@@ -27,14 +27,14 @@ const renameEntityBodySchema = t.Object({
 
 type RenameEntityBodySchema = Static<typeof renameEntityBodySchema>;
 
-type RenameEntityHandlerProps = {
+export type RenameEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   body: RenameEntityBodySchema;
 };
 
-const renameEntityHandler = async function* ({
+export const renameEntityHandler = async function* ({
   safeDb,
   workspaceId,
   recordAuditEvent,
@@ -141,7 +141,7 @@ const renameEntityHandler = async function* ({
 
 const config = {
   permissions: { entity: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "tool", name: "update_document" },
   body: renameEntityBodySchema,
 } satisfies HandlerConfig;
 

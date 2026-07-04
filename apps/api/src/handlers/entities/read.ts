@@ -42,7 +42,7 @@ const readEntitiesBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "tool", name: "list_documents" },
   body: readEntitiesBodySchema,
 } satisfies HandlerConfig;
 

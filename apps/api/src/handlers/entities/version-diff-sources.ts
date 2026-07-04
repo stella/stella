@@ -154,3 +154,90 @@ export const loadEntityVersionDiffSources = async function* ({
 
   return texts;
 };
+
+type LoadEntityVersionDocxTextOptions = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  entityId: SafeId<"entity">;
+  versionId: SafeId<"entityVersion">;
+};
+
+// Extract the plain text of one entity version's DOCX file, after validating
+// the version belongs to the workspace and entity. Powers arbitrary two-version
+// comparison (the diff-against-predecessor case stays in
+// `loadEntityVersionDiffSources`).
+export const loadEntityVersionDocxText = async function* ({
+  safeDb,
+  workspaceId,
+  organizationId,
+  entityId,
+  versionId,
+}: LoadEntityVersionDocxTextOptions) {
+  const version = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.entityVersions.findFirst({
+        where: {
+          id: { eq: versionId },
+          entityId: { eq: entityId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true },
+      }),
+    ),
+  );
+  if (!version) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Version not found" }),
+    );
+  }
+
+  const versionFields = yield* Result.await(
+    safeDb((tx) =>
+      // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via the
+      // unique (propertyId, entityVersionId) index.
+      // eslint-disable-next-line require-query-limit/require-query-limit
+      tx.query.fields.findMany({
+        where: { entityVersionId: { eq: versionId } },
+        columns: { content: true },
+      }),
+    ),
+  );
+
+  const file = findDocxFile(versionFields);
+  if (!file) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Version does not contain a DOCX file",
+      }),
+    );
+  }
+
+  const text = yield* Result.await(
+    Result.tryPromise({
+      try: async () => {
+        const buffer = await getS3()
+          .file(
+            createFileKey({
+              organizationId,
+              workspaceId,
+              fileId: file.id,
+              mimeType: DOCX_MIME_TYPE,
+            }),
+          )
+          .arrayBuffer();
+        const extracted = await extractText(new Uint8Array(buffer));
+        return extracted.paragraphs.map((p) => p.text).join("\n");
+      },
+      catch: (cause) =>
+        new HandlerError({
+          status: 500,
+          message: "Failed to read version content",
+          cause,
+        }),
+    }),
+  );
+
+  return Result.ok(text);
+};

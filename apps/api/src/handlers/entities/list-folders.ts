@@ -75,7 +75,7 @@ const listFoldersHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "covered", by: "list_documents" },
   query: listFoldersQuerySchema,
 } satisfies HandlerConfig;
 

@@ -59,7 +59,7 @@ const readEntitySummariesHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "covered", by: "list_documents" },
   query: readEntitySummariesQuerySchema,
 } satisfies HandlerConfig;
 

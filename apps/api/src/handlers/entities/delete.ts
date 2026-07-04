@@ -30,7 +30,7 @@ const deleteEntitiesBodySchema = t.Object({
 
 type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;
 
-type DeleteEntitiesHandlerProps = {
+export type DeleteEntitiesHandlerProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -38,7 +38,7 @@ type DeleteEntitiesHandlerProps = {
   body: DeleteEntitiesBodySchema;
 };
 
-const deleteEntitiesHandler = async function* ({
+export const deleteEntitiesHandler = async function* ({
   safeDb,
   organizationId,
   workspaceId,
@@ -169,7 +169,7 @@ const deleteEntitiesHandler = async function* ({
 
 const config = {
   permissions: { entity: ["delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "tool", name: "delete_document" },
   body: deleteEntitiesBodySchema,
 } satisfies HandlerConfig;
 

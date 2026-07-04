@@ -584,6 +584,9 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_templates",
       "describe_template",
       "template_marker_reference",
+      "list_documents",
+      "read_document",
+      "list_properties",
     ]);
   });
 
@@ -1560,5 +1563,244 @@ describe("OpenAI-compatible MCP tools", () => {
       expect.objectContaining({ message: "database timeout" }),
       { source: "mcp", toolName: "search" },
     );
+  });
+
+  // Document tools share resolveEntityWorkspace, which confines them to the
+  // document/folder kinds list_documents surfaces. An entity ID that names a
+  // task/message/link (kinds hidden from list_documents) must be rejected, not
+  // acted on, even though the caller can read that workspace.
+  const createEntityKindScopedDb = (kind: string) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              entities: {
+                findFirst: () => Promise<{
+                  kind: string;
+                  name: string;
+                  workspaceId: string;
+                }>;
+              };
+            };
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              entities: {
+                findFirst: async () => ({
+                  kind,
+                  name: "Weekly sync",
+                  workspaceId: "ws_1",
+                }),
+              },
+            },
+          }),
+      ),
+    );
+
+  test("read_document rejects an entity that is not a document or folder", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_task" },
+      context: createContext({ scopedDb: createEntityKindScopedDb("task") }),
+      toolName: "read_document",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Not a document or folder entity" }],
+      isError: true,
+    });
+  });
+
+  test("update_document rejects an entity that is not a document or folder", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_message", name: "Renamed" },
+      context: createContext({ scopedDb: createEntityKindScopedDb("message") }),
+      toolName: "update_document",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Not a document or folder entity" }],
+      isError: true,
+    });
+  });
+
+  // Cross-field shape rules live in the tool schemas (v.partialCheck), so an
+  // invalid combination fails at parse time before any workspace/DB access; the
+  // partial_check message is surfaced instead of the generic shape hint.
+
+  test("list_documents rejects flat mode combined with parent_id", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", mode: "flat", parent_id: "entity_folder" },
+      context: createContext(),
+      toolName: "list_documents",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "parent_id requires mode 'children'" }],
+      isError: true,
+    });
+  });
+
+  test("read_document rejects compare_with_version_id without version_id", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", compare_with_version_id: "ver_base" },
+      context: createContext(),
+      toolName: "read_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "compare_with_version_id requires version_id (the target version)",
+        },
+      ],
+      isError: true,
+    });
+  });
+
+  test("update_document rejects an empty update", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext(),
+      toolName: "update_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "Provide at least one change: name, parent_id/move_to_root, or version_id with label/description",
+        },
+      ],
+      isError: true,
+    });
+  });
+
+  test("update_document rejects parent_id together with move_to_root", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        entity_id: "entity_1",
+        move_to_root: true,
+        parent_id: "entity_folder",
+      },
+      context: createContext(),
+      toolName: "update_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "Provide either parent_id or move_to_root, not both",
+        },
+      ],
+      isError: true,
+    });
+  });
+
+  test("update_document rejects label without version_id", async () => {
+    // A rename keeps rule 1 (at least one change) satisfied so the failure
+    // isolates the label-requires-version_id rule.
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", name: "Renamed", label: "Signed copy" },
+      context: createContext(),
+      toolName: "update_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "label and description require version_id" },
+      ],
+      isError: true,
+    });
+  });
+
+  // read_document's default branch returns the version history. Each version's
+  // label/description are tenant-authored, so they must be pushed through the
+  // anonymization plan (not left raw) on the anonymized surface.
+  type VersionHistoryRow = {
+    createdAt: Date;
+    description: string | null;
+    id: string;
+    label: string | null;
+    stamp: string | null;
+    versionNumber: number;
+  };
+
+  const createVersionHistoryScopedDb = (rows: VersionHistoryRow[]) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(async (callback: (tx: unknown) => unknown) => {
+        const selectBuilder = {
+          from: () => selectBuilder,
+          where: () => selectBuilder,
+          orderBy: () => selectBuilder,
+          limit: () => rows,
+        };
+        return await callback({
+          query: {
+            entities: {
+              findFirst: async () => ({
+                currentVersionId: "ver_current",
+                kind: "document",
+                name: "Secret Doc for John Smith",
+                workspaceId: "ws_1",
+              }),
+            },
+            fields: {
+              findMany: async () => [],
+            },
+          },
+          select: () => selectBuilder,
+        });
+      }),
+    );
+
+  test("read_document anonymizes version-history labels and descriptions", async () => {
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["[DOC]", "[PERSON_1] draft", "Redacted note"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", include_versions: true },
+      context: createContext({
+        scopedDb: createVersionHistoryScopedDb([
+          {
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            description: "Note authored by John Smith",
+            id: "ver_1",
+            label: "Draft by John Smith",
+            stamp: null,
+            versionNumber: 2,
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "read_document",
+    });
+
+    // The version label and description reach the redactor as raw text fields;
+    // without the fix they would never be enqueued and would leak verbatim.
+    const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
+    expect(anonymizeInput).toMatchObject({
+      fields: [
+        "Secret Doc for John Smith",
+        "Draft by John Smith",
+        "Note authored by John Smith",
+      ],
+      workspaceId: "ws_1",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      versions: [
+        expect.objectContaining({
+          description: "Redacted note",
+          label: "[PERSON_1] draft",
+        }),
+      ],
+    });
   });
 });

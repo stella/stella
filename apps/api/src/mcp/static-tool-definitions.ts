@@ -1,6 +1,7 @@
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { COMPAT_TOOL_DEFINITIONS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
+import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_DEFINITIONS } from "@/api/mcp/template-tools";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
@@ -15,6 +16,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...COMPAT_TOOL_DEFINITIONS,
   ...STELLA_TOOL_DEFINITIONS,
   ...TEMPLATE_TOOL_DEFINITIONS,
+  ...DOCUMENT_TOOL_DEFINITIONS,
 ] as const satisfies readonly McpToolDefinition[];
 
 /**

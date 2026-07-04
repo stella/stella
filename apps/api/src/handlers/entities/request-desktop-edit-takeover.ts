@@ -15,7 +15,7 @@ import { pushSessionEvent } from "./desktop-edit-session-events";
 
 const config = {
   permissions: { entity: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "session_token_exchange" },
   body: t.Object({
     entityId: tSafeId("entity"),
     propertyId: tSafeId("property"),
