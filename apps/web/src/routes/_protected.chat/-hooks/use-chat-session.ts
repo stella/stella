@@ -33,6 +33,7 @@ import {
   isApprovalToolName,
   isExternalMcpToolName,
   isToolApprovalGrant,
+  sanitizeHydratedRunningToolCalls,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -268,7 +269,11 @@ export const useChatSession = ({
     const older = result.value;
     const current = chat.getSnapshot().messages;
     const existingIds = new Set(current.map((message) => message.id));
-    const prepend = older.messages.filter(
+    // Older pages are historical by definition — they can never contain
+    // the live turn — so rewriting their dead running tool-call parts is
+    // unconditionally safe. `current` is NOT sanitized: its tail may be a
+    // live streaming turn.
+    const prepend = sanitizeHydratedRunningToolCalls(older.messages).filter(
       (message) => !existingIds.has(message.id),
     );
     if (prepend.length > 0) {
