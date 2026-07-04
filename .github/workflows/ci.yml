@@ -152,7 +152,7 @@ jobs:
 
       - name: Turbo remote cache
         if: needs.ci-changes.outputs.package_checks_required == 'true'
-        uses: rharkor/caching-for-turbo@5d14fba18e450c09393333cfd4242e8b3cb455a6 # v2.4.2
+        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9 # v2.5.0
 
       - name: Install dependencies
         if: needs.ci-changes.outputs.package_checks_required == 'true'
@@ -996,7 +996,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@67ef31d5b988238dd797d409d6f9574278e20537 # stable
+        uses: dtolnay/rust-toolchain@fa04a1451ff1842e2626ccb99004d0195b455a88 # stable
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
