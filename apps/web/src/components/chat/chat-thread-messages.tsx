@@ -438,6 +438,7 @@ const StickyUserTurn = ({
     if (!container || !sentinel) {
       return;
     }
+    // eslint-disable-next-line react/react-compiler -- imperative scroll of the container DOM node (reached through the forwarded scrollRef prop) inside a click handler; a legitimate event-handler DOM mutation, not render state
     container.scrollTop +=
       sentinel.getBoundingClientRect().top -
       container.getBoundingClientRect().top;

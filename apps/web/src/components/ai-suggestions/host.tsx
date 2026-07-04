@@ -684,12 +684,12 @@ export function PromptBar(props: PromptBarProps) {
    */
   const [scopePromptPreset, setScopePromptPreset] =
     useState<AISuggestionPreset | null>(null);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (preset chips lose visibility → cancel the scope chooser); setScopePromptPreset is shared with submitPreset, so move into the visibility-change source
-  useEffect(() => {
-    if (!presetChipsVisible && scopePromptPreset !== null) {
-      setScopePromptPreset(null);
-    }
-  }, [presetChipsVisible, scopePromptPreset]);
+  // Cancel the scope chooser during render (adjust-state-during-render) rather
+  // than in an effect when the preset chips lose visibility; guarded on
+  // scopePromptPreset !== null so it converges in one pass.
+  if (!presetChipsVisible && scopePromptPreset !== null) {
+    setScopePromptPreset(null);
+  }
   const submitPreset = useCallback(
     (preset: AISuggestionPreset) => {
       if (canSubmitNow !== undefined && !canSubmitNow()) {
