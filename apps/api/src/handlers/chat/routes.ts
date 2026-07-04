@@ -5,6 +5,7 @@ import getMessages from "@/api/handlers/chat/get-messages";
 import getOlderMessages from "@/api/handlers/chat/get-older-messages";
 import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
+import getThreadTitle from "@/api/handlers/chat/get-thread-title";
 import getThreads from "@/api/handlers/chat/get-threads";
 import renameThread from "@/api/handlers/chat/rename-thread";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
@@ -55,6 +56,11 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: renameThread.config.params,
     permissions: renameThread.config.permissions,
     query: renameThread.config.query,
+  })
+  .get("/threads/:threadId/title", getThreadTitle.handler, {
+    params: getThreadTitle.config.params,
+    permissions: getThreadTitle.config.permissions,
+    query: getThreadTitle.config.query,
   })
   .get("/threads/:threadId/messages", getMessages.handler, {
     params: getMessages.config.params,

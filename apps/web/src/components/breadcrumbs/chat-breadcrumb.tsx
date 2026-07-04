@@ -1,6 +1,7 @@
 import {
   useInfiniteQuery,
   useMutation,
+  useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -17,6 +18,7 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import {
+  chatThreadTitleOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
   mergeGroupedChatThreadPages,
@@ -28,9 +30,12 @@ const protectedRoute = getRouteApi("/_protected");
 // Thread-title crumb for chat routes. Reuses the grouped-threads list already
 // primed by the sidebar / threads sheet (a lightweight query that never
 // instantiates the chat runtime), narrowed with `select` to this thread's
-// title. `useInfiniteQuery` (not Suspense) keeps a cache miss from suspending
-// the header. Falls back to the localized "New chat" while the thread is still
-// untitled; the crumb updates once the list query invalidates.
+// title. When the thread is not in the loaded pages (an older thread scrolled
+// out of the window), a bounded by-id title read fills the gap instead of
+// paging the whole list. Both queries use `useQuery`/`useInfiniteQuery` (not
+// Suspense) so a cache miss cannot suspend the header. Falls back to the
+// localized "New chat" while the thread is still untitled; the crumb updates
+// once the list query invalidates.
 //
 // The crumb doubles as an inline rename affordance. Because this crumb IS the
 // current route, clicking it has no navigation meaning, so a click activates
@@ -51,16 +56,29 @@ export const ChatBreadcrumb = ({
   const activeOrganizationId = protectedRoute.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: title } = useInfiniteQuery({
+  const { data: groupedTitle } = useInfiniteQuery({
     ...groupedChatThreadsOptions(activeOrganizationId),
     select: (data) => selectThreadTitle(data.pages, threadId),
   });
 
+  // The grouped list only holds its first loaded pages, so an older thread that
+  // has scrolled out of that window is absent (`groupedTitle === null`). Fall
+  // back to a bounded by-id title read, enabled only on that miss so a thread
+  // already in the list never triggers a redundant fetch.
+  const titleOptions = chatThreadTitleOptions({
+    activeOrganizationId,
+    enabled: groupedTitle === null,
+    key: { threadId, workspaceId },
+  });
+  const { data: byIdTitle } = useQuery(titleOptions);
+
+  const title = groupedTitle ?? byIdTitle ?? null;
   const currentTitle = title && !isPlaceholderThreadTitle(title) ? title : "";
   const displayTitle =
     currentTitle.length > 0 ? currentTitle : t("chat.newChat");
 
   const groupedKey = groupedChatThreadsOptions(activeOrganizationId).queryKey;
+  const titleKey = titleOptions.queryKey;
   const rename = useMutation({
     mutationFn: async (nextTitle: string) => {
       const response = await api.chat
@@ -80,7 +98,10 @@ export const ChatBreadcrumb = ({
     },
     onMutate: async (nextTitle) => {
       await queryClient.cancelQueries({ queryKey: groupedKey });
+      await queryClient.cancelQueries({ queryKey: titleKey });
       const previous = queryClient.getQueryData(groupedKey);
+      const previousTitle = queryClient.getQueryData(titleKey);
+      queryClient.setQueryData(titleKey, nextTitle);
       queryClient.setQueryData(groupedKey, (old) =>
         old
           ? {
@@ -104,17 +125,21 @@ export const ChatBreadcrumb = ({
             }
           : old,
       );
-      return { previous };
+      return { previous, previousTitle };
     },
     onError: (error, _nextTitle, context) => {
       if (context?.previous !== undefined) {
         queryClient.setQueryData(groupedKey, context.previous);
+      }
+      if (context?.previousTitle !== undefined) {
+        queryClient.setQueryData(titleKey, context.previousTitle);
       }
       getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     },
     onSettled: () => {
       void invalidateGroupedChatThreads(queryClient);
+      void queryClient.invalidateQueries({ queryKey: titleKey });
     },
   });
 

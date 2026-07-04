@@ -667,13 +667,18 @@ export function PromptBar(props: PromptBarProps) {
   });
 
   // Preset chips: visible over the empty idle bar; click — or Tab with an
-  // empty input — accepts and sends the preset in one step.
+  // empty input — accepts and sends the preset in one step. Hidden once the
+  // composer holds an attachment: a preset takes the scoped, text-only send
+  // path that bypasses `buildChatRequestMessage`, so leaving the chips up would
+  // silently drop the attached file. With attachments present the user sends
+  // through the normal composer path instead.
   const presetChipsVisible =
     layout === "floating" &&
     !threadHasMessages &&
     presets !== undefined &&
     presets.length > 0 &&
     isEmpty &&
+    attachments.length === 0 &&
     !busy &&
     !isSendBlocked;
   /**

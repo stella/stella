@@ -398,6 +398,14 @@ const StickyUserTurn = ({
       fileParts.push(part);
     }
   }
+  // A file-only turn (attachments, no visible text) would pin as an empty
+  // bubble once stuck, because the full attachments row hides while stuck and
+  // there is no text clamp to fall back on. Keep a compact count chip in that
+  // case so the pinned context is never blank; turns that have text keep the
+  // current behavior (attachments hidden, text clamped).
+  const hasVisibleText = headerMessage.parts.some(
+    (part) => part.type === "text" && part.content.trim().length > 0,
+  );
 
   // Stuck-detection: an out-of-flow 1px sentinel marks the header's natural
   // top. Once it scrolls above the container's top edge the header is pinned.
@@ -503,6 +511,12 @@ const StickyUserTurn = ({
             <div className="group-data-[stuck=true]/sticky:hidden">
               <UserAttachments parts={fileParts} />
             </div>
+            {!hasVisibleText && fileParts.length > 0 && (
+              <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
+                <PaperclipIcon aria-hidden="true" className="size-3" />
+                {t("chat.queuedAttachmentCount", { count: fileParts.length })}
+              </span>
+            )}
             <div
               className={cn(
                 "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",

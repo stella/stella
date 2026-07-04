@@ -89,6 +89,11 @@ type TemplateChatThreadKey = {
   templateId: string;
 };
 
+type ChatThreadTitleKey = {
+  threadId: string;
+  workspaceId?: string | undefined;
+};
+
 type GroupedChatThreadsPage = Awaited<
   ReturnType<typeof fetchGroupedChatThreads>
 >;
@@ -198,6 +203,13 @@ export const chatKeys = {
     activeOrganizationId,
     "threads",
     "grouped",
+  ],
+  threadTitle: (activeOrganizationId: string, key: ChatThreadTitleKey) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "thread-title",
+    key.workspaceId ?? "global",
+    key.threadId,
   ],
   thread: (activeOrganizationId: string, key: ChatThreadQueryKey) =>
     key.scope === "global"
@@ -1409,6 +1421,49 @@ export const groupedChatThreadsOptions = (activeOrganizationId: string) =>
       await fetchGroupedChatThreads({ cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+  });
+
+const fetchChatThreadTitle = async ({
+  threadId,
+  workspaceId,
+}: ChatThreadTitleKey): Promise<string> => {
+  const response = await api.chat
+    .threads({ threadId: toSafeId<"chatThread">(threadId) })
+    .title.get({
+      query: workspaceId
+        ? { workspaceId: toSafeId<"workspace">(workspaceId) }
+        : {},
+    });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return response.data.title;
+};
+
+type ChatThreadTitleOptionsArgs = {
+  activeOrganizationId: string;
+  enabled: boolean;
+  key: ChatThreadTitleKey;
+};
+
+// By-id title read for shared chrome (the chat breadcrumb). The grouped-threads
+// list only holds the first loaded pages, so opening an older thread that has
+// scrolled out of that window would otherwise leave the crumb without a title.
+// The breadcrumb reads the grouped cache first and only enables this query on a
+// miss, so a thread already in the list never triggers a redundant fetch.
+export const chatThreadTitleOptions = ({
+  activeOrganizationId,
+  enabled,
+  key,
+}: ChatThreadTitleOptionsArgs) =>
+  queryOptions({
+    enabled,
+    staleTime: STALE_TIME.FIVETEEN.MINUTES,
+    gcTime: STALE_TIME.FIVETEEN.MINUTES,
+    queryKey: chatKeys.threadTitle(activeOrganizationId, key),
+    queryFn: async () => await fetchChatThreadTitle(key),
   });
 
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>

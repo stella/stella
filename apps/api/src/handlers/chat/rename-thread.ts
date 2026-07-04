@@ -5,11 +5,13 @@ import { t } from "elysia";
 import { defaultDatabaseRetry } from "@/api/db";
 import { chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
   permissions: { chat: ["update"] },
@@ -101,6 +103,11 @@ const renameThread = createSafeRootHandler(
         }),
       );
     }
+
+    // Re-index so global search finds the thread by its new title. Fire-and-
+    // forget after the rename commits: indexing must never block or fail the
+    // rename. Mirrors generate-thread-title.ts and send-message.ts.
+    upsertChatThreadSearchDocument(params.threadId).catch(captureError);
 
     return Result.ok({ title });
   },
