@@ -1250,7 +1250,7 @@ const TemplateStudioChatInner = ({
               // path below stays text-only.
               await sendMessage(
                 await buildChatRequestMessage({
-                  files: files ?? [],
+                  files,
                   html: prompt,
                 }),
               );

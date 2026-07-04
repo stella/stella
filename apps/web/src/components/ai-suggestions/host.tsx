@@ -165,13 +165,14 @@ type PromptBarProps = {
   canSubmitNow?: (() => boolean) | undefined;
   /**
    * Emitted on send. `files` carries any attachments the user added via
-   * the shared (+) menu (empty for preset chips, which never attach);
-   * callers thread them into `buildChatRequestMessage`.
+   * the shared (+) menu, always an array (empty for preset chips, which
+   * never attach); callers thread them into `buildChatRequestMessage`
+   * without a fallback.
    */
   onSubmit: (input: {
     prompt: string;
     presetId?: string;
-    files?: ChatInputDraft["files"];
+    files: ChatInputDraft["files"];
   }) => void;
   presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
@@ -424,7 +425,7 @@ export function DockedComposer({ chips, bar, dock }: DockedComposerProps) {
         <ComposerVeil className="-inset-x-3 -top-4 -bottom-3.5" />
         {bar}
         {/* No extra top margin: `ComposerStatusRow` owns the single
-            bar-to-row gap (mt-1.5), same rhythm as the main chat tray. */}
+            bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}
         {dock !== undefined && <div className="px-1">{dock}</div>}
       </div>
     </div>
@@ -711,7 +712,7 @@ export function PromptBar(props: PromptBarProps) {
         presetScopeChooser.onSubmit(preset, "document");
         return;
       }
-      onSubmit({ prompt: preset.prompt, presetId: preset.id });
+      onSubmit({ prompt: preset.prompt, presetId: preset.id, files: [] });
     },
     [canSubmitNow, onSubmit, presetScopeChooser],
   );
@@ -859,7 +860,7 @@ export function PromptBar(props: PromptBarProps) {
           />
           {/* Shared (+) affordance on the left, identical to the main chat
               composer; opens the attach-file picker via the same controller.
-              The h-8 wrapper (same pattern as the pending badge below)
+              The h-8 wrapper (same pattern the pending badge below uses)
               centers the size-7 circle on the editor cell's single-line
               height: the shell is items-end, so the bare 28px button would
               otherwise ride 2px below the placeholder's center line. */}

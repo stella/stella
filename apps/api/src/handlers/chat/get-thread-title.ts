@@ -14,7 +14,7 @@ const config = {
   // sibling read endpoints (get-messages, get-threads) gate on `create`, so
   // this by-id title read follows the same convention.
   permissions: { chat: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "chat_thread_ui" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),

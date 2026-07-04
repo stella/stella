@@ -489,7 +489,7 @@ export const ChatTabPanel = ({
                 return;
               }
 
-              void handlePromptSubmit({ prompt, files: files ?? [] });
+              void handlePromptSubmit({ prompt, files });
             }}
             pendingCount={0}
             queueWhileGenerating
@@ -668,7 +668,7 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
           {t("chat.contextPlaceholder", { context: chatContextLabel })}
         </PromptBarPlaceholderContent>
       </div>
-      {/* Same h-8 centering wrapper as the live send button so the
+      {/* Same h-8 centering wrapper the live send button uses, so the
           placeholder stays pixel-identical; the disabled action button
           renders the canonical Send look without re-copying its styling. */}
       <span className="flex h-8 shrink-0 items-center">
@@ -720,8 +720,8 @@ export const ChatTabPanelShell = ({
         </ConversationContent>
       </Conversation>
 
-      {/* Same docked geometry (via DockedComposer) as the hydrated
-          composer so the bar keeps its place when the live panel slots
+      {/* Same docked geometry (via DockedComposer) the hydrated
+          composer uses, so the bar keeps its place when the live panel slots
           in. */}
       <DockedComposer bar={<PromptBarPlaceholder tab={tab} />} />
     </ChatTabPanelChrome>

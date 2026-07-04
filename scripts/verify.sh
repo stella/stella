@@ -162,6 +162,7 @@ run_step "Lint" run_lint
 run_step "Format" run_format
 run_step "Rust format" run_rust_format
 run_step "Typecheck" run_typecheck
+run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Ratchet guard" run_ratchet_guard
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard

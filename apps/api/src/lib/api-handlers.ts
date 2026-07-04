@@ -72,6 +72,9 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  * - `hosted_billing`: hosted-billing setup and management surfaces.
  * - `mcp_transport`: the MCP transport / connector routes themselves.
  * - `health_infra`: health and smoke endpoints.
+ * - `chat_thread_ui`: chat-thread management endpoints that back UI chrome
+ *   (breadcrumb title lookup, inline rename); agents reach threads through the
+ *   chat surface, not by managing thread metadata directly.
  */
 export type McpInternalReason =
   | "auth_plumbing"
@@ -83,7 +86,8 @@ export type McpInternalReason =
   | "account_lifecycle"
   | "hosted_billing"
   | "mcp_transport"
-  | "health_infra";
+  | "health_infra"
+  | "chat_thread_ui";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler

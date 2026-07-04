@@ -15,7 +15,7 @@ import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 const config = {
   permissions: { chat: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "chat_thread_ui" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),

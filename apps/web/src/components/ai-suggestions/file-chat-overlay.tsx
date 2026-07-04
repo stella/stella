@@ -631,6 +631,12 @@ const queueReviewSuggestions = ({
 // the legitimate "create a new document from this chat" flow.
 const ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS = new Set<ApprovalToolName>();
 
+// Stable empty context returned by `getContextMatterIds` before the picker
+// has seeded (its state is `string[] | null`). A named constant, not a `?? []`
+// literal: an unseeded thread has no selected matters, which is a real state,
+// not a structural invariant to panic on.
+const UNSEEDED_CONTEXT_MATTER_IDS: string[] = [];
+
 type FileChatOverlayProps = {
   /** Workspace this viewer belongs to. Scopes the thread + mention sources. */
   workspaceId?: string | undefined;
@@ -811,7 +817,9 @@ const FileChatOverlayInner = ({
   const [seededContextForThreadId, setSeededContextForThreadId] = useState<
     string | null
   >(null);
-  const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
+  const getContextMatterIds = useEffectEvent(
+    () => contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
+  );
   const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
   const hasDocxEditSurface =
     activeFile !== undefined && docxEditorRef !== undefined;
@@ -1399,7 +1407,7 @@ const FileChatOverlayInner = ({
               return;
             }
 
-            void handlePromptSubmit({ prompt, files: files ?? [] });
+            void handlePromptSubmit({ prompt, files });
           }}
           pendingCount={0}
           queueWhileGenerating
