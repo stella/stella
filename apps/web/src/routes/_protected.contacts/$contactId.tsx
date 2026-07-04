@@ -17,6 +17,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { MatterIcon } from "@/components/matter-icon";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
@@ -24,7 +25,6 @@ import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-compone
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
 import { ContactOwnersEditor } from "@/routes/_protected.contacts/-components/contact-owners-editor";
 import { EditableRow } from "@/routes/_protected.contacts/-components/editable-row";
-import { MatterIcon } from "@/components/matter-icon";
 import { InfoRow } from "@/routes/_protected.contacts/-components/info-row";
 import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-matter-row";
 import { useDeleteContact } from "@/routes/_protected.contacts/-mutations";
