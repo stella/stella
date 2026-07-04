@@ -8,6 +8,7 @@ import { rootDb, rlsDb } from "@/api/db/root";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveAccessibleWorkspaces } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -21,6 +22,13 @@ import { McpOrganizationAccessError } from "@/api/mcp/errors";
 export type McpRequestContext = {
   accessibleWorkspaceIds: SafeId<"workspace">[];
   accessibleWorkspaceIdSet: Set<string>;
+  /**
+   * Status of every accessible (non-deleting) workspace, keyed by id. Write
+   * tools gate on this to keep archived matters read-only, mirroring the HTTP
+   * `validateWorkspaceAccess` macro which 404s a workspace whose status is not
+   * "active".
+   */
+  accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
@@ -71,13 +79,19 @@ export const resolveMcpSessionContext = async (
   const allWorkspaceIds = accessibleWorkspaces.map((workspace) =>
     brandPersistedWorkspaceId(workspace.id),
   );
-  const usableWorkspaceIds = accessibleWorkspaces
-    .filter((w) => w.status !== "deleting")
-    .map((workspace) => brandPersistedWorkspaceId(workspace.id));
+  const usableWorkspaces = accessibleWorkspaces.filter(
+    (w) => w.status !== "deleting",
+  );
+  const usableWorkspaceIds = usableWorkspaces.map((workspace) =>
+    brandPersistedWorkspaceId(workspace.id),
+  );
 
   return {
     accessibleWorkspaceIds: usableWorkspaceIds,
     accessibleWorkspaceIdSet: new Set(usableWorkspaceIds),
+    accessibleWorkspaceStatusById: new Map(
+      usableWorkspaces.map((workspace) => [workspace.id, workspace.status]),
+    ),
     memberRole,
     organizationId,
     recordAuditEvent: createAuditRecorder({

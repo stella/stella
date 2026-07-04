@@ -52,9 +52,11 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   DEFAULT_LIST_LIMIT,
+  ensureActiveWorkspace,
   ensureWorkspaceAccess,
   enumProp,
   errorResult,
+  getWorkspaceStatus,
   intProp,
   MAX_LIST_LIMIT,
   nullableStringProp,
@@ -543,6 +545,26 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
   if (!workspaceId) {
     return errorResult("Matter not found or not accessible");
   }
+
+  // Archived matters are read-only except for an unarchive. The only save_matter
+  // request allowed on an archived matter is a pure status:"active" flip
+  // (mirrors the HTTP unarchive route, which is the sole mutation mounted
+  // outside the active-only workspace group). Any field edit, or re-archiving an
+  // already-archived matter, is rejected before touching the backing handlers.
+  if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
+    const isPureUnarchive =
+      input.status === "active" &&
+      input.name === undefined &&
+      input.reference === undefined &&
+      input.billing_reference === undefined;
+    if (!isPureUnarchive) {
+      if (input.status === "archived") {
+        return errorResult("Matter is already archived");
+      }
+      return errorResult("Matter is archived; unarchive it first");
+    }
+  }
+
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 
   if (
@@ -615,12 +637,14 @@ const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Invalid input: expected { matter_id: string }");
   }
 
-  const workspaceId = ensureWorkspaceAccess({
+  // The HTTP delete route sits inside the active-only workspace group, so an
+  // archived matter cannot be deleted until it is unarchived; mirror that here.
+  const workspaceId = ensureActiveWorkspace({
     context,
     workspaceId: parsed.output.matter_id,
   });
-  if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+  if (typeof workspaceId !== "string") {
+    return workspaceId;
   }
 
   const deleted = await Result.gen(() =>
@@ -1034,6 +1058,15 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
     if (owner.status !== "ok") {
       return errorResult("Task not found or not accessible");
     }
+    // When matter_id is also supplied it must name the task's own matter;
+    // otherwise a task from a different accessible matter would be returned.
+    // Mirrors the save_task pairing check.
+    if (
+      input.matter_id !== undefined &&
+      input.matter_id !== owner.workspaceId
+    ) {
+      return errorResult("task_id does not belong to matter_id");
+    }
     const { taskRow, assigneeRows, linkRows } = await readTaskDetail({
       context,
       taskId,
@@ -1361,12 +1394,12 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
     if (!roles[context.memberRole].authorize({ entity: ["create"] }).success) {
       return errorResult("Forbidden");
     }
-    const workspaceId = ensureWorkspaceAccess({
+    const workspaceId = ensureActiveWorkspace({
       context,
       workspaceId: input.matter_id ?? "",
     });
-    if (!workspaceId) {
-      return errorResult("Matter not found or not accessible");
+    if (typeof workspaceId !== "string") {
+      return workspaceId;
     }
     const created = await Result.gen(() =>
       createTaskEntityHandler({
@@ -1401,6 +1434,12 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Task not found or not accessible");
   }
   const workspaceId = owner.workspaceId;
+  // A task in an archived matter is read-only, matching the HTTP task routes
+  // that sit behind the active-only workspace group.
+  const active = ensureActiveWorkspace({ context, workspaceId });
+  if (typeof active !== "string") {
+    return active;
+  }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 
   const targetError = await validateSaveTaskTargets({
@@ -1593,12 +1632,12 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
   }
   const input = parsed.output;
 
-  const workspaceId = ensureWorkspaceAccess({
+  const workspaceId = ensureActiveWorkspace({
     context,
     workspaceId: input.matter_id,
   });
-  if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+  if (typeof workspaceId !== "string") {
+    return workspaceId;
   }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 

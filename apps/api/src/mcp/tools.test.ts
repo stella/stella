@@ -393,10 +393,12 @@ const createRecordAuditEventMock = () =>
 
 const createContext = ({
   accessibleWorkspaceIds = ["ws_1"],
+  archivedWorkspaceIds = [],
   recordAuditEvent = createRecordAuditEventMock(),
   scopedDb = createScopedDb(),
 }: {
   accessibleWorkspaceIds?: string[];
+  archivedWorkspaceIds?: string[];
   recordAuditEvent?: AuditRecorder;
   scopedDb?: McpRequestContext["scopedDb"];
 } = {}): McpRequestContext => ({
@@ -404,6 +406,12 @@ const createContext = ({
     toSafeId<"workspace">(workspaceId),
   ),
   accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
+  accessibleWorkspaceStatusById: new Map(
+    accessibleWorkspaceIds.map((workspaceId) => [
+      workspaceId,
+      archivedWorkspaceIds.includes(workspaceId) ? "archived" : "active",
+    ]),
+  ),
   memberRole: "owner",
   organizationId: toSafeId<"organization">("org_1"),
   recordAuditEvent,
@@ -1824,6 +1832,56 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  // Archived matters stay readable but are read-only through the write tools,
+  // mirroring the HTTP validateWorkspaceAccess macro (which 404s a workspace
+  // whose status is not "active"). A field edit on an archived matter is
+  // rejected before any backing handler runs.
+  test("save_matter rejects a write to an archived matter", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", name: "Renamed" },
+      context: createContext({ archivedWorkspaceIds: ["ws_1"] }),
+      toolName: "save_matter",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "Matter is archived; unarchive it first" },
+      ],
+      isError: true,
+    });
+  });
+
+  // The one write allowed on an archived matter is a pure status:"active" flip
+  // (unarchive); it must still go through.
+  const createWorkspaceUnarchiveScopedDb = () =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(async (callback: (tx: unknown) => unknown) => {
+        const builder = {
+          set: () => builder,
+          where: () => builder,
+          returning: async () => [{ id: "ws_1" }],
+        };
+        return await callback({ update: () => builder });
+      }),
+    );
+
+  test("save_matter allows unarchiving an archived matter", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", status: "active" },
+      context: createContext({
+        archivedWorkspaceIds: ["ws_1"],
+        scopedDb: createWorkspaceUnarchiveScopedDb(),
+      }),
+      toolName: "save_matter",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseToolPayload(result)).toEqual({
+      matterId: "ws_1",
+      updated: true,
+    });
+  });
+
   test("save_contact rejects a create with no type", async () => {
     const result = await handleMcpToolCall({
       args: { display_name: "Acme Corp" },
@@ -1914,6 +1972,25 @@ describe("OpenAI-compatible MCP tools", () => {
       args: { task_id: "task_1", matter_id: "ws_2", name: "Renamed" },
       context: createContext({ scopedDb: createTaskKindScopedDb("task") }),
       toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "task_id does not belong to matter_id" }],
+      isError: true,
+    });
+  });
+
+  // list_tasks detail resolved by task_id alone, so a task_id paired with a
+  // different accessible matter_id leaked a task from the wrong matter. The
+  // detail branch now enforces the same pairing check as save_task.
+  test("list_tasks detail rejects a task whose matter_id does not match", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", matter_id: "ws_2" },
+      context: createContext({
+        accessibleWorkspaceIds: ["ws_1", "ws_2"],
+        scopedDb: createTaskKindScopedDb("task"),
+      }),
+      toolName: "list_tasks",
     });
 
     expect(result).toEqual({

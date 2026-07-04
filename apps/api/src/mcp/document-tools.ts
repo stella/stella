@@ -46,6 +46,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   DEFAULT_LIST_LIMIT,
+  ensureActiveWorkspace,
   ensureWorkspaceAccess,
   enumProp,
   errorResult,
@@ -1125,12 +1126,12 @@ const handleCreateDocumentTool: McpToolHandler = async ({ args, context }) => {
     );
   }
 
-  const workspaceId = ensureWorkspaceAccess({
+  const workspaceId = ensureActiveWorkspace({
     context,
     workspaceId: parsed.output.matter_id,
   });
-  if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+  if (typeof workspaceId !== "string") {
+    return workspaceId;
   }
 
   const created = await Result.gen(() =>
@@ -1360,6 +1361,12 @@ const handleUpdateDocumentTool: McpToolHandler = async ({ args, context }) => {
     return documentEntityNotAvailable(owner);
   }
   const { workspaceId } = owner;
+  // Documents in an archived matter are read-only, matching the HTTP entity
+  // routes behind the active-only workspace group.
+  const active = ensureActiveWorkspace({ context, workspaceId });
+  if (typeof active !== "string") {
+    return active;
+  }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 
   const parentId =
@@ -1448,6 +1455,12 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
     return documentEntityNotAvailable(owner);
   }
   const { workspaceId } = owner;
+  // A document in an archived matter is read-only, matching the HTTP entity
+  // routes behind the active-only workspace group.
+  const active = ensureActiveWorkspace({ context, workspaceId });
+  if (typeof active !== "string") {
+    return active;
+  }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 
   // Deleting a single version is an entity update; deleting the whole document
@@ -1680,6 +1693,12 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
     return documentEntityNotAvailable(owner);
   }
   const { workspaceId } = owner;
+  // Setting a cell in an archived matter is a write, so it is rejected the same
+  // way the HTTP field routes behind the active-only workspace group are.
+  const active = ensureActiveWorkspace({ context, workspaceId });
+  if (typeof active !== "string") {
+    return active;
+  }
 
   const result = await Result.gen(() =>
     upsertFieldHandler({
