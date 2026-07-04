@@ -95,11 +95,11 @@ function AuditLogsPage() {
     setExporting(true);
     const result = await Result.tryPromise(async () => {
       const cleanParams: Record<string, string> = {};
-      if (filterAction) cleanParams["action"] = filterAction;
-      if (filterResourceType) cleanParams["resourceType"] = filterResourceType;
-      if (filterUserId) cleanParams["userId"] = filterUserId;
-      if (filterFrom) cleanParams["from"] = new Date(filterFrom).toISOString();
-      if (filterTo) cleanParams["to"] = new Date(filterTo).toISOString();
+      if (filterAction) {cleanParams["action"] = filterAction;}
+      if (filterResourceType) {cleanParams["resourceType"] = filterResourceType;}
+      if (filterUserId) {cleanParams["userId"] = filterUserId;}
+      if (filterFrom) {cleanParams["from"] = new Date(filterFrom).toISOString();}
+      if (filterTo) {cleanParams["to"] = new Date(filterTo).toISOString();}
 
       const response = await api["audit-logs"].export.get({
         query: cleanParams,

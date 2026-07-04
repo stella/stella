@@ -555,7 +555,7 @@ const runSafeHandler = async <
 };
 
 const createSafeScopedHandler = <
-  TConfig extends HandlerConfig<any, any, any, any>,
+  TConfig extends HandlerConfig<any, any, any>,
   TContext extends BaseHandlerContext<TConfig>,
   TResult extends SafeHandlerPayload,
  >(
@@ -610,22 +610,22 @@ const createSafeScopedHandler = <
       };
 
       const originalSafeDb = ctx.safeDb;
-      ctx.safeDb = async (fn, retry) => {
-        return await originalSafeDb(async (tx) => {
+      ctx.safeDb = async (fn, retry) => 
+        await originalSafeDb(async (tx) => {
           const result = await fn(tx);
           await recordAudit(tx, result);
           return result;
-        }, retry);
-      };
+        }, retry)
+      ;
 
       const originalScopedDb = ctx.scopedDb;
-      ctx.scopedDb = async (fn) => {
-        return await originalScopedDb(async (tx) => {
+      ctx.scopedDb = async (fn) => 
+        await originalScopedDb(async (tx) => {
           const result = await fn(tx);
           await recordAudit(tx, result);
           return result;
-        });
-      };
+        })
+      ;
     }
 
     // Resolve the metering context only when enforcement is on. It reads
