@@ -173,69 +173,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHeaderFooterEditor.ts#6"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHyperlinkHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/useFolioComments.ts#17"
-          },
-          {
-            "location": "packages/folio/src/hooks/useHistory.ts#11"
-          },
-          {
-            "location": "packages/folio/src/hooks/useTableSelection.ts#8"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useDragAutoScroll.ts#9"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#14"
-          },
-          {
-            "location": "packages/folio/src/utils/contained-handler.ts#1"
-          },
-          {
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
@@ -369,6 +306,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -1269,138 +1209,6 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#11"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#31"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#32"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#28"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#29"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/Toolbar.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FootnotePropertiesDialog.tsx#7"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePositionDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePropertiesDialog.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/PageSetupDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/TablePropertiesDialog.tsx#5"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
-          },
-          {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AISuggestionRectsOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AutocompleteCaretOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/TemplateDirectivesOverlay.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#9"
           },
           {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
@@ -2983,69 +2791,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHeaderFooterEditor.ts#6"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHyperlinkHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/useFolioComments.ts#17"
-          },
-          {
-            "location": "packages/folio/src/hooks/useHistory.ts#11"
-          },
-          {
-            "location": "packages/folio/src/hooks/useTableSelection.ts#8"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useDragAutoScroll.ts#9"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#14"
-          },
-          {
-            "location": "packages/folio/src/utils/contained-handler.ts#1"
-          },
-          {
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
@@ -3179,6 +2924,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -4079,138 +3827,6 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#11"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#31"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#32"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#28"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#29"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/Toolbar.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FootnotePropertiesDialog.tsx#7"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePositionDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePropertiesDialog.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/PageSetupDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/TablePropertiesDialog.tsx#5"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
-          },
-          {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AISuggestionRectsOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AutocompleteCaretOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/TemplateDirectivesOverlay.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#9"
           },
           {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
@@ -4605,15 +4221,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#18"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
           }
         ]
       },
@@ -4765,7 +4372,7 @@
       "version": "3.5.12"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@1.52.0",
+      "bom-ref": "pkg:npm/@google/genai@2.10.0",
       "evidence": {
         "identity": [
           {
@@ -4811,60 +4418,6 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@google/genai/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40google/genai@1.52.0",
-      "scope": "required",
-      "type": "library",
-      "version": "1.52.0"
-    },
-    {
-      "bom-ref": "pkg:npm/@google/genai@2.10.0",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@tanstack/ai-gemini/node_modules/@google/genai/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@tanstack/ai-gemini/node_modules/@google/genai/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#1"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/googleapis/js-genai#readme"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/googleapis/js-genai.git"
-        }
-      ],
-      "group": "@google",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "genai",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@tanstack/ai-gemini/node_modules/@google/genai/package.json"
         }
       ],
       "purl": "pkg:npm/%40google/genai@2.10.0",
@@ -5073,7 +4626,7 @@
       "version": "0.4.0"
     },
     {
-      "bom-ref": "pkg:npm/@litko/yara-x@0.6.1",
+      "bom-ref": "pkg:npm/@litko/yara-x@0.7.0",
       "evidence": {
         "identity": [
           {
@@ -5124,10 +4677,10 @@
           "value": "node_modules/@litko/yara-x/package.json"
         }
       ],
-      "purl": "pkg:npm/%40litko/yara-x@0.6.1",
+      "purl": "pkg:npm/%40litko/yara-x@0.7.0",
       "scope": "required",
       "type": "library",
-      "version": "0.6.1"
+      "version": "0.7.0"
     },
     {
       "authors": [
@@ -5283,71 +4836,6 @@
       ],
       "type": "library",
       "version": "0.219.0"
-    },
-    {
-      "authors": [
-        {
-          "name": "Microsoft Corporation"
-        }
-      ],
-      "bom-ref": "pkg:npm/@playwright/test@1.61.1",
-      "description": "A high-level API to automate web browsers",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@playwright/test/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@playwright/test/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/scripts/profile-editor.ts#1"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://playwright.dev"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/microsoft/playwright.git"
-        }
-      ],
-      "group": "@playwright",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "test",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@playwright/test/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40playwright/test@1.61.1",
-      "scope": "required",
-      "tags": [
-        "api",
-        "framework",
-        "web"
-      ],
-      "type": "framework",
-      "version": "1.61.1"
     },
     {
       "authors": [
@@ -5521,69 +5009,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHeaderFooterEditor.ts#6"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHyperlinkHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/useFolioComments.ts#17"
-          },
-          {
-            "location": "packages/folio/src/hooks/useHistory.ts#11"
-          },
-          {
-            "location": "packages/folio/src/hooks/useTableSelection.ts#8"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useDragAutoScroll.ts#9"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#14"
-          },
-          {
-            "location": "packages/folio/src/utils/contained-handler.ts#1"
-          },
-          {
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
@@ -5717,6 +5142,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -6617,138 +6045,6 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#11"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#31"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#32"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#28"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#29"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/Toolbar.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FootnotePropertiesDialog.tsx#7"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePositionDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePropertiesDialog.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/PageSetupDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/TablePropertiesDialog.tsx#5"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
-          },
-          {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AISuggestionRectsOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AutocompleteCaretOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/TemplateDirectivesOverlay.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#9"
           },
           {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
@@ -7601,7 +6897,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.15.12",
+      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.16.0",
       "description": "Anthropic Claude adapter for TanStack AI chat, tool calling, thinking, and structured outputs.",
       "evidence": {
         "identity": [
@@ -7633,6 +6929,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#5"
+          },
+          {
+            "location": "packages/ai-catalog/src/index.ts#20"
           }
         ]
       },
@@ -7662,16 +6961,16 @@
           "value": "node_modules/@tanstack/ai-anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.15.12",
+      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.16.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.15.12"
+      "version": "0.16.0"
     },
     {
-      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.1.0",
+      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.1.1",
       "description": "Amazon Bedrock adapter for TanStack AI — OpenAI-compatible chat, responses, tools, and reasoning.",
       "evidence": {
         "identity": [
@@ -7694,6 +6993,9 @@
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#7"
+          },
+          {
+            "location": "packages/ai-catalog/src/index.ts#21"
           }
         ]
       },
@@ -7719,13 +7021,13 @@
           "value": "node_modules/@tanstack/ai-bedrock/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.1.0",
+      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.1.1",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.1.0"
+      "version": "0.1.1"
     },
     {
       "authors": [
@@ -7733,7 +7035,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-client@0.19.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-client@0.19.2",
       "description": "Framework-agnostic headless client for TanStack AI chat, realtime sessions, streaming transports, and media generations.",
       "evidence": {
         "identity": [
@@ -7797,14 +7099,14 @@
           "value": "node_modules/@tanstack/ai-client/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-client@0.19.1",
+      "purl": "pkg:npm/%40tanstack/ai-client@0.19.2",
       "scope": "required",
       "tags": [
         "ai",
         "framework"
       ],
       "type": "framework",
-      "version": "0.19.1"
+      "version": "0.19.2"
     },
     {
       "authors": [
@@ -7812,7 +7114,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.18.4",
+      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.19.0",
       "description": "Google Gemini adapter for TanStack AI chat, images, speech, audio generation, and structured outputs.",
       "evidence": {
         "identity": [
@@ -7835,6 +7137,9 @@
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#9"
+          },
+          {
+            "location": "packages/ai-catalog/src/index.ts#22"
           }
         ]
       },
@@ -7864,13 +7169,13 @@
           "value": "node_modules/@tanstack/ai-gemini/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-gemini@0.18.4",
+      "purl": "pkg:npm/%40tanstack/ai-gemini@0.19.0",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.18.4"
+      "version": "0.19.0"
     },
     {
       "authors": [
@@ -7878,7 +7183,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.2.1",
+      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.2.2",
       "description": "Host-side Model Context Protocol client for TanStack AI: discover and run MCP server tools, resources, and prompts in any adapter's chat() loop, with generated end-to-end types.",
       "evidence": {
         "identity": [
@@ -7936,10 +7241,10 @@
           "value": "node_modules/@tanstack/ai-mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai-mcp@0.2.1",
+      "purl": "pkg:npm/%40tanstack/ai-mcp@0.2.2",
       "scope": "required",
       "type": "library",
-      "version": "0.2.1"
+      "version": "0.2.2"
     },
     {
       "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.2.0",
@@ -8093,6 +7398,9 @@
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#17"
+          },
+          {
+            "location": "packages/ai-catalog/src/index.ts#23"
           }
         ]
       },
@@ -8136,7 +7444,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/ai@0.39.0",
+      "bom-ref": "pkg:npm/@tanstack/ai@0.39.1",
       "description": "Type-safe TypeScript AI SDK for streaming chat, tool calling, agents, structured outputs, and multimodal generation.",
       "evidence": {
         "identity": [
@@ -8182,7 +7490,7 @@
             "location": "apps/api/src/handlers/chat/stream-chat.ts#7"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#15"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#16"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
@@ -8263,6 +7571,9 @@
             "location": "apps/api/src/lib/tanstack-ai-models.ts#3"
           },
           {
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#5"
+          },
+          {
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
           },
           {
@@ -8299,13 +7610,13 @@
           "value": "node_modules/@tanstack/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/ai@0.39.0",
+      "purl": "pkg:npm/%40tanstack/ai@0.39.1",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "0.39.0"
+      "version": "0.39.1"
     },
     {
       "authors": [
@@ -8565,7 +7876,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.101.1",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.101.2",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -8614,13 +7925,13 @@
           "value": "node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.101.1",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.101.2",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.101.1"
+      "version": "5.101.2"
     },
     {
       "authors": [
@@ -8628,7 +7939,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.101.1",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.101.2",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -9400,10 +8711,10 @@
           "value": "node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.101.1",
+      "purl": "pkg:npm/%40tanstack/react-query@5.101.2",
       "scope": "required",
       "type": "library",
-      "version": "5.101.1"
+      "version": "5.101.2"
     },
     {
       "authors": [
@@ -11560,69 +10871,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHeaderFooterEditor.ts#6"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHyperlinkHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/useFolioComments.ts#17"
-          },
-          {
-            "location": "packages/folio/src/hooks/useHistory.ts#11"
-          },
-          {
-            "location": "packages/folio/src/hooks/useTableSelection.ts#8"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useDragAutoScroll.ts#9"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#14"
-          },
-          {
-            "location": "packages/folio/src/utils/contained-handler.ts#1"
-          },
-          {
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
@@ -11756,6 +11004,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -12658,138 +11909,6 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
           },
           {
-            "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#11"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#31"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#32"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#28"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#29"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/Toolbar.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FootnotePropertiesDialog.tsx#7"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePositionDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePropertiesDialog.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/PageSetupDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/TablePropertiesDialog.tsx#5"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
-          },
-          {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AISuggestionRectsOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AutocompleteCaretOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/TemplateDirectivesOverlay.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#9"
-          },
-          {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
@@ -13034,7 +12153,7 @@
             "location": "apps/api/src/lib/json-schema/json-schema-to-type.ts#1"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-schema.ts#5"
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#6"
           }
         ]
       },
@@ -13524,7 +12643,7 @@
             "location": "apps/api/src/handlers/chat/skills.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#16"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#17"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
@@ -14589,6 +13708,9 @@
             "location": "apps/api/src/lib/file-scan/scan.ts#1"
           },
           {
+            "location": "apps/api/src/lib/groupable-sql.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/hosted-usage-provider/client.ts#3"
           },
           {
@@ -14805,99 +13927,6 @@
             "location": "packages/errors/src/index.ts#1"
           },
           {
-            "location": "packages/folio/scripts/profile-editor.ts#2"
-          },
-          {
-            "location": "packages/folio/src/core/content-controls/errors.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/docx/parser.ts#21"
-          },
-          {
-            "location": "packages/folio/src/core/docx/rezip.ts#32"
-          },
-          {
-            "location": "packages/folio/src/core/docx/selectiveSaveTripwire.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/docx/serializer/runSerializer.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/layout-engine/index.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/layout-engine/measure/font-metrics.worker.ts#18"
-          },
-          {
-            "location": "packages/folio/src/core/layout-engine/measure/measureContainer.ts#19"
-          },
-          {
-            "location": "packages/folio/src/core/layout-engine/measure/measureProvider.ts#12"
-          },
-          {
-            "location": "packages/folio/src/core/layout-engine/paginator.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/layout-painter/index.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/layout-painter/registry/registry.ts#10"
-          },
-          {
-            "location": "packages/folio/src/core/layout-painter/renderPage.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/attrs/index.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/ExtensionManager.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/BoldExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/FontFamilyExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/FontSizeExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/FootnoteRefExtension.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/HighlightExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/HyperlinkExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/ItalicExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/StrikeExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/SubscriptExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/SuperscriptExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/TextColorExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/UnderlineExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/HardBreakExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#8"
-          },
-          {
             "location": "packages/infosoud/scripts/extract-codes.ts#1"
           },
           {
@@ -15016,15 +14045,6 @@
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#7"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#19"
-          },
-          {
-            "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#28"
           }
         ]
       },
@@ -15065,7 +14085,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.79.1",
+      "bom-ref": "pkg:npm/bullmq@5.79.2",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -15126,10 +14146,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.79.1",
+      "purl": "pkg:npm/bullmq@5.79.2",
       "scope": "required",
       "type": "library",
-      "version": "5.79.1"
+      "version": "5.79.2"
     },
     {
       "authors": [
@@ -15568,56 +14588,6 @@
       "scope": "required",
       "type": "library",
       "version": "0.4.6"
-    },
-    {
-      "authors": [
-        {
-          "name": "Fredrik Nicol <fredrik.nicol@gmail.com>"
-        }
-      ],
-      "bom-ref": "pkg:npm/csstype@3.2.3",
-      "description": "Strict TypeScript and Flow types for style based on MDN data",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/csstype/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/csstype/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
-          }
-        ]
-      },
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "csstype",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/csstype/package.json"
-        }
-      ],
-      "purl": "pkg:npm/csstype@3.2.3",
-      "scope": "required",
-      "type": "library",
-      "version": "3.2.3"
     },
     {
       "bom-ref": "pkg:npm/diff@8.0.4",
@@ -16891,6 +15861,12 @@
           },
           {
             "location": "apps/api/src/lib/folio-collab-sessions.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/groupable-sql.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/groupable-sql.ts#13"
           },
           {
             "location": "apps/api/src/lib/health/probe-database.ts#1"
@@ -18383,66 +17359,6 @@
     {
       "authors": [
         {
-          "name": "Amit Gupta (https://solothought.com)"
-        }
-      ],
-      "bom-ref": "pkg:npm/fast-xml-parser@5.9.3",
-      "description": "Validate XML, Parse XML, Build XML without C/C++ based libraries",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/fast-xml-parser/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/fast-xml-parser/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/docx/xmlParser.ts#22"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/NaturalIntelligence/fast-xml-parser.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "fast-xml-parser",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/fast-xml-parser/package.json"
-        }
-      ],
-      "purl": "pkg:npm/fast-xml-parser@5.9.3",
-      "scope": "required",
-      "tags": [
-        "parse",
-        "xml"
-      ],
-      "type": "library",
-      "version": "5.9.3"
-    },
-    {
-      "authors": [
-        {
           "name": "Jake Archibald"
         }
       ],
@@ -18829,18 +17745,6 @@
           },
           {
             "location": "packages/docx-utils/src/zip.ts#1"
-          },
-          {
-            "location": "packages/folio/scripts/build-corpus-fixtures.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/docx/rezip.ts#33"
-          },
-          {
-            "location": "packages/folio/src/core/docx/selectiveSaveTripwire.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/docx/unzip.ts#27"
           }
         ]
       },
@@ -19589,36 +18493,6 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#4"
           },
           {
-            "location": "packages/folio/src/components/CommentsSidebar.tsx#21"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#34"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditorHelpers.tsx#5"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#24"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#24"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#22"
-          },
-          {
-            "location": "packages/folio/src/components/ui/ListButtons.tsx#10"
-          },
-          {
             "location": "packages/ui/src/components/accordion.tsx#4"
           },
           {
@@ -19702,250 +18576,6 @@
     {
       "authors": [
         {
-          "name": "Christopher Jeffrey"
-        }
-      ],
-      "bom-ref": "pkg:npm/marked@15.0.12",
-      "description": "A markdown parser built for speed",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@react-email/markdown/node_modules/marked/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@react-email/markdown/node_modules/marked/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/markdown/fromMarkdown.ts#21"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://marked.js.org"
-        },
-        {
-          "type": "vcs",
-          "url": "git://github.com/markedjs/marked.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "marked",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/react-email/node_modules/marked/package.json"
-        },
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@react-email/markdown/node_modules/marked/package.json"
-        }
-      ],
-      "purl": "pkg:npm/marked@15.0.12",
-      "scope": "required",
-      "type": "library",
-      "version": "15.0.12"
-    },
-    {
-      "authors": [
-        {
-          "name": "Christopher Jeffrey"
-        }
-      ],
-      "bom-ref": "pkg:npm/marked@16.4.2",
-      "description": "A markdown parser built for speed",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/mermaid/node_modules/marked/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/mermaid/node_modules/marked/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/markdown/fromMarkdown.ts#21"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://marked.js.org"
-        },
-        {
-          "type": "vcs",
-          "url": "git://github.com/markedjs/marked.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "marked",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/mermaid/node_modules/marked/package.json"
-        }
-      ],
-      "purl": "pkg:npm/marked@16.4.2",
-      "scope": "required",
-      "type": "library",
-      "version": "16.4.2"
-    },
-    {
-      "authors": [
-        {
-          "name": "Christopher Jeffrey"
-        }
-      ],
-      "bom-ref": "pkg:npm/marked@17.0.5",
-      "description": "A markdown parser built for speed",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/streamdown/node_modules/marked/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/streamdown/node_modules/marked/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/markdown/fromMarkdown.ts#21"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://marked.js.org"
-        },
-        {
-          "type": "vcs",
-          "url": "git://github.com/markedjs/marked.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "marked",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/streamdown/node_modules/marked/package.json"
-        }
-      ],
-      "purl": "pkg:npm/marked@17.0.5",
-      "scope": "required",
-      "type": "library",
-      "version": "17.0.5"
-    },
-    {
-      "authors": [
-        {
-          "name": "Christopher Jeffrey"
-        }
-      ],
-      "bom-ref": "pkg:npm/marked@18.0.5",
-      "description": "A markdown parser built for speed",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/marked/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/marked/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/markdown/fromMarkdown.ts#21"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://marked.js.org"
-        },
-        {
-          "type": "vcs",
-          "url": "git://github.com/markedjs/marked.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "marked",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/marked/package.json"
-        }
-      ],
-      "purl": "pkg:npm/marked@18.0.5",
-      "scope": "required",
-      "type": "library",
-      "version": "18.0.5"
-    },
-    {
-      "authors": [
-        {
           "name": "Andris Reinman"
         }
       ],
@@ -20004,7 +18634,7 @@
       "version": "9.0.1"
     },
     {
-      "bom-ref": "pkg:npm/pdfjs-dist@6.0.227",
+      "bom-ref": "pkg:npm/pdfjs-dist@6.1.200",
       "description": "Generic build of Mozilla's PDF.js library.",
       "evidence": {
         "identity": [
@@ -20069,10 +18699,10 @@
           "value": "pdfjs-dist,PDFDocumentLoadingTask,pdfjs-dist/PDFDocumentLoadingTask,PDFDocumentProxy,pdfjs-dist/PDFDocumentProxy,PDFPageProxy,pdfjs-dist/PDFPageProxy,PageViewport,pdfjs-dist/PageViewport"
         }
       ],
-      "purl": "pkg:npm/pdfjs-dist@6.0.227",
+      "purl": "pkg:npm/pdfjs-dist@6.1.200",
       "scope": "required",
       "type": "library",
-      "version": "6.0.227"
+      "version": "6.1.200"
     },
     {
       "authors": [
@@ -20270,27 +18900,6 @@
         ],
         "occurrences": [
           {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/BaseKeymapExtension.ts#15"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/BoldExtension.ts#6"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/ItalicExtension.ts#6"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/StrikeExtension.ts#6"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/SubscriptExtension.ts#6"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/SuperscriptExtension.ts#6"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/UnderlineExtension.ts#6"
-          },
-          {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#3"
           }
         ]
@@ -20323,108 +18932,6 @@
       "version": "1.7.1"
     },
     {
-      "bom-ref": "pkg:npm/prosemirror-dropcursor@1.8.2",
-      "description": "Drop cursor plugin for ProseMirror",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/prosemirror-dropcursor/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/prosemirror-dropcursor/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/DropCursorExtension.ts#8"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git://github.com/prosemirror/prosemirror-dropcursor.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "prosemirror-dropcursor",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/prosemirror-dropcursor/package.json"
-        }
-      ],
-      "purl": "pkg:npm/prosemirror-dropcursor@1.8.2",
-      "scope": "required",
-      "type": "library",
-      "version": "1.8.2"
-    },
-    {
-      "bom-ref": "pkg:npm/prosemirror-gapcursor@1.4.1",
-      "description": "ProseMirror plugin for cursors at normally impossible-to-reach positions",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/prosemirror-gapcursor/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/prosemirror-gapcursor/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/GapCursorExtension.ts#15"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git://github.com/prosemirror/prosemirror-gapcursor.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "prosemirror-gapcursor",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/prosemirror-gapcursor/package.json"
-        }
-      ],
-      "purl": "pkg:npm/prosemirror-gapcursor@1.4.1",
-      "scope": "required",
-      "type": "library",
-      "version": "1.4.1"
-    },
-    {
       "bom-ref": "pkg:npm/prosemirror-history@1.5.0",
       "description": "Undo history for ProseMirror",
       "evidence": {
@@ -20444,19 +18951,7 @@
         ],
         "occurrences": [
           {
-            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#10"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/core/HistoryExtension.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#14"
-          },
-          {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#4"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#31"
           }
         ]
       },
@@ -20506,9 +19001,6 @@
           }
         ],
         "occurrences": [
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/ExtensionManager.ts#10"
-          },
           {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#5"
           }
@@ -20564,139 +19056,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-suggestions.ts#14"
           },
           {
-            "location": "packages/folio/src/components/aiEditRange.ts#9"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/findReplaceSelection.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/ai-edits/apply.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/ai-edits/clean-text.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/ai-edits/snapshot.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/ai-suggestions/conflict.ts#11"
-          },
-          {
-            "location": "packages/folio/src/core/ai-suggestions/text-positions.ts#15"
-          },
-          {
-            "location": "packages/folio/src/core/layout-bridge/convert/headerFooterLayout.ts#20"
-          },
-          {
-            "location": "packages/folio/src/core/layout-bridge/convert/toFlowBlocks.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/attrs/index.ts#2"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/comments.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/contentControls.ts#12"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/contentControlsBlockFill.ts#12"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/formatting.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/pageBreak.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/conversion/fromProseDoc.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/conversion/toProseDoc.ts#15"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/ExtensionManager.ts#11"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/ExtensionManager.ts#12"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/core/ParagraphExtension.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/core/ParagraphExtension.ts#10"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/AutoBidiDetectionExtension.ts#30"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/BaseKeymapExtension.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/EmptyParagraphFormatExtension.ts#22"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ParaIdAllocatorExtension.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/RunFormattingOverrideExtension.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/markUtils.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/types.ts#11"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/aiCitationDecorations.ts#14"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/aiSuggestionDecorations.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#20"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/autocompleteSuggestion.ts#25"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/createDocScanPlugin.ts#19"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/pmTextScan.ts#15"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#15"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templateDirectives.ts#19"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templatePreviewValues.ts#18"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/selectionState.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/utils/findParagraphByParaId.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/validation.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/utils/headingCollector.ts#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#46"
           },
           {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#6"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#29"
           }
         ]
       },
@@ -20750,204 +19113,6 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#3"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#3"
-          },
-          {
-            "location": "packages/folio/src/components/commentsHelpers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/selectionDetection.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/selectionDetection.ts#2"
-          },
-          {
-            "location": "packages/folio/src/core/ai-edits/apply.ts#2"
-          },
-          {
-            "location": "packages/folio/src/core/controller/folioEditor.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#11"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#12"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#14"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#15"
-          },
-          {
-            "location": "packages/folio/src/core/controller/layoutPipeline.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/controller/layoutSession.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/layout-bridge/convert/wrapEditorViewAsSurface.ts#12"
-          },
-          {
-            "location": "packages/folio/src/core/layout-bridge/convert/wrapEditorViewAsSurface.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/paged-layout/transactionDirtyRange.ts#1"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/comments.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/contentControls.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/contentControlsBlockFill.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/formatting.ts#10"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/pageBreak.ts#6"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/pageBreak.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/paragraph.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/commands/table.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/ExtensionManager.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/core/ParagraphExtension.ts#11"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/AutoBidiDetectionExtension.ts#31"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/AutoBidiDetectionExtension.ts#32"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/BaseKeymapExtension.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/BidiShortcutExtension.ts#10"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/EmptyParagraphFormatExtension.ts#23"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ImageDragExtension.ts#11"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ImagePasteExtension.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ListExtension.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ParaIdAllocatorExtension.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ParaIdAllocatorExtension.ts#18"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#10"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/PasteStyleInlinerExtension.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/FootnoteRefExtension.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/HyperlinkExtension.ts#6"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/marks/markUtils.ts#8"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#10"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#11"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/types.ts#12"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/index.ts#54"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/aiCitationDecorations.ts#15"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/aiSuggestionDecorations.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#21"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/anonymizationDecorations.ts#22"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/autocompleteSuggestion.ts#26"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/autocompleteSuggestion.ts#27"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/contentControlWidgets.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/createDocScanPlugin.ts#20"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/createDocScanPlugin.ts#21"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/documentStyles.ts#18"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/selectionTracker.ts#11"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/selectionTracker.ts#12"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templateDirectives.ts#20"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templateDirectives.ts#21"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templatePreviewValues.ts#19"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templateSlashMenu.ts#21"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templateSlashMenu.ts#22"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/selectionState.ts#8"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#16"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#47"
           },
           {
@@ -20958,21 +19123,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#34"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#35"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#34"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#30"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#31"
           }
         ]
       },
@@ -20996,130 +19146,12 @@
         {
           "name": "SrcFile",
           "value": "node_modules/prosemirror-state/package.json"
-        },
-        {
-          "name": "ExportedModules",
-          "value": "prosemirror-state"
         }
       ],
       "purl": "pkg:npm/prosemirror-state@1.4.4",
       "scope": "required",
       "type": "library",
       "version": "1.4.4"
-    },
-    {
-      "bom-ref": "pkg:npm/prosemirror-tables@1.8.5",
-      "description": "ProseMirror's rowspan/colspan tables component",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/prosemirror-tables/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/prosemirror-tables/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#21"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#32"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/ProseMirror/prosemirror-tables.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "prosemirror-tables",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/prosemirror-tables/package.json"
-        }
-      ],
-      "purl": "pkg:npm/prosemirror-tables@1.8.5",
-      "scope": "required",
-      "type": "library",
-      "version": "1.8.5"
-    },
-    {
-      "bom-ref": "pkg:npm/prosemirror-transform@1.12.0",
-      "description": "ProseMirror document transformations",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/prosemirror-transform/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/prosemirror-transform/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "packages/folio/src/core/paged-layout/transactionDirtyRange.ts#2"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#17"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "git://github.com/prosemirror/prosemirror-transform.git"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT",
-            "url": "https://opensource.org/licenses/MIT"
-          }
-        }
-      ],
-      "name": "prosemirror-transform",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/prosemirror-transform/package.json"
-        }
-      ],
-      "purl": "pkg:npm/prosemirror-transform@1.12.0",
-      "scope": "required",
-      "type": "library",
-      "version": "1.12.0"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-view@1.41.9",
@@ -21147,75 +19179,6 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#4"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#4"
-          },
-          {
-            "location": "packages/folio/src/components/commentsHelpers.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHeaderFooterEditor.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHyperlinkHandlers.ts#3"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useImageHandlers.ts#3"
-          },
-          {
-            "location": "packages/folio/src/core/ai-suggestions/apply.ts#14"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#14"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/layout-bridge/convert/wrapEditorViewAsSurface.ts#14"
-          },
-          {
-            "location": "packages/folio/src/core/paged-layout/scrollToPmPosition.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/paged-layout/selectionViewportRect.ts#15"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/features/ImagePasteExtension.ts#9"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#22"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/aiCitationDecorations.ts#16"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/aiSuggestionDecorations.ts#18"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/autocompleteSuggestion.ts#28"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/contentControlWidgets.ts#17"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/selectionTracker.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/suggestionMode.ts#18"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templatePreviewValues.ts#20"
-          },
-          {
-            "location": "packages/folio/src/core/prosemirror/plugins/templatePreviewValues.ts#21"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#17"
-          },
-          {
             "location": "apps/web/src/components/ai-suggestions/host.tsx#42"
           },
           {
@@ -21229,42 +19192,6 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#36"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#36"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#53"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#32"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#35"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#35"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#48"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#33"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#53"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#35"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#48"
           }
         ]
       },
@@ -21474,15 +19401,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#2"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#18"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
           }
         ]
       },
@@ -21687,69 +19605,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
           },
           {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHeaderFooterEditor.ts#6"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHyperlinkHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/useFolioComments.ts#17"
-          },
-          {
-            "location": "packages/folio/src/hooks/useHistory.ts#11"
-          },
-          {
-            "location": "packages/folio/src/hooks/useTableSelection.ts#8"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useDragAutoScroll.ts#9"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#14"
-          },
-          {
-            "location": "packages/folio/src/utils/contained-handler.ts#1"
-          },
-          {
             "location": "packages/transactional/emails/_shared.ts#1"
           },
           {
@@ -21883,6 +19738,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -22785,138 +20643,6 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
           },
           {
-            "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#11"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#31"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#32"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#28"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#29"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/Toolbar.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FootnotePropertiesDialog.tsx#7"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePositionDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePropertiesDialog.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/PageSetupDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/TablePropertiesDialog.tsx#5"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
-          },
-          {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AISuggestionRectsOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AutocompleteCaretOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/TemplateDirectivesOverlay.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#9"
-          },
-          {
             "location": "packages/ui/src/components/alert-dialog.tsx#3"
           },
           {
@@ -23665,7 +21391,13 @@
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#4"
           },
           {
+            "location": "apps/web/src/components/chat/chat-context-meter.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#3"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#5"
@@ -24461,33 +22193,6 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#5"
-          },
-          {
-            "location": "packages/folio/src/components/CommentsSidebar.tsx#22"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#21"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#37"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditorHelpers.tsx#6"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#27"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#21"
-          },
-          {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#23"
-          },
-          {
-            "location": "packages/folio/src/components/ui/ListButtons.tsx#11"
           }
         ]
       },
@@ -24817,7 +22522,7 @@
             "location": "apps/api/src/lib/tanstack-ai-generate.ts#9"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-schema.ts#6"
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#7"
           },
           {
             "location": "apps/api/src/lib/views-schema.ts#3"
@@ -24893,9 +22598,6 @@
           },
           {
             "location": "packages/conditions/src/schema.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/docx/parserEnums.ts#23"
           },
           {
             "location": "packages/legal-ast/src/analysis.ts#5"
@@ -25034,9 +22736,6 @@
         "occurrences": [
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#7"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#18"
           }
         ]
       },
@@ -25100,15 +22799,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#5"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#19"
-          },
-          {
-            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#20"
           }
         ]
       },
@@ -25140,9 +22830,6 @@
       ],
       "purl": "pkg:npm/yjs@13.6.31",
       "scope": "required",
-      "tags": [
-        "xml"
-      ],
       "type": "library",
       "version": "13.6.31"
     },
