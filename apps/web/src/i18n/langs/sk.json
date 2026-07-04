@@ -2223,14 +2223,6 @@
         "termAddedToast": "Pojem „{value}“ bol pridaný do tímového zoznamu.",
         "title": "Anonymizácia"
       },
-      "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
-      },
       "auditLogs": "Záznamy o činnosti",
       "auditLogsAction": "Akcia",
       "auditLogsChanges": "Zmeny",
@@ -2245,7 +2237,14 @@
       "auditLogsResourceType": "Typ prostriedku",
       "auditLogsTime": "Čas",
       "auditLogsTo": "To date",
-      "auditLogsUser": "Používateľ",
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
+      },
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",
       "membersDescription": "Spravujte, kto má prístup k tejto organizácii a všetky čakajúce pozvánky",

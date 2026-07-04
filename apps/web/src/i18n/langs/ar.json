@@ -2223,14 +2223,6 @@
         "termAddedToast": "تمت إضافة «{value}» إلى قائمة الحظر على مستوى الفريق.",
         "title": "إخفاء الهوية"
       },
-      "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
-      },
       "auditLogs": "سجلات النشاط",
       "auditLogsAction": "الإجراء",
       "auditLogsChanges": "التغييرات",
@@ -2245,7 +2237,14 @@
       "auditLogsResourceType": "نوع المورد",
       "auditLogsTime": "الوقت",
       "auditLogsTo": "To date",
-      "auditLogsUser": "المستخدم",
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
+      },
       "matterNumbering": "ترقيم الملفات",
       "matterNumberingDescription": "اضبط كيفية توليد أرقام مراجع الملفات الجديدة",
       "membersDescription": "أدِر من له حق الوصول إلى هذه المؤسسة وأي دعوات معلَّقة",

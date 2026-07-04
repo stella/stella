@@ -2223,14 +2223,6 @@
         "termAddedToast": "“{value}” foi adicionado à lista da equipe.",
         "title": "Anonimização"
       },
-      "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
-      },
       "auditLogs": "Registros de atividade",
       "auditLogsAction": "Ação",
       "auditLogsChanges": "Alterações",
@@ -2245,7 +2237,14 @@
       "auditLogsResourceType": "Tipo de recurso",
       "auditLogsTime": "Hora",
       "auditLogsTo": "To date",
-      "auditLogsUser": "Usuário",
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
+      },
       "matterNumbering": "Numeração de casos",
       "matterNumberingDescription": "Configure como os novos números de referência de casos são gerados",
       "membersDescription": "Gerenciar quem tem acesso a esta organização e quaisquer convites pendentes",

@@ -2226,14 +2226,6 @@ type Messages = {
         "termAddedToast": "Added \"{value}\" to the team-wide deny list.";
         "title": "Anonymization";
       };
-      "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)";
-        "deleteFailed": "Couldn't delete document type";
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.";
-        "labelAria": "Document type name";
-        "reorder": "Reorder document type";
-        "title": "Document types";
-      };
       "auditLogs": "Activity logs";
       "auditLogsAction": "Action";
       "auditLogsChanges": "Changes";
@@ -2248,7 +2240,14 @@ type Messages = {
       "auditLogsResourceType": "Resource Type";
       "auditLogsTime": "Time";
       "auditLogsTo": "To date";
-      "auditLogsUser": "User";
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)";
+        "deleteFailed": "Couldn't delete document type";
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.";
+        "labelAria": "Document type name";
+        "reorder": "Reorder document type";
+        "title": "Document types";
+      };
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";

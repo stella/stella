@@ -2223,14 +2223,6 @@
         "termAddedToast": "„{value}“ pridėtas į komandos sąrašą.",
         "title": "Anonimizavimas"
       },
-      "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
-      },
       "auditLogs": "Veiklos žurnalai",
       "auditLogsAction": "Veiksmas",
       "auditLogsChanges": "Pakeitimai",
@@ -2245,7 +2237,14 @@
       "auditLogsResourceType": "Ištekliaus tipas",
       "auditLogsTime": "Laikas",
       "auditLogsTo": "To date",
-      "auditLogsUser": "Naudotojas",
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
+      },
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",
       "membersDescription": "Manage who has access to this organization",

@@ -2223,14 +2223,6 @@
         "termAddedToast": "„{value}“ wurde zur teamweiten Sperrliste hinzugefügt.",
         "title": "Anonymisierung"
       },
-      "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
-      },
       "auditLogs": "Aktivitätsprotokolle",
       "auditLogsAction": "Aktion",
       "auditLogsChanges": "Änderungen",
@@ -2245,7 +2237,14 @@
       "auditLogsResourceType": "Ressourcentyp",
       "auditLogsTime": "Zeit",
       "auditLogsTo": "To date",
-      "auditLogsUser": "Benutzer",
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
+      },
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",
       "membersDescription": "Manage who has access to this organization",

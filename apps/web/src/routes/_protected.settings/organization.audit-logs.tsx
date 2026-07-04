@@ -49,8 +49,8 @@ function AuditLogsPage() {
   const [filterAction, setFilterAction] = useState<string>("");
   const [filterResourceType, setFilterResourceType] = useState<string>("");
   const [filterUserId, setFilterUserId] = useState<string>("");
-  const [filterFrom, setFilterFrom] = useState<Date | null>(null);
-  const [filterTo, setFilterTo] = useState<Date | null>(null);
+  const [filterFrom, setFilterFrom] = useState<string | null>(null);
+  const [filterTo, setFilterTo] = useState<string | null>(null);
 
   const [exporting, setExporting] = useState(false);
 
@@ -66,8 +66,8 @@ function AuditLogsPage() {
     action: filterAction || undefined,
     resourceType: filterResourceType || undefined,
     userId: filterUserId || undefined,
-    from: filterFrom ? filterFrom.toISOString() : undefined,
-    to: filterTo ? filterTo.toISOString() : undefined,
+    from: filterFrom ? new Date(filterFrom).toISOString() : undefined,
+    to: filterTo ? new Date(filterTo).toISOString() : undefined,
   };
 
   const { data, isLoading, isError } = useQuery({
@@ -98,8 +98,8 @@ function AuditLogsPage() {
       if (filterAction) cleanParams["action"] = filterAction;
       if (filterResourceType) cleanParams["resourceType"] = filterResourceType;
       if (filterUserId) cleanParams["userId"] = filterUserId;
-      if (filterFrom) cleanParams["from"] = filterFrom.toISOString();
-      if (filterTo) cleanParams["to"] = filterTo.toISOString();
+      if (filterFrom) cleanParams["from"] = new Date(filterFrom).toISOString();
+      if (filterTo) cleanParams["to"] = new Date(filterTo).toISOString();
 
       const response = await api["audit-logs"].export.get({
         query: cleanParams,
@@ -152,7 +152,7 @@ function AuditLogsPage() {
             <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-muted/30 p-4 rounded-lg border">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="userId-input">
-                  {t("settings.organization.auditLogsUser")} ID
+                  {t("common.user")} ID
                 </label>
                 <Input
                   id="userId-input"
@@ -203,7 +203,6 @@ function AuditLogsPage() {
                   {t("settings.organization.auditLogsFrom")}
                 </label>
                 <DatePickerPopover
-                  id="from-input"
                   value={filterFrom}
                   onChange={(date) => handleFilterChange(setFilterFrom, date)}
                 />
@@ -214,7 +213,6 @@ function AuditLogsPage() {
                   {t("settings.organization.auditLogsTo")}
                 </label>
                 <DatePickerPopover
-                  id="to-input"
                   value={filterTo}
                   onChange={(date) => handleFilterChange(setFilterTo, date)}
                 />
@@ -226,7 +224,7 @@ function AuditLogsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("settings.organization.auditLogsTime")}</TableHead>
-                    <TableHead>{t("settings.organization.auditLogsUser")}</TableHead>
+                    <TableHead>{t("common.user")}</TableHead>
                     <TableHead>{t("settings.organization.auditLogsAction")}</TableHead>
                     <TableHead>{t("settings.organization.auditLogsResourceType")}</TableHead>
                     <TableHead>{t("settings.organization.auditLogsResourceId")}</TableHead>

@@ -2223,14 +2223,6 @@
         "termAddedToast": "„{value}“ lisati meeskonna keelduloendisse.",
         "title": "Anonüümistamine"
       },
-      "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
-      },
       "auditLogs": "Tegevuslogid",
       "auditLogsAction": "Tegevus",
       "auditLogsChanges": "Muudatused",
@@ -2245,7 +2237,14 @@
       "auditLogsResourceType": "Ressursi tüüp",
       "auditLogsTime": "Aeg",
       "auditLogsTo": "To date",
-      "auditLogsUser": "Kasutaja",
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
+      },
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
       "membersDescription": "Manage who has access to this organization",

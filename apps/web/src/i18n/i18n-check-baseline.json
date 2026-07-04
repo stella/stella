@@ -1771,6 +1771,37 @@
     "settings.account.desktop": [
       "de"
     ],
+    "settings.organization.auditLogsAction": [
+      "fr"
+    ],
+    "settings.organization.auditLogsFrom": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "settings.organization.auditLogsTo": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "settings.organization.documentTypes.addPlaceholder": [
       "ar",
       "cs",

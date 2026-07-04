@@ -2223,14 +2223,6 @@
         "termAddedToast": "„{value}” pievienots komandas sarakstam.",
         "title": "Anonimizācija"
       },
-      "documentTypes": {
-        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
-        "deleteFailed": "Couldn't delete document type",
-        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
-        "labelAria": "Document type name",
-        "reorder": "Reorder document type",
-        "title": "Document types"
-      },
       "auditLogs": "Darbību žurnāli",
       "auditLogsAction": "Darbība",
       "auditLogsChanges": "Izmaiņas",
@@ -2245,7 +2237,14 @@
       "auditLogsResourceType": "Resursa veids",
       "auditLogsTime": "Laiks",
       "auditLogsTo": "To date",
-      "auditLogsUser": "Lietotājs",
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
+      },
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Manage who has access to this organization",
