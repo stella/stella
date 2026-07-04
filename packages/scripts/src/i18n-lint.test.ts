@@ -485,4 +485,34 @@ describe("terminology: real glossary covers migrated Team-scope keys", () => {
       ),
     ).toEqual([]);
   });
+
+  const loadingRegressions = [
+    { locale: "en", value: "Analyzing..." },
+    { locale: "ar", value: "جارٍ التحليل..." },
+    { locale: "cs", value: "Analyzování..." },
+    { locale: "sk", value: "Analyzovanie..." },
+    { locale: "pl", value: "Analizowanie..." },
+    { locale: "de", value: "Analyse..." },
+    { locale: "et", value: "Analüüsimine..." },
+    { locale: "hu", value: "Elemzés..." },
+    { locale: "lt", value: "Analizuojama..." },
+    { locale: "lv", value: "Analizē..." },
+    { locale: "es", value: "Analizando..." },
+    { locale: "fr", value: "Analyse..." },
+    { locale: "pt-BR", value: "Analisando..." },
+  ];
+
+  for (const { locale, value } of loadingRegressions) {
+    test(`${locale} standalone Loading cannot regress to analysis copy`, () => {
+      expect(
+        findForbiddenTerms(
+          "Loading",
+          value,
+          locale,
+          realRules,
+          "common.loading",
+        ),
+      ).toEqual([value]);
+    });
+  }
 });

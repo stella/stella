@@ -331,7 +331,7 @@ export const TemplateList = ({
                 >
                   <PlusIcon />
                   {discovering
-                    ? t("templates.discovering")
+                    ? t("common.loading")
                     : t("templates.newTemplate")}
                 </Button>
                 <input

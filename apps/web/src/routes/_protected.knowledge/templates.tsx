@@ -282,9 +282,7 @@ function RouteComponent() {
   if (creating) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("templates.discovering")}
-        </p>
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
       </div>
     );
   }
@@ -363,9 +361,7 @@ const TemplateDetail = ({
     <div className="flex min-h-0 flex-1 flex-col">
       {state === "loading" && (
         <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-muted-foreground text-sm">
-            {t("templates.discovering")}
-          </p>
+          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
         </div>
       )}
 

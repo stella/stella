@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -9,12 +9,15 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
+const realAnonymizationBlacklist =
+  await import("@/api/lib/anonymization-blacklist");
 
 void mock.module("@/api/mcp/anonymization", () => ({
   anonymizeTextFields: anonymizeTextFieldsMock,
 }));
 
 void mock.module("@/api/lib/anonymization-blacklist", () => ({
+  ...realAnonymizationBlacklist,
   loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
 }));
 
@@ -51,6 +54,10 @@ const parsePayload = (result: CallToolResult) =>
   }>(parseText(result));
 
 describe("finalizeMcpEgress", () => {
+  afterAll(() => {
+    mock.restore();
+  });
+
   beforeEach(() => {
     anonymizeTextFieldsMock.mockReset();
     loadAnonymizationGazetteerEntriesMock.mockReset();

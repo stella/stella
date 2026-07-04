@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Koniec cyklu",
     "directiveEndIf": "Koniec podmienky",
     "directiveIf": "Ak: {expression}",
-    "discovering": "Analyzovanie...",
     "discoveryFailed": "Nepodarilo sa analyzovať vzor",
     "downloadAnyway": "Aj tak stiahnuť",
     "downloadDocx": "Stiahnuť DOCX",

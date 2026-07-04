@@ -98,9 +98,7 @@ export const TemplateVersionsTab = ({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">
-          {t("templates.discovering")}
-        </p>
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
       </div>
     );
   }

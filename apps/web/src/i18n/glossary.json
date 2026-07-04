@@ -868,6 +868,41 @@
         "fr": "colonne",
         "pt-BR": "coluna"
       }
+    },
+    {
+      "id": "loading",
+      "en": "Loading",
+      "note": "Standalone loading-state label. Use each locale's loading/status copy; do not use analysis/discovery wording for this key.",
+      "keyTriggers": ["common.loading"],
+      "forbidden": {
+        "en": ["Analyzing..."],
+        "ar": ["جارٍ التحليل..."],
+        "cs": ["Analyzování..."],
+        "sk": ["Analyzovanie..."],
+        "pl": ["Analizowanie..."],
+        "de": ["Analyse..."],
+        "et": ["Analüüsimine..."],
+        "hu": ["Elemzés..."],
+        "lt": ["Analizuojama..."],
+        "lv": ["Analizē..."],
+        "es": ["Analizando..."],
+        "fr": ["Analyse..."],
+        "pt-BR": ["Analisando..."]
+      },
+      "translations": {
+        "ar": "جارٍ التحميل",
+        "cs": "Načítám",
+        "sk": "Načítavam",
+        "pl": "Ładowanie",
+        "de": "Wird geladen …",
+        "et": "Laadimine",
+        "hu": "Betöltés",
+        "lt": "Įkeliama",
+        "lv": "Ielādē",
+        "es": "Cargando",
+        "fr": "Chargement",
+        "pt-BR": "Carregando"
+      }
     }
   ]
 }

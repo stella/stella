@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Kilpos pabaiga",
     "directiveEndIf": "Sąlygos pabaiga",
     "directiveIf": "Jei: {expression}",
-    "discovering": "Analizuojama...",
     "discoveryFailed": "Nepavyko išanalizuoti šablono",
     "downloadAnyway": "Vis tiek atsisiųsti",
     "downloadDocx": "Atsisiųsti DOCX",
