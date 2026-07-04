@@ -46,6 +46,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
+import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
@@ -321,24 +322,17 @@ function ChatIndex() {
 
   return (
     <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-end gap-2 px-4 py-2">
-        <div className="flex items-center gap-1">
-          {chatDraftMeta?.webSearchAvailable && (
-            <ChatWebSearchToggle
-              enabled={chatDraftMeta.webSearchEnabled}
-              threadRef={threadRef}
-            />
-          )}
-          <Tooltip
-            content={t("chat.moveToSide")}
-            render={
-              <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-                <Minimize2Icon className="size-4" />
-              </Button>
-            }
-          />
-        </div>
-      </div>
+      <ChromeHeaderActions>
+        <Tooltip
+          content={t("chat.moveToSide")}
+          render={
+            <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+              <Minimize2Icon className="size-4" />
+            </Button>
+          }
+        />
+        <ThreadsSheet />
+      </ChromeHeaderActions>
       <div className="flex flex-1 flex-col items-center overflow-y-auto px-4 pb-16">
         <div className="flex min-h-[22rem] w-full max-w-2xl shrink-0 flex-col items-center justify-center gap-8">
           <div className="flex flex-col items-center gap-4 text-center">
@@ -374,6 +368,12 @@ function ChatIndex() {
                     matterIds={contextMatterIds}
                     onChange={setContextMatterIds}
                   />
+                  {chatDraftMeta?.webSearchAvailable && (
+                    <ChatWebSearchToggle
+                      enabled={chatDraftMeta.webSearchEnabled}
+                      threadRef={threadRef}
+                    />
+                  )}
                   <ChatAnonymizedToggle
                     enabled={anonymized}
                     onChange={setAnonymized}

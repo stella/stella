@@ -1061,7 +1061,7 @@ const QueuedUserMessages = ({
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-muted-foreground ms-auto flex items-center gap-1 text-xs">
+      <p className="text-muted-foreground flex items-center gap-1 text-xs">
         <ClockIcon aria-hidden="true" className="size-3" />
         {t("chat.queuedNotice")}
       </p>
@@ -1071,17 +1071,8 @@ const QueuedUserMessages = ({
           : "";
         return (
           <Message from="user" key={queued.id}>
-            <div className="ms-auto flex max-w-full items-start gap-1">
-              <Button
-                aria-label={t("chat.cancelQueuedMessage")}
-                className="mt-0.5 shrink-0"
-                onClick={() => onRemove(queued.id)}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <XIcon className="size-3.5" />
-              </Button>
-              <MessageContent className="opacity-60">
+            <div className="flex w-full items-start gap-1">
+              <MessageContent className="min-w-0 flex-1 opacity-60">
                 {text.length > 0 && (
                   <UserMessageText
                     restorationPairs={EMPTY_RESTORATION_PAIRS}
@@ -1097,6 +1088,15 @@ const QueuedUserMessages = ({
                   </span>
                 )}
               </MessageContent>
+              <Button
+                aria-label={t("chat.cancelQueuedMessage")}
+                className="mt-0.5 shrink-0"
+                onClick={() => onRemove(queued.id)}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <XIcon className="size-3.5" />
+              </Button>
             </div>
           </Message>
         );

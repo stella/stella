@@ -60,6 +60,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
+import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import {
   SIDE_RAIL_ICON_BUTTON_SIZE,
   SIDE_RAIL_WIDTH,
@@ -508,6 +509,11 @@ function ProtectedContent() {
         )}
         <AppBreadcrumbs />
         {chromeActions}
+        {/* Chat routes publish their actions (move-to-side, threads, + New
+            chat) here via a portal, so they land at the far end after the
+            shell's own pin/matter/inspector icons without this shell importing
+            any chat slice. */}
+        <ChromeHeaderActionsSlot />
         <Menu
           onOpenChange={(nextOpen) => {
             setChatMenuOpen(nextOpen);

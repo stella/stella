@@ -31,9 +31,8 @@ type ChatContextMeterProps = {
   usage: ChatContextUsage;
 };
 
-// Progressive disclosure: the ring is always shown; the percent label appears
-// only once the context is half full, and the tone escalates near the trigger.
-const PERCENT_LABEL_THRESHOLD = 50;
+// The percent label always shows before the ring; the tone escalates near the
+// trigger.
 const WARNING_THRESHOLD = 80;
 const DANGER_THRESHOLD = 95;
 
@@ -74,7 +73,6 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
     Math.round((usage.estimatedTokens / usage.triggerTokens) * 100),
   );
   const tone = contextTone(percent);
-  const showPercent = percent >= PERCENT_LABEL_THRESHOLD;
   const compact = (value: number) =>
     format.number(value, { notation: "compact", maximumFractionDigits: 1 });
 
@@ -94,12 +92,10 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
           />
         }
       >
+        <span className="text-xs">
+          {t("percent", { percent: format.number(percent) })}
+        </span>
         <ContextRing percent={percent} />
-        {showPercent && (
-          <span className="text-xs">
-            {t("percent", { percent: format.number(percent) })}
-          </span>
-        )}
       </PopoverTrigger>
       <PopoverPopup align="end" className="w-96" side="top">
         <div className="flex flex-col gap-3">

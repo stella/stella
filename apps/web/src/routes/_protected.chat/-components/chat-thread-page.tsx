@@ -48,6 +48,7 @@ import {
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
+import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { toAPIError } from "@/lib/errors";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -400,31 +401,21 @@ export const ChatThreadPage = ({
         }}
       >
         <div className="relative flex w-full flex-1 flex-col overflow-hidden">
-          <div className="bg-background mx-auto flex w-full max-w-5xl shrink-0 items-center justify-between gap-2 px-4 py-2">
-            <div className="flex min-w-0 items-center gap-2">
-              <NewChatButton
-                hasMessages={messages.length > 0}
-                threadRef={threadRef}
-              />
-            </div>
-            <div className="flex items-center gap-1">
-              {data.webSearchAvailable && (
-                <ChatWebSearchToggle
-                  enabled={data.webSearchEnabled}
-                  threadRef={threadRef}
-                />
-              )}
-              <Tooltip
-                content={t("chat.moveToSide")}
-                render={
-                  <Button onClick={moveToSide} size="icon-sm" variant="ghost">
-                    <Maximize2Icon className="size-4" />
-                  </Button>
-                }
-              />
-              <ThreadsSheet />
-            </div>
-          </div>
+          <ChromeHeaderActions>
+            <Tooltip
+              content={t("chat.moveToSide")}
+              render={
+                <Button onClick={moveToSide} size="icon-sm" variant="ghost">
+                  <Maximize2Icon className="size-4" />
+                </Button>
+              }
+            />
+            <ThreadsSheet />
+            <NewChatButton
+              hasMessages={messages.length > 0}
+              threadRef={threadRef}
+            />
+          </ChromeHeaderActions>
 
           <div className="relative flex min-h-0 flex-1 flex-col">
             <Conversation className="min-h-0">
@@ -533,6 +524,12 @@ export const ChatThreadPage = ({
                       <ChatMatterPicker
                         matterIds={contextMatterIds}
                         onChange={setContextMatterIds}
+                      />
+                    )}
+                    {data.webSearchAvailable && (
+                      <ChatWebSearchToggle
+                        enabled={data.webSearchEnabled}
+                        threadRef={threadRef}
                       />
                     )}
                     <ChatAnonymizedToggle

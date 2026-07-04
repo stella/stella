@@ -162,6 +162,12 @@ export const ChatInputSurface = ({
   const showStatusRow =
     statusBarStart !== undefined || contextUsage !== undefined;
 
+  // Cursor-style placement: an empty composer keeps the (+) inline on the
+  // placeholder line (with the editor's start padding reserving its slot).
+  // Once there is text or an attachment, the (+) drops to the start of the
+  // bottom action row and the editor spans the full box width.
+  const showInlinePlus = isEmpty && attachments.length === 0;
+
   return (
     // Outer wrapper carries caller positioning (`className`) and the slim
     // status row; the inner box keeps the border and the drag/paste/focus
@@ -187,49 +193,27 @@ export const ChatInputSurface = ({
       >
         <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
         <div
-          className="chat-editor relative min-w-0 overflow-hidden ps-9 pe-3 pt-2 pb-1"
+          className={cn(
+            "chat-editor relative min-w-0 overflow-hidden pe-3 pt-2 pb-1",
+            showInlinePlus ? "ps-9" : "ps-3",
+          )}
           onKeyDown={(event) => event.stopPropagation()}
           role="presentation"
         >
-          <Menu>
-            <MenuTrigger
-              aria-label={t("chat.composerMenu.open")}
+          {showInlinePlus && (
+            <ComposerPlusMenu
               disabled={inputDisabled}
-              render={
-                <Button
-                  className="absolute start-2 top-1.5 rounded-full"
-                  size="icon-xs"
-                  type="button"
-                  variant="ghost"
-                />
-              }
-            >
-              <PlusIcon />
-            </MenuTrigger>
-            <MenuPopup align="start" side="top">
-              <MenuItem onClick={openFilePicker}>
-                <PaperclipIcon />
-                {t("chat.attachFile")}
-              </MenuItem>
-              {onOpenModelSelector && (
-                <MenuItem onClick={onOpenModelSelector}>
-                  <CpuIcon />
-                  {t("chat.composerMenu.models")}
-                </MenuItem>
-              )}
-              {onOpenMcpServers && (
-                <MenuItem onClick={onOpenMcpServers}>
-                  <ServerIcon />
-                  {t("chat.composerMenu.mcpServers")}
-                </MenuItem>
-              )}
-            </MenuPopup>
-          </Menu>
+              onOpenFilePicker={openFilePicker}
+              onOpenMcpServers={onOpenMcpServers}
+              onOpenModelSelector={onOpenModelSelector}
+              triggerClassName="absolute start-2 top-1.5"
+            />
+          )}
           <PromptEditorContent
             className={cn(inputDisabled && "pointer-events-none")}
             editor={editor}
           />
-          {isEmpty && attachments.length === 0 && (
+          {showInlinePlus && (
             <span
               aria-hidden="true"
               className="text-foreground-placeholder pointer-events-none absolute start-9 end-3 top-2 truncate text-sm"
@@ -239,6 +223,15 @@ export const ChatInputSurface = ({
           )}
         </div>
         <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
+          {!showInlinePlus && (
+            <ComposerPlusMenu
+              disabled={inputDisabled}
+              onOpenFilePicker={openFilePicker}
+              onOpenMcpServers={onOpenMcpServers}
+              onOpenModelSelector={onOpenModelSelector}
+              triggerClassName="me-auto"
+            />
+          )}
           <input
             accept={fileInputAccept}
             className="hidden"
@@ -311,5 +304,68 @@ const ChatSubmitButton = ({
       size="icon-sm"
       variant="default"
     />
+  );
+};
+
+type ComposerPlusMenuProps = {
+  disabled: boolean;
+  onOpenFilePicker: () => void;
+  onOpenModelSelector?: (() => void) | undefined;
+  onOpenMcpServers?: (() => void) | undefined;
+  /** Positioning for the trigger button, differing per slot: absolute on the
+   *  empty placeholder line, `me-auto` at the start of the bottom action row. */
+  triggerClassName?: string | undefined;
+};
+
+// The composer's (+) affordance: a single Menu rendered into whichever slot the
+// composer state calls for. A circular, filled button (not a bare ghost icon)
+// carrying the attach / models / MCP actions.
+const ComposerPlusMenu = ({
+  disabled,
+  onOpenFilePicker,
+  onOpenModelSelector,
+  onOpenMcpServers,
+  triggerClassName,
+}: ComposerPlusMenuProps) => {
+  const t = useTranslations();
+
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("chat.composerMenu.open")}
+        disabled={disabled}
+        render={
+          <Button
+            className={cn(
+              "border-border size-7 shrink-0 rounded-full border",
+              triggerClassName,
+            )}
+            size="icon-xs"
+            type="button"
+            variant="secondary"
+          />
+        }
+      >
+        <PlusIcon className="size-4" />
+      </MenuTrigger>
+      <MenuPopup align="start" side="top">
+        <MenuItem onClick={onOpenFilePicker}>
+          <PaperclipIcon />
+          {t("chat.attachFile")}
+        </MenuItem>
+        {onOpenModelSelector && (
+          <MenuItem onClick={onOpenModelSelector}>
+            <CpuIcon />
+            {t("chat.composerMenu.models")}
+          </MenuItem>
+        )}
+        {onOpenMcpServers && (
+          <MenuItem onClick={onOpenMcpServers}>
+            <ServerIcon />
+            {t("chat.composerMenu.mcpServers")}
+          </MenuItem>
+        )}
+      </MenuPopup>
+    </Menu>
   );
 };
