@@ -1,6 +1,6 @@
 import { Suspense, useState } from "react";
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
@@ -8,12 +8,21 @@ import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { startOfWeek } from "@/i18n/week";
 import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/expenses",
 )({
+  beforeLoad: ({ params }) => {
+    if (!isTimeBillingRouteEnabled()) {
+      throw redirect({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: params.workspaceId },
+      });
+    }
+  },
   component: ExpensesPage,
 });
 
