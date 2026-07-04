@@ -4,30 +4,67 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { type SafeId } from "@/lib/safe-id";
 
-export interface AuditLogQueryParams {
+export type AuditLogsPageKey = {
   workspaceId?: SafeId<"workspace">;
   action?: string;
   resourceType?: string;
+  resourceId?: string;
   userId?: string;
   from?: string;
   to?: string;
   limit?: number;
   cursor?: string;
-}
+};
 
 export const auditLogKeys = {
   all: ["audit-logs"] as const,
-  filtered: (filters: AuditLogQueryParams) => [...auditLogKeys.all, filters] as const,
+  filtered: (key: AuditLogsPageKey) =>
+    [
+      ...auditLogKeys.all,
+      {
+        workspaceId: key.workspaceId,
+        action: key.action,
+        resourceType: key.resourceType,
+        resourceId: key.resourceId,
+        userId: key.userId,
+        from: key.from,
+        to: key.to,
+        limit: key.limit,
+        cursor: key.cursor,
+      },
+    ] as const,
 };
 
-export const fetchAuditLogs = async (query: AuditLogQueryParams) => {
-  // exactOptionalPropertyTypes checks require omitting undefined keys
-  const cleanedQuery = Object.fromEntries(
-    Object.entries(query).filter(([_, v]) => v !== undefined)
-  );
+export type AuditLogOptionsInput = {
+  key: AuditLogsPageKey;
+};
+
+export const fetchAuditLogs = async (query: AuditLogsPageKey) => {
+  // Construct a query object with only defined keys to satisfy exactOptionalPropertyTypes
+  const cleanedQuery: {
+    workspaceId?: SafeId<"workspace">;
+    action?: string;
+    resourceType?: string;
+    resourceId?: string;
+    userId?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    cursor?: string;
+  } = {};
+
+  if (query.workspaceId !== undefined) cleanedQuery.workspaceId = query.workspaceId;
+  if (query.action !== undefined) cleanedQuery.action = query.action;
+  if (query.resourceType !== undefined) cleanedQuery.resourceType = query.resourceType;
+  if (query.resourceId !== undefined) cleanedQuery.resourceId = query.resourceId;
+  if (query.userId !== undefined) cleanedQuery.userId = query.userId;
+  if (query.from !== undefined) cleanedQuery.from = query.from;
+  if (query.to !== undefined) cleanedQuery.to = query.to;
+  if (query.limit !== undefined) cleanedQuery.limit = query.limit;
+  if (query.cursor !== undefined) cleanedQuery.cursor = query.cursor;
 
   const response = await api["audit-logs"].get({
-    query: cleanedQuery as any,
+    query: cleanedQuery,
   });
   if (response.error) {
     throw toAPIError(response.error);
@@ -35,8 +72,8 @@ export const fetchAuditLogs = async (query: AuditLogQueryParams) => {
   return response.data;
 };
 
-export const auditLogOptions = (query: AuditLogQueryParams) =>
+export const auditLogOptions = ({ key }: AuditLogOptionsInput) =>
   queryOptions({
-    queryKey: auditLogKeys.filtered(query),
-    queryFn: () => fetchAuditLogs(query),
+    queryKey: auditLogKeys.filtered(key),
+    queryFn: () => fetchAuditLogs(key),
   });

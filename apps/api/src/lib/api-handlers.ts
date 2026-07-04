@@ -256,11 +256,16 @@ export type UsageMeteringConfig = {
   modelRole?: ModelRole;
 };
 
-export type HandlerConfig = InputSchema & {
+export type HandlerConfig<
+  TBody = any,
+  TParams = any,
+  TQuery = any,
+  TAuditResult = any,
+> = InputSchema & {
   permissions: PermissionInput;
   requiresUsage?: UsageMeteringConfig;
   mcp: McpExposure;
-  audit?: AuditConfig | false;
+  audit?: AuditConfig<TBody, TParams, TQuery, TAuditResult> | false;
 };
 
 export type SessionHandlerConfig = InputSchema & {
@@ -550,10 +555,10 @@ const runSafeHandler = async <
 };
 
 const createSafeScopedHandler = <
-  TConfig extends HandlerConfig,
+  TConfig extends HandlerConfig<any, any, any, any>,
   TContext extends BaseHandlerContext<TConfig>,
   TResult extends SafeHandlerPayload,
->(
+ >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
@@ -569,7 +574,10 @@ const createSafeScopedHandler = <
     let hasLogged = false;
 
     if (config.audit) {
-      const recordAudit = async (tx: Transaction, result: any) => {
+      const recordAudit = async (
+        tx: Transaction,
+        result: any,
+      ) => {
         if (hasLogged || !config.audit) {
           return;
         }

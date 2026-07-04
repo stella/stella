@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@stll/ui/components/table";
 
-import { auditLogOptions } from "@/routes/_protected.settings/-queries/audit-logs";
+import { auditLogOptions, type AuditLogsPageKey } from "@/routes/_protected.settings/-queries/audit-logs";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute(
@@ -27,21 +27,22 @@ export const Route = createFileRoute(
 function AuditLogsPage() {
   const t = useTranslations();
   const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [cursorHistory, setCursorHistory] = useState<string[]>([]);
+  const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>([]);
   const limit = 20;
 
-  const queryParams: { limit: number; cursor?: string } = { limit };
+  const queryParams: AuditLogsPageKey = { limit };
   if (cursor) {
     queryParams.cursor = cursor;
   }
 
-  const { data, isLoading, isError } = useQuery(
-    auditLogOptions(queryParams),
-  );
+  const { data, isLoading, isError } = useQuery({
+    ...auditLogOptions({ key: queryParams }),
+    placeholderData: keepPreviousData,
+  });
 
   const handleNextPage = () => {
     if (data?.nextCursor) {
-      setCursorHistory((prev) => [...prev, cursor ?? ""]);
+      setCursorHistory((prev) => [...prev, cursor]);
       setCursor(data.nextCursor);
     }
   };
@@ -50,7 +51,7 @@ function AuditLogsPage() {
     setCursorHistory((prev) => {
       const nextHistory = [...prev];
       const prevCursor = nextHistory.pop();
-      setCursor(prevCursor === "" ? undefined : prevCursor);
+      setCursor(prevCursor);
       return nextHistory;
     });
   };
@@ -69,31 +70,31 @@ function AuditLogsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Time</TableHead>
-                    <TableHead>User</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Resource Type</TableHead>
-                    <TableHead>Resource ID</TableHead>
-                    <TableHead>Changes</TableHead>
+                    <TableHead>{t("settings.organization.auditLogsTime")}</TableHead>
+                    <TableHead>{t("settings.organization.auditLogsUser")}</TableHead>
+                    <TableHead>{t("settings.organization.auditLogsAction")}</TableHead>
+                    <TableHead>{t("settings.organization.auditLogsResourceType")}</TableHead>
+                    <TableHead>{t("settings.organization.auditLogsResourceId")}</TableHead>
+                    <TableHead>{t("settings.organization.auditLogsChanges")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
                       <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
-                        Loading logs...
+                        {t("settings.organization.auditLogsLoading")}
                       </TableCell>
                     </TableRow>
                   ) : isError ? (
                     <TableRow>
                       <TableCell className="text-destructive h-24 text-center font-medium" colSpan={6}>
-                        Failed to load activity logs.
+                        {t("settings.organization.auditLogsError")}
                       </TableCell>
                     </TableRow>
                   ) : !data || data.items.length === 0 ? (
                     <TableRow>
                       <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
-                        No activity logs found.
+                        {t("settings.organization.auditLogsEmpty")}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -124,14 +125,14 @@ function AuditLogsPage() {
                 onClick={handlePrevPage}
                 variant="outline"
               >
-                Previous
+                {t("common.previous")}
               </Button>
               <Button
                 disabled={!data?.nextCursor || isLoading}
                 onClick={handleNextPage}
                 variant="outline"
               >
-                Next
+                {t("common.next")}
               </Button>
             </div>
           </div>
