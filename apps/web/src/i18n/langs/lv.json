@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI čatā",
+    "composerMenu": {
+      "mcpServers": "MCP serveri",
+      "models": "Modeļi",
+      "open": "Atvērt pielikumu un rīku izvēlni"
+    },
     "contextMeter": {
       "attachments": "Pievienotie dokumenti",
       "autoCompact": "Sasniedzot 100%, stella automātiski apkopo vecākos ziņojumus, lai atbrīvotu vietu.",

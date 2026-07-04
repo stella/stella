@@ -406,12 +406,6 @@ export const ChatThreadPage = ({
                 hasMessages={messages.length > 0}
                 threadRef={threadRef}
               />
-              {contextMatterIds !== null && (
-                <ChatMatterPicker
-                  matterIds={contextMatterIds}
-                  onChange={setContextMatterIds}
-                />
-              )}
             </div>
             <div className="flex items-center gap-1">
               {data.webSearchAvailable && (
@@ -420,10 +414,6 @@ export const ChatThreadPage = ({
                   threadRef={threadRef}
                 />
               )}
-              <ChatAnonymizedToggle
-                enabled={anonymized}
-                onChange={setAnonymized}
-              />
               <Tooltip
                 content={t("chat.moveToSide")}
                 render={
@@ -528,6 +518,29 @@ export const ChatThreadPage = ({
                 contextUsage={data.context ?? undefined}
                 controller={controller}
                 isGenerating={isGenerating}
+                onOpenMcpServers={() => {
+                  void navigate({
+                    to: "/knowledge/tools",
+                    search: { kind: "mcp" },
+                  });
+                }}
+                onOpenModelSelector={() => {
+                  useModelSelectorStore.getState().open();
+                }}
+                statusBarStart={
+                  <div className="flex min-w-0 items-center gap-1">
+                    {contextMatterIds !== null && (
+                      <ChatMatterPicker
+                        matterIds={contextMatterIds}
+                        onChange={setContextMatterIds}
+                      />
+                    )}
+                    <ChatAnonymizedToggle
+                      enabled={anonymized}
+                      onChange={setAnonymized}
+                    />
+                  </div>
+                }
                 onStop={() => {
                   stop();
                 }}

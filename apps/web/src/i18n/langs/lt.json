@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Atšaukti eilėje esančią žinutę",
     "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į AI pokalbį",
+    "composerMenu": {
+      "mcpServers": "MCP serveriai",
+      "models": "Modeliai",
+      "open": "Atverti priedų ir įrankių meniu"
+    },
     "contextMeter": {
       "attachments": "Pridėti dokumentai",
       "autoCompact": "Pasiekus 100%, stella automatiškai apibendrina senesnes žinutes, kad atlaisvintų vietos.",

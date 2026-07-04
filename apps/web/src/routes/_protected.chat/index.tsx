@@ -321,11 +321,7 @@ function ChatIndex() {
 
   return (
     <div className="flex w-full max-w-5xl flex-1 flex-col overflow-hidden">
-      <div className="flex items-center justify-between gap-2 px-4 py-2">
-        <ChatMatterPicker
-          matterIds={contextMatterIds}
-          onChange={setContextMatterIds}
-        />
+      <div className="flex items-center justify-end gap-2 px-4 py-2">
         <div className="flex items-center gap-1">
           {chatDraftMeta?.webSearchAvailable && (
             <ChatWebSearchToggle
@@ -333,7 +329,6 @@ function ChatIndex() {
               threadRef={threadRef}
             />
           )}
-          <ChatAnonymizedToggle enabled={anonymized} onChange={setAnonymized} />
           <Tooltip
             content={t("chat.moveToSide")}
             render={
@@ -364,6 +359,27 @@ function ChatIndex() {
               anonymized={anonymized}
               autoFocus
               controller={controller}
+              onOpenMcpServers={() => {
+                void navigate({
+                  to: "/knowledge/tools",
+                  search: { kind: "mcp" },
+                });
+              }}
+              onOpenModelSelector={() => {
+                useModelSelectorStore.getState().open();
+              }}
+              statusBarStart={
+                <div className="flex min-w-0 items-center gap-1">
+                  <ChatMatterPicker
+                    matterIds={contextMatterIds}
+                    onChange={setContextMatterIds}
+                  />
+                  <ChatAnonymizedToggle
+                    enabled={anonymized}
+                    onChange={setAnonymized}
+                  />
+                </div>
+              }
               onSubmit={async (draft) => {
                 const reservedCommand = matchReservedChatCommand(draft.html);
                 if (reservedCommand?.id === "new") {

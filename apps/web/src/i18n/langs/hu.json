@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI chatbe",
+    "composerMenu": {
+      "mcpServers": "MCP-kiszolgálók",
+      "models": "Modellek",
+      "open": "Mellékletek és eszközök menüjének megnyitása"
+    },
     "contextMeter": {
       "attachments": "Csatolt dokumentumok",
       "autoCompact": "100%-nál a stella automatikusan összefoglalja a korábbi üzeneteket, hogy helyet szabadítson fel.",

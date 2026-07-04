@@ -1,10 +1,17 @@
 import "./chat-editor.css";
 import { useCallback, useRef } from "react";
+import type { ReactNode } from "react";
 
-import { PaperclipIcon } from "lucide-react";
+import { CpuIcon, PaperclipIcon, PlusIcon, ServerIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -47,10 +54,26 @@ type ChatInputSurfaceProps = {
   anonymized?: boolean;
   /**
    * Model-context estimate for this thread's next send. Renders a small ring
-   * meter in the footer that opens an explainer popover. Undefined on the
+   * meter on the far end of the status row below the box. Undefined on the
    * new-chat surface (no thread yet), where nothing is rendered.
    */
   contextUsage?: ChatContextUsage | undefined;
+  /**
+   * Left cluster of the slim status row rendered below the bordered box
+   * (matter picker, anonymization toggle, ...). Rendered as-is; callers own
+   * layout inside the `text-xs` row.
+   */
+  statusBarStart?: ReactNode;
+  /**
+   * When provided, the (+) menu gains a "Models" item. Omit on surfaces
+   * without a model selector.
+   */
+  onOpenModelSelector?: (() => void) | undefined;
+  /**
+   * When provided, the (+) menu gains an "MCP servers" item. Omit on
+   * surfaces that don't navigate to the tools catalogue.
+   */
+  onOpenMcpServers?: (() => void) | undefined;
 };
 
 export const ChatInputSurface = ({
@@ -64,6 +87,9 @@ export const ChatInputSurface = ({
   onStop,
   anonymized = false,
   contextUsage,
+  statusBarStart,
+  onOpenModelSelector,
+  onOpenMcpServers,
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -84,7 +110,6 @@ export const ChatInputSurface = ({
     removeFile,
   } = controller;
   const inputDisabled = disabled;
-  const attachFileLabel = t("chat.attachFile");
   // Submitting stays enabled while the assistant streams: a send
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
@@ -134,66 +159,95 @@ export const ChatInputSurface = ({
     onFocusChange?.(false);
   };
 
+  const showStatusRow =
+    statusBarStart !== undefined || contextUsage !== undefined;
+
   return (
-    <div
-      className={cn(
-        "bg-background rounded-lg border",
-        "transition-colors",
-        // Default focus border (gray) only when not in anonymized
-        // mode — otherwise the gray border landed on top of the
-        // blue ring and read as a double-ring on click.
-        !inputDisabled && !anonymized && "focus-within:border-ring",
-        anonymized &&
-          "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
-        className,
-      )}
-      onBlurCapture={handleBlur}
-      onDragOver={inputDisabled ? undefined : handleDragOver}
-      onDrop={inputDisabled ? undefined : handleDrop}
-      onFocusCapture={handleFocus}
-      onPaste={inputDisabled ? undefined : handlePaste}
-      ref={rootRef}
-    >
-      <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
+    // Outer wrapper carries caller positioning (`className`) and the slim
+    // status row; the inner box keeps the border and the drag/paste/focus
+    // handlers so the row sits outside the border but still inside scope.
+    <div className={cn("flex flex-col", className)}>
       <div
-        className="chat-editor relative min-w-0 overflow-hidden px-3 pt-2 pb-1"
-        onKeyDown={(event) => event.stopPropagation()}
-        role="presentation"
-      >
-        <PromptEditorContent
-          className={cn(inputDisabled && "pointer-events-none")}
-          editor={editor}
-        />
-        {isEmpty && attachments.length === 0 && (
-          <span
-            aria-hidden="true"
-            className="text-foreground-placeholder pointer-events-none absolute inset-x-3 top-2 truncate text-sm"
-          >
-            {placeholder}
-          </span>
+        className={cn(
+          "bg-background rounded-lg border",
+          "transition-colors",
+          // Default focus border (gray) only when not in anonymized
+          // mode — otherwise the gray border landed on top of the
+          // blue ring and read as a double-ring on click.
+          !inputDisabled && !anonymized && "focus-within:border-ring",
+          anonymized &&
+            "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
         )}
-      </div>
-      <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
-        <Button
-          aria-label={attachFileLabel}
-          disabled={inputDisabled}
-          onClick={openFilePicker}
-          size="icon-sm"
-          variant="ghost"
+        onBlurCapture={handleBlur}
+        onDragOver={inputDisabled ? undefined : handleDragOver}
+        onDrop={inputDisabled ? undefined : handleDrop}
+        onFocusCapture={handleFocus}
+        onPaste={inputDisabled ? undefined : handlePaste}
+        ref={rootRef}
+      >
+        <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
+        <div
+          className="chat-editor relative min-w-0 overflow-hidden ps-9 pe-3 pt-2 pb-1"
+          onKeyDown={(event) => event.stopPropagation()}
+          role="presentation"
         >
-          <PaperclipIcon className="size-3.5" />
-        </Button>
-        <input
-          accept={fileInputAccept}
-          className="hidden"
-          disabled={inputDisabled}
-          multiple
-          onChange={handleFileInputChange}
-          ref={fileInputRef}
-          type="file"
-        />
-        <div className="ms-auto flex items-center gap-1">
-          {contextUsage && <ChatContextMeter usage={contextUsage} />}
+          <Menu>
+            <MenuTrigger
+              aria-label={t("chat.composerMenu.open")}
+              disabled={inputDisabled}
+              render={
+                <Button
+                  className="absolute start-2 top-1.5 rounded-full"
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                />
+              }
+            >
+              <PlusIcon />
+            </MenuTrigger>
+            <MenuPopup align="start" side="top">
+              <MenuItem onClick={openFilePicker}>
+                <PaperclipIcon />
+                {t("chat.attachFile")}
+              </MenuItem>
+              {onOpenModelSelector && (
+                <MenuItem onClick={onOpenModelSelector}>
+                  <CpuIcon />
+                  {t("chat.composerMenu.models")}
+                </MenuItem>
+              )}
+              {onOpenMcpServers && (
+                <MenuItem onClick={onOpenMcpServers}>
+                  <ServerIcon />
+                  {t("chat.composerMenu.mcpServers")}
+                </MenuItem>
+              )}
+            </MenuPopup>
+          </Menu>
+          <PromptEditorContent
+            className={cn(inputDisabled && "pointer-events-none")}
+            editor={editor}
+          />
+          {isEmpty && attachments.length === 0 && (
+            <span
+              aria-hidden="true"
+              className="text-foreground-placeholder pointer-events-none absolute start-9 end-3 top-2 truncate text-sm"
+            >
+              {placeholder}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
+          <input
+            accept={fileInputAccept}
+            className="hidden"
+            disabled={inputDisabled}
+            multiple
+            onChange={handleFileInputChange}
+            ref={fileInputRef}
+            type="file"
+          />
           <ChatSubmitButton
             canSend={!submitDisabled && canSubmit}
             isGenerating={isGenerating}
@@ -204,6 +258,16 @@ export const ChatInputSurface = ({
           />
         </div>
       </div>
+      {showStatusRow && (
+        <div className="text-muted-foreground mt-1.5 flex items-center justify-between gap-2 px-1 text-xs">
+          {statusBarStart}
+          {contextUsage && (
+            <div className="ms-auto">
+              <ChatContextMeter usage={contextUsage} />
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

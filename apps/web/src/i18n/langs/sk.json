@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Zrušiť správu v poradí",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
+    "composerMenu": {
+      "mcpServers": "MCP servery",
+      "models": "Modely",
+      "open": "Otvoriť ponuku príloh a nástrojov"
+    },
     "contextMeter": {
       "attachments": "Pripojené dokumenty",
       "autoCompact": "Pri 100 % stella automaticky zhrnie staršie správy, aby uvoľnila miesto.",

@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
+    "composerMenu": {
+      "mcpServers": "MCP-Server",
+      "models": "Modelle",
+      "open": "Menü für Anhänge und Werkzeuge öffnen"
+    },
     "contextMeter": {
       "attachments": "Angehängte Dokumente",
       "autoCompact": "Bei 100 % fasst stella ältere Nachrichten automatisch zusammen, um Platz zu schaffen.",

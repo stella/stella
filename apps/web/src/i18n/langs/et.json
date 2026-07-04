@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
+    "composerMenu": {
+      "mcpServers": "MCP-serverid",
+      "models": "Mudelid",
+      "open": "Ava manuste ja tööriistade menüü"
+    },
     "contextMeter": {
       "attachments": "Manustatud dokumendid",
       "autoCompact": "100% juures teeb stella vanematest sõnumitest automaatselt kokkuvõtte, et ruumi vabastada.",

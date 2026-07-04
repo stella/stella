@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
     "caseLawGreeting": "Zeptejte se na toto rozhodnutí — plný text je k dispozici.",
     "chatAbout": "Vložit do AI chatu",
+    "composerMenu": {
+      "mcpServers": "MCP servery",
+      "models": "Modely",
+      "open": "Otevřít nabídku příloh a nástrojů"
+    },
     "contextMeter": {
       "attachments": "Připojené dokumenty",
       "autoCompact": "Při 100 % stella automaticky shrne starší zprávy, aby uvolnila místo.",

@@ -380,6 +380,11 @@ type Messages = {
     "cancelQueuedMessage": "Cancel queued message";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
+    "composerMenu": {
+      "mcpServers": "MCP servers";
+      "models": "Models";
+      "open": "Open attachments and tools menu";
+    };
     "contextMeter": {
       "attachments": "Attached documents";
       "autoCompact": "At 100% stella automatically summarizes older messages to free space.";

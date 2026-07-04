@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
+    "composerMenu": {
+      "mcpServers": "Serwery MCP",
+      "models": "Modele",
+      "open": "Otwórz menu załączników i narzędzi"
+    },
     "contextMeter": {
       "attachments": "Załączone dokumenty",
       "autoCompact": "Przy 100% stella automatycznie podsumowuje starsze wiadomości, aby zwolnić miejsce.",

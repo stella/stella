@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Cancelar mensaje en cola",
     "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
+    "composerMenu": {
+      "mcpServers": "Servidores MCP",
+      "models": "Modelos",
+      "open": "Abrir el menú de archivos adjuntos y herramientas"
+    },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
       "autoCompact": "Al 100 % stella resume automáticamente los mensajes más antiguos para liberar espacio.",
