@@ -3,6 +3,8 @@ import { TaggedError } from "better-result";
 
 import { env } from "@/api/env";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
@@ -36,6 +38,22 @@ export const stringProp = (
 ) =>
   ({
     type: "string",
+    description,
+    ...(opts?.maxLength === undefined ? {} : { maxLength: opts.maxLength }),
+  }) as const;
+
+/**
+ * A nullable string parameter. Advertises `type: ["string", "null"]` so the MCP
+ * JSON schema matches a Valibot field that accepts null (the "pass null to
+ * clear" convention); a plain string type would mislead callers into believing
+ * null is rejected.
+ */
+export const nullableStringProp = (
+  description: string,
+  opts?: { maxLength?: number },
+) =>
+  ({
+    type: ["string", "null"],
     description,
     ...(opts?.maxLength === undefined ? {} : { maxLength: opts.maxLength }),
   }) as const;
@@ -279,6 +297,45 @@ export const ensureWorkspaceAccess = ({
     accessibleWorkspaceIdSet: context.accessibleWorkspaceIdSet,
     workspaceId,
   });
+
+/** Status of an accessible workspace, or undefined when it is not accessible. */
+export const getWorkspaceStatus = ({
+  context,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  workspaceId: string;
+}): AccessibleWorkspace["status"] | undefined =>
+  context.accessibleWorkspaceStatusById.get(workspaceId);
+
+/**
+ * Resolve an accessible workspace that is also writable. Mirrors the HTTP
+ * `validateWorkspaceAccess` macro, which rejects any workspace whose status is
+ * not "active": archived matters stay readable but are read-only through MCP
+ * write tools. Returns the branded id when active, or an error result naming
+ * the reason (not accessible vs archived). Callers that need to allow an
+ * unarchive (`save_matter` with status:"active") should use
+ * `ensureWorkspaceAccess` plus `getWorkspaceStatus` instead.
+ */
+export const ensureActiveWorkspace = ({
+  context,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  workspaceId: string;
+}): SafeId<"workspace"> | CallToolResult => {
+  const resolved = getAccessibleWorkspaceId({
+    accessibleWorkspaceIdSet: context.accessibleWorkspaceIdSet,
+    workspaceId,
+  });
+  if (!resolved) {
+    return errorResult("Matter not found or not accessible");
+  }
+  if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
+    return errorResult("Matter is archived; unarchive it first");
+  }
+  return resolved;
+};
 
 export const buildMatterUrl = (workspaceId: string) =>
   `${getAppBaseUrl()}/workspaces/${workspaceId}`;

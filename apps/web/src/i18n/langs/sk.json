@@ -880,7 +880,9 @@
     "error": "Niečo sa pokazilo. Skúste to znova.",
     "missingJurisdictions": "Vaša organizácia v stelle si zatiaľ nenastavila jurisdikcie svojej praxe. Niektoré nástroje závislé od jurisdikcie nebudú dostupné, kým nastavenie nedokončíte.",
     "permissions": "Toto umožní aplikácii:",
+    "scopeDocumentsWrite": "Vytvoriť, upraviť a vymazať vaše dokumenty",
     "scopeExternalMcps": "Použitie vašich pripojených externých nástrojov",
+    "scopeMattersWrite": "Vytvoriť a upraviť vaše spisy, kontakty a úlohy",
     "scopeOnboarding": "Nastavte jurisdikcie praxe vašej organizácie",
     "scopeProfile": "Pristupovať k informáciám o vašom profile",
     "scopeRead": "Čítať vaše dokumenty, spisy a kontakty",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Vyhľadávať v anonymizovaných verziách vašich dokumentov a spisov",
     "scopeSkills": "Použitie vašich uložených zručností stella",
     "scopeTemplates": "Zobrazenie, vypĺňanie a vytváranie vašich vzorov dokumentov",
+    "scopeTemplatesAnonymized": "Zobraziť, vyplniť a vytvoriť anonymizované verzie vašich vzorov dokumentov",
     "title": "Autorizácia prístupu"
   },
   "contacts": {

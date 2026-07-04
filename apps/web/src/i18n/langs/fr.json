@@ -880,7 +880,9 @@
     "error": "Une erreur s’est produite. Veuillez réessayer.",
     "missingJurisdictions": "Votre organisation stella n’a pas encore configuré ses juridictions d’exercice. Certains outils tenant compte de la juridiction resteront indisponibles tant que vous n’aurez pas terminé la configuration.",
     "permissions": "Cela autorisera l’application à :",
+    "scopeDocumentsWrite": "Créer, modifier et supprimer vos documents",
     "scopeExternalMcps": "Utiliser vos outils externes connectés",
+    "scopeMattersWrite": "Créer et modifier vos dossiers, contacts et tâches",
     "scopeOnboarding": "Configurer les juridictions d’exercice de votre organisation",
     "scopeProfile": "Accéder aux informations de votre profil",
     "scopeRead": "Lire vos documents, dossiers et contacts",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Rechercher dans les versions anonymisées de vos documents et dossiers",
     "scopeSkills": "Utiliser vos compétences stella enregistrées",
     "scopeTemplates": "Lister, remplir et créer vos modèles de documents",
+    "scopeTemplatesAnonymized": "Lister, remplir et créer des versions anonymisées de vos modèles de documents",
     "title": "Autoriser l’accès"
   },
   "contacts": {

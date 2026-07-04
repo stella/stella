@@ -880,7 +880,9 @@
     "error": "Algo salió mal. Inténtelo de nuevo.",
     "missingJurisdictions": "Su organización de stella todavía no ha configurado sus jurisdicciones de práctica. Algunas herramientas que dependen de la jurisdicción no estarán disponibles hasta que complete la configuración.",
     "permissions": "Esto permitirá a la aplicación:",
+    "scopeDocumentsWrite": "Crear, editar y eliminar sus documentos",
     "scopeExternalMcps": "Usar tus herramientas externas conectadas",
+    "scopeMattersWrite": "Crear y editar sus asuntos, contactos y tareas",
     "scopeOnboarding": "Configurar las jurisdicciones de práctica de su organización",
     "scopeProfile": "Acceder a la información de su perfil",
     "scopeRead": "Leer sus documentos, asuntos y contactos",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Buscar en versiones anonimizadas de sus documentos y asuntos",
     "scopeSkills": "Usar tus habilidades de stella guardadas",
     "scopeTemplates": "Listar, rellenar y crear tus plantillas de documentos",
+    "scopeTemplatesAnonymized": "Listar, rellenar y crear versiones anonimizadas de sus plantillas de documentos",
     "title": "Autorizar acceso"
   },
   "contacts": {

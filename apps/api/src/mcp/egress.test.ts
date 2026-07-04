@@ -28,6 +28,7 @@ const createContext = (): McpRequestContext => {
   return {
     accessibleWorkspaceIds: [toSafeId<"workspace">("ws_1")],
     accessibleWorkspaceIdSet: new Set(["ws_1"]),
+    accessibleWorkspaceStatusById: new Map([["ws_1", "active"]]),
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_1"),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),

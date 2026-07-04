@@ -1,9 +1,13 @@
 import { Result } from "better-result";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { taskAssignees } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { TASK_ASSIGNEE_ROLES } from "@/api/lib/entity-constants";
 import type { TaskAssigneeRole } from "@/api/lib/entity-constants";
@@ -19,91 +23,114 @@ const addAssigneeBodySchema = t.Object({
 const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
   includes(TASK_ASSIGNEE_ROLES, value);
 
+export type AddAssigneeHandlerProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof addAssigneeBodySchema>;
+};
+
+// Shared task-assignee add logic reused by the HTTP handler and the
+// `save_task` MCP tool, so both emit identical audit events.
+export const addAssigneeHandler = async function* ({
+  safeDb,
+  workspaceId,
+  recordAuditEvent,
+  body,
+}: AddAssigneeHandlerProps) {
+  const role = body.role ?? "assignee";
+  if (!isTaskAssigneeRole(role)) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid assignee role" }),
+    );
+  }
+
+  const [task, isMember] = yield* Result.await(
+    safeDb(
+      async (tx) =>
+        await Promise.all([
+          tx.query.entities.findFirst({
+            where: {
+              id: { eq: body.taskId },
+              kind: { eq: "task" },
+              workspaceId: { eq: workspaceId },
+            },
+            columns: { id: true, readOnly: true },
+          }),
+          tx.query.workspaceMembers.findFirst({
+            where: {
+              workspaceId: { eq: workspaceId },
+              userId: body.userId,
+            },
+            columns: { id: true },
+          }),
+        ]),
+    ),
+  );
+
+  if (!task) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Task not found" }),
+    );
+  }
+  if (task.readOnly) {
+    return Result.err(
+      new HandlerError({ status: 409, message: "Task is read-only" }),
+    );
+  }
+  if (!isMember) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "User is not a member of this workspace",
+      }),
+    );
+  }
+
+  yield* Result.await(
+    safeDb(async (tx) => {
+      await tx
+        .insert(taskAssignees)
+        .values({
+          entityId: body.taskId,
+          workspaceId,
+          userId: body.userId,
+          role,
+        })
+        .onConflictDoUpdate({
+          target: [taskAssignees.entityId, taskAssignees.userId],
+          set: { role },
+        });
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: body.taskId,
+        metadata: {
+          change: "assignee-added",
+          assigneeUserId: body.userId,
+          role,
+        },
+      });
+    }),
+  );
+
+  return Result.ok({ success: true });
+};
+
 const addAssignee = createSafeHandler(
   {
     permissions: { entity: ["update"] },
-    mcp: { type: "pending" },
+    mcp: { type: "covered", by: "save_task" },
     body: addAssigneeBodySchema,
   },
   async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
-    const role = body.role ?? "assignee";
-    if (!isTaskAssigneeRole(role)) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Invalid assignee role" }),
-      );
-    }
-
-    const [task, isMember] = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await Promise.all([
-            tx.query.entities.findFirst({
-              where: {
-                id: { eq: body.taskId },
-                kind: { eq: "task" },
-                workspaceId: { eq: workspaceId },
-              },
-              columns: { id: true, readOnly: true },
-            }),
-            tx.query.workspaceMembers.findFirst({
-              where: {
-                workspaceId: { eq: workspaceId },
-                userId: body.userId,
-              },
-              columns: { id: true },
-            }),
-          ]),
-      ),
-    );
-
-    if (!task) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Task not found" }),
-      );
-    }
-    if (task.readOnly) {
-      return Result.err(
-        new HandlerError({ status: 409, message: "Task is read-only" }),
-      );
-    }
-    if (!isMember) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "User is not a member of this workspace",
-        }),
-      );
-    }
-
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await tx
-          .insert(taskAssignees)
-          .values({
-            entityId: body.taskId,
-            workspaceId,
-            userId: body.userId,
-            role,
-          })
-          .onConflictDoUpdate({
-            target: [taskAssignees.entityId, taskAssignees.userId],
-            set: { role },
-          });
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: body.taskId,
-          metadata: {
-            change: "assignee-added",
-            assigneeUserId: body.userId,
-            role,
-          },
-        });
-      }),
-    );
-
-    return Result.ok({ success: true });
+    return yield* addAssigneeHandler({
+      safeDb,
+      workspaceId,
+      recordAuditEvent,
+      body,
+    });
   },
 );
 

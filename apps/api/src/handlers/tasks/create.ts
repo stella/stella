@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import {
   entities,
   entityVersions,
@@ -11,7 +13,9 @@ import {
 import { captureError } from "@/api/lib/analytics";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
   AGENDA_ITEM_KIND,
@@ -79,186 +83,213 @@ const createTaskBodySchema = t.Object({
 const toDateOrNull = (value: string | null | undefined): Date | null =>
   value ? new Date(value) : null;
 
-const createTask = createSafeHandler(
-  {
-    permissions: { entity: ["create"] },
-    mcp: { type: "pending" },
-    body: createTaskBodySchema,
-  },
-  async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
-    const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
-    const taskStatus = body.status ?? "open";
-    const taskPriority = body.priority ?? "none";
+export type CreateTaskEntityHandlerProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof createTaskBodySchema>;
+};
 
-    if (!includes(AGENDA_ITEM_KINDS, agendaKind)) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Invalid agenda item kind" }),
-      );
-    }
-    if (!includes(TASK_STATUSES, taskStatus)) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Invalid task status" }),
-      );
-    }
-    if (!includes(ENTITY_PRIORITIES, taskPriority)) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Invalid task priority" }),
-      );
-    }
-    const agendaFields = validateAgendaFields({
-      attendees: body.attendees,
-      availability: body.availability,
-      sensitivity: body.sensitivity,
-    });
-    if (agendaFields.status === "error") {
-      return Result.err(agendaFields.error);
-    }
+// Shared task-creation logic reused by the HTTP handler and the
+// `save_task` MCP tool, so both emit identical audit events and
+// search-index writes.
+export const createTaskEntityHandler = async function* ({
+  safeDb,
+  workspaceId,
+  userId,
+  recordAuditEvent,
+  body,
+}: CreateTaskEntityHandlerProps) {
+  const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
+  const taskStatus = body.status ?? "open";
+  const taskPriority = body.priority ?? "none";
 
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        const totalEntities = await tx.$count(
-          entities,
-          eq(entities.workspaceId, workspaceId),
-        );
-        if (totalEntities >= LIMITS.entitiesCount) {
+  if (!includes(AGENDA_ITEM_KINDS, agendaKind)) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid agenda item kind" }),
+    );
+  }
+  if (!includes(TASK_STATUSES, taskStatus)) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid task status" }),
+    );
+  }
+  if (!includes(ENTITY_PRIORITIES, taskPriority)) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid task priority" }),
+    );
+  }
+  const agendaFields = validateAgendaFields({
+    attendees: body.attendees,
+    availability: body.availability,
+    sensitivity: body.sensitivity,
+  });
+  if (agendaFields.status === "error") {
+    return Result.err(agendaFields.error);
+  }
+
+  const txResult = yield* Result.await(
+    safeDb(async (tx) => {
+      const totalEntities = await tx.$count(
+        entities,
+        eq(entities.workspaceId, workspaceId),
+      );
+      if (totalEntities >= LIMITS.entitiesCount) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "Entities limit reached",
+        };
+      }
+
+      if (body.parentId) {
+        const parent = await tx.query.entities.findFirst({
+          where: {
+            id: { eq: body.parentId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { kind: true },
+        });
+        if (!parent) {
           return {
             ok: false as const,
             status: 400 as const,
-            message: "Entities limit reached",
+            message: "Parent entity not found in this workspace",
           };
         }
-
-        if (body.parentId) {
-          const parent = await tx.query.entities.findFirst({
-            where: {
-              id: { eq: body.parentId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { kind: true },
-          });
-          if (!parent) {
-            return {
-              ok: false as const,
-              status: 400 as const,
-              message: "Parent entity not found in this workspace",
-            };
-          }
-          if (parent.kind !== "task") {
-            return {
-              ok: false as const,
-              status: 400 as const,
-              message: `Subtasks must belong to a task, not a ${parent.kind}`,
-            };
-          }
+        if (parent.kind !== "task") {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: `Subtasks must belong to a task, not a ${parent.kind}`,
+          };
         }
+      }
 
-        const entityId = createSafeId<"entity">();
-        await tx.insert(entities).values({
-          id: entityId,
-          workspaceId,
-          kind: "task",
-          parentId: body.parentId ?? null,
-          name: body.name,
-          createdBy: user.id,
-          agendaKind,
-          status: taskStatus,
-          priority: taskPriority,
-          dueDate: body.dueDate ?? null,
-          startAt: toDateOrNull(body.startAt),
-          endAt: toDateOrNull(body.endAt),
-          occurredAt: toDateOrNull(body.occurredAt),
-          remindAt: toDateOrNull(body.remindAt),
-          allDay: body.allDay ?? false,
-          timeZone: body.timeZone ?? null,
-          location: body.location ?? null,
-          onlineMeetingUrl: body.onlineMeetingUrl ?? null,
-          availability: agendaFields.availability ?? null,
-          sensitivity: agendaFields.sensitivity ?? null,
-          organizer: body.organizer ?? null,
-          attendees: agendaFields.attendees ?? null,
-          recurrence: body.recurrence ?? null,
-          agendaSource: "manual",
-        });
+      const entityId = createSafeId<"entity">();
+      await tx.insert(entities).values({
+        id: entityId,
+        workspaceId,
+        kind: "task",
+        parentId: body.parentId ?? null,
+        name: body.name,
+        createdBy: userId,
+        agendaKind,
+        status: taskStatus,
+        priority: taskPriority,
+        dueDate: body.dueDate ?? null,
+        startAt: toDateOrNull(body.startAt),
+        endAt: toDateOrNull(body.endAt),
+        occurredAt: toDateOrNull(body.occurredAt),
+        remindAt: toDateOrNull(body.remindAt),
+        allDay: body.allDay ?? false,
+        timeZone: body.timeZone ?? null,
+        location: body.location ?? null,
+        onlineMeetingUrl: body.onlineMeetingUrl ?? null,
+        availability: agendaFields.availability ?? null,
+        sensitivity: agendaFields.sensitivity ?? null,
+        organizer: body.organizer ?? null,
+        attendees: agendaFields.attendees ?? null,
+        recurrence: body.recurrence ?? null,
+        agendaSource: "manual",
+      });
 
-        const entityVersionId = createSafeId<"entityVersion">();
-        await tx.insert(entityVersions).values({
-          id: entityVersionId,
-          workspaceId,
-          entityId,
-          versionNumber: 1,
-        });
+      const entityVersionId = createSafeId<"entityVersion">();
+      await tx.insert(entityVersions).values({
+        id: entityVersionId,
+        workspaceId,
+        entityId,
+        versionNumber: 1,
+      });
 
-        await tx
-          .update(entities)
-          .set({ currentVersionId: entityVersionId })
-          .where(eq(entities.id, entityId));
+      await tx
+        .update(entities)
+        .set({ currentVersionId: entityVersionId })
+        .where(eq(entities.id, entityId));
 
-        if (body.assigneeIds !== undefined && body.assigneeIds.length > 0) {
-          const members = await tx.query.workspaceMembers.findMany({
-            where: {
-              workspaceId: { eq: workspaceId },
-              userId: { in: body.assigneeIds },
-            },
-            columns: { userId: true },
-            limit: LIMITS.workspaceMembersCount,
-          });
-          const memberIds = new Set(members.map((m) => m.userId));
-          const invalidIds = body.assigneeIds.filter(
-            (uid) => !memberIds.has(uid),
-          );
-          if (invalidIds.length > 0) {
-            return {
-              ok: false as const,
-              status: 400 as const,
-              message: "Some assignee IDs are not workspace members",
-            };
-          }
-          const validIds = [...new Set(body.assigneeIds)];
-
-          if (validIds.length > 0) {
-            await tx.insert(taskAssignees).values(
-              validIds.map((uid) => ({
-                entityId,
-                workspaceId,
-                userId: uid,
-                role: "assignee" as const,
-              })),
-            );
-          }
-        }
-
-        await tx
-          .update(workspaces)
-          .set({ lastActivityAt: new Date() })
-          .where(eq(workspaces.id, workspaceId));
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-          resourceId: entityId,
-          metadata: {
-            kind: "task",
-            agendaKind,
-            ...(body.parentId && { parentId: body.parentId }),
+      if (body.assigneeIds !== undefined && body.assigneeIds.length > 0) {
+        const members = await tx.query.workspaceMembers.findMany({
+          where: {
+            workspaceId: { eq: workspaceId },
+            userId: { in: body.assigneeIds },
           },
+          columns: { userId: true },
+          limit: LIMITS.workspaceMembersCount,
         });
+        const memberIds = new Set(members.map((m) => m.userId));
+        const invalidIds = body.assigneeIds.filter(
+          (uid) => !memberIds.has(uid),
+        );
+        if (invalidIds.length > 0) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "Some assignee IDs are not workspace members",
+          };
+        }
+        const validIds = [...new Set(body.assigneeIds)];
 
-        return { ok: true as const, entityId };
+        if (validIds.length > 0) {
+          await tx.insert(taskAssignees).values(
+            validIds.map((uid) => ({
+              entityId,
+              workspaceId,
+              userId: uid,
+              role: "assignee" as const,
+            })),
+          );
+        }
+      }
+
+      await tx
+        .update(workspaces)
+        .set({ lastActivityAt: new Date() })
+        .where(eq(workspaces.id, workspaceId));
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: entityId,
+        metadata: {
+          kind: "task",
+          agendaKind,
+          ...(body.parentId && { parentId: body.parentId }),
+        },
+      });
+
+      return { ok: true as const, entityId };
+    }),
+  );
+
+  if (!txResult.ok) {
+    return Result.err(
+      new HandlerError({
+        status: txResult.status,
+        message: txResult.message,
       }),
     );
+  }
 
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
+  getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
 
-    getSearchProvider().indexEntity(txResult.entityId).catch(captureError);
+  return Result.ok({ entityId: txResult.entityId });
+};
 
-    return Result.ok({ entityId: txResult.entityId });
+const createTask = createSafeHandler(
+  {
+    permissions: { entity: ["create"] },
+    mcp: { type: "tool", name: "save_task" },
+    body: createTaskBodySchema,
+  },
+  async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {
+    return yield* createTaskEntityHandler({
+      safeDb,
+      workspaceId,
+      userId: user.id,
+      recordAuditEvent,
+      body,
+    });
   },
 );
 

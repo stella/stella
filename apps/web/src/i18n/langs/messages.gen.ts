@@ -883,7 +883,9 @@ type Messages = {
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "permissions": "This will allow the application to:";
+    "scopeDocumentsWrite": "Create, edit, and delete your documents";
     "scopeExternalMcps": "Use your connected integrations";
+    "scopeMattersWrite": "Create and edit your matters, contacts, and tasks";
     "scopeOnboarding": "Configure your organization's practice jurisdictions";
     "scopeProfile": "Access your profile information";
     "scopeRead": "Read your documents, matters, and contacts";
@@ -892,6 +894,7 @@ type Messages = {
     "scopeSearchAnonymized": "Search anonymized versions of your documents and matters";
     "scopeSkills": "Use your saved stella skills";
     "scopeTemplates": "List, fill, and create your document templates";
+    "scopeTemplatesAnonymized": "List, fill, and create anonymized versions of your document templates";
     "title": "Authorize access";
   };
   "contacts": {

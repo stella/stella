@@ -17,6 +17,7 @@ import {
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
+import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isUuid } from "@/api/lib/custom-schema";
@@ -144,6 +145,7 @@ export const STELLA_TOOL_DEFINITIONS = [
         "overview.recentEntities[].createdBy",
         "overview.recentEntities[].assignedTo",
         "contacts[].displayName",
+        "members[].name",
       ],
     },
     name: "get_matter_overview",
@@ -526,7 +528,7 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
     return errorResult("Matter not found or not accessible");
   }
 
-  const [workspace, overview, contacts] = await Promise.all([
+  const [workspace, overview, contacts, members] = await Promise.all([
     readWorkspaceHandler({
       organizationId: context.organizationId,
       scopedDb: context.scopedDb,
@@ -537,6 +539,10 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
       workspaceId,
     }),
     readWorkspaceContactsHandler({
+      scopedDb: context.scopedDb,
+      workspaceId,
+    }),
+    readWorkspaceMembersHandler({
       scopedDb: context.scopedDb,
       workspaceId,
     }),
@@ -559,6 +565,9 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
     }
     return [
       {
+        // The matter-contact link id, so link_matter_contact can unlink a
+        // precise role even when the contact holds several.
+        workspaceContactId: workspaceContact.id,
         contactId: workspaceContact.contact.id,
         displayName: workspaceContact.contact.displayName,
         role: workspaceContact.role,
@@ -566,6 +575,14 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
       },
     ];
   });
+  // Workspace members are the users save_task can assign, so surface their ids
+  // and names here for discoverability. Bounded by readWorkspaceMembersHandler's
+  // LIMITS.workspaceMembersCount cap.
+  const memberCards = members.flatMap((member) =>
+    member.user === null
+      ? []
+      : [{ userId: member.user.id, name: member.user.name }],
+  );
 
   const overviewWithoutAvatarUrls = {
     ...overview,
@@ -581,6 +598,7 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
     matter,
     overview: overviewWithoutAvatarUrls,
     contacts: contactCards,
+    members: memberCards,
   };
 
   // Everything below belongs to one matter, so it all anonymizes under this
@@ -644,6 +662,16 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
       },
       fields: textFields,
       value: contactCard.displayName,
+      workspaceId,
+    });
+  }
+  for (const memberCard of memberCards) {
+    collectAnonymizableField({
+      apply: (value) => {
+        memberCard.name = value;
+      },
+      fields: textFields,
+      value: memberCard.name,
       workspaceId,
     });
   }

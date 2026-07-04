@@ -880,7 +880,9 @@
     "error": "Něco se pokazilo. Zkuste to prosím znovu.",
     "missingJurisdictions": "Vaše organizace stella zatím nemá nastavené jurisdikce, ve kterých působí. Dokud nastavení nedokončíte, nebudou některé nástroje závislé na jurisdikci dostupné.",
     "permissions": "Tím aplikaci umožníte:",
+    "scopeDocumentsWrite": "Vytvoření, úprava a smazání vašich dokumentů",
     "scopeExternalMcps": "Použití vašich připojených integrací",
+    "scopeMattersWrite": "Vytvoření a úprava vašich spisů, kontaktů a úkolů",
     "scopeOnboarding": "Nastavit jurisdikce, ve kterých vaše organizace působí",
     "scopeProfile": "Přístup k informacím vašeho profilu",
     "scopeRead": "Čtení vašich dokumentů, spisů a kontaktů",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Vyhledávání v anonymizovaných verzích vašich dokumentů a spisů",
     "scopeSkills": "Použití vašich uložených dovedností stella",
     "scopeTemplates": "Zobrazení, vyplňování a vytváření vašich vzorů dokumentů",
+    "scopeTemplatesAnonymized": "Zobrazení, vyplňování a vytváření anonymizovaných verzí vašich vzorů dokumentů",
     "title": "Autorizovat přístup"
   },
   "contacts": {

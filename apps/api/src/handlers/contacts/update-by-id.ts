@@ -1,7 +1,9 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { contacts } from "@/api/db/schema";
 import {
   bankAccountSchema,
@@ -15,6 +17,8 @@ import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -63,185 +67,212 @@ const updateContactParamsSchema = t.Object({
   contactId: tSafeId("contact"),
 });
 
-const updateContactById = createSafeRootHandler(
-  {
-    permissions: { contact: ["update"] },
-    mcp: { type: "pending" },
-    params: updateContactParamsSchema,
-    body: updateContactBodySchema,
-  },
-  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
-    const attorneyIds: string[] = [];
-    if (body.originatingAttorneyId) {
-      attorneyIds.push(body.originatingAttorneyId);
-    }
-    if (body.responsibleAttorneyId) {
-      attorneyIds.push(body.responsibleAttorneyId);
-    }
+export type UpdateContactHandlerProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  contactId: SafeId<"contact">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof updateContactBodySchema>;
+};
 
-    if (attorneyIds.length > 0) {
-      const uniqueAttorneyIds = [...new Set(attorneyIds)];
-      const hasInvalidAttorney = yield* Result.await(
-        safeDb(async (tx) => {
-          for (const attorneyId of uniqueAttorneyIds) {
-            // oxlint-disable-next-line no-await-in-loop -- early-exits on first invalid attorney; at most two ids
-            const validAttorneyId = await validateOrgUserId(
-              tx,
-              brandPersistedUserId(attorneyId),
-              session.activeOrganizationId,
-            );
-            if (!validAttorneyId) {
-              return true;
-            }
-          }
-          return false;
-        }),
-      );
+// Shared contact-update logic reused by the HTTP handler and the
+// `save_contact` MCP tool, so both emit identical audit events and
+// search-index writes.
+export const updateContactHandler = async function* ({
+  safeDb,
+  organizationId,
+  contactId,
+  recordAuditEvent,
+  body,
+}: UpdateContactHandlerProps) {
+  const attorneyIds: string[] = [];
+  if (body.originatingAttorneyId) {
+    attorneyIds.push(body.originatingAttorneyId);
+  }
+  if (body.responsibleAttorneyId) {
+    attorneyIds.push(body.responsibleAttorneyId);
+  }
 
-      if (hasInvalidAttorney) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "User is not a member of this organization",
-          }),
-        );
-      }
-    }
-
-    const { defaultHourlyRate, metadata, ...rest } = body;
-
-    let metadataUpdate = {};
-    if (metadata !== undefined) {
-      const existingRows = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({ metadata: contacts.metadata })
-            .from(contacts)
-            .where(
-              and(
-                eq(contacts.id, params.contactId),
-                eq(contacts.organizationId, session.activeOrganizationId),
-              ),
-            )
-            .limit(1),
-        ),
-      );
-      const existing = existingRows.at(0);
-
-      if (!existing) {
-        return Result.err(
-          new HandlerError({
-            status: 404,
-            message: "Contact not found",
-          }),
-        );
-      }
-
-      metadataUpdate = {
-        metadata: mergeContactMetadata(existing.metadata, metadata),
-      };
-    }
-
-    const updates = {
-      ...pickDefined(rest, [
-        "type",
-        "prefix",
-        "firstName",
-        "middleName",
-        "lastName",
-        "suffix",
-        "organizationName",
-        "displayName",
-        "notes",
-        "emails",
-        "phones",
-        "addresses",
-        "color",
-        "tags",
-        "registrationNumber",
-        "taxId",
-        "bankAccounts",
-        "billingAddress",
-        "currency",
-        "paymentTermDays",
-        "originatingAttorneyId",
-        "responsibleAttorneyId",
-      ]),
-      ...metadataUpdate,
-      ...(defaultHourlyRate === undefined
-        ? {}
-        : {
-            defaultHourlyRate:
-              defaultHourlyRate === null ? null : cents(defaultHourlyRate),
-          }),
-    };
-
-    if (Object.keys(updates).length === 0) {
-      const existingRows = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({ id: contacts.id })
-            .from(contacts)
-            .where(
-              and(
-                eq(contacts.id, params.contactId),
-                eq(contacts.organizationId, session.activeOrganizationId),
-              ),
-            )
-            .limit(1),
-        ),
-      );
-      const existing = existingRows.at(0);
-
-      if (!existing) {
-        return Result.err(
-          new HandlerError({ status: 404, message: "Contact not found" }),
-        );
-      }
-
-      return Result.ok(existing);
-    }
-
-    const updatedRows = yield* Result.await(
+  if (attorneyIds.length > 0) {
+    const uniqueAttorneyIds = [...new Set(attorneyIds)];
+    const hasInvalidAttorney = yield* Result.await(
       safeDb(async (tx) => {
-        const rows = await tx
-          .update(contacts)
-          .set(updates)
-          .where(
-            and(
-              eq(contacts.id, params.contactId),
-              eq(contacts.organizationId, session.activeOrganizationId),
-            ),
-          )
-          .returning({ id: contacts.id });
-
-        if (rows.length > 0) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
-            resourceId: params.contactId,
-            workspaceId: null,
-            changes: { fields: { old: null, new: Object.keys(updates) } },
-          });
+        for (const attorneyId of uniqueAttorneyIds) {
+          // oxlint-disable-next-line no-await-in-loop -- early-exits on first invalid attorney; at most two ids
+          const validAttorneyId = await validateOrgUserId(
+            tx,
+            brandPersistedUserId(attorneyId),
+            organizationId,
+          );
+          if (!validAttorneyId) {
+            return true;
+          }
         }
-
-        return rows;
+        return false;
       }),
     );
-    const updated = updatedRows.at(0);
 
-    if (!updated) {
+    if (hasInvalidAttorney) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "User is not a member of this organization",
+        }),
+      );
+    }
+  }
+
+  const { defaultHourlyRate, metadata, ...rest } = body;
+
+  let metadataUpdate = {};
+  if (metadata !== undefined) {
+    const existingRows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({ metadata: contacts.metadata })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.id, contactId),
+              eq(contacts.organizationId, organizationId),
+            ),
+          )
+          .limit(1),
+      ),
+    );
+    const existing = existingRows.at(0);
+
+    if (!existing) {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: "Contact not found",
+        }),
+      );
+    }
+
+    metadataUpdate = {
+      metadata: mergeContactMetadata(existing.metadata, metadata),
+    };
+  }
+
+  const updates = {
+    ...pickDefined(rest, [
+      "type",
+      "prefix",
+      "firstName",
+      "middleName",
+      "lastName",
+      "suffix",
+      "organizationName",
+      "displayName",
+      "notes",
+      "emails",
+      "phones",
+      "addresses",
+      "color",
+      "tags",
+      "registrationNumber",
+      "taxId",
+      "bankAccounts",
+      "billingAddress",
+      "currency",
+      "paymentTermDays",
+      "originatingAttorneyId",
+      "responsibleAttorneyId",
+    ]),
+    ...metadataUpdate,
+    ...(defaultHourlyRate === undefined
+      ? {}
+      : {
+          defaultHourlyRate:
+            defaultHourlyRate === null ? null : cents(defaultHourlyRate),
+        }),
+  };
+
+  if (Object.keys(updates).length === 0) {
+    const existingRows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({ id: contacts.id })
+          .from(contacts)
+          .where(
+            and(
+              eq(contacts.id, contactId),
+              eq(contacts.organizationId, organizationId),
+            ),
+          )
+          .limit(1),
+      ),
+    );
+    const existing = existingRows.at(0);
+
+    if (!existing) {
       return Result.err(
         new HandlerError({ status: 404, message: "Contact not found" }),
       );
     }
 
-    Promise.all([
-      upsertContactSearchDocument(params.contactId),
-      reindexWorkspacesForContact(params.contactId),
-    ]).catch(captureError);
+    return Result.ok(existing);
+  }
 
-    return Result.ok(updated);
+  const updatedRows = yield* Result.await(
+    safeDb(async (tx) => {
+      const rows = await tx
+        .update(contacts)
+        .set(updates)
+        .where(
+          and(
+            eq(contacts.id, contactId),
+            eq(contacts.organizationId, organizationId),
+          ),
+        )
+        .returning({ id: contacts.id });
+
+      if (rows.length > 0) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+          resourceId: contactId,
+          workspaceId: null,
+          changes: { fields: { old: null, new: Object.keys(updates) } },
+        });
+      }
+
+      return rows;
+    }),
+  );
+  const updated = updatedRows.at(0);
+
+  if (!updated) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Contact not found" }),
+    );
+  }
+
+  Promise.all([
+    upsertContactSearchDocument(contactId),
+    reindexWorkspacesForContact(contactId),
+  ]).catch(captureError);
+
+  return Result.ok(updated);
+};
+
+const updateContactById = createSafeRootHandler(
+  {
+    permissions: { contact: ["update"] },
+    mcp: { type: "covered", by: "save_contact" },
+    params: updateContactParamsSchema,
+    body: updateContactBodySchema,
+  },
+  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+    return yield* updateContactHandler({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      contactId: params.contactId,
+      recordAuditEvent,
+      body,
+    });
   },
 );
 

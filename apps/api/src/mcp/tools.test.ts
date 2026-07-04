@@ -393,10 +393,12 @@ const createRecordAuditEventMock = () =>
 
 const createContext = ({
   accessibleWorkspaceIds = ["ws_1"],
+  archivedWorkspaceIds = [],
   recordAuditEvent = createRecordAuditEventMock(),
   scopedDb = createScopedDb(),
 }: {
   accessibleWorkspaceIds?: string[];
+  archivedWorkspaceIds?: string[];
   recordAuditEvent?: AuditRecorder;
   scopedDb?: McpRequestContext["scopedDb"];
 } = {}): McpRequestContext => ({
@@ -404,6 +406,12 @@ const createContext = ({
     toSafeId<"workspace">(workspaceId),
   ),
   accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
+  accessibleWorkspaceStatusById: new Map(
+    accessibleWorkspaceIds.map((workspaceId) => [
+      workspaceId,
+      archivedWorkspaceIds.includes(workspaceId) ? "archived" : "active",
+    ]),
+  ),
   memberRole: "owner",
   organizationId: toSafeId<"organization">("org_1"),
   recordAuditEvent,
@@ -587,6 +595,8 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_documents",
       "read_document",
       "list_properties",
+      "lookup_business_registry",
+      "list_tasks",
     ]);
   });
 
@@ -1801,6 +1811,452 @@ describe("OpenAI-compatible MCP tools", () => {
           label: "[PERSON_1] draft",
         }),
       ],
+    });
+  });
+
+  // --- Wave 2: matter / contact / task tools ---------------------------
+
+  // save_* tools enforce their create/update shape with v.partialCheck at the
+  // schema, so an invalid combination fails before any permission or DB access
+  // and surfaces the specific partial_check message.
+  test("save_matter rejects a create with no name", async () => {
+    const result = await handleMcpToolCall({
+      args: {},
+      context: createContext(),
+      toolName: "save_matter",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "name is required to create a matter" }],
+      isError: true,
+    });
+  });
+
+  // Archived matters stay readable but are read-only through the write tools,
+  // mirroring the HTTP validateWorkspaceAccess macro (which 404s a workspace
+  // whose status is not "active"). A field edit on an archived matter is
+  // rejected before any backing handler runs.
+  test("save_matter rejects a write to an archived matter", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", name: "Renamed" },
+      context: createContext({ archivedWorkspaceIds: ["ws_1"] }),
+      toolName: "save_matter",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "Matter is archived; unarchive it first" },
+      ],
+      isError: true,
+    });
+  });
+
+  // The one write allowed on an archived matter is a pure status:"active" flip
+  // (unarchive); it must still go through.
+  const createWorkspaceUnarchiveScopedDb = () =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(async (callback: (tx: unknown) => unknown) => {
+        const builder = {
+          set: () => builder,
+          where: () => builder,
+          returning: async () => [{ id: "ws_1" }],
+        };
+        return await callback({ update: () => builder });
+      }),
+    );
+
+  test("save_matter allows unarchiving an archived matter", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", status: "active" },
+      context: createContext({
+        archivedWorkspaceIds: ["ws_1"],
+        scopedDb: createWorkspaceUnarchiveScopedDb(),
+      }),
+      toolName: "save_matter",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseToolPayload(result)).toEqual({
+      matterId: "ws_1",
+      updated: true,
+    });
+  });
+
+  test("save_contact rejects a create with no type", async () => {
+    const result = await handleMcpToolCall({
+      args: { display_name: "Acme Corp" },
+      context: createContext(),
+      toolName: "save_contact",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "type is required to create a contact" }],
+      isError: true,
+    });
+  });
+
+  test("save_task rejects a create with no matter_id", async () => {
+    const result = await handleMcpToolCall({
+      args: { name: "Draft motion" },
+      context: createContext(),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "matter_id is required to create a task" },
+      ],
+      isError: true,
+    });
+  });
+
+  // list_tasks (detail) and save_task confine themselves to entities of kind
+  // "task": a document/folder ID the caller can otherwise access is rejected as
+  // wrong-kind, not acted on.
+  const createTaskKindScopedDb = (kind: string) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              entities: {
+                findFirst: () => Promise<{
+                  kind: string;
+                  workspaceId: string;
+                }>;
+              };
+            };
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              entities: {
+                findFirst: async () => ({ kind, workspaceId: "ws_1" }),
+              },
+            },
+          }),
+      ),
+    );
+
+  test("list_tasks rejects a task_id that is not a task", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "entity_doc" },
+      context: createContext({ scopedDb: createTaskKindScopedDb("document") }),
+      toolName: "list_tasks",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Not a task entity" }],
+      isError: true,
+    });
+  });
+
+  test("save_task rejects a task_id that is not a task", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "entity_doc", name: "Renamed" },
+      context: createContext({ scopedDb: createTaskKindScopedDb("document") }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Not a task entity" }],
+      isError: true,
+    });
+  });
+
+  // save_task ignored matter_id on update, so a mismatched pair silently
+  // updated a task under the wrong matter. The handler now rejects it.
+  test("save_task rejects a task whose matter_id does not match", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", matter_id: "ws_2", name: "Renamed" },
+      context: createContext({ scopedDb: createTaskKindScopedDb("task") }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "task_id does not belong to matter_id" }],
+      isError: true,
+    });
+  });
+
+  // list_tasks detail resolved by task_id alone, so a task_id paired with a
+  // different accessible matter_id leaked a task from the wrong matter. The
+  // detail branch now enforces the same pairing check as save_task.
+  test("list_tasks detail rejects a task whose matter_id does not match", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", matter_id: "ws_2" },
+      context: createContext({
+        accessibleWorkspaceIds: ["ws_1", "ws_2"],
+        scopedDb: createTaskKindScopedDb("task"),
+      }),
+      toolName: "list_tasks",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "task_id does not belong to matter_id" }],
+      isError: true,
+    });
+  });
+
+  // unlink_link_id is validated against the task up front: a link belonging to
+  // a different task in the same matter is rejected before any mutation runs.
+  const createUnlinkMismatchScopedDb = () =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              entities: {
+                findFirst: () => Promise<{
+                  kind: string;
+                  workspaceId: string;
+                }>;
+              };
+              entityLinks: {
+                findFirst: () => Promise<{
+                  sourceEntityId: string;
+                  targetEntityId: string;
+                }>;
+              };
+            };
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              entities: {
+                findFirst: async () => ({ kind: "task", workspaceId: "ws_1" }),
+              },
+              entityLinks: {
+                findFirst: async () => ({
+                  sourceEntityId: "other_task",
+                  targetEntityId: "other_doc",
+                }),
+              },
+            },
+          }),
+      ),
+    );
+
+  test("save_task rejects an unlink_link_id that belongs to another task", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", unlink_link_id: "link_1" },
+      context: createContext({ scopedDb: createUnlinkMismatchScopedDb() }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "unlink_link_id does not belong to this task" },
+      ],
+      isError: true,
+    });
+  });
+
+  // link_entity_id is validated up front against every rejection the backing
+  // createEntityLinkHandler applies (self-link, duplicate, read-only target),
+  // so a field edit bundled with a doomed link cannot half-apply.
+  const createLinkRejectionScopedDb = ({
+    existingLink = null,
+    updateMock,
+  }: {
+    existingLink?: { id: string } | null;
+    updateMock: ReturnType<typeof mock>;
+  }) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              entities: {
+                findFirst: () => Promise<{
+                  kind: string;
+                  readOnly: boolean;
+                  workspaceId: string;
+                }>;
+              };
+              entityLinks: {
+                findFirst: () => Promise<{ id: string } | null>;
+              };
+            };
+            update: typeof updateMock;
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              entities: {
+                findFirst: async () => ({
+                  kind: "task",
+                  readOnly: false,
+                  workspaceId: "ws_1",
+                }),
+              },
+              entityLinks: {
+                findFirst: async () => existingLink,
+              },
+            },
+            update: updateMock,
+          }),
+      ),
+    );
+
+  test("save_task rejects a field edit combined with a self-link, without applying the edit", async () => {
+    const updateMock = mock(() => ({
+      set: () => ({ where: () => ({ returning: async () => [] }) }),
+    }));
+
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", name: "Renamed", link_entity_id: "task_1" },
+      context: createContext({
+        scopedDb: createLinkRejectionScopedDb({ updateMock }),
+      }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Cannot link an entity to itself" }],
+      isError: true,
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_task rejects a field edit combined with a duplicate link, without applying the edit", async () => {
+    const updateMock = mock(() => ({
+      set: () => ({ where: () => ({ returning: async () => [] }) }),
+    }));
+
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", name: "Renamed", link_entity_id: "task_2" },
+      context: createContext({
+        scopedDb: createLinkRejectionScopedDb({
+          existingLink: { id: "link_existing" },
+          updateMock,
+        }),
+      }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "A link between these entities already exists" },
+      ],
+      isError: true,
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  // link_matter_contact accepts contact_id as an unlink selector, but a contact
+  // holding several roles maps to several links, so it must ask for the precise
+  // workspace_contact_id instead of guessing.
+  const createMultiRoleContactScopedDb = () =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              workspaceContacts: {
+                findMany: () => Promise<{ id: string }[]>;
+              };
+            };
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              workspaceContacts: {
+                findMany: async () => [{ id: "wc_1" }, { id: "wc_2" }],
+              },
+            },
+          }),
+      ),
+    );
+
+  test("link_matter_contact rejects an ambiguous contact_id unlink", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", contact_id: "contact_1" },
+      context: createContext({ scopedDb: createMultiRoleContactScopedDb() }),
+      toolName: "link_matter_contact",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "That contact holds multiple roles on the matter; pass workspace_contact_id to remove one link",
+        },
+      ],
+      isError: true,
+    });
+  });
+
+  // list_tasks (list mode) runs through the structured egress pipeline, so in
+  // anonymized mode each task name is redacted under its matter's workspace
+  // scope before it leaves Stella.
+  const createTaskListScopedDb = (
+    rows: {
+      createdAt: string;
+      id: string;
+      name: string;
+      status: string | null;
+      priority: string | null;
+      dueDate: string | null;
+    }[],
+  ) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(async (callback: (tx: unknown) => unknown) => {
+        const builder = {
+          from: () => builder,
+          where: () => builder,
+          orderBy: () => builder,
+          limit: () => rows,
+        };
+        return await callback({ select: () => builder });
+      }),
+    );
+
+  test("list_tasks anonymizes task names in anonymized mode", async () => {
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["[PERSON_1] deposition"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1" },
+      context: createContext({
+        scopedDb: createTaskListScopedDb([
+          {
+            createdAt: "2026-01-01T00:00:00.000000",
+            id: "task_1",
+            name: "John Smith deposition",
+            status: "open",
+            priority: "high",
+            dueDate: "2026-02-01",
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "list_tasks",
+    });
+
+    const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
+    expect(anonymizeInput).toMatchObject({
+      fields: ["John Smith deposition"],
+      workspaceId: "ws_1",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      tasks: [
+        {
+          id: "task_1",
+          name: "[PERSON_1] deposition",
+          status: "open",
+          priority: "high",
+          dueDate: "2026-02-01",
+        },
+      ],
+      nextCursor: null,
     });
   });
 });
