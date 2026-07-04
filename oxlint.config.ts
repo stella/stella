@@ -238,6 +238,11 @@ export default defineConfig({
     "unicorn/no-array-sort": "off",
     "unicorn/no-useless-spread": "off",
     "oxc/no-map-spread": "error",
+    // Spreading an accumulator inside a loop body or a `.reduce()`
+    // callback is O(n^2): every iteration copies the whole accumulator
+    // instead of appending in place. AGENTS.md: "Avoid spread in loop
+    // accumulators (use `.push()`)."
+    "oxc/no-accumulating-spread": "error",
     "unicorn/no-await-expression-member": "off",
     // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
     "unicorn/no-nested-ternary": "off",
@@ -369,6 +374,8 @@ export default defineConfig({
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
+    "./.oxlint-plugins/no-document-cookie.ts",
+    "./.oxlint-plugins/no-eager-singleton.ts",
   ],
 
   overrides: [
@@ -660,6 +667,21 @@ export default defineConfig({
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
+      },
+    },
+    {
+      // Browser surfaces only: `document` does not exist in apps/api's
+      // Bun runtime. CLAUDE.md: "No direct document.cookie assignment."
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/desktop/src/**/*.{ts,tsx}",
+        "apps/landing/src/**/*.{ts,tsx}",
+        "apps/playground/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-document-cookie.fixture.ts",
+      ],
+      rules: {
+        "no-document-cookie/no-document-cookie": "error",
       },
     },
     {
@@ -1582,6 +1604,43 @@ export default defineConfig({
       rules: {
         "no-crypto-random-uuid/no-crypto-random-uuid": "error",
       },
+    },
+    {
+      // Module Side Effects (CLAUDE.md): known side-effecting singleton
+      // constructors (DB pools, auth, Redis/queue connections, S3 clients)
+      // must not run at module top level. Scoped to the backend and shared
+      // packages, where these constructors are actually imported.
+      files: [
+        "apps/api/src/**/*.{ts,tsx}",
+        "packages/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-eager-singleton.fixture.ts",
+      ],
+      excludeFiles: [
+        "apps/api/src/**/*.test.ts",
+        "apps/api/src/tests/**/*.ts",
+        "packages/**/*.test.{ts,tsx}",
+        "packages/**/__tests__/**/*.{ts,tsx}",
+      ],
+      rules: {
+        "no-eager-singleton/no-eager-singleton": "error",
+      },
+    },
+    {
+      // Canonical root DB module: constructs the process-wide root/RLS
+      // connection pools and drizzle handles at import time by design —
+      // it is the one designated singleton module every other DB access
+      // path imports from, so there is no non-deterministic import-order
+      // hazard to defer against. New singleton modules must use the lazy
+      // `getX()` pattern instead of adding to this exemption.
+      files: ["apps/api/src/db/root.ts"],
+      rules: { "no-eager-singleton/no-eager-singleton": "off" },
+    },
+    {
+      // Standalone CLI entrypoint (`bun run src/db/migrate.ts`), never
+      // imported by other application modules, so eager construction here
+      // carries no shared-import-order TDZ risk.
+      files: ["apps/api/src/db/migrate.ts"],
+      rules: { "no-eager-singleton/no-eager-singleton": "off" },
     },
     {
       files: ["apps/api/src/handlers/**/*.ts", "apps/api/src/lib/**/*.ts"],
