@@ -205,6 +205,7 @@ const envApi = createEnv({
     FEATURE_TODOS: featureFlagSchema,
     FEATURE_MCP: featureFlagSchema,
     FEATURE_DESKTOP_EDITING: featureFlagSchema,
+    FEATURE_TIME_BILLING: featureFlagSchema,
     FEATURE_WEB_SEARCH: featureFlagSchema,
 
     /**

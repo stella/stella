@@ -857,6 +857,7 @@ type Messages = {
     "sort": "Sort";
     "status": "Status";
     "summarizeChanges": "Summarize changes";
+    "timeBilling": "Time & Billing";
     "today": "Today";
     "translate": "Translate";
     "tryAgain": "Try again";
@@ -1950,6 +1951,7 @@ type Messages = {
       "beta": "Beta Features";
       "betaCaseLawDescription": "Show the public case law search and reader in the sidebar";
       "betaDescription": "Try features that are still in development";
+      "betaTimeBillingDescription": "Show time tracking, invoices, and expenses";
       "confirmDelete": "Confirm delete account";
       "dangerZone": "Danger zone";
       "dangerZoneDescription": "Permanently delete your account access and private account data.";

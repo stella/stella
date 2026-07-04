@@ -1,5 +1,6 @@
 import type { Tool as McpTool } from "@modelcontextprotocol/sdk/types.js";
 
+import { env } from "@/api/env";
 import {
   isExternalMcpToolName,
   isSkillToolName,
@@ -21,8 +22,21 @@ import {
 import type {
   McpAnonymizedPolicy,
   McpToolDefinition,
+  McpToolFeatureFlag,
   ToolScope,
 } from "@/api/mcp/tool-types";
+
+/**
+ * A feature-gated tool is advertised and dispatchable only when its deployment
+ * flag is on, mirroring the backing route's own gate (e.g. the case-law public
+ * routes use `env.isDev || env.FEATURE_PUBLIC_LAW`). Untagged tools are always
+ * available. Dev deployments see every tool so local work is not blocked. This
+ * is the single chokepoint the list surface and the dispatch guard share so a
+ * gated-off tool can neither be discovered nor invoked by guessing its name.
+ */
+export const isMcpToolFeatureEnabled = (
+  feature: McpToolFeatureFlag | undefined,
+): boolean => feature === undefined || env.isDev || env[feature];
 
 // Skills and external connector tools are resolved by the dynamic gateway in
 // default mode only; they are never part of the anonymized projection.
@@ -40,8 +54,10 @@ export const listGatewayMcpToolDefinitions = async ({
   mode: McpMode;
   scopes?: readonly string[];
 }): Promise<McpToolDefinition[]> => {
-  const definitions = listStaticMcpToolDefinitions(mode).filter((definition) =>
-    hasGrantedScope(scopes, definition.scope),
+  const definitions = listStaticMcpToolDefinitions(mode).filter(
+    (definition) =>
+      hasGrantedScope(scopes, definition.scope) &&
+      isMcpToolFeatureEnabled(definition.feature),
   );
   if (mode === "anonymized") {
     return definitions;

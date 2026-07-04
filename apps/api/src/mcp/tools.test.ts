@@ -885,15 +885,90 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
 
-  test("search_case_law omits app URLs while public law routes are disabled", async () => {
+  // A deployment feature flag gates BOTH surfaces of a tagged tool: the
+  // advertised list and dispatch. The case-law tools carry FEATURE_PUBLIC_LAW,
+  // matching the public-routes gate on their backing corpus. Dev deployments
+  // bypass the gate so local work is never blocked. The env object is mutated
+  // in place (same approach the rest of this suite uses) and restored in a
+  // finally so the flip cannot leak into a neighbouring test.
+  const withPublicLaw = async (
+    { featurePublicLaw, isDev }: { featurePublicLaw: boolean; isDev: boolean },
+    run: () => Promise<void>,
+  ) => {
     const previousFeaturePublicLaw = env.FEATURE_PUBLIC_LAW;
     const previousIsDev = env.isDev;
-    env.FEATURE_PUBLIC_LAW = false;
-    env.isDev = false;
-
+    env.FEATURE_PUBLIC_LAW = featurePublicLaw;
+    env.isDev = isDev;
     try {
+      await run();
+    } finally {
+      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
+      env.isDev = previousIsDev;
+    }
+  };
+
+  test("hides feature-gated tools from the list when the flag is off outside dev", async () => {
+    await withPublicLaw({ featurePublicLaw: false, isDev: false }, async () => {
+      const toolNames = (await listMcpTools(createContext())).map(
+        (tool) => tool.name,
+      );
+
+      expect(toolNames).not.toContain("search_case_law");
+      expect(toolNames).not.toContain("read_case_law_decision");
+      // Untagged tools stay listed: the gate only drops flagged tools.
+      expect(toolNames).toContain("list_matters");
+    });
+  });
+
+  test("lists feature-gated tools once the flag is on", async () => {
+    await withPublicLaw({ featurePublicLaw: true, isDev: false }, async () => {
+      const toolNames = (await listMcpTools(createContext())).map(
+        (tool) => tool.name,
+      );
+
+      expect(toolNames).toContain("search_case_law");
+      expect(toolNames).toContain("read_case_law_decision");
+    });
+  });
+
+  test("lists feature-gated tools in dev even when the flag is off", async () => {
+    await withPublicLaw({ featurePublicLaw: false, isDev: true }, async () => {
+      const toolNames = (await listMcpTools(createContext())).map(
+        (tool) => tool.name,
+      );
+
+      expect(toolNames).toContain("search_case_law");
+      expect(toolNames).toContain("read_case_law_decision");
+    });
+  });
+
+  test("rejects dispatch of a feature-gated tool when the flag is off outside dev", async () => {
+    await withPublicLaw({ featurePublicLaw: false, isDev: false }, async () => {
+      const result = await handleMcpToolCall({
+        args: { query: "shareholder dispute" },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+
+      expect(result).toEqual({
+        content: [
+          {
+            type: "text",
+            text: "This feature is not enabled on this deployment",
+          },
+        ],
+        isError: true,
+      });
+      // The gate short-circuits before the backing handler runs, so guessing
+      // the tool name cannot reach the corpus.
+      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+    });
+  });
+
+  test("dispatches a feature-gated tool once the flag is on", async () => {
+    await withPublicLaw({ featurePublicLaw: true, isDev: false }, async () => {
       searchDecisionsHandlerMock.mockResolvedValue({
-        facets: null,
+        facets: { country: [{ count: 1, value: "CZE" }] },
         hits: [
           {
             caseNumber: "29 Cdo 123/2024",
@@ -911,7 +986,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
         ],
         nextCursor: null,
-        totalCount: null,
+        totalCount: 1,
       });
 
       const result = await handleMcpToolCall({
@@ -920,31 +995,20 @@ describe("OpenAI-compatible MCP tools", () => {
         toolName: "search_case_law",
       });
 
-      expect(parseToolPayload(result)).toEqual({
-        facets: null,
-        nextCursor: null,
+      // The gate opened: the backing handler ran instead of the not-enabled
+      // rejection, which would short-circuit before any handler call. With the
+      // flag on, app URLs resolve just as in dev.
+      expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(1);
+      expect(parseToolPayload(result)).toMatchObject({
         results: [
           {
-            appUrl: null,
-            caseNumber: "29 Cdo 123/2024",
-            citationCount: 7,
-            country: "CZE",
-            court: "Nejvyšší soud",
-            decisionDate: "2024-02-01",
+            appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
             decisionId: "dec_123",
-            decisionType: "judgment",
-            ecli: null,
-            language: "cs",
-            snippet: null,
-            sourceUrl: "https://example.test/decision",
           },
         ],
-        totalCount: null,
+        totalCount: 1,
       });
-    } finally {
-      env.FEATURE_PUBLIC_LAW = previousFeaturePublicLaw;
-      env.isDev = previousIsDev;
-    }
+    });
   });
 
   test("search_case_law rejects invalid ISO dates", async () => {

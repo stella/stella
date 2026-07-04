@@ -219,6 +219,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       required: ["query"],
     },
     anonymized: { exposure: "passthrough" },
+    // Backed by the public case-law corpus (caseLawPublicReadDb), the same
+    // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
+    feature: "FEATURE_PUBLIC_LAW",
     name: "search_case_law",
     scope: "stella:search",
   },
@@ -262,6 +265,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       required: ["decision_id"],
     },
     anonymized: { exposure: "passthrough" },
+    // Backed by the public case-law corpus (caseLawPublicReadDb), the same
+    // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
+    feature: "FEATURE_PUBLIC_LAW",
     name: "read_case_law_decision",
     scope: "stella:read",
   },

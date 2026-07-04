@@ -1,15 +1,26 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 import { DefaultPendingComponent } from "@/components/route-components";
+import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
-  // Time tracking is intentionally excluded from the current product surface.
-  // The route only redirects to the workspace's default view, from a mounted
-  // component so no dormant product UI mounts on a direct/deep-link visit.
-  // Remount on workspace change so a stale in-flight redirect is cancelled.
+  // Gated behind FEATURE_TIME_BILLING. While the flag is off the route is not
+  // part of the product surface, so redirect to the workspace's default view
+  // from beforeLoad. With the flag on it falls through to a mounted component
+  // that redirects the same way, so no dormant product UI mounts on a
+  // direct/deep-link visit. Remount on workspace change so a stale in-flight
+  // redirect is cancelled.
+  beforeLoad: ({ params }) => {
+    if (!isTimeBillingRouteEnabled()) {
+      throw redirect({
+        to: "/workspaces/$workspaceId",
+        params: { workspaceId: params.workspaceId },
+      });
+    }
+  },
   remountDeps: ({ params }) => params.workspaceId,
   component: TimesheetsRedirect,
 });
