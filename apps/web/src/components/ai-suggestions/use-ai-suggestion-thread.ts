@@ -63,6 +63,7 @@ export const useAISuggestionThread = ({
       return;
     }
     const doc = editorView.state.doc;
+    // eslint-disable-next-line react/react-compiler -- reconciles persisted suggestion status against the live ProseMirror document (external system); the status lives in `messages` and cannot be derived in render without restructuring the suggestion data model
     setMessages((prev) => {
       const messagesState = { changed: false };
       const next = prev.map<ThreadMessage>((m) => {

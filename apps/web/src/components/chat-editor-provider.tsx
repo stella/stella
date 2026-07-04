@@ -516,8 +516,10 @@ export const useChatEditor = ({
     : undefined;
   const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
   const placeholderRef = useRef(resolvedPlaceholder);
+  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: the imperative editor's Placeholder plugin reads placeholderRef.current out-of-render, so it must hold this render's value
   placeholderRef.current = resolvedPlaceholder;
   const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
+  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
@@ -532,6 +534,7 @@ export const useChatEditor = ({
   const sentMessageHistoryHtmlRef = useRef<readonly string[]>([]);
   const messageHistoryIndexRef = useRef<number | null>(null);
   const markDraftStartedRef = useRef<(() => void) | null>(null);
+  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: the message-history key handler reads this out-of-render, must reflect this render's prop
   sentMessageHistoryHtmlRef.current = sentMessageHistoryHtml ?? [];
   const threadKey = getChatThreadKey(threadRef);
   const {
@@ -552,6 +555,7 @@ export const useChatEditor = ({
     areDraftDocsEqual(draftDoc, EMPTY_CHAT_DRAFT_DOC),
   );
   const attachmentsRef = useRef(attachments);
+  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
   attachmentsRef.current = attachments;
   const pendingWorkspaceEntitySearchRef = useRef<{
     queryKey: QueryKey | null;
@@ -566,6 +570,7 @@ export const useChatEditor = ({
     draftStartedThreadKeyRef.current = threadKey;
     onDraftStart?.();
   }, [onDraftStart, threadKey]);
+  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: editor plugins invoke markDraftStartedRef.current out-of-render, must point at this render's callback
   markDraftStartedRef.current = markDraftStarted;
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref reset on id change, not external-system sync
@@ -787,6 +792,7 @@ export const useChatEditor = ({
     [slashShortcutRows, skillPageRows, reservedCommands],
   );
   const slashItemsRef = useRef(slashItems);
+  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: the PromptSlash suggestion reads slashItemsRef.current out-of-render, must hold this render's items
   slashItemsRef.current = slashItems;
 
   const handleMessageHistoryKeyDown = useCallback(
@@ -884,6 +890,7 @@ export const useChatEditor = ({
           };
         },
       }),
+      // eslint-disable-next-line react/react-compiler -- ref read deferred into the plugin's placeholder callback (invoked out-of-render), not read during render
       Placeholder.configure({
         placeholder: () => placeholderRef.current,
       }),
@@ -892,11 +899,13 @@ export const useChatEditor = ({
         suggestion: createChatSuggestion(
           getMentionItems,
           searchMentionItems,
+          // eslint-disable-next-line react/react-compiler -- editor-suggestion glue: loader closes over refs read out-of-render by the mention plugin, not during render
           loadWorkspaceEntities,
         ),
         deleteTriggerWithBackspace: true,
       }),
       PromptSlash.configure({
+        // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
         suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
       }),
       PastedText,
@@ -1010,6 +1019,7 @@ export const useChatEditor = ({
     },
   });
 
+  // eslint-disable-next-line react/react-compiler -- latest-ref mirror: holds the live editor instance for imperative access from out-of-render handlers and plugins
   editorRef.current = editor;
 
   const syncEditorPlugins = useCallback(
@@ -1296,7 +1306,7 @@ export const useChatEditor = ({
         throw error;
       }
     },
-    [clearDraft, editor, setDraft, threadKey],
+    [clearDraft, editor, setDraft, setIsEmpty, threadKey],
   );
 
   const canSubmit = !isEmpty || attachments.length > 0;

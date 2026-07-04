@@ -19,6 +19,7 @@ import {
   type RefObject,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -166,9 +167,7 @@ export const OutlineRail = ({
   // output changes (e.g. Folio's docSize); React Compiler keeps the adapters'
   // inline resolvers referentially stable between unrelated renders.
   const resolvePctRef = useRef(resolvePct);
-  resolvePctRef.current = resolvePct;
   const onJumpRef = useRef(onJump);
-  onJumpRef.current = onJump;
 
   const tree = useMemo(() => buildTree(items), [items]);
   const maxLevel = useMemo(() => {
@@ -217,7 +216,15 @@ export const OutlineRail = ({
   }, [items, scrollContainerRef, resolvePct]);
 
   const recalcRef = useRef(recalc);
-  recalcRef.current = recalc;
+  // Keep the latest onJump/resolvePct/recalc in refs so async consumers (scroll
+  // listener, ResizeObserver, click handlers) read the current values without
+  // re-subscribing. Assigning in a layout effect (rather than during render)
+  // keeps refs fresh every commit while staying render-pure.
+  useLayoutEffect(() => {
+    resolvePctRef.current = resolvePct;
+    onJumpRef.current = onJump;
+    recalcRef.current = recalc;
+  });
 
   useEffect(() => {
     recalc();

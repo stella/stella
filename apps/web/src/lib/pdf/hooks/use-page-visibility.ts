@@ -43,6 +43,7 @@ export const usePageVisibility = ({
   const throttledUpdate = useThrottledCallback(updateVisiblePages, 150);
 
   const containerRef = useCallback(
+    // eslint-disable-next-line react/react-compiler -- effect-event read inside a load-bearing useCallback: onPageChangedEvent is a useEffectEvent (stable, always-latest) that must stay out of the dep array, but the compiler infers it as a dependency it cannot reconcile, so it cannot preserve this memo
     (container: HTMLDivElement | null) => {
       if (!container || pageIds.length === 0) {
         return undefined;
@@ -108,6 +109,8 @@ export const usePageVisibility = ({
         ratios.clear();
       };
     },
+    // onPageChangedEvent is a useEffectEvent (stable, always-latest) so it is
+    // intentionally not a dependency.
     [pageIds, throttledUpdate],
   );
 

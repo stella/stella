@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { PencilIcon, SaveIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -74,11 +74,17 @@ export const SkillResourcePanel = ({
   const [draft, setDraft] = useState(tab.content);
   const [saving, setSaving] = useState(false);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id derived state, lift to a key prop on the panel
-  useEffect(() => {
+  // Reset the editor when the underlying tab identity or server content
+  // changes (a key-reset belongs on the parent panel, outside this batch).
+  // Adjusting state during render avoids the extra commit + cascading render.
+  const [lastTabId, setLastTabId] = useState(tab.id);
+  const [lastTabContent, setLastTabContent] = useState(tab.content);
+  if (tab.id !== lastTabId || tab.content !== lastTabContent) {
+    setLastTabId(tab.id);
+    setLastTabContent(tab.content);
     setEditing(false);
     setDraft(tab.content);
-  }, [tab.id, tab.content]);
+  }
 
   const save = async () => {
     if (saving || tab.skillId === null) {

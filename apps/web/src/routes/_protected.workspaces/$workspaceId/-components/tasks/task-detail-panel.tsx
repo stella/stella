@@ -119,6 +119,7 @@ export const TaskDetailPanel = ({
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay + data mutation, opens edit and auto-assigns the user on new task; move into the task-create flow
   useEffect(() => {
     if (isNewTask && task) {
+      // eslint-disable-next-line react/react-compiler -- event-relay reacting to a freshly-created task's data arriving (opens rename, auto-assigns); the creation handler that owns this transition lives in a different flow
       setEditNameValue("");
       setIsEditingName(true);
       clearNewFlag(taskId);

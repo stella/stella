@@ -227,8 +227,14 @@ const EntityMetadataContent = ({
     .toSorted()
     .join(",");
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, compute in render
-  useEffect(() => {
+  // Prune optimistic placeholders whose real fields have now arrived. Adjusting
+  // state during render (instead of in an effect) drops the placeholder in the
+  // same commit the field lands in and avoids the cascading-render warning.
+  const [lastArrivedKey, setLastArrivedKey] = useState(
+    entityFieldPropertyIdsKey,
+  );
+  if (entityFieldPropertyIdsKey !== lastArrivedKey) {
+    setLastArrivedKey(entityFieldPropertyIdsKey);
     const arrivedIds = new Set(
       entityFieldPropertyIdsKey.split(",").filter((id) => id.length > 0),
     );
@@ -237,7 +243,7 @@ const EntityMetadataContent = ({
         ? prev
         : prev.filter((id) => !arrivedIds.has(id)),
     );
-  }, [entityFieldPropertyIdsKey]);
+  }
 
   if (propertiesQuery.isError) {
     return null;

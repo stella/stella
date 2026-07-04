@@ -163,6 +163,7 @@ export const OnboardingWizard = () => {
       return;
     }
 
+    // eslint-disable-next-line react/react-compiler -- one-shot apply of an async, session-derived default once suggestedCountryCodes resolves; setting this during render would be a state-update-during-render hazard
     setData((currentData) => ({
       ...currentData,
       practiceJurisdictions: [

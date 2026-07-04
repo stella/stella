@@ -584,7 +584,9 @@ export const ExternalReferencePanel = ({
 }: ExternalReferencePanelProps) => {
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const fallbackChatThreadIdRef = useRef(createChatThreadId());
+  // Stable fallback chat-thread id, generated once per mount. useState (not a
+  // ref) so it can be read during render without a ref-access warning.
+  const [fallbackChatThreadId] = useState(() => createChatThreadId());
   const safeHref = sanitizeHref(tab.url);
   const [confirmHref, setConfirmHref] = useState<string | undefined>();
   const canPreview =
@@ -674,7 +676,7 @@ export const ExternalReferencePanel = ({
   const persistedExternalTab: { chatThreadId?: string | undefined } = tab;
   const externalChatThreadId =
     persistedExternalTab.chatThreadId === undefined
-      ? fallbackChatThreadIdRef.current
+      ? fallbackChatThreadId
       : toChatThreadId(persistedExternalTab.chatThreadId);
   const hasMetadata =
     provider !== undefined ||
@@ -736,9 +738,12 @@ export const ExternalReferencePanel = ({
           connectorSlug,
           connectors: mcpConnectorsData?.connectors ?? [],
         }));
-  const requestOpenExternal = useCallback((href: string) => {
-    setConfirmHref(href);
-  }, []);
+  const requestOpenExternal = useCallback(
+    (href: string) => {
+      setConfirmHref(href);
+    },
+    [setConfirmHref],
+  );
   const requestSafeExternalOpen = useCallback(() => {
     if (safeHref === undefined) {
       return;
@@ -753,7 +758,7 @@ export const ExternalReferencePanel = ({
 
     window.open(confirmHref, "_blank", "noopener,noreferrer");
     setConfirmHref(undefined);
-  }, [confirmHref]);
+  }, [confirmHref, setConfirmHref]);
   const copyConfirmHref = useCallback(async () => {
     if (confirmHref === undefined) {
       return;

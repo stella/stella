@@ -128,6 +128,7 @@ export const useEditSession = ({
   } | null>(null);
   const checkpointQueueRef = useRef(Promise.resolve());
   const releaseContextRef = useRef({ workspaceId, entityId, propertyId });
+  // eslint-disable-next-line react/react-compiler -- latest-props mirror; read only in the async open/release paths, never during render
   releaseContextRef.current = { workspaceId, entityId, propertyId };
   const isMountedRef = useRef(true);
   const isMounted = () => isMountedRef.current;

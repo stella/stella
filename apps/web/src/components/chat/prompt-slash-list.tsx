@@ -1,4 +1,4 @@
-import { useEffect, useImperativeHandle, useRef, useState } from "react";
+import { useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
@@ -77,10 +77,16 @@ export const PromptSlashList = ({
 
   const safeIndex = Math.min(selectedIndex, Math.max(0, itemCount - 1));
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset selection to 0 when items change; setSelectedIndex is also driven by keyboard nav + hover, so selectedIndex cannot be pure derived state and this stays a reset effect (component is mounted by a tiptap suggestion render(), so lift-to-key does not apply)
-  useEffect(() => {
+  // Reset selection to 0 when the items list changes, using React's
+  // adjust-state-during-render pattern instead of a reset effect. `items` is
+  // referentially stable between changes (the previous `[items]` effect relied
+  // on that too), so this only fires on a real change; keyboard nav + hover
+  // still drive setSelectedIndex the rest of the time.
+  const [prevItems, setPrevItems] = useState(items);
+  if (items !== prevItems) {
+    setPrevItems(items);
     setSelectedIndex(0);
-  }, [items]);
+  }
 
   // Scroll the active item into view as keyboard nav moves it
   // outside the popup's clipping area.

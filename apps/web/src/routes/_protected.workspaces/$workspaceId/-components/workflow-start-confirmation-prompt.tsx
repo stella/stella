@@ -94,6 +94,7 @@ export const WorkflowStartConfirmationPromptProvider = ({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("workspaces.workflow.largeRunPrompt.description", {
+                // eslint-disable-next-line react/react-compiler -- latest-value mirror written alongside pendingPrompt in confirmLargeRun; read during render only while the dialog is shown, bridging its exit animation when pendingPrompt clears
                 count: String(lastEntityCountRef.current),
               })}
             </AlertDialogDescription>

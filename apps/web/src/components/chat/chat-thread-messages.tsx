@@ -154,6 +154,7 @@ export const ChatThreadMessages = ({
   // and streaming keep the first id, so they skip this and stick-to-
   // bottom handles them; a thread switch changes the id too but has no
   // captured anchor, so it is also skipped.
+  // eslint-disable-next-line react/react-compiler -- scroll-anchoring layout effect mutates the DOM node's scrollTop through the forwarded scrollRef prop; DOM mutation in a layout effect is the correct pattern here
   useLayoutEffect(() => {
     const previousFirstId = prevFirstMessageIdRef.current;
     prevFirstMessageIdRef.current = firstMessageId;
@@ -166,6 +167,7 @@ export const ChatThreadMessages = ({
     if (!container) {
       return;
     }
+    // eslint-disable-next-line react/react-compiler -- adjusts the scroll container's scrollTop (DOM node reached via the forwarded scrollRef prop) to anchor position after a prepend; a legitimate layout-effect DOM mutation
     container.scrollTop += container.scrollHeight - previousScrollHeight;
   }, [firstMessageId, scrollRef]);
 

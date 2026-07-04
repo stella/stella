@@ -623,6 +623,7 @@ export const TemplateStudioPage = ({
           return;
         }
         frames += 1;
+        // eslint-disable-next-line react/react-compiler -- recursive local function flagged as its own dependency; `poll` is not a reactive value and cannot be added to the useCallback deps
         requestAnimationFrame(poll);
       };
       requestAnimationFrame(poll);
@@ -704,6 +705,7 @@ export const TemplateStudioPage = ({
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- latches the docx buffer from the query once and freezes it so a later refetch can't re-initialize the editor mid-edit; driven by async query state, not a single setter call-site, so it cannot move into a handler
   useEffect(() => {
     if (loadedBuffer && docBuffer === null) {
+      // eslint-disable-next-line react/react-compiler -- deliberate one-time latch of the async query buffer into frozen state; the `docBuffer === null` guard makes it fire once and cannot cascade
       setDocBuffer(loadedBuffer);
     }
   }, [loadedBuffer, docBuffer]);
@@ -1670,6 +1672,7 @@ export const TemplateStudioPage = ({
       if (!rect) {
         attempts++;
         if (attempts < 10) {
+          // eslint-disable-next-line react/react-compiler -- recursive local function flagged as its own dependency; `read` is not a reactive value and cannot be added to the useCallback deps
           requestAnimationFrame(read);
         }
         return;
@@ -1750,6 +1753,7 @@ export const TemplateStudioPage = ({
       view.dispatch(clearTemplateSlashMenu(view.state.tr));
     }
     setSlashState(null);
+    // eslint-disable-next-line react/react-compiler -- `setSlashView` closes only over the stable setSlashViewState setter and slashViewRef, so a stale closure is a no-op; empty deps are intentional to keep dismissSlash referentially stable for the [slashShown, dismissSlash] effect below
     setSlashView("root");
     slashFromRef.current = null;
   }, []);
@@ -2383,6 +2387,7 @@ export const TemplateStudioPage = ({
     return result !== null;
   };
 
+  // eslint-disable-next-line react/react-compiler -- deliberate latest-ref write: the store actions registered once in useMountEffect delegate through actionsRef.current, which must hold this render's fresh handler closures
   actionsRef.current = {
     toggleDirectives: () => setShowDirectives((visible) => !visible),
     deleteField: (path) => {
@@ -3182,7 +3187,9 @@ const SlashMenuRow = ({
         "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-start",
         selected ? "bg-accent text-accent-foreground" : "text-foreground",
       )}
+      // eslint-disable-next-line react/react-compiler -- containedHandler defers the rowRef.current read into the returned click handler; the ref is not read during render
       onClick={containedHandler(rowRef, onSelect)}
+      // eslint-disable-next-line react/react-compiler -- containedHandler defers the rowRef.current read into the returned mousedown handler; the ref is not read during render
       onMouseDown={containedHandler(rowRef, (event: ReactMouseEvent) =>
         event.preventDefault(),
       )}

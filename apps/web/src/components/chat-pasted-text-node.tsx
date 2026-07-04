@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
@@ -35,17 +35,18 @@ const CHIP_BASE_CLASS = cn(
   "text-foreground text-xs font-medium",
 );
 
-const pickChipIcon = (source: PastedTextSource) => {
+const ChipIcon = ({ source }: { source: PastedTextSource }) => {
+  const className = "text-muted-foreground size-3 shrink-0";
   if (source === "skill") {
-    return WandSparklesIcon;
+    return <WandSparklesIcon className={className} />;
   }
   if (source === "prompt") {
-    return SparklesIcon;
+    return <SparklesIcon className={className} />;
   }
   if (source === "command") {
-    return CommandIcon;
+    return <CommandIcon className={className} />;
   }
-  return ClipboardPasteIcon;
+  return <ClipboardPasteIcon className={className} />;
 };
 
 const PASTED_TEXT_SOURCE_VALUES: ReadonlySet<string> = new Set([
@@ -86,10 +87,16 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
   // when the popover closes), so each keystroke doesn't dispatch a
   // ProseMirror transaction + draft re-sync.
   const [draftText, setDraftText] = useState(attrs.text);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- resets the editable draft when the node attr changes upstream (undo/redo, external edits); can't compute inline (draftText is controlled by the textarea, setDraftText also used in onChange) and can't key (rendered by TipTap's ReactNodeViewRenderer, no JSX call-site)
-  useEffect(() => {
+  // Reset the editable draft when the node attr changes upstream (undo/redo,
+  // external edits) using React's adjust-state-during-render pattern instead of
+  // a reset effect: track the last attr value and re-seed the draft when it
+  // diverges. Local textarea edits keep attrs.text === lastAttrText until blur
+  // commits, so in-progress edits are preserved.
+  const [lastAttrText, setLastAttrText] = useState(attrs.text);
+  if (attrs.text !== lastAttrText) {
+    setLastAttrText(attrs.text);
     setDraftText(attrs.text);
-  }, [attrs.text]);
+  }
   const commitDraft = () => {
     if (draftText !== attrs.text) {
       props.updateAttributes({ text: draftText });
@@ -104,8 +111,6 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
         });
   const chipLabel = attrs.label.length > 0 ? attrs.label : fallbackLabel;
 
-  const Icon = pickChipIcon(attrs.source);
-
   // Reserved slash commands (`/new`, `/model`) are action triggers, not
   // editable content, so they render as a static chip without the expand/edit
   // popover the other sources use.
@@ -116,7 +121,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
           className={cn(CHIP_BASE_CLASS, "select-none")}
           contentEditable={false}
         >
-          <Icon className="text-muted-foreground size-3 shrink-0" />
+          <ChipIcon source={attrs.source} />
           <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
             {chipLabel}
           </span>
@@ -139,7 +144,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
           contentEditable={false}
           type="button"
         >
-          <Icon className="text-muted-foreground size-3 shrink-0" />
+          <ChipIcon source={attrs.source} />
           <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
             {chipLabel}
           </span>

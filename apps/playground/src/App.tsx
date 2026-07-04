@@ -63,53 +63,67 @@ function createLargeDocument(paragraphCount: number): FolioDocument {
   return document;
 }
 
+// Derive the initial document + name from the ?paragraphs= / default query
+// params during render. A ?file= fixture is loaded asynchronously in the effect
+// below (it needs a fetch), so it seeds an empty initial state here.
+function readInitialFixture(): {
+  document: FolioDocument | null;
+  fileName: string;
+} {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("file")) {
+    return { document: null, fileName: "Untitled.docx" };
+  }
+  const paragraphCount = Number(params.get("paragraphs"));
+  if (Number.isInteger(paragraphCount) && paragraphCount > 0) {
+    return {
+      document: createLargeDocument(paragraphCount),
+      fileName: `Generated ${paragraphCount} paragraphs.docx`,
+    };
+  }
+  return { document: createEmptyDocument(), fileName: "Untitled.docx" };
+}
+
 export function App() {
   const editorRef = useRef<DocxEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [initialFixture] = useState(readInitialFixture);
   const [currentDocument, setCurrentDocument] = useState<FolioDocument | null>(
-    null,
+    initialFixture.document,
   );
   const [documentBuffer, setDocumentBuffer] = useState<ArrayBuffer | null>(
     null,
   );
-  const [fileName, setFileName] = useState("Untitled.docx");
+  const [fileName, setFileName] = useState(initialFixture.fileName);
   const [status, setStatus] = useState("");
   const [editorMode, setEditorMode] = useState<EditorMode>("editing");
   const [zoom, setZoom] = useState(ZOOM_INITIAL);
 
-  // Load fixture from ?file= query param (for visual regression tests)
-  // or from /fixtures/*.docx (served by Vite's public dir)
+  // Load a ?file= fixture from /fixtures/*.docx (served by Vite's public dir)
+  // for visual regression tests. Non-fixture initial state is derived during
+  // render by readInitialFixture, so no synchronous setState is needed here.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const fixtureFile = params.get("file");
-    const paragraphCount = Number(params.get("paragraphs"));
-    if (fixtureFile) {
-      void (async () => {
-        try {
-          setStatus("Loading fixture...");
-          const response = await fetch(`/fixtures/${fixtureFile}`);
-          if (!response.ok) {
-            setStatus(`Fixture not found: ${fixtureFile}`);
-            return;
-          }
-          const buffer = await response.arrayBuffer();
-          setCurrentDocument(null);
-          setDocumentBuffer(buffer);
-          setFileName(fixtureFile);
-          setStatus("");
-        } catch {
-          setStatus("Error loading fixture");
+    const fixtureFile = new URLSearchParams(window.location.search).get("file");
+    if (!fixtureFile) {
+      return;
+    }
+    void (async () => {
+      try {
+        setStatus("Loading fixture...");
+        const response = await fetch(`/fixtures/${fixtureFile}`);
+        if (!response.ok) {
+          setStatus(`Fixture not found: ${fixtureFile}`);
+          return;
         }
-      })();
-      return;
-    }
-    if (Number.isInteger(paragraphCount) && paragraphCount > 0) {
-      setCurrentDocument(createLargeDocument(paragraphCount));
-      setFileName(`Generated ${paragraphCount} paragraphs.docx`);
-      return;
-    }
-    setCurrentDocument(createEmptyDocument());
-    setFileName("Untitled.docx");
+        const buffer = await response.arrayBuffer();
+        setCurrentDocument(null);
+        setDocumentBuffer(buffer);
+        setFileName(fixtureFile);
+        setStatus("");
+      } catch {
+        setStatus("Error loading fixture");
+      }
+    })();
   }, []);
 
   const handleNewDocument = useCallback(() => {

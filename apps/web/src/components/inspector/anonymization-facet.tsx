@@ -349,6 +349,7 @@ export const AnonymizationFacet = ({
     if (folioSelection === null) {
       return;
     }
+    // eslint-disable-next-line react/react-compiler -- external subscription: relays a selection the folio editor publishes into a store from its own dispatch wrapper (a different module); no in-component setter call-site can host it
     setPendingValue(folioSelection.text);
     // `seq` is part of the dep array so re-selecting the
     // same string still re-fires the prefill.
@@ -596,6 +597,7 @@ export const AnonymizationFacet = ({
       // term rows live above it and are always visible.
       detectedGroups.some(([label]) => label === docSelectionLabel)
     ) {
+      // eslint-disable-next-line react/react-compiler -- external subscription: two-pass reaction to a doc-selection store bump; this commit expands the target group, the effect re-run then scrolls + flashes via DOM imperatives that depend on the expand having committed
       setExpandedGroups((prev) => {
         const next = new Set(prev);
         next.add(docSelectionLabel);

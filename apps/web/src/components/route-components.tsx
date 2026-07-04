@@ -57,6 +57,7 @@ const useNetworkRetry = ({
   useEffect(() => {
     if (!networkError) {
       networkRetryCount = 0;
+      // eslint-disable-next-line react/react-compiler -- effect synchronizes retry state with a scheduled setTimeout side effect; not derivable in render
       setIsAutoRetrying(false);
       return undefined;
     }

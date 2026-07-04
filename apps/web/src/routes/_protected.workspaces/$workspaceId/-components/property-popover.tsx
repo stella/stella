@@ -183,6 +183,7 @@ export const PropertyPopover = ({
   // Mirror the latest render value into the ref during render. Read
   // only from event handlers (replaceDependency), so this is the
   // sanctioned latest-value pattern.
+  // eslint-disable-next-line react/react-compiler -- sanctioned latest-value mirror; read only from event handlers (replaceDependency), never for rendered output
   latestDependenciesRef.current = displayedDependencies;
   const dependencyGenerationRef = useRef(0);
   const [, startDepsTransition] = useTransition();

@@ -39,6 +39,7 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
         candidate.type === "pdf" && candidate.id === pendingRenameTabId,
     );
     if (target) {
+      // eslint-disable-next-line react/react-compiler -- store-flag relay: startRename's setState reacts to the pendingRenameTabId store flag AND to the target tab arriving in `tabs` async, so it cannot fold into the distant requestRename() call-site or a store-subscription callback
       startRename(target);
       clearRenameRequest();
     }

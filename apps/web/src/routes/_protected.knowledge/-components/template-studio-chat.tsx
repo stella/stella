@@ -276,6 +276,7 @@ const TemplateStudioChatInner = ({
   // where `createAIEditSnapshot()` still returns null. A send in that
   // window gives the model no editable blocks. Poll until the first
   // non-null snapshot, then stop (mirrors the file overlay).
+  // eslint-disable-next-line react/react-compiler -- mount-time seed of readiness from the imperative Folio editor instance; the ref read runs once in the useState initializer, and the poll below keeps it in sync
   const [editorReady, setEditorReady] = useState(() =>
     Boolean(editorRef.current?.createAIEditSnapshot()),
   );
@@ -1055,14 +1056,18 @@ const TemplateStudioChatInner = ({
   const hasMessages = messages.length > 0;
   const hasThreadContent = hasMessages || error !== undefined;
   const lastMessageId = messages.at(-1)?.id ?? null;
-  // Auto-open the thread panel as soon as the first message lands so
-  // users see streaming without having to click the chevron.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (panel openness follows thread content), compute in render
-  useEffect(() => {
+  // Auto-open the thread panel as soon as the first message lands so users see
+  // streaming without having to click the chevron. Adjust-state-during-render on
+  // the hasThreadContent transition (not every render) so the user can still
+  // close the panel afterwards while content is present.
+  const [prevHasThreadContent, setPrevHasThreadContent] =
+    useState(hasThreadContent);
+  if (hasThreadContent !== prevHasThreadContent) {
+    setPrevHasThreadContent(hasThreadContent);
     if (hasThreadContent) {
       setPanelOpen(true);
     }
-  }, [hasThreadContent]);
+  }
   useLayoutEffect(() => {
     const scrollElement = threadScrollRef.current;
     if (!scrollElement) {

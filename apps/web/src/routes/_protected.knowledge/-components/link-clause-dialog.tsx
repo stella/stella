@@ -127,6 +127,7 @@ export const LinkClauseDialog = ({
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- resets the slot draft on close and seeds a default slot once the preview/links queries land while open; setSlotValue/setCustomSlotName are also driven by user selection so this is not pure derived state, and the dialog stays mounted (open is controlled) so a key reset cannot replace it
   useEffect(() => {
     if (!open) {
+      // eslint-disable-next-line react/react-compiler -- resets the slot draft on close and seeds a default once the preview/links queries land; setters are also user-driven, so this syncs with external query state and is not pure derived state
       setSlotValue(null);
       setCustomSlotName("");
       return;

@@ -90,6 +90,7 @@ export const MatterMetadataPanel = ({
     }
 
     if (!nameDirty) {
+      // eslint-disable-next-line react/react-compiler -- resyncs the form field from server data, gated on the dirty flag; not pure-derivable since nameValue is also user-edited
       setNameValue(workspace.name);
     }
     if (!referenceDirty) {

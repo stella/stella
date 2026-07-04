@@ -89,9 +89,11 @@ function ChatIndex() {
   // composer bound to it via `useChatEditor`) rebind to the fresh id instead
   // of staying on the abandoned draft.
   const [, rotateDraftThread] = useState(0);
+  // eslint-disable-next-line react/react-compiler -- draft-thread identity held in a ref and rotated imperatively (each rotation is paired with rotateDraftThread to force the dependent render); reading the current id here to derive this render's threadRef and query key is intentional
+  const draftThreadId = threadIdRef.current;
   const threadRef: ChatThreadRef = {
     scope: "global",
-    threadId: threadIdRef.current,
+    threadId: draftThreadId,
   };
   const controller = useChatEditor({ reservedCommands: true, threadRef });
   const prompts = useSavedPrompts();
@@ -135,13 +137,13 @@ function ChatIndex() {
       activeOrganizationId,
       "thread",
       "global",
-      threadIdRef.current,
+      draftThreadId,
       "draftMeta",
     ] as const,
     staleTime: Number.POSITIVE_INFINITY,
     queryFn: async () => {
       const response = await api.chat
-        .threads({ threadId: toSafeId<"chatThread">(threadIdRef.current) })
+        .threads({ threadId: toSafeId<"chatThread">(draftThreadId) })
         .messages.get({ query: { allowMissingThread: true } });
       if (response.error) {
         throw toAPIError(response.error);
@@ -356,7 +358,7 @@ function ChatIndex() {
             <ChatAnonymizationLayer
               editor={controller.editor}
               enabled={anonymized}
-              workspaceId={threadRef.threadId}
+              workspaceId={draftThreadId}
             />
             <ChatInputSurface
               anonymized={anonymized}

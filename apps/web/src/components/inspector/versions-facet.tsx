@@ -81,9 +81,11 @@ export const VersionsFacet = ({
     setOlderCursor(data.olderCursor);
     setIsLoadingOlder(false);
     setLoadOlderError(false);
+    /* eslint-disable react/react-compiler -- deliberate render-time ref writes: they keep loadOlder's latest-value refs in sync with the re-seed so a response resolving in the commit→effect window is still caught by the stale-response guard; an effect would miss that window */
     olderCursorRef.current = data.olderCursor;
     isLoadingOlderRef.current = false;
     seededDataRef.current = data;
+    /* eslint-enable react/react-compiler */
   }
 
   const loadOlder = useCallback(async () => {

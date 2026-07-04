@@ -236,6 +236,7 @@ export function AppSidebar(props: AppSidebarProps) {
       showBadges();
     } else {
       showBadges.cancel();
+      // eslint-disable-next-line react/react-compiler -- effect reacts to the useKeyHold hook output and drives a debounced badge reveal side effect; not derivable in render
       setShowNavBadges(false);
     }
   }, [isNavKeyHeld, showBadges]);

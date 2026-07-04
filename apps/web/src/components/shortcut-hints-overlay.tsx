@@ -126,6 +126,7 @@ function ShortcutHintsOverlayContent() {
       showDialog();
     } else {
       showDialog.cancel();
+      // eslint-disable-next-line react/react-compiler -- effect reacts to the useKeyHold hook output and drives a debounced dialog side effect; not derivable in render
       setIsVisible(false);
     }
   }, [isModHeld, isSuppressedUntilRelease, showDialog]);

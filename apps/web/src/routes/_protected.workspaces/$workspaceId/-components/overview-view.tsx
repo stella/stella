@@ -298,7 +298,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   // `today` forces a recompute at day rollover; getWeekStart reads the current
   // date itself, so the `today` dependency is intentional despite not being
   // referenced. `locale` drives the first weekday.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react/react-compiler -- `today` is an intentional extra dep to force recompute at day rollover; getWeekStart reads the current date itself
   const weekStart = useMemo(() => getWeekStart(locale), [today, locale]);
   const weekEnd = useMemo(() => {
     const end = new Date(weekStart);
@@ -1344,6 +1344,7 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
         "group/row hover:bg-muted/50 flex items-center gap-3 px-4 py-2.5",
         handleOpen && "w-full cursor-pointer text-start",
       )}
+      // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; rowRef is handed to the helper, not read for rendered output
       onClick={containedHandler(rowRef, handleOpen)}
       onContextMenu={handleContextMenu}
       onKeyDown={handleKeyDown}

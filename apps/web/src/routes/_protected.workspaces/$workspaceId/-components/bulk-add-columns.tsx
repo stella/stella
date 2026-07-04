@@ -315,6 +315,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
   );
   const canSubmit = validDrafts.length > 0 && !batch.isPending;
 
+  // eslint-disable-next-line react/react-compiler -- latest-value mirror; read only in the dialog's onOpenChange close guard, never for rendered output
   dirtyRef.current = drafts.some(
     (d) => d.name.trim().length > 0 || d.prompt.trim().length > 0,
   );
@@ -505,6 +506,7 @@ const DraftCard = ({
   const promptField: PropertyPromptFieldHandle = useMemo(
     () => ({
       name: `draft-${draft.id}`,
+      // eslint-disable-next-line react/react-compiler -- intentionally stable handle; the editor reads state.value only on init, so draft.prompt/onChange are deliberately excluded from the memo deps (see exhaustive-deps note below)
       state: { value: draft.prompt },
       handleChange: (next) => onChange({ prompt: next }),
       handleBlur: () => undefined,

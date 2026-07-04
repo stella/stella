@@ -214,7 +214,9 @@ export const DraggableRow = ({
     },
     [measureElement],
   );
-  const bulkEntitiesRef = useRef<TableTreeNode[] | undefined>(undefined);
+  const [bulkEntities, setBulkEntities] = useState<TableTreeNode[] | undefined>(
+    undefined,
+  );
   const [contextOpen, setContextOpen] = useState(false);
   const [contextAnchor, setContextAnchor] = useState<VirtualAnchor | null>(
     null,
@@ -272,7 +274,7 @@ export const DraggableRow = ({
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    bulkEntitiesRef.current = getBulkSelectedEntities();
+    setBulkEntities(getBulkSelectedEntities());
     setContextPropertyId(getContextPropertyId(e.target));
     setContextAnchor({
       getBoundingClientRect: () => new DOMRect(e.clientX, e.clientY, 0, 0),
@@ -334,18 +336,18 @@ export const DraggableRow = ({
       entity={entity}
       onOpenChange={(open) => {
         if (open) {
-          bulkEntitiesRef.current = getBulkSelectedEntities();
+          setBulkEntities(getBulkSelectedEntities());
         }
         setContextOpen(open);
         if (!open) {
           setContextAnchor(null);
           setContextPropertyId(null);
-          bulkEntitiesRef.current = undefined;
+          setBulkEntities(undefined);
         }
       }}
       onRename={isFolder ? () => onStartEditing(entity.entityId) : undefined}
       open={contextOpen}
-      selectedEntities={contextOpen ? bulkEntitiesRef.current : undefined}
+      selectedEntities={contextOpen ? bulkEntities : undefined}
       cellMetadataTarget={
         contextPropertyId
           ? {
@@ -451,6 +453,7 @@ export const DraggableRow = ({
         data-index={virtualIndex}
         data-state={row_getIsSelected(row) ? "selected" : undefined}
         key={row.id}
+        // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; rowRef is handed to the helper, not read for rendered output
         onClick={containedHandler(rowRef, handleRowClick)}
         onContextMenu={handleContextMenu}
         ref={setRowRef}
@@ -732,6 +735,7 @@ const SelectRowContent = ({
     } else {
       row.toggleSelected();
     }
+    // eslint-disable-next-line react/react-compiler -- lastSelectedIndex is a RefObject prop; writing `.current` is the intended ref write (shared with the parent), not a prop mutation
     lastSelectedIndex.current = index;
   };
 

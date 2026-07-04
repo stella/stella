@@ -184,10 +184,16 @@ export const DocumentAiSourceBar = ({
     mutateBoundingBoxes({ justificationId });
   }, [needsBoxes, justificationId, mutateBoundingBoxes]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset expansion when fieldId changes. setIsAnswerExpanded also backs the toggle button, so it is not pure derived state; a key-reset belongs in the parent (file-tab-panel.tsx, outside this batch) and would also reset this component's bbox refs. Keep.
-  useEffect(() => {
+  // Reset expansion when the field changes. setIsAnswerExpanded also backs the
+  // toggle button, so this is not pure derived state; a key-reset belongs in
+  // the parent (file-tab-panel.tsx, outside this batch) and would also reset
+  // this component's bbox refs. Adjusting state during render (instead of in an
+  // effect) avoids the extra commit and the cascading-render warning.
+  const [lastFieldId, setLastFieldId] = useState(fieldId);
+  if (fieldId !== lastFieldId) {
+    setLastFieldId(fieldId);
     setIsAnswerExpanded(false);
-  }, [fieldId]);
+  }
 
   // Nudge the justifications cache every second while we still need
   // bboxes. POST success doesn't guarantee the payload is in cache

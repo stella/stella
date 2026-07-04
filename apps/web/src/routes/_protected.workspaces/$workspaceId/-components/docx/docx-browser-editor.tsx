@@ -263,6 +263,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       // Facet not on screen: skip the wasm pipeline entirely and
       // drop any previously detected terms so a re-mount starts
       // from a clean slate.
+      // eslint-disable-next-line react/react-compiler -- reset tied to the wasm-detection subscription lifecycle (facet off-screen): clears detected terms as part of tearing down the external pipeline
       setDetectedAnonymizationTerms([]);
       return undefined;
     }
@@ -411,6 +412,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const excludedCanonicalsRef = useRef<readonly string[]>([]);
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state synced into a ref plus an event-relay poke of runDetectionRef; compute in render / move into the allowlist mutation handler
   useEffect(() => {
+    // eslint-disable-next-line react/react-compiler -- not a state mutation: assigns a freshly-spread copy to a latest-ref mirror the polling effect reads; the compiler's immutability heuristic misfires on ref writes inside effects
     excludedCanonicalsRef.current = [...excludedCanonicalsSet];
     // Kick the detection right away so worker-found terms that
     // the user just added to the allowlist disappear without
@@ -575,16 +577,17 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     [fitZoomRef],
   );
   const t = useTranslations();
-  const previewPlaceholder =
-    optimisticPreviewRef.current?.fieldId === fieldId
-      ? optimisticPreviewRef.current.file
-      : undefined;
+  /* eslint-disable react/react-compiler -- optimistic preview carried across the finalize→refetch window in a mutable ref; reading it during render to seed this render's query placeholder is intentional editor glue (converting to state would add finalize-time re-renders) */
+  const optimisticPreview = optimisticPreviewRef.current;
+  const previewPlaceholderData =
+    optimisticPreview?.fieldId === fieldId
+      ? optimisticPreview.file
+      : keepPreviousData;
   const previewFileQuery = useQuery({
     ...fileOptions({ workspaceId, fieldId, purpose: "native-display" }),
-    ...(previewPlaceholder !== undefined
-      ? { placeholderData: previewPlaceholder }
-      : { placeholderData: keepPreviousData }),
+    placeholderData: previewPlaceholderData,
   });
+  /* eslint-enable react/react-compiler */
   const canAutoRequestCollaboration =
     isEditing &&
     !previewFileQuery.isPlaceholderData &&
@@ -612,13 +615,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     throw previewFileQuery.error;
   }
 
+  /* eslint-disable react/react-compiler -- optimisticPreview holds a mutable ref value read during render (see above); passing it to selectPreviewFile to pick this render's preview is intentional editor glue */
   const previewFile = previewFileQuery.data
     ? selectPreviewFile({
         file: previewFileQuery.data,
-        optimisticPreview: optimisticPreviewRef.current,
+        optimisticPreview,
         fieldId,
       })
     : null;
+  /* eslint-enable react/react-compiler */
 
   const {
     state,
@@ -908,6 +913,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   useEffect(() => {
     if (!isUnlocked) {
       wasUnlockedRef.current = false;
+      // eslint-disable-next-line react/react-compiler -- resets autosave status as part of the unlock-state subscription (mixes DOM focus/rAF); syncs the indicator when the doc relocks
       setAutosaveStatus("synced");
       return undefined;
     }
@@ -954,7 +960,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         }),
       );
     })();
-  }, [saveActiveCheckpoint]);
+  }, [saveActiveCheckpoint, setAutosaveStatus]);
 
   // Awaitable variant of `saveChangeCheckpoint` for callers that
   // need to wait for the round-trip before navigating (e.g. the
@@ -975,7 +981,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         checkpointSaved,
       }),
     );
-  }, [clearQueuedChangeCheckpoint, saveActiveCheckpoint]);
+  }, [clearQueuedChangeCheckpoint, saveActiveCheckpoint, setAutosaveStatus]);
 
   // Cmd+S / Ctrl+S checkpoints only while the document is actively editable.
   useExternalSyncEffect(() => {
@@ -1045,6 +1051,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     isUnlocked,
     markDirty,
     scheduleChangeCheckpointSave,
+    setAutosaveStatus,
   ]);
 
   const handleFinalize = useCallback(async () => {
@@ -1167,8 +1174,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     isDirty,
     onClose,
     onSaved,
+    optimisticPreviewRef,
     previewFile,
     saveActiveCheckpoint,
+    setAutosaveStatus,
     t,
   ]);
 
@@ -1292,16 +1301,19 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // "saving" with no buffer of its own). Without this we'd reload the
   // editor against `previewFile.buffer` for the few hundred ms before
   // the parent unmounts us — and the Stella fallback would flash.
+  /* eslint-disable react/react-compiler -- buffers preserved across the save transition in refs (so the editor doesn't swap to the preview buffer mid-save); reading their current values to pick this render's editor buffer, then latching this render's buffer for the next render, is intentional editor glue that must happen during render */
+  const preservedLoadedBufferSnapshot = preservedLoadedBufferRef.current;
   const preservedLoadedBuffer =
-    preservedLoadedBufferRef.current?.fieldId === fieldId
-      ? preservedLoadedBufferRef.current.buffer
+    preservedLoadedBufferSnapshot?.fieldId === fieldId
+      ? preservedLoadedBufferSnapshot.buffer
       : null;
+  const lastEditingBuffer = lastEditingBufferRef.current;
   const collaborationSeedBuffer =
     collaborationSession?.seedDocumentBuffer ?? null;
   const editorBuffer = selectDocxBrowserEditorBuffer({
     collaborationSeedBuffer,
     isCollaborativeEditing,
-    lastEditingBuffer: lastEditingBufferRef.current,
+    lastEditingBuffer,
     preservedLoadedBuffer,
     previewBuffer: previewFile?.buffer,
     state,
@@ -1313,6 +1325,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     lastEditingBufferRef.current = editorBuffer;
     preservedLoadedBufferRef.current = null;
   }
+  /* eslint-enable react/react-compiler */
 
   const finishEditingLabel = t("folio.finishEditing");
 
@@ -1355,6 +1368,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, resets editorMode from the isUnlocked flag; compute in render
   useEffect(() => {
     if (!isUnlocked) {
+      // eslint-disable-next-line react/react-compiler -- resets editor mode to "editing" when the doc relocks so the next unlock starts clean; effect timing preserved deliberately in this editor glue
       setEditorMode("editing");
     }
   }, [isUnlocked]);
@@ -1433,14 +1447,19 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     );
   }
 
+  // eslint-disable-next-line react/react-compiler -- last style-picker label kept in a ref so the loading fallback shows the previous label instead of flashing empty; reading it during render is intentional
+  const lastStyleLabel = lastStyleLabelRef.current;
+  // eslint-disable-next-line react/react-compiler -- last style-picker label style kept in a ref for the same anti-flash reason; reading it during render is intentional
+  const lastStyleLabelStyle = lastStyleLabelStyleRef.current;
+
   if (previewFile === null || editorBuffer === undefined) {
     return (
       <DocxEditorLoadingFallback
         label={t("folio.loadingDocument")}
         scaleOffset={scaleOffset}
         showActionBar={showActionBar}
-        stylePickerLabel={lastStyleLabelRef.current}
-        stylePickerLabelStyle={lastStyleLabelStyleRef.current}
+        stylePickerLabel={lastStyleLabel}
+        stylePickerLabelStyle={lastStyleLabelStyle}
         toolbarExtra={toolbarExtra}
         zoom={targetZoom}
       />
@@ -1526,8 +1545,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
                 label={t("folio.loadingDocument")}
                 scaleOffset={scaleOffset}
                 showActionBar={showActionBar}
-                stylePickerLabel={lastStyleLabelRef.current}
-                stylePickerLabelStyle={lastStyleLabelStyleRef.current}
+                stylePickerLabel={lastStyleLabel}
+                stylePickerLabelStyle={lastStyleLabelStyle}
                 toolbarExtra={toolbarExtra}
                 zoom={targetZoom}
               />
@@ -1596,6 +1615,7 @@ const useDocxBrowserCollaboration = ({
   });
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived/reset state, resyncs requestState from props (initiallyRequested, targetKey); compute in render / lift to a key prop
   useEffect(() => {
+    // eslint-disable-next-line react/react-compiler -- resyncs the collaboration request state when the edit target or initial-request prop changes; kept as an effect to preserve the resync timing in this collaboration glue
     setRequestState({ requested: initiallyRequested, targetKey });
   }, [initiallyRequested, targetKey]);
   const collaborationSession =

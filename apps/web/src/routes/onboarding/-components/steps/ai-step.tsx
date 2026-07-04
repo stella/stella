@@ -128,6 +128,7 @@ export const AIStep = ({
   // that row to idle so the user must save again.
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- `rowStates` is not pure derived state: it is also written by saveRow and updateProviders, so it cannot be deleted and computed in render. This effect reconciles validation status against the latest key fingerprints.
   useEffect(() => {
+    // eslint-disable-next-line react/react-compiler -- reconciles row validation status against the latest key fingerprints; rowStates is also written by saveRow/updateProviders, so it is not pure-derivable in render
     setRowStates((prev) => {
       let changed = false;
       const next: RowStateMap = { ...prev };

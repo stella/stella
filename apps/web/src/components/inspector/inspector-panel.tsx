@@ -121,7 +121,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
             },
           }
         : null,
-    [workspace?.name, workspace?.color, navigate, workspaceId],
+    [workspace, navigate, workspaceId],
   );
   // Resolve the matter's icon colour once so every tab header can
   // tint with the same `color-mix(... 2%)` formula the matter
@@ -223,6 +223,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
   const handleCloseTab = useCallback(
     (tabId: string) => {
+      // eslint-disable-next-line react/react-compiler -- docxActionsRef.current read at call time in a load-bearing callback (compiler-bailout component). react-compiler and react-hooks/exhaustive-deps disagree on this ref: exhaustive-deps requires it in the dep array (kept), the compiler flags it as unlistable — suppress the compiler side.
       const action = docxActionsRef.current.get(tabId);
       if (editingDocxTabId === tabId && action) {
         void action.cancel().finally(() => {
@@ -281,6 +282,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       // sidepeek editor. The new fullscreen mount opens a fresh
       // session and downloads the latest checkpoint; without this
       // flush, anything typed inside the debounce window is lost.
+      // eslint-disable-next-line react/react-compiler -- docxActionsRef.current read at call time in a load-bearing callback (compiler-bailout component). react-compiler and react-hooks/exhaustive-deps disagree on this ref: exhaustive-deps requires it in the dep array (kept), the compiler flags it as unlistable — suppress the compiler side.
       const action = docxActionsRef.current.get(activeTab.id);
       if (action) {
         try {
@@ -374,6 +376,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // committed recency plus the current activation/open tabs.
   const pdfRecencyRef = useRef<string[]>([]);
 
+  /* eslint-disable react/react-compiler -- deliberate ref-read-during-render: mountedPdfIds derives from the previous committed recency (pdfRecencyRef) plus current tabs, then the effect below commits the new snapshot. The compiler cannot model this recency pattern, so both its ref-access and inferred-dependency diagnostics are expected here. Load-bearing memo in a compiler-bailout component. */
   const mountedPdfIds = useMemo(() => {
     const openIds = new Set(pdfTabs.map((tab) => tab.id));
     let next = pdfRecencyRef.current.filter((id) => openIds.has(id));
@@ -393,6 +396,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     }
     return set;
   }, [activeId, activeTab?.type, pdfTabs]);
+  /* eslint-enable react/react-compiler */
 
   // Commit the latest recency snapshot after the render commits so
   // discarded renders (Strict Mode, Concurrent) don't pollute the

@@ -74,10 +74,16 @@ export const PDFViewport = ({
 }: PDFViewportProps) => {
   const [password, setPassword] = useState(initialPassword);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-prop: re-sync local password to the initialPassword prop. Not pure derived state — setPassword is also driven by the password prompt below, so it cannot be computed in render; keep until a key-reset is wired through every PDFViewport call site.
-  useEffect(() => {
+  // Re-sync local password to the initialPassword prop using React's
+  // adjust-state-during-render pattern instead of a reset effect. setPassword is
+  // also driven by the password prompt below, so this is not pure derived state;
+  // tracking the previous prop value resets only when the prop actually changes.
+  const [prevInitialPassword, setPrevInitialPassword] =
+    useState(initialPassword);
+  if (initialPassword !== prevInitialPassword) {
+    setPrevInitialPassword(initialPassword);
     setPassword(initialPassword);
-  }, [initialPassword]);
+  }
 
   const { data: result, refetch } = usePDFDocument({
     key: { fileId },

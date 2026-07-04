@@ -5,7 +5,7 @@
  * triggers generation and polls until complete.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -87,15 +87,17 @@ export const useDecisionAnalysis = (
   // value from enabling a fetch (and an unintended backend kick-off)
   // for an unrelated decision during a route transition.
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
-  const isGenerating = generatingFor === decisionId;
-
   // Clear the marker once the route moves on so returning to the
   // original decision lands in `idle` (matching prior behaviour)
   // instead of resuming a poll the user didn't request again.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset generatingFor when decisionId changes; this is a hook (no element to key in a parent) and setGeneratingFor is also called from generate(), so it is neither lift-to-key nor pure derived state
-  useEffect(() => {
+  // Adjusting state during render (rather than in an effect) drops the marker
+  // in the same render the decisionId changes and avoids a cascading render.
+  const [lastDecisionId, setLastDecisionId] = useState(decisionId);
+  if (decisionId !== lastDecisionId) {
+    setLastDecisionId(decisionId);
     setGeneratingFor(null);
-  }, [decisionId]);
+  }
+  const isGenerating = generatingFor === decisionId;
 
   const enabled = isGenerating && !hasFreshAnalysis;
 

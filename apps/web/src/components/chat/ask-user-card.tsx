@@ -191,6 +191,7 @@ export const AskUserCard = ({
     if (!input) {
       return;
     }
+    // eslint-disable-next-line react/react-compiler -- one-shot merge of question defaults into shared user-edited answers state once the streamed `input` prop arrives; the setter is shared across handlers, so this is not pure derived state
     setAnswers((prev) => {
       let seeded: Record<number, string> | null = null;
       for (let i = 0; i < input.questions.length; i++) {

@@ -254,6 +254,7 @@ type SearchDialogProps = {
   initialWorkspaceId?: string | undefined;
 };
 
+// eslint-disable-next-line react/react-compiler -- react-compiler skips this component: an API it uses returns functions that cannot be memoized, so the compiler bails out of the whole component (Compilation Skipped: incompatible library)
 export const SearchDialog = ({
   open,
   onOpenChange,
@@ -1545,12 +1546,14 @@ const SearchableFacetGroup = ({
   // Refs are intentionally mutated during render — they don't trigger
   // re-renders, and we want every label seen in the current render's
   // buckets to be available when computing `buckets` below.
+  /* eslint-disable react/react-compiler -- deliberate render-time label cache: mutating labelCacheRef here makes every label seen this render available to the missingSelected lookup below; refs don't trigger re-renders so this is safe */
   for (const bucket of defaultBuckets) {
     labelCacheRef.current[bucket.value] = resolveLabel(bucket);
   }
   for (const bucket of searchData?.buckets ?? []) {
     labelCacheRef.current[bucket.value] = resolveLabel(bucket);
   }
+  /* eslint-enable react/react-compiler */
 
   const sourceBuckets =
     isSearching && searchData ? searchData.buckets : defaultBuckets;
@@ -1563,6 +1566,7 @@ const SearchableFacetGroup = ({
   const present = new Set(visible.map((bucket) => bucket.value));
   const missingSelected: FacetBucket[] = selected
     .filter((id) => !present.has(id))
+    // eslint-disable-next-line react/react-compiler -- reads the deliberate render-time label cache mutated above; ref reads don't affect render correctness here
     .map((id) => ({
       value: id,
       label: labelCacheRef.current[id] ?? id,

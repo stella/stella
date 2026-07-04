@@ -44,6 +44,7 @@ export const ChatMentionList = ({
   const lastClientRectRef = useRef<DOMRect | null>(null);
   const latestClientRect = clientRect?.() ?? null;
   if (latestClientRect) {
+    // eslint-disable-next-line react/react-compiler -- retains the last non-null caret rect so the Floating UI anchor keeps its position when clientRect() momentarily returns null
     lastClientRectRef.current = latestClientRect;
   }
   // Stable virtual-anchor identity for the Base UI positioner (Floating UI).
@@ -229,6 +230,7 @@ export const ChatMentionList = ({
   const groups = groupByCategory(activeItems);
   const hasMultipleCategories = groups.length > 1;
 
+  // eslint-disable-next-line react/react-compiler -- reads the retained last-known caret rect (written above from this render's clientRect) to gate the positioner; the ref persists the value across renders where clientRect() returns null
   if (!lastClientRectRef.current) {
     return null;
   }
