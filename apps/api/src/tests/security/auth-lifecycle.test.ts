@@ -56,8 +56,12 @@ describe("self-host auth bootstrap lifecycle", () => {
     );
 
     expect(authSource).toContain("emailAndPassword");
+    expect(authSource).toContain('"/sign-in/email": AUTH_RATE_LIMITS.signIn');
     expect(authSource).toContain("isSelfhostLocalPasswordAuthEnabled()");
     expect(authSource).toContain("assertSelfhostBootstrapSignUp(ctx.body)");
+    expect(authSource).toContain("NEW_SESSION_SECURITY_PATHS");
+    expect(authSource).toContain("SIGN_IN_EMAIL_PATH");
+    expect(authSource).toContain("isTransactionalEmailConfigured()");
     expect(selfhostAuthSource).toContain('"/sign-up/email"');
     expect(selfhostAuthSource).toContain("SELFHOST_BOOTSTRAP_TOKEN");
     expect(selfhostAuthSource).toContain("hasAnyAuthUsers()");
