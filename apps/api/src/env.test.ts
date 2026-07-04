@@ -14,13 +14,17 @@ const baseEnv = {
   GOTENBERG_PASSWORD: "test",
 } as const;
 
+const envModuleUrl = new URL("env.ts", import.meta.url).href;
+const repoRoot = new URL("../../..", import.meta.url).pathname;
+
 const readEnvProvider = (env: Record<string, string | undefined>) => {
   const result = Bun.spawnSync({
     cmd: [
       process.execPath,
       "-e",
-      "import { env } from './apps/api/src/env.ts'; console.log(String(env.EMAIL_PROVIDER));",
+      `import { env } from ${JSON.stringify(envModuleUrl)}; console.log(String(env.EMAIL_PROVIDER));`,
     ],
+    cwd: repoRoot,
     env,
     stderr: "pipe",
     stdout: "pipe",
@@ -37,8 +41,9 @@ const readSelfhostLocalPasswordAuth = (
     cmd: [
       process.execPath,
       "-e",
-      "import { env } from './apps/api/src/env.ts'; console.log(String(env.SELFHOST_LOCAL_PASSWORD_AUTH));",
+      `import { env } from ${JSON.stringify(envModuleUrl)}; console.log(String(env.SELFHOST_LOCAL_PASSWORD_AUTH));`,
     ],
+    cwd: repoRoot,
     env,
     stderr: "pipe",
     stdout: "pipe",
