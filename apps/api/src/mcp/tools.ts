@@ -19,6 +19,7 @@ import {
   listGatewayMcpToolDefinitions,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
+import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
@@ -65,6 +66,14 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["delete_document", DOCUMENT_TOOL_HANDLERS.delete_document],
   ["list_properties", DOCUMENT_TOOL_HANDLERS.list_properties],
   ["set_field_value", DOCUMENT_TOOL_HANDLERS.set_field_value],
+  ["save_matter", MATTER_TOOL_HANDLERS.save_matter],
+  ["delete_matter", MATTER_TOOL_HANDLERS.delete_matter],
+  ["save_contact", MATTER_TOOL_HANDLERS.save_contact],
+  ["delete_contact", MATTER_TOOL_HANDLERS.delete_contact],
+  ["lookup_business_registry", MATTER_TOOL_HANDLERS.lookup_business_registry],
+  ["list_tasks", MATTER_TOOL_HANDLERS.list_tasks],
+  ["save_task", MATTER_TOOL_HANDLERS.save_task],
+  ["link_matter_contact", MATTER_TOOL_HANDLERS.link_matter_contact],
 ]);
 
 export const getMcpToolDefinition = async (

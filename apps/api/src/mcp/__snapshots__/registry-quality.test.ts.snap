@@ -1217,6 +1217,312 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "content"
       ]
     }
+  },
+  {
+    "name": "save_matter",
+    "scope": "stella:matters_write",
+    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to update; omit to create a new matter"
+        },
+        "name": {
+          "type": "string",
+          "description": "Matter name; required when creating",
+          "maxLength": 256
+        },
+        "client_id": {
+          "type": "string",
+          "description": "Contact ID to attach in the client role. Only valid when creating a matter."
+        },
+        "reference": {
+          "type": "string",
+          "description": "Matter reference (file number). Only valid when updating.",
+          "maxLength": 64
+        },
+        "billing_reference": {
+          "type": "string",
+          "description": "Billing reference; pass null to clear. Only valid when updating.",
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "archived"
+          ],
+          "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_matter",
+    "scope": "stella:matters_write",
+    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "annotations": {
+      "destructiveHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to delete"
+        }
+      },
+      "required": [
+        "matter_id"
+      ]
+    }
+  },
+  {
+    "name": "save_contact",
+    "scope": "stella:matters_write",
+    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type and display_name required); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID to update; omit to create"
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "person",
+            "organization"
+          ],
+          "description": "Contact kind; required when creating"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Display name; required when creating, non-empty when updating",
+          "maxLength": 512
+        },
+        "first_name": {
+          "type": "string",
+          "description": "First name; pass null to clear",
+          "maxLength": 256
+        },
+        "last_name": {
+          "type": "string",
+          "description": "Last name; pass null to clear",
+          "maxLength": 256
+        },
+        "organization_name": {
+          "type": "string",
+          "description": "Organization name; pass null to clear",
+          "maxLength": 512
+        },
+        "notes": {
+          "type": "string",
+          "description": "Free-text notes; pass null to clear"
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_contact",
+    "scope": "stella:matters_write",
+    "description": "Permanently delete a contact from the organization address book. Rejected while the contact is still the client of any matter. This is irreversible.",
+    "annotations": {
+      "destructiveHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID to delete"
+        }
+      },
+      "required": [
+        "contact_id"
+      ]
+    }
+  },
+  {
+    "name": "lookup_business_registry",
+    "scope": "stella:read",
+    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "registry": {
+          "type": "string",
+          "enum": [
+            "ares",
+            "brreg",
+            "companies-house",
+            "edgar",
+            "gcis",
+            "krs",
+            "orsr",
+            "prh",
+            "recherche-entreprises",
+            "vies"
+          ],
+          "description": "Business register to query"
+        },
+        "query": {
+          "type": "string",
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name",
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "registry",
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "list_tasks",
+    "scope": "stella:read",
+    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each task's id, name, status, priority, and due date.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list tasks in; required unless task_id is given"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task entity ID to read in detail"
+        },
+        "date_from": {
+          "type": "string",
+          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "status": {
+          "type": "string",
+          "description": "List only tasks with this status",
+          "maxLength": 32
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max tasks to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_tasks call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "save_task",
+    "scope": "stella:matters_write",
+    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "Task entity ID to update; omit to create"
+        },
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to create the task in; required when creating"
+        },
+        "name": {
+          "type": "string",
+          "description": "Task name; required when creating",
+          "maxLength": 255
+        },
+        "status": {
+          "type": "string",
+          "description": "Task status (e.g. open, in_progress, done)",
+          "maxLength": 32
+        },
+        "priority": {
+          "type": "string",
+          "description": "Task priority (e.g. none, low, medium, high)",
+          "maxLength": 16
+        },
+        "due_date": {
+          "type": "string",
+          "description": "Due date (ISO YYYY-MM-DD); pass null to clear",
+          "maxLength": 10
+        },
+        "add_assignee_user_id": {
+          "type": "string",
+          "description": "User ID to assign to the task (must be a workspace member)"
+        },
+        "remove_assignee_user_id": {
+          "type": "string",
+          "description": "User ID to unassign from the task"
+        },
+        "link_entity_id": {
+          "type": "string",
+          "description": "Entity ID to link to the task (document, folder, or another task)"
+        },
+        "unlink_link_id": {
+          "type": "string",
+          "description": "Entity-link ID to remove"
+        }
+      }
+    }
+  },
+  {
+    "name": "link_matter_contact",
+    "scope": "stella:matters_write",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id and role to link; pass workspace_contact_id (from get_matter_overview) to unlink.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID"
+        },
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID to link to the matter; requires role"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "opposing_party",
+            "opposing_counsel",
+            "co_counsel",
+            "witness",
+            "expert_witness",
+            "third_party",
+            "judge",
+            "mediator",
+            "other"
+          ],
+          "description": "Party role for the linked contact"
+        },
+        "workspace_contact_id": {
+          "type": "string",
+          "description": "Existing matter-contact link ID to remove"
+        }
+      },
+      "required": [
+        "matter_id"
+      ]
+    }
   }
 ]"
 `;
@@ -1654,6 +1960,91 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "required": [
         "matter_id"
       ]
+    }
+  },
+  {
+    "name": "lookup_business_registry",
+    "scope": "stella:read_anonymized",
+    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "registry": {
+          "type": "string",
+          "enum": [
+            "ares",
+            "brreg",
+            "companies-house",
+            "edgar",
+            "gcis",
+            "krs",
+            "orsr",
+            "prh",
+            "recherche-entreprises",
+            "vies"
+          ],
+          "description": "Business register to query"
+        },
+        "query": {
+          "type": "string",
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name",
+          "maxLength": 256
+        }
+      },
+      "required": [
+        "registry",
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "list_tasks",
+    "scope": "stella:read_anonymized",
+    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each task's id, name, status, priority, and due date.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list tasks in; required unless task_id is given"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task entity ID to read in detail"
+        },
+        "date_from": {
+          "type": "string",
+          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "status": {
+          "type": "string",
+          "description": "List only tasks with this status",
+          "maxLength": 32
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max tasks to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_tasks call to fetch the next page",
+          "maxLength": 512
+        }
+      }
     }
   }
 ]"

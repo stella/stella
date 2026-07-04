@@ -5,6 +5,7 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:read",
   "stella:templates",
   "stella:documents_write",
+  "stella:matters_write",
   "stella:onboarding",
   "stella:skills",
   "stella:external_mcps",

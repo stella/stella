@@ -1,7 +1,9 @@
 import { Result, panic } from "better-result";
 import { count, eq } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { contacts } from "@/api/db/schema";
 import {
   bankAccountSchema,
@@ -15,6 +17,8 @@ import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metada
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -51,132 +55,159 @@ const createContactBodySchema = t.Object({
   responsibleAttorneyId: t.Optional(tUserId),
 });
 
-const createContact = createSafeRootHandler(
-  {
-    permissions: { contact: ["create"] },
-    mcp: { type: "pending" },
-    body: createContactBodySchema,
-  },
-  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
-    const [totalRow] = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ total: count() })
-          .from(contacts)
-          .where(eq(contacts.organizationId, session.activeOrganizationId)),
-      ),
+export type CreateContactHandlerProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof createContactBodySchema>;
+};
+
+// Shared contact-creation logic reused by the HTTP handler and the
+// `save_contact` MCP tool, so both emit identical audit events and
+// search-index writes.
+export const createContactHandler = async function* ({
+  safeDb,
+  organizationId,
+  userId,
+  recordAuditEvent,
+  body,
+}: CreateContactHandlerProps) {
+  const [totalRow] = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({ total: count() })
+        .from(contacts)
+        .where(eq(contacts.organizationId, organizationId)),
+    ),
+  );
+
+  const total = totalRow?.total ?? 0;
+
+  if (total >= LIMITS.contactsCount) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Contacts limit reached" }),
     );
+  }
 
-    const total = totalRow?.total ?? 0;
+  const attorneyIds: string[] = [];
+  if (body.originatingAttorneyId) {
+    attorneyIds.push(body.originatingAttorneyId);
+  }
+  if (body.responsibleAttorneyId) {
+    attorneyIds.push(body.responsibleAttorneyId);
+  }
 
-    if (total >= LIMITS.contactsCount) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Contacts limit reached" }),
-      );
-    }
-
-    const attorneyIds: string[] = [];
-    if (body.originatingAttorneyId) {
-      attorneyIds.push(body.originatingAttorneyId);
-    }
-    if (body.responsibleAttorneyId) {
-      attorneyIds.push(body.responsibleAttorneyId);
-    }
-
-    if (attorneyIds.length > 0) {
-      const uniqueAttorneyIds = [...new Set(attorneyIds)];
-      const hasInvalidAttorney = yield* Result.await(
-        safeDb(async (tx) => {
-          for (const attorneyId of uniqueAttorneyIds) {
-            // oxlint-disable-next-line no-await-in-loop -- early-exits on first invalid attorney; at most two ids
-            const validAttorneyId = await validateOrgUserId(
-              tx,
-              brandPersistedUserId(attorneyId),
-              session.activeOrganizationId,
-            );
-            if (!validAttorneyId) {
-              return true;
-            }
-          }
-          return false;
-        }),
-      );
-
-      if (hasInvalidAttorney) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "User is not a member of this organization",
-          }),
-        );
-      }
-    }
-
-    const contact = yield* Result.await(
+  if (attorneyIds.length > 0) {
+    const uniqueAttorneyIds = [...new Set(attorneyIds)];
+    const hasInvalidAttorney = yield* Result.await(
       safeDb(async (tx) => {
-        const [row] = await tx
-          .insert(contacts)
-          .values({
-            id: body.id,
-            organizationId: session.activeOrganizationId,
-            type: body.type,
-            prefix: body.prefix,
-            firstName: body.firstName,
-            middleName: body.middleName,
-            lastName: body.lastName,
-            suffix: body.suffix,
-            organizationName: body.organizationName,
-            displayName: body.displayName,
-            notes: body.notes,
-            emails: body.emails,
-            phones: body.phones,
-            addresses: body.addresses,
-            metadata: normalizeContactMetadata(body.metadata),
-            tags: body.tags,
-            color: body.color,
-            registrationNumber: body.registrationNumber,
-            taxId: body.taxId,
-            bankAccounts: body.bankAccounts,
-            billingAddress: body.billingAddress,
-            defaultHourlyRate:
-              body.defaultHourlyRate === undefined
-                ? body.defaultHourlyRate
-                : cents(body.defaultHourlyRate),
-            currency: body.currency,
-            paymentTermDays: body.paymentTermDays,
-            originatingAttorneyId: body.originatingAttorneyId,
-            responsibleAttorneyId: body.responsibleAttorneyId,
-            createdBy: user.id,
-          })
-          .returning();
-
-        if (row) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.CREATE,
-            resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
-            resourceId: row.id,
-            workspaceId: null,
-            changes: {
-              created: {
-                old: null,
-                new: {
-                  type: row.type,
-                  displayName: row.displayName,
-                },
-              },
-            },
-          });
+        for (const attorneyId of uniqueAttorneyIds) {
+          // oxlint-disable-next-line no-await-in-loop -- early-exits on first invalid attorney; at most two ids
+          const validAttorneyId = await validateOrgUserId(
+            tx,
+            brandPersistedUserId(attorneyId),
+            organizationId,
+          );
+          if (!validAttorneyId) {
+            return true;
+          }
         }
-
-        return row;
+        return false;
       }),
     );
 
-    const created = contact ?? panic("Contact insert returned no row");
+    if (hasInvalidAttorney) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "User is not a member of this organization",
+        }),
+      );
+    }
+  }
 
-    upsertContactSearchDocument(created.id).catch(captureError);
+  const contact = yield* Result.await(
+    safeDb(async (tx) => {
+      const [row] = await tx
+        .insert(contacts)
+        .values({
+          id: body.id,
+          organizationId,
+          type: body.type,
+          prefix: body.prefix,
+          firstName: body.firstName,
+          middleName: body.middleName,
+          lastName: body.lastName,
+          suffix: body.suffix,
+          organizationName: body.organizationName,
+          displayName: body.displayName,
+          notes: body.notes,
+          emails: body.emails,
+          phones: body.phones,
+          addresses: body.addresses,
+          metadata: normalizeContactMetadata(body.metadata),
+          tags: body.tags,
+          color: body.color,
+          registrationNumber: body.registrationNumber,
+          taxId: body.taxId,
+          bankAccounts: body.bankAccounts,
+          billingAddress: body.billingAddress,
+          defaultHourlyRate:
+            body.defaultHourlyRate === undefined
+              ? body.defaultHourlyRate
+              : cents(body.defaultHourlyRate),
+          currency: body.currency,
+          paymentTermDays: body.paymentTermDays,
+          originatingAttorneyId: body.originatingAttorneyId,
+          responsibleAttorneyId: body.responsibleAttorneyId,
+          createdBy: userId,
+        })
+        .returning();
 
-    return Result.ok(created);
+      if (row) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+          resourceId: row.id,
+          workspaceId: null,
+          changes: {
+            created: {
+              old: null,
+              new: {
+                type: row.type,
+                displayName: row.displayName,
+              },
+            },
+          },
+        });
+      }
+
+      return row;
+    }),
+  );
+
+  const created = contact ?? panic("Contact insert returned no row");
+
+  upsertContactSearchDocument(created.id).catch(captureError);
+
+  return Result.ok(created);
+};
+
+const createContact = createSafeRootHandler(
+  {
+    permissions: { contact: ["create"] },
+    mcp: { type: "tool", name: "save_contact" },
+    body: createContactBodySchema,
+  },
+  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
+    return yield* createContactHandler({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      recordAuditEvent,
+      body,
+    });
   },
 );
 

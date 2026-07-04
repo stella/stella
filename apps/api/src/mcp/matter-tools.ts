@@ -1,0 +1,1502 @@
+import { Result } from "better-result";
+import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import * as v from "valibot";
+
+import { roles } from "@stll/permissions";
+
+import { entities } from "@/api/db/schema";
+import { lookupBusinessRegistryShared } from "@/api/handlers/contacts/business-registries-lookup";
+import { createContactHandler } from "@/api/handlers/contacts/create";
+import { deleteContactHandler } from "@/api/handlers/contacts/delete-by-id";
+import { updateContactHandler } from "@/api/handlers/contacts/update-by-id";
+import {
+  entityListCursorCondition,
+  entityListTimestampCursorExpr,
+} from "@/api/handlers/entities/list-cursor";
+import { addAssigneeHandler } from "@/api/handlers/tasks/assignees-add";
+import { removeAssigneeHandler } from "@/api/handlers/tasks/assignees-remove";
+import { createTaskEntityHandler } from "@/api/handlers/tasks/create";
+import { createEntityLinkHandler } from "@/api/handlers/tasks/entity-links-create";
+import { deleteEntityLinkHandler } from "@/api/handlers/tasks/entity-links-delete";
+import { updateTaskHandler } from "@/api/handlers/tasks/update";
+import { archiveWorkspaceHandler } from "@/api/handlers/workspaces/archive";
+import { createWorkspaceHandler } from "@/api/handlers/workspaces/create";
+import { deleteWorkspaceHandler } from "@/api/handlers/workspaces/delete-by-id";
+import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
+import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update-by-id";
+import { createWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-create";
+import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-delete";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId } from "@/api/lib/branded-types";
+import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+import { LIMITS } from "@/api/lib/limits";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
+import {
+  brandPersistedContactId,
+  brandPersistedEntityId,
+  brandPersistedEntityLinkId,
+  brandPersistedUserId,
+  brandPersistedWorkspaceContactId,
+} from "@/api/lib/safe-id-boundaries";
+import type { McpRequestContext } from "@/api/mcp/context";
+import type {
+  McpStructuredTextField,
+  McpToolDefinition,
+  McpToolHandler,
+} from "@/api/mcp/tool-types";
+import {
+  DEFAULT_LIST_LIMIT,
+  ensureWorkspaceAccess,
+  enumProp,
+  errorResult,
+  intProp,
+  MAX_LIST_LIMIT,
+  stringProp,
+  textResult,
+} from "@/api/mcp/tool-utils";
+
+type MatterToolName =
+  | "save_matter"
+  | "delete_matter"
+  | "save_contact"
+  | "delete_contact"
+  | "lookup_business_registry"
+  | "list_tasks"
+  | "save_task"
+  | "link_matter_contact";
+
+/** Statuses a matter can be flipped to through save_matter. */
+const MATTER_STATUSES = ["active", "archived"] as const;
+
+/** Contact discriminator accepted by save_contact. */
+const CONTACT_TYPES = ["person", "organization"] as const;
+
+/**
+ * Roles a contact can hold on a matter. Mirrors the closed set in
+ * workspaces/workspace-contacts-create.ts; kept in sync so the MCP schema
+ * advertises the same options the backing handler validates against.
+ */
+const WORKSPACE_CONTACT_ROLES = [
+  "opposing_party",
+  "opposing_counsel",
+  "co_counsel",
+  "witness",
+  "expert_witness",
+  "third_party",
+  "judge",
+  "mediator",
+  "other",
+] as const;
+
+/**
+ * System file-column name for a matter created via MCP. Mirrors the web
+ * client's default (`_protected.workspaces/-mutations.ts`) so an
+ * agent-created matter and a UI-created matter start with the same column.
+ */
+const DEFAULT_FILE_PROPERTY_NAME = "Documents";
+
+export const MATTER_TOOL_DEFINITIONS = [
+  {
+    description:
+      "Create, update, archive, or unarchive a matter. Omit matter_id to " +
+      "create a new matter (name required; pass client_id to attach a client " +
+      "contact). Pass matter_id to update an existing matter: set name, " +
+      "reference, or billing_reference, and/or set status to 'archived' or " +
+      "'active' to archive or unarchive it. Returns the matter ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        matter_id: stringProp(
+          "Matter/workspace ID to update; omit to create a new matter",
+        ),
+        name: stringProp("Matter name; required when creating", {
+          maxLength: 256,
+        }),
+        client_id: stringProp(
+          "Contact ID to attach in the client role. Only valid when " +
+            "creating a matter.",
+        ),
+        reference: stringProp(
+          "Matter reference (file number). Only valid when updating.",
+          { maxLength: 64 },
+        ),
+        billing_reference: stringProp(
+          "Billing reference; pass null to clear. Only valid when updating.",
+          { maxLength: 128 },
+        ),
+        status: enumProp(
+          "Set 'archived' to archive the matter or 'active' to unarchive it. " +
+            "Only valid when updating.",
+          MATTER_STATUSES,
+        ),
+      },
+    },
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_matter",
+    scope: "stella:matters_write",
+  },
+  {
+    annotations: { destructiveHint: true },
+    description:
+      "Permanently delete a matter and all its documents, tasks, fields, and " +
+      "chat history. This is irreversible.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        matter_id: stringProp("Matter/workspace ID to delete"),
+      },
+      required: ["matter_id"],
+    },
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "delete_matter",
+    scope: "stella:matters_write",
+  },
+  {
+    description:
+      "Create or update a contact (a person or organization in the address " +
+      "book, shared across the whole organization). Omit contact_id to create " +
+      "(type and display_name required); pass contact_id to update. String " +
+      "fields other than display_name accept null to clear them.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contact_id: stringProp("Contact ID to update; omit to create"),
+        type: enumProp("Contact kind; required when creating", CONTACT_TYPES),
+        display_name: stringProp(
+          "Display name; required when creating, non-empty when updating",
+          { maxLength: 512 },
+        ),
+        first_name: stringProp("First name; pass null to clear", {
+          maxLength: 256,
+        }),
+        last_name: stringProp("Last name; pass null to clear", {
+          maxLength: 256,
+        }),
+        organization_name: stringProp("Organization name; pass null to clear", {
+          maxLength: 512,
+        }),
+        notes: stringProp("Free-text notes; pass null to clear"),
+      },
+    },
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_contact",
+    scope: "stella:matters_write",
+  },
+  {
+    annotations: { destructiveHint: true },
+    description:
+      "Permanently delete a contact from the organization address book. " +
+      "Rejected while the contact is still the client of any matter. This is " +
+      "irreversible.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        contact_id: stringProp("Contact ID to delete"),
+      },
+      required: ["contact_id"],
+    },
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "delete_contact",
+    scope: "stella:matters_write",
+  },
+  {
+    annotations: { readOnlyHint: true },
+    description:
+      "Look up a company in a public business register (ARES, Brreg, " +
+      "Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, " +
+      "or VIES). Pass a canonical identifier (company/registration number, " +
+      "VAT number) for an exact match, or a company name to search where the " +
+      "register supports it. Returns registered names, addresses, and " +
+      "registry-specific details.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        registry: enumProp(
+          "Business register to query",
+          BUSINESS_REGISTRY_SLUGS,
+        ),
+        query: stringProp(
+          "Canonical identifier (e.g. company number, VAT number) or company name",
+          { maxLength: 256 },
+        ),
+      },
+      required: ["registry", "query"],
+    },
+    anonymized: { exposure: "passthrough" },
+    name: "lookup_business_registry",
+    scope: "stella:read",
+  },
+  {
+    annotations: { readOnlyHint: true },
+    description:
+      "List tasks in a matter, or read one task in detail. Pass task_id to " +
+      "get a single task's fields, assignees, and linked entities. Otherwise " +
+      "pass matter_id to list the matter's tasks, optionally filtered by a " +
+      "due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. " +
+      "Returns each task's id, name, status, priority, and due date.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        matter_id: stringProp(
+          "Matter/workspace ID to list tasks in; required unless task_id is given",
+        ),
+        task_id: stringProp("Task entity ID to read in detail"),
+        date_from: stringProp(
+          "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+          { maxLength: 10 },
+        ),
+        date_to: stringProp(
+          "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+          { maxLength: 10 },
+        ),
+        status: stringProp("List only tasks with this status", {
+          maxLength: 32,
+        }),
+        limit: intProp("Max tasks to return", { min: 1, max: MAX_LIST_LIMIT }),
+        cursor: stringProp(
+          "Opaque cursor from a previous list_tasks call to fetch the next page",
+          { maxLength: 512 },
+        ),
+      },
+    },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [
+        "tasks[].name",
+        "task.name",
+        "task.location",
+        "task.assignees[].name",
+        "task.links[].entity.name",
+      ],
+    },
+    name: "list_tasks",
+    scope: "stella:read",
+  },
+  {
+    description:
+      "Create or update a task, and manage its assignees and entity links. " +
+      "Omit task_id to create a task (matter_id and name required). Pass " +
+      "task_id to update: set name, status, priority, or due_date (ISO " +
+      "YYYY-MM-DD, null to clear); add or remove one assignee " +
+      "(add_assignee_user_id / remove_assignee_user_id); link the task to " +
+      "another entity (link_entity_id) or remove a link (unlink_link_id). " +
+      "Returns the task ID.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task_id: stringProp("Task entity ID to update; omit to create"),
+        matter_id: stringProp(
+          "Matter/workspace ID to create the task in; required when creating",
+        ),
+        name: stringProp("Task name; required when creating", {
+          maxLength: 255,
+        }),
+        status: stringProp("Task status (e.g. open, in_progress, done)", {
+          maxLength: 32,
+        }),
+        priority: stringProp("Task priority (e.g. none, low, medium, high)", {
+          maxLength: 16,
+        }),
+        due_date: stringProp("Due date (ISO YYYY-MM-DD); pass null to clear", {
+          maxLength: 10,
+        }),
+        add_assignee_user_id: stringProp(
+          "User ID to assign to the task (must be a workspace member)",
+        ),
+        remove_assignee_user_id: stringProp(
+          "User ID to unassign from the task",
+        ),
+        link_entity_id: stringProp(
+          "Entity ID to link to the task (document, folder, or another task)",
+        ),
+        unlink_link_id: stringProp("Entity-link ID to remove"),
+      },
+    },
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "save_task",
+    scope: "stella:matters_write",
+  },
+  {
+    description:
+      "Link a contact to a matter in a party role (opposing party/counsel, " +
+      "co-counsel, witness, expert witness, third party, judge, mediator, or " +
+      "other), or remove such a link. Pass contact_id and role to link; pass " +
+      "workspace_contact_id (from get_matter_overview) to unlink.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        matter_id: stringProp("Matter/workspace ID"),
+        contact_id: stringProp(
+          "Contact ID to link to the matter; requires role",
+        ),
+        role: enumProp(
+          "Party role for the linked contact",
+          WORKSPACE_CONTACT_ROLES,
+        ),
+        workspace_contact_id: stringProp(
+          "Existing matter-contact link ID to remove",
+        ),
+      },
+      required: ["matter_id"],
+    },
+    anonymized: { exposure: "excluded", reason: "write" },
+    name: "link_matter_contact",
+    scope: "stella:matters_write",
+  },
+] as const satisfies readonly McpToolDefinition[];
+
+/**
+ * Queue one anonymizable text field onto a structured egress plan, skipping
+ * null/empty values. `apply` writes the anonymized value back into the payload.
+ */
+const pushTextField = ({
+  apply,
+  fields: sink,
+  value,
+  workspaceId,
+}: {
+  apply: (value: string) => void;
+  fields: McpStructuredTextField[];
+  value: string | null | undefined;
+  workspaceId: string;
+}): void => {
+  if (typeof value === "string" && value.length > 0) {
+    sink.push({ apply, value, workspaceId });
+  }
+};
+
+/**
+ * Wrap the request-scoped recorder so audit rows written by the reused backing
+ * handlers carry the resolved workspace. The MCP recorder binds workspaceId to
+ * null (org-scoped); workspace-scoped handlers build events without a
+ * workspaceId, so inject it per event (an event that sets its own wins).
+ */
+const bindWorkspaceRecorder =
+  (
+    context: McpRequestContext,
+    workspaceId: SafeId<"workspace">,
+  ): AuditRecorder =>
+  async (tx, event) => {
+    const events: AuditEvent[] = Array.isArray(event) ? event : [event];
+    for (const e of events) {
+      if (e.workspaceId === undefined) {
+        e.workspaceId = workspaceId;
+      }
+    }
+    await context.recordAuditEvent(tx, events);
+  };
+
+/**
+ * Prefer a cross-field (`partial_check`) validation message when present,
+ * falling back to the hand-written shape hint for structural failures.
+ */
+const crossFieldOrGeneric = (
+  issues: readonly v.BaseIssue<unknown>[],
+  genericMessage: string,
+): string =>
+  issues.find((issue) => issue.type === "partial_check")?.message ??
+  genericMessage;
+
+// --- save_matter --------------------------------------------------------
+
+const saveMatterArgsSchema = v.pipe(
+  v.strictObject({
+    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(256))),
+    client_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    reference: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(64))),
+    billing_reference: v.optional(
+      v.nullable(v.pipe(v.string(), v.maxLength(128))),
+    ),
+    status: v.optional(v.picklist(MATTER_STATUSES)),
+  }),
+  // Creating (no matter_id) requires a name.
+  v.forward(
+    v.partialCheck(
+      [["matter_id"], ["name"]],
+      ({ matter_id, name }) => matter_id !== undefined || name !== undefined,
+      "name is required to create a matter",
+    ),
+    ["name"],
+  ),
+  // reference, billing_reference, status, and client_id apply to existing
+  // matters or to creation respectively; keep the two modes from mixing.
+  v.partialCheck(
+    [["matter_id"], ["reference"], ["billing_reference"], ["status"]],
+    ({ matter_id, reference, billing_reference, status }) =>
+      matter_id !== undefined ||
+      (reference === undefined &&
+        billing_reference === undefined &&
+        status === undefined),
+    "reference, billing_reference, and status apply to an existing matter; pass matter_id",
+  ),
+  v.forward(
+    v.partialCheck(
+      [["matter_id"], ["client_id"]],
+      ({ matter_id, client_id }) =>
+        matter_id === undefined || client_id === undefined,
+      "client_id can only be set when creating a matter",
+    ),
+    ["client_id"],
+  ),
+  // An update must request at least one change.
+  v.partialCheck(
+    [["matter_id"], ["name"], ["reference"], ["billing_reference"], ["status"]],
+    ({ matter_id, name, reference, billing_reference, status }) =>
+      matter_id === undefined ||
+      name !== undefined ||
+      reference !== undefined ||
+      billing_reference !== undefined ||
+      status !== undefined,
+    "Provide at least one change: name, reference, billing_reference, or status",
+  ),
+);
+
+const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
+  const parsed = v.safeParse(saveMatterArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { matter_id?: string, name?: string, client_id?: string, reference?: string, billing_reference?: string|null, status?: 'active'|'archived' }",
+      ),
+    );
+  }
+  const input = parsed.output;
+
+  // Create branch.
+  if (input.matter_id === undefined) {
+    if (
+      !roles[context.memberRole].authorize({ workspace: ["create"] }).success
+    ) {
+      return errorResult("Forbidden");
+    }
+    const name = input.name ?? "";
+    const workspaceId = createSafeId<"workspace">();
+    const created = await Result.gen(() =>
+      createWorkspaceHandler({
+        safeDb: context.safeDb,
+        organizationId: context.organizationId,
+        userId: context.userId,
+        recordAuditEvent: context.recordAuditEvent,
+        body: {
+          id: workspaceId,
+          name,
+          filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
+          ...(input.client_id === undefined
+            ? {}
+            : { clientId: brandPersistedContactId(input.client_id) }),
+        },
+      }),
+    );
+    if (Result.isError(created)) {
+      return errorResult(created.error.message);
+    }
+    return textResult({ matterId: created.value.id });
+  }
+
+  // Update branch.
+  if (!roles[context.memberRole].authorize({ workspace: ["update"] }).success) {
+    return errorResult("Forbidden");
+  }
+  const workspaceId = ensureWorkspaceAccess({
+    context,
+    workspaceId: input.matter_id,
+  });
+  if (!workspaceId) {
+    return errorResult("Matter not found or not accessible");
+  }
+  const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
+
+  if (
+    input.name !== undefined ||
+    input.reference !== undefined ||
+    input.billing_reference !== undefined
+  ) {
+    const updated = await Result.gen(() =>
+      updateWorkspaceHandler({
+        safeDb: context.safeDb,
+        organizationId: context.organizationId,
+        workspaceId,
+        recordAuditEvent,
+        body: {
+          ...(input.name === undefined ? {} : { name: input.name }),
+          ...(input.reference === undefined
+            ? {}
+            : { reference: input.reference }),
+          ...(input.billing_reference === undefined
+            ? {}
+            : { billingReference: input.billing_reference }),
+        },
+      }),
+    );
+    if (Result.isError(updated)) {
+      return errorResult(updated.error.message);
+    }
+  }
+
+  if (input.status === "archived") {
+    const archived = await Result.gen(() =>
+      archiveWorkspaceHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        recordAuditEvent,
+      }),
+    );
+    if (Result.isError(archived)) {
+      return errorResult(archived.error.message);
+    }
+  } else if (input.status === "active") {
+    const unarchived = await Result.gen(() =>
+      unarchiveWorkspaceHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        recordAuditEvent,
+      }),
+    );
+    if (Result.isError(unarchived)) {
+      return errorResult(unarchived.error.message);
+    }
+  }
+
+  return textResult({ matterId: workspaceId, updated: true });
+};
+
+// --- delete_matter ------------------------------------------------------
+
+const deleteMatterArgsSchema = v.strictObject({
+  matter_id: v.pipe(v.string(), v.minLength(1)),
+});
+
+const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
+  if (!roles[context.memberRole].authorize({ workspace: ["delete"] }).success) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(deleteMatterArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult("Invalid input: expected { matter_id: string }");
+  }
+
+  const workspaceId = ensureWorkspaceAccess({
+    context,
+    workspaceId: parsed.output.matter_id,
+  });
+  if (!workspaceId) {
+    return errorResult("Matter not found or not accessible");
+  }
+
+  const deleted = await Result.gen(() =>
+    deleteWorkspaceHandler({
+      scopedDb: context.scopedDb,
+      safeDb: context.safeDb,
+      workspaceId,
+      organizationId: context.organizationId,
+      recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
+    }),
+  );
+  if (Result.isError(deleted)) {
+    return errorResult(deleted.error.message);
+  }
+  return textResult({ deleted: true });
+};
+
+// --- save_contact -------------------------------------------------------
+
+const saveContactArgsSchema = v.pipe(
+  v.strictObject({
+    contact_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    type: v.optional(v.picklist(CONTACT_TYPES)),
+    display_name: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
+    ),
+    first_name: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
+    last_name: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(256)))),
+    organization_name: v.optional(
+      v.nullable(v.pipe(v.string(), v.maxLength(512))),
+    ),
+    notes: v.optional(v.nullable(v.string())),
+  }),
+  // Creating (no contact_id) requires type and display_name.
+  v.forward(
+    v.partialCheck(
+      [["contact_id"], ["type"]],
+      ({ contact_id, type }) => contact_id !== undefined || type !== undefined,
+      "type is required to create a contact",
+    ),
+    ["type"],
+  ),
+  v.forward(
+    v.partialCheck(
+      [["contact_id"], ["display_name"]],
+      ({ contact_id, display_name }) =>
+        contact_id !== undefined || display_name !== undefined,
+      "display_name is required to create a contact",
+    ),
+    ["display_name"],
+  ),
+  // An update must request at least one change.
+  v.partialCheck(
+    [
+      ["contact_id"],
+      ["type"],
+      ["display_name"],
+      ["first_name"],
+      ["last_name"],
+      ["organization_name"],
+      ["notes"],
+    ],
+    (i) =>
+      i.contact_id === undefined ||
+      i.type !== undefined ||
+      i.display_name !== undefined ||
+      i.first_name !== undefined ||
+      i.last_name !== undefined ||
+      i.organization_name !== undefined ||
+      i.notes !== undefined,
+    "Provide at least one field to change",
+  ),
+);
+
+const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
+  const parsed = v.safeParse(saveContactArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { contact_id?: string, type?: 'person'|'organization', display_name?: string, first_name?: string|null, last_name?: string|null, organization_name?: string|null, notes?: string|null }",
+      ),
+    );
+  }
+  const input = parsed.output;
+
+  // Create branch.
+  if (input.contact_id === undefined) {
+    if (!roles[context.memberRole].authorize({ contact: ["create"] }).success) {
+      return errorResult("Forbidden");
+    }
+    // The schema guarantees type and display_name are present on create.
+    const type = input.type ?? "person";
+    const displayName = input.display_name ?? "";
+    const created = await Result.gen(() =>
+      createContactHandler({
+        safeDb: context.safeDb,
+        organizationId: context.organizationId,
+        userId: context.userId,
+        recordAuditEvent: context.recordAuditEvent,
+        body: {
+          id: createSafeId<"contact">(),
+          type,
+          displayName,
+          ...(input.first_name === undefined || input.first_name === null
+            ? {}
+            : { firstName: input.first_name }),
+          ...(input.last_name === undefined || input.last_name === null
+            ? {}
+            : { lastName: input.last_name }),
+          ...(input.organization_name === undefined ||
+          input.organization_name === null
+            ? {}
+            : { organizationName: input.organization_name }),
+          ...(input.notes === undefined || input.notes === null
+            ? {}
+            : { notes: input.notes }),
+        },
+      }),
+    );
+    if (Result.isError(created)) {
+      return errorResult(created.error.message);
+    }
+    return textResult({ contactId: created.value.id });
+  }
+
+  // Update branch.
+  if (!roles[context.memberRole].authorize({ contact: ["update"] }).success) {
+    return errorResult("Forbidden");
+  }
+  const contactId = brandPersistedContactId(input.contact_id);
+  const updated = await Result.gen(() =>
+    updateContactHandler({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      contactId,
+      recordAuditEvent: context.recordAuditEvent,
+      body: {
+        ...(input.type === undefined ? {} : { type: input.type }),
+        ...(input.display_name === undefined
+          ? {}
+          : { displayName: input.display_name }),
+        ...(input.first_name === undefined
+          ? {}
+          : { firstName: input.first_name }),
+        ...(input.last_name === undefined ? {} : { lastName: input.last_name }),
+        ...(input.organization_name === undefined
+          ? {}
+          : { organizationName: input.organization_name }),
+        ...(input.notes === undefined ? {} : { notes: input.notes }),
+      },
+    }),
+  );
+  if (Result.isError(updated)) {
+    return errorResult(updated.error.message);
+  }
+  return textResult({ contactId: updated.value.id });
+};
+
+// --- delete_contact -----------------------------------------------------
+
+const deleteContactArgsSchema = v.strictObject({
+  contact_id: v.pipe(v.string(), v.minLength(1)),
+});
+
+const handleDeleteContactTool: McpToolHandler = async ({ args, context }) => {
+  if (!roles[context.memberRole].authorize({ contact: ["delete"] }).success) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(deleteContactArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult("Invalid input: expected { contact_id: string }");
+  }
+
+  const deleted = await Result.gen(() =>
+    deleteContactHandler({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      contactId: brandPersistedContactId(parsed.output.contact_id),
+      recordAuditEvent: context.recordAuditEvent,
+    }),
+  );
+  if (Result.isError(deleted)) {
+    return errorResult(deleted.error.message);
+  }
+  return textResult({ deleted: true });
+};
+
+// --- lookup_business_registry -------------------------------------------
+
+const lookupBusinessRegistryArgsSchema = v.strictObject({
+  registry: v.picklist(BUSINESS_REGISTRY_SLUGS),
+  query: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
+});
+
+const handleLookupBusinessRegistryTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(lookupBusinessRegistryArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      `Invalid input: expected { registry: one of ${BUSINESS_REGISTRY_SLUGS.join(", ")}, query: string }`,
+    );
+  }
+
+  const result = await lookupBusinessRegistryShared({
+    safeDb: context.safeDb,
+    organizationId: context.organizationId,
+    registry: parsed.output.registry,
+    q: parsed.output.query,
+  });
+  if (Result.isError(result)) {
+    return errorResult(result.error.message);
+  }
+  // Passthrough: the output is public business-register data and the query is
+  // caller-supplied, so no tenant-authored text needs redaction.
+  return textResult(result.value);
+};
+
+// --- list_tasks ---------------------------------------------------------
+
+/** Resolve the accessible workspace owning a task, confined to kind "task". */
+type ResolvedTask =
+  | { status: "ok"; workspaceId: SafeId<"workspace"> }
+  | { status: "not-found" }
+  | { status: "wrong-kind" };
+
+const resolveTaskWorkspace = async ({
+  context,
+  taskId,
+}: {
+  context: McpRequestContext;
+  taskId: SafeId<"entity">;
+}): Promise<ResolvedTask> => {
+  if (context.accessibleWorkspaceIds.length === 0) {
+    return { status: "not-found" };
+  }
+  const entity = await context.scopedDb((tx) =>
+    tx.query.entities.findFirst({
+      where: {
+        id: { eq: taskId },
+        workspaceId: { in: context.accessibleWorkspaceIds },
+      },
+      columns: { workspaceId: true, kind: true },
+    }),
+  );
+  if (!entity) {
+    return { status: "not-found" };
+  }
+  if (entity.kind !== "task") {
+    return { status: "wrong-kind" };
+  }
+  return { status: "ok", workspaceId: entity.workspaceId };
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+const listTasksArgsSchema = v.pipe(
+  v.strictObject({
+    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    task_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    date_from: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
+    date_to: v.optional(v.pipe(v.string(), v.regex(ISO_DATE))),
+    status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MAX_LIST_LIMIT),
+      ),
+    ),
+    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  }),
+  // List mode needs a matter to scope to; detail mode uses task_id alone.
+  v.forward(
+    v.partialCheck(
+      [["matter_id"], ["task_id"]],
+      ({ matter_id, task_id }) =>
+        task_id !== undefined || matter_id !== undefined,
+      "Provide matter_id to list tasks, or task_id to read one task",
+    ),
+    ["matter_id"],
+  ),
+);
+
+const decodeTaskPageCursor = (
+  cursor: string,
+): { createdAt: string; id: SafeId<"entity"> } | null => {
+  const parts = decodePaginationCursor(cursor);
+  if (!parts || parts.length !== 2) {
+    return null;
+  }
+  const [createdAt, id] = parts;
+  if (typeof createdAt !== "string" || typeof id !== "string") {
+    return null;
+  }
+  return { createdAt, id: brandPersistedEntityId(id) };
+};
+
+const readTaskDetail = async ({
+  context,
+  taskId,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  taskId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+}) => {
+  const linkColumns = {
+    id: true,
+    linkType: true,
+    sourceEntityId: true,
+    targetEntityId: true,
+  } as const;
+  const linkWith = {
+    sourceEntity: { columns: { id: true, name: true, kind: true } },
+    targetEntity: { columns: { id: true, name: true, kind: true } },
+  } as const;
+
+  const [taskRow, assigneeRows, linksAsSource, linksAsTarget] =
+    await context.scopedDb(
+      async (tx) =>
+        await Promise.all([
+          tx.query.entities.findFirst({
+            where: { id: { eq: taskId }, workspaceId: { eq: workspaceId } },
+            columns: {
+              id: true,
+              name: true,
+              status: true,
+              priority: true,
+              dueDate: true,
+              startAt: true,
+              endAt: true,
+              location: true,
+              agendaKind: true,
+            },
+          }),
+          tx.query.taskAssignees.findMany({
+            where: {
+              entityId: { eq: taskId },
+              workspaceId: { eq: workspaceId },
+            },
+            columns: { role: true },
+            with: { user: { columns: { id: true, name: true } } },
+            limit: LIMITS.workspaceMembersCount,
+          }),
+          tx.query.entityLinks.findMany({
+            where: {
+              workspaceId: { eq: workspaceId },
+              sourceEntityId: { eq: taskId },
+            },
+            columns: linkColumns,
+            with: linkWith,
+            limit: LIMITS.taskEntityLinksPerDirectionMax,
+          }),
+          tx.query.entityLinks.findMany({
+            where: {
+              workspaceId: { eq: workspaceId },
+              targetEntityId: { eq: taskId },
+            },
+            columns: linkColumns,
+            with: linkWith,
+            limit: LIMITS.taskEntityLinksPerDirectionMax,
+          }),
+        ]),
+    );
+
+  return {
+    taskRow,
+    assigneeRows,
+    linkRows: [...linksAsSource, ...linksAsTarget],
+  };
+};
+
+const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
+  if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(listTasksArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { matter_id?: string, task_id?: string, date_from?: YYYY-MM-DD, date_to?: YYYY-MM-DD, status?: string, limit?: integer, cursor?: string }",
+      ),
+    );
+  }
+  const input = parsed.output;
+
+  // Detail mode.
+  if (input.task_id !== undefined) {
+    const taskId = brandPersistedEntityId(input.task_id);
+    const owner = await resolveTaskWorkspace({ context, taskId });
+    if (owner.status === "wrong-kind") {
+      return errorResult("Not a task entity");
+    }
+    if (owner.status !== "ok") {
+      return errorResult("Task not found or not accessible");
+    }
+    const { taskRow, assigneeRows, linkRows } = await readTaskDetail({
+      context,
+      taskId,
+      workspaceId: owner.workspaceId,
+    });
+    if (!taskRow) {
+      return errorResult("Task not found or not accessible");
+    }
+    const workspaceId = owner.workspaceId;
+
+    const assignees = assigneeRows.flatMap((row) =>
+      row.user === null
+        ? []
+        : [{ userId: row.user.id, name: row.user.name, role: row.role }],
+    );
+    const links = linkRows.map((row) => {
+      const linked =
+        row.sourceEntityId === taskId ? row.targetEntity : row.sourceEntity;
+      return {
+        linkId: row.id,
+        linkType: row.linkType,
+        direction: row.sourceEntityId === taskId ? "outgoing" : "incoming",
+        entity: {
+          id: linked?.id ?? null,
+          name: linked?.name ?? null,
+          kind: linked?.kind ?? null,
+        },
+      };
+    });
+
+    const task = {
+      taskId: taskRow.id,
+      name: taskRow.name,
+      status: taskRow.status,
+      priority: taskRow.priority,
+      dueDate: taskRow.dueDate,
+      startAt: taskRow.startAt?.toISOString() ?? null,
+      endAt: taskRow.endAt?.toISOString() ?? null,
+      location: taskRow.location,
+      agendaKind: taskRow.agendaKind,
+      assignees,
+      links,
+    };
+
+    const textFields: McpStructuredTextField[] = [];
+    pushTextField({
+      apply: (value) => {
+        task.name = value;
+      },
+      fields: textFields,
+      value: task.name,
+      workspaceId,
+    });
+    pushTextField({
+      apply: (value) => {
+        task.location = value;
+      },
+      fields: textFields,
+      value: task.location,
+      workspaceId,
+    });
+    for (const assignee of assignees) {
+      pushTextField({
+        apply: (value) => {
+          assignee.name = value;
+        },
+        fields: textFields,
+        value: assignee.name,
+        workspaceId,
+      });
+    }
+    for (const link of links) {
+      pushTextField({
+        apply: (value) => {
+          link.entity.name = value;
+        },
+        fields: textFields,
+        value: link.entity.name,
+        workspaceId,
+      });
+    }
+
+    return { egress: "structured", payload: { task }, textFields };
+  }
+
+  // List mode. matter_id is guaranteed present by the schema.
+  const matterId = input.matter_id ?? "";
+  const workspaceId = ensureWorkspaceAccess({ context, workspaceId: matterId });
+  if (!workspaceId) {
+    return errorResult("Matter not found or not accessible");
+  }
+
+  let boundary: { createdAt: string; id: SafeId<"entity"> } | null = null;
+  if (input.cursor !== undefined) {
+    boundary = decodeTaskPageCursor(input.cursor);
+    if (boundary === null) {
+      return errorResult("Invalid cursor");
+    }
+  }
+  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+
+  const rows = await context.scopedDb((tx) =>
+    tx
+      .select({
+        createdAt: entityListTimestampCursorExpr(sql`${entities.createdAt}`),
+        id: entities.id,
+        name: entities.name,
+        status: entities.status,
+        priority: entities.priority,
+        dueDate: entities.dueDate,
+      })
+      .from(entities)
+      .where(
+        and(
+          eq(entities.workspaceId, workspaceId),
+          eq(entities.kind, "task"),
+          input.status === undefined
+            ? undefined
+            : eq(entities.status, input.status),
+          input.date_from === undefined
+            ? undefined
+            : gte(entities.dueDate, input.date_from),
+          input.date_to === undefined
+            ? undefined
+            : lte(entities.dueDate, input.date_to),
+          entityListCursorCondition(boundary),
+        ),
+      )
+      .orderBy(asc(entities.createdAt), asc(entities.id))
+      .limit(limit + 1),
+  );
+
+  const page = createCursorPage({
+    rows,
+    limit,
+    cursorForItem: (item) => encodePaginationCursor([item.createdAt, item.id]),
+  });
+
+  const tasks = page.items.map(({ createdAt: _createdAt, ...task }) => task);
+
+  const textFields: McpStructuredTextField[] = [];
+  for (const task of tasks) {
+    pushTextField({
+      apply: (value) => {
+        task.name = value;
+      },
+      fields: textFields,
+      value: task.name,
+      workspaceId,
+    });
+  }
+
+  return {
+    egress: "structured",
+    payload: { tasks, nextCursor: page.nextCursor },
+    textFields,
+  };
+};
+
+// --- save_task ----------------------------------------------------------
+
+const saveTaskArgsSchema = v.pipe(
+  v.strictObject({
+    task_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
+    status: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+    priority: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(16))),
+    due_date: v.optional(v.nullable(v.pipe(v.string(), v.regex(ISO_DATE)))),
+    add_assignee_user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    remove_assignee_user_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    link_entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    unlink_link_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+  }),
+  // Creating (no task_id) requires matter_id and name.
+  v.forward(
+    v.partialCheck(
+      [["task_id"], ["matter_id"]],
+      ({ task_id, matter_id }) =>
+        task_id !== undefined || matter_id !== undefined,
+      "matter_id is required to create a task",
+    ),
+    ["matter_id"],
+  ),
+  v.forward(
+    v.partialCheck(
+      [["task_id"], ["name"]],
+      ({ task_id, name }) => task_id !== undefined || name !== undefined,
+      "name is required to create a task",
+    ),
+    ["name"],
+  ),
+  // Assignee/link operations and matter_id only apply to an existing task.
+  v.partialCheck(
+    [
+      ["task_id"],
+      ["add_assignee_user_id"],
+      ["remove_assignee_user_id"],
+      ["link_entity_id"],
+      ["unlink_link_id"],
+      ["matter_id"],
+    ],
+    (i) =>
+      i.task_id !== undefined ||
+      (i.add_assignee_user_id === undefined &&
+        i.remove_assignee_user_id === undefined &&
+        i.link_entity_id === undefined &&
+        i.unlink_link_id === undefined),
+    "assignee and link changes require task_id (they apply to an existing task)",
+  ),
+  // An update must request at least one action.
+  v.partialCheck(
+    [
+      ["task_id"],
+      ["name"],
+      ["status"],
+      ["priority"],
+      ["due_date"],
+      ["add_assignee_user_id"],
+      ["remove_assignee_user_id"],
+      ["link_entity_id"],
+      ["unlink_link_id"],
+    ],
+    (i) =>
+      i.task_id === undefined ||
+      i.name !== undefined ||
+      i.status !== undefined ||
+      i.priority !== undefined ||
+      i.due_date !== undefined ||
+      i.add_assignee_user_id !== undefined ||
+      i.remove_assignee_user_id !== undefined ||
+      i.link_entity_id !== undefined ||
+      i.unlink_link_id !== undefined,
+    "Provide at least one change to the task",
+  ),
+);
+
+const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
+  const parsed = v.safeParse(saveTaskArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { task_id?, matter_id?, name?, status?, priority?, due_date?, add_assignee_user_id?, remove_assignee_user_id?, link_entity_id?, unlink_link_id? }",
+      ),
+    );
+  }
+  const input = parsed.output;
+
+  // Create branch.
+  if (input.task_id === undefined) {
+    if (!roles[context.memberRole].authorize({ entity: ["create"] }).success) {
+      return errorResult("Forbidden");
+    }
+    const workspaceId = ensureWorkspaceAccess({
+      context,
+      workspaceId: input.matter_id ?? "",
+    });
+    if (!workspaceId) {
+      return errorResult("Matter not found or not accessible");
+    }
+    const created = await Result.gen(() =>
+      createTaskEntityHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        userId: context.userId,
+        recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
+        body: {
+          name: input.name ?? "",
+          ...(input.status === undefined ? {} : { status: input.status }),
+          ...(input.priority === undefined ? {} : { priority: input.priority }),
+          ...(input.due_date === undefined ? {} : { dueDate: input.due_date }),
+        },
+      }),
+    );
+    if (Result.isError(created)) {
+      return errorResult(created.error.message);
+    }
+    return textResult({ taskId: created.value.entityId });
+  }
+
+  // Update branch.
+  if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
+    return errorResult("Forbidden");
+  }
+  const taskId = brandPersistedEntityId(input.task_id);
+  const owner = await resolveTaskWorkspace({ context, taskId });
+  if (owner.status === "wrong-kind") {
+    return errorResult("Not a task entity");
+  }
+  if (owner.status !== "ok") {
+    return errorResult("Task not found or not accessible");
+  }
+  const workspaceId = owner.workspaceId;
+  const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
+
+  // Validate the link target up front so a link request cannot fail after an
+  // earlier field update already committed. Not transactional: the target
+  // could change kind or be deleted between this check and the mutation (an
+  // accepted TOCTOU window); this only removes the common partial-failure mode.
+  if (input.link_entity_id !== undefined) {
+    const linkTargetId = brandPersistedEntityId(input.link_entity_id);
+    const target = await context.scopedDb((tx) =>
+      tx.query.entities.findFirst({
+        where: { id: { eq: linkTargetId }, workspaceId: { eq: workspaceId } },
+        columns: { id: true },
+      }),
+    );
+    if (!target) {
+      return errorResult("Link target entity not found in this matter");
+    }
+  }
+
+  if (
+    input.name !== undefined ||
+    input.status !== undefined ||
+    input.priority !== undefined ||
+    input.due_date !== undefined
+  ) {
+    const updated = await Result.gen(() =>
+      updateTaskHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        recordAuditEvent,
+        body: {
+          taskId,
+          ...(input.name === undefined ? {} : { name: input.name }),
+          ...(input.status === undefined ? {} : { status: input.status }),
+          ...(input.priority === undefined ? {} : { priority: input.priority }),
+          ...(input.due_date === undefined ? {} : { dueDate: input.due_date }),
+        },
+      }),
+    );
+    if (Result.isError(updated)) {
+      return errorResult(updated.error.message);
+    }
+  }
+
+  if (input.add_assignee_user_id !== undefined) {
+    const userId = brandPersistedUserId(input.add_assignee_user_id);
+    const added = await Result.gen(() =>
+      addAssigneeHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        recordAuditEvent,
+        body: { taskId, userId },
+      }),
+    );
+    if (Result.isError(added)) {
+      return errorResult(added.error.message);
+    }
+  }
+
+  if (input.remove_assignee_user_id !== undefined) {
+    const userId = brandPersistedUserId(input.remove_assignee_user_id);
+    const removed = await Result.gen(() =>
+      removeAssigneeHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        recordAuditEvent,
+        body: { taskId, userId },
+      }),
+    );
+    if (Result.isError(removed)) {
+      return errorResult(removed.error.message);
+    }
+  }
+
+  if (input.link_entity_id !== undefined) {
+    const targetEntityId = brandPersistedEntityId(input.link_entity_id);
+    const linked = await Result.gen(() =>
+      createEntityLinkHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        recordAuditEvent,
+        body: { sourceEntityId: taskId, targetEntityId },
+      }),
+    );
+    if (Result.isError(linked)) {
+      return errorResult(linked.error.message);
+    }
+  }
+
+  if (input.unlink_link_id !== undefined) {
+    const linkId = brandPersistedEntityLinkId(input.unlink_link_id);
+    const unlinked = await Result.gen(() =>
+      deleteEntityLinkHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        recordAuditEvent,
+        body: { linkId },
+      }),
+    );
+    if (Result.isError(unlinked)) {
+      return errorResult(unlinked.error.message);
+    }
+  }
+
+  return textResult({ taskId, updated: true });
+};
+
+// --- link_matter_contact ------------------------------------------------
+
+const linkMatterContactArgsSchema = v.pipe(
+  v.strictObject({
+    matter_id: v.pipe(v.string(), v.minLength(1)),
+    contact_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    role: v.optional(v.picklist(WORKSPACE_CONTACT_ROLES)),
+    workspace_contact_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+  }),
+  // Exactly one of link (contact_id) or unlink (workspace_contact_id).
+  v.partialCheck(
+    [["contact_id"], ["workspace_contact_id"]],
+    ({ contact_id, workspace_contact_id }) =>
+      (contact_id === undefined) !== (workspace_contact_id === undefined),
+    "Provide either contact_id (to link) or workspace_contact_id (to unlink), not both",
+  ),
+  // Linking a contact requires a role.
+  v.forward(
+    v.partialCheck(
+      [["contact_id"], ["role"]],
+      ({ contact_id, role }) => contact_id === undefined || role !== undefined,
+      "role is required when linking a contact",
+    ),
+    ["role"],
+  ),
+);
+
+const handleLinkMatterContactTool: McpToolHandler = async ({
+  args,
+  context,
+}) => {
+  if (!roles[context.memberRole].authorize({ workspace: ["update"] }).success) {
+    return errorResult("Forbidden");
+  }
+
+  const parsed = v.safeParse(linkMatterContactArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { matter_id: string, contact_id?: string, role?: string, workspace_contact_id?: string }",
+      ),
+    );
+  }
+  const input = parsed.output;
+
+  const workspaceId = ensureWorkspaceAccess({
+    context,
+    workspaceId: input.matter_id,
+  });
+  if (!workspaceId) {
+    return errorResult("Matter not found or not accessible");
+  }
+  const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
+
+  // Unlink branch.
+  if (input.workspace_contact_id !== undefined) {
+    const workspaceContactId = brandPersistedWorkspaceContactId(
+      input.workspace_contact_id,
+    );
+    const removed = await Result.gen(() =>
+      deleteWorkspaceContactHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        workspaceContactId,
+        recordAuditEvent,
+      }),
+    );
+    if (Result.isError(removed)) {
+      return errorResult(removed.error.message);
+    }
+    return textResult({ unlinked: true });
+  }
+
+  // Link branch. The schema guarantees contact_id and role are present here.
+  const created = await Result.gen(() =>
+    createWorkspaceContactHandler({
+      safeDb: context.safeDb,
+      organizationId: context.organizationId,
+      workspaceId,
+      recordAuditEvent,
+      body: {
+        contactId: brandPersistedContactId(input.contact_id ?? ""),
+        role: input.role ?? "other",
+      },
+    }),
+  );
+  if (Result.isError(created)) {
+    return errorResult(created.error.message);
+  }
+  return textResult({ workspaceContactId: created.value.id });
+};
+
+export const MATTER_TOOL_HANDLERS = {
+  save_matter: handleSaveMatterTool,
+  delete_matter: handleDeleteMatterTool,
+  save_contact: handleSaveContactTool,
+  delete_contact: handleDeleteContactTool,
+  lookup_business_registry: handleLookupBusinessRegistryTool,
+  list_tasks: handleListTasksTool,
+  save_task: handleSaveTaskTool,
+  link_matter_contact: handleLinkMatterContactTool,
+} satisfies Record<MatterToolName, McpToolHandler>;

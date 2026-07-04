@@ -82,6 +82,15 @@ export const brandPersistedCaseLawSourceId = (
 export const brandPersistedContactId = (contactId: string): SafeId<"contact"> =>
   toSafeId<"contact">(contactId);
 
+export const brandPersistedWorkspaceContactId = (
+  workspaceContactId: string,
+): SafeId<"workspaceContact"> =>
+  toSafeId<"workspaceContact">(workspaceContactId);
+
+export const brandPersistedEntityLinkId = (
+  entityLinkId: string,
+): SafeId<"entityLink"> => toSafeId<"entityLink">(entityLinkId);
+
 export const brandPersistedAuditLogId = (
   auditLogId: string,
 ): SafeId<"auditLog"> => toSafeId<"auditLog">(auditLogId);

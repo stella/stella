@@ -587,6 +587,8 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_documents",
       "read_document",
       "list_properties",
+      "lookup_business_registry",
+      "list_tasks",
     ]);
   });
 
@@ -1801,6 +1803,176 @@ describe("OpenAI-compatible MCP tools", () => {
           label: "[PERSON_1] draft",
         }),
       ],
+    });
+  });
+
+  // --- Wave 2: matter / contact / task tools ---------------------------
+
+  // save_* tools enforce their create/update shape with v.partialCheck at the
+  // schema, so an invalid combination fails before any permission or DB access
+  // and surfaces the specific partial_check message.
+  test("save_matter rejects a create with no name", async () => {
+    const result = await handleMcpToolCall({
+      args: {},
+      context: createContext(),
+      toolName: "save_matter",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "name is required to create a matter" }],
+      isError: true,
+    });
+  });
+
+  test("save_contact rejects a create with no type", async () => {
+    const result = await handleMcpToolCall({
+      args: { display_name: "Acme Corp" },
+      context: createContext(),
+      toolName: "save_contact",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "type is required to create a contact" }],
+      isError: true,
+    });
+  });
+
+  test("save_task rejects a create with no matter_id", async () => {
+    const result = await handleMcpToolCall({
+      args: { name: "Draft motion" },
+      context: createContext(),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "matter_id is required to create a task" },
+      ],
+      isError: true,
+    });
+  });
+
+  // list_tasks (detail) and save_task confine themselves to entities of kind
+  // "task": a document/folder ID the caller can otherwise access is rejected as
+  // wrong-kind, not acted on.
+  const createTaskKindScopedDb = (kind: string) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              entities: {
+                findFirst: () => Promise<{
+                  kind: string;
+                  workspaceId: string;
+                }>;
+              };
+            };
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              entities: {
+                findFirst: async () => ({ kind, workspaceId: "ws_1" }),
+              },
+            },
+          }),
+      ),
+    );
+
+  test("list_tasks rejects a task_id that is not a task", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "entity_doc" },
+      context: createContext({ scopedDb: createTaskKindScopedDb("document") }),
+      toolName: "list_tasks",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Not a task entity" }],
+      isError: true,
+    });
+  });
+
+  test("save_task rejects a task_id that is not a task", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "entity_doc", name: "Renamed" },
+      context: createContext({ scopedDb: createTaskKindScopedDb("document") }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Not a task entity" }],
+      isError: true,
+    });
+  });
+
+  // list_tasks (list mode) runs through the structured egress pipeline, so in
+  // anonymized mode each task name is redacted under its matter's workspace
+  // scope before it leaves Stella.
+  const createTaskListScopedDb = (
+    rows: {
+      createdAt: string;
+      id: string;
+      name: string;
+      status: string | null;
+      priority: string | null;
+      dueDate: string | null;
+    }[],
+  ) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(async (callback: (tx: unknown) => unknown) => {
+        const builder = {
+          from: () => builder,
+          where: () => builder,
+          orderBy: () => builder,
+          limit: () => rows,
+        };
+        return await callback({ select: () => builder });
+      }),
+    );
+
+  test("list_tasks anonymizes task names in anonymized mode", async () => {
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["[PERSON_1] deposition"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1" },
+      context: createContext({
+        scopedDb: createTaskListScopedDb([
+          {
+            createdAt: "2026-01-01T00:00:00.000000",
+            id: "task_1",
+            name: "John Smith deposition",
+            status: "open",
+            priority: "high",
+            dueDate: "2026-02-01",
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "list_tasks",
+    });
+
+    const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
+    expect(anonymizeInput).toMatchObject({
+      fields: ["John Smith deposition"],
+      workspaceId: "ws_1",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      tasks: [
+        {
+          id: "task_1",
+          name: "[PERSON_1] deposition",
+          status: "open",
+          priority: "high",
+          dueDate: "2026-02-01",
+        },
+      ],
+      nextCursor: null,
     });
   });
 });

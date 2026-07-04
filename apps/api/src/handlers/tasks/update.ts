@@ -1,10 +1,14 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import {
@@ -89,154 +93,177 @@ const validateAgendaKind = (
   };
 };
 
-const updateTask = createSafeHandler(
-  {
-    permissions: { entity: ["update"] },
-    mcp: { type: "pending" },
-    body: updateTaskBodySchema,
-  },
-  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
-    const agendaKindResult = validateAgendaKind(body.agendaKind);
-    if (agendaKindResult.status === "error") {
-      return Result.err(agendaKindResult.error);
-    }
-    const { agendaKind } = agendaKindResult;
-    if (body.status !== undefined && !includes(TASK_STATUSES, body.status)) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Invalid task status" }),
-      );
-    }
-    if (
-      body.priority !== undefined &&
-      !includes(ENTITY_PRIORITIES, body.priority)
-    ) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Invalid task priority" }),
-      );
-    }
-    const agendaFields = validateAgendaFields({
-      attendees: body.attendees,
-      availability: body.availability,
-      sensitivity: body.sensitivity,
-    });
-    if (agendaFields.status === "error") {
-      return Result.err(agendaFields.error);
-    }
+export type UpdateTaskHandlerProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof updateTaskBodySchema>;
+};
 
-    const updated = yield* Result.await(
-      safeDb(async (tx) => {
-        const rows = await tx
-          .update(entities)
-          .set({
-            ...(body.name !== undefined && { name: body.name }),
-            ...(agendaKind !== undefined && {
-              agendaKind,
-            }),
-            ...(body.status !== undefined && {
-              status: body.status,
-            }),
-            ...(body.priority !== undefined && {
-              priority: body.priority,
-            }),
-            ...(body.dueDate !== undefined && {
-              dueDate: body.dueDate,
-            }),
-            ...(body.startAt !== undefined && {
-              startAt: toDateOrNull(body.startAt),
-            }),
-            ...(body.endAt !== undefined && {
-              endAt: toDateOrNull(body.endAt),
-            }),
-            ...(body.occurredAt !== undefined && {
-              occurredAt: toDateOrNull(body.occurredAt),
-            }),
-            ...(body.remindAt !== undefined && {
-              remindAt: toDateOrNull(body.remindAt),
-            }),
-            ...(body.allDay !== undefined && {
-              allDay: body.allDay,
-            }),
-            ...(body.timeZone !== undefined && {
-              timeZone: body.timeZone,
-            }),
-            ...(body.location !== undefined && {
-              location: body.location,
-            }),
-            ...(body.onlineMeetingUrl !== undefined && {
-              onlineMeetingUrl: body.onlineMeetingUrl,
-            }),
-            ...(body.availability !== undefined && {
-              availability: agendaFields.availability,
-            }),
-            ...(body.sensitivity !== undefined && {
-              sensitivity: agendaFields.sensitivity,
-            }),
-            ...(body.organizer !== undefined && {
-              organizer: body.organizer,
-            }),
-            ...(body.attendees !== undefined && {
-              attendees: agendaFields.attendees,
-            }),
-            ...(body.recurrence !== undefined && {
-              recurrence: body.recurrence,
-            }),
-            ...(body.sortOrder !== undefined && {
-              sortOrder: body.sortOrder,
-            }),
-            updatedAt: new Date(),
-          })
+// Shared task-update logic reused by the HTTP handler and the
+// `save_task` MCP tool, so both emit identical audit events.
+export const updateTaskHandler = async function* ({
+  safeDb,
+  workspaceId,
+  recordAuditEvent,
+  body,
+}: UpdateTaskHandlerProps) {
+  const agendaKindResult = validateAgendaKind(body.agendaKind);
+  if (agendaKindResult.status === "error") {
+    return Result.err(agendaKindResult.error);
+  }
+  const { agendaKind } = agendaKindResult;
+  if (body.status !== undefined && !includes(TASK_STATUSES, body.status)) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid task status" }),
+    );
+  }
+  if (
+    body.priority !== undefined &&
+    !includes(ENTITY_PRIORITIES, body.priority)
+  ) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid task priority" }),
+    );
+  }
+  const agendaFields = validateAgendaFields({
+    attendees: body.attendees,
+    availability: body.availability,
+    sensitivity: body.sensitivity,
+  });
+  if (agendaFields.status === "error") {
+    return Result.err(agendaFields.error);
+  }
+
+  const updated = yield* Result.await(
+    safeDb(async (tx) => {
+      const rows = await tx
+        .update(entities)
+        .set({
+          ...(body.name !== undefined && { name: body.name }),
+          ...(agendaKind !== undefined && {
+            agendaKind,
+          }),
+          ...(body.status !== undefined && {
+            status: body.status,
+          }),
+          ...(body.priority !== undefined && {
+            priority: body.priority,
+          }),
+          ...(body.dueDate !== undefined && {
+            dueDate: body.dueDate,
+          }),
+          ...(body.startAt !== undefined && {
+            startAt: toDateOrNull(body.startAt),
+          }),
+          ...(body.endAt !== undefined && {
+            endAt: toDateOrNull(body.endAt),
+          }),
+          ...(body.occurredAt !== undefined && {
+            occurredAt: toDateOrNull(body.occurredAt),
+          }),
+          ...(body.remindAt !== undefined && {
+            remindAt: toDateOrNull(body.remindAt),
+          }),
+          ...(body.allDay !== undefined && {
+            allDay: body.allDay,
+          }),
+          ...(body.timeZone !== undefined && {
+            timeZone: body.timeZone,
+          }),
+          ...(body.location !== undefined && {
+            location: body.location,
+          }),
+          ...(body.onlineMeetingUrl !== undefined && {
+            onlineMeetingUrl: body.onlineMeetingUrl,
+          }),
+          ...(body.availability !== undefined && {
+            availability: agendaFields.availability,
+          }),
+          ...(body.sensitivity !== undefined && {
+            sensitivity: agendaFields.sensitivity,
+          }),
+          ...(body.organizer !== undefined && {
+            organizer: body.organizer,
+          }),
+          ...(body.attendees !== undefined && {
+            attendees: agendaFields.attendees,
+          }),
+          ...(body.recurrence !== undefined && {
+            recurrence: body.recurrence,
+          }),
+          ...(body.sortOrder !== undefined && {
+            sortOrder: body.sortOrder,
+          }),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(entities.id, body.taskId),
+            eq(entities.workspaceId, workspaceId),
+            eq(entities.kind, "task"),
+            eq(entities.readOnly, false),
+          ),
+        )
+        .returning({ id: entities.id });
+
+      if (rows.length > 0) {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: body.taskId,
+          metadata: { kind: "task" },
+        });
+      }
+
+      return rows;
+    }),
+  );
+
+  if (updated.length === 0) {
+    const [task] = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({ readOnly: entities.readOnly })
+          .from(entities)
           .where(
             and(
               eq(entities.id, body.taskId),
               eq(entities.workspaceId, workspaceId),
               eq(entities.kind, "task"),
-              eq(entities.readOnly, false),
             ),
           )
-          .returning({ id: entities.id });
-
-        if (rows.length > 0) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-            resourceId: body.taskId,
-            metadata: { kind: "task" },
-          });
-        }
-
-        return rows;
-      }),
+          .limit(1),
+      ),
     );
 
-    if (updated.length === 0) {
-      const [task] = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({ readOnly: entities.readOnly })
-            .from(entities)
-            .where(
-              and(
-                eq(entities.id, body.taskId),
-                eq(entities.workspaceId, workspaceId),
-                eq(entities.kind, "task"),
-              ),
-            )
-            .limit(1),
-        ),
-      );
-
-      if (task?.readOnly) {
-        return Result.err(
-          new HandlerError({ status: 409, message: "Task is read-only" }),
-        );
-      }
-
+    if (task?.readOnly) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Task not found" }),
+        new HandlerError({ status: 409, message: "Task is read-only" }),
       );
     }
 
-    return Result.ok({ success: true });
+    return Result.err(
+      new HandlerError({ status: 404, message: "Task not found" }),
+    );
+  }
+
+  return Result.ok({ success: true });
+};
+
+const updateTask = createSafeHandler(
+  {
+    permissions: { entity: ["update"] },
+    mcp: { type: "covered", by: "save_task" },
+    body: updateTaskBodySchema,
+  },
+  async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {
+    return yield* updateTaskHandler({
+      safeDb,
+      workspaceId,
+      recordAuditEvent,
+      body,
+    });
   },
 );
 

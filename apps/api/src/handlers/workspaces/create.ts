@@ -1,7 +1,9 @@
 import { Result, panic } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import {
@@ -15,6 +17,7 @@ import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
@@ -30,180 +33,196 @@ import {
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
+// A request without `clientId` creates a personal matter (initially
+// visible only to the creator). With `clientId`, it's a normal
+// client matter and `memberUserIds` may add additional members.
+const createWorkspaceBodySchema = t.Object({
+  id: tSafeId("workspace"),
+  clientId: t.Optional(tSafeId("contact")),
+  memberUserIds: t.Optional(
+    t.Array(t.String({ maxLength: 128 }), {
+      maxItems: LIMITS.workspaceMembersCount - 1,
+    }),
+  ),
+  name: tDefaultVarchar,
+  filePropertyName: tDefaultVarchar,
+});
+
 const config = {
   permissions: { workspace: ["create"] },
-  mcp: { type: "pending" },
-  // A request without `clientId` creates a personal matter (initially
-  // visible only to the creator). With `clientId`, it's a normal
-  // client matter and `memberUserIds` may add additional members.
-  body: t.Object({
-    id: tSafeId("workspace"),
-    clientId: t.Optional(tSafeId("contact")),
-    memberUserIds: t.Optional(
-      t.Array(t.String({ maxLength: 128 }), {
-        maxItems: LIMITS.workspaceMembersCount - 1,
-      }),
-    ),
-    name: tDefaultVarchar,
-    filePropertyName: tDefaultVarchar,
-  }),
+  mcp: { type: "tool", name: "save_matter" },
+  body: createWorkspaceBodySchema,
 } satisfies HandlerConfig;
 
-const createWorkspaces = createSafeRootHandler(
-  config,
-  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        const organizationId = session.activeOrganizationId;
-        // New personal matters (no clientId) start with exactly one
-        // member: the creator. Additional members can be attached
-        // through the workspace members endpoint after creation.
-        const requestedMemberUserIds =
-          body.clientId !== undefined && body.memberUserIds !== undefined
-            ? Array.from(new Set(body.memberUserIds))
-            : [];
+export type CreateWorkspaceHandlerProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof createWorkspaceBodySchema>;
+};
 
-        const orgFilter = eq(workspaces.organizationId, organizationId);
+// Shared matter-creation logic reused by the HTTP handler and the
+// `save_matter` MCP tool, so both emit identical audit events and
+// search-index writes.
+export const createWorkspaceHandler = async function* ({
+  safeDb,
+  organizationId,
+  userId,
+  recordAuditEvent,
+  body,
+}: CreateWorkspaceHandlerProps) {
+  const txResult = yield* Result.await(
+    safeDb(async (tx) => {
+      // New personal matters (no clientId) start with exactly one
+      // member: the creator. Additional members can be attached
+      // through the workspace members endpoint after creation.
+      const requestedMemberUserIds =
+        body.clientId !== undefined && body.memberUserIds !== undefined
+          ? Array.from(new Set(body.memberUserIds))
+          : [];
 
-        const [countResult, duplicatedNames, settings, client, orgMembers] =
-          await Promise.all([
-            tx.select({ total: count() }).from(workspaces).where(orgFilter),
-            tx
-              .select({ name: workspaces.name })
-              .from(workspaces)
-              .where(
-                and(
-                  orgFilter,
-                  ilike(workspaces.name, `${escapeLike(body.name)}%`),
-                ),
+      const orgFilter = eq(workspaces.organizationId, organizationId);
+
+      const [countResult, duplicatedNames, settings, client, orgMembers] =
+        await Promise.all([
+          tx.select({ total: count() }).from(workspaces).where(orgFilter),
+          tx
+            .select({ name: workspaces.name })
+            .from(workspaces)
+            .where(
+              and(
+                orgFilter,
+                ilike(workspaces.name, `${escapeLike(body.name)}%`),
               ),
-            tx.query.organizationSettings.findFirst({
-              where: { organizationId: { eq: organizationId } },
-              columns: {
-                matterNumberPattern: true,
-                matterNumberPadding: true,
-              },
-            }),
-            body.clientId !== undefined
-              ? tx
-                  .select({ id: contacts.id })
-                  .from(contacts)
-                  .where(
-                    and(
-                      eq(contacts.id, body.clientId),
-                      eq(contacts.organizationId, organizationId),
-                    ),
-                  )
-                  .for("update")
-                  .limit(1)
-                  .then((rows) => rows.at(0) ?? null)
-              : Promise.resolve(null),
-            requestedMemberUserIds.length > 0
-              ? tx
-                  .select({ userId: member.userId })
-                  .from(member)
-                  .where(
-                    and(
-                      eq(member.organizationId, organizationId),
-                      inArray(member.userId, requestedMemberUserIds),
-                    ),
-                  )
-                  .for("update")
-              : Promise.resolve([]),
-          ]);
-
-        const activeCount = countResult.at(0)?.total ?? 0;
-
-        if (body.clientId !== undefined && !client) {
-          return {
-            ok: false as const,
-            status: 404 as const,
-            message: "Client not found",
-          };
-        }
-
-        if (orgMembers.length !== requestedMemberUserIds.length) {
-          return {
-            ok: false as const,
-            status: 400 as const,
-            message: "Some users are not members of this organization",
-          };
-        }
-
-        // Membership verified above — brand each requested user ID.
-        // Combined with the session user.id, this gives a typed list
-        // of org-validated members for the insert below. New personal
-        // matters start with exactly one member: the creator.
-        const workspaceMemberUserIds = Array.from(
-          new Set([
-            user.id,
-            ...requestedMemberUserIds.map((id) => brandPersistedUserId(id)),
-          ]),
-        );
-
-        if (activeCount >= LIMITS.workspacesCount) {
-          return {
-            ok: false as const,
-            status: 400 as const,
-            message: "Workspaces limit reached",
-          };
-        }
-
-        const newName =
-          duplicatedNames.length > 0
-            ? `${body.name} (${duplicatedNames.length})`
-            : body.name;
-
-        const pattern =
-          settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
-        const padding =
-          settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
-        const now = new Date();
-        const scopeKey = toScopeKey(pattern, now);
-
-        // Atomic counter increment (upsert)
-        const counter = await tx
-          .insert(matterCounters)
-          .values({
-            id: createSafeId<"matterCounter">(),
-            organizationId,
-            scopeKey,
-            lastValue: 1,
-          })
-          .onConflictDoUpdate({
-            target: [matterCounters.organizationId, matterCounters.scopeKey],
-            set: {
-              lastValue: sql`${matterCounters.lastValue} + 1`,
+            ),
+          tx.query.organizationSettings.findFirst({
+            where: { organizationId: { eq: organizationId } },
+            columns: {
+              matterNumberPattern: true,
+              matterNumberPadding: true,
             },
-          })
-          .returning({ lastValue: matterCounters.lastValue })
-          .then((r) => r.at(0));
+          }),
+          body.clientId !== undefined
+            ? tx
+                .select({ id: contacts.id })
+                .from(contacts)
+                .where(
+                  and(
+                    eq(contacts.id, body.clientId),
+                    eq(contacts.organizationId, organizationId),
+                  ),
+                )
+                .for("update")
+                .limit(1)
+                .then((rows) => rows.at(0) ?? null)
+            : Promise.resolve(null),
+          requestedMemberUserIds.length > 0
+            ? tx
+                .select({ userId: member.userId })
+                .from(member)
+                .where(
+                  and(
+                    eq(member.organizationId, organizationId),
+                    inArray(member.userId, requestedMemberUserIds),
+                  ),
+                )
+                .for("update")
+            : Promise.resolve([]),
+        ]);
 
-        if (!counter) {
-          panic("Failed to create matter counter");
-        }
+      const activeCount = countResult.at(0)?.total ?? 0;
 
-        const reference = toReference({
-          pattern,
-          now,
-          seq: counter.lastValue,
-          padding,
-        });
+      if (body.clientId !== undefined && !client) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: "Client not found",
+        };
+      }
 
-        await tx.insert(workspaces).values({
-          id: body.id,
+      if (orgMembers.length !== requestedMemberUserIds.length) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "Some users are not members of this organization",
+        };
+      }
+
+      // Membership verified above — brand each requested user ID.
+      // Combined with the session user.id, this gives a typed list
+      // of org-validated members for the insert below. New personal
+      // matters start with exactly one member: the creator.
+      const workspaceMemberUserIds = Array.from(
+        new Set([
+          userId,
+          ...requestedMemberUserIds.map((id) => brandPersistedUserId(id)),
+        ]),
+      );
+
+      if (activeCount >= LIMITS.workspacesCount) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "Workspaces limit reached",
+        };
+      }
+
+      const newName =
+        duplicatedNames.length > 0
+          ? `${body.name} (${duplicatedNames.length})`
+          : body.name;
+
+      const pattern =
+        settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
+      const padding =
+        settings?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING;
+      const now = new Date();
+      const scopeKey = toScopeKey(pattern, now);
+
+      // Atomic counter increment (upsert)
+      const counter = await tx
+        .insert(matterCounters)
+        .values({
+          id: createSafeId<"matterCounter">(),
           organizationId,
-          clientId: body.clientId ?? null,
-          name: newName,
-          reference,
-        });
+          scopeKey,
+          lastValue: 1,
+        })
+        .onConflictDoUpdate({
+          target: [matterCounters.organizationId, matterCounters.scopeKey],
+          set: {
+            lastValue: sql`${matterCounters.lastValue} + 1`,
+          },
+        })
+        .returning({ lastValue: matterCounters.lastValue })
+        .then((r) => r.at(0));
 
-        // Append the new workspace ID to the RLS session variable
-        // so child inserts (workspaceMembers, properties) pass the
-        // workspace_insert policy within this transaction.
-        // The session var is a Postgres array literal: {id1,id2}.
-        await tx.execute(
-          sql`SELECT set_config(
+      if (!counter) {
+        panic("Failed to create matter counter");
+      }
+
+      const reference = toReference({
+        pattern,
+        now,
+        seq: counter.lastValue,
+        padding,
+      });
+
+      await tx.insert(workspaces).values({
+        id: body.id,
+        organizationId,
+        clientId: body.clientId ?? null,
+        name: newName,
+        reference,
+      });
+
+      // Append the new workspace ID to the RLS session variable
+      // so child inserts (workspaceMembers, properties) pass the
+      // workspace_insert policy within this transaction.
+      // The session var is a Postgres array literal: {id1,id2}.
+      await tx.execute(
+        sql`SELECT set_config(
           ${SETTING_WORKSPACE_IDS},
           array_append(
             current_setting(${SETTING_WORKSPACE_IDS}, true)::text[],
@@ -211,68 +230,80 @@ const createWorkspaces = createSafeRootHandler(
           )::text,
           true
         )`,
-        );
+      );
 
-        const workspaceId = body.id;
+      const workspaceId = body.id;
 
-        await tx.insert(workspaceMembers).values(
-          workspaceMemberUserIds.map((userId: SafeId<"user">) => ({
-            workspaceId,
-            userId,
-          })),
-        );
-
-        await tx.insert(properties).values([
-          {
-            workspaceId,
-            name: body.filePropertyName,
-            content: { type: "file", version: 1 },
-            tool: { version: 1, type: "manual-input" },
-            // The system file column is user-managed (uploads), not
-            // computed — fresh from creation.
-            status: "fresh",
-            system: true,
-            kinds: ["document"],
-          },
-        ]);
-
-        await recordAuditEvent(tx, {
+      await tx.insert(workspaceMembers).values(
+        workspaceMemberUserIds.map((memberUserId: SafeId<"user">) => ({
           workspaceId,
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
-          resourceId: workspaceId,
-          changes: {
-            created: {
-              old: null,
-              new: {
-                name: newName,
-                reference,
-                clientId: body.clientId ?? null,
-                memberCount: workspaceMemberUserIds.length,
-              },
+          userId: memberUserId,
+        })),
+      );
+
+      await tx.insert(properties).values([
+        {
+          workspaceId,
+          name: body.filePropertyName,
+          content: { type: "file", version: 1 },
+          tool: { version: 1, type: "manual-input" },
+          // The system file column is user-managed (uploads), not
+          // computed — fresh from creation.
+          status: "fresh",
+          system: true,
+          kinds: ["document"],
+        },
+      ]);
+
+      await recordAuditEvent(tx, {
+        workspaceId,
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
+        resourceId: workspaceId,
+        changes: {
+          created: {
+            old: null,
+            new: {
+              name: newName,
+              reference,
+              clientId: body.clientId ?? null,
+              memberCount: workspaceMemberUserIds.length,
             },
           },
-        });
+        },
+      });
 
-        return {
-          ok: true as const,
-          id: body.id,
-        };
+      return {
+        ok: true as const,
+        id: body.id,
+      };
+    }),
+  );
+
+  if (!txResult.ok) {
+    return Result.err(
+      new HandlerError({
+        status: txResult.status,
+        message: txResult.message,
       }),
     );
+  }
 
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
+  upsertWorkspaceSearchDocument(txResult.id).catch(captureError);
 
-    upsertWorkspaceSearchDocument(txResult.id).catch(captureError);
+  return Result.ok({ id: txResult.id });
+};
 
-    return Result.ok({ id: txResult.id });
+const createWorkspaces = createSafeRootHandler(
+  config,
+  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
+    return yield* createWorkspaceHandler({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+      recordAuditEvent,
+      body,
+    });
   },
 );
 
