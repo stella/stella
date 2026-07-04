@@ -2240,10 +2240,14 @@ type Messages = {
       "auditLogsDescription": "View compliance and action logs for this organization";
       "auditLogsEmpty": "No activity logs found.";
       "auditLogsError": "Failed to load activity logs.";
+      "auditLogsExport": "Export logs";
+      "auditLogsExporting": "Exporting...";
+      "auditLogsFrom": "From date";
       "auditLogsLoading": "Loading logs...";
       "auditLogsResourceId": "Resource ID";
       "auditLogsResourceType": "Resource Type";
       "auditLogsTime": "Time";
+      "auditLogsTo": "To date";
       "auditLogsUser": "User";
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";

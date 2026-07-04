@@ -3,9 +3,18 @@ import { useState } from "react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+import { Result } from "better-result";
 
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
+import { Input } from "@stll/ui/components/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import {
   Table,
   TableBody,
@@ -14,9 +23,15 @@ import {
   TableHeader,
   TableRow,
 } from "@stll/ui/components/table";
+import { stellaToast } from "@stll/ui/components/toast";
 
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
+import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { auditLogOptions, type AuditLogsPageKey } from "@/routes/_protected.settings/-queries/audit-logs";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { DatePickerPopover } from "@/components/date-picker-popover";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/audit-logs",
@@ -30,10 +45,30 @@ function AuditLogsPage() {
   const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>([]);
   const limit = 20;
 
-  const queryParams: AuditLogsPageKey = { limit };
-  if (cursor) {
-    queryParams.cursor = cursor;
-  }
+  // Filter states
+  const [filterAction, setFilterAction] = useState<string>("");
+  const [filterResourceType, setFilterResourceType] = useState<string>("");
+  const [filterUserId, setFilterUserId] = useState<string>("");
+  const [filterFrom, setFilterFrom] = useState<Date | null>(null);
+  const [filterTo, setFilterTo] = useState<Date | null>(null);
+
+  const [exporting, setExporting] = useState(false);
+
+  const handleFilterChange = <T,>(setter: (val: T) => void, val: T) => {
+    setter(val);
+    setCursor(undefined);
+    setCursorHistory([]);
+  };
+
+  const queryParams: AuditLogsPageKey = {
+    limit,
+    cursor,
+    action: filterAction || undefined,
+    resourceType: filterResourceType || undefined,
+    userId: filterUserId || undefined,
+    from: filterFrom ? filterFrom.toISOString() : undefined,
+    to: filterTo ? filterTo.toISOString() : undefined,
+  };
 
   const { data, isLoading, isError } = useQuery({
     ...auditLogOptions({ key: queryParams }),
@@ -56,16 +91,136 @@ function AuditLogsPage() {
     });
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    const result = await Result.tryPromise(async () => {
+      const cleanParams: Record<string, string> = {};
+      if (filterAction) cleanParams["action"] = filterAction;
+      if (filterResourceType) cleanParams["resourceType"] = filterResourceType;
+      if (filterUserId) cleanParams["userId"] = filterUserId;
+      if (filterFrom) cleanParams["from"] = filterFrom.toISOString();
+      if (filterTo) cleanParams["to"] = filterTo.toISOString();
+
+      const response = await api["audit-logs"].export.get({
+        query: cleanParams,
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    });
+
+    setExporting(false);
+
+    if (Result.isError(result)) {
+      stellaToast.add({
+        title: "Export failed",
+        type: "error",
+      });
+      return;
+    }
+
+    if (result.value) {
+      const blob = new Blob([result.value], { type: "text/csv;charset=utf-8;" });
+      downloadFile(blob, "audit-logs.csv");
+    }
+  };
+
   return (
     <>
-      <SettingsPageHeader
-        description={t("settings.organization.auditLogsDescription")}
-        title={t("settings.organization.auditLogs")}
-      />
+      <div className="flex justify-between items-center mb-6">
+        <SettingsPageHeader
+          description={t("settings.organization.auditLogsDescription")}
+          title={t("settings.organization.auditLogs")}
+        />
+        <Button
+          disabled={exporting}
+          onClick={() => {
+            void handleExport();
+          }}
+          variant="outline"
+        >
+          {exporting ? t("settings.organization.auditLogsExporting") : t("settings.organization.auditLogsExport")}
+        </Button>
+      </div>
 
       <Frame>
         <FramePanel>
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-6">
+            {/* Filters Row */}
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-muted/30 p-4 rounded-lg border">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="userId-input">
+                  {t("settings.organization.auditLogsUser")} ID
+                </label>
+                <Input
+                  id="userId-input"
+                  placeholder="Filter by User ID"
+                  value={filterUserId}
+                  onChange={(e) => handleFilterChange(setFilterUserId, e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="action-select">
+                  {t("settings.organization.auditLogsAction")}
+                </label>
+                <Select
+                  id="action-select"
+                  value={filterAction || "all"}
+                  onValueChange={(val) => handleFilterChange(setFilterAction, !val || val === "all" ? "" : val)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="All Actions" />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    <SelectItem value="all">All Actions</SelectItem>
+                    <SelectItem value="create">Create</SelectItem>
+                    <SelectItem value="update">Update</SelectItem>
+                    <SelectItem value="delete">Delete</SelectItem>
+                    <SelectItem value="download">Download</SelectItem>
+                    <SelectItem value="execute">Execute</SelectItem>
+                    <SelectItem value="access">Access</SelectItem>
+                  </SelectPopup>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="resourceType-input">
+                  {t("settings.organization.auditLogsResourceType")}
+                </label>
+                <Input
+                  id="resourceType-input"
+                  placeholder="e.g. workspace"
+                  value={filterResourceType}
+                  onChange={(e) => handleFilterChange(setFilterResourceType, e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="from-input">
+                  {t("settings.organization.auditLogsFrom")}
+                </label>
+                <DatePickerPopover
+                  id="from-input"
+                  value={filterFrom}
+                  onChange={(date) => handleFilterChange(setFilterFrom, date)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium text-muted-foreground" htmlFor="to-input">
+                  {t("settings.organization.auditLogsTo")}
+                </label>
+                <DatePickerPopover
+                  id="to-input"
+                  value={filterTo}
+                  onChange={(date) => handleFilterChange(setFilterTo, date)}
+                />
+              </div>
+            </div>
+
             <div className="overflow-x-auto rounded-md border">
               <Table>
                 <TableHeader>
@@ -101,9 +256,11 @@ function AuditLogsPage() {
                     data.items.map((log) => (
                       <TableRow key={log.id}>
                         <TableCell className="whitespace-nowrap text-xs">
-                          {new Date(log.createdAt).toLocaleString()}
+                          {new Date(log.createdAt).toLocaleString(getFormattingLocale())}
                         </TableCell>
-                        <TableCell className="text-xs font-mono">{log.userId}</TableCell>
+                        <TableCell className="text-xs font-mono">
+                          {log.user ? `${log.user.name} (${log.user.email})` : log.userId}
+                        </TableCell>
                         <TableCell className="text-xs capitalize font-medium">{log.action}</TableCell>
                         <TableCell className="text-xs">{log.resourceType}</TableCell>
                         <TableCell className="text-xs font-mono max-w-[120px] truncate" title={log.resourceId}>

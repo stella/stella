@@ -1,10 +1,21 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, getColumns, gte, lt, lte, or } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  getColumns,
+  inArray,
+  gte,
+  lt,
+  lte,
+  or,
+} from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -50,7 +61,7 @@ const decodeCursor = (
   return { createdAt, id: brandPersistedAuditLogId(id) };
 };
 
-const readAuditLogsQuerySchema = t.Object({
+export const readAuditLogsQuerySchema = t.Object({
   workspaceId: t.Optional(tSafeId("workspace")),
   // Use literal unions so a typo'd filter fails as 400 at the boundary
   // instead of returning an empty page. Adding a new action or
@@ -71,9 +82,9 @@ const readAuditLogsQuerySchema = t.Object({
   cursor: t.Optional(t.String()),
 });
 
-type ReadAuditLogsQuery = Static<typeof readAuditLogsQuerySchema>;
+export type ReadAuditLogsQuery = Static<typeof readAuditLogsQuerySchema>;
 
-const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
+export const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
   const conditions: SQL[] = [];
 
   /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- org-scoped compliance filter, not an ownership source */
@@ -124,6 +135,11 @@ const config = {
   permissions: { auditLog: ["read"] },
   mcp: { type: "tool", name: "list_audit_log" },
   query: readAuditLogsQuerySchema,
+  audit: {
+    action: AUDIT_ACTION.ACCESS,
+    resourceType: AUDIT_RESOURCE_TYPE.AUDIT_LOG,
+    getResourceId: () => "organization-logs",
+  },
 } satisfies HandlerConfig;
 
 const VALID_ACTIONS = new Set<string>(Object.values(AUDIT_ACTION));
@@ -199,8 +215,38 @@ export const queryAuditLogPage = async function* ({
     ),
   );
 
+  // Batch-fetch user names/emails
+  const userIds = [...new Set(rows.map((row) => row.userId).filter(Boolean))];
+  const userDetails =
+    userIds.length > 0
+      ? yield* Result.await(
+          safeDb((tx) =>
+            tx
+              .select({ id: user.id, name: user.name, email: user.email })
+              .from(user)
+              .innerJoin(member, eq(member.userId, user.id))
+              .where(
+                and(
+                  eq(member.organizationId, organizationId),
+                  inArray(user.id, userIds),
+                ),
+              ),
+          ),
+        )
+      : [];
+  const userMap = new Map(
+    userDetails.map((u) => [u.id, { name: u.name, email: u.email }]),
+  );
+
+  const mappedRows = rows.map((row) => {
+    const u = row.userId ? userMap.get(row.userId) : undefined;
+    return Object.assign(row, {
+      user: u ? { name: u.name, email: u.email } : null,
+    });
+  });
+
   const page = createCursorPage({
-    rows,
+    rows: mappedRows,
     limit,
     cursorForItem: (item) => encodeCursor(item.createdAtCursor, item.id),
   });

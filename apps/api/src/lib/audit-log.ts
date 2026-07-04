@@ -13,11 +13,13 @@ export const AUDIT_ACTION = {
   DELETE: "delete",
   DOWNLOAD: "download",
   EXECUTE: "execute",
+  ACCESS: "access",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  AUDIT_LOG: "audit_log",
   AGENT_SKILL: "agent_skill",
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
