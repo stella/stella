@@ -3,7 +3,7 @@ import type React from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { flexRender } from "@tanstack/react-table";
+import { flexRender, type RowSelectionState } from "@tanstack/react-table";
 import {
   row_getIsExpanded,
   row_getIsSelected,
@@ -718,7 +718,7 @@ const SelectRowContent = ({
       const start = Math.min(lastSelectedIndex.current, index);
       const end = Math.max(lastSelectedIndex.current, index);
       const rows = table.getRowModel().rows;
-      const patch: Record<string, boolean> = {};
+      const patch: RowSelectionState = {};
       for (let i = start; i <= end; i++) {
         const r = rows[i];
         if (r) {
