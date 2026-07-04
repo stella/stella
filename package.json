@@ -117,7 +117,7 @@
     "drizzle-kit": "1.0.0-rc.1",
     "drizzle-orm": "1.0.0-rc.1",
     "elysia": "1.4.29",
-    "eslint": "10.5.0",
+    "eslint": "10.6.0",
     "eslint-plugin-drizzle": "0.2.3",
     "eslint-plugin-sonarjs": "4.1.0",
     "fast-check": "^4.8.0",
