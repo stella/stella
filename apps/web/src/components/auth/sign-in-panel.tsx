@@ -26,6 +26,9 @@ import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { emailSchema, toFormErrors } from "@/lib/schema";
 
+import type { AuthCapabilities } from "./sign-in-panel.logic";
+import { resolveSignInOptions } from "./sign-in-panel.logic";
+
 type SignInPanelProps = {
   className?: string;
   redirectTo: string;
@@ -53,13 +56,16 @@ const authErrorResponseSchema = v.object({
 });
 
 const BETTER_AUTH_SIGN_UP_EMAIL_PATH = "/api/auth/sign-up/email";
-const hasSocialProviders = env.VITE_AUTH_GOOGLE || env.VITE_AUTH_MICROSOFT;
 const termsUrl = sanitizeHref(env.VITE_TERMS_URL) ?? "/terms";
 const authCapabilitiesFallback = {
   emailOtp: !env.VITE_SELFHOST,
   localPassword: false,
   bootstrap: false,
-};
+  social: {
+    google: false,
+    microsoft: false,
+  },
+} as const satisfies AuthCapabilities;
 
 const authCapabilitiesQueryOptions = {
   queryKey: ["auth-capabilities"] as const,
@@ -106,10 +112,21 @@ export function SignInPanel({
     "google" | "microsoft" | null
   >(null);
   const lastMethod = authClient.getLastUsedLoginMethod();
-  const showEmailOtp = authCapabilities.emailOtp;
-  const showLocalPassword = authCapabilities.localPassword;
-  const showBootstrap = authCapabilities.bootstrap;
-  const hasAboveEmailOptions = hasSocialProviders || showLocalPassword;
+  const {
+    showEmailOtp,
+    showLocalPassword,
+    showBootstrap,
+    showGoogle,
+    showMicrosoft,
+    showSocialProviders,
+    hasAboveEmailOptions,
+  } = resolveSignInOptions({
+    authCapabilities,
+    socialProviderFlags: {
+      google: env.VITE_AUTH_GOOGLE,
+      microsoft: env.VITE_AUTH_MICROSOFT,
+    },
+  });
 
   const handleOtpSent = async (email: string) => {
     if (onOtpSent) {
@@ -199,9 +216,9 @@ export function SignInPanel({
         </div>
       )}
 
-      {hasSocialProviders && (
+      {showSocialProviders && (
         <div className="flex flex-col gap-3">
-          {env.VITE_AUTH_GOOGLE && (
+          {showGoogle && (
             <SocialButton
               disabled={socialLoading !== null}
               icon={<GoogleIcon />}
@@ -219,7 +236,7 @@ export function SignInPanel({
               }}
             />
           )}
-          {env.VITE_AUTH_MICROSOFT && (
+          {showMicrosoft && (
             <SocialButton
               disabled={socialLoading !== null}
               icon={<MicrosoftIcon />}
@@ -240,10 +257,18 @@ export function SignInPanel({
         </div>
       )}
 
-      {showBootstrap && <BootstrapSignUpForm redirectTo={redirectTo} />}
+      {showBootstrap && (
+        <BootstrapSignUpForm
+          hasSocialProviders={showSocialProviders}
+          redirectTo={redirectTo}
+        />
+      )}
 
       {showLocalPassword && !showBootstrap && (
-        <PasswordSignInForm redirectTo={redirectTo} />
+        <PasswordSignInForm
+          hasSocialProviders={showSocialProviders}
+          redirectTo={redirectTo}
+        />
       )}
 
       {showEmailOtp && hasAboveEmailOptions && (
@@ -262,7 +287,7 @@ export function SignInPanel({
             {(field) => (
               <Field name={field.name}>
                 <Input
-                  autoFocus={!hasSocialProviders && !showLocalPassword}
+                  autoFocus={!showSocialProviders && !showLocalPassword}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
                   placeholder={t("auth.emailPlaceholder")}
@@ -303,7 +328,13 @@ export function SignInPanel({
   );
 }
 
-function PasswordSignInForm({ redirectTo }: { redirectTo: string }) {
+function PasswordSignInForm({
+  hasSocialProviders,
+  redirectTo,
+}: {
+  hasSocialProviders: boolean;
+  redirectTo: string;
+}) {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
@@ -412,7 +443,13 @@ function PasswordSignInForm({ redirectTo }: { redirectTo: string }) {
   );
 }
 
-function BootstrapSignUpForm({ redirectTo }: { redirectTo: string }) {
+function BootstrapSignUpForm({
+  hasSocialProviders,
+  redirectTo,
+}: {
+  hasSocialProviders: boolean;
+  redirectTo: string;
+}) {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();

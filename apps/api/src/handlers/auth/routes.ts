@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import { env } from "@/api/env";
 import {
   createAuthMetadataHeaders,
   handleOAuthAuthorizationServerMetadataRequest,
@@ -26,6 +27,15 @@ const applyHeaders = ({
     set.headers[key] = value;
   }
 };
+
+const getSocialAuthCapabilities = () => ({
+  google: !!(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET),
+  microsoft: !!(
+    env.MICROSOFT_AUTH_CLIENT_ID &&
+    env.MICROSOFT_AUTH_CLIENT_SECRET &&
+    env.MICROSOFT_AUTH_TENANT_ID
+  ),
+});
 
 export const authMetadataRoute = new Elysia()
   .options(ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, ({ set }) => {
@@ -74,4 +84,5 @@ export const authCapabilitiesRoute = new Elysia({
   emailOtp: isTransactionalEmailConfigured(),
   localPassword: isSelfhostLocalPasswordAuthEnabled(),
   bootstrap: await isSelfhostBootstrapAvailable(),
+  social: getSocialAuthCapabilities(),
 }));
