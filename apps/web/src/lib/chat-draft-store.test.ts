@@ -158,8 +158,12 @@ describe("shouldApplyStoredDraftToEditor", () => {
   });
 
   test("applies an external draft that differs from the live editor doc", () => {
-    // Thread switch / restore: the store holds content the editor never
-    // authored, so it must be pushed into the editor.
+    // Thread switch / restore: the store holds content this editor did not
+    // author *under the current thread*, so it must be pushed into the editor.
+    // A draft the editor authored in a prior thread also reaches the helper as
+    // `editorAuthoredDraft: false`, because the provider resets its per-thread
+    // authored-doc WeakSet on every thread switch; that ref lifecycle lives in
+    // chat-editor-provider and is not reproducible in this pure-logic test.
     expect(
       shouldApplyStoredDraftToEditor({
         draftDoc: docWithText("restored"),

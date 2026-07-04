@@ -424,7 +424,8 @@ const StickyUserTurn = ({
     );
     observer.observe(target);
     return () => observer.disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- scrollRef/sentinelRef are stable refs; headerMessage.id re-arms on thread switch or prepend
+    // scrollRef/sentinelRef are stable refs; headerMessage.id re-arms on
+    // thread switch or prepend.
   }, [scrollRef, headerMessage.id]);
 
   // Scroll the header back to its natural position. The header itself is

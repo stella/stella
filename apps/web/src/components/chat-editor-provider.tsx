@@ -535,8 +535,13 @@ export const useChatEditor = ({
   // avoid ever pushing editor-authored content back into the editor (see
   // `shouldApplyStoredDraftToEditor`). A WeakSet lets superseded draft docs be
   // collected once the store drops them, and identity membership survives even
-  // when the store has already advanced past a given snapshot — which is what
-  // a lagging passive effect closes over during fast typing.
+  // when the store has already advanced past a given snapshot, which is what a
+  // lagging passive effect closes over during fast typing.
+  //
+  // Marks are per-thread: one mounted editor serves many threads, so a thread
+  // switch resets this set (see the reset effect below). The stored draft for
+  // the incoming thread was authored under the previous thread's set, so it
+  // counts as external and gets restored into the editor.
   const editorAuthoredDocsRef = useRef(new WeakSet<JSONContent>());
   const isNavigatingHistoryRef = useRef(false);
   const draftStartedThreadKeyRef = useRef<string | null>(null);
@@ -586,6 +591,20 @@ export const useChatEditor = ({
   useEffect(() => {
     messageHistoryIndexRef.current = null;
   }, [sentMessageHistoryHtml, threadKey]);
+
+  // Authored marks are per-thread; one mounted editor serves many threads, so a
+  // thread switch must forget the outgoing thread's docs. Reset the set here so
+  // the incoming thread's stored draft counts as external and is restored.
+  // Keyed on `threadKey` alone and declared before the draft-apply effect: it
+  // runs first in the same commit, so the reset lands before that effect reads
+  // membership. Deliberately not folded into the `messageHistoryIndexRef` reset
+  // above (which also fires on `sentMessageHistoryHtml`): clearing marks
+  // mid-thread right after a send could let the lagging draft-apply effect
+  // revert an in-flight keystroke, the exact loop this set prevents.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref reset on id change, not external-system sync
+  useEffect(() => {
+    editorAuthoredDocsRef.current = new WeakSet();
+  }, [threadKey]);
 
   const fetchWorkspaceEntities = useCallback(
     async (workspace: ChatMentionOption, query: string) => {
