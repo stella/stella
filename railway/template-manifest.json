@@ -45,10 +45,7 @@
     "api": {
       "configFile": "/railway.json",
       "publicNetworking": true,
-      "requiredUserInputs": {
-        "SMTP_PASSWORD": "SMTP password or API key for sign-in and invitation emails.",
-        "TRANSACTIONAL_EMAIL_FROM": "From address for transactional emails."
-      },
+      "requiredUserInputs": {},
       "variables": {
         "BETTER_AUTH_SECRET": "${{secret(64, \"abcdef0123456789\")}}",
         "BETTER_AUTH_URL": "https://${{api.RAILWAY_PUBLIC_DOMAIN}}",
@@ -65,11 +62,8 @@
         "S3_ENDPOINT": "${{stella-files.ENDPOINT}}",
         "S3_REGION": "${{stella-files.REGION}}",
         "S3_SECRET_ACCESS_KEY": "${{stella-files.SECRET_ACCESS_KEY}}",
-        "SMTP_HOST": "smtp.resend.com",
-        "SMTP_PASSWORD": "smtp-password",
-        "SMTP_PORT": "587",
-        "SMTP_USERNAME": "resend",
-        "TRANSACTIONAL_EMAIL_FROM": "noreply@example.invalid"
+        "SELFHOST_BOOTSTRAP_TOKEN": "${{secret(40, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789\")}}",
+        "SELFHOST_LOCAL_PASSWORD_AUTH": "true"
       }
     },
     "web": {

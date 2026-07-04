@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import { env } from "@/api/env";
 import {
   createAuthMetadataHeaders,
   handleOAuthAuthorizationServerMetadataRequest,
@@ -9,6 +10,11 @@ import {
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth-paths";
+import { isTransactionalEmailConfigured } from "@/api/lib/email";
+import {
+  isSelfhostBootstrapAvailable,
+  isSelfhostLocalPasswordAuthEnabled,
+} from "@/api/lib/selfhost-auth";
 
 const applyHeaders = ({
   headers,
@@ -21,6 +27,15 @@ const applyHeaders = ({
     set.headers[key] = value;
   }
 };
+
+const getSocialAuthCapabilities = () => ({
+  google: !!(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET),
+  microsoft: !!(
+    env.MICROSOFT_AUTH_CLIENT_ID &&
+    env.MICROSOFT_AUTH_CLIENT_SECRET &&
+    env.MICROSOFT_AUTH_TENANT_ID
+  ),
+});
 
 export const authMetadataRoute = new Elysia()
   .options(ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, ({ set }) => {
@@ -62,3 +77,12 @@ export const authMetadataRoute = new Elysia()
     async ({ request }) =>
       await handleOAuthAuthorizationServerMetadataRequest(request),
   );
+
+export const authCapabilitiesRoute = new Elysia({
+  prefix: "/auth",
+}).get("/capabilities", async () => ({
+  emailOtp: isTransactionalEmailConfigured(),
+  localPassword: isSelfhostLocalPasswordAuthEnabled(),
+  bootstrap: await isSelfhostBootstrapAvailable(),
+  social: getSocialAuthCapabilities(),
+}));

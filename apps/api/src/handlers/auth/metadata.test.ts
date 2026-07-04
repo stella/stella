@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { authMetadataRoute } from "@/api/handlers/auth/routes";
+import {
+  authCapabilitiesRoute,
+  authMetadataRoute,
+} from "@/api/handlers/auth/routes";
 import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
@@ -84,5 +87,28 @@ describe("OAuth authorization server metadata", () => {
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",
     );
+  });
+});
+
+describe("auth capabilities", () => {
+  test("reports social providers as unavailable when provider credentials are not configured", async () => {
+    const response = await authCapabilitiesRoute.handle(
+      new Request("http://localhost/auth/capabilities"),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = v.parse(
+      v.object({
+        social: v.object({
+          google: v.literal(false),
+          microsoft: v.literal(false),
+        }),
+      }),
+      await response.json(),
+    );
+
+    expect(body.social.google).toBe(false);
+    expect(body.social.microsoft).toBe(false);
   });
 });

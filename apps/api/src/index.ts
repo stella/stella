@@ -6,7 +6,10 @@ import { env } from "@/api/env";
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
-import { authMetadataRoute } from "@/api/handlers/auth/routes";
+import {
+  authCapabilitiesRoute,
+  authMetadataRoute,
+} from "@/api/handlers/auth/routes";
 import { authUiRoute } from "@/api/handlers/auth/ui-routes";
 import { billingCodesRoute } from "@/api/handlers/billing-codes/routes";
 import { caseLawRoute } from "@/api/handlers/case-law/routes";
@@ -348,6 +351,7 @@ const api = new Elysia()
           },
         }),
       )
+      .use(authCapabilitiesRoute)
       .use(workspaceEventsRoute)
       .use(workspacesRoute)
       .use(playbooksRoute)

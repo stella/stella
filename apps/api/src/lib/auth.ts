@@ -36,6 +36,7 @@ import { tUuid } from "@/api/lib/custom-schema";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import {
+  isTransactionalEmailConfigured,
   sendNewDeviceLoginEmail,
   sendOrganizationInvitation,
   sendOTPEmail,
@@ -56,6 +57,11 @@ import {
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
+  assertSelfhostBootstrapSignUp,
+  isSelfhostLocalPasswordAuthEnabled,
+  shouldHandleSelfhostBootstrapPath,
+} from "@/api/lib/selfhost-auth";
+import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
   MCP_OAUTH_SCOPES,
@@ -68,6 +74,11 @@ const ACCESS_TOKEN_EXPIRES_IN = 15 * 60;
 const REFRESH_TOKEN_EXPIRES_IN = 30 * 24 * 60 * 60;
 
 const VERIFY_EMAIL_PATH = "/email-otp/verify-email";
+const SIGN_IN_EMAIL_PATH = "/sign-in/email";
+const NEW_SESSION_SECURITY_PATHS = new Set([
+  VERIFY_EMAIL_PATH,
+  SIGN_IN_EMAIL_PATH,
+]);
 const PREFERRED_NAME_MAX_LENGTH = 120;
 const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
@@ -239,6 +250,7 @@ const createAuth = () => {
       ),
       customRules: {
         "/sign-in/email-otp": AUTH_RATE_LIMITS.signIn,
+        "/sign-in/email": AUTH_RATE_LIMITS.signIn,
         "/sign-up/email": AUTH_RATE_LIMITS.signUp,
         "/email-otp/send-verification-otp": AUTH_RATE_LIMITS.sendOtp,
         "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
@@ -246,6 +258,14 @@ const createAuth = () => {
         "/reset-password": AUTH_RATE_LIMITS.resetPassword,
       },
     },
+    emailAndPassword: isSelfhostLocalPasswordAuthEnabled()
+      ? {
+          enabled: true,
+          autoSignIn: true,
+          minPasswordLength: 12,
+          requireEmailVerification: false,
+        }
+      : undefined,
     databaseHooks: {
       user: {
         create: {
@@ -307,6 +327,12 @@ const createAuth = () => {
             console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
             stashDevOtp(email, otp);
             return;
+          }
+
+          if (!isTransactionalEmailConfigured()) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Email sign-in is not configured for this instance.",
+            });
           }
 
           const lang = extractLangFromRequest(ctx?.request);
@@ -414,8 +440,22 @@ const createAuth = () => {
       }) as BetterAuthPlugin,
     ],
     hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
+          return;
+        }
+
+        await assertSelfhostBootstrapSignUp(ctx.body);
+      }),
       after: createAuthMiddleware(async (ctx) => {
-        if (ctx.path !== VERIFY_EMAIL_PATH || env.isDev) {
+        if (!NEW_SESSION_SECURITY_PATHS.has(ctx.path) || env.isDev) {
+          return;
+        }
+
+        if (
+          ctx.path === SIGN_IN_EMAIL_PATH &&
+          !isTransactionalEmailConfigured()
+        ) {
           return;
         }
 

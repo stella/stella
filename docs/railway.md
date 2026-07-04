@@ -47,11 +47,16 @@ S3_REGION=${{stella-files.REGION}}
 S3_ACCESS_KEY_ID=${{stella-files.ACCESS_KEY_ID}}
 S3_SECRET_ACCESS_KEY=${{stella-files.SECRET_ACCESS_KEY}}
 
-SMTP_HOST=smtp.resend.com
-SMTP_PASSWORD=<smtp password or API key>
-SMTP_PORT=587
-SMTP_USERNAME=resend
-TRANSACTIONAL_EMAIL_FROM=noreply@example.com
+SELFHOST_LOCAL_PASSWORD_AUTH=true
+SELFHOST_BOOTSTRAP_TOKEN=${{secret(40, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")}}
+
+# Optional, only when you want email OTP sign-in and invitations.
+# EMAIL_PROVIDER=smtp
+# SMTP_HOST=smtp.resend.com
+# SMTP_PASSWORD=<smtp password or API key>
+# SMTP_PORT=587
+# SMTP_USERNAME=resend
+# TRANSACTIONAL_EMAIL_FROM=noreply@example.com
 
 GOTENBERG_URL=http://${{gotenberg.RAILWAY_PRIVATE_DOMAIN}}:3000
 GOTENBERG_USERNAME=${{gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME}}
@@ -69,11 +74,13 @@ GOTENBERG_API_BASIC_AUTH_PASSWORD=${{secret(64, "abcdef0123456789")}}
 The API Docker image now honors Railway's injected `PORT` variable, with
 `STELLA_API_PORT` still available as an explicit override.
 
-For the public template, default the SMTP connection to Resend-compatible SMTP
-settings. Only the SMTP password/API key and transactional sender address should
-be required user inputs. Use Railway template variable functions for generated
-secrets and Railway reference variables for same-project services. The
-repository source of truth for this shape is `railway/template-manifest.json`.
+For the public template, require no user inputs on first deploy. The template
+enables self-host local password auth and generates a one-time bootstrap token
+for creating the first account. SMTP/SES remains optional; operators can add it
+later for email OTP sign-in, invitations, and account security emails. Use
+Railway template variable functions for generated secrets and Railway reference
+variables for same-project services. The repository source of truth for this
+shape is `railway/template-manifest.json`.
 
 Template editor checklist for `api` variables:
 
@@ -86,11 +93,14 @@ Template editor checklist for `api` variables:
 | `PUBLIC_URL`               | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`            | No           |
 | `BETTER_AUTH_SECRET`       | `${{secret(64, "abcdef0123456789")}}`               | No           |
 | `CONTENT_ENCRYPTION_KEY`   | `${{secret(64, "abcdef0123456789")}}`               | No           |
-| `SMTP_HOST`                | `smtp.resend.com`                                   | No           |
-| `SMTP_PASSWORD`            | SMTP password or API key                            | Yes          |
-| `SMTP_PORT`                | `587`                                               | No           |
-| `SMTP_USERNAME`            | `resend`                                            | No           |
-| `TRANSACTIONAL_EMAIL_FROM` | Verified sender address                             | Yes          |
+| `SELFHOST_LOCAL_PASSWORD_AUTH` | `true`                                          | No           |
+| `SELFHOST_BOOTSTRAP_TOKEN` | `${{secret(40, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")}}` | No           |
+| `EMAIL_PROVIDER`           | Optional: `smtp` or `ses`                           | No           |
+| `SMTP_HOST`                | Optional SMTP host                                  | No           |
+| `SMTP_PASSWORD`            | Optional SMTP password or API key                   | No           |
+| `SMTP_PORT`                | Optional SMTP port                                  | No           |
+| `SMTP_USERNAME`            | Optional SMTP username                              | No           |
+| `TRANSACTIONAL_EMAIL_FROM` | Optional verified sender address                    | No           |
 | `S3_ENDPOINT`              | `${{stella-files.ENDPOINT}}`                        | No           |
 | `S3_BUCKET`                | `${{stella-files.BUCKET}}`                          | No           |
 | `S3_REGION`                | `${{stella-files.REGION}}`                          | No           |
@@ -179,15 +189,17 @@ publishing. Check these items before the first publish:
 - `web` config path is `/railway/web.railway.json`.
 - `api`, `web`, Postgres, Redis, Gotenberg, and the storage bucket all deploy
   from the template into a fresh project.
-- Generated values use `secret(...)`; user-supplied credentials are prompted,
-  not committed.
-- Only `SMTP_PASSWORD` and `TRANSACTIONAL_EMAIL_FROM` are required user inputs.
-  SMTP host, port, and username should use the template defaults.
+- Generated values use `secret(...)`; no deploy-time user credentials are
+  required.
+- `SELFHOST_LOCAL_PASSWORD_AUTH=true` and `SELFHOST_BOOTSTRAP_TOKEN` is a
+  generated secret so the deployer can create the first account without SMTP.
+- SMTP/SES variables are absent from the template by default and can be added
+  later by operators who want email OTP sign-in or invitations.
 - Gotenberg has no public domain.
 - Both public domains pass `/health`.
 - The marketplace overview uses `railway/template-readme.md`.
 
-After editing the draft variables, validate that only the intended user prompts
+After editing the draft variables, validate that no unintended user prompts
 remain:
 
 ```bash
