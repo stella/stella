@@ -257,10 +257,10 @@ export type UsageMeteringConfig = {
 };
 
 export type HandlerConfig<
-  TBody = any,
-  TParams = any,
-  TQuery = any,
-  TAuditResult = any,
+  TBody = unknown,
+  TParams = unknown,
+  TQuery = unknown,
+  TAuditResult = unknown,
 > = InputSchema & {
   permissions: PermissionInput;
   requiresUsage?: UsageMeteringConfig;
@@ -555,7 +555,7 @@ const runSafeHandler = async <
 };
 
 const createSafeScopedHandler = <
-  TConfig extends HandlerConfig<any, any, any>,
+  TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
   TResult extends SafeHandlerPayload,
  >(
@@ -573,12 +573,12 @@ const createSafeScopedHandler = <
 
     let hasLogged = false;
 
-    if (config.audit) {
+    if (config.audit !== undefined && config.audit !== false) {
       const recordAudit = async (
         tx: Transaction,
-        result: any,
+        result: unknown,
       ) => {
-        if (hasLogged || !config.audit) {
+        if (hasLogged || config.audit === undefined || config.audit === false) {
           return;
         }
         const reqCtx = {
