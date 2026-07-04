@@ -237,22 +237,9 @@ export default defineConfig({
     "unicorn/no-array-reduce": "error",
     "unicorn/no-array-sort": "off",
     "unicorn/no-useless-spread": "off",
-    "oxc/no-map-spread": "error",
-    // Spreading an accumulator inside a loop body or a `.reduce()`
-    // callback is O(n^2): every iteration copies the whole accumulator
-    // instead of appending in place. AGENTS.md: "Avoid spread in loop
-    // accumulators (use `.push()`)."
-    "oxc/no-accumulating-spread": "error",
-    // Identical leading/trailing statements across if/else branches (or
-    // switch cases) hide the actual difference between branches and are a
-    // common source of copy-paste drift; hoist the shared code out.
-    "oxc/branches-sharing-code": "error",
-    "eslint/prefer-arrow-callback": "error",
-    "unicorn/no-array-fill-with-reference-type": "error",
     // NOT enabled: unicorn/prefer-number-coercion. Its parseInt(x, 10) ->
     // Number(x) transform is not semantics-preserving (lenient prefix parsing,
     // "" handling, hex strings); ingestion adapters rely on parseInt behavior.
-    "import/newline-after-import": "error",
     "unicorn/no-await-expression-member": "off",
     // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
     "unicorn/no-nested-ternary": "off",
@@ -392,6 +379,90 @@ export default defineConfig({
     ...(core.overrides ?? []),
     ...libraryOverrides,
     {
+      // react/react-compiler burn-down list. Enabling react-compiler
+      // (via @stll/oxlint-config libraryRules) flags existing code that
+      // reads refs during render, mutates props/state, or otherwise
+      // breaks the React Compiler rules. The rule stays live for all new
+      // code; these files are grandfathered and must be fixed and removed
+      // from this list one at a time. Do NOT add new files here.
+      files: [
+        "apps/desktop/src/i18n/index.tsx",
+        "apps/playground/src/App.tsx",
+        "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx",
+        "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx",
+        "apps/web/src/components/ai-suggestions/host.tsx",
+        "apps/web/src/components/ai-suggestions/use-ai-suggestion-thread.ts",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/chat-editor-provider.tsx",
+        "apps/web/src/components/chat-mention-list.tsx",
+        "apps/web/src/components/chat-pasted-text-node.tsx",
+        "apps/web/src/components/chat/ask-user-card.tsx",
+        "apps/web/src/components/chat/chat-thread-messages.tsx",
+        "apps/web/src/components/chat/prompt-slash-list.tsx",
+        "apps/web/src/components/chat/tool-approval-card.tsx",
+        "apps/web/src/components/inspector/anonymization-facet.tsx",
+        "apps/web/src/components/inspector/document-ai-source-bar.tsx",
+        "apps/web/src/components/inspector/entity-metadata-panel.tsx",
+        "apps/web/src/components/inspector/external-reference-panel.tsx",
+        "apps/web/src/components/inspector/inspector-panel.tsx",
+        "apps/web/src/components/inspector/inspector-rail.tsx",
+        "apps/web/src/components/inspector/skill-resource-panel.tsx",
+        "apps/web/src/components/inspector/use-docx-tab-edit-session.ts",
+        "apps/web/src/components/inspector/use-file-tab-rename.ts",
+        "apps/web/src/components/inspector/versions-facet.tsx",
+        "apps/web/src/components/require-ai-key.tsx",
+        "apps/web/src/components/route-components.tsx",
+        "apps/web/src/components/search-dialog.tsx",
+        "apps/web/src/components/shortcut-hints-overlay.tsx",
+        "apps/web/src/components/sidebar.tsx",
+        "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts",
+        "apps/web/src/lib/pdf/hooks/use-page-visibility.ts",
+        "apps/web/src/lib/pdf/pdf-viewport.tsx",
+        "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts",
+        "apps/web/src/routes/_protected.chat/index.tsx",
+        "apps/web/src/routes/_protected.contacts/-components/contact-notes-editor.tsx",
+        "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx",
+        "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx",
+        "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx",
+        "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx",
+        "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx",
+        "apps/web/src/routes/_protected.knowledge/clauses.tsx",
+        "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx",
+        "apps/web/src/routes/_protected.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes.ts",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx",
+        "apps/web/src/routes/auth/organization.tsx",
+        "apps/web/src/routes/law/cases/index.tsx",
+        "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx",
+        "apps/web/src/routes/onboarding/-components/steps/ai-step.tsx",
+        "packages/ui/src/components/combobox.tsx",
+        "packages/ui/src/components/hex-color-picker.tsx",
+        "packages/ui/src/components/outline-rail.tsx",
+        "packages/ui/src/hooks/use-mobile.ts",
+      ],
+      rules: { "react/react-compiler": "off" },
+    },
+    {
       // Custom oxlint plugin rules traverse AST nodes that the runtime
       // delivers as untyped (effectively `any`). Strict any-flow rules
       // produce noise without real safety here.
@@ -405,6 +476,10 @@ export default defineConfig({
         "typescript/strict-boolean-expressions": "off",
         "require-unicode-regexp": "off",
         "no-nested-ternary": "off",
+        // Regression fixtures deliberately embed ref-during-render and
+        // stale-closure patterns to exercise the custom plugin rules; they
+        // are not product code, so react-compiler noise stays off here.
+        "react/react-compiler": "off",
         // Plugin sources and fixtures embed directive strings as
         // documentation/regression examples; do not lint them as real
         // directives.

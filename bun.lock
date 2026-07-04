@@ -5,7 +5,7 @@
     "": {
       "name": "stella",
       "devDependencies": {
-        "@stll/oxlint-config": "0.3.0",
+        "@stll/oxlint-config": "0.4.0",
         "@stll/typescript-config": "workspace:^0.0.0",
         "@tanstack/eslint-plugin-query": "catalog:",
         "@tanstack/eslint-plugin-router": "catalog:",
@@ -1720,7 +1720,7 @@
 
     "@stll/money": ["@stll/money@workspace:packages/money"],
 
-    "@stll/oxlint-config": ["@stll/oxlint-config@0.3.0", "", { "peerDependencies": { "oxlint": ">=1.66.0", "oxlint-tsgolint": ">=0.23.0" } }, "sha512-kT4jS/0mgMejp5LUrQ7joHljyphqQr2kk2zGyuJGiJqFz7pHnp9lPJw5WmDyoOqEC34+jkHh0vPeNcZIEiXhog=="],
+    "@stll/oxlint-config": ["@stll/oxlint-config@0.4.0", "", { "peerDependencies": { "oxlint": ">=1.70.0", "oxlint-tsgolint": ">=0.23.0" } }, "sha512-IpACzB0EX71F6ovmSlTbzALydEufAK7FIlwY3iTCOCVo0ChAgDqP6YBtRI0qMEFWuGm4qM4zxU8YxfWFHmW5sg=="],
 
     "@stll/permissions": ["@stll/permissions@workspace:packages/permissions"],
 

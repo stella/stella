@@ -49,7 +49,7 @@
     "postinstall": "bun run lint:ws"
   },
   "devDependencies": {
-    "@stll/oxlint-config": "0.3.0",
+    "@stll/oxlint-config": "0.4.0",
     "@stll/typescript-config": "workspace:^0.0.0",
     "@tanstack/eslint-plugin-query": "catalog:",
     "@tanstack/eslint-plugin-router": "catalog:",
