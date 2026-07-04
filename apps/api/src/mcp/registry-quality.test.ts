@@ -26,23 +26,24 @@ const SURFACES = [
 
 type SurfaceMode = (typeof SURFACES)[number]["mode"];
 
-// Zero-buffer ceilings pinned to the measured counts: default 31 tools (23 +
-// the 8 matter/contact/task tools), anonymized 17 tools (15 + the two new read
-// tools list_tasks and lookup_business_registry; the six matter/contact/task
-// writes stay excluded from the anonymized projection). Any tool added to
-// either surface must bump the matching ceiling deliberately.
+// Zero-buffer ceilings pinned to the measured counts: default 36 tools (31 +
+// the 5 clause/playbook knowledge tools), anonymized 19 tools (17 + the two new
+// read tools list_clauses and list_playbooks; the three knowledge write tools
+// save_clause/delete_clause/run_playbook stay excluded from the anonymized
+// projection). Any tool added to either surface must bump the matching ceiling
+// deliberately.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 31,
-  anonymized: 17,
+  default: 36,
+  anonymized: 19,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
-// `toMcpTools`). Measured: default 32_629 chars (~8.2k tokens), anonymized
-// 12_484 chars (~3.1k tokens). Ceilings sit ~10-15% above so organic growth
+// `toMcpTools`). Measured: default 38_629 chars (~9.7k tokens), anonymized
+// 14_562 chars (~3.6k tokens). Ceilings sit ~10-15% above so organic growth
 // fits but a surface-size jump must be a deliberate constant bump.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 37_000,
-  anonymized: 14_000,
+  default: 44_000,
+  anonymized: 16_500,
 };
 
 // Longest description measured 2026-07-02: create_template at 791 chars

@@ -883,6 +883,7 @@
     "permissions": "See lubab rakendusel:",
     "scopeDocumentsWrite": "Luua, muuta ja kustutada teie dokumente",
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
+    "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid, kontakte ja ülesandeid",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",

@@ -597,6 +597,8 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_properties",
       "lookup_business_registry",
       "list_tasks",
+      "list_clauses",
+      "list_playbooks",
     ]);
   });
 

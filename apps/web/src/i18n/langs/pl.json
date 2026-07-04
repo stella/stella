@@ -883,6 +883,7 @@
     "permissions": "Spowoduje to przyznanie aplikacji dostępu do:",
     "scopeDocumentsWrite": "Tworzenie, edytowanie i usuwanie Twoich dokumentów",
     "scopeExternalMcps": "Korzystanie z połączonych narzędzi zewnętrznych",
+    "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",
     "scopeMattersWrite": "Tworzenie i edytowanie Twoich spraw, kontaktów i zadań",
     "scopeOnboarding": "Skonfiguruj jurysdykcje praktyki swojej organizacji",
     "scopeProfile": "Dostęp do Twoich danych profilowych",

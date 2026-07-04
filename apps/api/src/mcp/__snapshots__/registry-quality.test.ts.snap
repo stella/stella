@@ -1547,6 +1547,262 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id"
       ]
     }
+  },
+  {
+    "name": "list_clauses",
+    "scope": "stella:read",
+    "description": "List the clause library for this organization, or read one clause in detail. Pass clause_id to get a clause's body, description, usage notes, variants, and version history; add version_id to read one version's body. Otherwise list clauses (newest first), optionally filtered by category_id or a text query, and set include_categories to also return the category tree. Returns each clause's id, title, category, language, and current version.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "clause_id": {
+          "type": "string",
+          "description": "Clause id to read in detail; omit to list"
+        },
+        "version_id": {
+          "type": "string",
+          "description": "With clause_id, return this version's body instead of the current clause"
+        },
+        "category_id": {
+          "type": "string",
+          "description": "List only clauses filed under this category (list mode)"
+        },
+        "query": {
+          "type": "string",
+          "description": "Filter clauses by a text query over title and body (list mode)"
+        },
+        "include_categories": {
+          "type": "boolean",
+          "description": "Also return the organization's clause categories (list mode)"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max clauses to return",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_clauses call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "save_clause",
+    "scope": "stella:knowledge_write",
+    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional formatting. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "clause_id": {
+          "type": "string",
+          "description": "Clause id to update; omit to create"
+        },
+        "title": {
+          "type": "string",
+          "description": "Clause title; required when creating",
+          "maxLength": 256
+        },
+        "body": {
+          "type": "array",
+          "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Paragraph plain text"
+              },
+              "style": {
+                "type": "string",
+                "description": "Optional paragraph style name"
+              },
+              "level": {
+                "type": "integer",
+                "description": "Optional heading/outline level"
+              },
+              "runs": {
+                "type": "array",
+                "description": "Optional inline formatting runs whose text concatenates to the paragraph",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "Run text"
+                    },
+                    "bold": {
+                      "type": "boolean",
+                      "description": "Render the run bold"
+                    },
+                    "italic": {
+                      "type": "boolean",
+                      "description": "Render the run italic"
+                    }
+                  },
+                  "required": [
+                    "text"
+                  ]
+                }
+              },
+              "listKind": {
+                "type": "string",
+                "enum": [
+                  "bullet",
+                  "ordered"
+                ],
+                "description": "List item kind when the paragraph is a list item"
+              },
+              "listLevel": {
+                "type": "integer",
+                "description": "0-based list nesting depth for a list item"
+              },
+              "isDirective": {
+                "type": "boolean",
+                "description": "Whether the paragraph is a template directive marker"
+              },
+              "directiveKind": {
+                "type": "string",
+                "enum": [
+                  "if",
+                  "elseif",
+                  "else",
+                  "endif",
+                  "each",
+                  "endeach"
+                ],
+                "description": "Directive kind when isDirective is set"
+              },
+              "directiveExpression": {
+                "type": "string",
+                "description": "Directive expression for an if/each directive"
+              }
+            },
+            "required": [
+              "text"
+            ]
+          }
+        },
+        "category_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Category id to file the clause under; pass null to clear"
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "BCP-47 language tag for the clause; pass null to clear",
+          "maxLength": 10
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Short clause description; pass null to clear",
+          "maxLength": 2000
+        },
+        "usage_notes": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Guidance on when to use the clause; pass null to clear",
+          "maxLength": 2000
+        },
+        "metadata": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Free-form metadata object; pass null to clear",
+          "additionalProperties": true
+        },
+        "snapshot_version": {
+          "type": "boolean",
+          "description": "When updating, also append a version snapshot of the body"
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_clause",
+    "scope": "stella:knowledge_write",
+    "description": "Permanently delete a clause and all its variants and versions from the organization's clause library. This is irreversible.",
+    "annotations": {
+      "destructiveHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "clause_id": {
+          "type": "string",
+          "description": "Clause id to delete"
+        }
+      },
+      "required": [
+        "clause_id"
+      ]
+    }
+  },
+  {
+    "name": "list_playbooks",
+    "scope": "stella:read",
+    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, standards, and grading rules), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "playbook_id": {
+          "type": "string",
+          "description": "Playbook id to read in detail; omit to list playbooks"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max playbooks to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_playbooks call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "run_playbook",
+    "scope": "stella:knowledge_write",
+    "description": "Run a review playbook over a matter's documents. Materializes the playbook's extraction and verdict columns onto the matter's table and starts the AI review; findings populate asynchronously. Pass matter_id and playbook_id. Returns the number of columns queued for review.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace id to run the playbook over"
+        },
+        "playbook_id": {
+          "type": "string",
+          "description": "Playbook id to run"
+        }
+      },
+      "required": [
+        "matter_id",
+        "playbook_id"
+      ]
+    }
   }
 ]"
 `;
@@ -2066,6 +2322,78 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         "cursor": {
           "type": "string",
           "description": "Opaque cursor from a previous list_tasks call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "list_clauses",
+    "scope": "stella:read_anonymized",
+    "description": "List the clause library for this organization, or read one clause in detail. Pass clause_id to get a clause's body, description, usage notes, variants, and version history; add version_id to read one version's body. Otherwise list clauses (newest first), optionally filtered by category_id or a text query, and set include_categories to also return the category tree. Returns each clause's id, title, category, language, and current version.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "clause_id": {
+          "type": "string",
+          "description": "Clause id to read in detail; omit to list"
+        },
+        "version_id": {
+          "type": "string",
+          "description": "With clause_id, return this version's body instead of the current clause"
+        },
+        "category_id": {
+          "type": "string",
+          "description": "List only clauses filed under this category (list mode)"
+        },
+        "query": {
+          "type": "string",
+          "description": "Filter clauses by a text query over title and body (list mode)"
+        },
+        "include_categories": {
+          "type": "boolean",
+          "description": "Also return the organization's clause categories (list mode)"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max clauses to return",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_clauses call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "list_playbooks",
+    "scope": "stella:read_anonymized",
+    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, standards, and grading rules), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "playbook_id": {
+          "type": "string",
+          "description": "Playbook id to read in detail; omit to list playbooks"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max playbooks to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_playbooks call to fetch the next page",
           "maxLength": 512
         }
       }

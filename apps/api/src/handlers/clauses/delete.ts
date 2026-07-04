@@ -23,7 +23,7 @@ type DeleteClauseProps = {
   recordAuditEvent: AuditRecorder;
 };
 
-const deleteClauseHandler = async function* ({
+export const deleteClauseHandler = async function* ({
   safeDb,
   organizationId,
   clauseId,
@@ -93,7 +93,7 @@ const deleteClauseHandler = async function* ({
 
 const config = {
   permissions: { clause: ["delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "tool", name: "delete_clause" },
   params: deleteClauseParamsSchema,
 } satisfies HandlerConfig;
 
