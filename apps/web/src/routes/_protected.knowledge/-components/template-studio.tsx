@@ -1061,8 +1061,8 @@ export const TemplateStudioPage = ({
             return;
           }
         }
+        const $from = state.doc.resolve(from);
         if (from === to) {
-          const $from = state.doc.resolve(from);
           const pos =
             $from.depth >= 1
               ? $from.after(paragraphDepth($from, paragraph))
@@ -1074,7 +1074,6 @@ export const TemplateStudioPage = ({
             ).scrollIntoView(),
           );
         } else {
-          const $from = state.doc.resolve(from);
           const $to = state.doc.resolve(to);
           const start =
             $from.depth >= 1

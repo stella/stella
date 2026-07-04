@@ -21,7 +21,7 @@
 </style>
 
 <script is:inline>
-  document.querySelector("#theme-toggle").addEventListener("click", function() {
+  document.querySelector("#theme-toggle").addEventListener("click", () => {
     var d = document.documentElement.classList;
     var isDark = d.contains("dark");
     var systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;

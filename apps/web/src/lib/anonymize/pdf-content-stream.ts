@@ -333,20 +333,20 @@ export const replaceStringContent = (line: string): string => {
             result.push(" ");
             i++;
           }
-        } else if (line[i] === "(") {
-          depth++;
-          result.push(" ");
-          i++;
-        } else if (line[i] === ")") {
-          depth--;
-          if (depth === 0) {
-            result.push(")");
+        } else {
+          if (line[i] === "(") {
+            depth++;
+            result.push(" ");
+          } else if (line[i] === ")") {
+            depth--;
+            if (depth === 0) {
+              result.push(")");
+            } else {
+              result.push(" ");
+            }
           } else {
             result.push(" ");
           }
-          i++;
-        } else {
-          result.push(" ");
           i++;
         }
       }

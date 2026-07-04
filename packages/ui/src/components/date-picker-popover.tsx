@@ -311,13 +311,13 @@ function DatePickerPopover({
           d.setUTCMonth(d.getUTCMonth() + 1);
         }
         next = toISODate(d);
-      } else if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        if (!isDayDisabled(current)) {
-          onChange(current);
-        }
-        return;
       } else {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          if (!isDayDisabled(current)) {
+            onChange(current);
+          }
+        }
         return;
       }
 

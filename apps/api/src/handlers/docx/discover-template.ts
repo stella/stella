@@ -404,11 +404,9 @@ const analyzeContainer = (
           // Register the root as an object
           registerField(fields, root, "object");
         }
-        // Register the full path as string
-        registerField(fields, name, "string");
-      } else {
-        registerField(fields, name, "string");
       }
+      // Register the full path as string
+      registerField(fields, name, "string");
     }
   }
 

@@ -243,6 +243,16 @@ export default defineConfig({
     // instead of appending in place. AGENTS.md: "Avoid spread in loop
     // accumulators (use `.push()`)."
     "oxc/no-accumulating-spread": "error",
+    // Identical leading/trailing statements across if/else branches (or
+    // switch cases) hide the actual difference between branches and are a
+    // common source of copy-paste drift; hoist the shared code out.
+    "oxc/branches-sharing-code": "error",
+    "eslint/prefer-arrow-callback": "error",
+    "unicorn/no-array-fill-with-reference-type": "error",
+    // NOT enabled: unicorn/prefer-number-coercion. Its parseInt(x, 10) ->
+    // Number(x) transform is not semantics-preserving (lenient prefix parsing,
+    // "" handling, hex strings); ingestion adapters rely on parseInt behavior.
+    "import/newline-after-import": "error",
     "unicorn/no-await-expression-member": "off",
     // Candidate strict rule, not enabled yet: overlaps with no-nested-ternary.
     "unicorn/no-nested-ternary": "off",

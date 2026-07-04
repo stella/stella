@@ -157,20 +157,18 @@ const presignUpload = createSafeHandler(
       if (Result.isError(validation)) {
         return validation;
       }
-    } else if (purposeBody.purpose === "entity_version") {
-      const validation = yield* validateEntityVersion({
-        safeDb,
-        workspaceId,
-        entityId: purposeBody.entityId,
-      });
-      if (validation.status === "error") {
-        return validation;
-      }
     } else {
-      const validation = yield* validateAgentSkill({
-        memberRole,
-        scope: purposeBody.scope,
-      });
+      const validation =
+        purposeBody.purpose === "entity_version"
+          ? yield* validateEntityVersion({
+              safeDb,
+              workspaceId,
+              entityId: purposeBody.entityId,
+            })
+          : yield* validateAgentSkill({
+              memberRole,
+              scope: purposeBody.scope,
+            });
       if (validation.status === "error") {
         return validation;
       }
