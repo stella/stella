@@ -9,7 +9,7 @@ import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
   permissions: { playbook: ["apply"] },
-  mcp: { type: "pending" },
+  mcp: { type: "tool", name: "run_playbook" },
   params: workspaceParams({ playbookId: tSafeId("playbookDefinition") }),
 } satisfies HandlerConfig;
 

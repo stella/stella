@@ -46,7 +46,7 @@ type CreateClauseProps = {
   recordAuditEvent: AuditRecorder;
 };
 
-const createClauseHandler = async function* ({
+export const createClauseHandler = async function* ({
   safeDb,
   organizationId,
   userId,
@@ -165,7 +165,7 @@ const createClauseHandler = async function* ({
 
 const config = {
   permissions: { clause: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "tool", name: "save_clause" },
   body: createClauseBodySchema,
 } satisfies HandlerConfig;
 

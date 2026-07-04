@@ -883,6 +883,7 @@
     "permissions": "Toto umožní aplikácii:",
     "scopeDocumentsWrite": "Vytvoriť, upraviť a vymazať vaše dokumenty",
     "scopeExternalMcps": "Použitie vašich pripojených externých nástrojov",
+    "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",
     "scopeMattersWrite": "Vytvoriť a upraviť vaše spisy, kontakty a úlohy",
     "scopeOnboarding": "Nastavte jurisdikcie praxe vašej organizácie",
     "scopeProfile": "Pristupovať k informáciám o vašom profile",

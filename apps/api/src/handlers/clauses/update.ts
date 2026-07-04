@@ -69,7 +69,7 @@ type UpdateClauseProps = {
   recordAuditEvent: AuditRecorder;
 };
 
-const updateClauseHandler = async function* ({
+export const updateClauseHandler = async function* ({
   safeDb,
   organizationId,
   clauseId,
@@ -347,7 +347,7 @@ const updateClauseHandler = async function* ({
 
 const config = {
   permissions: { clause: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "covered", by: "save_clause" },
   params: updateClauseParamsSchema,
   body: updateClauseBodySchema,
 } satisfies HandlerConfig;

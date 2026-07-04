@@ -5,7 +5,7 @@ import { listCategoriesHandler } from "./categories";
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "covered", by: "list_clauses" },
 } satisfies HandlerConfig;
 
 const listClauseCategories = createSafeRootHandler(

@@ -20,6 +20,7 @@ import {
   listGatewayMcpToolDefinitions,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
+import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
@@ -75,6 +76,11 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["list_tasks", MATTER_TOOL_HANDLERS.list_tasks],
   ["save_task", MATTER_TOOL_HANDLERS.save_task],
   ["link_matter_contact", MATTER_TOOL_HANDLERS.link_matter_contact],
+  ["list_clauses", KNOWLEDGE_TOOL_HANDLERS.list_clauses],
+  ["save_clause", KNOWLEDGE_TOOL_HANDLERS.save_clause],
+  ["delete_clause", KNOWLEDGE_TOOL_HANDLERS.delete_clause],
+  ["list_playbooks", KNOWLEDGE_TOOL_HANDLERS.list_playbooks],
+  ["run_playbook", KNOWLEDGE_TOOL_HANDLERS.run_playbook],
 ]);
 
 export const getMcpToolDefinition = async (

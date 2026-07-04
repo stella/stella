@@ -883,6 +883,7 @@
     "permissions": "Ez lehetővé teszi az alkalmazás számára, hogy:",
     "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
     "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
+    "scopeKnowledgeWrite": "Záradékok létrehozása, szerkesztése és törlése, valamint playbookok futtatása",
     "scopeMattersWrite": "Ügyek, kapcsolatok és feladatok létrehozása és szerkesztése",
     "scopeOnboarding": "A szervezet praxisának joghatóságainak beállítása",
     "scopeProfile": "Hozzáférés a profiladataihoz",

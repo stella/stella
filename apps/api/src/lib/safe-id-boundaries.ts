@@ -102,6 +102,14 @@ export const brandPersistedBillingCodeId = (
 export const brandPersistedClauseId = (clauseId: string): SafeId<"clause"> =>
   toSafeId<"clause">(clauseId);
 
+export const brandPersistedClauseCategoryId = (
+  clauseCategoryId: string,
+): SafeId<"clauseCategory"> => toSafeId<"clauseCategory">(clauseCategoryId);
+
+export const brandPersistedClauseVersionId = (
+  clauseVersionId: string,
+): SafeId<"clauseVersion"> => toSafeId<"clauseVersion">(clauseVersionId);
+
 export const brandPersistedExpenseId = (expenseId: string): SafeId<"expense"> =>
   toSafeId<"expense">(expenseId);
 
