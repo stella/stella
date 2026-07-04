@@ -75,27 +75,132 @@ const MODULE_STMT_OPEN =
   /^\s*(?:import\b|export\s+(?:type\s+)?\{|export\s+\*)/u;
 const MODULE_STMT_TERMINATOR = /\bfrom\b|\};?\s*$|;\s*$/u;
 
+// --- String/template literal stripping --------------------------------------
+// A regex counter scanning raw line text cannot tell "as" the type-assertion
+// keyword from "as" the English word sitting inside a string, and a stray `//`
+// inside a string (e.g. a URL) must not be mistaken for a comment tail. Every
+// counter below first blanks string/template literal contents so it only ever
+// scans code, keeping with the file's "dumb, deterministic, line-based — no
+// AST" design: this is still a single char-by-char pass per line, carrying
+// only the minimal state needed to survive a template literal that spans
+// multiple lines.
+//
+// Trade-off: `${...}` interpolation inside a template literal is NOT parsed
+// specially — the whole template span up to the next unescaped backtick is
+// blanked, interpolation included. A cast written inside an interpolation
+// (`` `${x as T}` ``) is therefore missed, and a backtick nested inside an
+// interpolation (`` `${`nested`}` ``) is not handled correctly. Both are rare
+// in practice; a lexer that tracks interpolation nesting (itself possibly
+// containing new strings/templates) would no longer be "cheap" or
+// "line-based". Accepted, documented fidelity limit — same spirit as the
+// other known limitations called out in the self-test fixtures below.
+const BLANKED_LITERAL = " ";
+
+type LiteralScanState = { readonly inTemplate: boolean };
+
+const NO_OPEN_TEMPLATE: LiteralScanState = { inTemplate: false };
+
+// Index of the next unescaped `quote` at or after `from`, or -1.
+const findUnescapedQuote = (
+  line: string,
+  from: number,
+  quote: string,
+): number => {
+  for (let i = from; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === "\\") {
+      i += 1; // skip the escaped character, whatever it is
+      continue;
+    }
+    if (ch === quote) {
+      return i;
+    }
+  }
+  return -1;
+};
+
+// Blank string/template literal contents in `raw`, carrying open-template
+// state across lines. Returns the remaining code (literal contents replaced
+// by a single space, so word boundaries around the literal still hold) plus
+// the state to pass into the next line.
+const stripStringLiterals = (
+  raw: string,
+  state: LiteralScanState,
+): { code: string; state: LiteralScanState } => {
+  let out = "";
+  let i = 0;
+
+  if (state.inTemplate) {
+    const close = findUnescapedQuote(raw, 0, "`");
+    if (close === -1) {
+      return { code: out, state };
+    }
+    out += BLANKED_LITERAL;
+    i = close + 1;
+  }
+
+  let inTemplate = false;
+  while (i < raw.length) {
+    const ch = raw[i];
+    if (ch === "'" || ch === '"' || ch === "`") {
+      const close = findUnescapedQuote(raw, i + 1, ch);
+      if (close === -1) {
+        // Unterminated: a template literal legitimately continues on the
+        // next line; an unterminated '/" is invalid JS, blank defensively.
+        if (ch === "`") {
+          inTemplate = true;
+        }
+        break;
+      }
+      out += BLANKED_LITERAL;
+      i = close + 1;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+
+  return { code: out, state: { inTemplate } };
+};
+
+// Blank literals, then drop the trailing `//` comment. Order matters: doing
+// this on the ORIGINAL line (as the counters used to) means a `//` inside a
+// string (e.g. `const s = "http://x" as string;`) truncates the line before
+// the string is ever recognized as a string, silently dropping real code
+// (including real casts) after it. Stripping literals first fixes that.
+const stripLine = (
+  raw: string,
+  state: LiteralScanState,
+): { code: string; state: LiteralScanState } => {
+  const { code, state: nextState } = stripStringLiterals(raw, state);
+  return { code: code.replace(LINE_COMMENT_TAIL, ""), state: nextState };
+};
+
 const countAsCasts = (content: string): number => {
   let total = 0;
   let inModuleStmt = false;
+  let literalState = NO_OPEN_TEMPLATE;
+
   for (const raw of content.split("\n")) {
-    const line = raw.replace(LINE_COMMENT_TAIL, "");
+    const { code, state } = stripLine(raw, literalState);
+    literalState = state;
+
     if (inModuleStmt) {
-      if (MODULE_STMT_TERMINATOR.test(line)) {
+      if (MODULE_STMT_TERMINATOR.test(code)) {
         inModuleStmt = false;
       }
       continue;
     }
-    if (COMMENT_LINE.test(raw)) {
+    if (COMMENT_LINE.test(code)) {
       continue;
     }
-    if (MODULE_STMT_OPEN.test(line)) {
-      if (!MODULE_STMT_TERMINATOR.test(line)) {
+    if (MODULE_STMT_OPEN.test(code)) {
+      if (!MODULE_STMT_TERMINATOR.test(code)) {
         inModuleStmt = true;
       }
       continue;
     }
-    const scanned = line.replace(AS_UNKNOWN_AS, AS_UNKNOWN_PLACEHOLDER);
+    const scanned = code.replace(AS_UNKNOWN_AS, AS_UNKNOWN_PLACEHOLDER);
     total += (scanned.match(AS_CAST) ?? []).length;
   }
   return total;
@@ -103,14 +208,20 @@ const countAsCasts = (content: string): number => {
 
 const NULLISH_ARRAY = /\?\?\s*\[\]/gu;
 
+// Same false-positive class as as-casts (a string/template can contain
+// literal `?? []` text, e.g. an error message or doc example) and shares the
+// stripLine helper by construction, so it gets the same fix for free.
 const countNullishArrayFallback = (content: string): number => {
   let total = 0;
+  let literalState = NO_OPEN_TEMPLATE;
+
   for (const raw of content.split("\n")) {
-    if (COMMENT_LINE.test(raw)) {
+    const { code, state } = stripLine(raw, literalState);
+    literalState = state;
+    if (COMMENT_LINE.test(code)) {
       continue;
     }
-    total += (raw.replace(LINE_COMMENT_TAIL, "").match(NULLISH_ARRAY) ?? [])
-      .length;
+    total += (code.match(NULLISH_ARRAY) ?? []).length;
   }
   return total;
 };
@@ -357,34 +468,57 @@ const runCheck = (): number => {
 // globs + counters over them, and assert exact counts. Also exercise the diff
 // so a rise fails and an equal count passes.
 
-const SELF_TEST_AS_CASTS = `import { foo as bar } from "./x";
-export * as ns from "./y";
-import {
-  wide as narrow,
-  other as thing,
-} from "./multi";
-const a = value as Widget;
-const b = value as const;
-const c = value as unknown as Widget;
-// prose that says as much as it can
-const d = (value as readonly string[]).length; // trailing as comment
-const label = "stored as json"; // known string FP, tolerated at this fidelity
-`;
-// Expected as-casts: a, c (collapsed), d, plus the single `as` in the label
-// string = 4. The single-line alias imports, the MULTI-LINE import block (its
-// `wide as narrow` / `other as thing` continuation lines), `as const`, and the
-// pure-comment line are all excluded; the lone string false positive is
-// intentionally counted (documented fidelity limit).
-const EXPECTED_AS_CASTS = 4;
+// Lines are authored as an array (one line, one string) so quote characters
+// inside the fixture never have to fight the outer template literal's own
+// escaping rules.
+const AS_CAST_FIXTURE_LINES = [
+  'import { foo as bar } from "./x";',
+  'export * as ns from "./y";',
+  "import {",
+  "  wide as narrow,",
+  "  other as thing,",
+  '} from "./multi";',
+  "const a = value as Widget;",
+  "const b = value as const;",
+  "const c = value as unknown as Widget;",
+  "// prose that says as much as it can",
+  "const d = (value as readonly string[]).length; // trailing as comment",
+  'const label1 = "stored as json"; // double-quoted string must not count',
+  "const label2 = 'stored as json'; // single-quoted string must not count",
+  "const label3 = `stored as json`; // template-literal string must not count",
+  'const escaped = "a \\" as \\" b"; // escaped quote must not end the string early',
+  'const real = (value as string) + "not as this" + (other as number);',
+  'const url = ("http://example.com" as string).length; // "//" in a string must not eat the rest of the line',
+  "const tmpl = `first line: as if it mattered",
+  "second line: also as filler",
+  "end` as Widget;",
+];
+const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
+// Expected as-casts: `a`(1), `c` collapsed(1), `d`(1), `real`'s two casts(2),
+// `url`'s cast(1), the cast right after the multi-line template closes(1) = 7.
+// The single-line alias imports, the MULTI-LINE import block (its
+// `wide as narrow` / `other as thing` continuation lines), `as const`, the
+// pure-comment line, all three string-literal false positives (double/single/
+// template quoted), the escaped-quote string, the "as" text inside the
+// multi-line template body, and the "//" inside the url string are all
+// excluded.
+const EXPECTED_AS_CASTS = 7;
 
-const SELF_TEST_NULLISH = `const a = list ?? [];
-const b = other ??[];
-const c = map ?? {};
-// fallback ?? [] in a comment must not count
-const d = both ?? [] ?? [];
-`;
-// Expected: a(1) + b(1) + d(2) = 4; `?? {}` and the comment are excluded.
-const EXPECTED_NULLISH = 4;
+const NULLISH_FIXTURE_LINES = [
+  "const a = list ?? [];",
+  "const b = other ??[];",
+  "const c = map ?? {};",
+  "// fallback ?? [] in a comment must not count",
+  "const d = both ?? [] ?? [];",
+  'const e = "danger ?? [] in a string"; // string must not count',
+  "const f = 'danger ?? [] in a string'; // string must not count",
+  "const g = `danger ?? [] in a string`; // template string must not count",
+  'const h = (list ?? []) + "not ?? [] in this string";',
+];
+const SELF_TEST_NULLISH = `${NULLISH_FIXTURE_LINES.join("\n")}\n`;
+// Expected: a(1) + b(1) + d(2) + h(1) = 5; `?? {}`, the comment, and the
+// string/template false positives (e, f, g) are excluded.
+const EXPECTED_NULLISH = 5;
 
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
