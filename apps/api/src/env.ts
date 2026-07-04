@@ -9,6 +9,40 @@ const featureFlagSchema = v.optional(
   "false",
 );
 
+const hasAnySmtpTransportEnv = () =>
+  !!(
+    process.env["SMTP_HOST"] ||
+    process.env["SMTP_PORT"] ||
+    process.env["SMTP_USERNAME"] ||
+    process.env["SMTP_PASSWORD"]
+  );
+
+const inferEmailProvider = (provider: "ses" | "smtp" | undefined) => {
+  if (provider || !hasAnySmtpTransportEnv()) {
+    return provider;
+  }
+
+  return "smtp";
+};
+
+const hasRequiredEmailProviderEnv = (provider: "ses" | "smtp" | undefined) => {
+  if (provider === undefined) {
+    return true;
+  }
+
+  if (provider === "ses") {
+    return !!(
+      process.env["SES_REGION"] && process.env["TRANSACTIONAL_EMAIL_FROM"]
+    );
+  }
+
+  return !!(
+    process.env["SMTP_HOST"] &&
+    process.env["SMTP_PORT"] &&
+    process.env["TRANSACTIONAL_EMAIL_FROM"]
+  );
+};
+
 /**
  * API-specific environment variables. These are only required
  * when the full API server boots (auth, email, gotenberg, redis,
@@ -90,22 +124,12 @@ const envApi = createEnv({
      * "production" regardless of this value.
      */
     SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
-    EMAIL_PROVIDER: v.optional(
-      v.pipe(
-        v.picklist(["ses", "smtp"]),
-        v.check((provider) => {
-          if (provider === "ses") {
-            return !!(
-              process.env["SES_REGION"] &&
-              process.env["TRANSACTIONAL_EMAIL_FROM"]
-            );
-          }
-          return !!(
-            process.env["SMTP_HOST"] &&
-            process.env["SMTP_PORT"] &&
-            process.env["TRANSACTIONAL_EMAIL_FROM"]
-          );
-        }, "Missing required env vars for the selected EMAIL_PROVIDER"),
+    EMAIL_PROVIDER: v.pipe(
+      v.optional(v.picklist(["ses", "smtp"])),
+      v.transform(inferEmailProvider),
+      v.check(
+        hasRequiredEmailProviderEnv,
+        "Missing required env vars for the selected EMAIL_PROVIDER",
       ),
     ),
     SES_REGION: v.optional(v.string()),
