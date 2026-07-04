@@ -2054,6 +2054,99 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  // link_entity_id is validated up front against every rejection the backing
+  // createEntityLinkHandler applies (self-link, duplicate, read-only target),
+  // so a field edit bundled with a doomed link cannot half-apply.
+  const createLinkRejectionScopedDb = ({
+    existingLink = null,
+    updateMock,
+  }: {
+    existingLink?: { id: string } | null;
+    updateMock: ReturnType<typeof mock>;
+  }) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              entities: {
+                findFirst: () => Promise<{
+                  kind: string;
+                  readOnly: boolean;
+                  workspaceId: string;
+                }>;
+              };
+              entityLinks: {
+                findFirst: () => Promise<{ id: string } | null>;
+              };
+            };
+            update: typeof updateMock;
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              entities: {
+                findFirst: async () => ({
+                  kind: "task",
+                  readOnly: false,
+                  workspaceId: "ws_1",
+                }),
+              },
+              entityLinks: {
+                findFirst: async () => existingLink,
+              },
+            },
+            update: updateMock,
+          }),
+      ),
+    );
+
+  test("save_task rejects a field edit combined with a self-link, without applying the edit", async () => {
+    const updateMock = mock(() => ({
+      set: () => ({ where: () => ({ returning: async () => [] }) }),
+    }));
+
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", name: "Renamed", link_entity_id: "task_1" },
+      context: createContext({
+        scopedDb: createLinkRejectionScopedDb({ updateMock }),
+      }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Cannot link an entity to itself" }],
+      isError: true,
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  test("save_task rejects a field edit combined with a duplicate link, without applying the edit", async () => {
+    const updateMock = mock(() => ({
+      set: () => ({ where: () => ({ returning: async () => [] }) }),
+    }));
+
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", name: "Renamed", link_entity_id: "task_2" },
+      context: createContext({
+        scopedDb: createLinkRejectionScopedDb({
+          existingLink: { id: "link_existing" },
+          updateMock,
+        }),
+      }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "A link between these entities already exists" },
+      ],
+      isError: true,
+    });
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
   // link_matter_contact accepts contact_id as an unlink selector, but a contact
   // holding several roles maps to several links, so it must ask for the precise
   // workspace_contact_id instead of guessing.

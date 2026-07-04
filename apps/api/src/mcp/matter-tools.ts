@@ -1305,13 +1305,124 @@ const saveTaskArgsSchema = v.pipe(
 );
 
 /**
+ * Validate a save_task link_entity_id target: not the task itself, exists in
+ * the matter with a linkable kind, not itself a read-only task, and not
+ * already linked to the task in either direction. Mirrors every rejection in
+ * entity-links-create.ts. Returns an error result, or null when valid.
+ */
+const validateLinkTarget = async ({
+  context,
+  linkEntityId,
+  taskId,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  linkEntityId: string;
+  taskId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+}): Promise<ReturnType<typeof errorResult> | null> => {
+  const linkTargetId = brandPersistedEntityId(linkEntityId);
+  if (linkTargetId === taskId) {
+    return errorResult("Cannot link an entity to itself");
+  }
+  const target = await context.scopedDb((tx) =>
+    tx.query.entities.findFirst({
+      where: { id: { eq: linkTargetId }, workspaceId: { eq: workspaceId } },
+      columns: { kind: true, readOnly: true },
+    }),
+  );
+  if (!target) {
+    return errorResult("Link target entity not found in this matter");
+  }
+  if (!includes(LINKABLE_ENTITY_KINDS, target.kind)) {
+    return errorResult("Link target must be a document, folder, or task");
+  }
+  if (target.kind === "task" && target.readOnly) {
+    return errorResult("Task is read-only");
+  }
+  // One query for both directions; a single scopedDb client must not run
+  // concurrent queries (see the serialized task-detail reads above).
+  const existingLink = await context.scopedDb((tx) =>
+    tx.query.entityLinks.findFirst({
+      where: {
+        workspaceId: { eq: workspaceId },
+        OR: [
+          {
+            sourceEntityId: { eq: taskId },
+            targetEntityId: { eq: linkTargetId },
+          },
+          {
+            sourceEntityId: { eq: linkTargetId },
+            targetEntityId: { eq: taskId },
+          },
+        ],
+      },
+      columns: { id: true },
+    }),
+  );
+  if (existingLink) {
+    return errorResult("A link between these entities already exists");
+  }
+  return null;
+};
+
+/**
+ * Validate a save_task unlink_link_id target: exists in the matter, belongs
+ * to this task, and the entity on the other end of the link is not itself a
+ * read-only task. Mirrors every rejection in entity-links-delete.ts. Returns
+ * an error result, or null when valid.
+ */
+const validateUnlinkTarget = async ({
+  context,
+  taskId,
+  unlinkLinkId,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  taskId: SafeId<"entity">;
+  unlinkLinkId: string;
+  workspaceId: SafeId<"workspace">;
+}): Promise<ReturnType<typeof errorResult> | null> => {
+  const linkId = brandPersistedEntityLinkId(unlinkLinkId);
+  const link = await context.scopedDb((tx) =>
+    tx.query.entityLinks.findFirst({
+      where: { id: { eq: linkId }, workspaceId: { eq: workspaceId } },
+      columns: { sourceEntityId: true, targetEntityId: true },
+      with: {
+        sourceEntity: { columns: { kind: true, readOnly: true } },
+        targetEntity: { columns: { kind: true, readOnly: true } },
+      },
+    }),
+  );
+  if (!link) {
+    return errorResult("Entity-link not found in this matter");
+  }
+  if (link.sourceEntityId !== taskId && link.targetEntityId !== taskId) {
+    return errorResult("unlink_link_id does not belong to this task");
+  }
+  // The task side is already covered by the read-only check in
+  // validateSaveTaskTargets; the other side of the link can also be a
+  // read-only task, which deleteEntityLinkHandler rejects on too.
+  const other =
+    link.sourceEntityId === taskId ? link.targetEntity : link.sourceEntity;
+  if (other?.kind === "task" && other.readOnly) {
+    return errorResult("Task is read-only");
+  }
+  return null;
+};
+
+/**
  * Validate every failure-capable save_task target up front so no partial
  * mutation can commit before a later step fails. Covers the matter_id/task_id
- * pairing, the link target (existence and a linkable kind), assignee
- * membership, and unlink-link ownership. Not transactional: a target could
- * change kind, membership, or existence between this check and the mutation (an
- * accepted TOCTOU window); this only removes the common partial-failure mode.
- * Returns an error result, or null when valid.
+ * pairing; the task's own read-only state, which every assignee and link
+ * handler rejects on; the link target (via validateLinkTarget); assignee
+ * membership; and the unlink target (via validateUnlinkTarget). Mirrors every
+ * rejection in entity-links-create.ts, entity-links-delete.ts,
+ * assignees-add.ts, and assignees-remove.ts so they surface before any of the
+ * five backing handlers run. Not transactional: a target could change kind,
+ * membership, read-only state, or existence between this check and the
+ * mutation (an accepted TOCTOU window); this only removes the common
+ * partial-failure mode. Returns an error result, or null when valid.
  */
 const validateSaveTaskTargets = async ({
   context,
@@ -1329,19 +1440,36 @@ const validateSaveTaskTargets = async ({
     return errorResult("task_id does not belong to matter_id");
   }
 
-  if (input.link_entity_id !== undefined) {
-    const linkTargetId = brandPersistedEntityId(input.link_entity_id);
-    const target = await context.scopedDb((tx) =>
+  // Every assignee/link handler rejects once the task itself is read-only
+  // (e.g. a task imported from an external agenda source). Field-only edits
+  // are validated atomically inside updateTaskHandler itself, so they do not
+  // need a duplicate check here.
+  if (
+    input.add_assignee_user_id !== undefined ||
+    input.remove_assignee_user_id !== undefined ||
+    input.link_entity_id !== undefined ||
+    input.unlink_link_id !== undefined
+  ) {
+    const task = await context.scopedDb((tx) =>
       tx.query.entities.findFirst({
-        where: { id: { eq: linkTargetId }, workspaceId: { eq: workspaceId } },
-        columns: { kind: true },
+        where: { id: { eq: taskId }, workspaceId: { eq: workspaceId } },
+        columns: { readOnly: true },
       }),
     );
-    if (!target) {
-      return errorResult("Link target entity not found in this matter");
+    if (task?.readOnly) {
+      return errorResult("Task is read-only");
     }
-    if (!includes(LINKABLE_ENTITY_KINDS, target.kind)) {
-      return errorResult("Link target must be a document, folder, or task");
+  }
+
+  if (input.link_entity_id !== undefined) {
+    const linkError = await validateLinkTarget({
+      context,
+      linkEntityId: input.link_entity_id,
+      taskId,
+      workspaceId,
+    });
+    if (linkError) {
+      return linkError;
     }
   }
 
@@ -1359,18 +1487,14 @@ const validateSaveTaskTargets = async ({
   }
 
   if (input.unlink_link_id !== undefined) {
-    const linkId = brandPersistedEntityLinkId(input.unlink_link_id);
-    const link = await context.scopedDb((tx) =>
-      tx.query.entityLinks.findFirst({
-        where: { id: { eq: linkId }, workspaceId: { eq: workspaceId } },
-        columns: { sourceEntityId: true, targetEntityId: true },
-      }),
-    );
-    if (!link) {
-      return errorResult("Entity-link not found in this matter");
-    }
-    if (link.sourceEntityId !== taskId && link.targetEntityId !== taskId) {
-      return errorResult("unlink_link_id does not belong to this task");
+    const unlinkError = await validateUnlinkTarget({
+      context,
+      taskId,
+      unlinkLinkId: input.unlink_link_id,
+      workspaceId,
+    });
+    if (unlinkError) {
+      return unlinkError;
     }
   }
 
