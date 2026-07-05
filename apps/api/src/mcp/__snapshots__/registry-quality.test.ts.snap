@@ -56,24 +56,28 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   {
     "name": "list_matters",
     "scope": "stella:read",
-    "description": "List the matters you can access. Use this first when the user does not name a matter explicitly or when you need matter IDs for follow-up tools.",
+    "description": "List the matters you can access, or get one matter's overview. Omit matter_id to list accessible matters (filter with status, page with cursor); list first when the user does not name a matter or you need matter IDs for follow-up tools. Pass matter_id to return that matter's overview instead: counts, recent entities, linked contacts, and members.",
     "annotations": {
       "readOnlyHint": true
     },
     "inputSchema": {
       "type": "object",
       "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to return a single matter's overview; omit to list matters"
+        },
         "status": {
           "type": "string",
           "enum": [
             "active",
             "all"
           ],
-          "description": "Filter by matter status"
+          "description": "Filter by matter status (list mode)"
         },
         "limit": {
           "type": "integer",
-          "description": "Max matters to return",
+          "description": "Max matters to return (list mode)",
           "minimum": 1,
           "maximum": 100
         },
@@ -83,26 +87,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 512
         }
       }
-    }
-  },
-  {
-    "name": "get_matter_overview",
-    "scope": "stella:read",
-    "description": "Get a compact overview of a matter including counts, recent entities, and linked contacts. Use this to orient yourself before drilling in.",
-    "annotations": {
-      "readOnlyHint": true
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "matter_id": {
-          "type": "string",
-          "description": "Matter/workspace ID"
-        }
-      },
-      "required": [
-        "matter_id"
-      ]
     }
   },
   {
@@ -567,13 +551,17 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   {
     "name": "list_templates",
     "scope": "stella:templates",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases, and so on). Returns each template's id, name, number of fillable fields, tags, and usage guidance (whenToUse / whenNotToUse). Call this first to learn which templates exist and their ids before describing or filling one. Prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it.",
     "annotations": {
       "readOnlyHint": true
     },
     "inputSchema": {
       "type": "object",
       "properties": {
+        "template_id": {
+          "type": "string",
+          "description": "Template id to describe its fields in detail; omit to list templates"
+        },
         "cursor": {
           "type": "string",
           "description": "Opaque cursor from a previous list_templates call to fetch the next page",
@@ -583,29 +571,9 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "describe_template",
-    "scope": "stella:templates",
-    "description": "Describe a template's fillable fields so you know what to provide before filling it. Returns each field's full configuration: path, label, inputType, required, hint, select options, optionsFrom (dependent select), aiPrompt / aiAdapt (who-fills), date format, composite parts + format, and (for registry-lookup fields) the named output formats. Also returns named conditions and computed (formula) fields. The result is a complete round-trip: feed the same shape to configure_template_fields. Pass the template id from list_templates.",
-    "annotations": {
-      "readOnlyHint": true
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "template_id": {
-          "type": "string",
-          "description": "Template id, as returned by list_templates"
-        }
-      },
-      "required": [
-        "template_id"
-      ]
-    }
-  },
-  {
     "name": "fill_template",
     "scope": "stella:templates",
-    "description": "Fill a template with values and return the assembled document text plus the filled DOCX as base64. Call describe_template first to learn the field paths. 'values' maps each field path to its value, e.g. {\\"tenant.name\\": \\"ACME Sp. z o.o.\\", \\"signing_date\\": \\"2026-06-08\\"}. Registry lookups, composite fields, formula fields, and AI-fillable fields are resolved automatically; AI-fillable fields are drafted when you omit them. Returns the rendered text and any placeholders left unfilled.",
+    "description": "Fill a template with values and return the assembled document text plus the filled DOCX as base64. Call list_templates with a template_id first to learn the field paths. 'values' maps each field path to its value, e.g. {\\"tenant.name\\": \\"ACME Sp. z o.o.\\", \\"signing_date\\": \\"2026-06-08\\"}. Registry lookups, composite fields, formula fields, and AI-fillable fields are resolved automatically; AI-fillable fields are drafted when you omit them. Returns the rendered text and any placeholders left unfilled.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -626,188 +594,24 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "template_marker_reference",
+    "name": "save_template",
     "scope": "stella:templates",
-    "description": "Return stella's \`{{...}}\` template marker grammar: how to write fillable values, conditional and repeating blocks, clause slots, and numbering inside a DOCX. Takes no arguments. Call this before create_template whenever you are unsure of the marker syntax.",
-    "annotations": {
-      "readOnlyHint": true
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
-    }
-  },
-  {
-    "name": "create_template",
-    "scope": "stella:templates",
-    "description": "Create a document template from a DOCX file containing {{markers}}. 'docx_base64' is the base64-encoded bytes of a .docx (Office Open XML) file; the {{field}} markers in it become the template's fillable fields. If you are unsure how to write the markers, call template_marker_reference first. Optionally pass 'fields' to configure the discovered fields in the same call: input type, select options, who fills each field (a person, AI via aiPrompt, Person+AI via aiAdapt, a formula, or a company-register lookup), date format, composite parts, dependent options, hint, and required. You can also configure fields later with configure_template_fields. Max ~10 MB decoded. Returns the new template id and the number of discovered fields. Use describe_template afterwards to inspect the fields.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string",
-          "description": "Template display name",
-          "maxLength": 256
-        },
-        "docx_base64": {
-          "type": "string",
-          "description": "Base64-encoded DOCX file bytes (Office Open XML, max ~10 MB decoded)"
-        },
-        "fields": {
-          "type": "array",
-          "description": "Field configuration overlay, one entry per field to configure. Each entry's 'path' must match a {{marker}} in the template. Configurable: label, hint, inputType, required, options, optionsFrom (dependent select), date format, composite parts + format, and who-fills the field — a person (default), AI (aiPrompt), Person+AI (aiAdapt), a formula, or a company-register lookup (registry + named output formats). formula is mutually exclusive with aiPrompt/aiAdapt/lookup/parts.",
-          "items": {
-            "type": "object",
-            "properties": {
-              "path": {
-                "type": "string",
-                "description": "Field path — must match a {{marker}} in the template"
-              },
-              "label": {
-                "type": "string",
-                "description": "Human-readable field label"
-              },
-              "hint": {
-                "type": "string",
-                "description": "Short fill guidance shown to the person filling the field"
-              },
-              "inputType": {
-                "type": "string",
-                "enum": [
-                  "text",
-                  "number",
-                  "boolean",
-                  "date",
-                  "select"
-                ],
-                "description": "Input control type"
-              },
-              "required": {
-                "type": "boolean",
-                "description": "Whether a value is required"
-              },
-              "options": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "description": "Allowed values when inputType is 'select'"
-              },
-              "optionsFrom": {
-                "type": "string",
-                "description": "Dependent select: path of another field whose value(s) supply the options"
-              },
-              "aiPrompt": {
-                "type": "string",
-                "description": "Who-fills = AI: instruction the model uses to draft the value at fill time"
-              },
-              "aiAdapt": {
-                "type": "boolean",
-                "description": "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence"
-              },
-              "formula": {
-                "type": "string",
-                "description": "Who-fills = formula: arithmetic expression over other fields, derived at fill time"
-              },
-              "condition": {
-                "type": "string",
-                "description": "Boolean field derived by rule: a condition expression (e.g. client_type == \\"company\\"), evaluated at fill time. A {{#if field_path}} marker references it by path. Mutually exclusive with formula/aiPrompt/aiAdapt/lookup/parts."
-              },
-              "parts": {
-                "type": "array",
-                "description": "Composite field parts (joined by 'format')",
-                "items": {
-                  "type": "object",
-                  "additionalProperties": true
-                }
-              },
-              "format": {
-                "type": "string",
-                "description": "Join template over composite part keys, e.g. '{{title}} {{name}}'"
-              },
-              "dateFormat": {
-                "type": "object",
-                "description": "Locale-aware date rendering for a date field",
-                "properties": {
-                  "locale": {
-                    "type": "string",
-                    "description": "BCP-47 language tag, e.g. 'cs', 'de', 'pl'"
-                  },
-                  "style": {
-                    "type": "string",
-                    "enum": [
-                      "long",
-                      "medium",
-                      "short",
-                      "iso"
-                    ],
-                    "description": "Date style"
-                  }
-                },
-                "required": [
-                  "locale",
-                  "style"
-                ]
-              },
-              "lookup": {
-                "type": "object",
-                "description": "Who-fills = company-register lookup",
-                "properties": {
-                  "registry": {
-                    "type": "string",
-                    "description": "Registry slug, e.g. 'krs'"
-                  },
-                  "formats": {
-                    "type": "array",
-                    "description": "Named output renderings; the first is the default for the bare {{marker}}",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "key": {
-                          "type": "string",
-                          "description": "Marker segment after the path: {{path.key}}"
-                        },
-                        "template": {
-                          "type": "string",
-                          "description": "[token]-substituted rendering of the registry hit"
-                        }
-                      },
-                      "required": [
-                        "key",
-                        "template"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "registry",
-                  "formats"
-                ]
-              }
-            },
-            "required": [
-              "path"
-            ],
-            "additionalProperties": false
-          }
-        }
-      },
-      "required": [
-        "name",
-        "docx_base64"
-      ]
-    }
-  },
-  {
-    "name": "configure_template_fields",
-    "scope": "stella:templates",
-    "description": "Configure the fields of an EXISTING template: set input type, select options, who fills each field (a person, AI via aiPrompt, Person+AI via aiAdapt, a formula, or a company-register lookup with registry + named output formats), date format, composite parts, dependent options, hint, and required. Only the manifest is updated; the document's {{markers}} are left untouched. Each 'fields' entry's 'path' must be a field that exists in the template (call describe_template to list them). Returns the updated field list (same shape as describe_template).",
+    "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and you can pass fields to configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Each fields entry's path must match a {{marker}} in the template. Read the marker grammar from the template-markers reference resource when unsure. Returns the template id and field count when creating, or the updated field list when configuring.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "template_id": {
           "type": "string",
-          "description": "Template id, as returned by list_templates"
+          "description": "Existing template id to configure its fields; omit (with docx_base64) to create a new template"
+        },
+        "name": {
+          "type": "string",
+          "description": "Template display name; required when creating",
+          "maxLength": 256
+        },
+        "docx_base64": {
+          "type": "string",
+          "description": "Base64-encoded DOCX file bytes (Office Open XML, max ~10 MB decoded); required when creating, omit when configuring"
         },
         "fields": {
           "type": "array",
@@ -947,11 +751,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "additionalProperties": false
           }
         }
-      },
-      "required": [
-        "template_id",
-        "fields"
-      ]
+      }
     }
   },
   {
@@ -1035,24 +835,28 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "create_document",
+    "name": "save_document",
     "scope": "stella:documents_write",
-    "description": "Create a document or folder in a matter. Provide the target matter, a title, and optionally a parent folder. 'kind' defaults to 'document'; pass 'folder' to create a folder. This creates an empty titled entity; uploading file content is a separate step. Returns the new entity ID.",
+    "description": "Create a document or folder, or update an existing one. Omit entity_id to create: pass matter_id and name, optionally a parent_id folder and kind ('document' by default, or 'folder'). Creating makes an empty named entity; uploading file content is a separate step. Pass entity_id to update: set name to rename; parent_id to move it into a folder or move_to_root to move it to the matter root; version_id with label and/or description to annotate a version. An update needs at least one change. Returns the entity ID.",
     "inputSchema": {
       "type": "object",
       "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Document entity ID to update; omit to create"
+        },
         "matter_id": {
           "type": "string",
-          "description": "Matter/workspace ID to create the entity in"
+          "description": "Matter/workspace ID to create the entity in; required when creating"
         },
-        "title": {
+        "name": {
           "type": "string",
-          "description": "Display name for the new document or folder",
+          "description": "Display name: required when creating, or the new name when renaming",
           "maxLength": 255
         },
         "parent_id": {
           "type": "string",
-          "description": "Folder entity ID to create the entity inside; omit for the matter root"
+          "description": "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating"
         },
         "kind": {
           "type": "string",
@@ -1060,42 +864,15 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "document",
             "folder"
           ],
-          "description": "Entity kind to create; defaults to 'document'"
-        }
-      },
-      "required": [
-        "matter_id",
-        "title"
-      ]
-    }
-  },
-  {
-    "name": "update_document",
-    "scope": "stella:documents_write",
-    "description": "Update a document: rename it, move it to a different folder, and/or edit a version's label or description. Pass name to rename; parent_id to move it into a folder or move_to_root to move it to the matter root; version_id with label and/or description to annotate a version. At least one change is required.",
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "entity_id": {
-          "type": "string",
-          "description": "Document entity ID to update"
-        },
-        "name": {
-          "type": "string",
-          "description": "New display name for the document",
-          "maxLength": 255
-        },
-        "parent_id": {
-          "type": "string",
-          "description": "Folder entity ID to move the document into"
+          "description": "Entity kind to create; defaults to 'document'. Only valid when creating."
         },
         "move_to_root": {
           "type": "boolean",
-          "description": "Move the document to the matter root (no parent folder)"
+          "description": "Move the document to the matter root (no parent folder). Only valid when updating."
         },
         "version_id": {
           "type": "string",
-          "description": "Version ID to annotate; required when setting label or description"
+          "description": "Version ID to annotate; required when setting label or description. Only valid when updating."
         },
         "label": {
           "type": [
@@ -1113,10 +890,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "description": "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           "maxLength": 1024
         }
-      },
-      "required": [
-        "entity_id"
-      ]
+      }
     }
   },
   {
@@ -1513,7 +1287,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   {
     "name": "link_matter_contact",
     "scope": "stella:matters_write",
-    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass workspace_contact_id (precise, from get_matter_overview) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass workspace_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1542,7 +1316,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "workspace_contact_id": {
           "type": "string",
-          "description": "Existing matter-contact link ID to remove, from get_matter_overview"
+          "description": "Existing matter-contact link ID to remove, from list_matters"
         }
       },
       "required": [
@@ -2014,7 +1788,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "read_invoices",
+    "name": "list_invoices",
     "scope": "stella:read",
     "feature": "FEATURE_TIME_BILLING",
     "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
@@ -2040,7 +1814,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous read_invoices call to fetch the next page",
+          "description": "Opaque cursor from a previous list_invoices call to fetch the next page",
           "maxLength": 512
         }
       }
@@ -2144,7 +1918,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "read_audit_log",
+    "name": "list_audit_log",
     "scope": "stella:admin_read",
     "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, workspace, timestamp, and change detail. Filter by workspace_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
     "annotations": {
@@ -2191,7 +1965,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous read_audit_log call to fetch the next page",
+          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page",
           "maxLength": 512
         }
       }
@@ -2301,24 +2075,28 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
   {
     "name": "list_matters",
     "scope": "stella:read_anonymized",
-    "description": "List the matters you can access. Use this first when the user does not name a matter explicitly or when you need matter IDs for follow-up tools.",
+    "description": "List the matters you can access, or get one matter's overview. Omit matter_id to list accessible matters (filter with status, page with cursor); list first when the user does not name a matter or you need matter IDs for follow-up tools. Pass matter_id to return that matter's overview instead: counts, recent entities, linked contacts, and members.",
     "annotations": {
       "readOnlyHint": true
     },
     "inputSchema": {
       "type": "object",
       "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to return a single matter's overview; omit to list matters"
+        },
         "status": {
           "type": "string",
           "enum": [
             "active",
             "all"
           ],
-          "description": "Filter by matter status"
+          "description": "Filter by matter status (list mode)"
         },
         "limit": {
           "type": "integer",
-          "description": "Max matters to return",
+          "description": "Max matters to return (list mode)",
           "minimum": 1,
           "maximum": 100
         },
@@ -2328,26 +2106,6 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "maxLength": 512
         }
       }
-    }
-  },
-  {
-    "name": "get_matter_overview",
-    "scope": "stella:read_anonymized",
-    "description": "Get a compact overview of a matter including counts, recent entities, and linked contacts. Use this to orient yourself before drilling in.",
-    "annotations": {
-      "readOnlyHint": true
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "matter_id": {
-          "type": "string",
-          "description": "Matter/workspace ID"
-        }
-      },
-      "required": [
-        "matter_id"
-      ]
     }
   },
   {
@@ -2524,25 +2282,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
   {
     "name": "list_templates",
     "scope": "stella:templates_anonymized",
-    "description": "List the document templates in this organization (NDAs, powers of attorney, leases, and so on). Returns each template's id, name, number of fillable fields, tags, and usage guidance (whenToUse / whenNotToUse). Call this first to learn which templates exist and their ids before describing or filling one. Prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies.",
-    "annotations": {
-      "readOnlyHint": true
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {
-        "cursor": {
-          "type": "string",
-          "description": "Opaque cursor from a previous list_templates call to fetch the next page",
-          "maxLength": 512
-        }
-      }
-    }
-  },
-  {
-    "name": "describe_template",
-    "scope": "stella:templates_anonymized",
-    "description": "Describe a template's fillable fields so you know what to provide before filling it. Returns each field's full configuration: path, label, inputType, required, hint, select options, optionsFrom (dependent select), aiPrompt / aiAdapt (who-fills), date format, composite parts + format, and (for registry-lookup fields) the named output formats. Also returns named conditions and computed (formula) fields. The result is a complete round-trip: feed the same shape to configure_template_fields. Pass the template id from list_templates.",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it.",
     "annotations": {
       "readOnlyHint": true
     },
@@ -2551,24 +2291,14 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "properties": {
         "template_id": {
           "type": "string",
-          "description": "Template id, as returned by list_templates"
+          "description": "Template id to describe its fields in detail; omit to list templates"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_templates call to fetch the next page",
+          "maxLength": 512
         }
-      },
-      "required": [
-        "template_id"
-      ]
-    }
-  },
-  {
-    "name": "template_marker_reference",
-    "scope": "stella:templates_anonymized",
-    "description": "Return stella's \`{{...}}\` template marker grammar: how to write fillable values, conditional and repeating blocks, clause slots, and numbering inside a DOCX. Takes no arguments. Call this before create_template whenever you are unsure of the marker syntax.",
-    "annotations": {
-      "readOnlyHint": true
-    },
-    "inputSchema": {
-      "type": "object",
-      "properties": {}
+      }
     }
   },
   {
@@ -2933,7 +2663,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
-    "name": "read_invoices",
+    "name": "list_invoices",
     "scope": "stella:read_anonymized",
     "feature": "FEATURE_TIME_BILLING",
     "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
@@ -2959,7 +2689,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor from a previous read_invoices call to fetch the next page",
+          "description": "Opaque cursor from a previous list_invoices call to fetch the next page",
           "maxLength": 512
         }
       }

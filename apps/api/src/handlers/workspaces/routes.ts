@@ -48,7 +48,7 @@ import { LIMITS } from "@/api/lib/limits";
 const readWorkspace = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "covered", by: "get_matter_overview" },
+    mcp: { type: "covered", by: "list_matters" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, session, workspaceId }) {
     const response = yield* Result.await(
@@ -110,7 +110,7 @@ const readJustifications = createSafeHandler(
 const readOverview = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "tool", name: "get_matter_overview" },
+    mcp: { type: "covered", by: "list_matters" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
@@ -130,7 +130,7 @@ const readOverview = createSafeHandler(
 const readWorkspaceContacts = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "covered", by: "get_matter_overview" },
+    mcp: { type: "covered", by: "list_matters" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(

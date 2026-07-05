@@ -339,7 +339,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "Link a contact to a matter in a party role (opposing party/counsel, " +
       "co-counsel, witness, expert witness, third party, judge, mediator, or " +
       "other), or remove such a link. Pass contact_id with role to link. To " +
-      "unlink, pass workspace_contact_id (precise, from get_matter_overview) " +
+      "unlink, pass workspace_contact_id (precise, from list_matters) " +
       "or contact_id alone; contact_id alone is rejected when the contact " +
       "holds several roles on the matter.",
     inputSchema: {
@@ -355,7 +355,7 @@ export const MATTER_TOOL_DEFINITIONS = [
           WORKSPACE_CONTACT_ROLES,
         ),
         workspace_contact_id: stringProp(
-          "Existing matter-contact link ID to remove, from get_matter_overview",
+          "Existing matter-contact link ID to remove, from list_matters",
         ),
       },
       required: ["matter_id"],

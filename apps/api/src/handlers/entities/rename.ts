@@ -141,7 +141,7 @@ export const renameEntityHandler = async function* ({
 
 const config = {
   permissions: { entity: ["update"] },
-  mcp: { type: "tool", name: "update_document" },
+  mcp: { type: "covered", by: "save_document" },
   body: renameEntityBodySchema,
 } satisfies HandlerConfig;
 

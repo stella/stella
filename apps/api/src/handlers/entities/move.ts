@@ -229,7 +229,7 @@ const checkIsDescendant = async (
 
 const config = {
   permissions: { entity: ["update"] },
-  mcp: { type: "covered", by: "update_document" },
+  mcp: { type: "covered", by: "save_document" },
   body: moveEntityBodySchema,
 } satisfies HandlerConfig;
 

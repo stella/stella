@@ -62,8 +62,7 @@ import {
 type DocumentToolName =
   | "list_documents"
   | "read_document"
-  | "create_document"
-  | "update_document"
+  | "save_document"
   | "delete_document"
   | "list_properties"
   | "set_field_value";
@@ -168,53 +167,40 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   },
   {
     description:
-      "Create a document or folder in a matter. Provide the target matter, a " +
-      "title, and optionally a parent folder. 'kind' defaults to 'document'; " +
-      "pass 'folder' to create a folder. This creates an empty titled entity; " +
-      "uploading file content is a separate step. Returns the new entity ID.",
+      "Create a document or folder, or update an existing one. Omit entity_id " +
+      "to create: pass matter_id and name, optionally a parent_id folder and " +
+      "kind ('document' by default, or 'folder'). Creating makes an empty named " +
+      "entity; uploading file content is a separate step. Pass entity_id to " +
+      "update: set name to rename; parent_id to move it into a folder or " +
+      "move_to_root to move it to the matter root; version_id with label and/or " +
+      "description to annotate a version. An update needs at least one change. " +
+      "Returns the entity ID.",
     inputSchema: {
       type: "object",
       properties: {
-        matter_id: stringProp("Matter/workspace ID to create the entity in"),
-        title: stringProp("Display name for the new document or folder", {
-          maxLength: LIMITS.entityNameMaxLength,
-        }),
-        parent_id: stringProp(
-          "Folder entity ID to create the entity inside; omit for the matter root",
+        entity_id: stringProp("Document entity ID to update; omit to create"),
+        matter_id: stringProp(
+          "Matter/workspace ID to create the entity in; required when creating",
         ),
-        kind: enumProp("Entity kind to create; defaults to 'document'", [
-          "document",
-          "folder",
-        ]),
-      },
-      required: ["matter_id", "title"],
-    },
-    anonymized: { exposure: "excluded", reason: "write" },
-    name: "create_document",
-    scope: "stella:documents_write",
-  },
-  {
-    description:
-      "Update a document: rename it, move it to a different folder, and/or edit " +
-      "a version's label or description. Pass name to rename; parent_id to move " +
-      "it into a folder or move_to_root to move it to the matter root; version_id " +
-      "with label and/or description to annotate a version. At least one change " +
-      "is required.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        entity_id: stringProp("Document entity ID to update"),
-        name: stringProp("New display name for the document", {
-          maxLength: LIMITS.entityNameMaxLength,
-        }),
-        parent_id: stringProp("Folder entity ID to move the document into"),
+        name: stringProp(
+          "Display name: required when creating, or the new name when renaming",
+          { maxLength: LIMITS.entityNameMaxLength },
+        ),
+        parent_id: stringProp(
+          "Folder entity ID: to place the new entity inside when creating, or to " +
+            "move the document into when updating",
+        ),
+        kind: enumProp(
+          "Entity kind to create; defaults to 'document'. Only valid when creating.",
+          ["document", "folder"],
+        ),
         move_to_root: {
           type: "boolean",
           description:
-            "Move the document to the matter root (no parent folder)",
+            "Move the document to the matter root (no parent folder). Only valid when updating.",
         },
         version_id: stringProp(
-          "Version ID to annotate; required when setting label or description",
+          "Version ID to annotate; required when setting label or description. Only valid when updating.",
         ),
         label: nullableStringProp(
           "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
@@ -225,10 +211,9 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
           { maxLength: 1024 },
         ),
       },
-      required: ["entity_id"],
     },
     anonymized: { exposure: "excluded", reason: "write" },
-    name: "update_document",
+    name: "save_document",
     scope: "stella:documents_write",
   },
   {
@@ -1078,66 +1063,10 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
   return { egress: "structured", payload, textFields };
 };
 
-const createDocumentArgsSchema = v.strictObject({
-  matter_id: v.pipe(v.string(), v.minLength(1)),
-  title: v.pipe(
-    v.string(),
-    v.minLength(1),
-    v.maxLength(LIMITS.entityNameMaxLength),
-  ),
-  parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  kind: v.optional(v.picklist(["document", "folder"])),
-});
-
-const handleCreateDocumentTool: McpToolHandler = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
-    entity: ["create"],
-  });
-  if (!hasPermission.success) {
-    return errorResult("Forbidden");
-  }
-
-  const parsed = v.safeParse(createDocumentArgsSchema, args);
-  if (!parsed.success) {
-    return errorResult(
-      "Invalid input: expected { matter_id: string, title: string, parent_id?: string, kind?: 'document'|'folder' }",
-    );
-  }
-
-  const workspaceId = ensureActiveWorkspace({
-    context,
-    workspaceId: parsed.output.matter_id,
-  });
-  if (typeof workspaceId !== "string") {
-    return workspaceId;
-  }
-
-  const created = await Result.gen(() =>
-    createEntitiesHandler({
-      safeDb: context.safeDb,
-      workspaceId,
-      userId: context.userId,
-      recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
-      body: {
-        kind: parsed.output.kind ?? "document",
-        parentId:
-          parsed.output.parent_id === undefined
-            ? null
-            : brandPersistedEntityId(parsed.output.parent_id),
-        name: parsed.output.title,
-      },
-    }),
-  );
-  if (Result.isError(created)) {
-    return errorResult(created.error.message);
-  }
-
-  return textResult({ entityId: created.value.entityId });
-};
-
-const updateDocumentArgsSchema = v.pipe(
+const saveDocumentArgsSchema = v.pipe(
   v.strictObject({
-    entity_id: v.pipe(v.string(), v.minLength(1)),
+    entity_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     name: v.optional(
       v.pipe(
         v.string(),
@@ -1146,6 +1075,7 @@ const updateDocumentArgsSchema = v.pipe(
       ),
     ),
     parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    kind: v.optional(v.picklist(["document", "folder"])),
     move_to_root: v.optional(v.boolean()),
     version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     label: v.optional(
@@ -1155,11 +1085,65 @@ const updateDocumentArgsSchema = v.pipe(
       v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
     ),
   }),
-  // At least one mutation must be requested; an empty update is a no-op the
-  // caller almost certainly did not intend. Root-level (no single culprit
-  // field to forward the issue onto).
+  // Creating (no entity_id) requires matter_id and name.
+  v.forward(
+    v.partialCheck(
+      [["entity_id"], ["matter_id"]],
+      ({ entity_id, matter_id }) =>
+        entity_id !== undefined || matter_id !== undefined,
+      "matter_id is required to create a document",
+    ),
+    ["matter_id"],
+  ),
+  v.forward(
+    v.partialCheck(
+      [["entity_id"], ["name"]],
+      ({ entity_id, name }) => entity_id !== undefined || name !== undefined,
+      "name is required to create a document",
+    ),
+    ["name"],
+  ),
+  // matter_id and kind describe the entity to create; neither applies to an
+  // update.
+  v.forward(
+    v.partialCheck(
+      [["entity_id"], ["matter_id"]],
+      ({ entity_id, matter_id }) =>
+        entity_id === undefined || matter_id === undefined,
+      "matter_id applies only when creating; omit it when updating a document",
+    ),
+    ["matter_id"],
+  ),
+  v.forward(
+    v.partialCheck(
+      [["entity_id"], ["kind"]],
+      ({ entity_id, kind }) => entity_id === undefined || kind === undefined,
+      "kind applies only when creating a document",
+    ),
+    ["kind"],
+  ),
+  // move_to_root, version_id, label, and description are all update-only edits.
   v.partialCheck(
     [
+      ["entity_id"],
+      ["move_to_root"],
+      ["version_id"],
+      ["label"],
+      ["description"],
+    ],
+    ({ entity_id, move_to_root, version_id, label, description }) =>
+      entity_id !== undefined ||
+      (move_to_root === undefined &&
+        version_id === undefined &&
+        label === undefined &&
+        description === undefined),
+    "move_to_root, version_id, label, and description apply to an existing document; pass entity_id",
+  ),
+  // An update must request at least one mutation; an empty update is a no-op the
+  // caller almost certainly did not intend.
+  v.partialCheck(
+    [
+      ["entity_id"],
       ["name"],
       ["parent_id"],
       ["move_to_root"],
@@ -1168,6 +1152,9 @@ const updateDocumentArgsSchema = v.pipe(
       ["description"],
     ],
     (input) => {
+      if (input.entity_id === undefined) {
+        return true;
+      }
       const wantsRename = input.name !== undefined;
       const wantsMove =
         input.parent_id !== undefined || input.move_to_root === true;
@@ -1202,8 +1189,55 @@ const updateDocumentArgsSchema = v.pipe(
   ),
 );
 
+type SaveDocumentInput = v.InferOutput<typeof saveDocumentArgsSchema>;
+
+// Create branch of save_document: a new empty document or folder. Reused from
+// the former create_document tool.
+const createDocumentEntity = async ({
+  context,
+  input,
+}: {
+  context: McpRequestContext;
+  input: SaveDocumentInput;
+}): Promise<ReturnType<typeof textResult>> => {
+  if (!roles[context.memberRole].authorize({ entity: ["create"] }).success) {
+    return errorResult("Forbidden");
+  }
+
+  const workspaceId = ensureActiveWorkspace({
+    context,
+    workspaceId: input.matter_id ?? "",
+  });
+  if (typeof workspaceId !== "string") {
+    return workspaceId;
+  }
+
+  const created = await Result.gen(() =>
+    createEntitiesHandler({
+      safeDb: context.safeDb,
+      workspaceId,
+      userId: context.userId,
+      recordAuditEvent: bindWorkspaceRecorder(context, workspaceId),
+      body: {
+        kind: input.kind ?? "document",
+        parentId:
+          input.parent_id === undefined
+            ? null
+            : brandPersistedEntityId(input.parent_id),
+        name: input.name ?? "",
+      },
+    }),
+  );
+  if (Result.isError(created)) {
+    return errorResult(created.error.message);
+  }
+
+  return textResult({ entityId: created.value.entityId });
+};
+
 /**
- * Validate the entities update_document will touch before any mutation runs, so
+ * Validate the entities save_document's update branch will touch before any
+ * mutation runs, so
  * an invalid target cannot fail after an earlier rename already committed. Not
  * transactional: a target could be deleted or change kind between this check
  * and the mutation (an accepted TOCTOU window); this only removes the common
@@ -1308,32 +1342,27 @@ const applyVersionAnnotations = async ({
   return null;
 };
 
-const handleUpdateDocumentTool: McpToolHandler = async ({ args, context }) => {
-  const hasPermission = roles[context.memberRole].authorize({
-    entity: ["update"],
-  });
-  if (!hasPermission.success) {
+// Update branch of save_document: rename/move/annotate an existing document.
+// Reused from the former update_document tool; the caller guarantees entity_id
+// is present.
+const updateDocumentEntity = async ({
+  context,
+  input,
+}: {
+  context: McpRequestContext;
+  input: SaveDocumentInput;
+}): Promise<ReturnType<typeof textResult>> => {
+  if (!roles[context.memberRole].authorize({ entity: ["update"] }).success) {
     return errorResult("Forbidden");
   }
 
-  const parsed = v.safeParse(updateDocumentArgsSchema, args);
-  if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
-        parsed.issues,
-        "Invalid input: expected { entity_id: string, ... }",
-      ),
-    );
-  }
-  const input = parsed.output;
-
   // Cross-field shape rules (at least one change, parent_id/move_to_root
   // exclusivity, label/description require version_id) are enforced by
-  // updateDocumentArgsSchema above; only DB-dependent target validation remains.
+  // saveDocumentArgsSchema above; only DB-dependent target validation remains.
   const wantsMove =
     input.parent_id !== undefined || input.move_to_root === true;
 
-  const entityId = brandPersistedEntityId(input.entity_id);
+  const entityId = brandPersistedEntityId(input.entity_id ?? "");
   const owner = await resolveEntityWorkspace({ context, entityId });
   if (owner.status !== "ok") {
     return documentEntityNotAvailable(owner);
@@ -1412,6 +1441,25 @@ const handleUpdateDocumentTool: McpToolHandler = async ({ args, context }) => {
   }
 
   return textResult({ updated: true });
+};
+
+const handleSaveDocumentTool: McpToolHandler = async ({ args, context }) => {
+  const parsed = v.safeParse(saveDocumentArgsSchema, args);
+  if (!parsed.success) {
+    return errorResult(
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { matter_id, name, parent_id?, kind? } to create, or { entity_id, name?/parent_id?/move_to_root?/version_id?/label?/description? } to update",
+      ),
+    );
+  }
+  const input = parsed.output;
+
+  // Omit entity_id to create; pass it to update.
+  if (input.entity_id === undefined) {
+    return await createDocumentEntity({ context, input });
+  }
+  return await updateDocumentEntity({ context, input });
 };
 
 const deleteDocumentArgsSchema = v.strictObject({
@@ -1699,11 +1747,10 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
 };
 
 export const DOCUMENT_TOOL_HANDLERS = {
-  create_document: handleCreateDocumentTool,
   delete_document: handleDeleteDocumentTool,
   list_documents: handleListDocumentsTool,
   list_properties: handleListPropertiesTool,
   read_document: handleReadDocumentTool,
+  save_document: handleSaveDocumentTool,
   set_field_value: handleSetFieldValueTool,
-  update_document: handleUpdateDocumentTool,
 } satisfies Record<DocumentToolName, McpToolHandler>;

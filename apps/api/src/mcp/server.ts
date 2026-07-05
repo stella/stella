@@ -1,6 +1,7 @@
 import { captureError } from "@/api/lib/analytics";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
+import { listMcpResources, readMcpResource } from "@/api/mcp/resources";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import {
   getMcpToolDefinition,
@@ -15,6 +16,8 @@ export const handleMcpHttpRequest = createMcpHttpRequestHandler({
   getMcpToolDefinition,
   getMcpToolScopeHint,
   handleMcpToolCall,
+  listMcpResources,
   listMcpTools,
+  readMcpResource,
   resolveMcpSessionContext,
 });

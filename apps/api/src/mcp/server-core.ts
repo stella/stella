@@ -2,11 +2,15 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import {
   CallToolRequestSchema,
+  ListResourcesRequestSchema,
   ListToolsRequestSchema,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import type {
   CallToolResult,
   Tool as McpTool,
+  ReadResourceResult,
+  Resource,
 } from "@modelcontextprotocol/sdk/types.js";
 
 import type { McpSession } from "@/api/mcp/auth";
@@ -50,6 +54,8 @@ type McpServerDependencies = {
     mode?: McpMode,
     scopes?: readonly string[],
   ) => Promise<McpTool[]>;
+  listMcpResources: (mode: McpMode) => Resource[];
+  readMcpResource: (uri: string, mode: McpMode) => ReadResourceResult;
   resolveMcpSessionContext: (
     session: McpSession,
     options: { request: Request },
@@ -109,7 +115,9 @@ export const createMcpHttpRequestHandler = ({
   getMcpToolDefinition,
   getMcpToolScopeHint,
   handleMcpToolCall,
+  listMcpResources,
   listMcpTools,
+  readMcpResource,
   resolveMcpSessionContext,
 }: McpServerDependencies) => {
   const createMcpServer = async ({
@@ -128,12 +136,25 @@ export const createMcpHttpRequestHandler = ({
     // eslint-disable-next-line typescript-eslint/no-deprecated -- low-level Server is the intended "advanced use case" API per the SDK; McpServer would couple us to chat tool generics
     const server = new Server(
       { name: getMcpServerName(mode), version: MCP_SERVER_VERSION },
-      { capabilities: { tools: {} } },
+      { capabilities: { resources: {}, tools: {} } },
     );
 
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: await listMcpTools(context, mode, session.scopes),
     }));
+
+    // Resources are static, public, tenant-independent documents (the template
+    // marker grammar today); the same set is served in both modes without a
+    // per-tool scope gate. Every request already carries a valid session token.
+    // The SDK accepts synchronous request handlers, and both resource reads are
+    // synchronous, so neither needs an async wrapper.
+    server.setRequestHandler(ListResourcesRequestSchema, () => ({
+      resources: listMcpResources(mode),
+    }));
+
+    server.setRequestHandler(ReadResourceRequestSchema, (resourceRequest) =>
+      readMcpResource(resourceRequest.params.uri, mode),
+    );
 
     server.setRequestHandler(CallToolRequestSchema, async (toolRequest) => {
       const toolName = toolRequest.params.name;

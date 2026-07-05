@@ -583,15 +583,12 @@ describe("OpenAI-compatible MCP tools", () => {
       "search",
       "fetch",
       "list_matters",
-      "get_matter_overview",
       "search_across_matters",
       "search_case_law",
       "read_content_across_matters",
       "read_case_law_decision",
       "read_contact",
       "list_templates",
-      "describe_template",
-      "template_marker_reference",
       "list_documents",
       "read_document",
       "list_properties",
@@ -601,7 +598,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_playbooks",
       "list_time_entries",
       "resolve_rate",
-      "read_invoices",
+      "list_invoices",
       "get_usage",
       "search_legislation",
     ]);
@@ -1694,11 +1691,11 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("update_document rejects an entity that is not a document or folder", async () => {
+  test("save_document (update branch) rejects an entity that is not a document or folder", async () => {
     const result = await handleMcpToolCall({
       args: { entity_id: "entity_message", name: "Renamed" },
       context: createContext({ scopedDb: createEntityKindScopedDb("message") }),
-      toolName: "update_document",
+      toolName: "save_document",
     });
 
     expect(result).toEqual({
@@ -1742,11 +1739,11 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("update_document rejects an empty update", async () => {
+  test("save_document (update branch) rejects an empty update", async () => {
     const result = await handleMcpToolCall({
       args: { entity_id: "entity_1" },
       context: createContext(),
-      toolName: "update_document",
+      toolName: "save_document",
     });
 
     expect(result).toEqual({
@@ -1760,7 +1757,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("update_document rejects parent_id together with move_to_root", async () => {
+  test("save_document (update branch) rejects parent_id together with move_to_root", async () => {
     const result = await handleMcpToolCall({
       args: {
         entity_id: "entity_1",
@@ -1768,7 +1765,7 @@ describe("OpenAI-compatible MCP tools", () => {
         parent_id: "entity_folder",
       },
       context: createContext(),
-      toolName: "update_document",
+      toolName: "save_document",
     });
 
     expect(result).toEqual({
@@ -1782,18 +1779,54 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("update_document rejects label without version_id", async () => {
+  test("save_document (update branch) rejects label without version_id", async () => {
     // A rename keeps rule 1 (at least one change) satisfied so the failure
     // isolates the label-requires-version_id rule.
     const result = await handleMcpToolCall({
       args: { entity_id: "entity_1", name: "Renamed", label: "Signed copy" },
       context: createContext(),
-      toolName: "update_document",
+      toolName: "save_document",
     });
 
     expect(result).toEqual({
       content: [
         { type: "text", text: "label and description require version_id" },
+      ],
+      isError: true,
+    });
+  });
+
+  test("save_document rejects matter_id (a create field) alongside entity_id", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", matter_id: "ws_1", name: "Renamed" },
+      context: createContext(),
+      toolName: "save_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "matter_id applies only when creating; omit it when updating a document",
+        },
+      ],
+      isError: true,
+    });
+  });
+
+  test("list_matters rejects matter_id combined with a list filter", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", limit: 10 },
+      context: createContext(),
+      toolName: "list_matters",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "status, limit, and cursor apply when listing matters; omit matter_id to list",
+        },
       ],
       isError: true,
     });

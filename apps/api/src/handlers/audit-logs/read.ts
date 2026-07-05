@@ -112,7 +112,7 @@ const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
 
 const config = {
   permissions: { auditLog: ["read"] },
-  mcp: { type: "tool", name: "read_audit_log" },
+  mcp: { type: "tool", name: "list_audit_log" },
   query: readAuditLogsQuerySchema,
 } satisfies HandlerConfig;
 

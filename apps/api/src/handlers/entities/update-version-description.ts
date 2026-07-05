@@ -23,7 +23,7 @@ const bodySchema = t.Object({
 
 const config = {
   permissions: { entity: ["update"] },
-  mcp: { type: "covered", by: "update_document" },
+  mcp: { type: "covered", by: "save_document" },
   params: paramsSchema,
   body: bodySchema,
 } satisfies HandlerConfig;

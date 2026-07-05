@@ -1,6 +1,8 @@
 import type {
   CallToolResult,
   Tool as McpTool,
+  ReadResourceResult,
+  Resource,
 } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
@@ -21,6 +23,8 @@ const getMcpToolScopeHintMock = mock(
 );
 const handleMcpToolCallMock = mock();
 const listMcpToolsMock = mock(async (): Promise<McpTool[]> => []);
+const listMcpResourcesMock = mock((): Resource[] => []);
+const readMcpResourceMock = mock((): ReadResourceResult => ({ contents: [] }));
 
 const handleMcpHttpRequest = createMcpHttpRequestHandler({
   authenticateMcpRequest: authenticateMcpRequestMock,
@@ -30,7 +34,9 @@ const handleMcpHttpRequest = createMcpHttpRequestHandler({
   getMcpToolDefinition: getMcpToolDefinitionMock,
   getMcpToolScopeHint: getMcpToolScopeHintMock,
   handleMcpToolCall: handleMcpToolCallMock,
+  listMcpResources: listMcpResourcesMock,
   listMcpTools: listMcpToolsMock,
+  readMcpResource: readMcpResourceMock,
   resolveMcpSessionContext: resolveMcpSessionContextMock,
 });
 
@@ -63,6 +69,10 @@ describe("handleMcpHttpRequest", () => {
     handleMcpToolCallMock.mockReset();
     listMcpToolsMock.mockReset();
     listMcpToolsMock.mockImplementation(async () => []);
+    listMcpResourcesMock.mockReset();
+    listMcpResourcesMock.mockImplementation(() => []);
+    readMcpResourceMock.mockReset();
+    readMcpResourceMock.mockImplementation(() => ({ contents: [] }));
     resolveMcpSessionContextMock.mockReset();
   });
 
@@ -221,5 +231,82 @@ describe("handleMcpHttpRequest", () => {
       ],
       isError: true,
     });
+  });
+
+  test("lists static resources for the request mode", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    listMcpResourcesMock.mockReturnValue([
+      {
+        uri: "stella://reference/template-markers",
+        name: "template-markers",
+        description: "Template marker grammar",
+        mimeType: "text/markdown",
+      },
+    ]);
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "resources/list",
+      }),
+    );
+    const body =
+      await readTestJson<McpJsonResponse<{ resources: Resource[] }>>(response);
+
+    expect(response.status).toBe(200);
+    expect(listMcpResourcesMock).toHaveBeenCalledWith("default");
+    expect(body.result.resources.map((resource) => resource.uri)).toEqual([
+      "stella://reference/template-markers",
+    ]);
+  });
+
+  test("reads a resource by uri for the request mode", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    readMcpResourceMock.mockReturnValue({
+      contents: [
+        {
+          uri: "stella://reference/template-markers",
+          mimeType: "text/markdown",
+          text: "marker grammar body",
+        },
+      ],
+    });
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "resources/read",
+        params: { uri: "stella://reference/template-markers" },
+      }),
+    );
+    const body =
+      await readTestJson<McpJsonResponse<ReadResourceResult>>(response);
+
+    expect(response.status).toBe(200);
+    expect(readMcpResourceMock).toHaveBeenCalledWith(
+      "stella://reference/template-markers",
+      "default",
+    );
+    expect(body.result.contents).toEqual([
+      {
+        uri: "stella://reference/template-markers",
+        mimeType: "text/markdown",
+        text: "marker grammar body",
+      },
+    ]);
   });
 });

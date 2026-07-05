@@ -61,7 +61,9 @@ const createBlankTemplateHandler = async function* ({
 
 const config = {
   permissions: { template: ["create"] },
-  mcp: { type: "covered", by: "create_template" },
+  // Not reachable through save_template (which requires a DOCX on create);
+  // blank-template creation stays a tracked gap.
+  mcp: { type: "pending" },
   body: createBlankTemplateBodySchema,
 } satisfies HandlerConfig;
 
