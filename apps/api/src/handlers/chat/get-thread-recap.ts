@@ -24,7 +24,7 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 
 const config = {
   permissions: { chat: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "assistant_chat" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
 } satisfies HandlerConfig;

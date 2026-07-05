@@ -25,7 +25,7 @@ const updateWebSearchKeyBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "provider_secret" },
   body: updateWebSearchKeyBody,
 } satisfies HandlerConfig;
 

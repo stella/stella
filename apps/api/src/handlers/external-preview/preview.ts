@@ -41,7 +41,7 @@ type ExternalPreviewResponse = {
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "url_preview" },
   query: t.Object({
     url: t.String({ minLength: 1, maxLength: MAX_URL_LENGTH }),
   }),

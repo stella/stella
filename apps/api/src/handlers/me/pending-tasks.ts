@@ -5,7 +5,7 @@ import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { getPendingTasksAndMembers } from "@/api/lib/delete-account";
 
 const config = {
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;
 
 const deleteAccountPendingTasks = createSafeSessionHandler(

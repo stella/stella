@@ -889,6 +889,8 @@
     "error": "Algo salió mal. Inténtelo de nuevo.",
     "missingJurisdictions": "Su organización de stella todavía no ha configurado sus jurisdicciones de práctica. Algunas herramientas que dependen de la jurisdicción no estarán disponibles hasta que complete la configuración.",
     "permissions": "Esto permitirá a la aplicación:",
+    "scopeAdminRead": "Leer el registro de auditoría de su organización",
+    "scopeAdminWrite": "Gestionar los miembros y la configuración de la organización",
     "scopeBillingWrite": "Crear, editar y eliminar sus registros de tiempo",
     "scopeDocumentsWrite": "Crear, editar y eliminar sus documentos",
     "scopeExternalMcps": "Usar tus herramientas externas conectadas",

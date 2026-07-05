@@ -5,6 +5,7 @@ import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_DEFINITIONS } from "@/api/mcp/matter-tools";
+import { RESEARCH_ADMIN_TOOL_DEFINITIONS } from "@/api/mcp/research-admin-tools";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_DEFINITIONS } from "@/api/mcp/template-tools";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
@@ -23,6 +24,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...MATTER_TOOL_DEFINITIONS,
   ...KNOWLEDGE_TOOL_DEFINITIONS,
   ...BILLING_TOOL_DEFINITIONS,
+  ...RESEARCH_ADMIN_TOOL_DEFINITIONS,
 ] as const satisfies readonly McpToolDefinition[];
 
 /**

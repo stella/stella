@@ -8,6 +8,8 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:matters_write",
   "stella:knowledge_write",
   "stella:billing_write",
+  "stella:admin_read",
+  "stella:admin_write",
   "stella:onboarding",
   "stella:skills",
   "stella:external_mcps",

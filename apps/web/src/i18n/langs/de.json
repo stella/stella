@@ -889,6 +889,8 @@
     "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
     "missingJurisdictions": "Ihre stella-Organisation hat ihre Tätigkeitsgebiete noch nicht eingerichtet. Einige gebietsabhängige Tools sind erst verfügbar, wenn Sie die Einrichtung abschließen.",
     "permissions": "Dies erlaubt der Anwendung:",
+    "scopeAdminRead": "Das Audit-Protokoll Ihrer Organisation lesen",
+    "scopeAdminWrite": "Mitglieder und Einstellungen der Organisation verwalten",
     "scopeBillingWrite": "Ihre Zeiteinträge erstellen, bearbeiten und löschen",
     "scopeDocumentsWrite": "Ihre Dokumente erstellen, bearbeiten und löschen",
     "scopeExternalMcps": "Ihre verbundenen externen Tools verwenden",

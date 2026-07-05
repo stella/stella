@@ -4,6 +4,7 @@ import { and, desc, eq, gte, lt, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { auditLogs } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -111,7 +112,7 @@ const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
 
 const config = {
   permissions: { auditLog: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "tool", name: "read_audit_log" },
   query: readAuditLogsQuerySchema,
 } satisfies HandlerConfig;
 
@@ -120,70 +121,93 @@ const VALID_RESOURCE_TYPES = new Set<string>(
   Object.values(AUDIT_RESOURCE_TYPE),
 );
 
+/**
+ * Compliance-read filter over the org's append-only audit trail. Shared shape
+ * for the HTTP handler and the `read_audit_log` MCP tool so both apply the same
+ * filter surface, keyset cursor, and rejections.
+ */
+export type AuditLogFilter = ReadAuditLogsQuery;
+
+/**
+ * Replicates every 400 the read path rejects on before any query runs
+ * (unknown action / resource type, resourceId without resourceType, malformed
+ * cursor). Returns the human-readable reason, or null when the filter is valid.
+ * Both transports call it up front so a bad filter fails identically.
+ */
+export const validateAuditLogFilter = (
+  query: AuditLogFilter,
+): string | null => {
+  if (query.action !== undefined && !VALID_ACTIONS.has(query.action)) {
+    return `Unknown action filter '${query.action}'`;
+  }
+  if (
+    query.resourceType !== undefined &&
+    !VALID_RESOURCE_TYPES.has(query.resourceType)
+  ) {
+    return `Unknown resourceType filter '${query.resourceType}'`;
+  }
+  if (query.resourceId && !query.resourceType) {
+    return "resourceType is required when resourceId is provided";
+  }
+  if (query.cursor && !decodeCursor(query.cursor)) {
+    return "Invalid cursor";
+  }
+  return null;
+};
+
+// Runs the validated compliance-read query. Callers must invoke
+// `validateAuditLogFilter` first; this only builds the org-scoped conditions,
+// applies the keyset order, and pages the result. Kept transport-agnostic so
+// the HTTP handler and the MCP tool return byte-identical pages.
+export const queryAuditLogPage = async function* ({
+  safeDb,
+  organizationId,
+  query,
+}: {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  query: AuditLogFilter;
+}) {
+  const limit = query.limit ?? LIMITS.auditLogPageSizeDefault;
+
+  const conditions = [
+    eq(auditLogs.organizationId, organizationId),
+    ...toAuditLogConditions(query),
+  ];
+
+  const rows = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select()
+        .from(auditLogs)
+        .where(and(...conditions))
+        .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
+        .limit(limit + 1),
+    ),
+  );
+
+  return Result.ok(
+    createCursorPage({
+      rows,
+      limit,
+      cursorForItem: (item) => encodeCursor(item.createdAt, item.id),
+    }),
+  );
+};
+
 const readAuditLogs = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, query }) {
-    const limit = query.limit ?? LIMITS.auditLogPageSizeDefault;
-
-    if (query.action !== undefined && !VALID_ACTIONS.has(query.action)) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Unknown action filter '${query.action}'`,
-        }),
-      );
+    const invalid = validateAuditLogFilter(query);
+    if (invalid !== null) {
+      return Result.err(new HandlerError({ status: 400, message: invalid }));
     }
 
-    if (
-      query.resourceType !== undefined &&
-      !VALID_RESOURCE_TYPES.has(query.resourceType)
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Unknown resourceType filter '${query.resourceType}'`,
-        }),
-      );
-    }
-
-    if (query.resourceId && !query.resourceType) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "resourceType is required when resourceId is provided",
-        }),
-      );
-    }
-
-    if (query.cursor && !decodeCursor(query.cursor)) {
-      return Result.err(
-        new HandlerError({ status: 400, message: "Invalid cursor" }),
-      );
-    }
-
-    const conditions = [
-      eq(auditLogs.organizationId, session.activeOrganizationId),
-      ...toAuditLogConditions(query),
-    ];
-
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select()
-          .from(auditLogs)
-          .where(and(...conditions))
-          .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
-          .limit(limit + 1),
-      ),
-    );
-
-    return Result.ok(
-      createCursorPage({
-        rows,
-        limit,
-        cursorForItem: (item) => encodeCursor(item.createdAt, item.id),
-      }),
-    );
+    return yield* queryAuditLogPage({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      query,
+    });
   },
 );
 

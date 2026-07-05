@@ -892,6 +892,8 @@ type Messages = {
     "error": "Something went wrong. Please try again.";
     "missingJurisdictions": "Your stella organization hasn't set up its practice jurisdictions yet. Some jurisdiction-aware tools will be unavailable until you complete setup.";
     "permissions": "This will allow the application to:";
+    "scopeAdminRead": "Read your organization's audit log";
+    "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
     "scopeDocumentsWrite": "Create, edit, and delete your documents";
     "scopeExternalMcps": "Use your connected integrations";

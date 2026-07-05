@@ -603,6 +603,7 @@ describe("OpenAI-compatible MCP tools", () => {
       "resolve_rate",
       "read_invoices",
       "get_usage",
+      "search_legislation",
     ]);
   });
 
