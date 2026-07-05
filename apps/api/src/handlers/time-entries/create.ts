@@ -13,6 +13,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const createTimeEntryBodySchema = t.Object({
   matterId: tSafeId("entity"),
@@ -47,20 +48,9 @@ export const createTimeEntryHandler = async function* ({
   recordAuditEvent,
   body,
 }: CreateTimeEntryHandlerProps) {
-  const now = new Date();
-  let todayStr: string;
-  try {
-    todayStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: body.timezoneId,
-    }).format(now);
-  } catch {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Invalid timezone identifier",
-      }),
-    );
-  }
+  const todayStr = yield* formatTodayInTimeZone({
+    timezoneId: body.timezoneId,
+  });
   const dateWorked = new Date(`${body.dateWorked}T00:00:00`);
   const today = new Date(`${todayStr}T00:00:00`);
 

@@ -13,6 +13,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
 const timerStartBodySchema = t.Object({
   matterId: tSafeId("entity"),
@@ -36,6 +37,12 @@ const timerStart = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
+    const now = new Date();
+    const todayStr = yield* formatTodayInTimeZone({
+      timezoneId: body.timezoneId,
+      now,
+    });
+
     // Check active timer limit
     const activeTimerCount = yield* Result.await(
       safeDb((tx) =>
@@ -81,12 +88,6 @@ const timerStart = createSafeHandler(
         }),
       );
     }
-
-    const now = new Date();
-    // en-CA locale formats dates as YYYY-MM-DD (ISO 8601)
-    const todayStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: body.timezoneId,
-    }).format(now);
 
     // Advisory lock + count + insert in one transaction to
     // prevent TOCTOU on the workspace time entry limit.
