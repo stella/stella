@@ -1,5 +1,5 @@
-import { useLayoutEffect, useMemo, useRef } from "react";
-import type { ComponentProps, RefObject } from "react";
+import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { ComponentProps, ReactNode, RefObject } from "react";
 
 import {
   ChevronRightIcon,
@@ -74,6 +74,7 @@ export const ChatThreadMessages = ({
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
+  stickyUserMessages = false,
   queuedMessages,
   onRemoveQueuedMessage,
   streamdownComponents,
@@ -171,6 +172,85 @@ export const ChatThreadMessages = ({
     container.scrollTop += container.scrollHeight - previousScrollHeight;
   }, [firstMessageId, scrollRef]);
 
+  // Rendered per message in both the flat and sticky layouts, so the message
+  // body markup stays identical across surfaces; only the surrounding turn
+  // grouping differs when `stickyUserMessages` is on.
+  const renderMessageNode = (message: PersistedChatMessage, index: number) => (
+    <Message
+      className={cn(
+        "transition-opacity duration-200",
+        approvalPendingMessageId &&
+          approvalPendingMessageId !== message.id &&
+          "opacity-40",
+      )}
+      from={message.role}
+      key={message.id}
+    >
+      <MessageContent>
+        {message.role === "assistant" ? (
+          <>
+            <AssistantMessageParts
+              activeOrganizationId={activeOrganizationId}
+              isGenerating={isGenerating}
+              isLatestAssistantMessage={
+                message.id === retryableAssistantMessageId
+              }
+              message={message}
+              onAskUserEditAndRerun={onAskUserEditAndRerun}
+              onAskUserEditingChange={onAskUserEditingChange}
+              onAskUserSubmit={onAskUserSubmit}
+              onCreateDocumentResolve={onCreateDocumentResolve}
+              onOpenCreatedDocument={onOpenCreatedDocument}
+              shouldShowToolCalls={shouldShowToolCalls}
+              streamdownComponents={streamdownComponents}
+              workspaceId={workspaceId}
+            />
+            <SourceChips
+              activeOrganizationId={activeOrganizationId}
+              messageId={message.id}
+              parts={message.parts}
+              sourceDocuments={message.metadata?.sourceDocuments}
+              workspaceId={workspaceId}
+            />
+            <AssistantMessageActions
+              isGenerating={isGenerating}
+              isLatestAssistantMessage={
+                message.id === retryableAssistantMessageId
+              }
+              message={message}
+              onResend={onResend}
+            />
+          </>
+        ) : (
+          <>
+            {(() => {
+              const fileParts: ChatAttachmentPart[] = [];
+              for (const part of message.parts) {
+                if (isChatAttachmentPart(part)) {
+                  fileParts.push(part);
+                }
+              }
+
+              return <UserAttachments parts={fileParts} />;
+            })()}
+            {message.parts.map((part, partIndex) =>
+              part.type === "text" ? (
+                <UserMessageText
+                  key={`${message.id}-user-text-${partIndex}`}
+                  restorationPairs={getFollowingAssistantRestorations(
+                    messages,
+                    index,
+                  )}
+                  text={normalizeUserMessageTextForDisplay(part.content)}
+                />
+              ) : null,
+            )}
+          </>
+        )}
+      </MessageContent>
+    </Message>
+  );
+
   return (
     <>
       {canLoadOlder && (
@@ -180,81 +260,33 @@ export const ChatThreadMessages = ({
           ref={sentinelRef}
         />
       )}
-      {messages.map((message, index) => (
-        <Message
-          className={cn(
-            "transition-opacity duration-200",
-            approvalPendingMessageId &&
-              approvalPendingMessageId !== message.id &&
-              "opacity-40",
-          )}
-          from={message.role}
-          key={message.id}
-        >
-          <MessageContent>
-            {message.role === "assistant" ? (
-              <>
-                <AssistantMessageParts
-                  activeOrganizationId={activeOrganizationId}
-                  isGenerating={isGenerating}
-                  isLatestAssistantMessage={
-                    message.id === retryableAssistantMessageId
-                  }
-                  message={message}
-                  onAskUserEditAndRerun={onAskUserEditAndRerun}
-                  onAskUserEditingChange={onAskUserEditingChange}
-                  onAskUserSubmit={onAskUserSubmit}
-                  onCreateDocumentResolve={onCreateDocumentResolve}
-                  onOpenCreatedDocument={onOpenCreatedDocument}
-                  shouldShowToolCalls={shouldShowToolCalls}
-                  streamdownComponents={streamdownComponents}
-                  workspaceId={workspaceId}
-                />
-                <SourceChips
-                  activeOrganizationId={activeOrganizationId}
-                  messageId={message.id}
-                  parts={message.parts}
-                  sourceDocuments={message.metadata?.sourceDocuments}
-                  workspaceId={workspaceId}
-                />
-                <AssistantMessageActions
-                  isGenerating={isGenerating}
-                  isLatestAssistantMessage={
-                    message.id === retryableAssistantMessageId
-                  }
-                  message={message}
-                  onResend={onResend}
-                />
-              </>
-            ) : (
-              <>
-                {(() => {
-                  const fileParts: ChatAttachmentPart[] = [];
-                  for (const part of message.parts) {
-                    if (isChatAttachmentPart(part)) {
-                      fileParts.push(part);
-                    }
-                  }
-
-                  return <UserAttachments parts={fileParts} />;
-                })()}
-                {message.parts.map((part, partIndex) =>
-                  part.type === "text" ? (
-                    <UserMessageText
-                      key={`${message.id}-user-text-${partIndex}`}
-                      restorationPairs={getFollowingAssistantRestorations(
-                        messages,
-                        index,
-                      )}
-                      text={normalizeUserMessageTextForDisplay(part.content)}
-                    />
-                  ) : null,
+      {stickyUserMessages
+        ? buildMessageTurns(messages).map((turn, turnIndex) => {
+            if (turn.type === "orphan") {
+              return (
+                <Fragment key={`orphan-${turnIndex}`}>
+                  {turn.body.map((item) =>
+                    renderMessageNode(item.message, item.index),
+                  )}
+                </Fragment>
+              );
+            }
+            return (
+              <StickyUserTurn
+                approvalPendingMessageId={approvalPendingMessageId}
+                headerIndex={turn.index}
+                headerMessage={turn.header}
+                key={turn.header.id}
+                messages={messages}
+                scrollRef={scrollRef}
+              >
+                {turn.body.map((item) =>
+                  renderMessageNode(item.message, item.index),
                 )}
-              </>
-            )}
-          </MessageContent>
-        </Message>
-      ))}
+              </StickyUserTurn>
+            );
+          })
+        : messages.map((message, index) => renderMessageNode(message, index))}
       {error && (
         <ChatErrorMessage
           error={error}
@@ -275,6 +307,242 @@ export const ChatThreadMessages = ({
           />
         )}
     </>
+  );
+};
+
+type TurnBodyItem = {
+  message: PersistedChatMessage;
+  /** Position in the flat `messages` list, kept so anon-restoration lookups
+   *  and retry targeting stay identical to the non-sticky layout. */
+  index: number;
+};
+
+/**
+ * A transcript segment. `user` turns start with a user message that becomes
+ * the sticky header; `orphan` turns hold assistant/system messages that
+ * precede any user message (e.g. a greeting, or the tail of an older turn
+ * pulled in by pagination) and render without a sticky header.
+ */
+type MessageTurn =
+  | {
+      type: "user";
+      index: number;
+      header: PersistedChatMessage;
+      body: TurnBodyItem[];
+    }
+  | { type: "orphan"; body: TurnBodyItem[] };
+
+/**
+ * Groups the flat message list into turns for the sticky layout: every user
+ * message opens a new turn and the following non-user messages attach to it,
+ * so each turn's height spans its whole answer. That height is what gives the
+ * sticky header room to pin — a header can only stick within its own turn, so
+ * the next turn's header pushes it out as it reaches the top.
+ */
+export const buildMessageTurns = (
+  messages: readonly PersistedChatMessage[],
+): MessageTurn[] => {
+  const turns: MessageTurn[] = [];
+  for (let index = 0; index < messages.length; index += 1) {
+    const message = messages[index];
+    if (!message) {
+      continue;
+    }
+    if (message.role === "user") {
+      turns.push({ type: "user", index, header: message, body: [] });
+      continue;
+    }
+    const last = turns.at(-1);
+    if (last) {
+      last.body.push({ message, index });
+      continue;
+    }
+    turns.push({ type: "orphan", body: [{ message, index }] });
+  }
+  return turns;
+};
+
+type StickyUserTurnProps = {
+  approvalPendingMessageId: string | null;
+  headerIndex: number;
+  headerMessage: PersistedChatMessage;
+  messages: readonly PersistedChatMessage[];
+  scrollRef: RefObject<HTMLDivElement | null> | null;
+  children: ReactNode;
+};
+
+/**
+ * One turn in the sticky layout: a user header pinned to the top of the
+ * scroll container while its answer scrolls beneath. The header only sticks
+ * within this `section`, so once the answer is fully scrolled past the next
+ * turn's header takes over.
+ */
+const StickyUserTurn = ({
+  approvalPendingMessageId,
+  headerIndex,
+  headerMessage,
+  messages,
+  scrollRef,
+  children,
+}: StickyUserTurnProps) => {
+  const t = useTranslations();
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [isStuck, setIsStuck] = useState(false);
+  const restorationPairs = getFollowingAssistantRestorations(
+    messages,
+    headerIndex,
+  );
+  const fileParts: ChatAttachmentPart[] = [];
+  for (const part of headerMessage.parts) {
+    if (isChatAttachmentPart(part)) {
+      fileParts.push(part);
+    }
+  }
+  // A file-only turn (attachments, no visible text) would pin as an empty
+  // bubble once stuck, because the full attachments row hides while stuck and
+  // there is no text clamp to fall back on. Keep a compact count chip in that
+  // case so the pinned context is never blank; turns that have text keep the
+  // current behavior (attachments hidden, text clamped).
+  const hasVisibleText = headerMessage.parts.some(
+    (part) => part.type === "text" && part.content.trim().length > 0,
+  );
+
+  // Stuck-detection: an out-of-flow 1px sentinel marks the header's natural
+  // top. Once it scrolls above the container's top edge the header is pinned.
+  // Re-armed on `headerMessage.id` so a thread switch or paginated prepend
+  // rebinds the observer to this turn's live sentinel and container.
+  useExternalSyncEffect(() => {
+    const root = scrollRef?.current;
+    const target = sentinelRef.current;
+    if (!root || !target) {
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries.at(0);
+        if (!entry) {
+          return;
+        }
+        const rootTop = entry.rootBounds?.top ?? 0;
+        setIsStuck(
+          !entry.isIntersecting && entry.boundingClientRect.top <= rootTop,
+        );
+      },
+      { root, rootMargin: "0px", threshold: [0] },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+    // scrollRef/sentinelRef are stable refs; headerMessage.id re-arms on
+    // thread switch or prepend.
+  }, [scrollRef, headerMessage.id]);
+
+  // Scroll the header back to its natural position. The header itself is
+  // pinned at the top when stuck, so scrolling it into view is a no-op;
+  // aligning the always-in-flow sentinel to the container top is what
+  // reveals the start of this turn.
+  const handleScrollBack = () => {
+    const container = scrollRef?.current;
+    const sentinel = sentinelRef.current;
+    if (!container || !sentinel) {
+      return;
+    }
+    // eslint-disable-next-line react/react-compiler -- imperative scroll of the container DOM node (reached through the forwarded scrollRef prop) inside a click handler; a legitimate event-handler DOM mutation, not render state
+    container.scrollTop +=
+      sentinel.getBoundingClientRect().top -
+      container.getBoundingClientRect().top;
+  };
+
+  return (
+    <section className="relative flex flex-col gap-3">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        ref={sentinelRef}
+      />
+      <div
+        className={cn(
+          // Only needs to cover in-flow transcript content scrolling beneath
+          // it (z-auto). The page-level stacking order (see chat-thread-page)
+          // keeps the floating composer above the whole transcript, so this
+          // must NOT climb high enough to overlay it. `z-10` is the ceiling.
+          "group/sticky sticky top-0 z-10",
+          // Unstuck: opaque band flush with the page (no chrome/box).
+          "data-[stuck=false]:bg-background",
+          // Stuck: near-opaque glass veil + blur matching the floating
+          // composer and sidebar, so the pinned message floats over the
+          // answer scrolling beneath. The veil is raised toward opaque
+          // (/95, /80 with backdrop-filter) so the moving answer text
+          // barely ghosts through instead of competing with the header.
+          "data-[stuck=true]:bg-background/95 supports-[backdrop-filter]:data-[stuck=true]:bg-background/80 data-[stuck=true]:backdrop-blur-md",
+          // The veil band stays pinned flush to the pane top (top-0) so it
+          // always covers the answer scrolling through beneath it; the top
+          // padding then insets the bubble by a sliver, so the pinned
+          // message floats with a little blurred breathing room above it
+          // rather than leaning against the pane's top edge. A rounded
+          // bottom + fine border reads as a floating shelf, not a hard cut.
+          "data-[stuck=true]:border-border/50 data-[stuck=true]:rounded-b-xl data-[stuck=true]:border-b data-[stuck=true]:pt-1",
+        )}
+        data-stuck={isStuck ? "true" : "false"}
+      >
+        {/* Behind the bubble: while stuck the bubble goes pointer-events-none
+            so plain text falls through to this jump target, and only its
+            interactive children (anonymization pills) re-enable clicks. */}
+        {isStuck && (
+          <button
+            aria-label={t("chat.jumpToMessage")}
+            className="absolute inset-0 z-0 cursor-pointer"
+            onClick={handleScrollBack}
+            type="button"
+          />
+        )}
+        <Message
+          className={cn(
+            "relative z-10 transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== headerMessage.id &&
+              "opacity-40",
+            "group-data-[stuck=true]/sticky:pointer-events-none",
+            "group-data-[stuck=true]/sticky:[&_a]:pointer-events-auto",
+            "group-data-[stuck=true]/sticky:[&_button]:pointer-events-auto",
+          )}
+          from="user"
+        >
+          <MessageContent>
+            <div className="group-data-[stuck=true]/sticky:hidden">
+              <UserAttachments parts={fileParts} />
+            </div>
+            {!hasVisibleText && fileParts.length > 0 && (
+              <span className="text-muted-foreground hidden items-center gap-1 text-xs group-data-[stuck=true]/sticky:flex">
+                <PaperclipIcon aria-hidden="true" className="size-3" />
+                {t("chat.queuedAttachmentCount", { count: fileParts.length })}
+              </span>
+            )}
+            <div
+              className={cn(
+                "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
+                // Fade the clipped overflow so a long pinned message dissolves
+                // instead of ending in a hard mid-glyph cut. The absolute-length
+                // stop (~one line-height) keeps a single-line message wholly
+                // inside the opaque zone so it stays fully visible; the fade only
+                // bites once a second line overflows.
+                "group-data-[stuck=true]/sticky:[mask-image:linear-gradient(to_bottom,black_1.25rem,transparent)]",
+              )}
+            >
+              {headerMessage.parts.map((part, partIndex) =>
+                part.type === "text" ? (
+                  <UserMessageText
+                    key={`${headerMessage.id}-user-text-${partIndex}`}
+                    restorationPairs={restorationPairs}
+                    text={normalizeUserMessageTextForDisplay(part.content)}
+                  />
+                ) : null,
+              )}
+            </div>
+          </MessageContent>
+        </Message>
+      </div>
+      {children}
+    </section>
   );
 };
 
@@ -793,6 +1061,13 @@ type ChatThreadMessagesProps = {
   showToolCallDetails?: boolean | undefined;
   showToolCalls?: boolean | undefined;
   /**
+   * Opt-in Cursor-style transcript: each user message pins to the top of
+   * the scroll container while its turn's answer scrolls beneath it, the
+   * next turn's message pushing it away. Only the main chat surface enables
+   * this; every other embedder keeps the flat, non-sticky list.
+   */
+  stickyUserMessages?: boolean | undefined;
+  /**
    * Messages the user composed while a response was streaming.
    * Rendered as dimmed "pending" bubbles below the transcript;
    * `useChatSession` dispatches them once the turn finishes.
@@ -829,7 +1104,7 @@ const QueuedUserMessages = ({
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-muted-foreground ms-auto flex items-center gap-1 text-xs">
+      <p className="text-muted-foreground flex items-center gap-1 text-xs">
         <ClockIcon aria-hidden="true" className="size-3" />
         {t("chat.queuedNotice")}
       </p>
@@ -839,17 +1114,8 @@ const QueuedUserMessages = ({
           : "";
         return (
           <Message from="user" key={queued.id}>
-            <div className="ms-auto flex max-w-full items-start gap-1">
-              <Button
-                aria-label={t("chat.cancelQueuedMessage")}
-                className="mt-0.5 shrink-0"
-                onClick={() => onRemove(queued.id)}
-                size="icon-xs"
-                variant="ghost"
-              >
-                <XIcon className="size-3.5" />
-              </Button>
-              <MessageContent className="opacity-60">
+            <div className="flex w-full items-start gap-1">
+              <MessageContent className="min-w-0 flex-1 opacity-60">
                 {text.length > 0 && (
                   <UserMessageText
                     restorationPairs={EMPTY_RESTORATION_PAIRS}
@@ -865,6 +1131,15 @@ const QueuedUserMessages = ({
                   </span>
                 )}
               </MessageContent>
+              <Button
+                aria-label={t("chat.cancelQueuedMessage")}
+                className="mt-0.5 shrink-0"
+                onClick={() => onRemove(queued.id)}
+                size="icon-xs"
+                variant="ghost"
+              >
+                <XIcon className="size-3.5" />
+              </Button>
             </div>
           </Message>
         );

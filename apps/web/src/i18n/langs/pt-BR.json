@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Cancelar mensagem na fila",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
     "chatAbout": "Converse sobre isso",
+    "composerMenu": {
+      "mcpServers": "Servidores MCP",
+      "models": "Modelos",
+      "open": "Abrir o menu de anexos e ferramentas"
+    },
     "contextMeter": {
       "attachments": "Documentos anexados",
       "autoCompact": "Aos 100%, a stella resume automaticamente as mensagens mais antigas para liberar espaço.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
     "inDocument": "No documento",
+    "jumpToMessage": "Ir para esta mensagem",
     "landing": {
       "lastAccessedMatters": "Últimos casos acessados",
       "noMatters": "Ainda não há casos",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# token de raciocínio} other {# tokens de raciocínio}}",
     "recapLoading": "Resumindo a conversa…",
     "removeSuggestion": "(remover)",
+    "renameThread": "Renomear conversa",
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
@@ -554,6 +561,7 @@
       "exactCall": "Chamada exata",
       "field": "Campo",
       "input": "Entrada",
+      "interrupted": "Interrompido antes de concluir",
       "output": "Saída",
       "sourceCode": "Código fonte",
       "toggleDetails": "Alternar detalhes"

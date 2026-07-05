@@ -372,7 +372,12 @@ export const ToolCallCard = ({
 
   const isLoading = isRunningToolPart(part);
   const hasOutput = part.output !== undefined;
-  const errorMessage = getToolOutputError(part.output);
+  // A tool-call rewritten to the terminal "error" state at hydration (its
+  // stream died mid call, so it never produced an `output.error`) still
+  // reads as failed via a generic interrupted label.
+  const errorMessage =
+    getToolOutputError(part.output) ??
+    (part.state === "error" ? t("chat.toolCall.interrupted") : undefined);
   const hasError = errorMessage !== undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);

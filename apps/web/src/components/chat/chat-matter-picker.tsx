@@ -1,7 +1,7 @@
 import { useDeferredValue, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { ChevronDownIcon, LayersIcon, SearchIcon } from "lucide-react";
+import { ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import {
@@ -12,7 +12,9 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
+import { cn } from "@stll/ui/lib/utils";
 
+import { MatterIcon } from "@/components/matter-icon";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
@@ -39,12 +41,12 @@ type ChatMatterPickerProps = {
 };
 
 const NO_CLIENT_KEY = "__no_client__";
-const ALL_MATTERS_STACK_COLORS = [
-  "var(--option-red)",
-  "var(--option-blue)",
-  "var(--option-green)",
-] as const;
-
+// The Menu checkbox item lays out on a `grid-cols-[1rem_1fr]` track, whose
+// `1fr` cell keeps `min-width:auto` and so refuses to shrink below its label
+// — long matter/client names then overflow the capped popup width and force a
+// horizontal scrollbar. Switching the label cell to `minmax(0,1fr)` lets it
+// shrink so the inner `truncate` takes effect and only vertical scroll remains.
+const TRUNCATING_ITEM_CLASS = "grid-cols-[1rem_minmax(0,1fr)]";
 type Matter = {
   id: string;
   name: string;
@@ -228,23 +230,17 @@ export const ChatMatterPicker = ({
       >
         {(() => {
           if (allSelected) {
+            return <MatterIcon className="size-3 shrink-0" variant="all" />;
+          }
+          if (selected[0]) {
             return (
-              <MatterStackIcon aria-hidden="true" className="size-3 shrink-0" />
+              <MatterIcon
+                className="size-3 shrink-0"
+                matter={{ id: selected[0].id, color: selected[0].color }}
+              />
             );
           }
-          return (
-            <LayersIcon
-              aria-hidden="true"
-              className="size-3 shrink-0"
-              style={
-                triggerSwatch
-                  ? {
-                      color: triggerSwatch,
-                    }
-                  : undefined
-              }
-            />
-          );
+          return <MatterIcon className="size-3 shrink-0" variant="none" />;
         })()}
         <span className="truncate">{triggerLabel}</span>
         {extraCount > 0 && (
@@ -306,6 +302,7 @@ export const ChatMatterPicker = ({
           {workspaces !== undefined && matters.length > 0 && (
             <MenuCheckboxItem
               checked={allSelected}
+              className={TRUNCATING_ITEM_CLASS}
               closeOnClick={false}
               onClick={() => {
                 if (allSelected) {
@@ -316,10 +313,7 @@ export const ChatMatterPicker = ({
               }}
             >
               <span className="flex min-w-0 items-center gap-2">
-                <MatterStackIcon
-                  aria-hidden="true"
-                  className="size-3.5 shrink-0"
-                />
+                <MatterIcon className="size-3.5 shrink-0" variant="all" />
                 <span className="truncate text-xs font-medium">
                   {t("inspector.matterPicker.allMatters")}
                 </span>
@@ -354,21 +348,18 @@ export const ChatMatterPicker = ({
                 />
                 {group.matters.map((m) => {
                   const isOn = selectedIdSet.has(m.id);
-                  const swatch = resolveMatterColor(m.id, m.color);
                   return (
                     <MenuCheckboxItem
                       checked={isOn}
+                      className={TRUNCATING_ITEM_CLASS}
                       closeOnClick={false}
                       key={m.id}
                       onClick={() => toggle(m.id)}
                     >
                       <span className="flex min-w-0 items-center gap-2">
-                        <LayersIcon
-                          aria-hidden="true"
+                        <MatterIcon
                           className="size-3.5 shrink-0"
-                          style={{
-                            color: swatch,
-                          }}
+                          matter={{ id: m.id, color: m.color }}
                         />
                         <span className="truncate text-xs" dir="auto">
                           {m.name}
@@ -406,7 +397,10 @@ const ClientMatterToggle = ({
   return (
     <MenuCheckboxItem
       checked={groupAllSelected}
-      className="text-muted-foreground data-[checked]:text-foreground data-highlighted:text-foreground min-h-7 py-0.5 pe-2 text-xs font-medium"
+      className={cn(
+        "text-muted-foreground data-[checked]:text-foreground data-highlighted:text-foreground min-h-7 py-0.5 pe-2 text-xs font-medium",
+        TRUNCATING_ITEM_CLASS,
+      )}
       closeOnClick={false}
       onClick={onToggle}
     >
@@ -422,42 +416,3 @@ const ClientMatterToggle = ({
     </MenuCheckboxItem>
   );
 };
-
-type MatterStackIconProps = {
-  className?: string;
-  "aria-hidden"?: "true";
-};
-
-const MatterStackIcon = ({
-  className,
-  "aria-hidden": ariaHidden,
-}: MatterStackIconProps) => (
-  <svg
-    aria-hidden={ariaHidden}
-    className={className}
-    fill="none"
-    viewBox="0 0 24 24"
-  >
-    <path
-      d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"
-      stroke={ALL_MATTERS_STACK_COLORS[0]}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-    />
-    <path
-      d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"
-      stroke={ALL_MATTERS_STACK_COLORS[1]}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-    />
-    <path
-      d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
-      stroke={ALL_MATTERS_STACK_COLORS[2]}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="2"
-    />
-  </svg>
-);

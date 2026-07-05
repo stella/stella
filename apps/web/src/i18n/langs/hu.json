@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI chatbe",
+    "composerMenu": {
+      "mcpServers": "MCP-kiszolgálók",
+      "models": "Modellek",
+      "open": "Mellékletek és eszközök menüjének megnyitása"
+    },
     "contextMeter": {
       "attachments": "Csatolt dokumentumok",
       "autoCompact": "100%-nál a stella automatikusan összefoglalja a korábbi üzeneteket, hogy helyet szabadítson fel.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
     "inDocument": "A dokumentumban",
+    "jumpToMessage": "Ugrás ehhez az üzenethez",
     "landing": {
       "lastAccessedMatters": "Legutóbb megnyitott ügyek",
       "noMatters": "Még nincsenek ügyek",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# érvelési token} other {# érvelési token}}",
     "recapLoading": "A beszélgetés összefoglalása…",
     "removeSuggestion": "(eltávolítás)",
+    "renameThread": "Beszélgetés átnevezése",
     "resend": "Újraküldés",
     "resizeThread": "Beszélgetés méretezése",
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
@@ -554,6 +561,7 @@
       "exactCall": "Pontos hívás",
       "field": "Mező",
       "input": "Bemenet",
+      "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
       "toggleDetails": "Részletek megjelenítése"

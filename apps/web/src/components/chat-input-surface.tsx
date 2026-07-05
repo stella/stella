@@ -1,10 +1,9 @@
 import "./chat-editor.css";
 import { useCallback, useRef } from "react";
+import type { ReactNode } from "react";
 
-import { PaperclipIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -14,9 +13,8 @@ import type {
   ChatInputDraft,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
-import { ChatContextMeter } from "@/components/chat/chat-context-meter";
-import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -26,6 +24,13 @@ type ChatInputSurfaceProps = {
   className?: string;
   controller: ChatEditorController;
   disabled?: boolean;
+  /**
+   * Editor stature. `compact` (default) is the one-line follow-up bar: an
+   * empty composer collapses to a single placeholder line. `large` is the
+   * standalone new-chat hero box, holding ~3 text lines of min-height.
+   * Both variants keep the (+) at the start of the bottom action row.
+   */
+  variant?: "compact" | "large";
   onSubmit: (draft: ChatInputDraft) => Promise<void> | void;
   onFocusChange?: ((focused: boolean) => void) | undefined;
   /**
@@ -36,21 +41,29 @@ type ChatInputSurfaceProps = {
   isGenerating?: boolean;
   onStop?: () => void;
   /**
-   * Whether this surface will send the next request anonymized.
-   * Drives the blue-ring "shield active" treatment so the cue
-   * matches what gets sent. The shared input is mounted from
-   * surfaces with different toggle scopes (per-thread store on
-   * `/chat`, local state in the inspector tab, none in the file
-   * overlay), so reading from a global store here would render a
-   * shield on raw requests or hide it on protected ones.
+   * Whether this surface will send the next request anonymized, driving
+   * the box's blue-ring "shield active" treatment. The surface feeds this
+   * from the shared per-thread send-mode store — the same source the dock's
+   * shield and the send path read — so the ring can never contradict what
+   * gets sent. (The shield toggle itself lives in the dock, not here.)
    */
   anonymized?: boolean;
   /**
-   * Model-context estimate for this thread's next send. Renders a small ring
-   * meter in the footer that opens an explainer popover. Undefined on the
-   * new-chat surface (no thread yet), where nothing is rendered.
+   * The slim status row rendered below the bordered box, mounted as one
+   * organism (`ChatComposerDock`) so the surface can never hand-assemble
+   * — or forget — a control. Omit on surfaces with no status row.
    */
-  contextUsage?: ChatContextUsage | undefined;
+  dock?: ReactNode;
+  /**
+   * When provided, the (+) menu gains a "Models" item. Omit on surfaces
+   * without a model selector.
+   */
+  onOpenModelSelector?: (() => void) | undefined;
+  /**
+   * When provided, the (+) menu gains an "MCP servers" item. Omit on
+   * surfaces that don't navigate to the tools catalogue.
+   */
+  onOpenMcpServers?: (() => void) | undefined;
 };
 
 export const ChatInputSurface = ({
@@ -58,12 +71,15 @@ export const ChatInputSurface = ({
   className,
   controller,
   disabled = false,
+  variant = "compact",
   onSubmit,
   onFocusChange,
   isGenerating = false,
   onStop,
   anonymized = false,
-  contextUsage,
+  dock,
+  onOpenModelSelector,
+  onOpenMcpServers,
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -84,7 +100,6 @@ export const ChatInputSurface = ({
     removeFile,
   } = controller;
   const inputDisabled = disabled;
-  const attachFileLabel = t("chat.attachFile");
   // Submitting stays enabled while the assistant streams: a send
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
@@ -134,67 +149,81 @@ export const ChatInputSurface = ({
     onFocusChange?.(false);
   };
 
+  const isBlank = isEmpty && attachments.length === 0;
+
   return (
-    <div
-      className={cn(
-        "bg-background rounded-lg border",
-        "transition-colors",
-        // Default focus border (gray) only when not in anonymized
-        // mode — otherwise the gray border landed on top of the
-        // blue ring and read as a double-ring on click.
-        !inputDisabled && !anonymized && "focus-within:border-ring",
-        anonymized &&
-          "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
-        className,
-      )}
-      onBlurCapture={handleBlur}
-      onDragOver={inputDisabled ? undefined : handleDragOver}
-      onDrop={inputDisabled ? undefined : handleDrop}
-      onFocusCapture={handleFocus}
-      onPaste={inputDisabled ? undefined : handlePaste}
-      ref={rootRef}
-    >
-      <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
+    // Outer wrapper carries caller positioning (`className`) and the slim
+    // status row; the inner box keeps the border and the drag/paste/focus
+    // handlers so the row sits outside the border but still inside scope.
+    <div className={cn("flex flex-col", className)}>
       <div
-        className="chat-editor relative min-w-0 overflow-hidden px-3 pt-2 pb-1"
-        onKeyDown={(event) => event.stopPropagation()}
-        role="presentation"
-      >
-        <PromptEditorContent
-          className={cn(inputDisabled && "pointer-events-none")}
-          editor={editor}
-        />
-        {isEmpty && attachments.length === 0 && (
-          <span
-            aria-hidden="true"
-            className="text-foreground-placeholder pointer-events-none absolute inset-x-3 top-2 truncate text-sm"
-          >
-            {placeholder}
-          </span>
+        className={cn(
+          "bg-background rounded-lg border",
+          "transition-colors",
+          // Default focus border (gray) only when not in anonymized
+          // mode — otherwise the gray border landed on top of the
+          // blue ring and read as a double-ring on click.
+          !inputDisabled && !anonymized && "focus-within:border-ring",
+          anonymized &&
+            "ring-info/40 border-info/40 focus-within:border-info/60 shadow-[0_0_0_4px_rgb(from_var(--color-info)_r_g_b_/_0.08)] ring-1",
         )}
-      </div>
-      <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
-        <Button
-          aria-label={attachFileLabel}
-          disabled={inputDisabled}
-          onClick={openFilePicker}
-          size="icon-sm"
-          variant="ghost"
+        onBlurCapture={handleBlur}
+        onDragOver={inputDisabled ? undefined : handleDragOver}
+        onDrop={inputDisabled ? undefined : handleDrop}
+        onFocusCapture={handleFocus}
+        onPaste={inputDisabled ? undefined : handlePaste}
+        ref={rootRef}
+      >
+        <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
+        <div
+          className="chat-editor relative min-w-0 overflow-hidden ps-3 pe-3 pt-2 pb-1"
+          onKeyDown={(event) => event.stopPropagation()}
+          role="presentation"
         >
-          <PaperclipIcon className="size-3.5" />
-        </Button>
-        <input
-          accept={fileInputAccept}
-          className="hidden"
-          disabled={inputDisabled}
-          multiple
-          onChange={handleFileInputChange}
-          ref={fileInputRef}
-          type="file"
-        />
-        <div className="ms-auto flex items-center gap-1">
-          {contextUsage && <ChatContextMeter usage={contextUsage} />}
-          <ChatSubmitButton
+          <PromptEditorContent
+            // Compact: default to a single text line and grow with content
+            // (drop the provider's `min-h-10`), matching the inspector and
+            // file-chat bars. Large: hold ~3 text lines (`text-sm` at
+            // `leading-5` = 20px per line) so the hero box keeps its
+            // stature while empty.
+            className={cn(
+              variant === "large"
+                ? "[&_.ProseMirror]:min-h-15"
+                : "[&_.ProseMirror]:min-h-0",
+              inputDisabled && "pointer-events-none",
+            )}
+            editor={editor}
+          />
+          {isBlank && (
+            <span
+              aria-hidden="true"
+              className="text-foreground-placeholder pointer-events-none absolute start-3 end-3 top-2 truncate text-sm"
+            >
+              {placeholder}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
+          <ComposerPlusMenu
+            disabled={inputDisabled}
+            onOpenFilePicker={openFilePicker}
+            onOpenMcpServers={onOpenMcpServers}
+            onOpenModelSelector={onOpenModelSelector}
+            triggerClassName="me-auto"
+          />
+          <input
+            accept={fileInputAccept}
+            className="hidden"
+            disabled={inputDisabled}
+            multiple
+            onChange={handleFileInputChange}
+            ref={fileInputRef}
+            type="file"
+          />
+          {/* The single primary affordance morphs in place: the button
+              itself resolves send vs. stop from the state it is fed, so
+              this surface cannot render a second, parallel control. */}
+          <ChatComposerActionButton
             canSend={!submitDisabled && canSubmit}
             isGenerating={isGenerating}
             onSend={() => {
@@ -204,48 +233,7 @@ export const ChatInputSurface = ({
           />
         </div>
       </div>
+      {dock}
     </div>
-  );
-};
-
-type ChatSubmitButtonProps = {
-  canSend: boolean;
-  isGenerating: boolean;
-  onSend: () => void;
-  onStop?: (() => void) | undefined;
-};
-
-// The single primary affordance morphs in place: the same Button (and DOM node)
-// shows the send arrow to submit a draft and the stop square to cancel a running
-// turn, so focus state and the icon transition survive the state change.
-const ChatSubmitButton = ({
-  canSend,
-  isGenerating,
-  onSend,
-  onStop,
-}: ChatSubmitButtonProps) => {
-  const isStop = isGenerating && onStop !== undefined;
-
-  if (isStop) {
-    return (
-      <ChatComposerActionButton
-        className="bg-foreground text-background hover:bg-foreground/90 shrink-0"
-        mode="stop"
-        onStop={onStop}
-        size="icon-sm"
-        variant="default"
-      />
-    );
-  }
-
-  return (
-    <ChatComposerActionButton
-      canSend={canSend}
-      className="bg-foreground text-background hover:bg-foreground/90 shrink-0"
-      mode="send"
-      onSend={onSend}
-      size="icon-sm"
-      variant="default"
-    />
   );
 };

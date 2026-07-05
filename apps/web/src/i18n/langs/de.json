@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
+    "composerMenu": {
+      "mcpServers": "MCP-Server",
+      "models": "Modelle",
+      "open": "Menü für Anhänge und Werkzeuge öffnen"
+    },
     "contextMeter": {
       "attachments": "Angehängte Dokumente",
       "autoCompact": "Bei 100 % fasst stella ältere Nachrichten automatisch zusammen, um Platz zu schaffen.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
     "inDocument": "Im Dokument",
+    "jumpToMessage": "Zu dieser Nachricht springen",
     "landing": {
       "lastAccessedMatters": "Zuletzt geöffnete Akten",
       "noMatters": "Noch keine Akten",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# Argumentations-Token} other {# Argumentations-Tokens}}",
     "recapLoading": "Unterhaltung wird zusammengefasst…",
     "removeSuggestion": "(entfernen)",
+    "renameThread": "Konversation umbenennen",
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
@@ -554,6 +561,7 @@
       "exactCall": "Exakter Aufruf",
       "field": "Feld",
       "input": "Eingabe",
+      "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
       "toggleDetails": "Details ein-/ausblenden"

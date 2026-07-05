@@ -452,9 +452,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
           <TaskDetailPanel taskId={activeTab.id} workspaceId={workspaceId} />
         )}
 
-      {/* Chat content — sidepeek chat tab. Mounts FileAIChatHost in
-          standalone layout so the bar + thread fill the panel
-          instead of overlaying a file viewer. */}
+      {/* Chat content — sidepeek chat tab. Mounts ChatTabPanel, whose
+          transcript + docked composer fill the panel instead of
+          overlaying a file viewer. */}
       {!minimized &&
         activeTab?.type === "chat" && (
           // Local Suspense boundary so the chat-thread fetch (cold

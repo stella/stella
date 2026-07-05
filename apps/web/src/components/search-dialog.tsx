@@ -8,7 +8,6 @@ import {
   FileTextIcon,
   FolderIcon,
   HistoryIcon,
-  LayersIcon,
   LandmarkIcon,
   LinkIcon,
   LoaderIcon,
@@ -43,6 +42,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { MatterIcon } from "@/components/matter-icon";
 import { getChatHitRoute } from "@/components/search-dialog.logic";
 import {
   clearTime,
@@ -68,7 +68,6 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 import { toAPIError } from "@/lib/errors";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { toSafeId } from "@/lib/safe-id";
 import {
   searchFacetOptions,
@@ -117,7 +116,6 @@ const VIRTUAL_HIT_ESTIMATE_PX = 76;
 const VIRTUAL_HIT_OVERSCAN = 6;
 
 const KIND_ICONS = {
-  matter: LayersIcon,
   contact: UserIcon,
   "case-law": LandmarkIcon,
   document: FileTextIcon,
@@ -126,7 +124,10 @@ const KIND_ICONS = {
   message: MessageSquareIcon,
   link: LinkIcon,
   chat: MessagesSquareIcon,
-} as const satisfies Record<GlobalSearchResultType, typeof FileTextIcon>;
+} as const satisfies Record<
+  Exclude<GlobalSearchResultType, "matter">,
+  typeof FileTextIcon
+>;
 
 const KIND_TRANSLATION_KEYS = {
   matter: "search.kinds.matter",
@@ -1698,12 +1699,15 @@ const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
     );
   }
 
-  const Icon = KIND_ICONS[hit.type];
-
   if (hit.type === "matter") {
-    const color = resolveMatterColor(hit.workspaceId, hit.color);
-    return <Icon className="mt-0.5 size-4 shrink-0" style={{ color }} />;
+    return (
+      <MatterIcon
+        className="mt-0.5 size-4 shrink-0"
+        matter={{ id: hit.workspaceId, color: hit.color }}
+      />
+    );
   }
 
+  const Icon = KIND_ICONS[hit.type];
   return <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />;
 };

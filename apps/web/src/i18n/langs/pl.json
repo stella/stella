@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
+    "composerMenu": {
+      "mcpServers": "Serwery MCP",
+      "models": "Modele",
+      "open": "Otwórz menu załączników i narzędzi"
+    },
     "contextMeter": {
       "attachments": "Załączone dokumenty",
       "autoCompact": "Przy 100% stella automatycznie podsumowuje starsze wiadomości, aby zwolnić miejsce.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
     "inDocument": "W dokumencie",
+    "jumpToMessage": "Przejdź do tej wiadomości",
     "landing": {
       "lastAccessedMatters": "Ostatnio otwarte sprawy",
       "noMatters": "Nie ma jeszcze spraw",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# token rozumowania} few {# tokeny rozumowania} many {# tokenów rozumowania} other {# tokenu rozumowania}}",
     "recapLoading": "Podsumowywanie rozmowy…",
     "removeSuggestion": "(usuń)",
+    "renameThread": "Zmień nazwę rozmowy",
     "resend": "Wyślij ponownie",
     "resizeThread": "Zmień rozmiar konwersacji",
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
@@ -554,6 +561,7 @@
       "exactCall": "Dokładne wywołanie",
       "field": "Pole",
       "input": "Dane wejściowe",
+      "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
       "toggleDetails": "Przełącz szczegóły"

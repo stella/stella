@@ -4,7 +4,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   FileTextIcon,
-  LayersIcon,
   MessageSquareIcon,
   MessageSquarePlusIcon,
   PanelRightIcon,
@@ -32,6 +31,7 @@ import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
+import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -40,7 +40,6 @@ import {
   SIDE_RAIL_ICON_BUTTON_SIZE,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { catalogueOptions } from "@/routes/_protected.knowledge/-queries/catalogue";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
@@ -298,8 +297,12 @@ const VerticalTabIcon = ({
   }
 
   if (tab.type === "matter") {
-    const swatch = resolveMatterColor(tab.workspaceId, tab.color ?? null);
-    return <LayersIcon className="size-3.5" style={{ color: swatch }} />;
+    return (
+      <MatterIcon
+        className="size-3.5"
+        matter={{ id: tab.workspaceId, color: tab.color ?? null }}
+      />
+    );
   }
 
   if (tab.type === "external") {

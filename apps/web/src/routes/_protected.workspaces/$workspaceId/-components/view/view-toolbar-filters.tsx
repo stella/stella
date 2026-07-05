@@ -4,8 +4,8 @@ import {
   CircleDotIcon,
   FilterIcon,
   FlagIcon,
-  LayersIcon,
   MoreHorizontalIcon,
+  ShapesIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -598,7 +598,7 @@ const AddFilterPicker = ({
 
 const FieldTypeIcon = ({ field }: { field: FieldOption }) => {
   if (field.valueType === "kind") {
-    return <LayersIcon className="text-muted-foreground" />;
+    return <ShapesIcon className="text-muted-foreground" />;
   }
   if (field.valueType === "status") {
     return <CircleDotIcon className="text-muted-foreground" />;

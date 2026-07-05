@@ -5,7 +5,6 @@ import {
   CheckIcon,
   ExternalLinkIcon,
   FilePlusIcon,
-  LayersIcon,
   LoaderIcon,
   SearchIcon,
 } from "lucide-react";
@@ -22,7 +21,7 @@ import type {
   ChatToolCallPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
-import { resolveMatterColor } from "@/lib/matter-colors";
+import { MatterIcon } from "@/components/matter-icon";
 
 type CreateDocumentPart = Extract<
   ChatToolCallPart,
@@ -324,7 +323,6 @@ const MatterPickerSection = ({
             <div className="max-h-56 overflow-y-auto rounded-md border">
               {filtered.map((m) => {
                 const isSelected = m.id === selectedMatterId;
-                const swatch = resolveMatterColor(m.id, m.color);
                 return (
                   <button
                     className={cn(
@@ -338,12 +336,9 @@ const MatterPickerSection = ({
                     onClick={() => setSelectedMatterId(m.id)}
                     type="button"
                   >
-                    <LayersIcon
-                      aria-hidden="true"
+                    <MatterIcon
                       className="size-3.5 shrink-0"
-                      style={{
-                        color: isSelected ? undefined : swatch,
-                      }}
+                      matter={{ id: m.id, color: m.color }}
                     />
                     <BidiText as="span" className="min-w-0 flex-1 truncate">
                       {m.name}

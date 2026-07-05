@@ -10,6 +10,7 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
 
+import { ChatBreadcrumb } from "@/components/breadcrumbs/chat-breadcrumb";
 import { ClausesBreadcrumb } from "@/components/breadcrumbs/clauses-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
@@ -53,6 +54,18 @@ const renderContactBreadcrumb = ({
     return null;
   }
   return <ContactBreadcrumb contactId={contactId} />;
+};
+
+const renderChatThreadBreadcrumb = ({
+  threadId,
+  workspaceId,
+}: Record<string, string | undefined>) => {
+  if (!threadId) {
+    return null;
+  }
+  // `workspaceId` is present only on the workspace-scoped chat route; it
+  // scopes the inline rename's PATCH the same way the thread query is scoped.
+  return <ChatBreadcrumb threadId={threadId} workspaceId={workspaceId} />;
 };
 
 const renderBreadcrumbEntry = (
@@ -166,6 +179,10 @@ export const AppBreadcrumbs = () => {
     defineBreadcrumb(
       ["/chat"],
       <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/chat/$threadId", "/chat/workspaces/$workspaceId/$threadId"],
+      renderChatThreadBreadcrumb,
     ),
   ];
 

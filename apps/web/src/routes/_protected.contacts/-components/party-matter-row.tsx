@@ -1,7 +1,6 @@
-import { LayersIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { resolveMatterColor } from "@/lib/matter-colors";
+import { MatterIcon } from "@/components/matter-icon";
 import type { PartyMatter } from "@/routes/_protected.contacts/-components/types";
 import {
   PARTY_ROLE_LABEL_KEYS,
@@ -17,7 +16,7 @@ export const PartyMatterRow = ({ matter }: { matter: PartyMatter }) => {
       className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
       workspaceId={matter.id}
     >
-      <MatterIcon matter={matter} />
+      <MatterIcon className="size-4 shrink-0" matter={matter} />
       <span className="font-medium">{matter.name}</span>
       <div className="ms-auto flex flex-wrap justify-end gap-1">
         {matter.roles.map((role) => {
@@ -37,17 +36,5 @@ export const PartyMatterRow = ({ matter }: { matter: PartyMatter }) => {
         })}
       </div>
     </MatterRefLink>
-  );
-};
-
-export const MatterIcon = ({
-  matter,
-}: {
-  matter: { id: string; color: string | null };
-}) => {
-  const activeColor = resolveMatterColor(matter.id, matter.color);
-
-  return (
-    <LayersIcon className="size-4 shrink-0" style={{ color: activeColor }} />
   );
 };

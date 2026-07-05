@@ -1,12 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import {
-  ChevronRightIcon,
-  FolderIcon,
-  LayersIcon,
-  SearchIcon,
-} from "lucide-react";
+import { ChevronRightIcon, FolderIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -16,8 +11,8 @@ import { Label } from "@stll/ui/components/label";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
+import { MatterIcon } from "@/components/matter-icon";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { workspaceFoldersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import type { WorkspaceFolder } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
@@ -107,10 +102,6 @@ export const MatterTargetPicker = ({
               }
               return visibleMatters.map((workspace) => {
                 const isSelected = value?.workspaceId === workspace.id;
-                const swatch = resolveMatterColor(
-                  workspace.id,
-                  workspace.color,
-                );
                 return (
                   <button
                     className={cn(
@@ -123,10 +114,9 @@ export const MatterTargetPicker = ({
                     }
                     type="button"
                   >
-                    <LayersIcon
-                      aria-hidden="true"
+                    <MatterIcon
                       className="size-4 shrink-0"
-                      style={{ color: swatch }}
+                      matter={{ id: workspace.id, color: workspace.color }}
                     />
                     <BidiText as="span" className="min-w-0 flex-1 truncate">
                       {workspace.name}

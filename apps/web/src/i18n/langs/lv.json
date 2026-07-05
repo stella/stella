@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI čatā",
+    "composerMenu": {
+      "mcpServers": "MCP serveri",
+      "models": "Modeļi",
+      "open": "Atvērt pielikumu un rīku izvēlni"
+    },
     "contextMeter": {
       "attachments": "Pievienotie dokumenti",
       "autoCompact": "Sasniedzot 100%, stella automātiski apkopo vecākos ziņojumus, lai atbrīvotu vietu.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
     "inDocument": "Dokumentā",
+    "jumpToMessage": "Pāriet uz šo ziņu",
     "landing": {
       "lastAccessedMatters": "Pēdējās atvērtās lietas",
       "noMatters": "Lietu vēl nav",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, zero {# argumentācijas tokenu} one {# argumentācijas tokens} other {# argumentācijas tokeni}}",
     "recapLoading": "Sarunas apkopošana…",
     "removeSuggestion": "(noņemt)",
+    "renameThread": "Pārdēvēt sarunu",
     "resend": "Nosūtīt vēlreiz",
     "resizeThread": "Mainīt sarunas izmēru",
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
@@ -554,6 +561,7 @@
       "exactCall": "Precīzs izsaukums",
       "field": "Lauks",
       "input": "Ievade",
+      "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
       "toggleDetails": "Pārslēgt detaļas"

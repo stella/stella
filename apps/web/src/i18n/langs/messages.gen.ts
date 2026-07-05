@@ -380,6 +380,11 @@ type Messages = {
     "cancelQueuedMessage": "Cancel queued message";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
+    "composerMenu": {
+      "mcpServers": "MCP servers";
+      "models": "Models";
+      "open": "Open attachments and tools menu";
+    };
     "contextMeter": {
       "attachments": "Attached documents";
       "autoCompact": "At 100% stella automatically summarizes older messages to free space.";
@@ -426,6 +431,7 @@ type Messages = {
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
     "inDocument": "In document";
+    "jumpToMessage": "Jump to this message";
     "landing": {
       "lastAccessedMatters": "Last accessed matters";
       "noMatters": "No matters yet";
@@ -476,6 +482,7 @@ type Messages = {
     "reasoningTokens": "{count, plural, one {# reasoning token} other {# reasoning tokens}}";
     "recapLoading": "Recapping the conversation…";
     "removeSuggestion": "(remove)";
+    "renameThread": "Rename conversation";
     "resend": "Resend";
     "resizeThread": "Resize conversation";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
@@ -557,6 +564,7 @@ type Messages = {
       "exactCall": "Exact call";
       "field": "Field";
       "input": "Input";
+      "interrupted": "Interrupted before finishing";
       "output": "Output";
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";

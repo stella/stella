@@ -417,6 +417,55 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
   return message.parts.some(isRunningToolPart);
 };
 
+// Terminal state a dead running tool-call part is rewritten to at
+// hydration. "error" is the SDK's own terminal state for a failed tool
+// call: it clears `isRunningToolPart` and renders the card as interrupted
+// rather than a perpetual spinner. It never round-trips to the server —
+// only `messages.at(-1)` is sent on a send, and a sanitized assistant part
+// is never that message.
+const INTERRUPTED_TOOL_CALL_STATE = "error" as const;
+
+const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
+  if (part.type !== "tool-call" || !isRunningToolPart(part)) {
+    return part;
+  }
+  return { ...part, state: INTERRUPTED_TOOL_CALL_STATE };
+};
+
+/**
+ * Rewrite dead running tool-call parts to a terminal errored state when a
+ * thread is hydrated from persistence.
+ *
+ * The server only persists finalized turns (a turn is written at stream
+ * end, not mid-stream) and a freshly built runtime drives no live turn, so
+ * every running tool-call part in server-loaded messages belongs to a turn
+ * whose stream died before finishing (API process restart / deploy / crash
+ * mid tool call). Left untouched, such a part keeps
+ * `hasRunningToolCallInLatestAssistantMessage` — and therefore
+ * `isGenerating` — stuck true on every reload, wedging the composer in a
+ * stop/spinner state no live request can ever clear.
+ *
+ * Live-turn parts never flow through here: streaming updates reach the UI
+ * through the runtime's message subscription, not this hydration path, so a
+ * mid-flight tool call is never sanitized. `ask-user` / `create-document`
+ * and approval-flow parts are long-lived by design and already excluded by
+ * `isRunningToolPart`. Messages and parts left unchanged are returned by
+ * reference so downstream memoization stays stable.
+ */
+export const sanitizeHydratedRunningToolCalls = (
+  messages: readonly PersistedChatMessage[],
+): PersistedChatMessage[] =>
+  messages.map((message) => {
+    if (message.role !== "assistant") {
+      return message;
+    }
+    const parts = message.parts.map(toTerminalIfRunningToolPart);
+    const partsChanged = parts.some(
+      (part, index) => part !== message.parts[index],
+    );
+    return partsChanged ? { ...message, parts } : message;
+  });
+
 type ChatTurnInFlightOptions = {
   status: ChatClientState;
   messages: PersistedChatMessage[];

@@ -3,7 +3,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
-import { LayersIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -21,14 +20,11 @@ import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
+import { MatterIcon } from "@/components/matter-icon";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { APIError } from "@/lib/errors";
-import {
-  getMatterPickerColor,
-  resolveMatterColor,
-  toStoredMatterColor,
-} from "@/lib/matter-colors";
+import { getMatterPickerColor, toStoredMatterColor } from "@/lib/matter-colors";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 import { useConfigStore } from "@/stores/config-store";
@@ -113,7 +109,6 @@ export const WorkspaceBreadcrumb = ({
     });
   };
 
-  const activeColor = resolveMatterColor(workspaceId, workspace.color);
   const activeSwatch = getMatterPickerColor(workspaceId, workspace.color);
   const changeColorLabel = t("common.changeColor");
 
@@ -129,14 +124,17 @@ export const WorkspaceBreadcrumb = ({
         title={changeColorLabel}
         type="button"
       >
-        <LayersIcon
+        <MatterIcon
           className="size-3.5 shrink-0"
-          style={{ color: activeColor }}
+          matter={{ id: workspaceId, color: workspace.color }}
         />
       </button>
     </ColorPicker>
   ) : (
-    <LayersIcon className="size-3.5 shrink-0" style={{ color: activeColor }} />
+    <MatterIcon
+      className="size-3.5 shrink-0"
+      matter={{ id: workspaceId, color: workspace.color }}
+    />
   );
 
   const { client } = workspace;
@@ -249,11 +247,9 @@ export const WorkspaceBreadcrumb = ({
                     }}
                     ref={setIconAnchor}
                   >
-                    <LayersIcon
+                    <MatterIcon
                       className="size-3.5"
-                      style={{
-                        color: activeColor,
-                      }}
+                      matter={{ id: workspaceId, color: workspace.color }}
                     />
                   </span>
                   <Input
@@ -309,11 +305,9 @@ export const WorkspaceBreadcrumb = ({
                   }}
                   ref={setIconAnchor}
                 >
-                  <LayersIcon
+                  <MatterIcon
                     className="size-3.5"
-                    style={{
-                      color: activeColor,
-                    }}
+                    matter={{ id: workspaceId, color: workspace.color }}
                   />
                 </span>
                 <BidiText as="span" className="truncate">

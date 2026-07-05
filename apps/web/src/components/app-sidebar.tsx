@@ -15,7 +15,6 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
   EllipsisVerticalIcon,
-  LayersIcon,
   MessageSquareIcon,
   PanelLeftIcon,
   PinIcon,
@@ -42,6 +41,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { FeedbackDialog } from "@/components/feedback-dialog";
+import { MatterIcon } from "@/components/matter-icon";
 import { SearchDialog } from "@/components/search-dialog";
 import {
   Sidebar,
@@ -251,7 +251,12 @@ export function AppSidebar(props: AppSidebarProps) {
 
   const recentMatterAction = (ws: MatterIdentity): ContextAction => ({
     label: ws.name,
-    icon: <MatterIcon color={ws.color} id={ws.id} />,
+    icon: (
+      <MatterIcon
+        className="size-4 shrink-0"
+        matter={{ id: ws.id, color: ws.color }}
+      />
+    ),
     onClick: () => {
       void navigate({
         to: "/workspaces/$workspaceId",
@@ -404,8 +409,15 @@ export function AppSidebar(props: AppSidebarProps) {
     <Sidebar
       {...props}
       className={cn(
+        // Unified glass language with the chat composer tray: the same
+        // translucent veil + backdrop-blur-md instead of the solid
+        // sidebar fill so the app chrome reads as one system. The
+        // opaque-leaning fallback keeps contrast where backdrop-filter
+        // is unsupported. The matter tint keeps the identical alpha so
+        // accent-tinted sidebars stay in the same language.
+        "[&_[data-slot=sidebar-inner]]:bg-sidebar/80 supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-sidebar/60 [&_[data-slot=sidebar-inner]]:backdrop-blur-md",
         activeMatterColor &&
-          "[&_[data-slot=sidebar-inner]]:bg-[var(--matter-sidebar-tint)]",
+          "[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/80 supports-[backdrop-filter]:[&_[data-slot=sidebar-inner]]:bg-(--matter-sidebar-tint)/60",
         props.className,
       )}
       collapsible="icon"
@@ -718,15 +730,6 @@ type MatterIdentity = {
   name: string;
   color: string | null;
 };
-
-const MatterIcon = ({ id, color }: Pick<MatterIdentity, "id" | "color">) => (
-  <LayersIcon
-    className="size-4 shrink-0"
-    style={{
-      color: resolveMatterColor(id, color),
-    }}
-  />
-);
 
 type ContextAction = {
   label: string;
@@ -1073,7 +1076,10 @@ const MatterItem = ({
     return (
       <SidebarMenuItem>
         <div className="flex h-8 w-full items-center gap-2 rounded-md px-2">
-          <MatterIcon color={ws.color} id={ws.id} />
+          <MatterIcon
+            className="size-4 shrink-0"
+            matter={{ id: ws.id, color: ws.color }}
+          />
           <Input
             autoFocus
             className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
@@ -1134,7 +1140,10 @@ const MatterItem = ({
             params={{ workspaceId: ws.id }}
             to="/workspaces/$workspaceId"
           >
-            <MatterIcon color={ws.color} id={ws.id} />
+            <MatterIcon
+              className="size-4 shrink-0"
+              matter={{ id: ws.id, color: ws.color }}
+            />
             <span className="flex min-w-0 flex-col">
               <BidiText as="span" className="truncate">
                 {ws.name}

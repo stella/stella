@@ -9,7 +9,6 @@ import {
   FileTextIcon,
   FolderIcon,
   LandmarkIcon,
-  LayersIcon,
   LoaderIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -23,8 +22,8 @@ import type {
   ChatMentionOption,
   ChatReferenceCategory,
 } from "@/components/chat-mention-extension";
+import { MatterIcon } from "@/components/matter-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 export const ChatMentionList = ({
@@ -259,7 +258,10 @@ export const ChatMentionList = ({
                 className="size-3.5 shrink-0"
                 icon={ArrowLeftIcon}
               />
-              <LayersIcon className="size-3.5 shrink-0" />
+              <MatterIcon
+                className="size-3.5 shrink-0"
+                matter={{ id: drillTarget.workspaceId, color: null }}
+              />
               <span className="truncate">{drillTarget.name}</span>
             </Button>
           )}
@@ -419,10 +421,7 @@ const MentionIcon = ({
 
   if (category === "workspace") {
     return (
-      <LayersIcon
-        className="size-3.5 shrink-0"
-        style={{ color: getMatterColor(id) }}
-      />
+      <MatterIcon className="size-3.5 shrink-0" matter={{ id, color: null }} />
     );
   }
 

@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactNode } from "react";
 
-import { ArrowLeftIcon, LayersIcon, XIcon } from "lucide-react";
+import { ArrowLeftIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -8,7 +8,7 @@ import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
-import { resolveMatterColor } from "@/lib/matter-colors";
+import { MatterIcon } from "@/components/matter-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 
 /**
@@ -186,21 +186,14 @@ export const MatterOriginLink = ({
   name,
   color,
   onClick,
-}: MatterOriginLinkProps) => {
-  const swatch = resolveMatterColor(id, color);
-  return (
-    <button
-      className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
-      onClick={onClick}
-      title={name}
-      type="button"
-    >
-      <LayersIcon
-        aria-hidden="true"
-        className="size-3 shrink-0"
-        style={{ color: swatch }}
-      />
-      <span className="truncate">{name}</span>
-    </button>
-  );
-};
+}: MatterOriginLinkProps) => (
+  <button
+    className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
+    onClick={onClick}
+    title={name}
+    type="button"
+  >
+    <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />
+    <span className="truncate">{name}</span>
+  </button>
+);

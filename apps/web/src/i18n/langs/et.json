@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
+    "composerMenu": {
+      "mcpServers": "MCP-serverid",
+      "models": "Mudelid",
+      "open": "Ava manuste ja tööriistade menüü"
+    },
     "contextMeter": {
       "attachments": "Manustatud dokumendid",
       "autoCompact": "100% juures teeb stella vanematest sõnumitest automaatselt kokkuvõtte, et ruumi vabastada.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
     "inDocument": "Dokumendis",
+    "jumpToMessage": "Liigu selle sõnumi juurde",
     "landing": {
       "lastAccessedMatters": "Viimati avatud toimikud",
       "noMatters": "Toimikuid veel pole",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# arutlustoken} other {# arutlustokenit}}",
     "recapLoading": "Vestlus võetakse kokku…",
     "removeSuggestion": "(eemalda)",
+    "renameThread": "Nimeta vestlus ümber",
     "resend": "Saada uuesti",
     "resizeThread": "Muuda vestluse suurust",
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
@@ -554,6 +561,7 @@
       "exactCall": "Täpne kutse",
       "field": "Väli",
       "input": "Sisend",
+      "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
       "toggleDetails": "Üksikasjade lülitamine"

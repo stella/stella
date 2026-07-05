@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Cancelar mensaje en cola",
     "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
+    "composerMenu": {
+      "mcpServers": "Servidores MCP",
+      "models": "Modelos",
+      "open": "Abrir el menú de archivos adjuntos y herramientas"
+    },
     "contextMeter": {
       "attachments": "Documentos adjuntos",
       "autoCompact": "Al 100 % stella resume automáticamente los mensajes más antiguos para liberar espacio.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
     "inDocument": "En el documento",
+    "jumpToMessage": "Ir a este mensaje",
     "landing": {
       "lastAccessedMatters": "Asuntos abiertos recientemente",
       "noMatters": "Aún no hay asuntos",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# token de razonamiento} other {# tokens de razonamiento}}",
     "recapLoading": "Resumiendo la conversación…",
     "removeSuggestion": "(eliminar)",
+    "renameThread": "Cambiar el nombre de la conversación",
     "resend": "Reenviar",
     "resizeThread": "Cambiar tamaño de la conversación",
     "sendError": "Hubo un problema al enviar tu mensaje. Contacta con soporte si el error persiste.",
@@ -554,6 +561,7 @@
       "exactCall": "Llamada exacta",
       "field": "Campo",
       "input": "Entrada",
+      "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
       "sourceCode": "Código fuente",
       "toggleDetails": "Mostrar detalles"

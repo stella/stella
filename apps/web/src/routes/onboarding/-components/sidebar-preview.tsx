@@ -4,7 +4,6 @@ import { useState } from "react";
 import { formatForDisplay } from "@tanstack/react-hotkeys";
 import {
   BookOpenIcon,
-  LayersIcon,
   MessageSquareIcon,
   SearchIcon,
   UsersIcon,
@@ -17,6 +16,7 @@ import type {
   ProviderValidationStatus,
 } from "@/components/ai-config-role-models.logic";
 import { getProviderIcon } from "@/components/ai-provider-icons";
+import { MatterIcon, MattersNavIcon } from "@/components/matter-icon";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { useMountEffect } from "@/hooks/use-effect";
 import { HOTKEYS } from "@/lib/hotkeys";
@@ -143,7 +143,7 @@ export const SidebarPreview = ({
         />
         <NavItem
           active={!showChatActive}
-          icon={LayersIcon}
+          icon={MattersNavIcon}
           label={t("common.matters")}
         />
         <NavItem icon={BookOpenIcon} label={t("navigation.knowledge")} />
@@ -157,7 +157,10 @@ export const SidebarPreview = ({
 
         {matterName ? (
           <div className="animate-slide-in flex items-center gap-2 rounded-md px-2 py-1.5">
-            <LayersIcon className="text-foreground size-3.5 shrink-0" />
+            <MatterIcon
+              className="size-3.5 shrink-0"
+              matter={{ id: matterName, color: null }}
+            />
             <span className="text-foreground truncate text-sm">
               {matterName}
             </span>

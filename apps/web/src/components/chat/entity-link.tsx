@@ -4,18 +4,16 @@ import {
   FileTextIcon,
   FolderIcon,
   LandmarkIcon,
-  LayersIcon,
   ListTodoIcon,
 } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
-import type { MentionCategory } from "@/components/chat/chat-mention-href";
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
-import { getMatterColor } from "@/lib/matter-colors";
+import { MatterIcon } from "@/components/matter-icon";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -73,13 +71,6 @@ export const EntityMentionIcon = ({
   }
 
   return <FileTextIcon className={ICON_CLASS} />;
-};
-
-const CATEGORY_ICON: Record<
-  Exclude<MentionCategory, "entity">,
-  React.ComponentType<{ className?: string; style?: React.CSSProperties }>
-> = {
-  workspace: LayersIcon,
 };
 
 /** Renders `#stella-*=` and `#stella-decision=` links as
@@ -183,15 +174,10 @@ export const EntityLink = ({
     category === "entity" ? (
       <EntityMentionIcon entityId={id} workspaceId={mentionWorkspaceId} />
     ) : (
-      (() => {
-        const Icon = CATEGORY_ICON[category];
-        return (
-          <Icon
-            className="inline size-3 shrink-0"
-            style={{ color: getMatterColor(id) }}
-          />
-        );
-      })()
+      <MatterIcon
+        className="inline size-3 shrink-0"
+        matter={{ id, color: null }}
+      />
     );
 
   return (

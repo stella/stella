@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Atšaukti eilėje esančią žinutę",
     "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į AI pokalbį",
+    "composerMenu": {
+      "mcpServers": "MCP serveriai",
+      "models": "Modeliai",
+      "open": "Atverti priedų ir įrankių meniu"
+    },
     "contextMeter": {
       "attachments": "Pridėti dokumentai",
       "autoCompact": "Pasiekus 100%, stella automatiškai apibendrina senesnes žinutes, kad atlaisvintų vietos.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
     "inDocument": "Dokumente",
+    "jumpToMessage": "Pereiti prie šios žinutės",
     "landing": {
       "lastAccessedMatters": "Paskutinės atidarytos bylos",
       "noMatters": "Bylų dar nėra",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# mąstymo tokenas} few {# mąstymo tokenai} many {# mąstymo tokeno} other {# mąstymo tokenų}}",
     "recapLoading": "Apibendrinamas pokalbis…",
     "removeSuggestion": "(pašalinti)",
+    "renameThread": "Pervadinti pokalbį",
     "resend": "Siųsti dar kartą",
     "resizeThread": "Keisti pokalbio dydį",
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
@@ -554,6 +561,7 @@
       "exactCall": "Tikslus iškvietimas",
       "field": "Laukas",
       "input": "Įvestis",
+      "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pradinis kodas",
       "toggleDetails": "Perjungti detales"

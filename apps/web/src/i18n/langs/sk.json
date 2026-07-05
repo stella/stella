@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Zrušiť správu v poradí",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie — plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
+    "composerMenu": {
+      "mcpServers": "MCP servery",
+      "models": "Modely",
+      "open": "Otvoriť ponuku príloh a nástrojov"
+    },
     "contextMeter": {
       "attachments": "Pripojené dokumenty",
       "autoCompact": "Pri 100 % stella automaticky zhrnie staršie správy, aby uvoľnila miesto.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
     "inDocument": "V dokumente",
+    "jumpToMessage": "Prejsť na túto správu",
     "landing": {
       "lastAccessedMatters": "Naposledy otvorené spisy",
       "noMatters": "Zatiaľ žiadne spisy",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# token uvažovania} few {# tokeny uvažovania} other {# tokenov uvažovania}}",
     "recapLoading": "Zhrnutie konverzácie…",
     "removeSuggestion": "(odstrániť)",
+    "renameThread": "Premenovať konverzáciu",
     "resend": "Odoslať znova",
     "resizeThread": "Zmeniť veľkosť konverzácie",
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
@@ -554,6 +561,7 @@
       "exactCall": "Presné volanie",
       "field": "Pole",
       "input": "Vstup",
+      "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
       "toggleDetails": "Prepnúť podrobnosti"

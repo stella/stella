@@ -71,6 +71,10 @@ export const ChatWebSearchToggle = ({
         <Button
           aria-label={t("chat.webSearch.toggleLabel")}
           aria-pressed={enabled}
+          // Quiet status-row control: muted at rest, borderless, only the
+          // usual ghost hover surface. The enabled state speaks through
+          // the info-tinted icon, not a filled chip.
+          className="text-muted-foreground hover:text-foreground"
           data-pressed={enabled ? "" : undefined}
           disabled={isPending}
           onClick={() => {

@@ -377,6 +377,11 @@
     "cancelQueuedMessage": "Annuler le message en file d’attente",
     "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
     "chatAbout": "Insérer dans le chat IA",
+    "composerMenu": {
+      "mcpServers": "Serveurs MCP",
+      "models": "Modèles",
+      "open": "Ouvrir le menu des pièces jointes et des outils"
+    },
     "contextMeter": {
       "attachments": "Documents joints",
       "autoCompact": "À 100 %, stella résume automatiquement les anciens messages pour libérer de la place.",
@@ -423,6 +428,7 @@
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
     "inDocument": "Dans le document",
+    "jumpToMessage": "Aller à ce message",
     "landing": {
       "lastAccessedMatters": "Dossiers consultés récemment",
       "noMatters": "Aucun dossier pour le moment",
@@ -473,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# jeton de raisonnement} other {# jetons de raisonnement}}",
     "recapLoading": "Récapitulatif de la conversation…",
     "removeSuggestion": "(supprimer)",
+    "renameThread": "Renommer la conversation",
     "resend": "Renvoyer",
     "resizeThread": "Redimensionner la conversation",
     "sendError": "Un problème est survenu lors de l’envoi de ton message. Contacte le support si l’erreur persiste.",
@@ -554,6 +561,7 @@
       "exactCall": "Appel exact",
       "field": "Champ",
       "input": "Entrée",
+      "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
       "toggleDetails": "Afficher les détails"

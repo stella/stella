@@ -1,13 +1,14 @@
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
+
 import {
   BookOpenIcon,
-  LayersIcon,
   MessageSquareIcon,
   ScaleIcon,
   SearchIcon,
   UsersIcon,
 } from "lucide-react";
 
+import { MattersNavIcon } from "@/components/matter-icon";
 import type { TranslationKey } from "@/i18n/types";
 
 type WorkspacePrimaryRoute =
@@ -18,7 +19,7 @@ type WorkspacePrimaryRoute =
   | "/workspaces";
 
 type WorkspacePrimaryNavItem = {
-  readonly icon: LucideIcon;
+  readonly icon: ComponentType<{ className?: string }>;
   readonly id:
     | "caseLaw"
     | "chat"
@@ -52,7 +53,7 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     to: "/chat",
   },
   {
-    icon: LayersIcon,
+    icon: MattersNavIcon,
     id: "matters",
     kind: "route",
     labelKey: "common.matters",
