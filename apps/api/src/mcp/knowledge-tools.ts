@@ -11,10 +11,14 @@ import {
   getClauseVersionHandler,
   listClausesHandler,
 } from "@/api/handlers/clauses/read";
-import type { ClauseBody } from "@/api/handlers/clauses/types";
+import type { ClauseBody, ClauseRun } from "@/api/handlers/clauses/types";
 import { isClauseBody } from "@/api/handlers/clauses/types";
 import { updateClauseHandler } from "@/api/handlers/clauses/update";
 import { materializePlaybookRun } from "@/api/handlers/playbooks/materialize-run";
+import type {
+  Position,
+  PositionStandard,
+} from "@/api/handlers/playbooks/positions";
 import {
   getPlaybookDefinitionHandler,
   listPlaybookDefinitionsHandler,
@@ -31,8 +35,13 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  defineTextFieldSpec,
+  deriveTextFieldPaths,
+  runTextFieldSpecs,
+} from "@/api/mcp/text-field-spec";
 import type {
-  McpStructuredTextField,
+  McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
@@ -118,6 +127,358 @@ const clauseBodyProp = {
   items: clauseParagraphItemSchema,
 } as const;
 
+// --- Text-field specs (plan 049, Option B) --------------------------------
+//
+// Every anonymize-mode field below is organization-scoped: clauses and
+// playbooks have no owning workspace, so `organizationId` is the
+// anonymization scope everywhere. `organizationId` is not part of either
+// served payload, so it is threaded in as a builder argument; the
+// definitions below call these same builders with a placeholder id purely to
+// derive the documented `textFields` path list — `deriveTextFieldPaths` only
+// reads each spec's static `path`, never `scope`, so the placeholder never
+// affects the declaration.
+
+/**
+ * Normalized read/write pair over one tenant-authored text unit. A clause
+ * body paragraph's text and its optional inline runs' text both become one
+ * unit apiece, so `clauseBodyTextFieldSpec` below can redact a whole body
+ * (paragraphs + runs) as a single spec instead of re-deriving that shape at
+ * every call site (clause body, clause variant bodies, standalone version
+ * body).
+ */
+type TextUnit = {
+  read: () => string | null | undefined;
+  write: (value: string) => void;
+};
+
+/** A paragraph's inline runs, or an empty list when it has none. */
+const clauseParagraphRuns = (
+  paragraph: ClauseBody[number],
+): readonly ClauseRun[] => {
+  if (paragraph.runs === undefined) {
+    return [];
+  }
+  return paragraph.runs;
+};
+
+const clauseBodyTextUnits = (body: ClauseBody): readonly TextUnit[] =>
+  body.flatMap((paragraph): TextUnit[] => [
+    {
+      read: () => paragraph.text,
+      write: (value) => {
+        paragraph.text = value;
+      },
+    },
+    ...clauseParagraphRuns(paragraph).map((run) => ({
+      read: () => run.text,
+      write: (value: string) => {
+        run.text = value;
+      },
+    })),
+  ]);
+
+/**
+ * One anonymize-mode spec over a whole `ClauseBody`, parameterized on the
+ * `path` (`clause.body[].text` / `clause.variants[].body[].text` /
+ * `version.body[].text`) and the `body` accessor for the branch's payload
+ * shape. Every call site runs this only after its own `isClauseBody` guard
+ * has passed (see the fail-closed control flow in `readClauseDetail`).
+ */
+const clauseBodyTextFieldSpec = <TPayload>({
+  body,
+  organizationId,
+  path,
+}: {
+  body: (payload: TPayload) => ClauseBody;
+  organizationId: string;
+  path: string;
+}): McpTextFieldSpec<TPayload> =>
+  defineTextFieldSpec({
+    path,
+    items: (payload: TPayload) => clauseBodyTextUnits(body(payload)),
+    scope: () => organizationId,
+    read: (unit: TextUnit) => unit.read(),
+    apply: (unit: TextUnit, value) => {
+      unit.write(value);
+    },
+  });
+
+const CLAUSE_BODY_TEXT_FIELD_PATH = "clause.body[].text";
+const CLAUSE_VARIANT_BODY_TEXT_FIELD_PATH = "clause.variants[].body[].text";
+const CLAUSE_VERSION_BODY_TEXT_FIELD_PATH = "version.body[].text";
+
+// --- list_clauses ----------------------------------------------------------
+
+type ClauseListItem = { title: string; description: string | null };
+type ClauseCategoryItem = { name: string; description: string | null };
+
+const clauseListTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<{ clauses: readonly ClauseListItem[] }>[] => [
+  defineTextFieldSpec({
+    path: "clauses[].title",
+    items: (payload) => payload.clauses,
+    scope: () => organizationId,
+    read: (item) => item.title,
+    apply: (item, value) => {
+      item.title = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "clauses[].description",
+    items: (payload) => payload.clauses,
+    scope: () => organizationId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+];
+
+const categoryListTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<{
+  categories: readonly ClauseCategoryItem[];
+}>[] => [
+  defineTextFieldSpec({
+    path: "categories[].name",
+    items: (payload) => payload.categories,
+    scope: () => organizationId,
+    read: (item) => item.name,
+    apply: (item, value) => {
+      item.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "categories[].description",
+    items: (payload) => payload.categories,
+    scope: () => organizationId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+];
+
+type ClauseCoreItem = {
+  title: string;
+  description: string | null;
+  usageNotes: string | null;
+};
+
+/** Clause detail: title/description/usageNotes. Pushed unconditionally
+ * before either `isClauseBody` guard in `readClauseDetail` runs — matching
+ * the original handler, where these are pushed first and only discarded (via
+ * the guard's early error return) if the body turns out malformed. */
+const clauseCoreTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<{ clause: ClauseCoreItem }>[] => [
+  defineTextFieldSpec({
+    path: "clause.title",
+    items: (payload) => [payload.clause],
+    scope: () => organizationId,
+    read: (item) => item.title,
+    apply: (item, value) => {
+      item.title = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "clause.description",
+    items: (payload) => [payload.clause],
+    scope: () => organizationId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "clause.usageNotes",
+    items: (payload) => [payload.clause],
+    scope: () => organizationId,
+    read: (item) => item.usageNotes,
+    apply: (item, value) => {
+      item.usageNotes = value;
+    },
+  }),
+];
+
+type ClauseVariantLabelItem = { label: string };
+
+const variantLabelTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<{ variant: ClauseVariantLabelItem }>[] => [
+  defineTextFieldSpec({
+    path: "clause.variants[].label",
+    items: (payload) => [payload.variant],
+    scope: () => organizationId,
+    read: (item) => item.label,
+    apply: (item, value) => {
+      item.label = value;
+    },
+  }),
+];
+
+const LIST_CLAUSES_TEXT_FIELD_PATHS = [
+  ...deriveTextFieldPaths(clauseListTextFieldSpecs("")),
+  ...deriveTextFieldPaths(categoryListTextFieldSpecs("")),
+  ...deriveTextFieldPaths(clauseCoreTextFieldSpecs("")),
+  CLAUSE_BODY_TEXT_FIELD_PATH,
+  ...deriveTextFieldPaths(variantLabelTextFieldSpecs("")),
+  CLAUSE_VARIANT_BODY_TEXT_FIELD_PATH,
+  CLAUSE_VERSION_BODY_TEXT_FIELD_PATH,
+];
+
+// --- list_playbooks ---------------------------------------------------------
+
+type PlaybookListItem = { name: string; description: string | null };
+
+const playbookListTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<{ items: readonly PlaybookListItem[] }>[] => [
+  defineTextFieldSpec({
+    path: "items[].name",
+    items: (payload) => payload.items,
+    scope: () => organizationId,
+    read: (item) => item.name,
+    apply: (item, value) => {
+      item.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "items[].description",
+    items: (payload) => payload.items,
+    scope: () => organizationId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+];
+
+type PlaybookInlineStandard = Extract<PositionStandard, { source: "inline" }>;
+type PlaybookInlineFallback = NonNullable<
+  PlaybookInlineStandard["fallbacks"]
+>[number];
+
+const playbookInlineStandardItems = (
+  positions: readonly Position[],
+): readonly PlaybookInlineStandard[] =>
+  positions.flatMap((position) =>
+    position.standard.source === "inline" ? [position.standard] : [],
+  );
+
+const playbookStandardFallbacks = (
+  standard: PlaybookInlineStandard,
+): readonly PlaybookInlineFallback[] => {
+  if (standard.fallbacks === undefined) {
+    return [];
+  }
+  return standard.fallbacks;
+};
+
+const playbookInlineFallbackItems = (
+  positions: readonly Position[],
+): readonly PlaybookInlineFallback[] =>
+  playbookInlineStandardItems(positions).flatMap(playbookStandardFallbacks);
+
+type PlaybookDetailPayload = {
+  playbook: {
+    name: string;
+    description: string | null;
+    positions: { items: readonly Position[] };
+  };
+};
+
+/**
+ * Every redactable field on one playbook detail response: the playbook's own
+ * name/description, each position's issue/ask.question/guidance, and — only
+ * for an inline standard (`source === "inline"`, resolved structurally, same
+ * discriminant the handler already checks) — its preferred language and each
+ * fallback's label and text. `standard.fallbacks[].label` was pushed by the
+ * original handler but never declared (the same declared-vs-pushed drift the
+ * `read_document` migration also fixed); deriving the declaration from this
+ * spec closes that gap here too.
+ */
+const playbookDetailTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<PlaybookDetailPayload>[] => [
+  defineTextFieldSpec({
+    path: "playbook.name",
+    items: (payload) => [payload.playbook],
+    scope: () => organizationId,
+    read: (item) => item.name,
+    apply: (item, value) => {
+      item.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.description",
+    items: (payload) => [payload.playbook],
+    scope: () => organizationId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].issue",
+    items: (payload) => payload.playbook.positions.items,
+    scope: () => organizationId,
+    read: (item) => item.issue,
+    apply: (item, value) => {
+      item.issue = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].ask.question",
+    items: (payload) => payload.playbook.positions.items,
+    scope: () => organizationId,
+    read: (item) => item.ask.question,
+    apply: (item, value) => {
+      item.ask.question = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].guidance",
+    items: (payload) => payload.playbook.positions.items,
+    scope: () => organizationId,
+    read: (item) => item.guidance,
+    apply: (item, value) => {
+      item.guidance = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].standard.preferred",
+    items: (payload) =>
+      playbookInlineStandardItems(payload.playbook.positions.items),
+    scope: () => organizationId,
+    read: (item) => item.preferred,
+    apply: (item, value) => {
+      item.preferred = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].standard.fallbacks[].label",
+    items: (payload) =>
+      playbookInlineFallbackItems(payload.playbook.positions.items),
+    scope: () => organizationId,
+    read: (item) => item.label,
+    apply: (item, value) => {
+      item.label = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].standard.fallbacks[].text",
+    items: (payload) =>
+      playbookInlineFallbackItems(payload.playbook.positions.items),
+    scope: () => organizationId,
+    read: (item) => item.text,
+    apply: (item, value) => {
+      item.text = value;
+    },
+  }),
+];
+
 export const KNOWLEDGE_TOOL_DEFINITIONS = [
   {
     annotations: { readOnlyHint: true },
@@ -159,19 +520,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     },
     anonymized: {
       exposure: "anonymize",
-      textFields: [
-        "clauses[].title",
-        "clauses[].description",
-        "categories[].name",
-        "categories[].description",
-        "clause.title",
-        "clause.description",
-        "clause.usageNotes",
-        "clause.body[].text",
-        "clause.variants[].label",
-        "clause.variants[].body[].text",
-        "version.body[].text",
-      ],
+      textFields: LIST_CLAUSES_TEXT_FIELD_PATHS,
     },
     name: "list_clauses",
     scope: "stella:read",
@@ -266,15 +615,8 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     anonymized: {
       exposure: "anonymize",
       textFields: [
-        "items[].name",
-        "items[].description",
-        "playbook.name",
-        "playbook.description",
-        "playbook.positions.items[].issue",
-        "playbook.positions.items[].ask.question",
-        "playbook.positions.items[].guidance",
-        "playbook.positions.items[].standard.preferred",
-        "playbook.positions.items[].standard.fallbacks[].text",
+        ...deriveTextFieldPaths(playbookListTextFieldSpecs("")),
+        ...deriveTextFieldPaths(playbookDetailTextFieldSpecs("")),
       ],
     },
     name: "list_playbooks",
@@ -299,26 +641,6 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:knowledge_write",
   },
 ] as const satisfies readonly McpToolDefinition[];
-
-/**
- * Queue one anonymizable text field onto a structured egress plan, skipping
- * null/empty values. `apply` writes the anonymized value back into the payload.
- */
-const pushTextField = ({
-  apply,
-  fields: sink,
-  value,
-  workspaceId,
-}: {
-  apply: (value: string) => void;
-  fields: McpStructuredTextField[];
-  value: string | null | undefined;
-  workspaceId: string;
-}): void => {
-  if (typeof value === "string" && value.length > 0) {
-    sink.push({ apply, value, workspaceId });
-  }
-};
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -351,40 +673,6 @@ const crossFieldOrGeneric = (
 ): string =>
   issues.find((issue) => issue.type === "partial_check")?.message ??
   genericMessage;
-
-/** Anonymize each paragraph's text and inline-run text in a clause body. */
-const pushClauseBodyTexts = ({
-  body,
-  fields: sink,
-  workspaceId,
-}: {
-  body: ClauseBody;
-  fields: McpStructuredTextField[];
-  workspaceId: string;
-}): void => {
-  for (const paragraph of body) {
-    pushTextField({
-      apply: (value) => {
-        paragraph.text = value;
-      },
-      fields: sink,
-      value: paragraph.text,
-      workspaceId,
-    });
-    if (paragraph.runs) {
-      for (const run of paragraph.runs) {
-        pushTextField({
-          apply: (value) => {
-            run.text = value;
-          },
-          fields: sink,
-          value: run.text,
-          workspaceId,
-        });
-      }
-    }
-  }
-};
 
 // --- list_clauses -------------------------------------------------------
 
@@ -460,15 +748,22 @@ const readClauseDetail = async ({
       return errorResult(result.error.message);
     }
     const version = result.value;
+    // Fail-closed (P7): a malformed version body aborts before any push runs,
+    // exactly the Wave 4 fix — kept as inline control flow, unchanged.
     if (!isClauseBody(version.body)) {
       return errorResult("Clause body has an unrecognized format");
     }
-    const textFields: McpStructuredTextField[] = [];
-    pushClauseBodyTexts({
-      body: version.body,
-      fields: textFields,
-      workspaceId: organizationId,
-    });
+    const textFields = runTextFieldSpecs(
+      [
+        clauseBodyTextFieldSpec({
+          path: CLAUSE_VERSION_BODY_TEXT_FIELD_PATH,
+          body: (payload: { version: { body: ClauseBody } }) =>
+            payload.version.body,
+          organizationId,
+        }),
+      ],
+      { version },
+    );
     return { egress: "structured", payload: { version }, textFields } as const;
   }
 
@@ -479,56 +774,55 @@ const readClauseDetail = async ({
     return errorResult(result.error.message);
   }
   const clause = result.value;
-  const textFields: McpStructuredTextField[] = [];
-  pushTextField({
-    apply: (value) => {
-      clause.title = value;
+  // title/description/usageNotes are queued unconditionally, matching the
+  // original handler: if the body guard below fails, this response (and these
+  // fields) is discarded via the early error return before it ever reaches a
+  // caller, same as before.
+  const textFields = runTextFieldSpecs(
+    clauseCoreTextFieldSpecs(organizationId),
+    {
+      clause,
     },
-    fields: textFields,
-    value: clause.title,
-    workspaceId: organizationId,
-  });
-  pushTextField({
-    apply: (value) => {
-      clause.description = value;
-    },
-    fields: textFields,
-    value: clause.description,
-    workspaceId: organizationId,
-  });
-  pushTextField({
-    apply: (value) => {
-      clause.usageNotes = value;
-    },
-    fields: textFields,
-    value: clause.usageNotes,
-    workspaceId: organizationId,
-  });
+  );
+  // Fail-closed (P7): kept as inline control flow, unchanged, at the same
+  // point relative to the pushes above and below.
   if (!isClauseBody(clause.body)) {
     return errorResult("Clause body has an unrecognized format");
   }
-  pushClauseBodyTexts({
-    body: clause.body,
-    fields: textFields,
-    workspaceId: organizationId,
-  });
+  textFields.push(
+    ...runTextFieldSpecs(
+      [
+        clauseBodyTextFieldSpec({
+          path: CLAUSE_BODY_TEXT_FIELD_PATH,
+          body: (payload: { body: ClauseBody }) => payload.body,
+          organizationId,
+        }),
+      ],
+      { body: clause.body },
+    ),
+  );
   for (const variant of clause.variants) {
-    pushTextField({
-      apply: (value) => {
-        variant.label = value;
-      },
-      fields: textFields,
-      value: variant.label,
-      workspaceId: organizationId,
-    });
+    textFields.push(
+      ...runTextFieldSpecs(variantLabelTextFieldSpecs(organizationId), {
+        variant,
+      }),
+    );
+    // Fail-closed (P7): kept inline inside the variant loop, unchanged.
     if (!isClauseBody(variant.body)) {
       return errorResult("Clause body has an unrecognized format");
     }
-    pushClauseBodyTexts({
-      body: variant.body,
-      fields: textFields,
-      workspaceId: organizationId,
-    });
+    textFields.push(
+      ...runTextFieldSpecs(
+        [
+          clauseBodyTextFieldSpec({
+            path: CLAUSE_VARIANT_BODY_TEXT_FIELD_PATH,
+            body: (payload: { body: ClauseBody }) => payload.body,
+            organizationId,
+          }),
+        ],
+        { body: variant.body },
+      ),
+    );
   }
   return { egress: "structured", payload: { clause }, textFields } as const;
 };
@@ -598,55 +892,21 @@ const handleListClausesTool: McpToolHandler = async ({ args, context }) => {
       ? categoriesResult.value.categories
       : undefined;
 
-  const textFields: McpStructuredTextField[] = [];
-  for (const clause of clauses) {
-    pushTextField({
-      apply: (value) => {
-        clause.title = value;
-      },
-      fields: textFields,
-      value: clause.title,
-      workspaceId: organizationId,
-    });
-    pushTextField({
-      apply: (value) => {
-        clause.description = value;
-      },
-      fields: textFields,
-      value: clause.description,
-      workspaceId: organizationId,
-    });
-  }
-  if (categories) {
-    for (const category of categories) {
-      pushTextField({
-        apply: (value) => {
-          category.name = value;
-        },
-        fields: textFields,
-        value: category.name,
-        workspaceId: organizationId,
-      });
-      pushTextField({
-        apply: (value) => {
-          category.description = value;
-        },
-        fields: textFields,
-        value: category.description,
-        workspaceId: organizationId,
-      });
-    }
-  }
-
-  return {
-    egress: "structured",
-    payload: {
-      clauses,
-      ...(categories ? { categories } : {}),
-      nextCursor: listed.value.nextCursor,
-    },
-    textFields,
+  const payload = {
+    clauses,
+    ...(categories ? { categories } : {}),
+    nextCursor: listed.value.nextCursor,
   };
+  const textFields = [
+    ...runTextFieldSpecs(clauseListTextFieldSpecs(organizationId), payload),
+    ...(categories
+      ? runTextFieldSpecs(categoryListTextFieldSpecs(organizationId), {
+          categories,
+        })
+      : []),
+  ];
+
+  return { egress: "structured", payload, textFields };
 };
 
 // --- save_clause --------------------------------------------------------
@@ -932,80 +1192,10 @@ const readPlaybookDetail = async ({
   }
   const playbook = result.value;
 
-  const textFields: McpStructuredTextField[] = [];
-  pushTextField({
-    apply: (value) => {
-      playbook.name = value;
-    },
-    fields: textFields,
-    value: playbook.name,
-    workspaceId: organizationId,
-  });
-  pushTextField({
-    apply: (value) => {
-      playbook.description = value;
-    },
-    fields: textFields,
-    value: playbook.description,
-    workspaceId: organizationId,
-  });
-  for (const position of playbook.positions.items) {
-    pushTextField({
-      apply: (value) => {
-        position.issue = value;
-      },
-      fields: textFields,
-      value: position.issue,
-      workspaceId: organizationId,
-    });
-    pushTextField({
-      apply: (value) => {
-        position.ask.question = value;
-      },
-      fields: textFields,
-      value: position.ask.question,
-      workspaceId: organizationId,
-    });
-    pushTextField({
-      apply: (value) => {
-        position.guidance = value;
-      },
-      fields: textFields,
-      value: position.guidance,
-      workspaceId: organizationId,
-    });
-    if (position.standard.source === "inline") {
-      const standard = position.standard;
-      pushTextField({
-        apply: (value) => {
-          standard.preferred = value;
-        },
-        fields: textFields,
-        value: standard.preferred,
-        workspaceId: organizationId,
-      });
-      if (standard.fallbacks !== undefined) {
-        for (const fallback of standard.fallbacks) {
-          pushTextField({
-            apply: (value) => {
-              fallback.label = value;
-            },
-            fields: textFields,
-            value: fallback.label,
-            workspaceId: organizationId,
-          });
-          pushTextField({
-            apply: (value) => {
-              fallback.text = value;
-            },
-            fields: textFields,
-            value: fallback.text,
-            workspaceId: organizationId,
-          });
-        }
-      }
-    }
-  }
+  const textFields = runTextFieldSpecs(
+    playbookDetailTextFieldSpecs(organizationId),
+    { playbook },
+  );
 
   return { egress: "structured", payload: { playbook }, textFields } as const;
 };
@@ -1049,31 +1239,13 @@ const handleListPlaybooksTool: McpToolHandler = async ({ args, context }) => {
   }
   const items = listed.value.items;
 
-  const textFields: McpStructuredTextField[] = [];
-  for (const item of items) {
-    pushTextField({
-      apply: (value) => {
-        item.name = value;
-      },
-      fields: textFields,
-      value: item.name,
-      workspaceId: organizationId,
-    });
-    pushTextField({
-      apply: (value) => {
-        item.description = value;
-      },
-      fields: textFields,
-      value: item.description,
-      workspaceId: organizationId,
-    });
-  }
+  const payload = { items, nextCursor: listed.value.nextCursor };
+  const textFields = runTextFieldSpecs(
+    playbookListTextFieldSpecs(organizationId),
+    payload,
+  );
 
-  return {
-    egress: "structured",
-    payload: { items, nextCursor: listed.value.nextCursor },
-    textFields,
-  };
+  return { egress: "structured", payload, textFields };
 };
 
 // --- run_playbook -------------------------------------------------------
