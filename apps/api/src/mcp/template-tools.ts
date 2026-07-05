@@ -371,6 +371,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
         ),
       },
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       // Placeholder org id: derivation only ever reads `.path`, see the
@@ -405,6 +406,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       },
       required: ["template_id", "values"],
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "fill_template",
     scope: "stella:templates",
@@ -437,6 +439,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
         fields: fieldsOverlayProp,
       },
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_template",
     scope: "stella:templates",

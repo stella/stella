@@ -518,6 +518,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         ),
       },
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: LIST_CLAUSES_TEXT_FIELD_PATHS,
@@ -568,6 +569,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         },
       },
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_clause",
     scope: "stella:knowledge_write",
@@ -584,6 +586,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       },
       required: ["clause_id"],
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "delete_clause",
     scope: "stella:knowledge_write",
@@ -612,6 +615,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
         ),
       },
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -636,6 +640,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       },
       required: ["matter_id", "playbook_id"],
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "run_playbook",
     scope: "stella:knowledge_write",

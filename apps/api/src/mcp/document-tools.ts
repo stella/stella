@@ -461,6 +461,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["matter_id"],
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: [DOCUMENT_LIST_TEXT_FIELD_PATH],
@@ -498,6 +499,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["entity_id"],
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: READ_DOCUMENT_TEXT_FIELD_PATHS,
@@ -552,6 +554,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         ),
       },
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_document",
     scope: "stella:documents_write",
@@ -573,6 +576,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["entity_id"],
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "delete_document",
     scope: "stella:documents_write",
@@ -599,6 +603,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["matter_id"],
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: [PROPERTY_LIST_TEXT_FIELD_PATH],
@@ -644,6 +649,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["entity_id", "property_id", "content"],
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_field_value",
     scope: "stella:documents_write",
