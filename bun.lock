@@ -389,6 +389,20 @@
         "@types/bun": "catalog:",
       },
     },
+    "packages/cli": {
+      "name": "@stll/cli",
+      "version": "0.1.0",
+      "bin": {
+        "stella": "./dist/cli.js",
+      },
+      "dependencies": {
+        "@stricli/core": "^1.2.8",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+      },
+    },
     "packages/conditions": {
       "name": "@stll/conditions",
       "version": "0.1.0",
@@ -1686,6 +1700,8 @@
 
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
 
+    "@stll/cli": ["@stll/cli@workspace:packages/cli"],
+
     "@stll/collab": ["@stll/collab@workspace:apps/collab"],
 
     "@stll/conditions": ["@stll/conditions@workspace:packages/conditions"],
@@ -1755,6 +1771,8 @@
     "@streamdown/math": ["@streamdown/math@1.0.2", "", { "dependencies": { "katex": "^0.16.27", "rehype-katex": "^7.0.1", "remark-math": "^6.0.0" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-r8Ur9/lBuFnzZAFdEWrLUF2s/gRwRRRwruqltdZibyjbCBnuW7SJbFm26nXqvpJPW/gzpBUMrBVBzd88z05D5g=="],
 
     "@streamdown/mermaid": ["@streamdown/mermaid@1.0.2", "", { "dependencies": { "mermaid": "^11.12.2" }, "peerDependencies": { "react": "^18.0.0 || ^19.0.0" } }, "sha512-Fr/4sBWnAeSnxM3PcrV/+DiZe5oPMq9gOkUIAH7ZauJeuwrZ/DVzD4g0zlav6AH0axh2m/sOfrfLtY5aLT7niw=="],
+
+    "@stricli/core": ["@stricli/core@1.2.8", "", {}, "sha512-zqEZu9x+UAAZrzQlfD/iDXIyb6Y3560MzfvFpNfWXJdZuJ0SSxGOGse+0P/5kwlufsSXQF8Wn5jK1NZF4vcqnw=="],
 
     "@swc/helpers": ["@swc/helpers@0.5.15", "", { "dependencies": { "tslib": "^2.8.0" } }, "sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g=="],
 

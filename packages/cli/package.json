@@ -1,0 +1,42 @@
+{
+  "name": "@stll/cli",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Stella command-line client",
+  "keywords": [
+    "cli",
+    "legal",
+    "stella"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/cli",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/cli"
+  },
+  "bin": {
+    "stella": "./dist/cli.js"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "rm -rf dist && tsgo -p tsconfig.build.json",
+    "test": "bun test src",
+    "typecheck": "tsgo --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/cli",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/cli",
+    "format": "oxfmt ."
+  },
+  "dependencies": {
+    "@stricli/core": "^1.2.8"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "@types/bun": "catalog:"
+  }
+}
