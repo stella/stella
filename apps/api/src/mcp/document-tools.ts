@@ -38,9 +38,15 @@ import {
   brandPersistedPropertyId,
 } from "@/api/lib/safe-id-boundaries";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
+import type { VersionDiffSegment } from "@/api/lib/text-diff";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  defineTextFieldSpec,
+  deriveTextFieldPaths,
+  runTextFieldSpecs,
+} from "@/api/mcp/text-field-spec";
 import type {
-  McpStructuredTextField,
+  McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
@@ -78,6 +84,344 @@ const SETTABLE_VALUE_TYPES = [
   "date",
   "int",
 ] as const;
+
+// --- Text-field specs (plan 049, Option B) --------------------------------
+
+/**
+ * Normalized read/write pair over one field's tenant-authored text unit. A
+ * `FieldContent`'s text-bearing value is not always a lone scalar: a
+ * multi-select holds several array-indexed values, a clip holds two named
+ * fields (snippet, citation), and a "changed" diff segment holds several
+ * inline runs. Every text-bearing shape becomes one unit apiece; a single
+ * `McpTextFieldSpec` then just iterates `TextUnit`s without re-deriving the
+ * union's shape at every call site.
+ */
+type TextUnit = {
+  read: () => string | null | undefined;
+  write: (value: string) => void;
+};
+
+/** One entity/version field row as fetched from the DB — text-field specs
+ * only ever touch `content`. */
+type EntityFieldRow = { content: FieldContent };
+
+/**
+ * The former `pushFieldContentTexts` helper's full discriminated-union walk,
+ * narrowed here once: `text`/`single-select` are a scalar unit; `multi-select`
+ * yields one unit per array index, writing back through the same array
+ * reference; `clip` yields its snippet and citation as two named units;
+ * `file` yields its fileName. `date`/`int`/`error`/`pending`/`unsupported`
+ * carry no tenant-authored text and contribute nothing.
+ */
+const fieldContentTextUnits = (
+  fields: readonly EntityFieldRow[],
+): readonly TextUnit[] =>
+  fields.flatMap(({ content }): TextUnit[] => {
+    if (content.type === "text") {
+      return [
+        {
+          read: () => content.value,
+          write: (value) => {
+            content.value = value;
+          },
+        },
+      ];
+    }
+    if (content.type === "single-select") {
+      return [
+        {
+          read: () => content.value,
+          write: (value) => {
+            content.value = value;
+          },
+        },
+      ];
+    }
+    if (content.type === "multi-select") {
+      const values = content.value;
+      return values.map((_value, index) => ({
+        read: () => values[index],
+        write: (value: string) => {
+          values[index] = value;
+        },
+      }));
+    }
+    if (content.type === "clip") {
+      return [
+        {
+          read: () => content.snippet,
+          write: (value) => {
+            content.snippet = value;
+          },
+        },
+        {
+          read: () => content.citation,
+          write: (value) => {
+            content.citation = value;
+          },
+        },
+      ];
+    }
+    if (content.type === "file") {
+      return [
+        {
+          read: () => content.fileName,
+          write: (value) => {
+            content.fileName = value;
+          },
+        },
+      ];
+    }
+    return [];
+  });
+
+/**
+ * Same union-walk shape as `fieldContentTextUnits`, over a line-diff's
+ * segments: a "changed" segment's several inline runs each become one unit;
+ * every other segment kind is a single scalar unit over its own `text`.
+ */
+const diffSegmentTextUnits = (
+  segments: readonly VersionDiffSegment[],
+): readonly TextUnit[] =>
+  segments.flatMap((segment): TextUnit[] => {
+    if (segment.kind === "changed") {
+      return segment.runs.map((run) => ({
+        read: () => run.text,
+        write: (value: string) => {
+          run.text = value;
+        },
+      }));
+    }
+    return [
+      {
+        read: () => segment.text,
+        write: (value: string) => {
+          segment.text = value;
+        },
+      },
+    ];
+  });
+
+/**
+ * One anonymize-mode spec over a flat list of `TextUnit`s, shared by every
+ * field-values path (`fields[].value`, `version.fields[].value`) and the diff
+ * path (`diff.segments[].text`) below.
+ */
+const textUnitTextFieldSpec = <TPayload>({
+  path,
+  units,
+  workspaceId,
+}: {
+  path: string;
+  units: (payload: TPayload) => readonly TextUnit[];
+  workspaceId: string;
+}): McpTextFieldSpec<TPayload> =>
+  defineTextFieldSpec({
+    path,
+    items: units,
+    scope: () => workspaceId,
+    read: (unit: TextUnit) => unit.read(),
+    apply: (unit: TextUnit, value) => {
+      unit.write(value);
+    },
+  });
+
+/**
+ * One anonymize-mode spec over a single `{ name: string }`-shaped payload,
+ * shared across read_document's default/version/diff branches (P1: the whole
+ * branch response shares one resolved `workspaceId`).
+ */
+const nameTextFieldSpec = <TPayload extends { name: string }>(
+  workspaceId: string,
+): McpTextFieldSpec<TPayload> =>
+  defineTextFieldSpec({
+    path: "name",
+    items: (payload: TPayload) => [payload],
+    scope: () => workspaceId,
+    read: (item: TPayload) => item.name,
+    apply: (item: TPayload, value) => {
+      item.name = value;
+    },
+  });
+
+// --- list_documents / list_properties -------------------------------------
+
+type NamedListItem = { name: string };
+
+const DOCUMENT_LIST_TEXT_FIELD_PATH = "documents[].name";
+
+const documentListTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<{ documents: readonly NamedListItem[] }>[] => [
+  defineTextFieldSpec({
+    path: DOCUMENT_LIST_TEXT_FIELD_PATH,
+    items: (payload) => payload.documents,
+    scope: () => workspaceId,
+    read: (item) => item.name,
+    apply: (item, value) => {
+      item.name = value;
+    },
+  }),
+];
+
+const PROPERTY_LIST_TEXT_FIELD_PATH = "properties[].name";
+
+const propertyListTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<{ properties: readonly NamedListItem[] }>[] => [
+  defineTextFieldSpec({
+    path: PROPERTY_LIST_TEXT_FIELD_PATH,
+    items: (payload) => payload.properties,
+    scope: () => workspaceId,
+    read: (item) => item.name,
+    apply: (item, value) => {
+      item.name = value;
+    },
+  }),
+];
+
+// --- read_document ---------------------------------------------------------
+
+/** Version-history fields this surface redacts. See `VersionHistoryEntry`
+ * below for the full row shape fetched from the DB. */
+type VersionHistoryTextItem = {
+  label: string | null;
+  description: string | null;
+};
+
+type ReadDocumentDefaultPayload = {
+  name: string;
+  fields: readonly EntityFieldRow[];
+  versions?: readonly VersionHistoryTextItem[];
+};
+
+/** `versions` is only present when `include_versions` was requested — a
+ * genuine absence, not a structural invariant, so this reads as an explicit
+ * presence check rather than a `?? []` fallback. */
+const readDocumentVersionHistoryItems = (
+  payload: ReadDocumentDefaultPayload,
+): readonly VersionHistoryTextItem[] => {
+  if (payload.versions === undefined) {
+    return [];
+  }
+  return payload.versions;
+};
+
+/**
+ * Default branch (current version): the entity's own name, its field values
+ * (full `FieldContent` union recursion via `fieldContentTextUnits`), and,
+ * when `include_versions` was requested, each version-history entry's label
+ * and description — the exact fields Wave 1 declared but never pushed;
+ * deriving the declaration from this same spec closes that gap structurally.
+ */
+const readDocumentDefaultTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<ReadDocumentDefaultPayload>[] => [
+  nameTextFieldSpec<ReadDocumentDefaultPayload>(workspaceId),
+  textUnitTextFieldSpec({
+    path: "fields[].value",
+    units: (payload: ReadDocumentDefaultPayload) =>
+      fieldContentTextUnits(payload.fields),
+    workspaceId,
+  }),
+  defineTextFieldSpec({
+    path: "versions[].label",
+    items: readDocumentVersionHistoryItems,
+    scope: () => workspaceId,
+    read: (item) => item.label,
+    apply: (item, value) => {
+      item.label = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "versions[].description",
+    items: readDocumentVersionHistoryItems,
+    scope: () => workspaceId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+];
+
+type ReadDocumentVersionDetailPayload = {
+  name: string;
+  version: {
+    label: string | null;
+    description: string | null;
+    fields: readonly EntityFieldRow[];
+  };
+};
+
+/**
+ * version_id branch: the entity name, the requested version's own
+ * label/description (pushed by the original handler but never declared —
+ * another instance of the declared-vs-pushed drift this migration closes),
+ * and that version's field values.
+ */
+const readDocumentVersionDetailTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<ReadDocumentVersionDetailPayload>[] => [
+  nameTextFieldSpec<ReadDocumentVersionDetailPayload>(workspaceId),
+  defineTextFieldSpec({
+    path: "version.label",
+    items: (payload: ReadDocumentVersionDetailPayload) => [payload.version],
+    scope: () => workspaceId,
+    read: (item) => item.label,
+    apply: (item, value) => {
+      item.label = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "version.description",
+    items: (payload: ReadDocumentVersionDetailPayload) => [payload.version],
+    scope: () => workspaceId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+  textUnitTextFieldSpec({
+    path: "version.fields[].value",
+    units: (payload: ReadDocumentVersionDetailPayload) =>
+      fieldContentTextUnits(payload.version.fields),
+    workspaceId,
+  }),
+];
+
+type ReadDocumentDiffPayload = {
+  name: string;
+  diff: { segments: readonly VersionDiffSegment[] };
+};
+
+/**
+ * compare_with_version_id branch: the entity name and every diff segment's
+ * text (a "changed" segment's several inline runs, or the segment's own text
+ * for every other kind).
+ */
+const readDocumentDiffTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<ReadDocumentDiffPayload>[] => [
+  nameTextFieldSpec<ReadDocumentDiffPayload>(workspaceId),
+  textUnitTextFieldSpec({
+    path: "diff.segments[].text",
+    units: (payload: ReadDocumentDiffPayload) =>
+      diffSegmentTextUnits(payload.diff.segments),
+    workspaceId,
+  }),
+];
+
+// read_document's three branches (default/version/diff) never populate the
+// same response at once, but each has its own payload shape, so the declared
+// path list is the union of all three specs' paths (deduped: `name` is
+// shared by every branch).
+const READ_DOCUMENT_TEXT_FIELD_PATHS = [
+  ...new Set([
+    ...deriveTextFieldPaths(readDocumentDefaultTextFieldSpecs("")),
+    ...deriveTextFieldPaths(readDocumentVersionDetailTextFieldSpecs("")),
+    ...deriveTextFieldPaths(readDocumentDiffTextFieldSpecs("")),
+  ]),
+];
 
 export const DOCUMENT_TOOL_DEFINITIONS = [
   {
@@ -117,7 +461,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["matter_id"],
     },
-    anonymized: { exposure: "anonymize", textFields: ["documents[].name"] },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [DOCUMENT_LIST_TEXT_FIELD_PATH],
+    },
     name: "list_documents",
     scope: "stella:read",
   },
@@ -153,14 +500,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     },
     anonymized: {
       exposure: "anonymize",
-      textFields: [
-        "name",
-        "fields[].value",
-        "version.fields[].value",
-        "versions[].label",
-        "versions[].description",
-        "diff.segments[].text",
-      ],
+      textFields: READ_DOCUMENT_TEXT_FIELD_PATHS,
     },
     name: "read_document",
     scope: "stella:read",
@@ -259,7 +599,10 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["matter_id"],
     },
-    anonymized: { exposure: "anonymize", textFields: ["properties[].name"] },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [PROPERTY_LIST_TEXT_FIELD_PATH],
+    },
     name: "list_properties",
     scope: "stella:read",
   },
@@ -306,123 +649,6 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:documents_write",
   },
 ] as const satisfies readonly McpToolDefinition[];
-
-/**
- * Queue one anonymizable text field onto a structured egress plan, skipping
- * null/empty values. `apply` writes the anonymized value back into the payload.
- */
-const pushTextField = ({
-  apply,
-  fields: sink,
-  value,
-  workspaceId,
-}: {
-  apply: (value: string) => void;
-  fields: McpStructuredTextField[];
-  value: string | null | undefined;
-  workspaceId: string;
-}): void => {
-  if (typeof value === "string" && value.length > 0) {
-    sink.push({ apply, value, workspaceId });
-  }
-};
-
-/** Anonymize a field's tenant-authored text in place (values, file names). */
-const pushFieldContentTexts = ({
-  content,
-  fields: sink,
-  workspaceId,
-}: {
-  content: FieldContent;
-  fields: McpStructuredTextField[];
-  workspaceId: string;
-}): void => {
-  if (content.type === "text") {
-    pushTextField({
-      apply: (value) => {
-        content.value = value;
-      },
-      fields: sink,
-      value: content.value,
-      workspaceId,
-    });
-    return;
-  }
-  if (content.type === "single-select") {
-    pushTextField({
-      apply: (value) => {
-        content.value = value;
-      },
-      fields: sink,
-      value: content.value,
-      workspaceId,
-    });
-    return;
-  }
-  if (content.type === "multi-select") {
-    const values = content.value;
-    for (const [index, value] of values.entries()) {
-      pushTextField({
-        apply: (next) => {
-          values[index] = next;
-        },
-        fields: sink,
-        value,
-        workspaceId,
-      });
-    }
-    return;
-  }
-  if (content.type === "clip") {
-    pushTextField({
-      apply: (value) => {
-        content.snippet = value;
-      },
-      fields: sink,
-      value: content.snippet,
-      workspaceId,
-    });
-    pushTextField({
-      apply: (value) => {
-        content.citation = value;
-      },
-      fields: sink,
-      value: content.citation,
-      workspaceId,
-    });
-    return;
-  }
-  if (content.type === "file") {
-    pushTextField({
-      apply: (value) => {
-        content.fileName = value;
-      },
-      fields: sink,
-      value: content.fileName,
-      workspaceId,
-    });
-  }
-};
-
-type EntityFieldRow = { content: FieldContent };
-
-const pushEntityFieldsTexts = ({
-  entityFields,
-  fields: sink,
-  workspaceId,
-}: {
-  entityFields: EntityFieldRow[];
-  fields: McpStructuredTextField[];
-  workspaceId: string;
-}): void => {
-  for (const field of entityFields) {
-    pushFieldContentTexts({
-      content: field.content,
-      fields: sink,
-      workspaceId,
-    });
-  }
-};
 
 /** Entity kind the document tools operate on (same set list_documents surfaces). */
 type DocumentEntityKind = (typeof LISTABLE_ENTITY_KINDS)[number];
@@ -651,23 +877,13 @@ const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
 
   const documents = page.items.map(({ createdAt: _createdAt, ...doc }) => doc);
 
-  const textFields: McpStructuredTextField[] = [];
-  for (const doc of documents) {
-    pushTextField({
-      apply: (value) => {
-        doc.name = value;
-      },
-      fields: textFields,
-      value: doc.name,
-      workspaceId,
-    });
-  }
+  const payload = { documents, nextCursor: page.nextCursor };
+  const textFields = runTextFieldSpecs(
+    documentListTextFieldSpecs(workspaceId),
+    payload,
+  );
 
-  return {
-    egress: "structured",
-    payload: { documents, nextCursor: page.nextCursor },
-    textFields,
-  };
+  return { egress: "structured", payload, textFields };
 };
 
 // Version-history cursor is [versionNumber, versionId]; keyset paginates
@@ -713,9 +929,9 @@ const readDocumentArgsSchema = v.pipe(
 
 /**
  * One version-history entry. `label` and `description` are tenant-authored, so
- * both must be pushed through `pushTextField` on the anonymized surface; typing
- * them concretely (rather than `unknown[]` at the call site) is what makes that
- * omission visible.
+ * both must be redacted through `readDocumentDefaultTextFieldSpecs` on the
+ * anonymized surface; typing them concretely (rather than `unknown[]` at the
+ * call site) is what makes that omission visible.
  */
 type VersionHistoryEntry = {
   id: SafeId<"entityVersion">;
@@ -875,38 +1091,10 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
       diff: { baseVersionId, targetVersionId, segments },
     };
 
-    const textFields: McpStructuredTextField[] = [];
-    pushTextField({
-      apply: (value) => {
-        payload.name = value;
-      },
-      fields: textFields,
-      value: payload.name,
-      workspaceId,
-    });
-    for (const segment of segments) {
-      if (segment.kind === "changed") {
-        for (const run of segment.runs) {
-          pushTextField({
-            apply: (value) => {
-              run.text = value;
-            },
-            fields: textFields,
-            value: run.text,
-            workspaceId,
-          });
-        }
-        continue;
-      }
-      pushTextField({
-        apply: (value) => {
-          segment.text = value;
-        },
-        fields: textFields,
-        value: segment.text,
-        workspaceId,
-      });
-    }
+    const textFields = runTextFieldSpecs(
+      readDocumentDiffTextFieldSpecs(workspaceId),
+      payload,
+    );
 
     return { egress: "structured", payload, textFields };
   }
@@ -953,36 +1141,10 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
         fields: versionFields,
       },
     };
-    const textFields: McpStructuredTextField[] = [];
-    pushTextField({
-      apply: (value) => {
-        payload.name = value;
-      },
-      fields: textFields,
-      value: payload.name,
-      workspaceId,
-    });
-    pushTextField({
-      apply: (value) => {
-        payload.version.label = value;
-      },
-      fields: textFields,
-      value: payload.version.label,
-      workspaceId,
-    });
-    pushTextField({
-      apply: (value) => {
-        payload.version.description = value;
-      },
-      fields: textFields,
-      value: payload.version.description,
-      workspaceId,
-    });
-    pushEntityFieldsTexts({
-      entityFields: versionFields,
-      fields: textFields,
-      workspaceId,
-    });
+    const textFields = runTextFieldSpecs(
+      readDocumentVersionDetailTextFieldSpecs(workspaceId),
+      payload,
+    );
     return { egress: "structured", payload, textFields };
   }
 
@@ -1022,43 +1184,14 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
       : {}),
   };
 
-  const textFields: McpStructuredTextField[] = [];
-  pushTextField({
-    apply: (value) => {
-      payload.name = value;
-    },
-    fields: textFields,
-    value: payload.name,
-    workspaceId,
-  });
-  pushEntityFieldsTexts({
-    entityFields: current.fields,
-    fields: textFields,
-    workspaceId,
-  });
-  // Version history carries tenant-authored label/description. payload.versions
-  // holds the same entry references, so writing back here anonymizes the
-  // payload in place, matching the specific-version branch above.
-  if (versionHistory) {
-    for (const version of versionHistory.versions) {
-      pushTextField({
-        apply: (value) => {
-          version.label = value;
-        },
-        fields: textFields,
-        value: version.label,
-        workspaceId,
-      });
-      pushTextField({
-        apply: (value) => {
-          version.description = value;
-        },
-        fields: textFields,
-        value: version.description,
-        workspaceId,
-      });
-    }
-  }
+  // Version history carries tenant-authored label/description; payload.versions
+  // holds the same entry references runTextFieldSpecs reads from, so the
+  // write-back anonymizes the served payload in place, matching the
+  // specific-version branch above.
+  const textFields = runTextFieldSpecs(
+    readDocumentDefaultTextFieldSpecs(workspaceId),
+    payload,
+  );
 
   return { egress: "structured", payload, textFields };
 };
@@ -1626,23 +1759,13 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
     status: property.status,
   }));
 
-  const textFields: McpStructuredTextField[] = [];
-  for (const property of propertyList) {
-    pushTextField({
-      apply: (value) => {
-        property.name = value;
-      },
-      fields: textFields,
-      value: property.name,
-      workspaceId,
-    });
-  }
+  const payload = { properties: propertyList, nextCursor: page.nextCursor };
+  const textFields = runTextFieldSpecs(
+    propertyListTextFieldSpecs(workspaceId),
+    payload,
+  );
 
-  return {
-    egress: "structured",
-    payload: { properties: propertyList, nextCursor: page.nextCursor },
-    textFields,
-  };
+  return { egress: "structured", payload, textFields };
 };
 
 const setFieldValueContentSchema = v.variant("type", [
