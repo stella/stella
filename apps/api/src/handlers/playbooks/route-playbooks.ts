@@ -2,6 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb, Transaction } from "@/api/db";
 import { documentTypes, fields } from "@/api/db/schema";
+import type { DocTypeClassifier } from "@/api/handlers/playbooks/materialize-run";
 import {
   materializePlaybookRun,
   resolveDocTypeClassifier,
@@ -90,11 +91,16 @@ export const resolveApplicablePlaybooks = async ({
   workspaceId,
   organizationId,
   playbooks,
+  classifier: preResolvedClassifier,
 }: {
   tx: Transaction;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   playbooks: readonly RoutablePlaybook[];
+  // The "Document Type" classifier, pre-resolved by a caller that already
+  // fetched it (classification routing threads it in to avoid a duplicate
+  // lookup). Omitted by the auto-run path, which resolves it internally below.
+  classifier?: DocTypeClassifier | null;
 }): Promise<RoutablePlaybook[]> => {
   const scoped = playbooks.filter((playbook) =>
     Boolean(playbook.scope?.documentTypeKey),
@@ -113,7 +119,10 @@ export const resolveApplicablePlaybooks = async ({
     ),
   ];
 
-  const classifier = await resolveDocTypeClassifier(tx, workspaceId);
+  const classifier =
+    preResolvedClassifier === undefined
+      ? await resolveDocTypeClassifier(tx, workspaceId)
+      : preResolvedClassifier;
   // No "Document Type" classifier means doc-type gating cannot be resolved, so
   // only workspace-wide playbooks apply.
   if (!classifier) {
@@ -189,6 +198,10 @@ type RouteClassifiedDocumentsArgs = {
   userId: SafeId<"user">;
   scopedDb: ScopedDb;
   startWorkflow: StartWorkflowFn;
+  // The classifier the calling workflow already resolved (see
+  // maybeRouteClassifiedDocuments): threaded into resolveApplicablePlaybooks so
+  // the "Document Type" column is not looked up a second time per routed run.
+  classifier: DocTypeClassifier;
 };
 
 // Classification-driven routing: after the Document Type classifier resolves for
@@ -206,16 +219,28 @@ export const routeClassifiedDocuments = async ({
   userId,
   scopedDb,
   startWorkflow,
+  classifier,
 }: RouteClassifiedDocumentsArgs): Promise<void> => {
   const materializedPropertyIds = await scopedDb(async (tx) => {
-    const playbooks = await tx.query.playbookDefinitions.findMany({
-      where: { organizationId: { eq: organizationId } },
+    // Push the trigger predicate into the query for this path: only
+    // `onClassified` playbooks route, so filtering in SQL avoids fetching the
+    // `positions` JSONB for manual playbooks that would be discarded anyway.
+    // (`scope->>'trigger'` is NULL for a null scope or an absent trigger, so a
+    // manual/legacy playbook is excluded — matching `playbookTrigger`'s default.)
+    const routable = await tx.query.playbookDefinitions.findMany({
+      where: {
+        organizationId: { eq: organizationId },
+        RAW: (table) => sql`${table.scope}->>'trigger' = 'onClassified'`,
+      },
       columns: { id: true, positions: true, scope: true },
       limit: LIMITS.playbookDefinitionsCount,
     });
 
-    const routable = selectRoutablePlaybooks(playbooks);
-    if (routable.length === 0) {
+    // Defense in depth: the SQL predicate already excludes non-`onClassified`
+    // playbooks; re-checking the returned rows keeps the invariant enforced in
+    // app code too, and is cheap over the already-narrowed set.
+    const onClassified = selectRoutablePlaybooks(routable);
+    if (onClassified.length === 0) {
       return [] as SafeId<"property">[];
     }
 
@@ -223,7 +248,8 @@ export const routeClassifiedDocuments = async ({
       tx,
       workspaceId,
       organizationId,
-      playbooks: routable,
+      playbooks: onClassified,
+      classifier,
     });
     if (applicable.length === 0) {
       return [] as SafeId<"property">[];

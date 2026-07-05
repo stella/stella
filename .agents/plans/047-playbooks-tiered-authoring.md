@@ -244,6 +244,25 @@ classifier). Slice D formalizes it:
 - Editor: reorder keeps sourceId identity; duplicate assigns fresh sourceId +
   rule ids; inline validation targets the offending field.
 
+## Review follow-ups (verified findings deliberately deferred)
+
+- **Degraded-ask visibility**: a failed auto-ASK derivation persists as
+  `{mode:"auto"}` and re-derives on the next save, but between saves the
+  position runs on a generic text ask with no author-visible signal (the
+  Advanced hint reads the same for "will derive" and "derivation failed").
+  Needs a distinct hint string (13 locales) and possibly a derived-at
+  timestamp.
+- **Generic completion seam**: `finishWorkflow` now hosts two inline
+  feature-specific post-completion blocks (ai-model stragglers, playbook
+  routing). A third consumer should trigger extracting a completion-hook
+  registry with recursion guards owned by the engine, not each caller.
+- **Mock AI feature keying**: `register-mock-ai.ts` sniffs schema property
+  names; `TextOptions.metadata` exists unused in the TanStack layer and could
+  carry the `feature` string end-to-end for a registry keyed by feature.
+- **Tier/verdict tone palette**: `TIER_*_CLASS` (position-editor) and
+  `verdict*Class` (playbook-facet) duplicate the success/warning/destructive
+  mapping; unify via a neutral tone type both key onto.
+
 ## Non-goals (this wave)
 
 Section grouping, definition versioning, governance/RBAC, AI bootstrap from

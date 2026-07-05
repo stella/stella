@@ -1905,6 +1905,9 @@ const maybeRouteClassifiedDocuments = async ({
     userId,
     scopedDb,
     startWorkflow,
+    // Reuse the classifier already resolved above rather than having
+    // resolveApplicablePlaybooks look it up a second time.
+    classifier,
   });
 };
 

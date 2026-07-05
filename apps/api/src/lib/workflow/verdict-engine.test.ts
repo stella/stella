@@ -1,13 +1,17 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ScopedDb, Transaction } from "@/api/db";
 import type { ResolvedTiers } from "@/api/handlers/playbooks/positions";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { VerdictBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import {
   buildTierMatchUserMessage,
+  computeVerdictBatch,
   gradeTierMatch,
   resolveMatchedRef,
 } from "@/api/lib/workflow/verdict-engine";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const tiers: ResolvedTiers = {
   ideal: "Governed by the laws of England and Wales.",
@@ -99,6 +103,86 @@ describe("resolveMatchedRef — rank → stable reference", () => {
 
   test("an absent match resolves to no reference", () => {
     expect(resolveMatchedRef(undefined, tiers)).toBeUndefined();
+  });
+});
+
+describe("computeVerdictBatch — pre-v2 verdict row without tiers", () => {
+  test("grades to deviation without throwing and without an LLM call", async () => {
+    const askPropertyId = toSafeId<"property">("ask_prop_1");
+    const verdictPropertyId = toSafeId<"property">("verdict_prop_1");
+
+    // Simulate a row materialized before the tiered-authoring migration: the
+    // positions migration rewrote playbook_definitions.positions but never
+    // properties.tool, so the persisted verdict tool carries `{standard}` and
+    // has no `tiers` snapshot even though PlaybookVerdictTool types it present.
+    const preV2VerdictProperty = asTestRaw<VerdictBatchProperty>({
+      id: verdictPropertyId,
+      status: "stale",
+      content: { type: "single-select", version: 1, value: null },
+      dependencies: [],
+      tool: {
+        version: 1,
+        type: "playbook-verdict",
+        askPropertyId,
+        rule: { kind: "positionMatch" },
+        severity: "medium",
+        // tiers deliberately omitted: this is the pre-migration shape.
+      },
+    });
+
+    // fetchInputFieldsForBatch runs `tx.select().from().where()`; return a
+    // present ASK value so the positionMatch task reaches gradeTierMatch.
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () =>
+            Promise.resolve([
+              {
+                id: toSafeId<"field">("field_1"),
+                propertyId: askPropertyId,
+                content: {
+                  type: "text",
+                  version: 1,
+                  value: "Some extracted clause value.",
+                },
+              },
+            ]),
+        }),
+      }),
+    };
+    const scopedDb: ScopedDb = async (run) =>
+      await run(asTestRaw<Transaction>(tx));
+
+    const result = await computeVerdictBatch({
+      // A pre-aborted signal proves no external LLM call is attempted: the
+      // empty-tiers guard returns before any AI/analytics setup.
+      abortSignal: AbortSignal.abort(),
+      organizationId: toSafeId<"organization">("org_1"),
+      workspaceId: toSafeId<"workspace">("ws_1"),
+      scopedDb,
+      entityVersionId: toSafeId<"entityVersion">("ev_1"),
+      verdictProperties: [preV2VerdictProperty],
+      inputPropertyIds: [askPropertyId],
+      orgAIConfig: null,
+      promptCachingEnabled: false,
+      serviceTier: "standard",
+    });
+
+    expect(result.erroredPropertyIds).toEqual([]);
+    expect(result.aiResults).toHaveLength(1);
+    const [verdict] = result.aiResults;
+    expect(verdict?.propertyId).toBe(verdictPropertyId);
+    expect(verdict?.content).toMatchObject({
+      type: "single-select",
+      value: "deviation",
+    });
+
+    const [justification] = result.aiJustifications;
+    expect(justification?.content.blocks[0]).toMatchObject({
+      kind: "playbook-verdict",
+      rationale:
+        "No acceptable, fallback, or red-line criteria were configured to compare against.",
+    });
   });
 });
 

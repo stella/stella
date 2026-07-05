@@ -67,6 +67,7 @@ import {
   type FallbackEntry,
   type GradedPosition,
   type IdealLanguage,
+  moveAdjacent,
   newFallbackEntry,
   newTierRule,
   type Position,
@@ -177,6 +178,22 @@ const contentForType = (
   }
   return { version: 1, type: "text" };
 };
+
+// ── Inline action (muted text-only ghost button) ──────
+// Tier "+ add" affordances and the advanced-panel toggles read as plain muted
+// text until hover, not filled controls. A ghost xs Button with a muted text
+// override keeps focus rings, sizing, and keyboard behaviour consistent.
+const InlineAction = ({
+  className,
+  ...props
+}: React.ComponentProps<typeof Button>) => (
+  <Button
+    className={cn("text-muted-foreground hover:text-foreground", className)}
+    size="xs"
+    variant="ghost"
+    {...props}
+  />
+);
 
 // ── Root: position card ───────────────────────────────
 
@@ -531,13 +548,11 @@ const GradedBody = ({
         tone="acceptable"
         trailingAction={
           tiers.acceptable.ideal === undefined ? (
-            <button
-              className="text-muted-foreground hover:text-foreground rounded-md px-1.5 py-0.5 text-xs"
+            <InlineAction
               onClick={() => setIdeal({ source: "inline", text: "" })}
-              type="button"
             >
               + {t("knowledge.playbooks.idealLanguage")}
-            </button>
+            </InlineAction>
           ) : null
         }
       >
@@ -603,27 +618,23 @@ const GradedBody = ({
               )
             }
             onMoveDown={() => {
-              if (entryIndex < tiers.fallback.entries.length - 1) {
-                const next = [...tiers.fallback.entries];
-                const cur = next[entryIndex];
-                const swap = next[entryIndex + 1];
-                if (cur && swap) {
-                  next[entryIndex] = swap;
-                  next[entryIndex + 1] = cur;
-                  setEntries(next);
-                }
+              const next = moveAdjacent(
+                tiers.fallback.entries,
+                entryIndex,
+                "down",
+              );
+              if (next) {
+                setEntries(next);
               }
             }}
             onMoveUp={() => {
-              if (entryIndex > 0) {
-                const next = [...tiers.fallback.entries];
-                const cur = next[entryIndex];
-                const swap = next[entryIndex - 1];
-                if (cur && swap) {
-                  next[entryIndex] = swap;
-                  next[entryIndex - 1] = cur;
-                  setEntries(next);
-                }
+              const next = moveAdjacent(
+                tiers.fallback.entries,
+                entryIndex,
+                "up",
+              );
+              if (next) {
+                setEntries(next);
               }
             }}
             onRemove={() =>
@@ -748,13 +759,9 @@ const TierSection = ({
         </span>
         <div className="ms-auto flex items-center gap-1">
           {trailingAction}
-          <button
-            className="text-muted-foreground hover:text-foreground rounded-md px-1.5 py-0.5 text-xs"
-            onClick={onAddRule}
-            type="button"
-          >
+          <InlineAction onClick={onAddRule}>
             + {t("knowledge.playbooks.addRule")}
-          </button>
+          </InlineAction>
         </div>
       </div>
       <div className="space-y-2 px-3 pb-3">{children}</div>
@@ -1059,15 +1066,13 @@ const GradedFooter = ({
               : t("knowledge.playbooks.extractionManual")}
           </span>
         </span>
-        <button
+        <InlineAction
           aria-expanded={advancedOpen}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
           onClick={() => setAdvancedOpen((prev) => !prev)}
-          type="button"
         >
           <SlidersHorizontalIcon className="size-3" />
           {t("knowledge.playbooks.advanced")}
-        </button>
+        </InlineAction>
       </div>
 
       {advancedOpen && (
@@ -1373,15 +1378,13 @@ const ExtractBody = ({
         <span className="text-muted-foreground text-xs">
           {t("knowledge.playbooks.extractOnlyDescription")}
         </span>
-        <button
+        <InlineAction
           aria-expanded={advancedOpen}
-          className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs"
           onClick={() => setAdvancedOpen((prev) => !prev)}
-          type="button"
         >
           <SlidersHorizontalIcon className="size-3" />
           {t("knowledge.playbooks.advanced")}
-        </button>
+        </InlineAction>
       </div>
 
       {advancedOpen && (

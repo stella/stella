@@ -95,6 +95,9 @@ type DocTypeGate = {
   label: string;
 };
 
+// The workspace's "Document Type" classifier column, identified by property id.
+export type DocTypeClassifier = { id: SafeId<"property"> };
+
 // The workspace's "Document Type" classifier: a single-select column computed by
 // an AI model. The column set is bounded per workspace (LIMITS.propertiesCount),
 // content/tool are JSONB, so the single-select + ai-model checks run in app code
@@ -102,7 +105,7 @@ type DocTypeGate = {
 export const resolveDocTypeClassifier = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
-): Promise<{ id: SafeId<"property"> } | null> => {
+): Promise<DocTypeClassifier | null> => {
   const candidates = await tx
     .select({
       id: properties.id,

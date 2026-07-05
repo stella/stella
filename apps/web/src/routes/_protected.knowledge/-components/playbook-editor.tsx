@@ -49,6 +49,7 @@ import {
   extractToGraded,
   gradedToExtract,
   hasErrors,
+  moveAdjacent,
   newExtractPosition,
   newGradedPosition,
   normalizePosition,
@@ -348,19 +349,7 @@ const PlaybookEditorForm = ({
   const movePosition = (sourceId: string, direction: "up" | "down") => {
     setPositions((prev) => {
       const index = prev.findIndex((p) => p.sourceId === sourceId);
-      const target = direction === "up" ? index - 1 : index + 1;
-      if (index === -1 || target < 0 || target >= prev.length) {
-        return prev;
-      }
-      const next = [...prev];
-      const current = next[index];
-      const swap = next[target];
-      if (!current || !swap) {
-        return prev;
-      }
-      next[index] = swap;
-      next[target] = current;
-      return next;
+      return moveAdjacent(prev, index, direction) ?? prev;
     });
   };
 
@@ -382,19 +371,19 @@ const PlaybookEditorForm = ({
       return;
     }
 
-    const invalid = positions.some((position) =>
-      hasErrors(validatePosition(position)),
-    );
-    if (invalid) {
+    // Reuse the render-time validation map instead of re-running validatePosition
+    // per position twice more on the save path.
+    const invalidIds = [...errorsById]
+      .filter(([, positionErrors]) => hasErrors(positionErrors))
+      .map(([id]) => id);
+    if (invalidIds.length > 0) {
       setAttemptedSave(true);
       // Expand every position that still has an error so the inline messages
       // are visible, not hidden inside a collapsed card.
       setOpenIds((prev) => {
         const next = new Set(prev);
-        for (const position of positions) {
-          if (hasErrors(validatePosition(position))) {
-            next.add(position.sourceId);
-          }
+        for (const id of invalidIds) {
+          next.add(id);
         }
         return next;
       });
@@ -797,13 +786,14 @@ const OutlineRail = ({
       <ol className="space-y-0.5">
         {positions.map((position, index) => (
           <li key={position.sourceId}>
-            <button
+            <Button
               className={cn(
-                "hover:bg-muted flex w-full items-baseline gap-2 rounded-md px-2 py-1 text-start",
+                "hover:bg-muted h-auto w-full items-baseline justify-start px-2 py-1 text-start font-normal",
                 !position.enabled && "opacity-50",
               )}
               onClick={() => onJump(position.sourceId)}
-              type="button"
+              size="xs"
+              variant="ghost"
             >
               <span className="text-muted-foreground shrink-0 text-[11px] tabular-nums">
                 {String(index + 1).padStart(2, "0")}
@@ -823,7 +813,7 @@ const OutlineRail = ({
                   }}
                 />
               )}
-            </button>
+            </Button>
           </li>
         ))}
       </ol>

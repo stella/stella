@@ -215,6 +215,29 @@ type TierMatchVerdict = {
   matchedRef?: VerdictMatchedRef;
 };
 
+// Empty resolved tiers: no ideal, no fallbacks, no acceptable/red-line rules.
+// `ideal` is optional, so its absence is the empty state.
+const EMPTY_RESOLVED_TIERS: ResolvedTiers = {
+  fallbacks: [],
+  acceptableRules: [],
+  notAcceptableRules: [],
+};
+
+// Pre-v2 materialized verdict rows persisted `{standard}` and were lifted
+// without a resolved `tiers` snapshot; the positions migration only rewrote
+// `playbook_definitions.positions`, never `properties.tool`. Such a row still
+// reaches the grader with `tiers` absent at runtime even though
+// `PlaybookVerdictTool` types it as always present, so read it through a widened
+// view (optional `tiers`) and default to empty tiers. `gradeTierMatch`'s
+// `tiersHaveContent` guard then grades it deterministically to `deviation` with
+// the "no criteria configured" rationale (no LLM call) instead of dereferencing
+// undefined and throwing. Mirrors the same default in `review-grade.ts`.
+const resolveVerdictTiers = ({
+  tiers,
+}: {
+  tiers?: ResolvedTiers;
+}): ResolvedTiers => tiers ?? EMPTY_RESOLVED_TIERS;
+
 // A graded position with no authored tier content and no deterministic check is
 // rejected at validation, but a v1-lifted row can carry it. Force `deviation`
 // rather than compare an extracted value against nothing.
@@ -500,7 +523,7 @@ export const computeVerdictBatch = async ({
       chunk.map(async ({ property, askValue }) => {
         const graded = await gradeTierMatch({
           askValue,
-          tiers: property.tool.tiers,
+          tiers: resolveVerdictTiers(property.tool),
           abortSignal,
           organizationId,
           workspaceId,

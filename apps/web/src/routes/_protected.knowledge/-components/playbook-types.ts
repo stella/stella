@@ -165,6 +165,30 @@ export const duplicatePosition = (position: Position): Position => {
   };
 };
 
+// ── Reorder ───────────────────────────────────────────
+// Bounds-checked adjacent swap: returns a new array with item[index] moved one
+// slot up/down, or null when the move would fall off either end so callers can
+// skip the state update entirely (no spurious re-render / dirty flag).
+export const moveAdjacent = <T>(
+  items: readonly T[],
+  index: number,
+  direction: "up" | "down",
+): T[] | null => {
+  const target = direction === "up" ? index - 1 : index + 1;
+  if (index < 0 || target < 0 || target >= items.length) {
+    return null;
+  }
+  const next = items.slice();
+  const current = next[index];
+  const swap = next[target];
+  if (current === undefined || swap === undefined) {
+    return null;
+  }
+  next[index] = swap;
+  next[target] = current;
+  return next;
+};
+
 // ── Validation (mirrors positions-validation.ts, surfaced inline) ──
 
 export type PositionErrors = {
