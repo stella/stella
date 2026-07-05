@@ -900,6 +900,7 @@ type Messages = {
     "scopeExternalMcps": "Use your connected integrations";
     "scopeKnowledgeWrite": "Create, edit, and delete your clauses, and run playbooks";
     "scopeMattersWrite": "Create and edit your matters, contacts, and tasks";
+    "scopeOfflineAccess": "Keep you signed in without repeated approval";
     "scopeOnboarding": "Configure your organization's practice jurisdictions";
     "scopeProfile": "Access your profile information";
     "scopeRead": "Read your documents, matters, and contacts";
