@@ -80,6 +80,7 @@ const SCOPE_LABELS = {
   "stella:templates_anonymized": "consent.scopeTemplatesAnonymized",
   "stella:onboarding": "consent.scopeOnboarding",
   email: "consent.scopeProfile",
+  offline_access: "consent.scopeOfflineAccess",
   openid: "consent.scopeProfile",
   profile: "consent.scopeProfile",
 } as const satisfies Record<McpOAuthScope, TranslationKey>;

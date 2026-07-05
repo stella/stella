@@ -30,6 +30,12 @@ export const MCP_OAUTH_SCOPES = [
   "openid",
   "profile",
   "email",
+  // Protocol scope (RFC 6749 / OIDC), not a stella resource scope: it must
+  // never leak into `MCP_ALL_RESOURCE_SCOPES` or the resource-metadata scope
+  // lists derived from it. Granting it is what makes
+  // `oauthProvider({ scopes: ... })` in `lib/auth.ts` issue a refresh token
+  // alongside the access token.
+  "offline_access",
   ...MCP_ALL_RESOURCE_SCOPES,
 ] as const;
 

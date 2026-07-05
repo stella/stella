@@ -54,6 +54,11 @@ describe("OAuth authorization server metadata", () => {
     expect(body.scopes_supported).toContain("stella:external_mcps");
     expect(body.scopes_supported).toContain("stella:read_anonymized");
     expect(body.scopes_supported).toContain("stella:search_anonymized");
+    // Grantable protocol scope: without it in the live oauthProvider config,
+    // no client (MCP connectors, the CLI) can ever request a refresh token
+    // and access tokens die after ACCESS_TOKEN_EXPIRES_IN with no way to
+    // renew short of full re-consent.
+    expect(body.scopes_supported).toContain("offline_access");
     expect(body.token_endpoint_auth_methods_supported).toContain("none");
     expect(body.token_endpoint_auth_methods_supported).toContain(
       "client_secret_basic",
