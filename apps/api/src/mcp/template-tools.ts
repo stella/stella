@@ -10,12 +10,13 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
-import type { FieldMeta } from "@/api/handlers/docx/types";
+import type { FieldMeta, FieldPart } from "@/api/handlers/docx/types";
 import { INPUT_TYPES, isFieldMeta } from "@/api/handlers/docx/types";
 import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
 import { recordTemplateFill } from "@/api/handlers/templates/record-use";
+import type { DescribeTemplateResult } from "@/api/handlers/templates/template-fill-service";
 import {
   describeStoredTemplate,
   fillStoredTemplateWithText,
@@ -34,8 +35,13 @@ import {
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  defineTextFieldSpec,
+  deriveTextFieldPaths,
+  runTextFieldSpecs,
+} from "@/api/mcp/text-field-spec";
 import type {
-  McpStructuredTextField,
+  McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
@@ -154,6 +160,191 @@ const fieldsOverlayProp = {
   items: fieldConfigItemSchema,
 } as const;
 
+// --- Text-field specs (plan 049, Option B) --------------------------------
+//
+// Both anonymize-mode branches of list_templates are org-scoped: templates
+// have no owning workspace, so `organizationId` is the anonymization scope
+// for every field below. `organizationId` is not part of either served
+// payload, so (unlike a per-item workspace id already sitting in the
+// payload) it must be threaded in as a builder argument rather than read off
+// an item. `TEMPLATE_TOOL_DEFINITIONS` below calls these same builders with a
+// placeholder id purely to derive the documented `textFields` path list:
+// `deriveTextFieldPaths` only reads each spec's static `path`, never `scope`,
+// so the placeholder never affects the declaration.
+
+type TemplateListItem = {
+  name: string;
+  tags: string[] | null;
+  whenNotToUse: string | null;
+  whenToUse: string | null;
+};
+
+type TemplateListPayload = { templates: readonly TemplateListItem[] };
+
+/** Every tag on every listed template, paired with its own index into the
+ * owning `tags` array so `apply` writes back through that same array
+ * reference rather than a detached copy. */
+const templateTagItems = (
+  payload: TemplateListPayload,
+): readonly { index: number; tags: string[] }[] =>
+  payload.templates.flatMap((template) => {
+    const tags = template.tags;
+    return tags ? tags.map((_tag, index) => ({ index, tags })) : [];
+  });
+
+const buildTemplateListTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<TemplateListPayload>[] => [
+  defineTextFieldSpec({
+    path: "templates[].name",
+    items: (payload: TemplateListPayload) => payload.templates,
+    scope: () => organizationId,
+    read: (template: TemplateListItem) => template.name,
+    apply: (template: TemplateListItem, value) => {
+      template.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "templates[].whenToUse",
+    items: (payload: TemplateListPayload) => payload.templates,
+    scope: () => organizationId,
+    read: (template: TemplateListItem) => template.whenToUse,
+    apply: (template: TemplateListItem, value) => {
+      template.whenToUse = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "templates[].whenNotToUse",
+    items: (payload: TemplateListPayload) => payload.templates,
+    scope: () => organizationId,
+    read: (template: TemplateListItem) => template.whenNotToUse,
+    apply: (template: TemplateListItem, value) => {
+      template.whenNotToUse = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "templates[].tags[]",
+    items: templateTagItems,
+    scope: () => organizationId,
+    read: (item: { index: number; tags: string[] }) => item.tags[item.index],
+    apply: (item: { index: number; tags: string[] }, value) => {
+      item.tags[item.index] = value;
+    },
+  }),
+];
+
+// Detail-mode payload: the success variant of `describeStoredTemplate`'s
+// result (the error variant is handled and returned before a spec ever runs).
+type TemplateDetailSuccess = Extract<
+  DescribeTemplateResult,
+  { fields: unknown[] }
+>;
+type TemplateDetailField = TemplateDetailSuccess["fields"][number];
+
+const templateFieldOptionItems = (
+  payload: TemplateDetailSuccess,
+): readonly { index: number; options: string[] }[] =>
+  payload.fields.flatMap((field) => {
+    const options = field.options;
+    return options ? options.map((_option, index) => ({ index, options })) : [];
+  });
+
+const templateFieldPartItems = (
+  payload: TemplateDetailSuccess,
+): readonly FieldPart[] => payload.fields.flatMap((field) => field.parts ?? []);
+
+const templateFieldPartOptionItems = (
+  payload: TemplateDetailSuccess,
+): readonly { index: number; options: string[] }[] =>
+  templateFieldPartItems(payload).flatMap((part) => {
+    const options = part.options;
+    return options ? options.map((_option, index) => ({ index, options })) : [];
+  });
+
+const templateFieldFormatItems = (
+  payload: TemplateDetailSuccess,
+): readonly { key: string; template: string }[] =>
+  payload.fields.flatMap((field) => field.formats ?? []);
+
+const buildTemplateDetailTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<TemplateDetailSuccess>[] => [
+  defineTextFieldSpec({
+    path: "name",
+    items: (payload: TemplateDetailSuccess) => [payload],
+    scope: () => organizationId,
+    read: (payload: TemplateDetailSuccess) => payload.name,
+    apply: (payload: TemplateDetailSuccess, value) => {
+      payload.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "fields[].label",
+    items: (payload: TemplateDetailSuccess) => payload.fields,
+    scope: () => organizationId,
+    read: (field: TemplateDetailField) => field.label,
+    apply: (field: TemplateDetailField, value) => {
+      field.label = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "fields[].hint",
+    items: (payload: TemplateDetailSuccess) => payload.fields,
+    scope: () => organizationId,
+    read: (field: TemplateDetailField) => field.hint,
+    apply: (field: TemplateDetailField, value) => {
+      field.hint = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "fields[].aiPrompt",
+    items: (payload: TemplateDetailSuccess) => payload.fields,
+    scope: () => organizationId,
+    read: (field: TemplateDetailField) => field.aiPrompt,
+    apply: (field: TemplateDetailField, value) => {
+      field.aiPrompt = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "fields[].options[]",
+    items: templateFieldOptionItems,
+    scope: () => organizationId,
+    read: (item: { index: number; options: string[] }) =>
+      item.options[item.index],
+    apply: (item: { index: number; options: string[] }, value) => {
+      item.options[item.index] = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "fields[].parts[].label",
+    items: templateFieldPartItems,
+    scope: () => organizationId,
+    read: (part: FieldPart) => part.label,
+    apply: (part: FieldPart, value) => {
+      part.label = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "fields[].parts[].options[]",
+    items: templateFieldPartOptionItems,
+    scope: () => organizationId,
+    read: (item: { index: number; options: string[] }) =>
+      item.options[item.index],
+    apply: (item: { index: number; options: string[] }, value) => {
+      item.options[item.index] = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "fields[].formats[].template",
+    items: templateFieldFormatItems,
+    scope: () => organizationId,
+    read: (format: { key: string; template: string }) => format.template,
+    apply: (format: { key: string; template: string }, value) => {
+      format.template = value;
+    },
+  }),
+];
+
 export const TEMPLATE_TOOL_DEFINITIONS = [
   {
     annotations: { readOnlyHint: true },
@@ -182,14 +373,11 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
     },
     anonymized: {
       exposure: "anonymize",
+      // Placeholder org id: derivation only ever reads `.path`, see the
+      // builders' doc comment above.
       textFields: [
-        "templates[].name",
-        "templates[].whenToUse",
-        "templates[].whenNotToUse",
-        "name",
-        "fields[].label",
-        "fields[].hint",
-        "fields[].aiPrompt",
+        ...deriveTextFieldPaths(buildTemplateListTextFieldSpecs("")),
+        ...deriveTextFieldPaths(buildTemplateDetailTextFieldSpecs("")),
       ],
     },
     name: "list_templates",
@@ -344,152 +532,16 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
     cursorForItem: (item) => encodePaginationCursor([item.id]),
   });
 
-  const templateList = page.items;
-
   // Templates are organization-scoped, so the org id is the anonymization
-  // scope. Only the org-authored free text (name, usage guidance) is redacted;
-  // ids, field counts, and tags pass through.
-  const workspaceId = context.organizationId;
-  const textFields: McpStructuredTextField[] = [];
-  for (const template of templateList) {
-    pushTemplateTextField({
-      apply: (value) => {
-        template.name = value;
-      },
-      fields: textFields,
-      value: template.name,
-      workspaceId,
-    });
-    pushTemplateTextField({
-      apply: (value) => {
-        template.whenToUse = value;
-      },
-      fields: textFields,
-      value: template.whenToUse,
-      workspaceId,
-    });
-    pushTemplateTextField({
-      apply: (value) => {
-        template.whenNotToUse = value;
-      },
-      fields: textFields,
-      value: template.whenNotToUse,
-      workspaceId,
-    });
-    const tags = template.tags ?? [];
-    for (const [index, tag] of tags.entries()) {
-      pushTemplateTextField({
-        apply: (value) => {
-          tags[index] = value;
-        },
-        fields: textFields,
-        value: tag,
-        workspaceId,
-      });
-    }
-  }
+  // scope. Only the org-authored free text (name, usage guidance, tags) is
+  // redacted; ids and field counts pass through.
+  const payload = { templates: page.items, nextCursor: page.nextCursor };
+  const textFields = runTextFieldSpecs(
+    buildTemplateListTextFieldSpecs(context.organizationId),
+    payload,
+  );
 
-  return {
-    egress: "structured",
-    payload: { templates: templateList, nextCursor: page.nextCursor },
-    textFields,
-  };
-};
-
-/**
- * Queue one anonymizable template text field, skipping null/empty values.
- * Templates carry org-authored free text (name, usage guidance, field labels
- * and prompts); everything else on the surface is structural.
- */
-const pushTemplateTextField = ({
-  apply,
-  fields,
-  value,
-  workspaceId,
-}: {
-  apply: (value: string) => void;
-  fields: McpStructuredTextField[];
-  value: string | null | undefined;
-  workspaceId: string;
-}): void => {
-  if (typeof value === "string" && value.length > 0) {
-    fields.push({ apply, value, workspaceId });
-  }
-};
-
-type TemplateAnonymizableField = {
-  formats?: { template: string }[] | null | undefined;
-  lookup?: { formats: { template: string }[] } | null | undefined;
-  options?: string[] | null | undefined;
-  parts?:
-    | {
-        label?: string | null | undefined;
-        options?: string[] | null | undefined;
-      }[]
-    | null
-    | undefined;
-};
-
-const pushTemplateFieldNestedTextFields = ({
-  field,
-  fields,
-  workspaceId,
-}: {
-  field: TemplateAnonymizableField;
-  fields: McpStructuredTextField[];
-  workspaceId: string;
-}): void => {
-  if (field.options) {
-    for (const [index, option] of field.options.entries()) {
-      pushTemplateTextField({
-        apply: (value) => {
-          field.options?.splice(index, 1, value);
-        },
-        fields,
-        value: option,
-        workspaceId,
-      });
-    }
-  }
-
-  if (field.parts) {
-    for (const part of field.parts) {
-      pushTemplateTextField({
-        apply: (value) => {
-          part.label = value;
-        },
-        fields,
-        value: part.label,
-        workspaceId,
-      });
-      if (part.options) {
-        for (const [index, option] of part.options.entries()) {
-          pushTemplateTextField({
-            apply: (value) => {
-              part.options?.splice(index, 1, value);
-            },
-            fields,
-            value: option,
-            workspaceId,
-          });
-        }
-      }
-    }
-  }
-
-  const formats = field.formats ?? field.lookup?.formats;
-  if (formats) {
-    for (const format of formats) {
-      pushTemplateTextField({
-        apply: (value) => {
-          format.template = value;
-        },
-        fields,
-        value: format.template,
-        workspaceId,
-      });
-    }
-  }
+  return { egress: "structured", payload, textFields };
 };
 
 const describeTemplateArgsSchema = v.strictObject({
@@ -516,47 +568,10 @@ const describeTemplateDetail: McpToolHandler = async ({ args, context }) => {
   // Redact the org-authored template name and each field's label/hint/aiPrompt;
   // field paths, input types, options, and condition/formula expressions are
   // structural and pass through. Template = org scope.
-  const workspaceId = context.organizationId;
-  const textFields: McpStructuredTextField[] = [];
-  pushTemplateTextField({
-    apply: (value) => {
-      result.name = value;
-    },
-    fields: textFields,
-    value: result.name,
-    workspaceId,
-  });
-  for (const field of result.fields) {
-    pushTemplateTextField({
-      apply: (value) => {
-        field.label = value;
-      },
-      fields: textFields,
-      value: field.label,
-      workspaceId,
-    });
-    pushTemplateTextField({
-      apply: (value) => {
-        field.hint = value;
-      },
-      fields: textFields,
-      value: field.hint,
-      workspaceId,
-    });
-    pushTemplateTextField({
-      apply: (value) => {
-        field.aiPrompt = value;
-      },
-      fields: textFields,
-      value: field.aiPrompt,
-      workspaceId,
-    });
-    pushTemplateFieldNestedTextFields({
-      field,
-      fields: textFields,
-      workspaceId,
-    });
-  }
+  const textFields = runTextFieldSpecs(
+    buildTemplateDetailTextFieldSpecs(context.organizationId),
+    result,
+  );
 
   return { egress: "structured", payload: result, textFields };
 };

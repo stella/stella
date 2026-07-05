@@ -91,7 +91,7 @@
     }
   },
   "nullish-array-fallback": {
-    "count": 314,
+    "count": 315,
     "files": {
       "apps/api/src/handlers/case-law/court-weights.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search.ts": 5,
@@ -164,7 +164,7 @@
       "apps/api/src/lib/workflow/get-execution-plan.ts": 2,
       "apps/api/src/lib/workflow/verdict-engine.ts": 1,
       "apps/api/src/mcp/stella-tools.ts": 3,
-      "apps/api/src/mcp/template-tools.ts": 1,
+      "apps/api/src/mcp/template-tools.ts": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 2,
       "apps/web/src/components/ai-suggestions/playbook-review-store.ts": 1,
       "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 3,
