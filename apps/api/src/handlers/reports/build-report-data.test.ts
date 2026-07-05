@@ -45,7 +45,7 @@ const verdictTool = (
   askPropertyId,
   rule: { kind: "positionMatch" },
   severity,
-  standard: {},
+  tiers: { fallbacks: [], acceptableRules: [], notAcceptableRules: [] },
 });
 
 const properties = [
@@ -213,7 +213,6 @@ describe("assembleReportData", () => {
             {
               kind: "playbook-verdict",
               rationale: "Non-standard forum.",
-              matched: "none",
             },
           ],
         },

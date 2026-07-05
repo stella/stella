@@ -2,11 +2,14 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { resolveScopedGate } from "@/api/handlers/playbooks/materialize-run";
-import { selectEnginePositions } from "@/api/handlers/playbooks/position-adapter";
-import type { ResolvedStandard } from "@/api/handlers/playbooks/positions";
+import {
+  resolveEffectiveAsk,
+  selectEnabledPositions,
+} from "@/api/handlers/playbooks/position-runtime";
+import type { ResolvedTiers } from "@/api/handlers/playbooks/positions";
 import {
   loadClauseSnapshots,
-  resolveStandard,
+  resolveTiers,
 } from "@/api/handlers/playbooks/resolve-standards";
 import { extractAskContents } from "@/api/handlers/playbooks/review-extract";
 import type { ReviewAsk } from "@/api/handlers/playbooks/review-extract";
@@ -173,9 +176,8 @@ const reviewPlaybook = createSafeHandler(
           }
         }
 
-        // SLICE A shim: skip disabled positions and project the rest onto the
-        // engine's v1 inputs, matching the materialized run's semantics.
-        const positions = selectEnginePositions(playbook.positions.items);
+        // Skip disabled positions, matching the materialized run's semantics.
+        const positions = selectEnabledPositions(playbook.positions.items);
         const clauseSnapshots = await loadClauseSnapshots(
           tx,
           organizationId,
@@ -200,12 +202,14 @@ const reviewPlaybook = createSafeHandler(
 
     const { positions, entityVersionId, activeFile, clauseSnapshots } = loaded;
 
-    const standardBySourceId = new Map<string, ResolvedStandard>();
+    const tiersBySourceId = new Map<string, ResolvedTiers>();
     for (const position of positions) {
-      standardBySourceId.set(
-        position.sourceId,
-        resolveStandard(position, clauseSnapshots),
-      );
+      if (position.mode === "graded") {
+        tiersBySourceId.set(
+          position.sourceId,
+          resolveTiers(position, clauseSnapshots),
+        );
+      }
     }
 
     const resolvedFile: ResolvedFile = {
@@ -221,11 +225,12 @@ const reviewPlaybook = createSafeHandler(
     const asks: ReviewAsk[] = [];
     const askSourceIds = new Set<string>();
     for (const position of positions) {
-      const question = position.ask.question.trim();
+      const ask = resolveEffectiveAsk(position);
+      const question = ask.question.trim();
       if (question.length === 0) {
         continue;
       }
-      const content = position.ask.content;
+      const content = ask.content;
       if (content.type === "file") {
         continue;
       }
@@ -299,7 +304,7 @@ const reviewPlaybook = createSafeHandler(
         askSourceIds.has(position.sourceId),
       ),
       contentBySourceId: extractionResult.value.contentBySourceId,
-      standardBySourceId,
+      tiersBySourceId,
       lastBlockId: extractionResult.value.lastBlockId,
       abortSignal,
       organizationId,

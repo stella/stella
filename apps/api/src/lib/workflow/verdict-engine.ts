@@ -4,11 +4,11 @@ import * as v from "valibot";
 import type { ConditionNode } from "@stll/conditions";
 
 import type { ScopedDb } from "@/api/db";
-import type { JustificationContent } from "@/api/db/schema";
+import type { JustificationContent, VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type {
   PositionRule,
-  ResolvedStandard,
+  ResolvedTiers,
 } from "@/api/handlers/playbooks/positions";
 import type { VerdictTier } from "@/api/handlers/playbooks/verdict-tiers";
 import { resolveCaching } from "@/api/lib/ai-config";
@@ -137,54 +137,124 @@ export const gradePropertyConstraint = (
     : "deviation";
 };
 
-// ── positionMatch (LLM) grading ───────────────────────
-const VERDICT_SYSTEM_PROMPT =
-  "You grade whether a value extracted from a contract meets a drafting " +
-  "standard. You are given the preferred standard language, an ordered list " +
-  "of acceptable fallback variants, and the extracted value. Decide: " +
-  '"compliant" if the extracted value satisfies the intent of the preferred ' +
-  'standard; "fallback" if it does not match the preferred standard but does ' +
-  'satisfy one of the acceptable fallbacks; "deviation" if it satisfies ' +
-  "neither. Judge by legal substance and effect, not wording. Give a short " +
-  "one-sentence rationale.";
+// ── Tier-match (LLM) grading ──────────────────────────
+export const TIER_MATCH_SYSTEM_PROMPT =
+  "You grade whether a value extracted from a contract meets a tiered drafting " +
+  "standard authored by a lawyer for one issue. You are given: numbered " +
+  "acceptable rules the value must satisfy, the ideal (preferred) language, " +
+  "ranked fallback options, numbered not-acceptable (red-line) rules, and the " +
+  'extracted value. Decide exactly one tier. Choose "compliant" when the ' +
+  "value satisfies the acceptable rules or the intent of the ideal language. " +
+  'Choose "fallback" when it does not meet the ideal but matches one of the ' +
+  'ranked fallback options; set matched to { kind: "fallback", rank } with ' +
+  'the [rank N] of the option it matched. Choose "deviation" when the value ' +
+  'violates a red-line rule; set matched to { kind: "redLine", rank } with ' +
+  'the [rank N] of the violated rule. Also choose "deviation" when the value ' +
+  "satisfies none of the tiers, and omit matched. Judge by legal substance and " +
+  "effect, not wording. Give a short one-sentence rationale.";
 
-const buildVerdictUserMessage = ({
-  preferred,
-  fallbacks,
+export const buildTierMatchUserMessage = ({
+  tiers,
   askValue,
 }: {
-  preferred: string;
-  fallbacks: string[];
+  tiers: ResolvedTiers;
   askValue: string;
 }): string => {
-  const lines = [
-    "Preferred standard:",
-    preferred.length > 0 ? preferred : "(none)",
-  ];
-  if (fallbacks.length > 0) {
-    lines.push("", "Acceptable fallbacks (ranked, best first):");
-    for (const [index, text] of fallbacks.entries()) {
-      lines.push(`${index + 1}. ${text}`);
+  const lines: string[] = [];
+
+  lines.push("Acceptable rules:");
+  if (tiers.acceptableRules.length > 0) {
+    for (const [index, rule] of tiers.acceptableRules.entries()) {
+      lines.push(`${index + 1}. ${rule.text}`);
     }
+  } else {
+    lines.push("(none)");
   }
+
+  lines.push("", "Ideal language:", tiers.ideal ?? "(none)");
+
+  lines.push("", "Fallback options (ranked, best first):");
+  if (tiers.fallbacks.length > 0) {
+    for (const fallback of tiers.fallbacks) {
+      const label = fallback.label ? ` (${fallback.label})` : "";
+      lines.push(`[rank ${fallback.rank}]${label} ${fallback.text}`);
+    }
+  } else {
+    lines.push("(none)");
+  }
+
+  lines.push("", "Not-acceptable rules (red lines):");
+  if (tiers.notAcceptableRules.length > 0) {
+    for (const [index, rule] of tiers.notAcceptableRules.entries()) {
+      lines.push(`[rank ${index}] ${rule.text}`);
+    }
+  } else {
+    lines.push("(none)");
+  }
+
   lines.push("", "Extracted value:", askValue);
   return lines.join("\n");
 };
 
-const positionMatchSchema = v.strictObject({
+const tierMatchSchema = v.strictObject({
   tier: v.picklist(["compliant", "fallback", "deviation"]),
   rationale: v.pipe(v.string(), v.maxLength(1000)),
+  matched: v.optional(
+    v.strictObject({
+      kind: v.picklist(["fallback", "redLine"]),
+      rank: v.number(),
+    }),
+  ),
 });
 
-type PositionMatchVerdict = {
+type TierMatchOutput = v.InferOutput<typeof tierMatchSchema>;
+
+type TierMatchVerdict = {
   tier: VerdictTier;
   rationale: string;
-  matched: "preferred" | "fallback" | "none";
+  matchedRef?: VerdictMatchedRef;
 };
 
-export type GradePositionMatchArgs = {
+// A graded position with no authored tier content and no deterministic check is
+// rejected at validation, but a v1-lifted row can carry it. Force `deviation`
+// rather than compare an extracted value against nothing.
+const tiersHaveContent = (tiers: ResolvedTiers): boolean =>
+  tiers.ideal !== undefined ||
+  tiers.fallbacks.length > 0 ||
+  tiers.acceptableRules.length > 0 ||
+  tiers.notAcceptableRules.length > 0;
+
+// Resolve the grader's ranked `matched` into a stable reference so consumers
+// never re-index the resolved tiers. An out-of-bounds rank (model error) drops
+// the reference rather than fabricating one.
+export const resolveMatchedRef = (
+  matched: TierMatchOutput["matched"],
+  tiers: ResolvedTiers,
+): VerdictMatchedRef | undefined => {
+  if (matched === undefined) {
+    return undefined;
+  }
+  if (matched.kind === "fallback") {
+    const entry = tiers.fallbacks.at(matched.rank);
+    if (!entry) {
+      return undefined;
+    }
+    return {
+      kind: "fallback",
+      ...(entry.label === undefined ? {} : { label: entry.label }),
+      text: entry.text,
+    };
+  }
+  const rule = tiers.notAcceptableRules.at(matched.rank);
+  if (!rule) {
+    return undefined;
+  }
+  return { kind: "redLine", ruleId: rule.id, text: rule.text };
+};
+
+export type GradeTierMatchArgs = {
   askValue: string;
-  standard: ResolvedStandard;
+  tiers: ResolvedTiers;
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -196,9 +266,9 @@ export type GradePositionMatchArgs = {
   usageMetering?: AIUsageMetering | undefined;
 };
 
-export const gradePositionMatch = async ({
+export const gradeTierMatch = async ({
   askValue,
-  standard,
+  tiers,
   abortSignal,
   organizationId,
   workspaceId,
@@ -208,21 +278,17 @@ export const gradePositionMatch = async ({
   promptCachingEnabled,
   serviceTier,
   usageMetering,
-}: GradePositionMatchArgs): Promise<
-  Result<PositionMatchVerdict, WorkflowIntegrationError>
+}: GradeTierMatchArgs): Promise<
+  Result<TierMatchVerdict, WorkflowIntegrationError>
 > => {
-  const preferred = standard.preferred?.trim() ?? "";
-  const fallbacks = [...(standard.fallbacks ?? [])]
-    .sort((a, b) => a.rank - b.rank)
-    .map((fallback) => fallback.text);
-
-  // No standard language to compare against: a present value cannot be
-  // verified, so flag it for review without spending an LLM call.
-  if (preferred.length === 0 && fallbacks.length === 0) {
+  // Nothing authored to compare against: a present value cannot be verified, so
+  // flag it for review without spending an LLM call (defense in depth —
+  // validation already rejects this shape for new saves).
+  if (!tiersHaveContent(tiers)) {
     return Result.ok({
       tier: "deviation",
-      rationale: "No standard language was configured to compare against.",
-      matched: "none",
+      rationale:
+        "No acceptable, fallback, or red-line criteria were configured to compare against.",
     });
   }
 
@@ -242,7 +308,7 @@ export const gradePositionMatch = async ({
   });
 
   return await Result.tryPromise({
-    try: async (): Promise<PositionMatchVerdict> => {
+    try: async (): Promise<TierMatchVerdict> => {
       const result = await generateTanStackObjectForRole({
         role: "pdf",
         orgAIConfig,
@@ -254,24 +320,19 @@ export const gradePositionMatch = async ({
           scopeKey: entityVersionId,
         }),
         serviceTier,
-        system: VERDICT_SYSTEM_PROMPT,
-        prompt: buildVerdictUserMessage({
-          preferred,
-          fallbacks,
-          askValue,
-        }),
+        system: TIER_MATCH_SYSTEM_PROMPT,
+        prompt: buildTierMatchUserMessage({ tiers, askValue }),
         abortSignal,
-        outputSchema: positionMatchSchema,
+        outputSchema: tierMatchSchema,
       });
 
       const tier: VerdictTier = result.tier;
-      let matched: PositionMatchVerdict["matched"] = "none";
-      if (tier === "compliant") {
-        matched = "preferred";
-      } else if (tier === "fallback") {
-        matched = "fallback";
-      }
-      return { tier, rationale: result.rationale, matched };
+      const matchedRef = resolveMatchedRef(result.matched, tiers);
+      return {
+        tier,
+        rationale: result.rationale,
+        ...(matchedRef === undefined ? {} : { matchedRef }),
+      };
     },
     catch: (error) => {
       aiAnalytics.captureError(error);
@@ -330,9 +391,10 @@ export const POSITION_MATCH_CONCURRENCY = 4;
 /**
  * Grade a batch of verdict properties for one entity version. Deterministic
  * rules (`presence`, `propertyConstraint`) are evaluated directly from the ASK
- * field value; `positionMatch` rules issue a targeted LLM compare against the
- * standard's preferred/fallback language and attach the rationale as a
- * justification. `extractOnly` never materializes a verdict, so it is skipped.
+ * field value; `positionMatch` rules issue a targeted LLM tier-match against the
+ * resolved tiers (ideal, fallbacks, acceptable/red-line rules) and attach the
+ * rationale plus resolved `matchedRef` as a justification. `extractOnly` never
+ * materializes a verdict, so it is skipped.
  */
 export const computeVerdictBatch = async ({
   abortSignal,
@@ -436,9 +498,9 @@ export const computeVerdictBatch = async ({
     // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the per-entity Promise.all fan-out of LLM compares
     await Promise.all(
       chunk.map(async ({ property, askValue }) => {
-        const graded = await gradePositionMatch({
+        const graded = await gradeTierMatch({
           askValue,
-          standard: property.tool.standard,
+          tiers: property.tool.tiers,
           abortSignal,
           organizationId,
           workspaceId,
@@ -453,7 +515,7 @@ export const computeVerdictBatch = async ({
           erroredPropertyIds.push(property.id);
           return;
         }
-        const { tier, rationale, matched } = graded.value;
+        const { tier, rationale, matchedRef } = graded.value;
         const fieldId = createSafeId<"field">();
         aiResults.push({
           fieldId,
@@ -462,7 +524,13 @@ export const computeVerdictBatch = async ({
         });
         const content: JustificationContent = {
           version: 1,
-          blocks: [{ kind: "playbook-verdict", rationale, matched }],
+          blocks: [
+            {
+              kind: "playbook-verdict",
+              rationale,
+              ...(matchedRef === undefined ? {} : { matchedRef }),
+            },
+          ],
         };
         aiJustifications.push({
           fieldId,

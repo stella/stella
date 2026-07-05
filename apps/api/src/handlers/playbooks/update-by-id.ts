@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { playbookDefinitions } from "@/api/db/schema";
+import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import { assertPositionsValid } from "@/api/handlers/playbooks/positions-validation";
 import {
   playbookDefinitionBodySchema,
@@ -21,7 +22,15 @@ const config = {
 
 const updatePlaybookDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    params,
+    body,
+    recordAuditEvent,
+    orgAIConfig,
+    promptCachingEnabled,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     yield* Result.await(
@@ -31,6 +40,15 @@ const updatePlaybookDefinition = createSafeRootHandler(
         positions: body.positions,
       }),
     );
+
+    // Derive auto-ASK questions from tier rules before persisting. A stored
+    // `derived` whose `rulesHash` still matches is reused (no LLM call); a
+    // failed derivation persists with `derived` absent.
+    const positions = await deriveAutoAsks(body.positions, {
+      organizationId,
+      orgAIConfig,
+      promptCachingEnabled,
+    });
 
     const documentTypeKey = body.scope?.documentTypeKey;
     if (documentTypeKey !== undefined) {
@@ -64,7 +82,7 @@ const updatePlaybookDefinition = createSafeRootHandler(
             name: body.name,
             description: body.description ?? null,
             scope: body.scope ?? null,
-            positions: body.positions,
+            positions,
             updatedAt: new Date(),
           })
           .where(

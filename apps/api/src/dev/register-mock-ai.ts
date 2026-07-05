@@ -76,15 +76,48 @@ const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
       usage: mockUsage,
     } satisfies StreamChunk;
   },
-  structuredOutput: async () => {
+  structuredOutput: async ({ outputSchema }) => {
     await Promise.resolve();
+    const data = mockStructuredData(outputSchema);
     return {
-      data: {},
-      rawText: "{}",
+      data,
+      rawText: JSON.stringify(data),
       usage: mockUsage,
     };
   },
 });
+
+// The default `{}` fails any strict valibot schema, so the playbook grade/derive
+// paths have no working dev mock. Return a minimal schema-valid object for the
+// two playbook structured-output features (keyed off the JSON-schema property
+// set, since the adapter never sees the feature name), and keep `{}` for every
+// other structured-output caller.
+const mockStructuredData = (outputSchema: unknown): Record<string, unknown> => {
+  const properties =
+    typeof outputSchema === "object" &&
+    outputSchema !== null &&
+    "properties" in outputSchema &&
+    typeof outputSchema.properties === "object" &&
+    outputSchema.properties !== null
+      ? (outputSchema.properties as Record<string, unknown>)
+      : {};
+
+  // playbook.verdict — tier-match. Return a plain "deviation" with no `matched`
+  // so the object is valid regardless of whether the prompt listed fallbacks.
+  if ("tier" in properties) {
+    return { tier: "deviation", rationale: "Mock verdict." };
+  }
+
+  // playbook.derive-ask — question + content type.
+  if ("question" in properties && "contentType" in properties) {
+    return {
+      question: "What does the contract say about this issue?",
+      contentType: "text",
+    };
+  }
+
+  return {};
+};
 
 if (isMockAI()) {
   registerBatchGenerator(generateBatchMock);

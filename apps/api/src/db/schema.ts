@@ -111,15 +111,27 @@ export type DocxFolioJustificationBlock = {
   }[];
 };
 
+// What a tier-match verdict cited to decide it, resolved from the grader's
+// ranked answer into stable references (never a raw array index) so a review
+// facet or provenance card can render "matches fallback X" / "violates red line
+// Y" without re-indexing the resolved tiers:
+//   - `fallback`: the accepted alternative the value matched (its optional
+//     label + resolved text).
+//   - `redLine`: the not-acceptable rule the value violated (its stable id +
+//     text) for a deviation.
+export type VerdictMatchedRef =
+  | { kind: "fallback"; label?: string; text: string }
+  | { kind: "redLine"; ruleId: string; text: string };
+
 // A playbook verdict's rationale. Unlike the document-citation blocks above it
-// carries no file/bates/folio reference: a `positionMatch` verdict is graded by
-// comparing the already-extracted ASK value against the standard's
-// preferred/fallback language, so the provenance is the model's explanation plus
-// which tier of the standard it matched.
+// carries no file/bates/folio reference: a tier-match verdict is graded by
+// comparing the already-extracted ASK value against the resolved tiered
+// standard, so the provenance is the model's explanation plus, when present, the
+// resolved `matchedRef` that decided the tier.
 export type VerdictRationaleJustificationBlock = {
   kind: "playbook-verdict";
   rationale: string;
-  matched: "preferred" | "fallback" | "none";
+  matchedRef?: VerdictMatchedRef;
 };
 
 export type JustificationBlock =

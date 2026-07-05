@@ -5,28 +5,20 @@ import { propertyContentSchema } from "@/api/db/schema-validators";
 import {
   positionRuleSchema,
   positionSeveritySchema,
-  positionStandardSchema,
-  resolvedStandardSchema,
+  resolvedTiersSchema,
 } from "@/api/handlers/playbooks/position-facets";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 
-// The EXPECT/GRADE/severity facets and the run-time `ResolvedStandard` snapshot
-// live in `position-facets.ts`, a leaf module with no `db/schema-validators`
-// dependency, so the `playbook-verdict` property tool (defined in
-// schema-validators) can embed them without an import cycle. The grading engine
-// and the v2 → engine shim (`position-adapter.ts`) consume these too, so
-// re-export them from this one module. They are unchanged in slice A: the shim
-// keeps grading on the v1 vocabulary while the engine stays untouched.
-export {
-  positionRuleSchema,
-  positionSeveritySchema,
-  positionStandardSchema,
-  resolvedStandardSchema,
-};
+// The run-time grading facets (`rule` discriminator, `severity`) and the
+// verdict-time `ResolvedTiers` snapshot live in `position-facets.ts`, a leaf
+// module with no `db/schema-validators` dependency, so the `playbook-verdict`
+// property tool (defined in schema-validators) can embed them without an import
+// cycle. The grading engine consumes these too, so re-export them from this one
+// module.
+export { positionRuleSchema, positionSeveritySchema, resolvedTiersSchema };
 export type PositionRule = Static<typeof positionRuleSchema>;
 export type PositionSeverity = Static<typeof positionSeveritySchema>;
-export type PositionStandard = Static<typeof positionStandardSchema>;
-export type ResolvedStandard = Static<typeof resolvedStandardSchema>;
+export type ResolvedTiers = Static<typeof resolvedTiersSchema>;
 
 const version2 = t.Literal(2);
 

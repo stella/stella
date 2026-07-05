@@ -9,16 +9,25 @@ import type {
   PlaybookVerdictTool,
   PropertyTool,
 } from "@/api/db/schema-validators";
-import type { EnginePosition } from "@/api/handlers/playbooks/position-adapter";
-import { selectEnginePositions } from "@/api/handlers/playbooks/position-adapter";
+import type {
+  EffectiveAsk,
+  GradedPosition,
+} from "@/api/handlers/playbooks/position-runtime";
+import {
+  gradedPositionRule,
+  resolveEffectiveAsk,
+  selectEnabledPositions,
+} from "@/api/handlers/playbooks/position-runtime";
 import type {
   PlaybookScope,
   Position,
-  ResolvedStandard,
+  PositionRule,
+  PositionSeverity,
+  ResolvedTiers,
 } from "@/api/handlers/playbooks/positions";
 import {
   loadClauseSnapshots,
-  resolveStandard,
+  resolveTiers,
 } from "@/api/handlers/playbooks/resolve-standards";
 import { buildVerdictContent } from "@/api/handlers/playbooks/verdict-tiers";
 import { createDefaultTool } from "@/api/handlers/properties/create-schema";
@@ -30,9 +39,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import { LIMITS } from "@/api/lib/limits";
 
-const buildAskTool = (position: EnginePosition): PropertyTool => {
-  const question = position.ask.question.trim();
-  const useAi = position.ask.content.type !== "file" && question.length > 0;
+const buildAskTool = (ask: EffectiveAsk): PropertyTool => {
+  const question = ask.question.trim();
+  const useAi = ask.content.type !== "file" && question.length > 0;
   return createDefaultTool({
     dependencies: [],
     prompt: useAi ? question : undefined,
@@ -42,34 +51,38 @@ const buildAskTool = (position: EnginePosition): PropertyTool => {
 
 const buildVerdictTool = ({
   askPropertyId,
-  position,
-  standard,
+  sourceId,
+  rule,
+  severity,
+  tiers,
 }: {
   askPropertyId: SafeId<"property">;
-  position: EnginePosition;
-  standard: ResolvedStandard;
+  sourceId: string;
+  rule: PositionRule;
+  severity: PositionSeverity;
+  tiers: ResolvedTiers;
 }): PlaybookVerdictTool => {
   // A propertyConstraint condition is authored against the position's own value
   // via a `property` operand whose id is the position `sourceId`; rewrite that
   // self-reference to the materialized ASK property so the verdict engine
   // evaluates the condition over the real extracted field.
-  const rule =
-    position.rule.kind === "propertyConstraint"
+  const remappedRule =
+    rule.kind === "propertyConstraint"
       ? {
           kind: "propertyConstraint" as const,
-          condition: remapNodePropertyIds(position.rule.condition, (id) =>
-            id === position.sourceId ? askPropertyId : id,
+          condition: remapNodePropertyIds(rule.condition, (id) =>
+            id === sourceId ? askPropertyId : id,
           ),
         }
-      : position.rule;
+      : rule;
 
   return {
     version: 1,
     type: "playbook-verdict",
     askPropertyId,
-    rule,
-    severity: position.severity,
-    standard,
+    rule: remappedRule,
+    severity,
+    tiers,
   };
 };
 
@@ -247,16 +260,15 @@ export const materializePlaybookRun = async ({
   }
   const docTypeGate = gateResult.gate;
 
-  // SLICE A shim: project each v2 position onto the engine's v1 inputs and drop
-  // disabled positions before materializing. A disabled position emits no
+  // Drop disabled positions before materializing. A disabled position emits no
   // columns; any it previously owned falls out of the emitted set below and is
   // deleted as obsolete, so toggling `enabled` off tears its columns down.
-  const enginePositions = selectEnginePositions(positions);
+  const enabledPositions = selectEnabledPositions(positions);
 
   const clauseSnapshots = await loadClauseSnapshots(
     tx,
     organizationId,
-    enginePositions,
+    enabledPositions,
   );
 
   // The AI extraction batch only receives files that are among a property's
@@ -279,7 +291,7 @@ export const materializePlaybookRun = async ({
   }
   const filePropertyId = systemFileProperty.id;
 
-  const sourceIds = enginePositions.map((position) => position.sourceId);
+  const sourceIds = enabledPositions.map((position) => position.sourceId);
   const owned = await tx
     .select({
       id: properties.id,
@@ -327,8 +339,9 @@ export const materializePlaybookRun = async ({
   const verdictPropertyIds: SafeId<"property">[] = [];
   let newCount = 0;
 
-  for (const position of enginePositions) {
-    const askTool = buildAskTool(position);
+  for (const position of enabledPositions) {
+    const ask = resolveEffectiveAsk(position);
+    const askTool = buildAskTool(ask);
     const askId =
       askIdBySourceId.get(position.sourceId) ?? createSafeId<"property">();
     if (!askIdBySourceId.has(position.sourceId)) {
@@ -339,7 +352,7 @@ export const materializePlaybookRun = async ({
       id: askId,
       workspaceId,
       name: position.issue,
-      content: position.ask.content,
+      content: ask.content,
       tool: askTool,
       status: askTool.type === "ai-model" ? "stale" : "fresh",
       playbookSourceId: position.sourceId,
@@ -370,9 +383,11 @@ export const materializePlaybookRun = async ({
       });
     }
 
-    if (position.rule.kind === "extractOnly") {
+    // Extract-only positions materialize a value column with no verdict.
+    if (position.mode === "extract") {
       continue;
     }
+    const gradedPosition: GradedPosition = position;
 
     const verdictId =
       verdictIdBySourceId.get(position.sourceId) ?? createSafeId<"property">();
@@ -388,8 +403,10 @@ export const materializePlaybookRun = async ({
       content: buildVerdictContent(),
       tool: buildVerdictTool({
         askPropertyId: askId,
-        position,
-        standard: resolveStandard(position, clauseSnapshots),
+        sourceId: gradedPosition.sourceId,
+        rule: gradedPositionRule(gradedPosition),
+        severity: gradedPosition.severity,
+        tiers: resolveTiers(gradedPosition, clauseSnapshots),
       }),
       status: "stale",
       playbookSourceId: position.sourceId,

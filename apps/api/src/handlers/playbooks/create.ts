@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { playbookDefinitions } from "@/api/db/schema";
+import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import { assertPositionsValid } from "@/api/handlers/playbooks/positions-validation";
 import { playbookDefinitionBodySchema } from "@/api/handlers/playbooks/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -19,7 +20,14 @@ const config = {
 
 const createPlaybookDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    body,
+    recordAuditEvent,
+    orgAIConfig,
+    promptCachingEnabled,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     yield* Result.await(
@@ -29,6 +37,15 @@ const createPlaybookDefinition = createSafeRootHandler(
         positions: body.positions,
       }),
     );
+
+    // Derive auto-ASK questions from tier rules before persisting so run/review
+    // consume `derived` like a manual ask. A failed derivation never blocks the
+    // save (it persists with `derived` absent).
+    const positions = await deriveAutoAsks(body.positions, {
+      organizationId,
+      orgAIConfig,
+      promptCachingEnabled,
+    });
 
     const documentTypeKey = body.scope?.documentTypeKey;
     if (documentTypeKey !== undefined) {
@@ -81,7 +98,7 @@ const createPlaybookDefinition = createSafeRootHandler(
             name: body.name,
             description: body.description ?? null,
             scope: body.scope ?? null,
-            positions: body.positions,
+            positions,
           })
           .returning({ id: playbookDefinitions.id });
 
