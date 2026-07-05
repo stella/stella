@@ -228,6 +228,7 @@ const getCompatFetchPayload = ({
 export const COMPAT_TOOL_DEFINITIONS = [
   {
     annotations: { readOnlyHint: true },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: ["title"],
@@ -256,6 +257,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
   },
   {
     annotations: { readOnlyHint: true },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: ["title", "text"],

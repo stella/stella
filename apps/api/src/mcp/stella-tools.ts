@@ -457,6 +457,7 @@ export const STELLA_TOOL_DEFINITIONS = [
         ),
       },
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -489,6 +490,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["query"],
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: deriveTextFieldPaths(SEARCH_ACROSS_MATTERS_TEXT_FIELD_SPECS),
@@ -534,6 +536,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["query"],
     },
+    access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
@@ -558,6 +561,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["entity_id"],
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: deriveTextFieldPaths(
@@ -585,6 +589,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["decision_id"],
     },
+    access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
     // surface the public routes gate behind env.isDev || env.FEATURE_PUBLIC_LAW.
@@ -604,6 +609,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["contact_id"],
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       // Placeholder org id: derivation only ever reads `.path`, see
@@ -650,6 +656,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["jurisdictions"],
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_practice_jurisdictions",
     scope: "stella:onboarding",

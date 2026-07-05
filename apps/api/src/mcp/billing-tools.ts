@@ -328,6 +328,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         ),
       },
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -415,6 +416,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         ),
       },
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
     name: "save_time_entry",
@@ -434,6 +436,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       },
       required: ["time_entry_id"],
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
     name: "delete_time_entry",
@@ -458,6 +461,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       },
       required: ["matter_id", "user_id", "date"],
     },
+    access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
     name: "resolve_rate",
@@ -489,6 +493,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         ),
       },
     },
+    access: "read",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -511,6 +516,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       type: "object",
       properties: {},
     },
+    access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",
     name: "get_usage",

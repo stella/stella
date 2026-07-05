@@ -75,7 +75,23 @@ export type McpAnonymizedPolicy =
   | { exposure: "passthrough" }
   | { exposure: "excluded"; reason: McpAnonymizedExclusionReason };
 
+/**
+ * Closed set of mutation levels a tool can declare. `write` covers any
+ * handler that changes tenant state: DB inserts/updates/deletes, enqueuing a
+ * workflow, or metering usage. Everything else is `read`. Required on every
+ * tool (no default) so a new tool cannot land without an explicit call; this
+ * is the structural signal the chat code-mode projection selects read-only
+ * tools by, instead of the annotations below (optional, client-hint-only) or
+ * the anonymized-exclusion `"write"` reason (a narrower, egress-specific
+ * consequence of the same fact). The registry-quality suite cross-checks all
+ * three stay coherent.
+ */
+export const MCP_TOOL_ACCESS_LEVELS = ["read", "write"] as const;
+
+export type McpToolAccess = (typeof MCP_TOOL_ACCESS_LEVELS)[number];
+
 export type McpToolDefinition = {
+  access: McpToolAccess;
   annotations?: McpTool["annotations"];
   anonymized: McpAnonymizedPolicy;
   description: string;

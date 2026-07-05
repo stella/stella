@@ -122,14 +122,99 @@ describe.each([...SURFACES])(
   },
 );
 
+/**
+ * `access` (plan 048 prerequisite: the chat code-mode projection selects
+ * read-only tools structurally by this field) must stay coherent with the two
+ * older, narrower signals that already implied a tool's mutation status:
+ * MCP client-hint `annotations` and the anonymized-surface exclusion reason.
+ * These are deterministic cross-checks over the static registry, not
+ * per-tool assertions, so a new tool cannot silently declare `access` at odds
+ * with either signal.
+ */
+// Widened to `McpToolDefinition` (which makes `annotations` a uniformly
+// optional key) so the coherence checks below can destructure freely; the
+// exported `as const satisfies` registry keeps each element's narrower
+// literal type, which does not have `annotations` at all on tools that omit
+// it and fails these checks' property access at the type level.
+const defaultTools: readonly McpToolDefinition[] = DEFAULT_MCP_TOOL_DEFINITIONS;
+const anonymizedTools: readonly McpToolDefinition[] =
+  ANONYMIZED_MCP_TOOL_DEFINITIONS;
+
+describe("MCP registry access coherence", () => {
+  test('access: "write" tools never carry readOnlyHint', () => {
+    for (const tool of defaultTools) {
+      if (tool.access === "write") {
+        expect(
+          tool.annotations?.readOnlyHint,
+          `Tool ${tool.name} is access: "write" but carries readOnlyHint`,
+        ).not.toBe(true);
+      }
+    }
+  });
+
+  test('destructiveHint tools are always access: "write"', () => {
+    for (const tool of defaultTools) {
+      if (tool.annotations?.destructiveHint) {
+        expect(
+          tool.access,
+          `Tool ${tool.name} carries destructiveHint but is not access: "write"`,
+        ).toBe("write");
+      }
+    }
+  });
+
+  test('anonymized-exclusion reason "write" and access: "write" imply each other', () => {
+    for (const tool of defaultTools) {
+      const isWriteExcluded =
+        tool.anonymized.exposure === "excluded" &&
+        tool.anonymized.reason === "write";
+      if (isWriteExcluded) {
+        expect(
+          tool.access,
+          `Tool ${tool.name} is anonymized-excluded for "write" but is not access: "write"`,
+        ).toBe("write");
+      }
+      if (tool.access === "write") {
+        expect(
+          isWriteExcluded,
+          `Tool ${tool.name} is access: "write" but is not anonymized-excluded with reason "write"`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  test('access: "write" tools are absent from the anonymized surface', () => {
+    const anonymizedNames = new Set(anonymizedTools.map((tool) => tool.name));
+    for (const tool of defaultTools) {
+      if (tool.access === "write") {
+        expect(
+          anonymizedNames.has(tool.name),
+          `Tool ${tool.name} is access: "write" but appears on the anonymized surface`,
+        ).toBe(false);
+      }
+    }
+  });
+});
+
 const serializeToolSurface = (
   definitions: readonly McpToolDefinition[],
 ): string =>
   JSON.stringify(
     definitions.map(
-      ({ annotations, description, feature, inputSchema, name, scope }) => ({
+      ({
+        access,
+        annotations,
+        description,
+        feature,
+        inputSchema,
         name,
         scope,
+      }) => ({
+        name,
+        scope,
+        // Serialized so a change to a tool's read/write classification is a
+        // visible snapshot diff, not a silent surface change.
+        access,
         // Serialized so a change to a tool's deployment gate is a visible
         // snapshot diff, not a silent surface change.
         feature,

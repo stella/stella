@@ -133,6 +133,7 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
         },
       },
     },
+    access: "read",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
     name: "search_legislation",
@@ -179,6 +180,7 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
     // Audit payloads carry free-form tenant-authored change diffs whose text
     // fields cannot be enumerated for redaction, so this read tool fails closed
     // and never appears on the anonymized surface.
+    access: "read",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     name: "list_audit_log",
     scope: "stella:admin_read",
@@ -218,6 +220,7 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
       },
       required: ["action"],
     },
+    access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "manage_organization",
     scope: "stella:admin_write",

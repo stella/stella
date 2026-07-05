@@ -21,6 +21,7 @@ import {
 } from "@/api/mcp/static-tool-definitions";
 import type {
   McpAnonymizedPolicy,
+  McpToolAccess,
   McpToolDefinition,
   McpToolFeatureFlag,
   ToolScope,
@@ -45,6 +46,19 @@ const DYNAMIC_GATEWAY_ANONYMIZED = {
   reason: "dynamic_gateway",
 } as const satisfies McpAnonymizedPolicy;
 
+/**
+ * An external MCP connector is a third party server we do not control, so its
+ * own `readOnlyHint` (an optional, unverified client hint per the MCP spec)
+ * is the only signal available. Trust it only when the connector explicitly
+ * asserts `true`; treat `false` or an absent hint as `"write"` so an
+ * unverified external tool never structurally qualifies for a surface (like
+ * the chat code-mode projection) that assumes `"read"` means safe-to-run
+ * without confirmation.
+ */
+const externalMcpToolAccess = (
+  readOnlyHint: boolean | undefined,
+): McpToolAccess => (readOnlyHint === true ? "read" : "write");
+
 export const listGatewayMcpToolDefinitions = async ({
   context,
   mode,
@@ -66,6 +80,7 @@ export const listGatewayMcpToolDefinitions = async ({
   if (hasGrantedScope(scopes, "stella:external_mcps")) {
     for (const tool of await listGatewayExternalMcpTools({ context })) {
       definitions.push({
+        access: externalMcpToolAccess(tool.cachedTool.readOnlyHint),
         ...(tool.cachedTool.readOnlyHint === undefined
           ? {}
           : { annotations: { readOnlyHint: tool.cachedTool.readOnlyHint } }),
@@ -84,6 +99,7 @@ export const listGatewayMcpToolDefinitions = async ({
   if (hasGrantedScope(scopes, "stella:skills")) {
     for (const skill of await loadVisibleSkillTools({ context })) {
       definitions.push({
+        access: "read",
         annotations: { readOnlyHint: true },
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: skill.description,
@@ -125,6 +141,7 @@ export const getGatewayMcpToolDefinition = async ({
     }
 
     return {
+      access: externalMcpToolAccess(externalTool.cachedTool.readOnlyHint),
       ...(externalTool.cachedTool.readOnlyHint === undefined
         ? {}
         : {
@@ -153,6 +170,7 @@ export const getGatewayMcpToolDefinition = async ({
   }
 
   return {
+    access: "read",
     annotations: { readOnlyHint: true },
     anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
     description: skill.description,
