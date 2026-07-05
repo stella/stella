@@ -48,6 +48,7 @@ import type {
   PlaybookFinding,
   PlaybookFindingFix,
   PlaybookFixState,
+  PlaybookMatchedRef,
   PlaybookSeverity,
   PlaybookVerdict,
 } from "@/components/ai-suggestions/playbook-review-store";
@@ -594,6 +595,7 @@ const FindingCard = ({
             {finding.rationale}
           </p>
         )}
+        <MatchedRefLine matchedRef={finding.matchedRef} />
         {finding.citations.length > 0 && (
           <div className="flex flex-col gap-1">
             {finding.citations.map((citation, index) => (
@@ -711,6 +713,33 @@ const FixActions = ({
         {t("knowledge.playbooks.review.insertPreferred")}
       </Button>
     </div>
+  );
+};
+
+// Additive line under the rationale: the fallback that matched or the red line
+// that was violated. Tolerant of `matchedRef` being absent (older findings) or
+// null (verdicts that were not decided by a specific tier reference).
+const MatchedRefLine = ({
+  matchedRef,
+}: {
+  matchedRef: PlaybookMatchedRef | null | undefined;
+}) => {
+  const t = useTranslations();
+  if (matchedRef === undefined || matchedRef === null) {
+    return null;
+  }
+  const label =
+    matchedRef.kind === "fallback"
+      ? t("knowledge.playbooks.review.matchedFallback")
+      : t("knowledge.playbooks.review.violatedRedLine");
+  const text =
+    matchedRef.kind === "fallback" && matchedRef.label
+      ? `${matchedRef.label}: ${matchedRef.text}`
+      : matchedRef.text;
+  return (
+    <p className="text-muted-foreground text-xs leading-snug">
+      <span className="text-foreground-strong-muted">{label}</span> {text}
+    </p>
   );
 };
 

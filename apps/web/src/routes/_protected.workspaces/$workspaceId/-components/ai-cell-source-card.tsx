@@ -317,12 +317,17 @@ const flattenStatements = (content: JustificationContent): CardStatement[] => {
 
     // A verdict block's provenance is its rationale; surface it as a single
     // statement so the card renders it like any other extraction explanation.
+    // The matched fallback option or violated red-line rule is authored
+    // standard language, so it renders as the statement's quote.
     if (block.kind === "playbook-verdict") {
+      const matchedText = block.matchedRef?.text.trim();
       statements.push({
         key: `${blockIndex}-verdict`,
         text: block.rationale,
         pages: [],
-        quotes: [],
+        quotes: matchedText
+          ? [{ key: `${blockIndex}-verdict-matched`, text: matchedText }]
+          : [],
       });
       continue;
     }

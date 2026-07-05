@@ -39,6 +39,13 @@ export type PlaybookFindingFix = {
   text: string;
 };
 
+// What decided a graded verdict: the fallback entry that matched, or the red
+// line that was violated. Optional/nullable because the backend slice (B) adds
+// it; findings from before that lands simply omit it.
+export type PlaybookMatchedRef =
+  | { kind: "fallback"; label?: string; text: string }
+  | { kind: "redLine"; ruleId: string; text: string };
+
 export type PlaybookFinding = {
   positionId: string;
   issue: string;
@@ -48,6 +55,7 @@ export type PlaybookFinding = {
   rationale: string | null;
   citations: PlaybookCitation[];
   fix: PlaybookFindingFix | null;
+  matchedRef?: PlaybookMatchedRef | null;
 };
 
 /** Lifecycle of an inserted "preferred clause" tracked change. */

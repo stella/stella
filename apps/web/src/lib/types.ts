@@ -331,12 +331,17 @@ export type DocxFolioJustificationBlock = {
 
 // A playbook verdict's provenance. Unlike the document-citation blocks above it
 // carries no file/page/block reference: a verdict grades the already-extracted
-// ASK value against the standard, so the provenance is the model's rationale
-// plus which tier of the standard's wording it matched.
+// ASK value against the position's tiers, so the provenance is the model's
+// rationale plus, when the tier decision hinged on specific authored language,
+// the matched fallback option or violated red-line rule.
+export type VerdictMatchedRef =
+  | { kind: "fallback"; label?: string; text: string }
+  | { kind: "redLine"; ruleId: string; text: string };
+
 export type VerdictRationaleJustificationBlock = {
   kind: "playbook-verdict";
   rationale: string;
-  matched: "preferred" | "fallback" | "none";
+  matchedRef?: VerdictMatchedRef;
 };
 
 export type JustificationBlock =
