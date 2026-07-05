@@ -106,6 +106,12 @@ export const deleteTimeEntryHandler = async function* ({
     return Result.ok({ deleted: true });
   }
 
+  // Already written off: avoid a no-op UPDATE that would emit a
+  // misleading audit event recording old and new status as identical.
+  if (existing.status === BILLING_STATUS.WRITTEN_OFF) {
+    return Result.ok({ deleted: false });
+  }
+
   // Non-draft entries get written off instead of deleted
   yield* Result.await(
     safeDb(async (tx) => {

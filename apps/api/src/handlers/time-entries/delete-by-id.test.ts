@@ -66,4 +66,42 @@ describe("deleteTimeEntryById", () => {
     });
     expect(getCallCount()).toBe(1);
   });
+
+  test("no-ops on an already written-off entry without a duplicate audit event", async () => {
+    let auditEventCount = 0;
+    const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        timeEntries: {
+          findFirst: async () => ({
+            status: BILLING_STATUS.WRITTEN_OFF,
+            matterId: toSafeId<"entity">("matter_test"),
+            dateWorked: "2026-06-14",
+            durationMinutes: 30,
+            billedMinutes: 30,
+            rateAtEntry: 10_000,
+            currency: "USD",
+            billable: true,
+          }),
+        },
+      },
+      delete: () => {
+        throw new Error("delete should not be called for a written-off entry");
+      },
+      update: () => {
+        throw new Error("update should not be called for a written-off entry");
+      },
+    });
+
+    const context = createContext({ safeDb, scopedDb });
+    const result = await deleteTimeEntryById.handler({
+      ...context,
+      recordAuditEvent: async () => {
+        auditEventCount += 1;
+      },
+    });
+
+    expect(result).toEqual({ deleted: false });
+    expect(auditEventCount).toBe(0);
+    expect(getCallCount()).toBe(1);
+  });
 });

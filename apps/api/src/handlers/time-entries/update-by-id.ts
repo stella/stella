@@ -182,13 +182,22 @@ const updateTimeEntryById = createSafeHandler(
   },
 );
 
+// Free-text client notes; excluded from the audit diff so they are
+// never persisted into `audit_logs`. Matches create.ts, which omits
+// `narrative` from the CREATE audit event for the same reason.
+const TIME_ENTRY_DIFF_EXCLUDED_FIELDS = new Set([
+  "updatedAt",
+  "narrative",
+  "invoiceNarrative",
+]);
+
 const buildTimeEntryDiff = (
   before: Record<string, unknown>,
   updates: Record<string, unknown>,
 ): Record<string, { old: unknown; new: unknown }> => {
   const diff: Record<string, { old: unknown; new: unknown }> = {};
   for (const [key, value] of Object.entries(updates)) {
-    if (key === "updatedAt") {
+    if (TIME_ENTRY_DIFF_EXCLUDED_FIELDS.has(key)) {
       continue;
     }
     diff[key] = { old: before[key] ?? null, new: value };
