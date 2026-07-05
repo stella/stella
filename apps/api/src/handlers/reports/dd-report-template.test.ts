@@ -9,7 +9,6 @@ import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { buildExportColumns } from "@/api/handlers/views/table-export";
-// eslint-disable-next-line no-restricted-imports -- test fixture: brand a field id for a JustificationContent literal
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 

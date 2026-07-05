@@ -553,7 +553,6 @@ const main = async (): Promise<void> => {
     import.meta.url,
   );
   await Bun.write(outUrl, withManifest);
-  // eslint-disable-next-line no-console -- generation script; stdout is its interface
   console.info(`[generate-dd-report-template] wrote ${outUrl.pathname}`);
 };
 

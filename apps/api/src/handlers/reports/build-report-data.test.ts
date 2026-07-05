@@ -5,7 +5,6 @@ import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent, PropertyTool } from "@/api/db/schema-validators";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { buildExportColumns } from "@/api/handlers/views/table-export";
-// eslint-disable-next-line no-restricted-imports -- test fixture: brand a field id for a JustificationContent literal
 import { toSafeId } from "@/api/lib/branded-types";
 import { isStuckReportExport } from "@/api/lib/report-export-recovery";
 import type { ViewLayout } from "@/api/lib/views-schema";
