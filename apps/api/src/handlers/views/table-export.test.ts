@@ -542,7 +542,9 @@ describe("table export", () => {
       ),
       propertyConfig({ numRuns: 50 }),
     );
-  });
+    // 50 zip builds + parses brush the default 5s timeout on loaded CI
+    // runners; the explicit timeout keeps the property run deterministic.
+  }, 20_000);
 
   test("xlsx property: long arbitrary values are capped before XML output", async () => {
     await fc.assert(
