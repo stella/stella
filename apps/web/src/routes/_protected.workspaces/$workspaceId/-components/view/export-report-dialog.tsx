@@ -128,7 +128,6 @@ export const ExportReportControl = ({
         type: "error",
         title: t("workspaces.views.reportExport.failed"),
         description: status.error ?? t("common.unexpectedError"),
-        action: undefined,
       });
       setActive(null);
       return;
@@ -180,7 +179,6 @@ export const ExportReportControl = ({
       type: "error",
       title: t("workspaces.views.reportExport.failed"),
       description: t("common.unexpectedError"),
-      action: undefined,
     });
     setActive(null);
   }, [active, status, workspaceId, t, queryClient, navigate]);
