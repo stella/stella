@@ -433,7 +433,7 @@ describe("isStuckReportExport", () => {
   const now = new Date("2026-07-02T12:00:00.000Z");
   const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
 
-  test("sweeps an old running row, leaves fresh rows alone", () => {
+  test("sweeps abandoned rows, leaves live ones alone", () => {
     // Old running row → orphaned by a dead worker; recover it.
     expect(
       isStuckReportExport(
@@ -441,9 +441,18 @@ describe("isStuckReportExport", () => {
         now,
       ),
     ).toBe(true);
-    // Old queued row → never picked up (enqueue died); recover it too.
+    // Queued past the short threshold → possibly just backlogged; the job
+    // persists in the queue and the sweep runs before the worker starts, so
+    // it MUST be left for the worker.
     expect(
       isStuckReportExport({ status: "queued", updatedAt: minutesAgo(31) }, now),
+    ).toBe(false);
+    // Queued for a day → the job is gone (queue data loss); recover it.
+    expect(
+      isStuckReportExport(
+        { status: "queued", updatedAt: minutesAgo(25 * 60) },
+        now,
+      ),
     ).toBe(true);
     // Fresh running row → still in flight; leave it.
     expect(

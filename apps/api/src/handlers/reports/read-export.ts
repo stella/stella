@@ -4,8 +4,10 @@
  * Returns the export's lifecycle state and, for a completed download-mode
  * export, a short-lived presigned URL scoped to the requesting workspace. A
  * save-to-workspace export instead returns the created document entity id. The
- * row is read under RLS (workspace-scoped), so a caller can never poll another
- * workspace's export.
+ * row is read under RLS (workspace-scoped) AND scoped to the requesting user:
+ * only the requester's client polls this endpoint, so least privilege costs
+ * nothing and a same-workspace member can never fish another export's
+ * download URL by id.
  */
 
 import { Result } from "better-result";
@@ -32,13 +34,14 @@ const config = {
 
 const readReportExport = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, session, params }) {
+  async function* ({ safeDb, workspaceId, session, user, params }) {
     const row = yield* Result.await(
       safeDb((tx) =>
         tx.query.reportExports.findFirst({
           where: {
             id: { eq: params.exportId },
             workspaceId: { eq: workspaceId },
+            requestedBy: { eq: user.id },
           },
           columns: {
             status: true,
