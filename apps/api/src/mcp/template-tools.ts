@@ -940,9 +940,12 @@ const handleSaveTemplateTool: McpToolHandler = async ({ args, context }) => {
   // Create branch: docx_base64 and name are guaranteed present by the schema.
   return await createTemplateFromDocx({
     context,
-    docxBase64: input.docx_base64 ?? "",
+    docxBase64:
+      input.docx_base64 ??
+      panic("save_template create branch reached without docx_base64"),
     fields: input.fields,
-    name: input.name ?? "",
+    name:
+      input.name ?? panic("save_template create branch reached without name"),
   });
 };
 

@@ -15,8 +15,9 @@ ratchets to 40 (default) / 21 (anonymized) with 45 kept as the hard product cap.
   the char budget (default surface measures 50,099 chars against a 56,000 ceiling).
   Consolidation buys **count headroom**, which is the scarce resource.
 - **4 clean, idiom-aligned merges** recover **4 slots** (45 → 41) with zero policy
-  weakening. A 5th optional move (`template_marker_reference` → MCP resource) recovers
-  a 6th... 5th slot (→ 40).
+  weakening. A 5th move (`template_marker_reference` → MCP resource) recovers one
+  additional slot (→ 40). All five, plus the two renames, are IMPLEMENTED on this
+  branch; later sections keep the original proposal framing for the rationale.
 - The **4 "search" tools do NOT merge** — not because it's hard, but because their
   anonymized egress policies diverge (tenant-private `anonymize` vs public
   `passthrough`). A merged tool's policy must cover the union; here the union forces
@@ -354,11 +355,13 @@ changes.
 
 ---
 
-## 10. Recommendation
+## 10. Recommendation and outcome
 
-Do **M1–M4** (45 → 41; four recovered slots, zero policy weakening, all idiom-aligned).
-Treat **M5** and the **renames** as an optional cleanup pass. **Do not** touch the
-search family, read_document, or set_practice_jurisdictions — those separations are
-load-bearing (egress policy, schema density, least privilege), and the honest call is
-to keep them. Net result: the surface gets **more uniform, not just smaller**, and you
-regain 4 slots of headroom under the hard 45 ceiling before MCP launches.
+The original recommendation was M1–M4 with M5 and the renames optional. The
+maintainer approved the full sweep (M1–M5 plus both renames), and this branch
+implements all of it: 40 tools, marker reference served as an MCP resource, and
+`list_invoices`/`list_audit_log` names. **Not touched, by design**: the search
+family, read_document, and set_practice_jurisdictions — those separations are
+load-bearing (egress policy, schema density, least privilege). Net result: the
+surface is **more uniform, not just smaller**, with 5 slots of headroom under
+the hard 45 ceiling before MCP launches.

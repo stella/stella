@@ -111,6 +111,7 @@
   "apps/api/src/handlers/templates/clauses-sync-all.ts",
   "apps/api/src/handlers/templates/clauses-sync.ts",
   "apps/api/src/handlers/templates/clauses-unlink.ts",
+  "apps/api/src/handlers/templates/create-blank.ts",
   "apps/api/src/handlers/templates/delete.ts",
   "apps/api/src/handlers/templates/discover.ts",
   "apps/api/src/handlers/templates/lookup-preview.ts",
