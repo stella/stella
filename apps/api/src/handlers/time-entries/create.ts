@@ -48,9 +48,19 @@ export const createTimeEntryHandler = async function* ({
   body,
 }: CreateTimeEntryHandlerProps) {
   const now = new Date();
-  const todayStr = new Intl.DateTimeFormat("en-CA", {
-    timeZone: body.timezoneId,
-  }).format(now);
+  let todayStr: string;
+  try {
+    todayStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: body.timezoneId,
+    }).format(now);
+  } catch {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid timezone identifier",
+      }),
+    );
+  }
   const dateWorked = new Date(`${body.dateWorked}T00:00:00`);
   const today = new Date(`${todayStr}T00:00:00`);
 
