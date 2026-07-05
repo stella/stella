@@ -101,6 +101,15 @@ export type DehydratedInput = {
   args: Record<string, unknown>;
   /** Resolved workspace uuid per matter input param, for entity output refs. */
   resolvedMatterParams: Record<string, SafeId<"workspace">>;
+  /**
+   * Resolved workspace uuid per entity input param, for output entities that
+   * are *different* from the input entity but share its workspace (e.g. a
+   * task's linked entities). `resolvedMatterParams` covers the reverse case
+   * (workspace named directly); this covers the entity-ref case, where the
+   * workspace is recovered from the ref the caller already resolved rather
+   * than from a fresh lookup.
+   */
+  resolvedEntityParams: Record<string, SafeId<"workspace">>;
   /** entity uuid -> the ref it was dehydrated from, for reuse on output. */
   dehydratedEntityRefs: Map<string, string>;
 };
@@ -126,6 +135,7 @@ export const dehydrateInputRefs = ({
 }): Result<DehydratedInput, ChatToolError> => {
   const nextArgs = { ...args };
   const resolvedMatterParams: Record<string, SafeId<"workspace">> = {};
+  const resolvedEntityParams: Record<string, SafeId<"workspace">> = {};
   const dehydratedEntityRefs = new Map<string, string>();
 
   for (const { kind, param } of READ_TOOL_REF_FIELD_MAP[toolName].inputRefs) {
@@ -147,12 +157,13 @@ export const dehydrateInputRefs = ({
       continue;
     }
     if (kind === "entity") {
-      const resolved = refRegistry.resolveEntityRefs([raw]);
+      const resolved = refRegistry.resolveEntityRefTargets([raw]);
       if (Result.isError(resolved)) {
         return Result.err(resolved.error);
       }
-      const entityId = takeSingle(resolved.value);
+      const { entityId, workspaceId } = takeSingle(resolved.value);
       nextArgs[param] = entityId;
+      resolvedEntityParams[param] = workspaceId;
       dehydratedEntityRefs.set(entityId, raw);
       continue;
     }
@@ -171,6 +182,7 @@ export const dehydrateInputRefs = ({
   return Result.ok({
     args: nextArgs,
     resolvedMatterParams,
+    resolvedEntityParams,
     dehydratedEntityRefs,
   });
 };
@@ -197,8 +209,12 @@ const resolveEntityWorkspaceUuid = ({
   if (source.from === "inputParam") {
     return dehydration.resolvedMatterParams[source.param];
   }
+  if (source.from === "inputEntityWorkspace") {
+    return dehydration.resolvedEntityParams[source.param];
+  }
   // "inputEntity": the output entity is the request's own entity input, so its
   // ref is minted from the reuse map below, never from a workspace lookup.
+  source.from satisfies "inputEntity";
   return undefined;
 };
 

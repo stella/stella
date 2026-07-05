@@ -12,12 +12,14 @@ import {
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const ENTITY_UUID = "c09ec856-d945-5ecc-82e3-bb5382165f34";
+const LINKED_ENTITY_UUID = "1e7f7f2a-9b2b-4c40-8ab1-2f5b6c7d8e9f";
 const PROPERTY_UUID = "37286c24-6145-572e-ad27-15a1d4454d59";
 const CONTACT_UUID = "6111c8e9-1404-5b6f-8a9a-0e3a93e8179a";
 
 const EMPTY_DEHYDRATION = {
   args: {},
   resolvedMatterParams: {},
+  resolvedEntityParams: {},
   dehydratedEntityRefs: new Map<string, string>(),
 };
 
@@ -171,6 +173,70 @@ describe("registry ref mediation", () => {
       nextCursor: null,
     });
     expect(containsRawUuid(hydrated)).toBe(false);
+  });
+
+  test("list_tasks: a linked entity ref draws its workspace from the task_id input, not the reuse map", () => {
+    const registry = createChatRefRegistry();
+    const taskRef = registry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+
+    const dehydrated = dehydrateInputRefs({
+      args: { task_id: taskRef },
+      refRegistry: registry,
+      toolName: "list_tasks",
+    }).unwrap();
+    expect(dehydrated.args["task_id"]).toBe(ENTITY_UUID);
+    expect(dehydrated.resolvedEntityParams["task_id"]).toBe(
+      toSafeId<"workspace">(WS_UUID),
+    );
+
+    const hydrated = hydrateOutputRefs({
+      dehydration: dehydrated,
+      output: {
+        task: {
+          taskId: ENTITY_UUID,
+          name: "Draft reply",
+          links: [
+            {
+              linkId: "link-1",
+              linkType: "related",
+              direction: "outgoing",
+              entity: {
+                id: LINKED_ENTITY_UUID,
+                name: "Exhibit A",
+                kind: "document",
+              },
+            },
+          ],
+        },
+      },
+      refRegistry: registry,
+      toolName: "list_tasks",
+    });
+
+    // The task's own id reuses its input ref; the linked entity (a different
+    // uuid) mints a new ref scoped to the same workspace, not the task's own
+    // ref and not an un-hydrated raw uuid.
+    expect(hydrated).toEqual({
+      task: {
+        taskId: taskRef,
+        name: "Draft reply",
+        links: [
+          {
+            linkId: "link-1",
+            linkType: "related",
+            direction: "outgoing",
+            entity: { id: "ent_2", name: "Exhibit A", kind: "document" },
+          },
+        ],
+      },
+    });
+    expect(containsRawUuid(hydrated)).toBe(false);
+    expect(registry.resolveEntityRefs(["ent_2"]).unwrap()).toEqual([
+      toSafeId<"entity">(LINKED_ENTITY_UUID),
+    ]);
   });
 
   test("an unknown ref surfaces the registry's ChatToolError", () => {

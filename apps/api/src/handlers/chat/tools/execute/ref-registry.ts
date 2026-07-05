@@ -39,7 +39,7 @@ const escapeMarkdownLinkLabel = (label: string) =>
 const createEntityRefKey = ({ entityId, workspaceId }: EntityTarget) =>
   `${workspaceId}:${entityId}`;
 
-type EntityTarget = {
+export type EntityTarget = {
   entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
 };
@@ -140,6 +140,15 @@ export type ChatRefRegistry = {
   resolveEntityRefs: (
     refs: string[],
   ) => Result<SafeId<"entity">[], ChatToolError>;
+  /**
+   * Like `resolveEntityRefs`, but keeps each ref's owning workspace id
+   * alongside its entity id. Callers that need to mint a ref for a
+   * *different* entity known to share the resolved ref's workspace (e.g. a
+   * task's linked entities) use this instead of discarding the workspace id.
+   */
+  resolveEntityRefTargets: (
+    refs: string[],
+  ) => Result<EntityTarget[], ChatToolError>;
   resolveMatterRefs: (
     refs: string[],
   ) => Result<SafeId<"workspace">[], ChatToolError>;
@@ -440,6 +449,12 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
 
       return Result.ok(resolved.value.map(({ entityId }) => entityId));
     },
+    resolveEntityRefTargets: (refs: string[]) =>
+      resolveRefs({
+        kind: "entity",
+        refs,
+        state: entityState,
+      }),
     resolveContactRefs: (refs: string[]) =>
       resolveRefs({
         kind: "contact",

@@ -2,6 +2,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { panic, Result } from "better-result";
 
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { captureError } from "@/api/lib/analytics";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
@@ -19,7 +20,11 @@ import type { McpToolHandler } from "@/api/mcp/tool-types";
 
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
-import { dehydrateInputRefs, hydrateOutputRefs } from "./ref-mediation";
+import {
+  containsRawUuid,
+  dehydrateInputRefs,
+  hydrateOutputRefs,
+} from "./ref-mediation";
 
 /**
  * The read-only registry handlers chat may drive, gathered from the per-domain
@@ -56,6 +61,13 @@ const firstTextContent = (result: CallToolResult): string => {
   const item = result.content.at(0);
   return item?.type === "text" ? item.text : "";
 };
+
+/** Fallback for an `isError` result whose content carries no text block. */
+const DEFAULT_TOOL_ERROR_MESSAGE = "Tool execution failed.";
+
+/** Surfaced to the model when a hydrated payload still carries a raw uuid. */
+const ANONYMIZATION_FAILURE_MESSAGE =
+  "Tool output failed anonymization of internal identifiers.";
 
 /**
  * A finished registry result is a single text content block holding the
@@ -141,9 +153,8 @@ export const runRegistryReadTool = async ({
   });
 
   if (finished.isError === true) {
-    return Result.err(
-      new ChatToolError({ message: firstTextContent(finished) }),
-    );
+    const message = firstTextContent(finished) || DEFAULT_TOOL_ERROR_MESSAGE;
+    return Result.err(new ChatToolError({ message }));
   }
 
   const payload = parsePayload(finished);
@@ -151,12 +162,24 @@ export const runRegistryReadTool = async ({
     return Result.err(payload.error);
   }
 
-  return Result.ok(
-    hydrateOutputRefs({
-      dehydration: dehydrated.value,
-      output: payload.value,
-      refRegistry,
-      toolName,
-    }),
-  );
+  const hydrated = hydrateOutputRefs({
+    dehydration: dehydrated.value,
+    output: payload.value,
+    refRegistry,
+    toolName,
+  });
+
+  // Runtime backstop for the "no tenant UUID reaches the model" invariant: the
+  // ref-field map is documentation the type system cannot fully enforce (a
+  // wrong or missing path silently skips hydration), so re-check the finished
+  // payload rather than trusting the static mapping alone. A survivor fails
+  // closed instead of leaking the id; the error message never repeats the
+  // payload, so it cannot itself leak the value it is refusing.
+  if (containsRawUuid(hydrated)) {
+    const error = new ChatToolError({ message: ANONYMIZATION_FAILURE_MESSAGE });
+    captureError(error, { source: "run-registry-tool", toolName });
+    return Result.err(error);
+  }
+
+  return Result.ok(hydrated);
 };

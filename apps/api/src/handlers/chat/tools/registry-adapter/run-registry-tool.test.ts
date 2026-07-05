@@ -109,6 +109,38 @@ describe("runRegistryReadTool", () => {
     }
   });
 
+  test("fails closed when a raw uuid survives ref hydration in an unmapped field", async () => {
+    const registry = createChatRefRegistry();
+    // Doctored: `reference` is an ordinary free-text field the ref map never
+    // mediates (it is not one of `list_matters`'s `outputRefs` or
+    // `passthroughIdPaths`), but nothing stops it from holding a raw uuid.
+    // The backstop must catch this survivor even though no per-field ref
+    // rule exists for it.
+    const rows = [
+      {
+        id: WS_UUID,
+        name: "Acme",
+        reference: OTHER_WS_UUID,
+        status: "active",
+        lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    ];
+
+    const result = await runRegistryReadTool({
+      args: {},
+      context: buildContext({ scopedDb: selectScopedDb(rows) }),
+      refRegistry: registry,
+      toolName: "list_matters",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.message).not.toContain(WS_UUID);
+      expect(result.error.message).not.toContain(OTHER_WS_UUID);
+    }
+  });
+
   test("refuses a read tool the ref map keeps off the chat surface", async () => {
     const result = await runRegistryReadTool({
       args: {},

@@ -38,6 +38,12 @@ export type EntityWorkspaceSource =
   | { from: "sibling"; key: string }
   | { from: "outputPath"; path: string }
   | { from: "inputParam"; param: string }
+  // The output entity is a *different* entity than the request's own entity
+  // input named by `param`, but is validated (at write time, outside this
+  // orchestrator) to share its workspace, e.g. a task's linked entities. The
+  // workspace is the one already resolved when `param`'s ref was dehydrated,
+  // not a fresh lookup.
+  | { from: "inputEntityWorkspace"; param: string }
   // The output entity IS the request's own entity input; the orchestrator
   // reuses the ref it dehydrated on the way in, so no workspace lookup runs.
   | { from: "inputEntity"; param: string };
@@ -116,7 +122,11 @@ export const READ_TOOL_REF_FIELD_MAP = {
       { kind: "contact", path: "contacts[].contactId" },
       {
         kind: "entity",
-        path: "overview.recentEntities[].id",
+        // The overview handler's item field is `entityId`, not `id`
+        // (`readOverviewHandler` returns `{ entityId: e.id, ... }`); the path
+        // must match the actual key or the walker silently skips every slot
+        // and the raw entity uuid reaches the model.
+        path: "overview.recentEntities[].entityId",
         // Detail mode: every recent entity belongs to the one matter this
         // response describes, so its workspace is the payload's `matter.id`.
         workspace: { from: "outputPath", path: "matter.id" },
@@ -228,12 +238,21 @@ export const READ_TOOL_REF_FIELD_MAP = {
         path: "task.taskId",
         workspace: { from: "inputEntity", param: "task_id" },
       },
+      {
+        kind: "entity",
+        path: "task.links[].entity.id",
+        // Entity links are validated same-workspace at creation:
+        // `createEntityLinkHandler` (entity-links-create.ts, shared by the
+        // HTTP route and save_task) looks up both the source and target
+        // entities scoped to one ambient `workspaceId` before inserting the
+        // link row, so a linked entity always belongs to the task's own
+        // workspace. Detail mode only reaches this path via `task_id`
+        // (list mode's `tasks[]` carries no `links`), so the workspace
+        // already resolved for that input entity is the correct source.
+        workspace: { from: "inputEntityWorkspace", param: "task_id" },
+      },
     ],
     passthroughIdPaths: [
-      // A linked entity's owning workspace is the task's matter, which detail
-      // mode does not surface and does not require `matter_id` to reach. Minting
-      // its ref needs the extra lookup the manifest-swap step adds; deferred.
-      "task.links[].entity.id (linked entity id; owning workspace not statically recoverable)",
       "task.assignees[].userId (user handle, no chat ref kind)",
       "task.links[].linkId (entity-link handle, no chat ref kind)",
     ],
