@@ -644,7 +644,11 @@ const readMatterOverview: McpToolHandler = async ({ args, context }) => {
     value: matter.clientName,
     workspaceId,
   });
-  for (const entity of overview.recentEntities) {
+  // Iterate the entities actually served in the payload, not the source
+  // `overview.recentEntities`: the avatar-URL strip above copies each entity
+  // into a new object, so writing an anonymized value back onto the source
+  // entity would land on a stale reference the response never serializes.
+  for (const entity of overviewWithoutAvatarUrls.recentEntities) {
     collectAnonymizableField({
       apply: (value) => {
         entity.name = value;
