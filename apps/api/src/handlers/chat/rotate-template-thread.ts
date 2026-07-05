@@ -14,7 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { chat: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "assistant_chat" },
   body: t.Object({
     templateId: tSafeId("template"),
   }),

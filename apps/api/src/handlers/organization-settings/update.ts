@@ -1,11 +1,15 @@
 import { Result } from "better-result";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { organizationSettings } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
@@ -17,63 +21,90 @@ const updateOrganizationSettingsBodySchema = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "covered", by: "manage_organization" },
   body: updateOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;
 
-const updateOrganizationSettings = createSafeRootHandler(
-  config,
-  async function* ({ safeDb, session, body, recordAuditEvent }) {
-    const matterPattern = body.matterNumberPattern;
-    const matterPadding = body.matterNumberPadding;
-    const wantsMatterUpdate =
-      matterPattern !== undefined || matterPadding !== undefined;
+export type UpdateOrganizationSettingsProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof updateOrganizationSettingsBodySchema>;
+};
 
-    if (
-      wantsMatterUpdate &&
-      (matterPattern === undefined || matterPadding === undefined)
-    ) {
+// Shared org-settings update logic reused by the HTTP handler and the
+// `manage_organization` MCP tool, so both emit the identical audit event and
+// enforce the matter-pattern/padding pairing and pattern validation. Only the
+// non-secret settings live here; provider-secret writes are separate,
+// dashboard-only endpoints (mcp: internal).
+export const updateOrganizationSettingsHandler = async function* ({
+  safeDb,
+  organizationId,
+  recordAuditEvent,
+  body,
+}: UpdateOrganizationSettingsProps) {
+  const matterPattern = body.matterNumberPattern;
+  const matterPadding = body.matterNumberPadding;
+  const wantsMatterUpdate =
+    matterPattern !== undefined || matterPadding !== undefined;
+
+  if (
+    wantsMatterUpdate &&
+    (matterPattern === undefined || matterPadding === undefined)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message:
+          "matterNumberPattern and matterNumberPadding must be sent together",
+      }),
+    );
+  }
+
+  if (matterPattern !== undefined && matterPadding !== undefined) {
+    const validation = validatePattern(matterPattern, matterPadding);
+
+    if (Result.isError(validation)) {
       return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "matterNumberPattern and matterNumberPadding must be sent together",
-        }),
+        new HandlerError({ status: 400, message: validation.error.message }),
       );
     }
+  }
 
-    if (matterPattern !== undefined && matterPadding !== undefined) {
-      const validation = validatePattern(matterPattern, matterPadding);
+  yield* Result.await(
+    safeDb(async (tx) => {
+      // Only touch promptCachingEnabled when the body carries it;
+      // omitting it from the upsert set keeps a concurrent toggle
+      // request from being clobbered by a stale read.
+      const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
+      const existing = wantsPromptCachingUpdate
+        ? await tx.query.organizationSettings.findFirst({
+            where: { organizationId: { eq: organizationId } },
+            columns: { promptCachingEnabled: true },
+          })
+        : undefined;
 
-      if (Result.isError(validation)) {
-        return Result.err(
-          new HandlerError({ status: 400, message: validation.error.message }),
-        );
-      }
-    }
-
-    yield* Result.await(
-      safeDb(async (tx) => {
-        // Only touch promptCachingEnabled when the body carries it;
-        // omitting it from the upsert set keeps a concurrent toggle
-        // request from being clobbered by a stale read.
-        const wantsPromptCachingUpdate =
-          body.promptCachingEnabled !== undefined;
-        const existing = wantsPromptCachingUpdate
-          ? await tx.query.organizationSettings.findFirst({
-              where: { organizationId: { eq: session.activeOrganizationId } },
-              columns: { promptCachingEnabled: true },
-            })
-          : undefined;
-
-        // Insert path needs schema defaults for any required column
-        // the body did not carry. Matter columns are NOT NULL with
-        // schema defaults — Drizzle infers them when omitted.
-        await tx
-          .insert(organizationSettings)
-          .values({
-            id: createSafeId<"organizationSettings">(),
-            organizationId: session.activeOrganizationId,
+      // Insert path needs schema defaults for any required column
+      // the body did not carry. Matter columns are NOT NULL with
+      // schema defaults — Drizzle infers them when omitted.
+      await tx
+        .insert(organizationSettings)
+        .values({
+          id: createSafeId<"organizationSettings">(),
+          organizationId,
+          ...(wantsMatterUpdate
+            ? {
+                matterNumberPattern: body.matterNumberPattern,
+                matterNumberPadding: body.matterNumberPadding,
+              }
+            : {}),
+          ...(wantsPromptCachingUpdate
+            ? { promptCachingEnabled: body.promptCachingEnabled }
+            : {}),
+        })
+        .onConflictDoUpdate({
+          target: organizationSettings.organizationId,
+          set: {
             ...(wantsMatterUpdate
               ? {
                   matterNumberPattern: body.matterNumberPattern,
@@ -83,65 +114,62 @@ const updateOrganizationSettings = createSafeRootHandler(
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
               : {}),
-          })
-          .onConflictDoUpdate({
-            target: organizationSettings.organizationId,
-            set: {
-              ...(wantsMatterUpdate
-                ? {
-                    matterNumberPattern: body.matterNumberPattern,
-                    matterNumberPadding: body.matterNumberPadding,
-                  }
-                : {}),
-              ...(wantsPromptCachingUpdate
-                ? { promptCachingEnabled: body.promptCachingEnabled }
-                : {}),
-              updatedAt: new Date(),
-            },
-          });
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-          resourceId: session.activeOrganizationId,
-          changes: {
-            ...(wantsMatterUpdate
-              ? {
-                  matterNumberPattern: {
-                    old: null,
-                    new: body.matterNumberPattern,
-                  },
-                  matterNumberPadding: {
-                    old: null,
-                    new: body.matterNumberPadding,
-                  },
-                }
-              : {}),
-            ...(wantsPromptCachingUpdate &&
-            body.promptCachingEnabled !==
-              (existing?.promptCachingEnabled ?? true)
-              ? {
-                  promptCachingEnabled: {
-                    old: existing?.promptCachingEnabled ?? true,
-                    new: body.promptCachingEnabled,
-                  },
-                }
-              : {}),
+            updatedAt: new Date(),
           },
         });
-      }),
-    );
 
-    return Result.ok({
-      ...(body.matterNumberPattern !== undefined
-        ? { matterNumberPattern: body.matterNumberPattern }
-        : {}),
-      ...(body.matterNumberPadding !== undefined
-        ? { matterNumberPadding: body.matterNumberPadding }
-        : {}),
-      ...(body.promptCachingEnabled !== undefined
-        ? { promptCachingEnabled: body.promptCachingEnabled }
-        : {}),
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+        resourceId: organizationId,
+        changes: {
+          ...(wantsMatterUpdate
+            ? {
+                matterNumberPattern: {
+                  old: null,
+                  new: body.matterNumberPattern,
+                },
+                matterNumberPadding: {
+                  old: null,
+                  new: body.matterNumberPadding,
+                },
+              }
+            : {}),
+          ...(wantsPromptCachingUpdate &&
+          body.promptCachingEnabled !== (existing?.promptCachingEnabled ?? true)
+            ? {
+                promptCachingEnabled: {
+                  old: existing?.promptCachingEnabled ?? true,
+                  new: body.promptCachingEnabled,
+                },
+              }
+            : {}),
+        },
+      });
+    }),
+  );
+
+  return Result.ok({
+    ...(body.matterNumberPattern !== undefined
+      ? { matterNumberPattern: body.matterNumberPattern }
+      : {}),
+    ...(body.matterNumberPadding !== undefined
+      ? { matterNumberPadding: body.matterNumberPadding }
+      : {}),
+    ...(body.promptCachingEnabled !== undefined
+      ? { promptCachingEnabled: body.promptCachingEnabled }
+      : {}),
+  });
+};
+
+const updateOrganizationSettings = createSafeRootHandler(
+  config,
+  async function* ({ safeDb, session, body, recordAuditEvent }) {
+    return yield* updateOrganizationSettingsHandler({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      recordAuditEvent,
+      body,
     });
   },
 );

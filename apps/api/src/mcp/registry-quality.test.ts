@@ -26,24 +26,28 @@ const SURFACES = [
 
 type SurfaceMode = (typeof SURFACES)[number]["mode"];
 
-// Zero-buffer ceilings pinned to the measured counts: default 42 tools (31 +
-// the 5 clause/playbook knowledge tools + the 6 time-and-billing tools),
-// anonymized 23 tools (17 + list_clauses/list_playbooks +
-// list_time_entries/resolve_rate/read_invoices/get_usage; the knowledge and
-// billing write tools stay excluded from the anonymized projection). Any tool
+// Zero-buffer ceilings pinned to the measured counts: default 45 tools (31 +
+// the 5 clause/playbook knowledge tools + the 6 time-and-billing tools + the
+// 3 research/admin tools search_legislation, read_audit_log, and
+// manage_organization; 45 is also the hard product ceiling for the default
+// surface), anonymized 24 tools (17 + list_clauses/list_playbooks +
+// list_time_entries/resolve_rate/read_invoices/get_usage + search_legislation;
+// the knowledge/billing write tools and read_audit_log/manage_organization
+// stay excluded from the anonymized projection — read_audit_log fails closed
+// on its dynamic tenant payload and manage_organization is a write). Any tool
 // added to either surface must bump the matching ceiling deliberately.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 42,
-  anonymized: 23,
+  default: 45,
+  anonymized: 24,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
-// `toMcpTools`). Measured: default 45_222 chars (~11.3k tokens), anonymized
-// 18_111 chars (~4.5k tokens). Ceilings sit ~10-15% above so organic growth
+// `toMcpTools`). Measured: default 50_099 chars (~12.5k tokens), anonymized
+// 20_281 chars (~5.1k tokens). Ceilings sit ~10-15% above so organic growth
 // fits but a surface-size jump must be a deliberate constant bump.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 51_000,
-  anonymized: 20_000,
+  default: 56_000,
+  anonymized: 23_000,
 };
 
 // Longest description measured 2026-07-02: create_template at 791 chars
@@ -130,6 +134,8 @@ const serializeToolSurface = (
       ({ annotations, description, feature, inputSchema, name, scope }) => ({
         name,
         scope,
+        // Serialized so a change to a tool's deployment gate is a visible
+        // snapshot diff, not a silent surface change.
         feature,
         description,
         annotations,

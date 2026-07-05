@@ -2058,6 +2058,189 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "type": "object",
       "properties": {}
     }
+  },
+  {
+    "name": "search_legislation",
+    "scope": "stella:read",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search and read Spanish consolidated legislation from the BOE. In search mode, pass query (free text) and/or filters (title, department_code, legal_range_code, matter_code, date_from/date_to as YYYYMMDD); at least one filter is required. In read mode, pass law_id (e.g. BOE-A-1889-4763) to return the law with its block structure; add full_text to include the consolidated text, block_id to return one text block, or relation_type to list related laws instead. Returns public statutory data.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Free-text search over consolidated legislation",
+          "maxLength": 256
+        },
+        "title": {
+          "type": "string",
+          "description": "Filter search results by title text",
+          "maxLength": 256
+        },
+        "department_code": {
+          "type": "string",
+          "description": "Filter search results by department code",
+          "maxLength": 32
+        },
+        "legal_range_code": {
+          "type": "string",
+          "description": "Filter search results by legal-range code (law rank)",
+          "maxLength": 32
+        },
+        "matter_code": {
+          "type": "string",
+          "description": "Filter search results by subject-matter code",
+          "maxLength": 32
+        },
+        "date_from": {
+          "type": "string",
+          "description": "Only laws published on or after this date (YYYYMMDD)",
+          "maxLength": 8
+        },
+        "date_to": {
+          "type": "string",
+          "description": "Only laws published on or before this date (YYYYMMDD)",
+          "maxLength": 8
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max search results to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_legislation call for the next page",
+          "maxLength": 5
+        },
+        "law_id": {
+          "type": "string",
+          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+        },
+        "block_id": {
+          "type": "string",
+          "description": "With law_id, return this text block's content instead of the whole law",
+          "maxLength": 128
+        },
+        "relation_type": {
+          "type": "string",
+          "enum": [
+            "modifies",
+            "modifiedBy",
+            "derogates",
+            "derogatedBy",
+            "all"
+          ],
+          "description": "With law_id, list related laws of this relation kind instead of the law body"
+        },
+        "full_text": {
+          "type": "boolean",
+          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+        }
+      }
+    }
+  },
+  {
+    "name": "read_audit_log",
+    "scope": "stella:admin_read",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, workspace, timestamp, and change detail. Filter by workspace_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspace_id": {
+          "type": "string",
+          "description": "Only entries scoped to this matter/workspace"
+        },
+        "action": {
+          "type": "string",
+          "description": "Only entries with this audit action"
+        },
+        "resource_type": {
+          "type": "string",
+          "description": "Only entries about this resource type"
+        },
+        "resource_id": {
+          "type": "string",
+          "description": "Only entries about this resource id; requires resource_type"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "Only entries whose actor is this user"
+        },
+        "from": {
+          "type": "string",
+          "description": "Only entries created on or after this ISO date-time",
+          "maxLength": 40
+        },
+        "to": {
+          "type": "string",
+          "description": "Only entries created on or before this ISO date-time",
+          "maxLength": 40
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max entries to return",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous read_audit_log call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "manage_organization",
+    "scope": "stella:admin_write",
+    "description": "Administer the organization (owner/admin actions). Set action to add_member or remove_member to add/remove a workspace member (matter_id and user_id required); or update_org_settings to change non-secret organization settings: matter_number_pattern with matter_number_padding (sent together) and/or prompt_caching_enabled. Provider API keys and other secrets are managed only in the dashboard, not here.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "add_member",
+            "remove_member",
+            "update_org_settings"
+          ],
+          "description": "Administrative action to perform"
+        },
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace id for add_member and remove_member"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User id to add or remove for the member actions"
+        },
+        "matter_number_pattern": {
+          "type": "string",
+          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding",
+          "maxLength": 128
+        },
+        "matter_number_padding": {
+          "type": "integer",
+          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "prompt_caching_enabled": {
+          "type": "boolean",
+          "description": "Toggle AI prompt caching for the organization (update_org_settings)"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
   }
 ]"
 `;
@@ -2793,6 +2976,90 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "inputSchema": {
       "type": "object",
       "properties": {}
+    }
+  },
+  {
+    "name": "search_legislation",
+    "scope": "stella:read_anonymized",
+    "feature": "FEATURE_PUBLIC_LAW",
+    "description": "Search and read Spanish consolidated legislation from the BOE. In search mode, pass query (free text) and/or filters (title, department_code, legal_range_code, matter_code, date_from/date_to as YYYYMMDD); at least one filter is required. In read mode, pass law_id (e.g. BOE-A-1889-4763) to return the law with its block structure; add full_text to include the consolidated text, block_id to return one text block, or relation_type to list related laws instead. Returns public statutory data.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Free-text search over consolidated legislation",
+          "maxLength": 256
+        },
+        "title": {
+          "type": "string",
+          "description": "Filter search results by title text",
+          "maxLength": 256
+        },
+        "department_code": {
+          "type": "string",
+          "description": "Filter search results by department code",
+          "maxLength": 32
+        },
+        "legal_range_code": {
+          "type": "string",
+          "description": "Filter search results by legal-range code (law rank)",
+          "maxLength": 32
+        },
+        "matter_code": {
+          "type": "string",
+          "description": "Filter search results by subject-matter code",
+          "maxLength": 32
+        },
+        "date_from": {
+          "type": "string",
+          "description": "Only laws published on or after this date (YYYYMMDD)",
+          "maxLength": 8
+        },
+        "date_to": {
+          "type": "string",
+          "description": "Only laws published on or before this date (YYYYMMDD)",
+          "maxLength": 8
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max search results to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_legislation call for the next page",
+          "maxLength": 5
+        },
+        "law_id": {
+          "type": "string",
+          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+        },
+        "block_id": {
+          "type": "string",
+          "description": "With law_id, return this text block's content instead of the whole law",
+          "maxLength": 128
+        },
+        "relation_type": {
+          "type": "string",
+          "enum": [
+            "modifies",
+            "modifiedBy",
+            "derogates",
+            "derogatedBy",
+            "all"
+          ],
+          "description": "With law_id, list related laws of this relation kind instead of the law body"
+        },
+        "full_text": {
+          "type": "boolean",
+          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+        }
+      }
     }
   }
 ]"

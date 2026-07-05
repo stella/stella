@@ -18,7 +18,7 @@ export const validateProviderBody = t.Object({
 });
 
 const config = {
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "provider_secret" },
   body: validateProviderBody,
 } satisfies SessionHandlerConfig;
 

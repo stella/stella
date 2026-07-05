@@ -23,6 +23,7 @@ import {
 } from "@/api/mcp/gateway/list-tools";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
+import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
@@ -88,6 +89,9 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["resolve_rate", BILLING_TOOL_HANDLERS.resolve_rate],
   ["read_invoices", BILLING_TOOL_HANDLERS.read_invoices],
   ["get_usage", BILLING_TOOL_HANDLERS.get_usage],
+  ["search_legislation", RESEARCH_ADMIN_TOOL_HANDLERS.search_legislation],
+  ["read_audit_log", RESEARCH_ADMIN_TOOL_HANDLERS.read_audit_log],
+  ["manage_organization", RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization],
 ]);
 
 export const getMcpToolDefinition = async (

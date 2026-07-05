@@ -36,6 +36,15 @@ export const MCP_ANONYMIZED_EXCLUSION_REASONS = [
    * surface.
    */
   "dynamic_gateway",
+  /**
+   * Read tool whose payload embeds tenant-authored text in a structurally
+   * dynamic shape the egress pipeline cannot enumerate field-by-field (e.g. the
+   * audit log's free-form `changes`/`metadata` JSON diffs, which can hold any
+   * matter/contact/document name a mutation touched). Declaring a fixed
+   * `textFields` list would silently leak whatever the list missed, so the tool
+   * fails closed and is excluded from the anonymized surface entirely.
+   */
+  "dynamic_tenant_payload",
 ] as const;
 
 export type McpAnonymizedExclusionReason =

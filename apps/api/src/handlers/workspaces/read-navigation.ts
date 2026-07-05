@@ -8,7 +8,7 @@ const config = {
   permissions: {
     workspace: ["read"],
   },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "ui_navigation_state" },
 } satisfies HandlerConfig;
 
 const readWorkspaceNavigation = createSafeRootHandler(

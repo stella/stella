@@ -3,6 +3,7 @@ import { TaggedError } from "better-result";
 
 import { env } from "@/api/env";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -12,6 +13,29 @@ import {
 } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
+
+/**
+ * Wrap the request-scoped recorder so audit rows written by the reused backing
+ * handlers carry the resolved workspace. The MCP recorder binds workspaceId to
+ * null (org-scoped); the shared handlers build events without a workspaceId, so
+ * inject it here per event (an event that sets its own workspaceId wins).
+ */
+export const bindWorkspaceRecorder =
+  (
+    context: McpRequestContext,
+    workspaceId: SafeId<"workspace">,
+  ): AuditRecorder =>
+  async (tx, event) => {
+    const events: AuditEvent[] = Array.isArray(event) ? event : [event];
+    // Events are freshly built by the backing handler and single-use, so stamp
+    // the resolved workspace in place rather than cloning.
+    for (const e of events) {
+      if (e.workspaceId === undefined) {
+        e.workspaceId = workspaceId;
+      }
+    }
+    await context.recordAuditEvent(tx, events);
+  };
 
 export const DEFAULT_LIST_LIMIT = LIMITS.mcpListPageSizeDefault;
 export const DEFAULT_SEARCH_LIMIT = LIMITS.mcpSearchPageSizeDefault;

@@ -75,6 +75,17 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  * - `chat_thread_ui`: chat-thread management endpoints that back UI chrome
  *   (breadcrumb title lookup, inline rename); agents reach threads through the
  *   chat surface, not by managing thread metadata directly.
+ * - `provider_secret`: writes/probes of provider API keys and secrets (AI
+ *   provider config, DeepL key, web-search key, provider validation). Secret
+ *   material must never transit an agent surface; these stay dashboard-only.
+ * - `deploy_mechanics`: deployment/availability mechanics for native tools
+ *   (which backends can be deployed), an operator concern, not an agent action.
+ * - `ui_navigation_state`: per-user UI navigation state (active workspace,
+ *   navigation tree) that only makes sense for the interactive web client.
+ * - `assistant_chat`: the built-in assistant chat plumbing (threads, messages,
+ *   recaps, suggested prompts). An MCP client drives its own agent, so it never
+ *   reaches into stella's own chat threads.
+ * - `url_preview`: server-side external-URL unfurl/preview mechanics.
  */
 export type McpInternalReason =
   | "auth_plumbing"
@@ -87,7 +98,12 @@ export type McpInternalReason =
   | "hosted_billing"
   | "mcp_transport"
   | "health_infra"
-  | "chat_thread_ui";
+  | "chat_thread_ui"
+  | "provider_secret"
+  | "deploy_mechanics"
+  | "ui_navigation_state"
+  | "assistant_chat"
+  | "url_preview";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler

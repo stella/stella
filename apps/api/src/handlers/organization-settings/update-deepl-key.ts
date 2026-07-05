@@ -26,7 +26,7 @@ const updateDeepLKeyBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "provider_secret" },
   body: updateDeepLKeyBody,
 } satisfies HandlerConfig;
 

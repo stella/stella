@@ -26,7 +26,6 @@ import { unarchiveWorkspaceHandler } from "@/api/handlers/workspaces/unarchive";
 import { updateWorkspaceHandler } from "@/api/handlers/workspaces/update-by-id";
 import { createWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-create";
 import { deleteWorkspaceContactHandler } from "@/api/handlers/workspaces/workspace-contacts-delete";
-import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
@@ -51,6 +50,7 @@ import type {
   McpToolHandler,
 } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -385,27 +385,6 @@ const pushTextField = ({
     sink.push({ apply, value, workspaceId });
   }
 };
-
-/**
- * Wrap the request-scoped recorder so audit rows written by the reused backing
- * handlers carry the resolved workspace. The MCP recorder binds workspaceId to
- * null (org-scoped); workspace-scoped handlers build events without a
- * workspaceId, so inject it per event (an event that sets its own wins).
- */
-const bindWorkspaceRecorder =
-  (
-    context: McpRequestContext,
-    workspaceId: SafeId<"workspace">,
-  ): AuditRecorder =>
-  async (tx, event) => {
-    const events: AuditEvent[] = Array.isArray(event) ? event : [event];
-    for (const e of events) {
-      if (e.workspaceId === undefined) {
-        e.workspaceId = workspaceId;
-      }
-    }
-    await context.recordAuditEvent(tx, events);
-  };
 
 /**
  * Prefer a cross-field (`partial_check`) validation message when present,

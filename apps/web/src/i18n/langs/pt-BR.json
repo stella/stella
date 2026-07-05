@@ -889,6 +889,8 @@
     "error": "Algo deu errado. Por favor, tente novamente.",
     "missingJurisdictions": "Sua organização na stella ainda não configurou as jurisdições de atuação. Algumas ferramentas que dependem de jurisdição ficarão indisponíveis até você concluir a configuração.",
     "permissions": "Isso permitirá que o aplicativo:",
+    "scopeAdminRead": "Ler o registro de auditoria da sua organização",
+    "scopeAdminWrite": "Gerenciar membros e configurações da organização",
     "scopeBillingWrite": "Criar, editar e excluir seus lançamentos de horas",
     "scopeDocumentsWrite": "Criar, editar e excluir seus documentos",
     "scopeExternalMcps": "Usar suas ferramentas externas conectadas",
