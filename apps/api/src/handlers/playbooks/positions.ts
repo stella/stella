@@ -171,13 +171,23 @@ export type PlaybookPositions = Static<typeof playbookPositionsSchema>;
 // document-type taxonomy) and a review PERSPECTIVE. When `documentTypeKey` is
 // set, a files-table run gates each materialized column on the workspace's
 // "Document Type" classifier so only matching documents are extracted/graded.
-// Routing (`trigger`) is slice D; this schema is unchanged in slice A.
 export const playbookScopeSchema = t.Object({
   documentTypeKey: t.Optional(t.String({ maxLength: 128 })),
   // t.Union([t.Literal(...)]) rather than t.Optional(t.UnionEnum(...)): an
   // absent optional UnionEnum coerces to its first member instead of undefined.
+  // `perspective` has no safe default (buyer ≠ neutral), so it must stay
+  // genuinely absent when unset.
   perspective: t.Optional(
     t.Union([t.Literal("buyer"), t.Literal("seller"), t.Literal("neutral")]),
   ),
+  // Routing trigger (slice D). `manual` = only runs on an explicit run/auto-run;
+  // `onClassified` = auto-routed when the Document Type classifier resolves.
+  // Same literal-union shape as `perspective` (the no-coerced-optional-union-enum
+  // rule bans optional UnionEnum): absent stays `undefined` on the wire, and
+  // `playbookTrigger` in route-playbooks.ts owns the default to `manual`.
+  trigger: t.Optional(
+    t.Union([t.Literal("manual"), t.Literal("onClassified")]),
+  ),
 });
 export type PlaybookScope = Static<typeof playbookScopeSchema>;
+export type PlaybookTrigger = NonNullable<PlaybookScope["trigger"]>;

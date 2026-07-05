@@ -218,6 +218,10 @@ type MaterializePlaybookRunArgs = {
   positions: readonly Position[];
   scope: PlaybookScope | null;
   recordAuditEvent: AuditRecorder;
+  // Extra context merged onto the EXECUTE audit row. An auto-routed run passes a
+  // system/trigger marker so the row is distinguishable from a manual run; a
+  // manual run omits it and the row stays exactly as before.
+  auditMetadata?: Record<string, unknown>;
 };
 
 // Materialize one playbook's ASK + verdict columns (and their dependencies:
@@ -235,6 +239,7 @@ export const materializePlaybookRun = async ({
   positions,
   scope,
   recordAuditEvent,
+  auditMetadata,
 }: MaterializePlaybookRunArgs): Promise<MaterializePlaybookRunResult> => {
   if (positions.length === 0) {
     return { ok: true, materializedPropertyIds: [] };
@@ -531,6 +536,7 @@ export const materializePlaybookRun = async ({
         new: { materializedPropertyCount: materializedPropertyIds.length },
       },
     },
+    ...(auditMetadata && { metadata: auditMetadata }),
   });
 
   return { ok: true, materializedPropertyIds };

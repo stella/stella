@@ -14,6 +14,11 @@ import {
   properties,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { resolveDocTypeClassifier } from "@/api/handlers/playbooks/materialize-run";
+import {
+  classifierParticipatedInPlan,
+  routeClassifiedDocuments,
+} from "@/api/handlers/playbooks/route-playbooks";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import {
   loadOrgAIConfig,
@@ -1830,6 +1835,79 @@ const onEntityCompleted = async (
   ]);
 };
 
+// Read the plan-properties snapshot recorded at workflow start. Returns [] when
+// absent (pre-snapshot workflows) or unparseable; the caller treats [] as "freshen
+// everything" for backwards-compat and as "classifier did not run" for routing.
+const readPlanPropertyIds = async (
+  redis: RedisClient,
+  workspaceId: SafeId<"workspace">,
+): Promise<SafeId<"property">[]> => {
+  try {
+    const planRaw = await redis.get(
+      workflowKey(workspaceId, "plan-properties"),
+    );
+    if (planRaw === null) {
+      return [];
+    }
+    const parsed: unknown = JSON.parse(planRaw);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => brandPersistedPropertyId(value));
+  } catch (error: unknown) {
+    captureError(error, { workspaceId });
+    return [];
+  }
+};
+
+type MaybeRouteClassifiedDocumentsArgs = {
+  workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  scopedDb: ScopedDb;
+  planPropertyIds: readonly SafeId<"property">[];
+};
+
+// Route classified documents into `onClassified` playbooks, but only when the
+// just-finished workflow actually computed the workspace's Document Type
+// classifier (its id is in the plan). This is the recursion guard: a playbook
+// run materializes ASK/verdict columns whose later completion must not re-route,
+// and none of those columns is the classifier, so its id is absent from their
+// plan and this short-circuits.
+const maybeRouteClassifiedDocuments = async ({
+  workspaceId,
+  organizationId,
+  userId,
+  scopedDb,
+  planPropertyIds,
+}: MaybeRouteClassifiedDocumentsArgs): Promise<void> => {
+  if (planPropertyIds.length === 0) {
+    return;
+  }
+  const classifier = await scopedDb((tx) =>
+    resolveDocTypeClassifier(tx, workspaceId),
+  );
+  if (
+    !classifier ||
+    !classifierParticipatedInPlan({
+      classifierPropertyId: classifier.id,
+      planPropertyIds,
+    })
+  ) {
+    return;
+  }
+
+  await routeClassifiedDocuments({
+    workspaceId,
+    organizationId,
+    userId,
+    scopedDb,
+    startWorkflow,
+  });
+};
+
 const finishWorkflow = async (
   workspaceId: SafeId<"workspace">,
   organizationId: SafeId<"organization">,
@@ -1862,25 +1940,17 @@ const finishWorkflow = async (
     await redis.get(workflowKey(workspaceId, "service-tier")),
   );
 
+  // Snapshot the plan's property ids before clearing run state; used both to
+  // freshen exactly the processed properties and to gate classification-driven
+  // routing on whether the Document Type classifier actually ran this pass.
+  const planPropertyIds = await readPlanPropertyIds(redis, workspaceId);
+
   if (!wasScopedRun) {
     // Freshen only the properties that were part of this workflow's
     // plan. Properties created mid-workflow are not in the snapshot —
     // they stay stale and trigger an automatic follow-up run below.
-    let processedIds: SafeId<"property">[] = [];
     try {
-      const planRaw = await redis.get(
-        workflowKey(workspaceId, "plan-properties"),
-      );
-      if (planRaw !== null) {
-        const parsed: unknown = JSON.parse(planRaw);
-        if (Array.isArray(parsed)) {
-          processedIds = parsed
-            .filter((value): value is string => typeof value === "string")
-            .map((value) => brandPersistedPropertyId(value));
-        }
-      }
-
-      if (processedIds.length > 0) {
+      if (planPropertyIds.length > 0) {
         await scopedDb((tx) =>
           tx
             .update(properties)
@@ -1888,7 +1958,7 @@ const finishWorkflow = async (
             .where(
               and(
                 eq(properties.workspaceId, workspaceId),
-                inArray(properties.id, processedIds),
+                inArray(properties.id, planPropertyIds),
               ),
             ),
         );
@@ -1913,6 +1983,20 @@ const finishWorkflow = async (
   // Broadcast completion
   broadcastWorkflowStatus(workspaceId, false);
   broadcastInvalidation(workspaceId, ["properties", workspaceId]);
+
+  // Classification-driven routing. If this workflow (re)computed the Document
+  // Type classifier, materialize + run any `onClassified` org playbooks now that
+  // the run lock is released. Fire-and-forget with structured capture: a routing
+  // failure must never fail (or block) the classification workflow. The
+  // recursion guard inside — a playbook run's materialized columns are never the
+  // classifier, so they cannot re-trigger routing — keeps this from looping.
+  void maybeRouteClassifiedDocuments({
+    workspaceId,
+    organizationId,
+    userId,
+    scopedDb,
+    planPropertyIds,
+  }).catch((error: unknown) => captureError(error, { workspaceId }));
 
   if (wasScopedRun) {
     return;
