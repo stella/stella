@@ -49,7 +49,14 @@ export const readCliConfig = async (configDir: string): Promise<CliConfig> => {
     return EMPTY_CONFIG;
   }
 
-  const raw: unknown = await file.json();
+  // A corrupt or empty config file must degrade to defaults, not crash
+  // every CLI invocation at context construction.
+  let raw: unknown;
+  try {
+    raw = await file.json();
+  } catch {
+    return EMPTY_CONFIG;
+  }
   const parsed = v.safeParse(cliConfigSchema, raw);
   return parsed.success ? parsed.output : EMPTY_CONFIG;
 };

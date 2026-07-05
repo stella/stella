@@ -27,13 +27,18 @@ export const openInBrowser = async (url: string): Promise<boolean> => {
       stdin: "ignore",
       stdout: "ignore",
     });
-    const exited = await Promise.race([
-      proc.exited,
-      new Promise<number>((resolve) => {
-        setTimeout(() => resolve(-1), OPEN_TIMEOUT_MS);
-      }),
-    ]);
-    return exited === 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const exited = await Promise.race([
+        proc.exited,
+        new Promise<number>((resolve) => {
+          timer = setTimeout(() => resolve(-1), OPEN_TIMEOUT_MS);
+        }),
+      ]);
+      return exited === 0;
+    } finally {
+      clearTimeout(timer);
+    }
   } catch {
     return false;
   }
