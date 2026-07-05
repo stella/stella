@@ -7,6 +7,7 @@ import { roles } from "@stll/permissions";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
+import type { ContactEmail, ContactPhone } from "@/api/db/schema-validators";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/read-by-id";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
@@ -37,8 +38,13 @@ import {
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  defineTextFieldSpec,
+  deriveTextFieldPaths,
+  runTextFieldSpecs,
+} from "@/api/mcp/text-field-spec";
 import type {
-  McpStructuredTextField,
+  McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
@@ -78,26 +84,349 @@ type StellaToolName =
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
 
+// --- Text-field specs (plan 049, Option B) --------------------------------
+
 /**
- * Queue one anonymizable text field onto a structured egress plan, skipping
- * null/empty values (no PII to redact, and an empty batch entry is wasted
- * work). `apply` writes the anonymized value back into the payload.
+ * list_matters, list mode: one matter per row, scoped under its own matter id
+ * (a matter's workspace id IS its anonymization scope). Both fields already
+ * ride in the served payload, so no external attribution is needed.
  */
-const collectAnonymizableField = ({
-  apply,
-  fields,
-  value,
-  workspaceId,
-}: {
-  apply: (value: string) => void;
-  fields: McpStructuredTextField[];
-  value: string | null | undefined;
-  workspaceId: string;
-}): void => {
-  if (typeof value === "string" && value.length > 0) {
-    fields.push({ apply, value, workspaceId });
-  }
+type ListedMatter = { id: string; name: string; reference: string };
+type ListMattersListPayload = { matters: readonly ListedMatter[] };
+
+const LIST_MATTERS_LIST_TEXT_FIELD_SPECS: readonly McpTextFieldSpec<ListMattersListPayload>[] =
+  [
+    defineTextFieldSpec({
+      path: "matters[].name",
+      items: (payload: ListMattersListPayload) => payload.matters,
+      scope: (matter: ListedMatter) => matter.id,
+      read: (matter: ListedMatter) => matter.name,
+      apply: (matter: ListedMatter, value) => {
+        matter.name = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "matters[].reference",
+      items: (payload: ListMattersListPayload) => payload.matters,
+      scope: (matter: ListedMatter) => matter.id,
+      read: (matter: ListedMatter) => matter.reference,
+      apply: (matter: ListedMatter, value) => {
+        matter.reference = value;
+      },
+    }),
+  ];
+
+/**
+ * list_matters, detail mode (one matter's overview): every field below
+ * belongs to the one matter this response describes, so `payload.matter.id`
+ * is the anonymization scope throughout — including the nested
+ * entity/contact/member cards, which carry no workspace id of their own on
+ * the wire. Each nested item selector pairs the item with that scope id
+ * read straight off the payload, so no request-scoped closure is needed.
+ */
+type MatterOverviewMatter = {
+  clientName: string | null;
+  id: string;
+  name: string;
+  reference: string;
 };
+type MatterOverviewEntity = {
+  assignedTo: string | null;
+  createdBy: string | null;
+  name: string;
+};
+type MatterOverviewContact = { displayName: string };
+type MatterOverviewMember = { name: string };
+type MatterOverviewPayload = {
+  contacts: readonly MatterOverviewContact[];
+  matter: MatterOverviewMatter;
+  members: readonly MatterOverviewMember[];
+  overview: { recentEntities: readonly MatterOverviewEntity[] };
+};
+
+const matterOverviewMatterItems = (
+  payload: MatterOverviewPayload,
+): readonly [MatterOverviewMatter] => [payload.matter];
+
+type EntityWithScope = { entity: MatterOverviewEntity; workspaceId: string };
+const matterOverviewEntityItems = (
+  payload: MatterOverviewPayload,
+): readonly EntityWithScope[] =>
+  payload.overview.recentEntities.map((entity) => ({
+    entity,
+    workspaceId: payload.matter.id,
+  }));
+
+type ContactWithScope = {
+  contact: MatterOverviewContact;
+  workspaceId: string;
+};
+const matterOverviewContactItems = (
+  payload: MatterOverviewPayload,
+): readonly ContactWithScope[] =>
+  payload.contacts.map((contact) => ({
+    contact,
+    workspaceId: payload.matter.id,
+  }));
+
+type MemberWithScope = { member: MatterOverviewMember; workspaceId: string };
+const matterOverviewMemberItems = (
+  payload: MatterOverviewPayload,
+): readonly MemberWithScope[] =>
+  payload.members.map((member) => ({
+    member,
+    workspaceId: payload.matter.id,
+  }));
+
+const MATTER_OVERVIEW_TEXT_FIELD_SPECS: readonly McpTextFieldSpec<MatterOverviewPayload>[] =
+  [
+    defineTextFieldSpec({
+      path: "matter.name",
+      items: matterOverviewMatterItems,
+      scope: (matter: MatterOverviewMatter) => matter.id,
+      read: (matter: MatterOverviewMatter) => matter.name,
+      apply: (matter: MatterOverviewMatter, value) => {
+        matter.name = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "matter.reference",
+      items: matterOverviewMatterItems,
+      scope: (matter: MatterOverviewMatter) => matter.id,
+      read: (matter: MatterOverviewMatter) => matter.reference,
+      apply: (matter: MatterOverviewMatter, value) => {
+        matter.reference = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "matter.clientName",
+      items: matterOverviewMatterItems,
+      scope: (matter: MatterOverviewMatter) => matter.id,
+      read: (matter: MatterOverviewMatter) => matter.clientName,
+      apply: (matter: MatterOverviewMatter, value) => {
+        matter.clientName = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "overview.recentEntities[].name",
+      items: matterOverviewEntityItems,
+      scope: (item: EntityWithScope) => item.workspaceId,
+      read: (item: EntityWithScope) => item.entity.name,
+      apply: (item: EntityWithScope, value) => {
+        item.entity.name = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "overview.recentEntities[].createdBy",
+      items: matterOverviewEntityItems,
+      scope: (item: EntityWithScope) => item.workspaceId,
+      read: (item: EntityWithScope) => item.entity.createdBy,
+      apply: (item: EntityWithScope, value) => {
+        item.entity.createdBy = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "overview.recentEntities[].assignedTo",
+      items: matterOverviewEntityItems,
+      scope: (item: EntityWithScope) => item.workspaceId,
+      read: (item: EntityWithScope) => item.entity.assignedTo,
+      apply: (item: EntityWithScope, value) => {
+        item.entity.assignedTo = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "contacts[].displayName",
+      items: matterOverviewContactItems,
+      scope: (item: ContactWithScope) => item.workspaceId,
+      read: (item: ContactWithScope) => item.contact.displayName,
+      apply: (item: ContactWithScope, value) => {
+        item.contact.displayName = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "members[].name",
+      items: matterOverviewMemberItems,
+      scope: (item: MemberWithScope) => item.workspaceId,
+      read: (item: MemberWithScope) => item.member.name,
+      apply: (item: MemberWithScope, value) => {
+        item.member.name = value;
+      },
+    }),
+  ];
+
+/**
+ * search_across_matters: hits span multiple matters, each already carrying
+ * its own `workspaceId` on the wire (P2 per-item attribution).
+ */
+type SearchAcrossMattersHit = {
+  headline: string | null;
+  name: string;
+  workspaceId: string;
+  workspaceName: string | null;
+};
+type SearchAcrossMattersPayload = { hits: readonly SearchAcrossMattersHit[] };
+
+const SEARCH_ACROSS_MATTERS_TEXT_FIELD_SPECS: readonly McpTextFieldSpec<SearchAcrossMattersPayload>[] =
+  [
+    defineTextFieldSpec({
+      path: "hits[].name",
+      items: (payload: SearchAcrossMattersPayload) => payload.hits,
+      scope: (hit: SearchAcrossMattersHit) => hit.workspaceId,
+      read: (hit: SearchAcrossMattersHit) => hit.name,
+      apply: (hit: SearchAcrossMattersHit, value) => {
+        hit.name = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "hits[].headline",
+      items: (payload: SearchAcrossMattersPayload) => payload.hits,
+      scope: (hit: SearchAcrossMattersHit) => hit.workspaceId,
+      read: (hit: SearchAcrossMattersHit) => hit.headline,
+      apply: (hit: SearchAcrossMattersHit, value) => {
+        hit.headline = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "hits[].workspaceName",
+      items: (payload: SearchAcrossMattersPayload) => payload.hits,
+      scope: (hit: SearchAcrossMattersHit) => hit.workspaceId,
+      read: (hit: SearchAcrossMattersHit) => hit.workspaceName,
+      apply: (hit: SearchAcrossMattersHit, value) => {
+        hit.workspaceName = value;
+      },
+    }),
+  ];
+
+/**
+ * read_content_across_matters: a single document, windowed after
+ * anonymization (P8). The window co-declaration in the handler is untouched;
+ * only the `name`/`text` textFields construction migrates here. `workspaceId`
+ * already rides in the payload (stripped by nothing — this tool has no
+ * compat-style field-stripping), so it is read straight off the item.
+ */
+type ReadContentAcrossMattersPayload = {
+  name: string;
+  text: string;
+  workspaceId: string;
+};
+
+const READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS: readonly McpTextFieldSpec<ReadContentAcrossMattersPayload>[] =
+  [
+    defineTextFieldSpec({
+      path: "name",
+      items: (payload: ReadContentAcrossMattersPayload) => [payload],
+      scope: (item: ReadContentAcrossMattersPayload) => item.workspaceId,
+      read: (item: ReadContentAcrossMattersPayload) => item.name,
+      apply: (item: ReadContentAcrossMattersPayload, value) => {
+        item.name = value;
+      },
+    }),
+    defineTextFieldSpec({
+      path: "text",
+      items: (payload: ReadContentAcrossMattersPayload) => [payload],
+      scope: (item: ReadContentAcrossMattersPayload) => item.workspaceId,
+      read: (item: ReadContentAcrossMattersPayload) => item.text,
+      apply: (item: ReadContentAcrossMattersPayload, value) => {
+        item.text = value;
+      },
+    }),
+  ];
+
+/**
+ * read_contact: contacts are organization-scoped (no owning workspace), so
+ * `organizationId` is the anonymization scope for every field. Unlike the
+ * per-item/per-matter cases above, `organizationId` is not part of the served
+ * payload, so it is threaded in as a builder argument. `STELLA_TOOL_DEFINITIONS`
+ * below calls this same builder with a placeholder id purely to derive the
+ * documented `textFields` path list — `deriveTextFieldPaths` only reads each
+ * spec's static `path`, never `scope`, so the placeholder never affects the
+ * declaration.
+ */
+type ContactPayload = {
+  displayName: string;
+  emails: readonly ContactEmail[];
+  firstName: string | null;
+  lastName: string | null;
+  organizationName: string | null;
+  phones: readonly ContactPhone[];
+};
+
+const buildContactTextFieldSpecs = (
+  organizationId: string,
+): readonly McpTextFieldSpec<ContactPayload>[] => [
+  defineTextFieldSpec({
+    path: "displayName",
+    items: (payload: ContactPayload) => [payload],
+    scope: () => organizationId,
+    read: (item: ContactPayload) => item.displayName,
+    apply: (item: ContactPayload, value) => {
+      item.displayName = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "firstName",
+    items: (payload: ContactPayload) => [payload],
+    scope: () => organizationId,
+    read: (item: ContactPayload) => item.firstName,
+    apply: (item: ContactPayload, value) => {
+      item.firstName = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "lastName",
+    items: (payload: ContactPayload) => [payload],
+    scope: () => organizationId,
+    read: (item: ContactPayload) => item.lastName,
+    apply: (item: ContactPayload, value) => {
+      item.lastName = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "organizationName",
+    items: (payload: ContactPayload) => [payload],
+    scope: () => organizationId,
+    read: (item: ContactPayload) => item.organizationName,
+    apply: (item: ContactPayload, value) => {
+      item.organizationName = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "emails[].label",
+    items: (payload: ContactPayload) => payload.emails,
+    scope: () => organizationId,
+    read: (email: ContactEmail) => email.label,
+    apply: (email: ContactEmail, value) => {
+      email.label = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "emails[].address",
+    items: (payload: ContactPayload) => payload.emails,
+    scope: () => organizationId,
+    read: (email: ContactEmail) => email.address,
+    apply: (email: ContactEmail, value) => {
+      email.address = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "phones[].label",
+    items: (payload: ContactPayload) => payload.phones,
+    scope: () => organizationId,
+    read: (phone: ContactPhone) => phone.label,
+    apply: (phone: ContactPhone, value) => {
+      phone.label = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "phones[].number",
+    items: (payload: ContactPayload) => payload.phones,
+    scope: () => organizationId,
+    read: (phone: ContactPhone) => phone.number,
+    apply: (phone: ContactPhone, value) => {
+      phone.number = value;
+    },
+  }),
+];
 
 export const STELLA_TOOL_DEFINITIONS = [
   {
@@ -131,14 +460,8 @@ export const STELLA_TOOL_DEFINITIONS = [
     anonymized: {
       exposure: "anonymize",
       textFields: [
-        "matters[].name",
-        "matter.name",
-        "matter.clientName",
-        "overview.recentEntities[].name",
-        "overview.recentEntities[].createdBy",
-        "overview.recentEntities[].assignedTo",
-        "contacts[].displayName",
-        "members[].name",
+        ...deriveTextFieldPaths(LIST_MATTERS_LIST_TEXT_FIELD_SPECS),
+        ...deriveTextFieldPaths(MATTER_OVERVIEW_TEXT_FIELD_SPECS),
       ],
     },
     name: "list_matters",
@@ -168,7 +491,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     anonymized: {
       exposure: "anonymize",
-      textFields: ["hits[].name", "hits[].headline", "hits[].workspaceName"],
+      textFields: deriveTextFieldPaths(SEARCH_ACROSS_MATTERS_TEXT_FIELD_SPECS),
     },
     name: "search_across_matters",
     scope: "stella:search",
@@ -235,7 +558,12 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["entity_id"],
     },
-    anonymized: { exposure: "anonymize", textFields: ["name", "text"] },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: deriveTextFieldPaths(
+        READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
+      ),
+    },
     name: "read_content_across_matters",
     scope: "stella:read",
   },
@@ -278,14 +606,9 @@ export const STELLA_TOOL_DEFINITIONS = [
     },
     anonymized: {
       exposure: "anonymize",
-      textFields: [
-        "displayName",
-        "firstName",
-        "lastName",
-        "organizationName",
-        "emails[].address",
-        "phones[].number",
-      ],
+      // Placeholder org id: derivation only ever reads `.path`, see
+      // `buildContactTextFieldSpecs`'s doc comment above.
+      textFields: deriveTextFieldPaths(buildContactTextFieldSpecs("")),
     },
     name: "read_contact",
     scope: "stella:read",
@@ -499,31 +822,13 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
     });
   }
 
-  const textFields: McpStructuredTextField[] = [];
-  for (const matter of matters) {
-    collectAnonymizableField({
-      apply: (value) => {
-        matter.name = value;
-      },
-      fields: textFields,
-      value: matter.name,
-      workspaceId: matter.id,
-    });
-    collectAnonymizableField({
-      apply: (value) => {
-        matter.reference = value;
-      },
-      fields: textFields,
-      value: matter.reference,
-      workspaceId: matter.id,
-    });
-  }
+  const payload = { matters, nextCursor: page.nextCursor };
+  const textFields = runTextFieldSpecs(
+    LIST_MATTERS_LIST_TEXT_FIELD_SPECS,
+    payload,
+  );
 
-  return {
-    egress: "structured",
-    payload: { matters, nextCursor: page.nextCursor },
-    textFields,
-  };
+  return { egress: "structured", payload, textFields };
 };
 
 // Detail branch of list_matters: one matter's overview (counts, recent
@@ -618,82 +923,17 @@ const readMatterOverview: McpToolHandler = async ({ args, context }) => {
 
   // Everything below belongs to one matter, so it all anonymizes under this
   // single workspace scope. Ids/status/dates pass through; user-authored
-  // matter references and free-text party/person names are redacted.
-  const textFields: McpStructuredTextField[] = [];
-  collectAnonymizableField({
-    apply: (value) => {
-      matter.name = value;
-    },
-    fields: textFields,
-    value: matter.name,
-    workspaceId,
-  });
-  collectAnonymizableField({
-    apply: (value) => {
-      matter.reference = value;
-    },
-    fields: textFields,
-    value: matter.reference,
-    workspaceId,
-  });
-  collectAnonymizableField({
-    apply: (value) => {
-      matter.clientName = value;
-    },
-    fields: textFields,
-    value: matter.clientName,
-    workspaceId,
-  });
-  // Iterate the entities actually served in the payload, not the source
-  // `overview.recentEntities`: the avatar-URL strip above copies each entity
-  // into a new object, so writing an anonymized value back onto the source
-  // entity would land on a stale reference the response never serializes.
-  for (const entity of overviewWithoutAvatarUrls.recentEntities) {
-    collectAnonymizableField({
-      apply: (value) => {
-        entity.name = value;
-      },
-      fields: textFields,
-      value: entity.name,
-      workspaceId,
-    });
-    collectAnonymizableField({
-      apply: (value) => {
-        entity.createdBy = value;
-      },
-      fields: textFields,
-      value: entity.createdBy,
-      workspaceId,
-    });
-    collectAnonymizableField({
-      apply: (value) => {
-        entity.assignedTo = value;
-      },
-      fields: textFields,
-      value: entity.assignedTo,
-      workspaceId,
-    });
-  }
-  for (const contactCard of contactCards) {
-    collectAnonymizableField({
-      apply: (value) => {
-        contactCard.displayName = value;
-      },
-      fields: textFields,
-      value: contactCard.displayName,
-      workspaceId,
-    });
-  }
-  for (const memberCard of memberCards) {
-    collectAnonymizableField({
-      apply: (value) => {
-        memberCard.name = value;
-      },
-      fields: textFields,
-      value: memberCard.name,
-      workspaceId,
-    });
-  }
+  // matter references and free-text party/person names are redacted. The
+  // entity/contact/member item selectors above read `payload.matter.id` for
+  // the scope and `payload.overview.recentEntities` (not the source
+  // `overview.recentEntities`) for the entities — the avatar-URL strip above
+  // copies each entity into a new object, so extracting items from the
+  // object actually placed in the payload (not the pre-strip source) is what
+  // keeps the write-back landing on the object the response serializes.
+  const textFields = runTextFieldSpecs(
+    MATTER_OVERVIEW_TEXT_FIELD_SPECS,
+    payload,
+  );
 
   return { egress: "structured", payload, textFields };
 };
@@ -750,43 +990,17 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
   // Hits span multiple matters; each anonymizes under its own workspace scope.
   // `workspaceName` embeds the matter name (party names), so it is redacted
   // alongside the hit name and headline to stay consistent with list_matters.
-  const textFields: McpStructuredTextField[] = [];
-  for (const hit of hits) {
-    collectAnonymizableField({
-      apply: (value) => {
-        hit.name = value;
-      },
-      fields: textFields,
-      value: hit.name,
-      workspaceId: hit.workspaceId,
-    });
-    collectAnonymizableField({
-      apply: (value) => {
-        hit.headline = value;
-      },
-      fields: textFields,
-      value: hit.headline,
-      workspaceId: hit.workspaceId,
-    });
-    collectAnonymizableField({
-      apply: (value) => {
-        hit.workspaceName = value;
-      },
-      fields: textFields,
-      value: hit.workspaceName,
-      workspaceId: hit.workspaceId,
-    });
-  }
-
-  return {
-    egress: "structured",
-    payload: {
-      totalCount: result.totalCount,
-      nextCursor: result.nextCursor,
-      hits,
-    },
-    textFields,
+  const payload = {
+    totalCount: result.totalCount,
+    nextCursor: result.nextCursor,
+    hits,
   };
+  const textFields = runTextFieldSpecs(
+    SEARCH_ACROSS_MATTERS_TEXT_FIELD_SPECS,
+    payload,
+  );
+
+  return { egress: "structured", payload, textFields };
 };
 
 const parseOptionalStringArg = ({
@@ -982,22 +1196,10 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   return {
     egress: "structured",
     payload,
-    textFields: [
-      {
-        apply: (value) => {
-          payload.name = value;
-        },
-        value: payload.name,
-        workspaceId,
-      },
-      {
-        apply: (value) => {
-          payload.text = value;
-        },
-        value: payload.text,
-        workspaceId,
-      },
-    ],
+    textFields: runTextFieldSpecs(
+      READ_CONTENT_ACROSS_MATTERS_TEXT_FIELD_SPECS,
+      payload,
+    ),
     window: {
       cursor,
       maxChars: MCP_CONTENT_MAX_CHARS,
@@ -1327,7 +1529,6 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
   // Contacts are organization-scoped (no owning workspace), so the org id is
   // the anonymization scope. The placeholder card is intentional and consistent
   // with how chat anonymizes contact fields.
-  const workspaceId = context.organizationId;
   const payload = {
     contactId: contact.id,
     type: contact.type,
@@ -1341,75 +1542,10 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
     phones: contact.phones ?? [],
   };
 
-  const textFields: McpStructuredTextField[] = [];
-  collectAnonymizableField({
-    apply: (value) => {
-      payload.displayName = value;
-    },
-    fields: textFields,
-    value: payload.displayName,
-    workspaceId,
-  });
-  collectAnonymizableField({
-    apply: (value) => {
-      payload.firstName = value;
-    },
-    fields: textFields,
-    value: payload.firstName,
-    workspaceId,
-  });
-  collectAnonymizableField({
-    apply: (value) => {
-      payload.lastName = value;
-    },
-    fields: textFields,
-    value: payload.lastName,
-    workspaceId,
-  });
-  collectAnonymizableField({
-    apply: (value) => {
-      payload.organizationName = value;
-    },
-    fields: textFields,
-    value: payload.organizationName,
-    workspaceId,
-  });
-  for (const email of payload.emails) {
-    collectAnonymizableField({
-      apply: (value) => {
-        email.label = value;
-      },
-      fields: textFields,
-      value: email.label,
-      workspaceId,
-    });
-    collectAnonymizableField({
-      apply: (value) => {
-        email.address = value;
-      },
-      fields: textFields,
-      value: email.address,
-      workspaceId,
-    });
-  }
-  for (const phone of payload.phones) {
-    collectAnonymizableField({
-      apply: (value) => {
-        phone.label = value;
-      },
-      fields: textFields,
-      value: phone.label,
-      workspaceId,
-    });
-    collectAnonymizableField({
-      apply: (value) => {
-        phone.number = value;
-      },
-      fields: textFields,
-      value: phone.number,
-      workspaceId,
-    });
-  }
+  const textFields = runTextFieldSpecs(
+    buildContactTextFieldSpecs(context.organizationId),
+    payload,
+  );
 
   return { egress: "structured", payload, textFields };
 };
