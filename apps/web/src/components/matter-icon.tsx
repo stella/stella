@@ -91,10 +91,12 @@ export const MatterIcon = (props: MatterIconProps) => {
 
 // Stable component reference for config-driven renderers (the primary nav,
 // the onboarding sidebar preview) that store an icon component and render
-// it as `<Icon className={...} />`. Represents the "all matters"
-// navigation affordance (the tri-plane stack).
+// it as `<Icon className={...} />`. Paints the muted mono glyph so the
+// matters entry reads like its neighbouring nav icons (search, chat,
+// contacts) rather than singling itself out with the tri-plane colour;
+// a specific matter still gets its colour wherever one is actually named.
 export const MattersNavIcon = ({
   className,
 }: {
   className?: string | undefined;
-}) => <MatterIcon className={className} variant="all" />;
+}) => <MatterIcon className={className} variant="none" />;
