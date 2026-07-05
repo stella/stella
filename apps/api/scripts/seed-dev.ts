@@ -3860,65 +3860,91 @@ export const seedPlaybooks = async (
         perspective: "buyer",
       },
       positions: {
-        version: 1,
+        version: 2,
         items: [
           {
+            mode: "graded",
             sourceId: seedId("playbook-cz-pos-rozhodne-pravo"),
             issue: "Rozhodné právo",
+            severity: "high",
             ask: {
+              mode: "manual",
               question: "Jakým právním řádem se smlouva řídí?",
               content: { version: 1, type: "text" },
             },
-            standard: {
-              source: "inline",
-              preferred: "Smlouva se řídí právním řádem České republiky.",
-              fallbacks: [
-                {
-                  rank: 0,
-                  text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: {
+                  source: "inline",
+                  text: "Smlouva se řídí právním řádem České republiky.",
                 },
-              ],
+              },
+              fallback: {
+                entries: [
+                  {
+                    id: seedId("playbook-cz-fb-rozhodne-pravo-eu"),
+                    text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
+                  },
+                ],
+              },
+              notAcceptable: { rules: [] },
             },
-            rule: { kind: "positionMatch" },
-            severity: "high",
             guidance:
               "Preferujeme volbu českého práva; jiné právo EU je akceptovatelný ústupek.",
+            enabled: true,
           },
           {
+            mode: "graded",
             sourceId: seedId("playbook-cz-pos-omezeni-odpovednosti"),
             issue: "Omezení odpovědnosti za škodu",
+            severity: "blocker",
             ask: {
+              mode: "manual",
               question:
                 "Je odpovědnost smluvní strany za škodu omezena? Pokud ano, jaká je maximální výše náhrady?",
               content: { version: 1, type: "text" },
             },
-            standard: {
-              source: "inline",
-              preferred:
-                "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
-              fallbacks: [
-                {
-                  rank: 0,
-                  text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: {
+                  source: "inline",
+                  text: "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
                 },
-              ],
+              },
+              fallback: {
+                entries: [
+                  {
+                    id: seedId("playbook-cz-fb-omezeni-odpovednosti-2x"),
+                    text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
+                  },
+                ],
+              },
+              notAcceptable: { rules: [] },
             },
-            rule: { kind: "positionMatch" },
-            severity: "blocker",
             guidance:
               "Neomezená odpovědnost je nepřijatelná; vyžaduje eskalaci.",
+            enabled: true,
           },
           {
+            mode: "graded",
             sourceId: paymentTermsSourceId,
             issue: "Splatnost faktur (dny)",
+            severity: "medium",
             ask: {
+              mode: "manual",
               question:
                 "Jaká je splatnost faktur ve dnech? Odpověz pouze číslem.",
               content: { version: 1, type: "int" },
             },
-            standard: { source: "none" },
-            rule: {
-              kind: "propertyConstraint",
+            tiers: {
+              acceptable: { rules: [] },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
+            check: {
+              kind: "constraint",
               condition: {
                 type: "group",
                 combinator: "and",
@@ -3935,48 +3961,62 @@ export const seedPlaybooks = async (
                 ],
               },
             },
-            severity: "medium",
             guidance: "Splatnost nad 30 dnů zhoršuje cash flow.",
+            enabled: true,
           },
           {
+            mode: "graded",
             sourceId: seedId("playbook-cz-pos-mlcenlivost"),
             issue: "Mlčenlivost",
+            severity: "high",
             ask: {
+              mode: "manual",
               question:
                 "Cituj ustanovení smlouvy o mlčenlivosti / ochraně důvěrných informací, je-li ve smlouvě obsaženo.",
               content: { version: 1, type: "text" },
             },
-            standard: { source: "none" },
-            rule: { kind: "presence", expectation: "required" },
-            severity: "high",
+            tiers: {
+              acceptable: { rules: [] },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
+            check: { kind: "presence", expectation: "required" },
             guidance: "Smlouva musí obsahovat závazek mlčenlivosti.",
+            enabled: true,
           },
           {
+            mode: "graded",
             sourceId: seedId("playbook-cz-pos-change-of-control"),
             issue: "Změna ovládání (change of control)",
+            severity: "high",
             ask: {
+              mode: "manual",
               question:
                 "Cituj ustanovení vyžadující souhlas druhé strany při změně ovládání (change of control) jedné ze stran, existuje-li.",
               content: { version: 1, type: "text" },
             },
-            standard: { source: "none" },
-            rule: { kind: "presence", expectation: "restricted" },
-            severity: "high",
+            tiers: {
+              acceptable: { rules: [] },
+              fallback: { entries: [] },
+              notAcceptable: { rules: [] },
+            },
+            check: { kind: "presence", expectation: "restricted" },
             guidance:
               "Požadavek na souhlas při change of control je riziko pro akvizici – nutno označit.",
+            enabled: true,
           },
           {
+            mode: "extract",
             sourceId: seedId("playbook-cz-pos-vypovedni-doba"),
             issue: "Výpovědní doba",
             ask: {
               question: "Jaká je výpovědní doba pro ukončení smlouvy?",
               content: { version: 1, type: "text" },
             },
-            standard: { source: "none" },
-            rule: { kind: "extractOnly" },
-            severity: "low",
+            enabled: true,
           },
           {
+            mode: "extract",
             sourceId: seedId("playbook-cz-pos-doba-trvani"),
             issue: "Doba trvání a automatické prodloužení",
             ask: {
@@ -3984,31 +4024,38 @@ export const seedPlaybooks = async (
                 "Na jakou dobu je smlouva uzavřena a obsahuje doložku o automatickém prodloužení (auto-renewal)?",
               content: { version: 1, type: "text" },
             },
-            standard: { source: "none" },
-            rule: { kind: "extractOnly" },
-            severity: "low",
+            enabled: true,
           },
           {
+            mode: "graded",
             sourceId: seedId("playbook-cz-pos-reseni-sporu"),
             issue: "Řešení sporů",
+            severity: "medium",
             ask: {
+              mode: "manual",
               question:
                 "Jak se řeší spory ze smlouvy — příslušnými soudy ČR, nebo v rozhodčím řízení?",
               content: { version: 1, type: "text" },
             },
-            standard: {
-              source: "inline",
-              preferred:
-                "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
-              fallbacks: [
-                {
-                  rank: 0,
-                  text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
+            tiers: {
+              acceptable: {
+                rules: [],
+                ideal: {
+                  source: "inline",
+                  text: "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
                 },
-              ],
+              },
+              fallback: {
+                entries: [
+                  {
+                    id: seedId("playbook-cz-fb-reseni-sporu-rozhodci"),
+                    text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
+                  },
+                ],
+              },
+              notAcceptable: { rules: [] },
             },
-            rule: { kind: "positionMatch" },
-            severity: "medium",
+            enabled: true,
           },
         ],
       } satisfies PlaybookPositions,

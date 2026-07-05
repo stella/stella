@@ -9,6 +9,8 @@ import type {
   PlaybookVerdictTool,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import type { EnginePosition } from "@/api/handlers/playbooks/position-adapter";
+import { selectEnginePositions } from "@/api/handlers/playbooks/position-adapter";
 import type {
   PlaybookScope,
   Position,
@@ -28,7 +30,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import { LIMITS } from "@/api/lib/limits";
 
-const buildAskTool = (position: Position): PropertyTool => {
+const buildAskTool = (position: EnginePosition): PropertyTool => {
   const question = position.ask.question.trim();
   const useAi = position.ask.content.type !== "file" && question.length > 0;
   return createDefaultTool({
@@ -44,7 +46,7 @@ const buildVerdictTool = ({
   standard,
 }: {
   askPropertyId: SafeId<"property">;
-  position: Position;
+  position: EnginePosition;
   standard: ResolvedStandard;
 }): PlaybookVerdictTool => {
   // A propertyConstraint condition is authored against the position's own value
@@ -245,10 +247,16 @@ export const materializePlaybookRun = async ({
   }
   const docTypeGate = gateResult.gate;
 
+  // SLICE A shim: project each v2 position onto the engine's v1 inputs and drop
+  // disabled positions before materializing. A disabled position emits no
+  // columns; any it previously owned falls out of the emitted set below and is
+  // deleted as obsolete, so toggling `enabled` off tears its columns down.
+  const enginePositions = selectEnginePositions(positions);
+
   const clauseSnapshots = await loadClauseSnapshots(
     tx,
     organizationId,
-    positions,
+    enginePositions,
   );
 
   // The AI extraction batch only receives files that are among a property's
@@ -271,7 +279,7 @@ export const materializePlaybookRun = async ({
   }
   const filePropertyId = systemFileProperty.id;
 
-  const sourceIds = positions.map((position) => position.sourceId);
+  const sourceIds = enginePositions.map((position) => position.sourceId);
   const owned = await tx
     .select({
       id: properties.id,
@@ -319,7 +327,7 @@ export const materializePlaybookRun = async ({
   const verdictPropertyIds: SafeId<"property">[] = [];
   let newCount = 0;
 
-  for (const position of positions) {
+  for (const position of enginePositions) {
     const askTool = buildAskTool(position);
     const askId =
       askIdBySourceId.get(position.sourceId) ?? createSafeId<"property">();

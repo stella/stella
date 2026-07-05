@@ -15,10 +15,7 @@ import type { ClauseBody, ClauseRun } from "@/api/handlers/clauses/types";
 import { isClauseBody } from "@/api/handlers/clauses/types";
 import { updateClauseHandler } from "@/api/handlers/clauses/update";
 import { materializePlaybookRun } from "@/api/handlers/playbooks/materialize-run";
-import type {
-  Position,
-  PositionStandard,
-} from "@/api/handlers/playbooks/positions";
+import type { Position } from "@/api/handlers/playbooks/positions";
 import {
   getPlaybookDefinitionHandler,
   listPlaybookDefinitionsHandler,
@@ -355,31 +352,48 @@ const playbookListTextFieldSpecs = (
   }),
 ];
 
-type PlaybookInlineStandard = Extract<PositionStandard, { source: "inline" }>;
-type PlaybookInlineFallback = NonNullable<
-  PlaybookInlineStandard["fallbacks"]
->[number];
+type GradedPosition = Extract<Position, { mode: "graded" }>;
+type InlineIdeal = Extract<
+  NonNullable<GradedPosition["tiers"]["acceptable"]["ideal"]>,
+  { source: "inline" }
+>;
 
-const playbookInlineStandardItems = (
+const gradedPositions = (
   positions: readonly Position[],
-): readonly PlaybookInlineStandard[] =>
+): readonly GradedPosition[] =>
   positions.flatMap((position) =>
-    position.standard.source === "inline" ? [position.standard] : [],
+    position.mode === "graded" ? [position] : [],
   );
 
-const playbookStandardFallbacks = (
-  standard: PlaybookInlineStandard,
-): readonly PlaybookInlineFallback[] => {
-  if (standard.fallbacks === undefined) {
-    return [];
-  }
-  return standard.fallbacks;
-};
-
-const playbookInlineFallbackItems = (
+// Ask objects that carry a directly-authored question: every extract position
+// and every graded position on the manual ask variant. The auto variant's
+// derived question is redacted separately (`ask.derived.question`).
+const manualAskItems = (
   positions: readonly Position[],
-): readonly PlaybookInlineFallback[] =>
-  playbookInlineStandardItems(positions).flatMap(playbookStandardFallbacks);
+): readonly { question: string }[] =>
+  positions.flatMap((position) => {
+    if (position.mode === "extract") {
+      return [position.ask];
+    }
+    return position.ask.mode === "manual" ? [position.ask] : [];
+  });
+
+const derivedAskItems = (
+  positions: readonly Position[],
+): readonly { question: string }[] =>
+  gradedPositions(positions).flatMap((position) =>
+    position.ask.mode === "auto" && position.ask.derived !== undefined
+      ? [position.ask.derived]
+      : [],
+  );
+
+const inlineIdealItems = (
+  positions: readonly Position[],
+): readonly InlineIdeal[] =>
+  gradedPositions(positions).flatMap((position) => {
+    const { ideal } = position.tiers.acceptable;
+    return ideal?.source === "inline" ? [ideal] : [];
+  });
 
 type PlaybookDetailPayload = {
   playbook: {
@@ -391,13 +405,12 @@ type PlaybookDetailPayload = {
 
 /**
  * Every redactable field on one playbook detail response: the playbook's own
- * name/description, each position's issue/ask.question/guidance, and — only
- * for an inline standard (`source === "inline"`, resolved structurally, same
- * discriminant the handler already checks) — its preferred language and each
- * fallback's label and text. `standard.fallbacks[].label` was pushed by the
- * original handler but never declared (the same declared-vs-pushed drift the
- * `read_document` migration also fixed); deriving the declaration from this
- * spec closes that gap here too.
+ * name/description, and per position its issue, guidance, and ask question
+ * (the manual/extract question, or an auto position's derived question) —
+ * plus, for a graded position, each tier rule (acceptable and not-acceptable
+ * red lines), inline ideal language, and each fallback entry's text and label.
+ * Deriving the declared `textFields` path list from these specs keeps the
+ * documented paths and the runtime redaction in lockstep.
  */
 const playbookDetailTextFieldSpecs = (
   organizationId: string,
@@ -431,11 +444,20 @@ const playbookDetailTextFieldSpecs = (
   }),
   defineTextFieldSpec({
     path: "playbook.positions.items[].ask.question",
-    items: (payload) => payload.playbook.positions.items,
+    items: (payload) => manualAskItems(payload.playbook.positions.items),
     scope: () => organizationId,
-    read: (item) => item.ask.question,
+    read: (item) => item.question,
     apply: (item, value) => {
-      item.ask.question = value;
+      item.question = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].ask.derived.question",
+    items: (payload) => derivedAskItems(payload.playbook.positions.items),
+    scope: () => organizationId,
+    read: (item) => item.question,
+    apply: (item, value) => {
+      item.question = value;
     },
   }),
   defineTextFieldSpec({
@@ -448,19 +470,44 @@ const playbookDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "playbook.positions.items[].standard.preferred",
+    path: "playbook.positions.items[].tiers.acceptable.rules[].text",
     items: (payload) =>
-      playbookInlineStandardItems(payload.playbook.positions.items),
+      gradedPositions(payload.playbook.positions.items).flatMap(
+        (position) => position.tiers.acceptable.rules,
+      ),
     scope: () => organizationId,
-    read: (item) => item.preferred,
+    read: (item) => item.text,
     apply: (item, value) => {
-      item.preferred = value;
+      item.text = value;
     },
   }),
   defineTextFieldSpec({
-    path: "playbook.positions.items[].standard.fallbacks[].label",
+    path: "playbook.positions.items[].tiers.acceptable.ideal.text",
+    items: (payload) => inlineIdealItems(payload.playbook.positions.items),
+    scope: () => organizationId,
+    read: (item) => item.text,
+    apply: (item, value) => {
+      item.text = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].tiers.fallback.entries[].text",
     items: (payload) =>
-      playbookInlineFallbackItems(payload.playbook.positions.items),
+      gradedPositions(payload.playbook.positions.items).flatMap(
+        (position) => position.tiers.fallback.entries,
+      ),
+    scope: () => organizationId,
+    read: (item) => item.text,
+    apply: (item, value) => {
+      item.text = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].tiers.fallback.entries[].label",
+    items: (payload) =>
+      gradedPositions(payload.playbook.positions.items).flatMap(
+        (position) => position.tiers.fallback.entries,
+      ),
     scope: () => organizationId,
     read: (item) => item.label,
     apply: (item, value) => {
@@ -468,9 +515,11 @@ const playbookDetailTextFieldSpecs = (
     },
   }),
   defineTextFieldSpec({
-    path: "playbook.positions.items[].standard.fallbacks[].text",
+    path: "playbook.positions.items[].tiers.notAcceptable.rules[].text",
     items: (payload) =>
-      playbookInlineFallbackItems(payload.playbook.positions.items),
+      gradedPositions(payload.playbook.positions.items).flatMap(
+        (position) => position.tiers.notAcceptable.rules,
+      ),
     scope: () => organizationId,
     read: (item) => item.text,
     apply: (item, value) => {
@@ -596,7 +645,8 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     description:
       "List the review playbooks in this organization, or read one in detail. " +
       "Pass playbook_id to get a playbook's positions (the issues it reviews, " +
-      "their questions, standards, and grading rules), scope, and description. " +
+      "their questions, tiered rules, and ideal language), scope, and " +
+      "description. " +
       "Otherwise list playbooks (newest first). Returns each playbook's id, " +
       "name, and description.",
     inputSchema: {

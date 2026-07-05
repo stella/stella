@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { resolveScopedGate } from "@/api/handlers/playbooks/materialize-run";
+import { selectEnginePositions } from "@/api/handlers/playbooks/position-adapter";
 import type { ResolvedStandard } from "@/api/handlers/playbooks/positions";
 import {
   loadClauseSnapshots,
@@ -172,7 +173,9 @@ const reviewPlaybook = createSafeHandler(
           }
         }
 
-        const positions = playbook.positions.items;
+        // SLICE A shim: skip disabled positions and project the rest onto the
+        // engine's v1 inputs, matching the materialized run's semantics.
+        const positions = selectEnginePositions(playbook.positions.items);
         const clauseSnapshots = await loadClauseSnapshots(
           tx,
           organizationId,

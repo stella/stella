@@ -1563,7 +1563,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "name": "list_playbooks",
     "scope": "stella:read",
     "access": "read",
-    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, standards, and grading rules), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
+    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, tiered rules, and ideal language), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
     "annotations": {
       "readOnlyHint": true
     },
@@ -2600,7 +2600,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "name": "list_playbooks",
     "scope": "stella:read_anonymized",
     "access": "read",
-    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, standards, and grading rules), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
+    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, tiered rules, and ideal language), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
     "annotations": {
       "readOnlyHint": true
     },

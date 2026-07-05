@@ -1,8 +1,8 @@
 import { panic, Result } from "better-result";
 
 import type { FieldContent } from "@/api/db/schema-validators";
+import type { EnginePosition } from "@/api/handlers/playbooks/position-adapter";
 import type {
-  Position,
   PositionSeverity,
   ResolvedStandard,
 } from "@/api/handlers/playbooks/positions";
@@ -62,7 +62,7 @@ type AiGradingDeps = {
 };
 
 export type BuildFindingsArgs = AiGradingDeps & {
-  positions: readonly Position[];
+  positions: readonly EnginePosition[];
   contentBySourceId: ReadonlyMap<string, AskExtraction>;
   standardBySourceId: ReadonlyMap<string, ResolvedStandard>;
   lastBlockId: string | null;
@@ -155,7 +155,7 @@ const gradePosition = async ({
   standard,
   deps,
 }: {
-  position: Position;
+  position: EnginePosition;
   askContent: FieldContent | undefined;
   fieldContentBySourceId: ReadonlyMap<string, FieldContent>;
   standard: ResolvedStandard;
@@ -233,7 +233,9 @@ export const buildFindings = async ({
     fieldContentBySourceId.set(sourceId, extraction.content);
   }
 
-  const buildFinding = async (position: Position): Promise<ReviewFinding> => {
+  const buildFinding = async (
+    position: EnginePosition,
+  ): Promise<ReviewFinding> => {
     const extraction = contentBySourceId.get(position.sourceId);
     const askContent = extraction?.content;
     const standard = standardBySourceId.get(position.sourceId) ?? {};
@@ -271,7 +273,7 @@ export const buildFindings = async ({
   // POSITION_MATCH_CONCURRENCY). Findings are re-sorted by original index to
   // preserve the input `positions` order.
   const indexedFindings: { index: number; finding: ReviewFinding }[] = [];
-  const positionMatchTasks: { index: number; position: Position }[] = [];
+  const positionMatchTasks: { index: number; position: EnginePosition }[] = [];
 
   await Promise.all(
     positions.map(async (position, index) => {

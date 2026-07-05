@@ -3,10 +3,8 @@ import { and, asc, eq, inArray, or } from "drizzle-orm";
 import type { Transaction } from "@/api/db";
 import { clauses, clauseVariants, clauseVersions } from "@/api/db/schema";
 import { clauseBodyToPlainText } from "@/api/handlers/clauses/clause-to-patch";
-import type {
-  Position,
-  ResolvedStandard,
-} from "@/api/handlers/playbooks/positions";
+import type { EnginePosition } from "@/api/handlers/playbooks/position-adapter";
+import type { ResolvedStandard } from "@/api/handlers/playbooks/positions";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
@@ -34,7 +32,7 @@ type ClauseSnapshot = {
 export const loadClauseSnapshots = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
-  positions: readonly Position[],
+  positions: readonly EnginePosition[],
 ): Promise<Map<string, ClauseSnapshot>> => {
   const clauseIds = [
     ...new Set(
@@ -150,7 +148,7 @@ export const loadClauseSnapshots = async (
 };
 
 export const resolveStandard = (
-  position: Position,
+  position: EnginePosition,
   clauseSnapshots: ReadonlyMap<string, ClauseSnapshot>,
 ): ResolvedStandard => {
   const { standard } = position;
