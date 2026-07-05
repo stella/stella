@@ -187,3 +187,48 @@ export type McpToolHandler = ({
   args: Record<string, unknown>;
   context: McpRequestContext;
 }) => Promise<McpToolResponse>;
+
+/**
+ * Foundation for expressing one anonymizable text field as code instead of a
+ * hand-written `textFields` path string (design brief plan 049, Option B).
+ * `items` extracts the field's target items live from the actual payload
+ * object a handler is about to return, so a write-back through `apply`
+ * always lands on the object reference the client receives - this closes,
+ * structurally, the specific class of bug where a push closure mutates a
+ * copy the served payload was built from instead of the served object
+ * itself (see the `readMatterOverview` fix in `stella-tools.ts` for a real,
+ * shipped instance of exactly that mistake).
+ *
+ * `path` stays a human/agent-facing documentation string, mirroring today's
+ * hand-written `textFields` entries; `deriveTextFieldPaths` in
+ * `text-field-spec.ts` turns a spec list into that documented list
+ * mechanically, so the declaration and the code that actually walks the
+ * payload can no longer name different fields.
+ *
+ * `TItem` is intentionally not a parameter of this public type: one tool's
+ * spec list mixes fields over different item shapes (a matter, a recent
+ * entity, a contact card, ...), so a list of specs for one tool is
+ * necessarily item-shape-heterogeneous. Author a spec through
+ * `defineTextFieldSpec` (generic over `TItem`) in `text-field-spec.ts`,
+ * which stores it here item-shape-erased.
+ *
+ * This type has no consumer yet: wiring a real tool's `textFields` through
+ * a spec is a per-module migration, out of scope for this foundational
+ * commit (see plan 049 Phases 2+).
+ */
+export type McpTextFieldSpec<TPayload> = {
+  /** Documentation-only path, mirroring today's hand-written textFields entries. */
+  path: string;
+  /** Extracts this field's target items live from the payload about to be returned. */
+  items: (payload: TPayload) => readonly unknown[];
+  /**
+   * Anonymization scope for one item: a real workspace id for
+   * matter/document-shaped items, or the organization id for org-scoped
+   * items (contacts, templates, clauses).
+   */
+  scope: (item: unknown, index: number) => string;
+  /** Reads the current text value off one item; null/undefined/empty is skipped. */
+  read: (item: unknown, index: number) => string | null | undefined;
+  /** Writes the redacted value back onto the item (or an owning array, by index). */
+  apply: (item: unknown, value: string, index: number) => void;
+};

@@ -1,6 +1,6 @@
 {
   "as-casts": {
-    "count": 124,
+    "count": 125,
     "files": {
       "apps/api/src/db-url.ts": 1,
       "apps/api/src/handlers/case-law/citation-authority.ts": 1,
@@ -42,6 +42,7 @@
       "apps/api/src/lib/validated-org-user-id.ts": 1,
       "apps/api/src/mcp/document-tools.ts": 1,
       "apps/api/src/mcp/stella-tools.ts": 1,
+      "apps/api/src/mcp/text-field-spec.ts": 1,
       "apps/api/src/scripts/resolve-citations.ts": 2,
       "apps/api/src/tests/helpers/test-tool-set.ts": 5,
       "apps/web/src/app-providers.tsx": 1,
@@ -165,8 +166,6 @@
       "apps/api/src/mcp/stella-tools.ts": 3,
       "apps/api/src/mcp/template-tools.ts": 1,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 2,
-      "apps/web/src/components/ai-suggestions/host.logic.ts": 1,
-      "apps/web/src/components/ai-suggestions/host.tsx": 1,
       "apps/web/src/components/ai-suggestions/playbook-review-store.ts": 1,
       "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 3,
       "apps/web/src/components/ai-suggestions/review-store.ts": 1,
@@ -241,6 +240,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-columns.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.logic.ts": 3,
