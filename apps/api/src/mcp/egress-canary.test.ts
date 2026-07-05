@@ -812,13 +812,14 @@ describe("MCP anonymization canary corpus", () => {
   test("read_document (diff, egress-plan level) anonymizes diff segment text", async () => {
     const tool = "read_document";
     const diffSeed = mkSeed(tool, 5);
+    const diffSegment = { kind: "unchanged" as const, text: diffSeed };
     const payload = {
       entityId: "entity_1",
       name: "Doc",
       diff: {
         baseVersionId: "ver_a",
         targetVersionId: "ver_b",
-        segments: [{ kind: "unchanged" as const, text: diffSeed }],
+        segments: [diffSegment],
       },
     };
     const plan: McpEgressPlan = {
@@ -827,7 +828,7 @@ describe("MCP anonymization canary corpus", () => {
       textFields: [
         {
           apply: (value: string) => {
-            payload.diff.segments[0]!.text = value;
+            diffSegment.text = value;
           },
           value: diffSeed,
           workspaceId: "ws_1",
@@ -1436,10 +1437,9 @@ describe("MCP anonymization canary corpus", () => {
       ],
       isError: true,
     });
-    // Belt-and-braces: even though the handler already returned a finished
-    // error result here (never reaching finalizeMcpEgress), confirm the
-    // pipeline agrees nothing was queued for anonymization.
-    expectSeedsQueuedForAnonymization([]);
+    // Belt-and-braces: the handler returned a finished error result (never
+    // reaching finalizeMcpEgress), so the anonymizer must never have run.
+    expect(anonymizeTextFieldsMock.mock.calls.length).toBe(0);
   });
 
   test("list_playbooks (list mode) anonymizes item name and description", async () => {
