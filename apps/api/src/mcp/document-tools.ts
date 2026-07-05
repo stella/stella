@@ -22,7 +22,7 @@ import { updateVersionLabelHandler } from "@/api/handlers/entities/update-versio
 import { loadEntityVersionDocxText } from "@/api/handlers/entities/version-diff-sources";
 import type { UpsertFieldContent } from "@/api/handlers/fields/upsert-by-id";
 import { upsertFieldHandler } from "@/api/handlers/fields/upsert-by-id";
-import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -45,6 +45,7 @@ import type {
   McpToolHandler,
 } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -340,29 +341,6 @@ const pushTextField = ({
     sink.push({ apply, value, workspaceId });
   }
 };
-
-/**
- * Wrap the request-scoped recorder so audit rows written by the reused backing
- * handlers carry the resolved workspace. The MCP recorder binds workspaceId to
- * null (org-scoped); the shared handlers build events without a workspaceId, so
- * inject it here per event (an event that sets its own workspaceId wins).
- */
-const bindWorkspaceRecorder =
-  (
-    context: McpRequestContext,
-    workspaceId: SafeId<"workspace">,
-  ): AuditRecorder =>
-  async (tx, event) => {
-    const events: AuditEvent[] = Array.isArray(event) ? event : [event];
-    // Events are freshly built by the backing handler and single-use, so stamp
-    // the resolved workspace in place rather than cloning.
-    for (const e of events) {
-      if (e.workspaceId === undefined) {
-        e.workspaceId = workspaceId;
-      }
-    }
-    await context.recordAuditEvent(tx, events);
-  };
 
 /** Anonymize a field's tenant-authored text in place (values, file names). */
 const pushFieldContentTexts = ({

@@ -20,8 +20,6 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-remove";
-import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
   brandPersistedUserId,
@@ -30,6 +28,7 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
+  bindWorkspaceRecorder,
   ensureActiveWorkspace,
   enumProp,
   errorResult,
@@ -224,28 +223,6 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
     scope: "stella:admin_write",
   },
 ] as const satisfies readonly McpToolDefinition[];
-
-/**
- * Wrap the request-scoped recorder so audit rows written by the reused
- * workspace-scoped backing handlers carry the resolved workspace. The MCP
- * recorder binds workspaceId to null (org-scoped); the member handlers build
- * events without a workspaceId, so inject it per event (an event that sets its
- * own wins).
- */
-const bindWorkspaceRecorder =
-  (
-    context: McpRequestContext,
-    workspaceId: SafeId<"workspace">,
-  ): AuditRecorder =>
-  async (tx, event) => {
-    const events: AuditEvent[] = Array.isArray(event) ? event : [event];
-    for (const e of events) {
-      if (e.workspaceId === undefined) {
-        e.workspaceId = workspaceId;
-      }
-    }
-    await context.recordAuditEvent(tx, events);
-  };
 
 /**
  * Prefer a cross-field (`partial_check`) validation message when present,
