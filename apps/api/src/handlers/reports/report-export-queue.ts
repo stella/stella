@@ -300,7 +300,7 @@ const convertReportDocxToPdf: ConvertReportToPdf = async (docx) => {
     DOCX_MIME_TYPE,
   );
   if (Result.isError(result)) {
-    return result;
+    return Result.err(result.error);
   }
   return Result.ok(result.value.buffer);
 };
@@ -488,10 +488,10 @@ const fillReport = async ({
 /** The AI generator bundle passed into the fill pipeline; every field is
  *  optional so a deterministic export can pass `{}`. */
 type ReportAiGenerators = {
-  generateAiValue?: ReturnType<typeof buildAiFieldGenerator>;
-  decideAiCondition?: ReturnType<typeof buildAiConditionDecider>;
-  adaptAiValue?: ReturnType<typeof buildAiOccurrenceAdapter>;
-  assertUsageAvailable?: () => Promise<unknown>;
+  generateAiValue?: ReturnType<typeof buildAiFieldGenerator> | undefined;
+  decideAiCondition?: ReturnType<typeof buildAiConditionDecider> | undefined;
+  adaptAiValue?: ReturnType<typeof buildAiOccurrenceAdapter> | undefined;
+  assertUsageAvailable?: (() => Promise<unknown>) | undefined;
 };
 
 /** Build the metered AI generators + usage preflight for a narrative export. */

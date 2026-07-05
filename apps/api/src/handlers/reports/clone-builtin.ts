@@ -79,7 +79,7 @@ const cloneBuiltinReportTemplate = createSafeHandler(
       recordAuditEvent,
     });
     if (Result.isError(created)) {
-      return created;
+      return Result.err(created.error);
     }
 
     return Result.ok({ templateId: created.value.id });

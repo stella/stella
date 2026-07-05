@@ -116,14 +116,14 @@ const arrayFields: FieldMeta[] = [
 
 describe("resolveAiFields — array-scoped (per-item) fields", () => {
   test("drafts once per row and injects at the remainder path on each row", async () => {
-    const seenNames: unknown[] = [];
+    const seenNames: string[] = [];
     const result = await resolveAiFields({
       values: {
         contracts: [{ name: "Alpha" }, { name: "Beta" }],
       },
       fields: arrayFields,
       generate: async ({ values }) => {
-        seenNames.push(values["name"]);
+        seenNames.push(String(values["name"]));
         return `SUMMARY[${String(values["name"])}]`;
       },
     });
