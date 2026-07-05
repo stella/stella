@@ -44,8 +44,13 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  defineTextFieldSpec,
+  deriveTextFieldPaths,
+  runTextFieldSpecs,
+} from "@/api/mcp/text-field-spec";
 import type {
-  McpStructuredTextField,
+  McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
@@ -110,6 +115,90 @@ const WORKSPACE_CONTACT_ROLES = [
  * agent-created matter and a UI-created matter start with the same column.
  */
 const DEFAULT_FILE_PROPERTY_NAME = "Documents";
+
+// --- list_tasks text-field specs -----------------------------------------
+
+/** Shape `list_tasks`'s list branch redacts: one field, per item. */
+type TaskNameTextItem = { name: string };
+
+const TASK_LIST_TEXT_FIELD_PATH = "tasks[].name";
+
+const taskListTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<{ tasks: readonly TaskNameTextItem[] }>[] => [
+  defineTextFieldSpec({
+    path: TASK_LIST_TEXT_FIELD_PATH,
+    items: (payload) => payload.tasks,
+    scope: () => workspaceId,
+    read: (item) => item.name,
+    apply: (item, value) => {
+      item.name = value;
+    },
+  }),
+];
+
+type TaskAssigneeTextItem = { name: string | null };
+type TaskLinkTextItem = { entity: { name: string | null } };
+
+/** Full shape `list_tasks`'s detail branch redacts, one task deep. */
+type TaskDetailTextPayload = {
+  task: {
+    name: string;
+    location: string | null;
+    assignees: readonly TaskAssigneeTextItem[];
+    links: readonly TaskLinkTextItem[];
+  };
+};
+
+/**
+ * Every redactable field on one task detail response: the task's own
+ * name/location (P1: constant `workspaceId`, single item), plus its
+ * assignees' names and linked entities' names.
+ */
+const taskDetailTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<TaskDetailTextPayload>[] => [
+  defineTextFieldSpec({
+    path: "task.name",
+    items: (payload) => [payload.task],
+    scope: () => workspaceId,
+    read: (item) => item.name,
+    apply: (item, value) => {
+      item.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "task.location",
+    items: (payload) => [payload.task],
+    scope: () => workspaceId,
+    read: (item) => item.location,
+    apply: (item, value) => {
+      item.location = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "task.assignees[].name",
+    items: (payload) => payload.task.assignees,
+    scope: () => workspaceId,
+    read: (item) => item.name,
+    apply: (item, value) => {
+      item.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "task.links[].entity.name",
+    items: (payload) => payload.task.links,
+    scope: () => workspaceId,
+    read: (item) => item.entity.name,
+    apply: (item, value) => {
+      item.entity.name = value;
+    },
+  }),
+];
+
+const TASK_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
+  taskDetailTextFieldSpecs(""),
+);
 
 export const MATTER_TOOL_DEFINITIONS = [
   {
@@ -278,13 +367,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     },
     anonymized: {
       exposure: "anonymize",
-      textFields: [
-        "tasks[].name",
-        "task.name",
-        "task.location",
-        "task.assignees[].name",
-        "task.links[].entity.name",
-      ],
+      textFields: [TASK_LIST_TEXT_FIELD_PATH, ...TASK_DETAIL_TEXT_FIELD_PATHS],
     },
     name: "list_tasks",
     scope: "stella:read",
@@ -365,26 +448,6 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   },
 ] as const satisfies readonly McpToolDefinition[];
-
-/**
- * Queue one anonymizable text field onto a structured egress plan, skipping
- * null/empty values. `apply` writes the anonymized value back into the payload.
- */
-const pushTextField = ({
-  apply,
-  fields: sink,
-  value,
-  workspaceId,
-}: {
-  apply: (value: string) => void;
-  fields: McpStructuredTextField[];
-  value: string | null | undefined;
-  workspaceId: string;
-}): void => {
-  if (typeof value === "string" && value.length > 0) {
-    sink.push({ apply, value, workspaceId });
-  }
-};
 
 /**
  * Prefer a cross-field (`partial_check`) validation message when present,
@@ -1090,43 +1153,12 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
       links,
     };
 
-    const textFields: McpStructuredTextField[] = [];
-    pushTextField({
-      apply: (value) => {
-        task.name = value;
+    const textFields = runTextFieldSpecs(
+      taskDetailTextFieldSpecs(workspaceId),
+      {
+        task,
       },
-      fields: textFields,
-      value: task.name,
-      workspaceId,
-    });
-    pushTextField({
-      apply: (value) => {
-        task.location = value;
-      },
-      fields: textFields,
-      value: task.location,
-      workspaceId,
-    });
-    for (const assignee of assignees) {
-      pushTextField({
-        apply: (value) => {
-          assignee.name = value;
-        },
-        fields: textFields,
-        value: assignee.name,
-        workspaceId,
-      });
-    }
-    for (const link of links) {
-      pushTextField({
-        apply: (value) => {
-          link.entity.name = value;
-        },
-        fields: textFields,
-        value: link.entity.name,
-        workspaceId,
-      });
-    }
+    );
 
     return { egress: "structured", payload: { task }, textFields };
   }
@@ -1186,17 +1218,9 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
 
   const tasks = page.items.map(({ createdAt: _createdAt, ...task }) => task);
 
-  const textFields: McpStructuredTextField[] = [];
-  for (const task of tasks) {
-    pushTextField({
-      apply: (value) => {
-        task.name = value;
-      },
-      fields: textFields,
-      value: task.name,
-      workspaceId,
-    });
-  }
+  const textFields = runTextFieldSpecs(taskListTextFieldSpecs(workspaceId), {
+    tasks,
+  });
 
   return {
     egress: "structured",

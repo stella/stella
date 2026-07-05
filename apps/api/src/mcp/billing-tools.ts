@@ -29,8 +29,13 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { validateOrgUserId } from "@/api/lib/validated-org-user-id";
 import type { McpRequestContext } from "@/api/mcp/context";
+import {
+  defineTextFieldSpec,
+  deriveTextFieldPaths,
+  runTextFieldSpecs,
+} from "@/api/mcp/text-field-spec";
 import type {
-  McpStructuredTextField,
+  McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
@@ -71,6 +76,211 @@ const TIME_ENTRY_STATUS_FILTERS = [
 const SAVE_TIME_ENTRY_STATUSES = ["draft", "approved"] as const;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+// --- list_time_entries text-field specs ---------------------------------
+
+/** Shape `list_time_entries` redacts on both the list and detail branch. */
+type TimeEntryTextItem = {
+  narrative: string;
+  invoiceNarrative: string | null;
+  userName: string | null;
+};
+
+/**
+ * The three redactable fields of one time entry, parameterized on the
+ * branch's `path` prefix (`"entries[]"` vs `"entry"`), its `items` accessor
+ * (a list vs a wrapped singleton), and the branch's single resolved
+ * `workspaceId` (P1: the whole list/detail response shares one attribution).
+ * Called once at module load (with a placeholder `workspaceId`) to derive the
+ * definition's `textFields` doc list, and again per request (with the real
+ * `workspaceId`) to build the actual push list.
+ */
+const timeEntryTextFieldSpecs = <TPayload>({
+  items,
+  pathPrefix,
+  workspaceId,
+}: {
+  items: (payload: TPayload) => readonly TimeEntryTextItem[];
+  pathPrefix: string;
+  workspaceId: string;
+}): readonly McpTextFieldSpec<TPayload>[] => [
+  defineTextFieldSpec({
+    path: `${pathPrefix}.narrative`,
+    items,
+    scope: () => workspaceId,
+    read: (item) => item.narrative,
+    apply: (item, value) => {
+      item.narrative = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: `${pathPrefix}.invoiceNarrative`,
+    items,
+    scope: () => workspaceId,
+    read: (item) => item.invoiceNarrative,
+    apply: (item, value) => {
+      item.invoiceNarrative = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: `${pathPrefix}.userName`,
+    items,
+    scope: () => workspaceId,
+    read: (item) => item.userName,
+    apply: (item, value) => {
+      item.userName = value;
+    },
+  }),
+];
+
+const TIME_ENTRY_LIST_TEXT_FIELD_PATHS = deriveTextFieldPaths(
+  timeEntryTextFieldSpecs({
+    items: (payload: { entries: readonly TimeEntryTextItem[] }) =>
+      payload.entries,
+    pathPrefix: "entries[]",
+    workspaceId: "",
+  }),
+);
+
+const TIME_ENTRY_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
+  timeEntryTextFieldSpecs({
+    items: (payload: { entry: TimeEntryTextItem }) => [payload.entry],
+    pathPrefix: "entry",
+    workspaceId: "",
+  }),
+);
+
+// --- list_invoices text-field specs --------------------------------------
+
+/** Shape `list_invoices`'s list branch redacts: one field, per item. */
+type InvoiceReferenceTextItem = { reference: string | null };
+
+const INVOICE_LIST_TEXT_FIELD_PATH = "invoices[].reference";
+
+const invoiceListTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<{
+  invoices: readonly InvoiceReferenceTextItem[];
+}>[] => [
+  defineTextFieldSpec({
+    path: INVOICE_LIST_TEXT_FIELD_PATH,
+    items: (payload) => payload.invoices,
+    scope: () => workspaceId,
+    read: (item) => item.reference,
+    apply: (item, value) => {
+      item.reference = value;
+    },
+  }),
+];
+
+type InvoiceTimeEntryTextItem = {
+  narrative: string;
+  invoiceNarrative: string | null;
+  entity: { name: string };
+};
+
+type InvoiceExpenseTextItem = {
+  description: string;
+  invoiceDescription: string | null;
+  entity: { name: string };
+};
+
+/** Full shape `list_invoices`'s detail branch redacts, one invoice deep. */
+type InvoiceDetailTextPayload = {
+  invoice: {
+    reference: string | null;
+    notes: string | null;
+    timeEntries: readonly InvoiceTimeEntryTextItem[];
+    expenses: readonly InvoiceExpenseTextItem[];
+  };
+};
+
+/**
+ * Every redactable field on one invoice detail response: the invoice's own
+ * reference/notes (P1: constant `workspaceId`, single item), plus its nested
+ * time-entry and expense line items (each with its own narrative/description
+ * pair and the linked entity's name).
+ */
+const invoiceDetailTextFieldSpecs = (
+  workspaceId: string,
+): readonly McpTextFieldSpec<InvoiceDetailTextPayload>[] => [
+  defineTextFieldSpec({
+    path: "invoice.reference",
+    items: (payload) => [payload.invoice],
+    scope: () => workspaceId,
+    read: (item) => item.reference,
+    apply: (item, value) => {
+      item.reference = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.notes",
+    items: (payload) => [payload.invoice],
+    scope: () => workspaceId,
+    read: (item) => item.notes,
+    apply: (item, value) => {
+      item.notes = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.timeEntries[].narrative",
+    items: (payload) => payload.invoice.timeEntries,
+    scope: () => workspaceId,
+    read: (item) => item.narrative,
+    apply: (item, value) => {
+      item.narrative = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.timeEntries[].invoiceNarrative",
+    items: (payload) => payload.invoice.timeEntries,
+    scope: () => workspaceId,
+    read: (item) => item.invoiceNarrative,
+    apply: (item, value) => {
+      item.invoiceNarrative = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.timeEntries[].entity.name",
+    items: (payload) => payload.invoice.timeEntries,
+    scope: () => workspaceId,
+    read: (item) => item.entity.name,
+    apply: (item, value) => {
+      item.entity.name = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.expenses[].description",
+    items: (payload) => payload.invoice.expenses,
+    scope: () => workspaceId,
+    read: (item) => item.description,
+    apply: (item, value) => {
+      item.description = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.expenses[].invoiceDescription",
+    items: (payload) => payload.invoice.expenses,
+    scope: () => workspaceId,
+    read: (item) => item.invoiceDescription,
+    apply: (item, value) => {
+      item.invoiceDescription = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "invoice.expenses[].entity.name",
+    items: (payload) => payload.invoice.expenses,
+    scope: () => workspaceId,
+    read: (item) => item.entity.name,
+    apply: (item, value) => {
+      item.entity.name = value;
+    },
+  }),
+];
+
+const INVOICE_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
+  invoiceDetailTextFieldSpecs(""),
+);
 
 export const BILLING_TOOL_DEFINITIONS = [
   {
@@ -121,12 +331,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     anonymized: {
       exposure: "anonymize",
       textFields: [
-        "entries[].narrative",
-        "entries[].invoiceNarrative",
-        "entries[].userName",
-        "entry.narrative",
-        "entry.invoiceNarrative",
-        "entry.userName",
+        ...TIME_ENTRY_LIST_TEXT_FIELD_PATHS,
+        ...TIME_ENTRY_DETAIL_TEXT_FIELD_PATHS,
       ],
     },
     feature: "FEATURE_TIME_BILLING",
@@ -286,15 +492,8 @@ export const BILLING_TOOL_DEFINITIONS = [
     anonymized: {
       exposure: "anonymize",
       textFields: [
-        "invoices[].reference",
-        "invoice.reference",
-        "invoice.notes",
-        "invoice.timeEntries[].narrative",
-        "invoice.timeEntries[].invoiceNarrative",
-        "invoice.timeEntries[].entity.name",
-        "invoice.expenses[].description",
-        "invoice.expenses[].invoiceDescription",
-        "invoice.expenses[].entity.name",
+        INVOICE_LIST_TEXT_FIELD_PATH,
+        ...INVOICE_DETAIL_TEXT_FIELD_PATHS,
       ],
     },
     feature: "FEATURE_TIME_BILLING",
@@ -318,26 +517,6 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
 ] as const satisfies readonly McpToolDefinition[];
-
-/**
- * Queue one anonymizable text field onto a structured egress plan, skipping
- * null/empty values. `apply` writes the anonymized value back into the payload.
- */
-const pushTextField = ({
-  apply,
-  fields: sink,
-  value,
-  workspaceId,
-}: {
-  apply: (value: string) => void;
-  fields: McpStructuredTextField[];
-  value: string | null | undefined;
-  workspaceId: string;
-}): void => {
-  if (typeof value === "string" && value.length > 0) {
-    sink.push({ apply, value, workspaceId });
-  }
-};
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -496,46 +675,6 @@ const timeEntryColumns = {
   status: timeEntries.status,
 };
 
-/** Queue narrative/invoiceNarrative/userName of one entry payload for redaction. */
-const pushTimeEntryTexts = ({
-  entry,
-  fields,
-  workspaceId,
-}: {
-  entry: {
-    narrative: string;
-    invoiceNarrative: string | null;
-    userName: string | null;
-  };
-  fields: McpStructuredTextField[];
-  workspaceId: string;
-}): void => {
-  pushTextField({
-    apply: (value) => {
-      entry.narrative = value;
-    },
-    fields,
-    value: entry.narrative,
-    workspaceId,
-  });
-  pushTextField({
-    apply: (value) => {
-      entry.invoiceNarrative = value;
-    },
-    fields,
-    value: entry.invoiceNarrative,
-    workspaceId,
-  });
-  pushTextField({
-    apply: (value) => {
-      entry.userName = value;
-    },
-    fields,
-    value: entry.userName,
-    workspaceId,
-  });
-};
-
 const decodeTimeEntryPageCursor = (
   cursor: string,
 ): { dateWorked: string; id: SafeId<"timeEntry"> } | null => {
@@ -609,8 +748,14 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
         : null,
     };
 
-    const textFields: McpStructuredTextField[] = [];
-    pushTimeEntryTexts({ entry, fields: textFields, workspaceId });
+    const textFields = runTextFieldSpecs(
+      timeEntryTextFieldSpecs({
+        items: (payload: { entry: TimeEntryTextItem }) => [payload.entry],
+        pathPrefix: "entry",
+        workspaceId,
+      }),
+      { entry },
+    );
     return { egress: "structured", payload: { entry }, textFields };
   }
 
@@ -686,10 +831,15 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     userName: row.userId ? (userNames.get(row.userId) ?? null) : null,
   }));
 
-  const textFields: McpStructuredTextField[] = [];
-  for (const entry of entries) {
-    pushTimeEntryTexts({ entry, fields: textFields, workspaceId });
-  }
+  const textFields = runTextFieldSpecs(
+    timeEntryTextFieldSpecs({
+      items: (payload: { entries: readonly TimeEntryTextItem[] }) =>
+        payload.entries,
+      pathPrefix: "entries[]",
+      workspaceId,
+    }),
+    { entries },
+  );
 
   return {
     egress: "structured",
@@ -1201,75 +1351,10 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
       }),
     };
 
-    const textFields: McpStructuredTextField[] = [];
-    pushTextField({
-      apply: (value) => {
-        invoice.reference = value;
-      },
-      fields: textFields,
-      value: invoice.reference,
-      workspaceId,
-    });
-    pushTextField({
-      apply: (value) => {
-        invoice.notes = value;
-      },
-      fields: textFields,
-      value: invoice.notes,
-      workspaceId,
-    });
-    for (const te of invoice.timeEntries) {
-      pushTextField({
-        apply: (value) => {
-          te.narrative = value;
-        },
-        fields: textFields,
-        value: te.narrative,
-        workspaceId,
-      });
-      pushTextField({
-        apply: (value) => {
-          te.invoiceNarrative = value;
-        },
-        fields: textFields,
-        value: te.invoiceNarrative,
-        workspaceId,
-      });
-      pushTextField({
-        apply: (value) => {
-          te.entity.name = value;
-        },
-        fields: textFields,
-        value: te.entity.name,
-        workspaceId,
-      });
-    }
-    for (const ex of invoice.expenses) {
-      pushTextField({
-        apply: (value) => {
-          ex.description = value;
-        },
-        fields: textFields,
-        value: ex.description,
-        workspaceId,
-      });
-      pushTextField({
-        apply: (value) => {
-          ex.invoiceDescription = value;
-        },
-        fields: textFields,
-        value: ex.invoiceDescription,
-        workspaceId,
-      });
-      pushTextField({
-        apply: (value) => {
-          ex.entity.name = value;
-        },
-        fields: textFields,
-        value: ex.entity.name,
-        workspaceId,
-      });
-    }
+    const textFields = runTextFieldSpecs(
+      invoiceDetailTextFieldSpecs(workspaceId),
+      { invoice },
+    );
 
     return { egress: "structured", payload: { invoice }, textFields };
   }
@@ -1333,17 +1418,9 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
     ({ createdAtCursor: _createdAtCursor, ...invoice }) => invoice,
   );
 
-  const textFields: McpStructuredTextField[] = [];
-  for (const invoice of invoiceList) {
-    pushTextField({
-      apply: (value) => {
-        invoice.reference = value;
-      },
-      fields: textFields,
-      value: invoice.reference,
-      workspaceId,
-    });
-  }
+  const textFields = runTextFieldSpecs(invoiceListTextFieldSpecs(workspaceId), {
+    invoices: invoiceList,
+  });
 
   return {
     egress: "structured",
