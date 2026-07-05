@@ -34,6 +34,10 @@ export const brandPersistedTemplateId = (
 export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
   toSafeId<"entity">(entityId);
 
+export const brandPersistedReportExportId = (
+  reportExportId: string,
+): SafeId<"reportExport"> => toSafeId<"reportExport">(reportExportId);
+
 export const brandPersistedFieldId = (fieldId: string): SafeId<"field"> =>
   toSafeId<"field">(fieldId);
 

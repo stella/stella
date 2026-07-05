@@ -173,7 +173,7 @@ export const buildAiFieldGenerator = ({
   if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return undefined;
   }
-  return async ({ prompt, values, documentText }) => {
+  return async ({ prompt, values, documentText, item }) => {
     try {
       const skillTools = maybeSkillTools(prompt, skillContext);
       // Injected only for fields that opted in via aiSeesDocument; omitted
@@ -182,6 +182,12 @@ export const buildAiFieldGenerator = ({
         documentText !== undefined && documentText.trim() !== ""
           ? `\nDocument:\n${documentText}\n`
           : "";
+      // Per-item positional context for array-scoped fields; omitted entirely
+      // for top-level fields so their prompt is unchanged.
+      const itemSection =
+        item !== undefined
+          ? `\nThis is item ${String(item.index)} of ${String(item.count)}.\n`
+          : "";
       const text = await generateFieldText({
         abortSignal: AbortSignal.timeout(AI_FIELD_TIMEOUT_MS),
         aiAnalytics,
@@ -189,7 +195,7 @@ export const buildAiFieldGenerator = ({
         orgAIConfig,
         organizationId,
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
-${documentSection}
+${itemSection}${documentSection}
 Known details (JSON):
 ${JSON.stringify(values)}
 

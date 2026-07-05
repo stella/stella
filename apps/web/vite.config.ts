@@ -201,6 +201,21 @@ export default defineConfig(({ mode }) => {
         "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
         "Cross-Origin-Embedder-Policy": "credentialless",
       },
+      // Vite's fs allowlist covers the workspace root only. When a dependency
+      // is bun-linked to a local checkout (e.g. developing @stll/folio-*
+      // against the app), its out-of-root source must be allowed explicitly;
+      // pass the checkout root(s), colon-separated, via
+      // DEV_LINKED_PACKAGE_ROOTS.
+      ...(process.env["DEV_LINKED_PACKAGE_ROOTS"]
+        ? {
+            fs: {
+              allow: [
+                path.resolve(APP_ROOT, "../.."),
+                ...process.env["DEV_LINKED_PACKAGE_ROOTS"].split(":"),
+              ],
+            },
+          }
+        : {}),
     },
     // Default worker output is "iife", which forbids top-level await.
     // The @stll/*-wasm packages we own emit a loader with top-level

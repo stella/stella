@@ -9,6 +9,31 @@
  * Templates without block directives skip all processing
  * (fast-path check via regex on raw XML).
  *
+ * `{{#each}}` loop bodies clone block-level units, not just
+ * paragraphs. Placement decides what a loop repeats:
+ *   - ROW REPEAT: when the opener `{{#each}}` and its matching
+ *     `{{/each}}` are paragraphs confined to the SAME table row
+ *     (`w:tr`), the whole row is cloned once per item and the two
+ *     marker paragraphs are stripped from the output rows (a cell
+ *     left with no paragraph is backfilled with an empty one so
+ *     the row stays valid OOXML). Zero items removes the row.
+ *   - BLOCK REPEAT: when the opener and closer are block-level
+ *     siblings (typically direct children of `w:body`), every
+ *     block child between them — paragraphs AND whole tables
+ *     (`w:tbl`) — is cloned as a unit per item.
+ * A marker pair that straddles a table boundary (opener in a row,
+ * closer outside it, or the two in different rows) is ambiguous:
+ * it is reported as a {@link TemplateStructureError} and its
+ * markers are neutralized rather than producing corrupt XML.
+ *
+ * Nested loops resolve through per-item recursion: an inner
+ * `{{#each outer.sub}}` keeps its path and is expanded against the
+ * outer item's context (so `outer.sub` resolves to that item's
+ * array), while the outer pass defers rewriting placeholders that
+ * belong to the inner loop (`{{outer.sub.field}}`). This is what
+ * lets a body-level `{{#each contracts}}` wrap a table whose single
+ * template row repeats over `{{#each contracts.fields}}`.
+ *
  * Word list numbering (`w:numPr`) survives loop expansion
  * untouched: every cloned paragraph keeps its original
  * `w:numId`, so Word numbers all iterations as one continuous
@@ -35,7 +60,7 @@ import {
 } from "@stll/template-conditions";
 import type { NamedCondition } from "@stll/template-conditions";
 
-import { isElement, paragraphText, W_NS } from "./ooxml";
+import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
 import type {
   Block,
   BlockDirective,
@@ -454,12 +479,114 @@ export const flattenTemplateData = (
 const escapeRegExp = (s: string): string =>
   s.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
+// ── OOXML block-level tag names ──────────────────────────
+
+/** WordprocessingML local names the loop engine treats as block units. */
+const TAG = {
+  paragraph: "p",
+  table: "tbl",
+  row: "tr",
+  cell: "tc",
+} as const;
+
 // ── Deep clone for slimdom nodes ─────────────────────────
 
-const cloneParagraph = (
-  p: slimdom.Element,
+const cloneElement = (
+  el: slimdom.Element,
   doc: slimdom.Document,
-): slimdom.Element => doc.importNode(p, true);
+): slimdom.Element => doc.importNode(el, true);
+
+/**
+ * Paragraphs contained in a block-level unit, in document order. A unit that
+ * *is* a `w:p` yields itself (`getElementsByTagNameNS` returns descendants
+ * only); a `w:tbl` (or any container) yields its descendant paragraphs.
+ */
+const paragraphsInUnit = (unit: slimdom.Element): slimdom.Element[] =>
+  unit.localName === TAG.paragraph && unit.namespaceURI === W_NS
+    ? [unit]
+    : [...unit.getElementsByTagNameNS(W_NS, TAG.paragraph)];
+
+/** Paragraphs contained in a sequence of block units, in document order. */
+const paragraphsInUnits = (
+  units: readonly slimdom.Element[],
+): slimdom.Element[] => units.flatMap(paragraphsInUnit);
+
+/**
+ * Remove a stripped `{{#each}}`/`{{/each}}` marker paragraph from a cloned row,
+ * backfilling an empty paragraph when its cell would otherwise be left without
+ * one (a `w:tc` must contain at least one block-level child).
+ */
+const stripRowMarkerParagraph = (
+  paragraph: slimdom.Element,
+  doc: slimdom.Document,
+): void => {
+  const cell = ancestorByLocalName(paragraph, TAG.cell);
+  paragraph.parentNode?.removeChild(paragraph);
+  if (cell && cell.getElementsByTagNameNS(W_NS, TAG.paragraph).length === 0) {
+    cell.append(doc.createElementNS(W_NS, "w:p"));
+  }
+};
+
+/**
+ * Prune an `{{#if}}` block by block-level UNIT (paragraphs AND whole tables),
+ * keeping only the winning branch's content units. Applies only when the block's
+ * opener/closer (and the winning branch's delimiters) are block-level siblings
+ * of one parent — the common case for a body-level or loop-body `{{#if}}`. The
+ * unit walk removes every sibling in the opener…closer range that is not part of
+ * the winning branch, so a losing branch's `w:tbl` is removed with it (a
+ * paragraph-only removal would leave the table shell). Returns `false` without
+ * mutating when the placement is not a clean block-level sibling run, so the
+ * caller can fall back to paragraph-index removal.
+ */
+const pruneIfBlockUnits = (
+  paragraphs: readonly slimdom.Element[],
+  firstP: slimdom.Element,
+  lastP: slimdom.Element,
+  winningBranch: IfBranch | null,
+): boolean => {
+  const parent = firstP.parentNode;
+  if (!parent || !isElement(parent) || lastP.parentNode !== parent) {
+    return false;
+  }
+
+  const keep = new Set<slimdom.Node>();
+  if (winningBranch) {
+    // `contentStart` is the paragraph index just after the branch's opening
+    // directive, so `contentStart - 1` is that directive; `contentEnd` is the
+    // branch's closing directive (the next elseif/else/endif).
+    const branchOpenP = paragraphs[winningBranch.contentStart - 1];
+    const branchCloseP = paragraphs[winningBranch.contentEnd];
+    if (
+      !branchOpenP ||
+      !branchCloseP ||
+      branchOpenP.parentNode !== parent ||
+      branchCloseP.parentNode !== parent
+    ) {
+      return false;
+    }
+    for (
+      let n: slimdom.Node | null = branchOpenP.nextSibling;
+      n && n !== branchCloseP;
+      n = n.nextSibling
+    ) {
+      keep.add(n);
+    }
+  }
+
+  const toRemove: slimdom.Node[] = [];
+  for (let n: slimdom.Node | null = firstP; n; n = n.nextSibling) {
+    if (!keep.has(n)) {
+      toRemove.push(n);
+    }
+    if (n === lastP) {
+      break;
+    }
+  }
+  for (const n of toRemove) {
+    parent.removeChild(n);
+  }
+  return true;
+};
 
 // ── Main processor ───────────────────────────────────────
 
@@ -585,6 +712,24 @@ export const processBlockDirectives = (
     // directiveParagraphs always has opening + closing entries
     const lastDirective = block.directiveParagraphs.at(-1) ?? 0;
 
+    // Preferred path: when the block's directive paragraphs are block-level
+    // siblings (share one parent), prune by block-level UNIT so a losing
+    // branch's whole tables (`w:tbl`) are removed too, not just its paragraphs.
+    // This mirrors the each-loop's block-unit treatment (see expandBlock);
+    // without it a two-table `{{#if}}/{{#else}}` variant would leave the losing
+    // branch's empty table shell behind. Falls through to the paragraph-index
+    // removal below for a degenerate placement where the directive paragraphs do
+    // not share a block-level parent (e.g. straddling a table boundary).
+    const firstP = paragraphs[firstDirective];
+    const lastP = paragraphs[lastDirective];
+    if (
+      firstP &&
+      lastP &&
+      pruneIfBlockUnits(paragraphs, firstP, lastP, winningBranch)
+    ) {
+      return;
+    }
+
     // We need to remove everything from firstDirective to
     // lastDirective, then insert the winning branch's content.
 
@@ -619,6 +764,284 @@ export const processBlockDirectives = (
     }
   };
 
+  // Build a loop iteration's evaluation context: `contextData` overlaid with
+  // the item's own fields, the item under its array name (so `{{#each
+  // arrayPath.sub}}` resolves), and the row's raw (pre-format) date overlay.
+  const buildItemContext = (
+    contextData: Record<string, unknown>,
+    item: unknown,
+    arrayPath: string,
+    itemIdx: number,
+  ): Record<string, unknown> => {
+    const itemContext: Record<string, unknown> = { ...contextData };
+    if (isRecord(item)) {
+      Object.assign(itemContext, item);
+      itemContext[arrayPath] = item;
+      // A nested `{{#each arrayPath.sub}}` was rewritten to its per-item key
+      // (see rewriteNestedEachExpr); expose the item's arrays under that key so
+      // the inner loop resolves them in the recursion.
+      for (const [field, value] of Object.entries(item)) {
+        if (Array.isArray(value)) {
+          itemContext[eachKey(arrayPath, itemIdx, field)] = value;
+        }
+      }
+      applyRowRawOverlay(itemContext, conditionValues, arrayPath, itemIdx);
+    }
+    return itemContext;
+  };
+
+  // Register a loop item's values for later substitution (recursively for
+  // nested objects so deep paths like address.city resolve).
+  const registerItem = (
+    item: unknown,
+    arrayPath: string,
+    itemIdx: number,
+  ): void => {
+    if (isRecord(item)) {
+      registerItemPatchValues(patchValues, item, arrayPath, itemIdx, "");
+    } else if (typeof item === "string") {
+      // Simple array of strings: {{arrayPath.value}} or raw {{__each_arrayPath_N}}
+      patchValues[`__each_${arrayPath}_${itemIdx}`] = item;
+    }
+  };
+
+  // Resolve `{{@index}}`/`{{@count}}` (innermost-loop only, via `tokenMask`)
+  // and loop-scoped `{{@num:Key}}`/`{{@ref:Key}}` on a copy's content
+  // paragraphs. Placeholder rewriting is done separately over whole units.
+  const rewriteContentParagraphs = (
+    contentParas: readonly slimdom.Element[],
+    options: {
+      tokenMask: readonly boolean[];
+      localNumKeys: ReadonlySet<string>;
+      expansionId: number;
+      itemIdx: number;
+      itemCount: number;
+    },
+  ): void => {
+    for (const [k, cp] of contentParas.entries()) {
+      if (options.tokenMask[k]) {
+        rewriteIterationTokens(cp, options.itemIdx, options.itemCount);
+      }
+      if (options.localNumKeys.size > 0) {
+        scopeNumberingMarkers(cp, {
+          localKeys: options.localNumKeys,
+          expansionId: options.expansionId,
+          index: options.itemIdx,
+        });
+      }
+    }
+  };
+
+  // Clear a straddling marker's text so the scanner stops treating it as a
+  // directive (avoids an unresolved-directive loop), then report the error.
+  const reportAmbiguousPlacement = (
+    openerP: slimdom.Element,
+    closerP: slimdom.Element,
+    block: EachBlock,
+    openingIdx: number,
+  ): void => {
+    rewriteTextNodes(openerP, () => "");
+    rewriteTextNodes(closerP, () => "");
+    allErrors.push({
+      message:
+        "{{#each}} and {{/each}} must sit in the same table row or share a block-level parent; a marker pair that straddles a table boundary is not supported",
+      paragraphIndex: openingIdx,
+      directive: `{{#each ${block.arrayPath}}}`,
+    });
+  };
+
+  // Row-repeat: the opener/closer confined to one `w:tr`. Clone the row per
+  // item, strip the marker paragraphs, and rewrite per item.
+  const expandRow = (
+    row: slimdom.Element,
+    openerP: slimdom.Element,
+    closerP: slimdom.Element,
+    block: EachBlock,
+    items: readonly unknown[],
+    contextData: Record<string, unknown>,
+    doc: slimdom.Document,
+  ): void => {
+    const tbl = row.parentNode;
+    if (!tbl || !isElement(tbl)) {
+      return;
+    }
+
+    const rowParas = [...row.getElementsByTagNameNS(W_NS, TAG.paragraph)];
+    const openerOrdinal = rowParas.indexOf(openerP);
+    const closerOrdinal = rowParas.indexOf(closerP);
+    const isMarker = (i: number): boolean =>
+      i === openerOrdinal || i === closerOrdinal;
+    const contentParas = rowParas.filter((_, i) => !isMarker(i));
+
+    const tokenMask = directEachBodyMask(contentParas);
+    const localNumKeys = collectNumKeys(contentParas);
+    const expansionId = eachExpansionCount;
+    eachExpansionCount += 1;
+
+    const finalRows: slimdom.Element[] = [];
+    for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+      const item = items[itemIdx];
+      const clonedRow = cloneElement(row, doc);
+      const clonedParas = [
+        ...clonedRow.getElementsByTagNameNS(W_NS, TAG.paragraph),
+      ];
+
+      const openerClone = clonedParas[openerOrdinal];
+      const closerClone = clonedParas[closerOrdinal];
+      if (openerClone) {
+        stripRowMarkerParagraph(openerClone, doc);
+      }
+      if (closerClone && closerClone !== openerClone) {
+        stripRowMarkerParagraph(closerClone, doc);
+      }
+
+      rewriteEachPlaceholders(clonedRow, block.arrayPath, itemIdx);
+      rewriteNestedEachExpr(clonedRow, block.arrayPath, itemIdx);
+      const clonedContentParas = clonedParas.filter((_, i) => !isMarker(i));
+      rewriteContentParagraphs(clonedContentParas, {
+        tokenMask,
+        localNumKeys,
+        expansionId,
+        itemIdx,
+        itemCount: items.length,
+      });
+      registerItem(item, block.arrayPath, itemIdx);
+
+      const hasNested = clonedContentParas.some((p) =>
+        DIRECTIVE_RE.test(paragraphText(p)),
+      );
+      if (hasNested) {
+        const itemContext = buildItemContext(
+          contextData,
+          item,
+          block.arrayPath,
+          itemIdx,
+        );
+        const tempBody = doc.createElementNS(W_NS, "w:body");
+        const tempTbl = doc.createElementNS(W_NS, "w:tbl");
+        tempBody.append(tempTbl);
+        tempTbl.append(clonedRow);
+        process(tempBody, itemContext);
+        for (const child of [...tempTbl.childNodes]) {
+          if (isElement(child)) {
+            finalRows.push(child);
+          }
+        }
+      } else {
+        finalRows.push(clonedRow);
+      }
+    }
+
+    const insertionRef = row.nextSibling;
+    tbl.removeChild(row);
+    for (const r of finalRows) {
+      if (insertionRef) {
+        tbl.insertBefore(r, insertionRef);
+      } else {
+        tbl.append(r);
+      }
+    }
+  };
+
+  // Block repeat: opener/closer are block-level siblings. Clone every block
+  // child (w:p AND w:tbl) between them as a unit per item.
+  const expandBlock = (
+    openerP: slimdom.Element,
+    closerP: slimdom.Element,
+    block: EachBlock,
+    items: readonly unknown[],
+    contextData: Record<string, unknown>,
+    doc: slimdom.Document,
+  ): void => {
+    const parent = openerP.parentNode;
+    if (!parent || !isElement(parent)) {
+      return;
+    }
+
+    const contentUnits: slimdom.Element[] = [];
+    for (
+      let n: slimdom.Node | null = openerP.nextSibling;
+      n && n !== closerP;
+      n = n.nextSibling
+    ) {
+      if (isElement(n)) {
+        contentUnits.push(n);
+      }
+    }
+
+    const contentParas = paragraphsInUnits(contentUnits);
+    const tokenMask = directEachBodyMask(contentParas);
+    const localNumKeys = collectNumKeys(contentParas);
+    const expansionId = eachExpansionCount;
+    eachExpansionCount += 1;
+
+    const finalUnits: slimdom.Element[] = [];
+    for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
+      const item = items[itemIdx];
+      const clones = contentUnits.map((u) => cloneElement(u, doc));
+      const clonedParas = paragraphsInUnits(clones);
+
+      for (const clone of clones) {
+        rewriteEachPlaceholders(clone, block.arrayPath, itemIdx);
+        rewriteNestedEachExpr(clone, block.arrayPath, itemIdx);
+      }
+      rewriteContentParagraphs(clonedParas, {
+        tokenMask,
+        localNumKeys,
+        expansionId,
+        itemIdx,
+        itemCount: items.length,
+      });
+      registerItem(item, block.arrayPath, itemIdx);
+
+      const hasNested = clonedParas.some((p) =>
+        DIRECTIVE_RE.test(paragraphText(p)),
+      );
+      if (hasNested) {
+        const itemContext = buildItemContext(
+          contextData,
+          item,
+          block.arrayPath,
+          itemIdx,
+        );
+        const tempBody = doc.createElementNS(W_NS, "w:body");
+        for (const clone of clones) {
+          tempBody.append(clone);
+        }
+        process(tempBody, itemContext);
+        for (const child of [...tempBody.childNodes]) {
+          if (isElement(child)) {
+            finalUnits.push(child);
+          }
+        }
+      } else {
+        finalUnits.push(...clones);
+      }
+    }
+
+    // Insertion reference captured before removal; it sits after closerP and
+    // survives removing the opener…closer range.
+    const insertionRef = closerP.nextSibling;
+    const toRemove: slimdom.Node[] = [];
+    for (let n: slimdom.Node | null = openerP; n; n = n.nextSibling) {
+      toRemove.push(n);
+      if (n === closerP) {
+        break;
+      }
+    }
+    for (const n of toRemove) {
+      parent.removeChild(n);
+    }
+
+    for (const u of finalUnits) {
+      if (insertionRef) {
+        parent.insertBefore(u, insertionRef);
+      } else {
+        parent.append(u);
+      }
+    }
+  };
+
   const processEachBlock = (
     bodyEl: slimdom.Element,
     paragraphs: slimdom.Element[],
@@ -633,162 +1056,33 @@ export const processBlockDirectives = (
       return;
     }
 
-    // Content paragraphs to clone (between opening and closing)
-    const contentParagraphs: slimdom.Element[] = [];
-    for (let j = block.contentStart; j < block.contentEnd; j++) {
-      const p = paragraphs[j];
-      if (p) {
-        contentParagraphs.push(p);
-      }
-    }
-
-    // SAFETY: directiveParagraphs always has at least 2 entries
-    // directiveParagraphs always has opening + closing entries
-    const closingIdx = block.directiveParagraphs.at(-1) ?? 0;
-
-    // {{@num:Key}} keys defined inside the loop body must number
-    // per expanded copy, not once for all iterations (a repeated
-    // key reuses its first number — see numbering.ts). Scope them
-    // with a per-expansion, per-iteration suffix. Keys defined
-    // outside the body are left alone so `@ref`s to shared
-    // clauses keep resolving from within the loop.
-    const localNumKeys = collectNumKeys(contentParagraphs);
-    const expansionId = eachExpansionCount;
-    eachExpansionCount += 1;
-
-    // `{{@index}}`/`{{@count}}` bind to the innermost loop, so resolve them
-    // only on paragraphs that belong directly to this loop's body — not those
-    // inside a nested `{{#each}}`, which will resolve when that loop expands.
-    const directlyInLoop = directEachBodyMask(contentParagraphs);
-
-    // Create expanded paragraphs for each item
-    const expandedGroups: slimdom.Element[][] = [];
-    for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
-      const item = items[itemIdx];
-      const group: slimdom.Element[] = [];
-
-      for (const [pIdx, contentP] of contentParagraphs.entries()) {
-        const cloned = cloneParagraph(contentP, doc);
-
-        // Rewrite {{arrayPath.field}} → {{__each_arrayPath_N_field}}
-        rewriteEachPlaceholders(cloned, block.arrayPath, itemIdx);
-
-        if (directlyInLoop[pIdx]) {
-          rewriteIterationTokens(cloned, itemIdx, items.length);
-        }
-
-        if (localNumKeys.size > 0) {
-          scopeNumberingMarkers(cloned, {
-            localKeys: localNumKeys,
-            expansionId,
-            index: itemIdx,
-          });
-        }
-
-        group.push(cloned);
-      }
-
-      // Register patch values for this item (recursively for
-      // nested objects so deep paths like address.city resolve)
-      if (isRecord(item)) {
-        registerItemPatchValues(
-          patchValues,
-          item,
-          block.arrayPath,
-          itemIdx,
-          "",
-        );
-      } else if (typeof item === "string") {
-        // Simple array of strings: {{arrayPath.value}} or
-        // raw {{__each_arrayPath_N}}
-        const key = `__each_${block.arrayPath}_${itemIdx}`;
-        patchValues[key] = item;
-      }
-
-      expandedGroups.push(group);
-    }
-
-    // Now process conditionals inside each expanded group
-    // by creating a temporary wrapper, running
-    // processBlockDirectives recursively, then extracting
-    // the surviving paragraphs
-    const finalParagraphs: slimdom.Element[] = [];
-    for (let itemIdx = 0; itemIdx < expandedGroups.length; itemIdx++) {
-      const group = expandedGroups[itemIdx];
-      if (!group) {
-        continue;
-      }
-      const item = items[itemIdx];
-
-      // Build context for this iteration
-      const itemContext: Record<string, unknown> = {
-        ...contextData,
-      };
-      if (isRecord(item)) {
-        Object.assign(itemContext, item);
-        // Also keep the array accessible by name
-        itemContext[block.arrayPath] = item;
-        // Raw (pre-format) date values for this row, so a loop-body
-        // `{{#if dob > "..."}}` compares the ISO date, not the localized text
-        // the date step wrote into the row for substitution.
-        applyRowRawOverlay(
-          itemContext,
-          conditionValues,
-          block.arrayPath,
-          itemIdx,
-        );
-      }
-
-      // Check if any group paragraph has block directives
-      const hasNested = group.some((p) => {
-        const text = paragraphText(p);
-        return DIRECTIVE_RE.test(text);
-      });
-
-      if (hasNested) {
-        // Create temporary body with the group paragraphs
-        const tempBody = doc.createElementNS(W_NS, "w:body");
-        for (const p of group) {
-          tempBody.append(p);
-        }
-        // Recursively process
-        process(tempBody, itemContext);
-        // Collect surviving paragraphs
-        const survivors = tempBody.getElementsByTagNameNS(W_NS, "p");
-        for (const s of survivors) {
-          finalParagraphs.push(s);
-        }
-      } else {
-        finalParagraphs.push(...group);
-      }
-    }
-
-    // Save insertion reference before removing paragraphs.
-    // Use the closing directive's nextSibling (guaranteed to
-    // be a direct child of bodyEl, unlike getElementsByTagNameNS
-    // which returns nested descendants too).
+    // SAFETY: directiveParagraphs always has opening + closing entries.
     const openingIdx = block.directiveParagraphs[0] ?? 0;
-    const closingP =
-      closingIdx < paragraphs.length ? paragraphs[closingIdx] : null;
-    const insertionRef = closingP?.nextSibling ?? null;
-
-    // Remove original content and directive paragraphs
-    // (reverse order to preserve indices)
-    for (let j = closingIdx; j >= openingIdx; j--) {
-      const p = paragraphs[j];
-      if (p) {
-        p.parentNode?.removeChild(p);
-      }
+    const closingIdx = block.directiveParagraphs.at(-1) ?? 0;
+    const openerP = paragraphs[openingIdx];
+    const closerP = paragraphs[closingIdx];
+    if (!openerP || !closerP) {
+      return;
     }
 
-    // Insert expanded paragraphs at the saved position
-    for (const p of finalParagraphs) {
-      if (insertionRef) {
-        bodyEl.insertBefore(p, insertionRef);
-      } else {
-        bodyEl.append(p);
-      }
+    const openerRow = ancestorByLocalName(openerP, TAG.row);
+    const closerRow = ancestorByLocalName(closerP, TAG.row);
+
+    // Row-repeat: both markers confined to the same table row.
+    if (openerRow && openerRow === closerRow) {
+      expandRow(openerRow, openerP, closerP, block, items, contextData, doc);
+      return;
     }
+
+    // Ambiguous: one marker in a row and the other outside it, the two in
+    // different rows, or non-sibling block-level markers. Reject rather than
+    // emit corrupt XML.
+    if (openerRow || closerRow || openerP.parentNode !== closerP.parentNode) {
+      reportAmbiguousPlacement(openerP, closerP, block, openingIdx);
+      return;
+    }
+
+    expandBlock(openerP, closerP, block, items, contextData, doc);
   };
 
   process(body, conditionData);
@@ -888,15 +1182,41 @@ export const rewriteEachPlaceholdersInText = (
 
 /**
  * Rewrite `{{arrayPath.field}}` → `{{__each_arrayPath_N_field}}`
- * in all `w:t` nodes of a paragraph.
+ * in all `w:t` nodes of a paragraph (or any element subtree).
  */
 const rewriteEachPlaceholders = (
-  paragraph: slimdom.Element,
+  root: slimdom.Element,
   arrayPath: string,
   index: number,
 ): void => {
-  rewriteTextNodes(paragraph, (text) =>
+  rewriteTextNodes(root, (text) =>
     rewriteEachPlaceholdersInText(text, arrayPath, index),
+  );
+};
+
+/**
+ * Rewrite a nested loop opener `{{#each arrayPath.sub}}` → `{{#each
+ * __each_arrayPath_N_sub}}` so the inner loop, expanded in a later per-item
+ * recursion, resolves against the outer item's array (registered under the same
+ * key in the iteration context) and its synthetic keys stay unique per outer
+ * item. Unprefixed nested loops (`{{#each other}}`) are left untouched and
+ * resolve through the item context by name.
+ */
+const rewriteNestedEachExpr = (
+  root: slimdom.Element,
+  arrayPath: string,
+  index: number,
+): void => {
+  const re = new RegExp(
+    `(\\{\\{\\s*#each\\s+)${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_-]+)(\\s*\\}\\})`,
+    "gu",
+  );
+  rewriteTextNodes(root, (text) =>
+    text.replace(
+      re,
+      (_match, pre: string, sub: string, post: string) =>
+        `${pre}${eachKey(arrayPath, index, sub)}${post}`,
+    ),
   );
 };
 

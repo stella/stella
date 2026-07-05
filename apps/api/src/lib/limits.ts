@@ -134,6 +134,11 @@ export const LIMITS = {
   invoicesPageSizeMax: 100,
   exportRowLimit: 10_000,
   exportPdfRowLimit: 5000,
+  /** Hard cap on rows (contracts) a single view-to-report export may span.
+   *  A DD report drafts per-contract AI narrative, so the row count bounds
+   *  the metered model calls; exceeding it at enqueue/build time is a typed
+   *  error rather than a truncated report. */
+  reportExportMaxRows: 500,
   auditLogPageSizeDefault: 50,
   auditLogPageSizeMax: 200,
   contactsCount: 10_000,

@@ -3,6 +3,9 @@
  * any embedded manifest (optionally overlaid with client field metadata),
  * write the manifest back into the DOCX, upload to S3, and insert the template
  * + first version rows under an advisory lock that enforces the per-org limit.
+ * A caller may instead supply a pre-built `manifest` to embed verbatim
+ * (skipping discovery + merge), used by built-in report clones that must fill
+ * identically to their source.
  *
  * Backs the REST create handler (`create.ts`) and the MCP `create_template`
  * tool so both paths embed the manifest and count fields identically.
@@ -13,6 +16,7 @@ import { eq, sql } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
 import { templates, templateVersions } from "@/api/db/schema";
+import type { TemplateKind } from "@/api/db/schema";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {
   mergeManifestWithDiscovery,
@@ -48,7 +52,7 @@ export type ClientTemplateManifest = {
   fields: FieldMeta[];
 };
 
-type CreateStoredTemplateOptions = {
+export type CreateStoredTemplateOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -57,6 +61,16 @@ type CreateStoredTemplateOptions = {
   fileName: string;
   categoryId?: SafeId<"templateCategory"> | undefined;
   clientManifest?: ClientTemplateManifest | null | undefined;
+  /** Pre-built manifest embedded verbatim, skipping discovery + merge. Used by
+   *  built-in report clones: their manifests carry per-item AI fields under an
+   *  array path (e.g. `contracts.summary`) that the discovery merge folds into
+   *  the array root and drops, and a clone must fill identically to the
+   *  built-in. Mutually exclusive with `clientManifest` (an overlay onto
+   *  discovered fields), which is ignored when this is set. */
+  manifest?: TemplateManifest | undefined;
+  /** Template kind; defaults to `document`. Report templates (cloned from a
+   *  built-in report layout) set `report` so the report picker can filter. */
+  kind?: TemplateKind | undefined;
   recordAuditEvent: AuditRecorder;
 };
 
@@ -74,6 +88,8 @@ export const createStoredTemplate = async function* ({
   fileName,
   categoryId,
   clientManifest,
+  manifest,
+  kind = "document",
   recordAuditEvent,
 }: CreateStoredTemplateOptions): SafeHandlerGenerator<CreatedTemplate> {
   if (categoryId) {
@@ -98,68 +114,81 @@ export const createStoredTemplate = async function* ({
   // Language detection is best-effort metadata: it guesses the document
   // languages from the text so bilingual templates are tagged from day
   // one; users can correct the result via the update endpoint.
-  const [discovered, existingManifest, detectedLanguages] = await Promise.all([
-    discoverTemplate(buffer),
-    readManifest(buffer),
-    detectTemplateLanguagesFromDocx(buffer),
-  ]);
+  const detectedLanguages = await detectTemplateLanguagesFromDocx(buffer);
 
-  const fields = mergeManifestWithDiscovery(existingManifest, discovered);
+  // A caller-supplied manifest is authoritative: it is embedded verbatim and
+  // discovery/merge is skipped entirely, so nested per-item fields survive.
+  // Otherwise the manifest is built from discovery, optionally overlaid with
+  // the client field configuration.
+  let resolvedManifest: TemplateManifest;
+  if (manifest) {
+    resolvedManifest = manifest;
+  } else {
+    const [discovered, existingManifest] = await Promise.all([
+      discoverTemplate(buffer),
+      readManifest(buffer),
+    ]);
 
-  let fieldMetas: FieldMeta[] = fields.map((f) => ({
-    path: f.path,
-    label: f.label,
-    hint: f.hint,
-    inputType: f.inputType,
-    options: f.options,
-    validation: f.validation,
-    required: f.required,
-    aiPrompt: f.aiPrompt,
-    aiAdapt: f.aiAdapt,
-    aiSeesDocument: f.aiSeesDocument,
-    parts: f.parts,
-    format: f.format,
-    optionsFrom: f.optionsFrom,
-    lookup: f.lookup,
-    formula: f.formula,
-    condition: f.condition,
-    conditionAst: f.conditionAst,
-    dateFormat: f.dateFormat,
-  }));
+    const fields = mergeManifestWithDiscovery(existingManifest, discovered);
 
-  if (clientManifest) {
-    const fieldPaths = new Set(fieldMetas.map((f) => f.path));
-    const unknown = clientManifest.fields.find((f) => !fieldPaths.has(f.path));
-    if (unknown) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            `No field "${unknown.path}" was discovered in the DOCX. ` +
-            "Configure only paths that exist as {{markers}}.",
-        }),
+    let fieldMetas: FieldMeta[] = fields.map((f) => ({
+      path: f.path,
+      label: f.label,
+      hint: f.hint,
+      inputType: f.inputType,
+      options: f.options,
+      validation: f.validation,
+      required: f.required,
+      aiPrompt: f.aiPrompt,
+      aiAdapt: f.aiAdapt,
+      aiSeesDocument: f.aiSeesDocument,
+      parts: f.parts,
+      format: f.format,
+      optionsFrom: f.optionsFrom,
+      lookup: f.lookup,
+      formula: f.formula,
+      condition: f.condition,
+      conditionAst: f.conditionAst,
+      dateFormat: f.dateFormat,
+    }));
+
+    if (clientManifest) {
+      const fieldPaths = new Set(fieldMetas.map((f) => f.path));
+      const unknown = clientManifest.fields.find(
+        (f) => !fieldPaths.has(f.path),
       );
+      if (unknown) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message:
+              `No field "${unknown.path}" was discovered in the DOCX. ` +
+              "Configure only paths that exist as {{markers}}.",
+          }),
+        );
+      }
+
+      const metaByPath = new Map<string, FieldMeta>();
+      for (const f of clientManifest.fields) {
+        metaByPath.set(f.path, f);
+      }
+      fieldMetas = fieldMetas.map((f) => {
+        const override = metaByPath.get(f.path);
+        if (!override) {
+          return f;
+        }
+        return { ...f, ...override };
+      });
     }
 
-    const metaByPath = new Map<string, FieldMeta>();
-    for (const f of clientManifest.fields) {
-      metaByPath.set(f.path, f);
-    }
-    fieldMetas = fieldMetas.map((f) => {
-      const override = metaByPath.get(f.path);
-      if (!override) {
-        return f;
-      }
-      return { ...f, ...override };
-    });
+    resolvedManifest = {
+      version: existingManifest?.version ?? 1,
+      fields: fieldMetas,
+    };
   }
 
-  const manifest: TemplateManifest = {
-    version: existingManifest?.version ?? 1,
-    fields: fieldMetas,
-  };
-
-  const docxWithManifest = await writeManifest(buffer, manifest);
+  const fieldCount = resolvedManifest.fields.length;
+  const docxWithManifest = await writeManifest(buffer, resolvedManifest);
 
   // Pre-generate the ID so the S3 key and DB row stay in sync.
   const templateId = createSafeId<"template">();
@@ -193,11 +222,12 @@ export const createStoredTemplate = async function* ({
           organizationId,
           categoryId: categoryId ?? null,
           name,
+          kind,
           fileName: sanitizeFilename(fileName),
           s3Key,
           sizeBytes: docxWithManifest.byteLength,
-          manifest,
-          fieldCount: fields.length,
+          manifest: resolvedManifest,
+          fieldCount,
           currentVersion: 1,
           languages: detectedLanguages,
           createdBy: userId,
@@ -217,8 +247,8 @@ export const createStoredTemplate = async function* ({
         templateId,
         version: 1,
         s3Key,
-        manifest,
-        fieldCount: fields.length,
+        manifest: resolvedManifest,
+        fieldCount,
         createdBy: userId,
       });
 
@@ -234,7 +264,7 @@ export const createStoredTemplate = async function* ({
               name,
               categoryId: categoryId ?? null,
               fileName: row?.fileName ?? null,
-              fieldCount: fields.length,
+              fieldCount,
               currentVersion: 1,
             },
           },

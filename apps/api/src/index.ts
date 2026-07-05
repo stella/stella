@@ -44,6 +44,8 @@ import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
 import { ratesRoute } from "@/api/handlers/rates/routes";
+import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
+import { reportsRoute } from "@/api/handlers/reports/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
 import { shortcutsRoute } from "@/api/handlers/shortcuts/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
@@ -356,6 +358,7 @@ const api = new Elysia()
       .use(workspacesRoute)
       .use(playbooksRoute)
       .use(playbookRunsRoute)
+      .use(reportsRoute)
       .use(documentTypesRoute)
       .use(propertiesRoute)
       .use(filesRoute)
@@ -461,6 +464,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for durable account-deletion storage cleanup.
   const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
 
+  // BullMQ worker for queued view→report exports.
+  const reportExportWorker = initReportExportWorker();
+
   api.listen(getApiPort());
 
   // Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
@@ -488,6 +494,7 @@ const startServer = async (): Promise<void> => {
         workflowWorker.close(),
         fileDerivativeWorker.close(),
         accountDeletionCleanupWorker.close(),
+        reportExportWorker.close(),
       ]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);

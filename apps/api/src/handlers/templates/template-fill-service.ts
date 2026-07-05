@@ -238,15 +238,35 @@ type FilledDocx = {
 };
 
 /**
- * Shared fill recipe: load the stored DOCX, resolve clause slots, run the
- * manifest fill steps (lookups, composites, formulas, dependent selects),
- * draft/adapt AI fields, then substitute. Records the template use.
- * Mirrors the fill-by-id route's pipeline so a template fills identically
- * at every boundary. Backs the fill-to-workspace route (which persists the
- * bytes as a matter document) and the chat tools' text fill below.
+ * An already-resolved DOCX to fill: the loaded bytes plus display metadata.
+ * A stored template also carries its `templateId`, which enables clause-slot
+ * resolution and use recording; a built-in / in-memory template (e.g. the
+ * report layout) omits it — it has no linked clauses and no row to increment.
  */
-export const fillStoredTemplateDocx = async <TRejection = never>({
-  templateId,
+export type FillTemplateSource = {
+  name: string;
+  fileName: string;
+  buffer: Buffer;
+  templateId?: SafeId<"template"> | undefined;
+};
+
+type FillDocxOptions<TRejection = never> = Omit<
+  FillServiceOptions<TRejection>,
+  "templateId"
+> & {
+  source: FillTemplateSource;
+};
+
+/**
+ * Shared fill recipe over an already-loaded DOCX: resolve clause slots (stored
+ * templates only), run the manifest fill steps (lookups, composites, formulas,
+ * dependent selects), draft/adapt AI fields, then substitute. Records the
+ * template use when a `templateId` is present. Backs both the stored-template
+ * fill below and the built-in report export, so a template fills identically at
+ * every boundary.
+ */
+export const fillTemplateDocx = async <TRejection = never>({
+  source,
   values,
   scopedDb,
   organizationId,
@@ -255,18 +275,17 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
   decideAiCondition,
   adaptAiValue,
   assertUsageAvailable,
-}: FillServiceOptions<TRejection>): Promise<
+}: FillDocxOptions<TRejection>): Promise<
   FilledDocx | { error: string } | { usageRejection: TRejection }
 > => {
-  const loaded = await loadTemplate(templateId, scopedDb);
-  if (!loaded) {
-    return { error: "Template not found." };
-  }
+  const loaded = source;
+  const { templateId } = source;
 
   let record: FillValues = { ...values };
 
-  const slots = await discoverClauseSlots(loaded.buffer);
-  if (slots.length > 0) {
+  const slots =
+    templateId !== undefined ? await discoverClauseSlots(loaded.buffer) : [];
+  if (templateId !== undefined && slots.length > 0) {
     const patches = await resolveClauseSlots(
       templateId,
       slots,
@@ -366,9 +385,11 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
 
   const result = await fillTemplate(fillBuffer, record);
 
-  await scopedDb(async (tx) => {
-    await recordTemplateUse({ tx, templateId });
-  });
+  if (templateId !== undefined) {
+    await scopedDb(async (tx) => {
+      await recordTemplateUse({ tx, templateId });
+    });
+  }
 
   return {
     templateName: loaded.name,
@@ -382,6 +403,42 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
     ),
     structureErrors: result.structureErrors,
   };
+};
+
+/**
+ * Load a stored template's DOCX from S3 and fill it via {@link fillTemplateDocx}.
+ * Mirrors the fill-by-id route's pipeline so a stored template fills identically
+ * at every boundary. Backs the fill-to-workspace route and the chat tools.
+ */
+export const fillStoredTemplateDocx = async <TRejection = never>({
+  templateId,
+  values,
+  scopedDb,
+  organizationId,
+  clauseOverrides,
+  generateAiValue,
+  decideAiCondition,
+  adaptAiValue,
+  assertUsageAvailable,
+}: FillServiceOptions<TRejection>): Promise<
+  FilledDocx | { error: string } | { usageRejection: TRejection }
+> => {
+  const loaded = await loadTemplate(templateId, scopedDb);
+  if (!loaded) {
+    return { error: "Template not found." };
+  }
+
+  return await fillTemplateDocx({
+    source: { ...loaded, templateId },
+    values,
+    scopedDb,
+    organizationId,
+    clauseOverrides,
+    generateAiValue,
+    decideAiCondition,
+    adaptAiValue,
+    assertUsageAvailable,
+  });
 };
 
 export type FillTemplateResult =

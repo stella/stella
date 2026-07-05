@@ -831,6 +831,7 @@ type Messages = {
     "pin": "Pin";
     "playVideo": "Play video";
     "playbooks": "Playbooks";
+    "preparing": "Preparing…";
     "preview": "Preview";
     "previous": "Previous";
     "print": "Print";
@@ -3027,6 +3028,26 @@ type Messages = {
       "noFilterResults": "No items match these filters";
       "noFilterResultsHint": "They would show up here if you removed some filters.";
       "removeAdvancedFilter": "Remove advanced filter";
+      "reportExport": {
+        "action": "Export report…";
+        "aiSummaries": "Include AI summaries";
+        "completed": "Report ready";
+        "customize": "Customize";
+        "customized": "Copied to your templates";
+        "deliveryLabel": "Delivery";
+        "description": "Generate a report document from this view using a report template.";
+        "failed": "Report export failed";
+        "formatDocx": "DOCX";
+        "formatLabel": "Format";
+        "formatPdf": "PDF";
+        "loadTemplatesFailed": "Couldn’t load report templates.";
+        "loadingTemplates": "Loading templates…";
+        "noTemplates": "No report templates available.";
+        "openReport": "Open report";
+        "submit": "Export report";
+        "templateLabel": "Report template";
+        "title": "Export report";
+      };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";
       "templates": {

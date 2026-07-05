@@ -1736,6 +1736,11 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "workspaces.views.reportExport.formatLabel": [
+      "de",
+      "fr",
+      "pl"
     ]
   }
 }
