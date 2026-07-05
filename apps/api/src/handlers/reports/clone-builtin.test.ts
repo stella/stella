@@ -1,37 +1,43 @@
+import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import { auditLogs, templates, templateVersions } from "@/api/db/schema";
-import type { TemplateManifest } from "@/api/handlers/docx/types";
+import type { CreateStoredTemplateOptions } from "@/api/handlers/templates/create-template-service";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-const writeMock = mock(async () => undefined);
-const s3DeleteMock = mock(async () => undefined);
+// The real `createStoredTemplate` cannot be exercised here: the MCP template
+// tools test mocks its module, and Bun's `mock.module` poisons the module for
+// the whole test process regardless of file order. Test the handler at the
+// service seam instead — the manifest-fidelity regression this file guards
+// (verbatim registry manifest, no discovery merge) lives entirely in what the
+// handler PASSES to the service.
+const capturedOptions: CreateStoredTemplateOptions[] = [];
+const createStoredTemplateMock = mock(function* (
+  options: CreateStoredTemplateOptions,
+) {
+  capturedOptions.push(options);
+  return Result.ok({
+    id: toSafeId<"template">("template_1"),
+    name: options.name,
+    fileName: options.fileName,
+    fieldCount: options.manifest?.fields.length ?? 0,
+    currentVersion: 1,
+    categoryId: null,
+  });
+});
 
-void mock.module("@/api/lib/s3", () => ({
-  getS3: () => ({ delete: s3DeleteMock, write: writeMock }),
+void mock.module("@/api/handlers/templates/create-template-service", () => ({
+  createStoredTemplate: createStoredTemplateMock,
 }));
 
 const { default: cloneBuiltinReportTemplate } = await import("./clone-builtin");
-const { DD_REPORT_KEY, DD_REPORT_MANIFEST } =
+const { DD_REPORT_KEY, DD_REPORT_MANIFEST, getBuiltinReportTemplate } =
   await import("./builtin-templates");
 
 const workspaceId = toSafeId<"workspace">("workspace_1");
 const userId = toSafeId<"user">("user_1");
 const organizationId = toSafeId<"organization">("organization_1");
-
-type InsertedTemplate = {
-  id: string;
-  name: string;
-  kind: string;
-  fileName: string;
-  manifest: TemplateManifest;
-  fieldCount: number;
-};
-
-const isInsertedTemplate = (value: unknown): value is InsertedTemplate =>
-  typeof value === "object" && value !== null && "kind" in value;
 
 const createContext = (
   safeDb: ReturnType<typeof createScopedDbMock>["safeDb"],
@@ -60,31 +66,13 @@ const createContext = (
 };
 
 describe("clone built-in report template", () => {
-  test("inserts a report-kind template carrying the built-in manifest", async () => {
-    const insertedTemplates: InsertedTemplate[] = [];
-
+  test("passes the registry manifest verbatim with kind report", async () => {
+    capturedOptions.length = 0;
     const tx = {
       query: {
         // No same-named template exists → keep the built-in's name.
         templates: { findFirst: async () => undefined },
       },
-      execute: async () => undefined,
-      $count: async () => 0,
-      insert: (table: unknown) => ({
-        values: (value: unknown) => {
-          if (table === templates) {
-            if (!isInsertedTemplate(value)) {
-              throw new Error("Invalid inserted template fixture value");
-            }
-            insertedTemplates.push(value);
-            return { returning: async () => [value] };
-          }
-          if (table === templateVersions || table === auditLogs) {
-            return undefined;
-          }
-          return undefined;
-        },
-      }),
     };
 
     const { safeDb } = createScopedDbMock(tx);
@@ -93,27 +81,45 @@ describe("clone built-in report template", () => {
     );
 
     expect(result).toEqual({ templateId: expect.any(String) });
-    const row = insertedTemplates.at(0);
-    if (!row) {
-      throw new Error("expected a template row to be inserted");
+    const options = capturedOptions.at(0);
+    if (!options) {
+      throw new Error("expected createStoredTemplate to be called");
     }
-    expect(row.kind).toBe("report");
-    // The registry manifest is stored verbatim (no discovery merge), so the
-    // clone fills identically to the built-in. In particular the per-item
-    // `contracts.summary` AI field — which a discovery merge would fold into
-    // the `contracts` array root and drop — survives with its aiPrompt, and so
-    // does the top-level `execSummary` field.
-    expect(row.manifest).toEqual(DD_REPORT_MANIFEST);
-    const execSummary = row.manifest.fields.find(
-      (field) => field.path === "execSummary",
-    );
-    expect(execSummary?.aiPrompt).toBeDefined();
-    const contractSummary = row.manifest.fields.find(
+    expect(options.kind).toBe("report");
+    // Verbatim: the registry manifest object itself, not a re-discovered or
+    // rebuilt copy — a discovery merge would fold the per-item
+    // `contracts.summary` AI field into the `contracts` array root and drop
+    // it, so the clone would stop drafting per-contract summaries.
+    expect(options.manifest).toBe(DD_REPORT_MANIFEST);
+    const contractSummary = options.manifest?.fields.find(
       (field) => field.path === "contracts.summary",
     );
     expect(contractSummary?.aiPrompt).toBeDefined();
-    expect(row.fieldCount).toBe(DD_REPORT_MANIFEST.fields.length);
-    expect(writeMock).toHaveBeenCalled();
+    const execSummary = options.manifest?.fields.find(
+      (field) => field.path === "execSummary",
+    );
+    expect(execSummary?.aiPrompt).toBeDefined();
+    const builtin = getBuiltinReportTemplate(DD_REPORT_KEY);
+    expect(options.name).toBe(builtin?.name ?? "");
+    expect(options.fileName).toBe(`${builtin?.name ?? ""}.docx`);
+    expect(options.buffer.byteLength).toBeGreaterThan(0);
+  });
+
+  test("appends (copy) when a same-named template exists", async () => {
+    capturedOptions.length = 0;
+    const tx = {
+      query: {
+        templates: { findFirst: async () => ({ id: "existing" }) },
+      },
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    await cloneBuiltinReportTemplate.handler(
+      createContext(safeDb, DD_REPORT_KEY),
+    );
+
+    const builtin = getBuiltinReportTemplate(DD_REPORT_KEY);
+    expect(capturedOptions.at(0)?.name).toBe(`${builtin?.name ?? ""} (copy)`);
   });
 
   test("rejects an unknown built-in key with a 400", async () => {

@@ -52,7 +52,7 @@ export type ClientTemplateManifest = {
   fields: FieldMeta[];
 };
 
-type CreateStoredTemplateOptions = {
+export type CreateStoredTemplateOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
