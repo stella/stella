@@ -33,7 +33,9 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stricli/core": "^1.2.8"
+    "@stricli/core": "^1.2.8",
+    "better-result": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
