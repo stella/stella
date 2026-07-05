@@ -889,6 +889,7 @@
     "error": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
     "missingJurisdictions": "Jūsu stella organizācija vēl nav iestatījusi savas prakses jurisdikcijas. Daži ar jurisdikciju saistīti rīki nebūs pieejami, līdz pabeigsiet iestatīšanu.",
     "permissions": "Tas atļaus lietotnei:",
+    "scopeBillingWrite": "Izveidot, rediģēt un dzēst jūsu laika ierakstus",
     "scopeDocumentsWrite": "Izveidot, rediģēt un dzēst jūsu dokumentus",
     "scopeExternalMcps": "Izmantot jūsu pievienotos ārējos rīkus",
     "scopeKnowledgeWrite": "Izveidot, rediģēt un dzēst jūsu klauzulas un palaist pārbaudes ceļvežus",

@@ -1,10 +1,14 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -23,10 +27,174 @@ const createTimeEntryBodySchema = t.Object({
   activityCode: t.Optional(t.Nullable(t.String({ maxLength: 20 }))),
 });
 
+export type CreateTimeEntryHandlerProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof createTimeEntryBodySchema>;
+};
+
+// Shared time-entry creation logic reused by the HTTP handler and the
+// `save_time_entry` MCP tool, so both run the same validation, advisory-lock
+// limit check, and audit event.
+export const createTimeEntryHandler = async function* ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  userId,
+  recordAuditEvent,
+  body,
+}: CreateTimeEntryHandlerProps) {
+  const now = new Date();
+  let todayStr: string;
+  try {
+    todayStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: body.timezoneId,
+    }).format(now);
+  } catch {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid timezone identifier",
+      }),
+    );
+  }
+  const dateWorked = new Date(`${body.dateWorked}T00:00:00`);
+  const today = new Date(`${todayStr}T00:00:00`);
+
+  if (dateWorked > today) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Date worked cannot be in the future",
+      }),
+    );
+  }
+
+  const maxAgeCutoff = new Date(today);
+  maxAgeCutoff.setDate(maxAgeCutoff.getDate() - LIMITS.timeEntryMaxAgeDays);
+  if (dateWorked < maxAgeCutoff) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Date worked cannot be more than ${LIMITS.timeEntryMaxAgeDays} days ago`,
+      }),
+    );
+  }
+
+  const matter = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.entities.findFirst({
+        where: {
+          id: { eq: body.matterId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true },
+      }),
+    ),
+  );
+
+  if (!matter) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Matter not found in this workspace",
+      }),
+    );
+  }
+
+  const billedMinutes = roundToIncrement(body.durationMinutes);
+
+  const txResult = yield* Result.await(
+    safeDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
+      );
+      const count = await tx.$count(
+        timeEntries,
+        eq(timeEntries.workspaceId, workspaceId),
+      );
+
+      if (count >= LIMITS.timeEntriesPerWorkspace) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "Time entries limit reached for this workspace",
+        };
+      }
+
+      const [entry] = await tx
+        .insert(timeEntries)
+        .values({
+          organizationId,
+          workspaceId,
+          userId,
+          matterId: body.matterId,
+          dateWorked: body.dateWorked,
+          timezoneId: body.timezoneId,
+          durationMinutes: body.durationMinutes,
+          billedMinutes,
+          rateAtEntry: cents(body.rateAtEntry),
+          currency: body.currency,
+          narrative: body.narrative,
+          billable: body.billable ?? true,
+          taskCode: body.taskCode ?? null,
+          activityCode: body.activityCode ?? null,
+          source: TIME_ENTRY_SOURCE.MANUAL,
+        })
+        .returning({ id: timeEntries.id });
+
+      if (!entry) {
+        return {
+          ok: false as const,
+          status: 500 as const,
+          message: "Failed to create time entry",
+        };
+      }
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.CREATE,
+        resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+        resourceId: entry.id,
+        changes: {
+          created: {
+            old: null,
+            new: {
+              matterId: body.matterId,
+              dateWorked: body.dateWorked,
+              durationMinutes: body.durationMinutes,
+              billedMinutes,
+              rateAtEntry: cents(body.rateAtEntry),
+              currency: body.currency,
+              billable: body.billable ?? true,
+              source: TIME_ENTRY_SOURCE.MANUAL,
+            },
+          },
+        },
+      });
+
+      return { ok: true as const, id: entry.id };
+    }),
+  );
+
+  if (!txResult.ok) {
+    return Result.err(
+      new HandlerError({
+        status: txResult.status,
+        message: txResult.message,
+      }),
+    );
+  }
+
+  return Result.ok({ id: txResult.id });
+};
+
 const createTimeEntry = createSafeHandler(
   {
     permissions: { timeEntry: ["create"] },
-    mcp: { type: "pending" },
+    mcp: { type: "tool", name: "save_time_entry" },
     body: createTimeEntryBodySchema,
   },
   async function* ({
@@ -37,138 +205,14 @@ const createTimeEntry = createSafeHandler(
     body,
     recordAuditEvent,
   }) {
-    const now = new Date();
-    const todayStr = new Intl.DateTimeFormat("en-CA", {
-      timeZone: body.timezoneId,
-    }).format(now);
-    const dateWorked = new Date(`${body.dateWorked}T00:00:00`);
-    const today = new Date(`${todayStr}T00:00:00`);
-
-    if (dateWorked > today) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Date worked cannot be in the future",
-        }),
-      );
-    }
-
-    const maxAgeCutoff = new Date(today);
-    maxAgeCutoff.setDate(maxAgeCutoff.getDate() - LIMITS.timeEntryMaxAgeDays);
-    if (dateWorked < maxAgeCutoff) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Date worked cannot be more than ${LIMITS.timeEntryMaxAgeDays} days ago`,
-        }),
-      );
-    }
-
-    const matter = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.entities.findFirst({
-          where: {
-            id: { eq: body.matterId },
-            workspaceId: { eq: workspaceId },
-          },
-          columns: { id: true },
-        }),
-      ),
-    );
-
-    if (!matter) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Matter not found in this workspace",
-        }),
-      );
-    }
-
-    const billedMinutes = roundToIncrement(body.durationMinutes);
-
-    const txResult = yield* Result.await(
-      safeDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-        );
-        const count = await tx.$count(
-          timeEntries,
-          eq(timeEntries.workspaceId, workspaceId),
-        );
-
-        if (count >= LIMITS.timeEntriesPerWorkspace) {
-          return {
-            ok: false as const,
-            status: 400 as const,
-            message: "Time entries limit reached for this workspace",
-          };
-        }
-
-        const [entry] = await tx
-          .insert(timeEntries)
-          .values({
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            userId: user.id,
-            matterId: body.matterId,
-            dateWorked: body.dateWorked,
-            timezoneId: body.timezoneId,
-            durationMinutes: body.durationMinutes,
-            billedMinutes,
-            rateAtEntry: cents(body.rateAtEntry),
-            currency: body.currency,
-            narrative: body.narrative,
-            billable: body.billable ?? true,
-            taskCode: body.taskCode ?? null,
-            activityCode: body.activityCode ?? null,
-            source: TIME_ENTRY_SOURCE.MANUAL,
-          })
-          .returning({ id: timeEntries.id });
-
-        if (!entry) {
-          return {
-            ok: false as const,
-            status: 500 as const,
-            message: "Failed to create time entry",
-          };
-        }
-
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.CREATE,
-          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-          resourceId: entry.id,
-          changes: {
-            created: {
-              old: null,
-              new: {
-                matterId: body.matterId,
-                dateWorked: body.dateWorked,
-                durationMinutes: body.durationMinutes,
-                billedMinutes,
-                rateAtEntry: cents(body.rateAtEntry),
-                currency: body.currency,
-                billable: body.billable ?? true,
-                source: TIME_ENTRY_SOURCE.MANUAL,
-              },
-            },
-          },
-        });
-
-        return { ok: true as const, id: entry.id };
-      }),
-    );
-
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
-    }
-
-    return Result.ok({ id: txResult.id });
+    return yield* createTimeEntryHandler({
+      safeDb,
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      userId: user.id,
+      recordAuditEvent,
+      body,
+    });
   },
 );
 

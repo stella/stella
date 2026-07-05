@@ -889,6 +889,7 @@
     "error": "Midagi läks valesti. Palun proovige uuesti.",
     "missingJurisdictions": "Teie stella organisatsioon ei ole veel oma praktika jurisdiktsioone seadistanud. Mõned jurisdiktsioonipõhised tööriistad ei ole saadaval enne, kui seadistamise lõpetate.",
     "permissions": "See lubab rakendusel:",
+    "scopeBillingWrite": "Luua, muuta ja kustutada teie ajakirjeid",
     "scopeDocumentsWrite": "Luua, muuta ja kustutada teie dokumente",
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",

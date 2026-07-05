@@ -889,6 +889,7 @@
     "error": "Hiba történt. Kérjük, próbálja újra.",
     "missingJurisdictions": "A stella-szervezete még nem állította be a praxis joghatóságait. Egyes joghatóságfüggő eszközök addig nem lesznek elérhetők, amíg be nem fejezi a beállítást.",
     "permissions": "Ez lehetővé teszi az alkalmazás számára, hogy:",
+    "scopeBillingWrite": "Időbejegyzések létrehozása, szerkesztése és törlése",
     "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
     "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
     "scopeKnowledgeWrite": "Záradékok létrehozása, szerkesztése és törlése, valamint playbookok futtatása",

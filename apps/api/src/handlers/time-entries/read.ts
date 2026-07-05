@@ -70,7 +70,7 @@ const decodeTimeEntryCursor = (cursor: string): TimeEntryCursor | null => {
 const readTimeEntries = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "tool", name: "list_time_entries" },
     query: readTimeEntriesQuerySchema,
   },
   async function* ({ safeDb, session, workspaceId, query }) {
