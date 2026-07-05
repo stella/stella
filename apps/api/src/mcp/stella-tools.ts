@@ -68,7 +68,6 @@ const MCP_CONTENT_MAX_CHARS = 8000;
 // text and both citation lists are paged together by a single compound cursor.
 const MCP_CASE_LAW_CITATIONS_PER_DECISION = 50;
 type StellaToolName =
-  | "get_matter_overview"
   | "list_matters"
   | "read_case_law_decision"
   | "read_contact"
@@ -104,13 +103,22 @@ export const STELLA_TOOL_DEFINITIONS = [
   {
     annotations: { readOnlyHint: true },
     description:
-      "List the matters you can access. Use this first when the user does not " +
-      "name a matter explicitly or when you need matter IDs for follow-up tools.",
+      "List the matters you can access, or get one matter's overview. Omit " +
+      "matter_id to list accessible matters (filter with status, page with " +
+      "cursor); list first when the user does not name a matter or you need " +
+      "matter IDs for follow-up tools. Pass matter_id to return that matter's " +
+      "overview instead: counts, recent entities, linked contacts, and members.",
     inputSchema: {
       type: "object",
       properties: {
-        status: enumProp("Filter by matter status", ["active", "all"]),
-        limit: intProp("Max matters to return", {
+        matter_id: stringProp(
+          "Matter/workspace ID to return a single matter's overview; omit to list matters",
+        ),
+        status: enumProp("Filter by matter status (list mode)", [
+          "active",
+          "all",
+        ]),
+        limit: intProp("Max matters to return (list mode)", {
           min: 1,
           max: MAX_LIST_LIMIT,
         }),
@@ -120,25 +128,10 @@ export const STELLA_TOOL_DEFINITIONS = [
         ),
       },
     },
-    anonymized: { exposure: "anonymize", textFields: ["matters[].name"] },
-    name: "list_matters",
-    scope: "stella:read",
-  },
-  {
-    annotations: { readOnlyHint: true },
-    description:
-      "Get a compact overview of a matter including counts, recent entities, " +
-      "and linked contacts. Use this to orient yourself before drilling in.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        matter_id: stringProp("Matter/workspace ID"),
-      },
-      required: ["matter_id"],
-    },
     anonymized: {
       exposure: "anonymize",
       textFields: [
+        "matters[].name",
         "matter.name",
         "matter.clientName",
         "overview.recentEntities[].name",
@@ -148,7 +141,7 @@ export const STELLA_TOOL_DEFINITIONS = [
         "members[].name",
       ],
     },
-    name: "get_matter_overview",
+    name: "list_matters",
     scope: "stella:read",
   },
   {
@@ -396,6 +389,22 @@ const decodeMatterPageCursor = (cursor: string): string | null => {
 };
 
 const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
+  // Detail mode: matter_id selects one matter's overview. The list-only
+  // filters (status/limit/cursor) do not apply, so reject the mixed request
+  // up front rather than silently ignoring them.
+  if (args["matter_id"] !== undefined) {
+    if (
+      args["status"] !== undefined ||
+      args["limit"] !== undefined ||
+      args["cursor"] !== undefined
+    ) {
+      return errorResult(
+        "status, limit, and cursor apply when listing matters; omit matter_id to list",
+      );
+    }
+    return await readMatterOverview({ args, context });
+  }
+
   const status = parseOptionalEnum({
     args,
     defaultValue: "active",
@@ -517,10 +526,10 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
   };
 };
 
-const handleGetMatterOverviewTool: McpToolHandler = async ({
-  args,
-  context,
-}) => {
+// Detail branch of list_matters: one matter's overview (counts, recent
+// entities, contacts, members). Reused verbatim from the former
+// get_matter_overview tool, which list_matters absorbed.
+const readMatterOverview: McpToolHandler = async ({ args, context }) => {
   const matterId = parseRequiredString(args, "matter_id");
   if (typeof matterId !== "string") {
     return matterId;
@@ -1458,7 +1467,6 @@ const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
 };
 
 export const STELLA_TOOL_HANDLERS = {
-  get_matter_overview: handleGetMatterOverviewTool,
   list_matters: handleListMattersTool,
   read_case_law_decision: handleReadCaseLawDecisionTool,
   read_contact: handleReadContactTool,

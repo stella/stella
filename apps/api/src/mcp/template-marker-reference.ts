@@ -126,8 +126,7 @@ const NON_DIRECTIVE_RULES = [
       "input type, select options, dependent options, date format, composite " +
       "parts, hint, required, and who fills the field — a person (default), AI " +
       "(aiPrompt), Person+AI (aiAdapt), a formula, or a company-register " +
-      "lookup. Configure fields over MCP via create_template's `fields` overlay " +
-      "or the configure_template_fields tool.",
+      "lookup. Configure fields over MCP via save_template's `fields` overlay.",
   },
 ] as const;
 

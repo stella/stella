@@ -109,8 +109,6 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search",
   search_across_matters:
     "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search (same backing as `search`)",
-  get_matter_overview:
-    "inline endpoint: apps/api/src/handlers/workspaces/routes.ts GET /:workspaceId/overview",
   search_case_law:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts POST /case/decisions/search",
   read_case_law_decision:
@@ -119,10 +117,6 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: MCP handler reads extractedContent directly (apps/api/src/mcp/stella-tools.ts)",
   fetch:
     "no dedicated endpoint: compat alias, MCP handler reads extractedContent directly (apps/api/src/mcp/compat-tools.ts)",
-  configure_template_fields:
-    "no dedicated endpoint: MCP-only, configure-template-fields-service.ts has no HTTP route",
-  template_marker_reference:
-    "static reference: buildMarkerReference (apps/api/src/mcp/template-marker-reference.ts), no HTTP route",
 };
 
 export type EnumeratedEndpoint = {

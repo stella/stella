@@ -26,33 +26,29 @@ const SURFACES = [
 
 type SurfaceMode = (typeof SURFACES)[number]["mode"];
 
-// Zero-buffer ceilings pinned to the measured counts: default 45 tools (31 +
-// the 5 clause/playbook knowledge tools + the 6 time-and-billing tools + the
-// 3 research/admin tools search_legislation, read_audit_log, and
-// manage_organization; 45 is also the hard product ceiling for the default
-// surface), anonymized 24 tools (17 + list_clauses/list_playbooks +
-// list_time_entries/resolve_rate/read_invoices/get_usage + search_legislation;
-// the knowledge/billing write tools and read_audit_log/manage_organization
-// stay excluded from the anonymized projection — read_audit_log fails closed
-// on its dynamic tenant payload and manage_organization is a write). Any tool
+// Ceilings pinned to the measured counts after the tool-surface consolidation
+// (plan 047): default 40 tools, anonymized 21 tools. 45 remains the hard
+// product ceiling for the default surface; the five slots the consolidation
+// recovered (40 -> 45) are deliberate headroom below that cap, and this ratchet
+// sits at the tighter measured 40 so unreviewed growth fails first. Any tool
 // added to either surface must bump the matching ceiling deliberately.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 45,
-  anonymized: 24,
+  default: 40,
+  anonymized: 21,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
-// `toMcpTools`). Measured: default 50_099 chars (~12.5k tokens), anonymized
-// 20_281 chars (~5.1k tokens). Ceilings sit ~10-15% above so organic growth
-// fits but a surface-size jump must be a deliberate constant bump.
+// `toMcpTools`). Measured after plan 047: default 45_339 chars (~11.3k tokens),
+// anonymized 19_472 chars (~4.9k tokens). Ceilings sit ~10-15% above so organic
+// growth fits but a surface-size jump must be a deliberate constant bump.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 56_000,
-  anonymized: 23_000,
+  default: 51_000,
+  anonymized: 22_000,
 };
 
-// Longest description measured 2026-07-02: create_template at 791 chars
-// (~200 tokens).
-const TOOL_DESCRIPTION_CHAR_CEILING = 900;
+// Longest description measured after plan 047: save_template at 724 chars
+// (~180 tokens). Ceiling sits ~12% above.
+const TOOL_DESCRIPTION_CHAR_CEILING = 810;
 
 // verb_noun style: lowercase words joined by single underscores.
 const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;

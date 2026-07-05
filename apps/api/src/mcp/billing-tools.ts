@@ -52,7 +52,7 @@ type BillingToolName =
   | "save_time_entry"
   | "delete_time_entry"
   | "resolve_rate"
-  | "read_invoices"
+  | "list_invoices"
   | "get_usage";
 
 /** Statuses list_time_entries can filter on (the full time-entry lifecycle). */
@@ -278,7 +278,7 @@ export const BILLING_TOOL_DEFINITIONS = [
           max: MAX_LIST_LIMIT,
         }),
         cursor: stringProp(
-          "Opaque cursor from a previous read_invoices call to fetch the next page",
+          "Opaque cursor from a previous list_invoices call to fetch the next page",
           { maxLength: 512 },
         ),
       },
@@ -298,7 +298,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       ],
     },
     feature: "FEATURE_TIME_BILLING",
-    name: "read_invoices",
+    name: "list_invoices",
     scope: "stella:read",
   },
   {
@@ -1029,9 +1029,9 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
   return textResult(resolved.value ?? { hourlyRate: null, currency: null });
 };
 
-// --- read_invoices ------------------------------------------------------
+// --- list_invoices ------------------------------------------------------
 
-const readInvoicesArgsSchema = v.pipe(
+const listInvoicesArgsSchema = v.pipe(
   v.strictObject({
     matter_id: v.optional(v.pipe(v.string(), v.minLength(1))),
     invoice_id: v.optional(v.pipe(v.string(), v.minLength(1))),
@@ -1116,12 +1116,12 @@ const readInvoiceDetail = async ({
     }),
   );
 
-const handleReadInvoicesTool: McpToolHandler = async ({ args, context }) => {
+const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ workspace: ["read"] }).success) {
     return errorResult("Forbidden");
   }
 
-  const parsed = v.safeParse(readInvoicesArgsSchema, args);
+  const parsed = v.safeParse(listInvoicesArgsSchema, args);
   if (!parsed.success) {
     return errorResult(
       crossFieldOrGeneric(
@@ -1389,6 +1389,6 @@ export const BILLING_TOOL_HANDLERS = {
   save_time_entry: handleSaveTimeEntryTool,
   delete_time_entry: handleDeleteTimeEntryTool,
   resolve_rate: handleResolveRateTool,
-  read_invoices: handleReadInvoicesTool,
+  list_invoices: handleListInvoicesTool,
   get_usage: handleGetUsageTool,
 } satisfies Record<BillingToolName, McpToolHandler>;

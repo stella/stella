@@ -174,7 +174,7 @@ export const createEntitiesHandler = async function* ({
 
 const config = {
   permissions: { entity: ["create"] },
-  mcp: { type: "tool", name: "create_document" },
+  mcp: { type: "tool", name: "save_document" },
   body: createEntityBodySchema,
 } satisfies HandlerConfig;
 

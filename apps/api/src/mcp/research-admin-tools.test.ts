@@ -45,10 +45,10 @@ const errorText = (result: McpToolResponse): string => {
   return first !== undefined && "text" in first ? first.text : "";
 };
 
-describe("read_audit_log", () => {
+describe("list_audit_log", () => {
   test("fails closed on the anonymized surface", () => {
     const def = DEFAULT_MCP_TOOL_DEFINITIONS.find(
-      (tool) => tool.name === "read_audit_log",
+      (tool) => tool.name === "list_audit_log",
     );
     // The dynamic tenant payload (free-form change diffs) cannot be enumerated
     // for field-level redaction, so the tool is excluded rather than partially
@@ -60,13 +60,13 @@ describe("read_audit_log", () => {
     expect(def?.scope).toBe("stella:admin_read");
     expect(
       ANONYMIZED_MCP_TOOL_DEFINITIONS.some(
-        (tool) => tool.name === "read_audit_log",
+        (tool) => tool.name === "list_audit_log",
       ),
     ).toBe(false);
   });
 
   test("forbids roles without organization audit-log access", async () => {
-    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.read_audit_log({
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log({
       args: {},
       context: createContext("member"),
     });
@@ -74,7 +74,7 @@ describe("read_audit_log", () => {
   });
 
   test("replicates the backing resourceId-requires-resourceType rejection", async () => {
-    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.read_audit_log({
+    const result = await RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log({
       args: { resource_id: "matter_1" },
       context: createContext("owner"),
     });

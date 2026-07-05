@@ -39,7 +39,7 @@ import {
 
 type ResearchAdminToolName =
   | "search_legislation"
-  | "read_audit_log"
+  | "list_audit_log"
   | "manage_organization";
 
 /** Consolidated-law relation kinds accepted by search_legislation `relation_type`. */
@@ -171,7 +171,7 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
           max: LIMITS.auditLogPageSizeMax,
         }),
         cursor: stringProp(
-          "Opaque cursor from a previous read_audit_log call to fetch the next page",
+          "Opaque cursor from a previous list_audit_log call to fetch the next page",
           { maxLength: 512 },
         ),
       },
@@ -180,7 +180,7 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
     // fields cannot be enumerated for redaction, so this read tool fails closed
     // and never appears on the anonymized surface.
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
-    name: "read_audit_log",
+    name: "list_audit_log",
     scope: "stella:admin_read",
   },
   {
@@ -458,7 +458,7 @@ const handleSearchLegislationTool: McpToolHandler = async ({
   return textResult(result.value);
 };
 
-// --- read_audit_log -----------------------------------------------------
+// --- list_audit_log -----------------------------------------------------
 
 const ISO_DATE_INPUT = v.pipe(
   v.string(),
@@ -469,7 +469,7 @@ const ISO_DATE_INPUT = v.pipe(
   ),
 );
 
-const readAuditLogArgsSchema = v.strictObject({
+const listAuditLogArgsSchema = v.strictObject({
   workspace_id: v.optional(v.pipe(v.string(), v.minLength(1))),
   action: v.optional(v.pipe(v.string(), v.minLength(1))),
   resource_type: v.optional(v.pipe(v.string(), v.minLength(1))),
@@ -488,12 +488,12 @@ const readAuditLogArgsSchema = v.strictObject({
   cursor: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
 });
 
-const handleReadAuditLogTool: McpToolHandler = async ({ args, context }) => {
+const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   if (!roles[context.memberRole].authorize({ auditLog: ["read"] }).success) {
     return errorResult("Forbidden");
   }
 
-  const parsed = v.safeParse(readAuditLogArgsSchema, args);
+  const parsed = v.safeParse(listAuditLogArgsSchema, args);
   if (!parsed.success) {
     return errorResult(
       "Invalid input: expected { workspace_id?, action?, resource_type?, resource_id?, user_id?, from?, to?, limit?, cursor? }",
@@ -748,6 +748,6 @@ const handleManageOrganizationTool: McpToolHandler = async ({
 
 export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   search_legislation: handleSearchLegislationTool,
-  read_audit_log: handleReadAuditLogTool,
+  list_audit_log: handleListAuditLogTool,
   manage_organization: handleManageOrganizationTool,
 } satisfies Record<ResearchAdminToolName, McpToolHandler>;

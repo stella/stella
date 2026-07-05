@@ -47,7 +47,7 @@ const decodeInvoiceCursor = (cursor: string): InvoiceCursor | null => {
 const readInvoices = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "tool", name: "read_invoices" },
+    mcp: { type: "tool", name: "list_invoices" },
     query: readInvoicesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {
