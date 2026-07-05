@@ -87,6 +87,7 @@ export const PlaybookEditor = ({
         initialDocumentTypeKey={null}
         initialName=""
         initialPerspective={null}
+        initialTrigger={null}
         initialPositions={[]}
         onBack={onBack}
         onSaved={onSaved}
@@ -149,6 +150,7 @@ const PlaybookEditorLoader = ({
       initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
       initialName={detail.name}
       initialPerspective={detail.scope?.perspective ?? null}
+      initialTrigger={detail.scope?.trigger ?? null}
       initialPositions={detail.positions.items}
       onBack={onBack}
       onSaved={onSaved}
@@ -165,6 +167,7 @@ const PlaybookEditorLoader = ({
 const SCOPE_ALL_VALUE = "__all__";
 
 type PlaybookPerspective = "buyer" | "seller" | "neutral";
+type PlaybookTrigger = "manual" | "onClassified";
 
 type PlaybookEditorFormProps = {
   organizationId: string;
@@ -173,6 +176,7 @@ type PlaybookEditorFormProps = {
   initialDescription: string;
   initialDocumentTypeKey: string | null;
   initialPerspective: PlaybookPerspective | null;
+  initialTrigger: PlaybookTrigger | null;
   initialPositions: Position[];
   onBack: () => void;
   onSaved: () => void;
@@ -185,6 +189,7 @@ const PlaybookEditorForm = ({
   initialDescription,
   initialDocumentTypeKey,
   initialPerspective,
+  initialTrigger,
   initialPositions,
   onBack,
   onSaved,
@@ -219,6 +224,11 @@ const PlaybookEditorForm = ({
   // classifier, so this is what makes "a different playbook per type" work.
   const [documentTypeKey, setDocumentTypeKey] = useState<string | null>(
     initialDocumentTypeKey,
+  );
+  // How runs start: manual only, or auto-routed when the Document Type
+  // classifier resolves a matching document (slice D routing).
+  const [trigger, setTrigger] = useState<PlaybookTrigger>(
+    initialTrigger ?? "manual",
   );
   const { data: documentTypesData } = useQuery(
     documentTypesOptions(organizationId),
@@ -398,16 +408,21 @@ const PlaybookEditorForm = ({
     const items = positions.map(normalizePosition);
     const positionsPayload: PlaybookPositionsValue = { version: 2, items };
     const trimmedDescription = description.trim();
-    // Rebuild the scope from the document-type picker, preserving any existing
-    // perspective. Omitted entirely when unscoped so the handler clears it.
+    // Rebuild the scope from the document-type and trigger pickers, preserving
+    // any existing perspective. Omitted entirely in the all-defaults case so
+    // the handler clears it; whenever a scope is sent, `trigger` rides along
+    // explicitly (absent optional fields must not be left to server defaults).
     const scope =
-      documentTypeKey === null && initialPerspective === null
+      documentTypeKey === null &&
+      initialPerspective === null &&
+      trigger === "manual"
         ? undefined
         : {
             ...(documentTypeKey !== null ? { documentTypeKey } : {}),
             ...(initialPerspective !== null
               ? { perspective: initialPerspective }
               : {}),
+            trigger,
           };
 
     setSaving(true);
@@ -604,6 +619,30 @@ const PlaybookEditorForm = ({
               </Select>
             </div>
           )}
+
+          <div className="grid gap-1.5">
+            <Label htmlFor="playbook-trigger">
+              {t("knowledge.playbooks.triggerLabel")}
+            </Label>
+            <Select
+              onValueChange={(next) =>
+                setTrigger(next === "onClassified" ? "onClassified" : "manual")
+              }
+              value={trigger}
+            >
+              <SelectTrigger id="playbook-trigger">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value="manual">
+                  {t("knowledge.playbooks.trigger.manual")}
+                </SelectItem>
+                <SelectItem value="onClassified">
+                  {t("knowledge.playbooks.trigger.onClassified")}
+                </SelectItem>
+              </SelectPopup>
+            </Select>
+          </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">

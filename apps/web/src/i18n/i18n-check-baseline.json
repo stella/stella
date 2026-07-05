@@ -102,14 +102,17 @@
     "inspector.metadata.author",
     "inspector.metadata.updatedAt",
     "knowledge.agentSkills.newFolder",
+    "knowledge.playbooks.addOption",
+    "knowledge.playbooks.addRule",
+    "knowledge.playbooks.advanced",
     "knowledge.playbooks.contentType.int",
     "knowledge.playbooks.contentType.text",
-    "knowledge.playbooks.gradeRuleLabel",
     "knowledge.playbooks.review.fixAccepted",
     "knowledge.playbooks.review.reject",
     "knowledge.playbooks.severity.high",
     "knowledge.playbooks.severity.low",
     "knowledge.playbooks.severity.medium",
+    "knowledge.playbooks.trigger.manual",
     "knowledge.sections.prompts.title",
     "knowledge.sections.templates.title",
     "knowledge.sections.tools.title",
@@ -197,11 +200,14 @@
     "workspaces.parties.personalLabel",
     "workspaces.parties.searchContacts",
     "workspaces.playbooks.run",
+    "workspaces.properties.addOption",
     "workspaces.properties.chipMulti",
     "workspaces.properties.chipNumber",
     "workspaces.properties.chipText",
     "workspaces.properties.text",
     "workspaces.team",
+    "workspaces.tools.manualInput",
+    "workspaces.views.advancedFilter",
     "workspaces.views.fieldsSelected",
     "workspaces.views.layouts.calendar"
   ],
@@ -823,11 +829,15 @@
     "knowledge.playbooks.askQuestionLabel": [
       "fr"
     ],
-    "knowledge.playbooks.clauseLabel": [
-      "fr"
-    ],
     "knowledge.playbooks.contentType.text": [
       "de"
+    ],
+    "knowledge.playbooks.extraction": [
+      "fr"
+    ],
+    "knowledge.playbooks.extractionManual": [
+      "es",
+      "pt-BR"
     ],
     "knowledge.playbooks.optionsLabel": [
       "fr"
@@ -842,6 +852,9 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "knowledge.playbooks.tier.acceptable": [
+      "fr"
     ],
     "knowledge.sections.agents.title": [
       "fr"

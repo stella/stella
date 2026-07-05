@@ -1583,7 +1583,7 @@ type Messages = {
       "extractionManual": "Manual";
       "fixErrorsBeforeSaving": "Fix the highlighted fields before saving.";
       "gradedNeedsContent": "Add at least one rule, fallback entry, or ideal language.";
-      "guidanceLabel": "Note for reviewers";
+      "guidanceLabel": "Guidance";
       "guidancePlaceholder": "Notes for reviewers (optional)";
       "idealFromClause": "From clause library";
       "idealInline": "Inline text";
@@ -1645,6 +1645,11 @@ type Messages = {
         "fallback": "Fallback";
         "notAcceptable": "Not acceptable";
       };
+      "trigger": {
+        "manual": "Manually";
+        "onClassified": "Automatically when the document type matches";
+      };
+      "triggerLabel": "Runs";
       "untitledPosition": "Untitled position";
       "updated": "Playbook updated";
       "verdict": {
