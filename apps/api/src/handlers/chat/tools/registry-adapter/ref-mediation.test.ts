@@ -7,6 +7,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   containsRawUuid,
   dehydrateInputRefs,
+  findUndeclaredUuidPath,
   hydrateOutputRefs,
 } from "./ref-mediation";
 
@@ -251,5 +252,84 @@ describe("registry ref mediation", () => {
   test("containsRawUuid flags an un-hydrated payload", () => {
     expect(containsRawUuid({ id: WS_UUID })).toBe(true);
     expect(containsRawUuid({ id: "mat_1" })).toBe(false);
+  });
+
+  describe("findUndeclaredUuidPath", () => {
+    const INVOICE_UUID = "9c9f2a9e-2f0a-4b7a-9a0e-2e7a1a2b3c4d";
+    const LINE_ITEM_UUID = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+    // A list_invoices-style detail-branch payload, post-hydration: the
+    // entity refs `hydrateOutputRefs` mints for the invoice's tenant
+    // content (an `outputRefs` path) already read as chat refs, while the
+    // invoice id and the time-entry's own id are non-tenant handles the
+    // map declares in `passthroughIdPaths` and never mediates.
+    const invoiceFixture = {
+      invoice: {
+        id: INVOICE_UUID,
+        status: "draft",
+        timeEntries: [
+          {
+            id: LINE_ITEM_UUID,
+            entityId: "ent_1",
+            entity: { id: "ent_1", name: "Brief" },
+          },
+        ],
+        expenses: [],
+      },
+    };
+
+    test("a list_invoices-style fixture with only declared passthrough ids passes", () => {
+      expect(
+        findUndeclaredUuidPath({
+          payload: invoiceFixture,
+          toolName: "list_invoices",
+        }),
+      ).toBeUndefined();
+    });
+
+    test("a rogue uuid at an undeclared path fails closed with that path", () => {
+      const doctored = {
+        invoice: {
+          ...invoiceFixture.invoice,
+          // Not one of list_invoices's outputRefs or passthroughIdPaths: an
+          // ordinary field nothing stops from holding a raw uuid.
+          notes: WS_UUID,
+        },
+      };
+
+      expect(
+        findUndeclaredUuidPath({
+          payload: doctored,
+          toolName: "list_invoices",
+        }),
+      ).toBe("invoice.notes");
+    });
+
+    test("a uuid surviving at a declared outputRefs path fails closed (simulated hydration miss)", () => {
+      // `invoice.timeEntries[].entityId` is a declared `outputRefs` entity
+      // path: `hydrateOutputRefs` should always have rewritten it to a chat
+      // ref. Leaving it a raw uuid simulates a hydration miss (an
+      // unresolved workspace source, say), which the passthrough allowlist
+      // must NOT paper over: `outputRefs` paths are deliberately excluded
+      // from it.
+      const doctored = {
+        invoice: {
+          ...invoiceFixture.invoice,
+          timeEntries: [
+            {
+              id: LINE_ITEM_UUID,
+              entityId: ENTITY_UUID,
+              entity: { id: "ent_1", name: "Brief" },
+            },
+          ],
+        },
+      };
+
+      expect(
+        findUndeclaredUuidPath({
+          payload: doctored,
+          toolName: "list_invoices",
+        }),
+      ).toBe("invoice.timeEntries[].entityId");
+    });
   });
 });

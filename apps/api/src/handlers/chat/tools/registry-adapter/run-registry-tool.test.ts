@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -9,9 +9,16 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-import { buildMcpContextFromChat } from "./mcp-chat-context";
-import { containsRawUuid, dehydrateInputRefs } from "./ref-mediation";
-import { runRegistryReadTool } from "./run-registry-tool";
+const captureErrorMock = mock();
+void mock.module("@/api/lib/analytics", () => ({
+  captureError: captureErrorMock,
+  captureRequestError: captureErrorMock,
+  getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),
+}));
+
+const { buildMcpContextFromChat } = await import("./mcp-chat-context");
+const { containsRawUuid, dehydrateInputRefs } = await import("./ref-mediation");
+const { runRegistryReadTool } = await import("./run-registry-tool");
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";
@@ -49,6 +56,10 @@ const buildContext = ({
   });
 
 describe("runRegistryReadTool", () => {
+  beforeEach(() => {
+    captureErrorMock.mockClear();
+  });
+
   test("runs list_matters end-to-end: output UUIDs become refs, input ref dehydrates", async () => {
     const registry = createChatRefRegistry();
     const rows = [
@@ -109,13 +120,13 @@ describe("runRegistryReadTool", () => {
     }
   });
 
-  test("fails closed when a raw uuid survives ref hydration in an unmapped field", async () => {
+  test("fails closed when a raw uuid survives ref hydration at an undeclared path", async () => {
     const registry = createChatRefRegistry();
     // Doctored: `reference` is an ordinary free-text field the ref map never
     // mediates (it is not one of `list_matters`'s `outputRefs` or
     // `passthroughIdPaths`), but nothing stops it from holding a raw uuid.
-    // The backstop must catch this survivor even though no per-field ref
-    // rule exists for it.
+    // The path-aware backstop must catch this survivor at its exact path even
+    // though no per-field ref rule exists for it.
     const rows = [
       {
         id: WS_UUID,
@@ -139,6 +150,18 @@ describe("runRegistryReadTool", () => {
       expect(result.error.message).not.toContain(WS_UUID);
       expect(result.error.message).not.toContain(OTHER_WS_UUID);
     }
+    // Telemetry carries the offending path so the survivor is traceable, but
+    // never the leaked value itself.
+    expect(captureErrorMock).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.any(String) }),
+      {
+        source: "run-registry-tool",
+        toolName: "list_matters",
+        path: "matters[].reference",
+      },
+    );
+    const [, telemetryContext] = captureErrorMock.mock.calls.at(0) ?? [];
+    expect(JSON.stringify(telemetryContext)).not.toContain(OTHER_WS_UUID);
   });
 
   test("refuses a read tool the ref map keeps off the chat surface", async () => {

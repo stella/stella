@@ -38,6 +38,75 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 export const containsRawUuid = (value: unknown): boolean =>
   UUID_ANYWHERE_REGEX.test(JSON.stringify(value));
 
+// --- path-aware UUID backstop ------------------------------------------------
+
+export type UuidPathHit = { path: string; value: string };
+
+/**
+ * Walk every string leaf in a payload, recording the normalized path (dot-
+ * joined, arrays collapsed to `[]`, the same `a.b` / `a[].b` grammar
+ * `outputRefs`/`passthroughIdPaths` use) of every value that matches the UUID
+ * pattern anywhere in the string. A substring match (not just a bare-UUID
+ * exact match) so a UUID embedded inside a longer string (a url, free text)
+ * is still caught, matching the whole-payload check this replaces.
+ */
+const walkUuidPaths = (
+  node: unknown,
+  path: readonly string[],
+  hits: UuidPathHit[],
+): void => {
+  if (typeof node === "string") {
+    if (UUID_ANYWHERE_REGEX.test(node)) {
+      hits.push({ path: path.join("."), value: node });
+    }
+    return;
+  }
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      walkUuidPaths(item, path, hits);
+    }
+    return;
+  }
+  if (!isRecord(node)) {
+    return;
+  }
+  for (const [key, value] of Object.entries(node)) {
+    const segment = Array.isArray(value) ? `${key}[]` : key;
+    walkUuidPaths(value, [...path, segment], hits);
+  }
+};
+
+/** Every UUID-matching string value in a payload, with its normalized path. */
+export const collectUuidPaths = (payload: unknown): readonly UuidPathHit[] => {
+  const hits: UuidPathHit[] = [];
+  walkUuidPaths(payload, [], hits);
+  return hits;
+};
+
+/**
+ * Find the first UUID surviving in a hydrated read-tool payload at a path the
+ * tool's ref-field-map entry does not license. Only `passthroughIdPaths`
+ * grants a path permission to still hold a raw UUID (a declared non-tenant
+ * handle); an `outputRefs` path is deliberately excluded from this allowlist,
+ * since `hydrateOutputRefs` should have already rewritten it to a chat ref —
+ * a UUID still there means hydration missed it, which fails closed the same
+ * as a wholly undeclared path. Returns the offending path, never the value,
+ * so callers can log it without leaking the id it is refusing.
+ */
+export const findUndeclaredUuidPath = ({
+  toolName,
+  payload,
+}: {
+  toolName: RegistryReadToolName;
+  payload: unknown;
+}): string | undefined => {
+  const allowedPaths = new Set<string>(
+    READ_TOOL_REF_FIELD_MAP[toolName].passthroughIdPaths,
+  );
+  return collectUuidPaths(payload).find((hit) => !allowedPaths.has(hit.path))
+    ?.path;
+};
+
 // --- path grammar -----------------------------------------------------------
 // Paths use the same `a.b` / `a[].b` shape as the egress text-field specs. A
 // step is one dotted token; a `[]` suffix means "descend into the array at this

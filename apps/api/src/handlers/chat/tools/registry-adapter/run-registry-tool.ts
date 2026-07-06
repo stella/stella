@@ -21,8 +21,8 @@ import type { McpToolHandler } from "@/api/mcp/tool-types";
 import type { RegistryReadToolName } from "./ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "./ref-field-map";
 import {
-  containsRawUuid,
   dehydrateInputRefs,
+  findUndeclaredUuidPath,
   hydrateOutputRefs,
 } from "./ref-mediation";
 
@@ -172,12 +172,19 @@ export const runRegistryReadTool = async ({
   // Runtime backstop for the "no tenant UUID reaches the model" invariant: the
   // ref-field map is documentation the type system cannot fully enforce (a
   // wrong or missing path silently skips hydration), so re-check the finished
-  // payload rather than trusting the static mapping alone. A survivor fails
-  // closed instead of leaking the id; the error message never repeats the
-  // payload, so it cannot itself leak the value it is refusing.
-  if (containsRawUuid(hydrated)) {
+  // payload path-by-path rather than trusting the static mapping alone. A
+  // UUID surviving anywhere the tool's `passthroughIdPaths` does not license
+  // fails closed instead of leaking; the error message never repeats the
+  // payload or the path, so it cannot itself leak the value it is refusing,
+  // while the offending path (never the value) still reaches telemetry.
+  const offendingPath = findUndeclaredUuidPath({ toolName, payload: hydrated });
+  if (offendingPath !== undefined) {
     const error = new ChatToolError({ message: ANONYMIZATION_FAILURE_MESSAGE });
-    captureError(error, { source: "run-registry-tool", toolName });
+    captureError(error, {
+      source: "run-registry-tool",
+      toolName,
+      path: offendingPath,
+    });
     return Result.err(error);
   }
 

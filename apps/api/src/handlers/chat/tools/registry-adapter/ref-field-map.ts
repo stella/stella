@@ -72,11 +72,18 @@ export type RegistryRefFieldMapEntry = {
   inputRefs: readonly InputRefParam[];
   outputRefs: readonly OutputRefField[];
   /**
-   * UUID-bearing output paths intentionally left un-refed, each with a
-   * rationale in a comment. Forces an explicit decision per tool: an id here is
-   * either a non-tenant handle (user/invoice/template/audit/public-corpus id)
-   * or an entity id whose owning workspace is not statically recoverable and is
-   * deferred to the manifest-swap step. Documentation only; never walked.
+   * UUID-bearing output paths intentionally left un-refed. Each path uses the
+   * same `a.b` / `a[].b` grammar as `outputRefs`. Forces an explicit decision
+   * per tool: an id here is either a non-tenant handle (user/invoice/
+   * template/audit/public-corpus id) or an entity id whose owning workspace is
+   * not statically recoverable and is deferred to the manifest-swap step.
+   *
+   * Load-bearing, not documentation: `findUndeclaredUuidPath`
+   * (`ref-mediation.ts`) walks the hydrated payload and allows a surviving
+   * raw uuid only at one of these exact paths. An `outputRefs` path is
+   * deliberately NOT part of this allowlist — hydration must have already
+   * rewritten it to a chat ref, so a uuid still there means hydration missed
+   * it, which fails closed the same as an undeclared path.
    */
   passthroughIdPaths: readonly string[];
 };
@@ -92,23 +99,24 @@ export const READ_TOOL_REF_FIELD_MAP = {
   // search_across_matters and additionally emit `url` (and `metadata`) fields
   // that embed raw workspace/entity UUIDs inside a string the ref walker cannot
   // rewrite without reparsing URLs. Chat projects the native equivalents
-  // instead, so these are kept off the chat surface.
+  // instead, so these are kept off the chat surface: `chatProjectable: false`
+  // makes the paths below inert (the orchestrator refuses the tool before the
+  // backstop ever walks its payload), they are listed only so the shape stays
+  // documented if that ever changes.
   fetch: {
     chatProjectable: false,
     inputRefs: [],
     outputRefs: [],
-    passthroughIdPaths: [
-      "id (entity handle)",
-      "url (embeds workspace + entity UUIDs)",
-    ],
+    passthroughIdPaths: ["id", "url", "workspaceId"],
   },
   search: {
     chatProjectable: false,
     inputRefs: [],
     outputRefs: [],
     passthroughIdPaths: [
-      "results[].id (entity handle)",
-      "results[].url (embeds workspace + entity UUIDs)",
+      "results[].id",
+      "results[].url",
+      "results[].workspaceId",
     ],
   },
 
@@ -132,10 +140,13 @@ export const READ_TOOL_REF_FIELD_MAP = {
         workspace: { from: "outputPath", path: "matter.id" },
       },
     ],
+    // Matter-contact link ids and workspace member (user) ids are handles
+    // with no chat ref kind; `nextCursor` is an opaque base64 cursor (not
+    // UUID-formatted).
     passthroughIdPaths: [
-      "contacts[].workspaceContactId (matter-contact link handle, no chat ref kind)",
-      "members[].userId (user handle, no chat ref kind)",
-      "nextCursor (opaque base64 cursor; not UUID-formatted)",
+      "contacts[].workspaceContactId",
+      "members[].userId",
+      "nextCursor",
     ],
   },
   search_across_matters: {
@@ -190,9 +201,8 @@ export const READ_TOOL_REF_FIELD_MAP = {
         workspace: { from: "inputParam", param: "matter_id" },
       },
     ],
-    passthroughIdPaths: [
-      "nextCursor (opaque [createdAt, id] cursor; embeds an entity id, not UUID-formatted)",
-    ],
+    // Opaque `[createdAt, id]` cursor; embeds an entity id, not UUID-formatted.
+    passthroughIdPaths: ["nextCursor"],
   },
   read_document: {
     chatProjectable: true,
@@ -206,18 +216,27 @@ export const READ_TOOL_REF_FIELD_MAP = {
       { kind: "property", path: "fields[].propertyId" },
       { kind: "property", path: "version.fields[].propertyId" },
     ],
+    // Entity-version handles (`version.id`/`versions[].id`, the specific-
+    // version branch's own `version.fields[].id`, and the diff branch's
+    // `diff.baseVersionId`/`diff.targetVersionId`), field-row handles
+    // (`fields[].id`), and `versionsNextCursor`, an opaque
+    // `[versionNumber, entityVersionId]` cursor — none carry a chat ref kind.
     passthroughIdPaths: [
-      "version.id / versions[].id (entity-version handles, no chat ref kind)",
-      "fields[].id (field row handles, no chat ref kind)",
+      "version.id",
+      "versions[].id",
+      "version.fields[].id",
+      "fields[].id",
+      "diff.baseVersionId",
+      "diff.targetVersionId",
+      "versionsNextCursor",
     ],
   },
   list_properties: {
     chatProjectable: true,
     inputRefs: [{ kind: "matter", param: "matter_id" }],
     outputRefs: [{ kind: "property", path: "properties[].id" }],
-    passthroughIdPaths: [
-      "nextCursor (opaque [createdAt, id] cursor; not UUID-formatted)",
-    ],
+    // Opaque `[createdAt, id]` cursor; not UUID-formatted.
+    passthroughIdPaths: ["nextCursor"],
   },
 
   // --- Tasks -----------------------------------------------------------------
@@ -252,9 +271,13 @@ export const READ_TOOL_REF_FIELD_MAP = {
         workspace: { from: "inputEntityWorkspace", param: "task_id" },
       },
     ],
+    // Assignee ids are user handles, link ids are entity-link handles
+    // (neither carries a chat ref kind); `nextCursor` is an opaque
+    // `[createdAt, id]` cursor embedding an entity id, not UUID-formatted.
     passthroughIdPaths: [
-      "task.assignees[].userId (user handle, no chat ref kind)",
-      "task.links[].linkId (entity-link handle, no chat ref kind)",
+      "task.assignees[].userId",
+      "task.links[].linkId",
+      "nextCursor",
     ],
   },
 
@@ -265,16 +288,39 @@ export const READ_TOOL_REF_FIELD_MAP = {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
+    // Clause, category, variant, and clause-version ids are org-scoped
+    // library handles; `clause.createdBy` is the authoring user's id (a
+    // `text` column, not a uuid column, but declared defensively in case a
+    // deployment's user ids happen to be uuid-shaped); `nextCursor` is an
+    // opaque `${isoDate}|${clauseId}` cursor.
     passthroughIdPaths: [
-      "clauses[].id / clause.id (clause handle)",
-      "clause.variants[].id, version ids, category ids (library handles)",
+      "clauses[].id",
+      "clauses[].categoryId",
+      "clause.id",
+      "clause.categoryId",
+      "clause.variants[].id",
+      "clause.versions[].id",
+      "clause.createdBy",
+      "categories[].id",
+      "categories[].parentId",
+      "version.id",
+      "nextCursor",
     ],
   },
   list_playbooks: {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
-    passthroughIdPaths: ["items[].id / playbook.id (playbook handle)"],
+    // Playbook ids are org-scoped library handles; a position's `sourceId` is
+    // a client-supplied stable id; a "clause"-sourced standard's `clauseId`
+    // is the same clause-library handle `list_clauses` declares.
+    passthroughIdPaths: [
+      "items[].id",
+      "playbook.id",
+      "playbook.positions.items[].sourceId",
+      "playbook.positions.items[].standard.clauseId",
+      "nextCursor",
+    ],
   },
 
   // --- Billing: entity refs on line items, rest are billing handles ---------
@@ -296,10 +342,14 @@ export const READ_TOOL_REF_FIELD_MAP = {
         workspace: { from: "inputParam", param: "matter_id" },
       },
     ],
+    // Time-entry ids and user ids carry no chat ref kind; `nextCursor` is an
+    // opaque `[dateWorked, id]` cursor, not UUID-formatted.
     passthroughIdPaths: [
-      "entries[].id / entry.id (time-entry handles)",
-      "entries[].userId / entry.userId (user handles)",
-      "nextCursor (opaque [dateWorked, id] cursor; not UUID-formatted)",
+      "entries[].id",
+      "entry.id",
+      "entries[].userId",
+      "entry.userId",
+      "nextCursor",
     ],
   },
   resolve_rate: {
@@ -333,19 +383,23 @@ export const READ_TOOL_REF_FIELD_MAP = {
         workspace: { from: "inputParam", param: "matter_id" },
       },
     ],
+    // Invoice ids and line-item ids (time entry / expense) carry no chat ref
+    // kind; `nextCursor` is an opaque `[createdAt, id]` cursor, not
+    // UUID-formatted.
     passthroughIdPaths: [
-      "invoices[].id / invoice.id (invoice handles)",
-      "invoice.timeEntries[].id, invoice.expenses[].id (line-item handles)",
-      "nextCursor (opaque [createdAt, id] cursor; not UUID-formatted)",
+      "invoices[].id",
+      "invoice.id",
+      "invoice.timeEntries[].id",
+      "invoice.expenses[].id",
+      "nextCursor",
     ],
   },
   get_usage: {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
-    passthroughIdPaths: [
-      "entitlement.id, policy.id (org billing-plan ids, not tenant refs)",
-    ],
+    // Org billing-plan ids, not tenant refs.
+    passthroughIdPaths: ["entitlement.id", "policy.id"],
   },
 
   // --- Public corpora: public ids, no tenant refs ---------------------------
@@ -353,24 +407,42 @@ export const READ_TOOL_REF_FIELD_MAP = {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
-    passthroughIdPaths: [
-      "results[].decisionId, source_id (public case-law corpus ids)",
-    ],
+    // Public case-law corpus id; `source_id` is a request input, never an
+    // output field, so it needs no output-path declaration here.
+    passthroughIdPaths: ["results[].decisionId", "nextCursor"],
   },
   read_case_law_decision: {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
+    // Public case-law corpus ids (decision, citation, and source ids);
+    // `decision.metadata` is free-form jsonb straight from the public court
+    // source and cannot be enumerated by path (same unenumerable-payload
+    // caveat as `list_audit_log`'s `metadata`/`changes`, just over public
+    // rather than tenant data).
     passthroughIdPaths: [
-      "decision.decisionId, decision_id (public case-law corpus ids)",
+      "decision.decisionId",
+      "decision.citationsFrom[].id",
+      "decision.citationsFrom[].citedDecisionId",
+      "decision.citationsTo[].id",
+      "decision.citationsTo[].citingDecisionId",
+      "decision.source.id",
+      "nextCursor",
     ],
   },
   search_legislation: {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
+    // Public BOE statute ids, not tenant refs. Never actually UUID-formatted
+    // (`lawId` is schema-validated against the `BOE-*` id pattern; `blockId`
+    // and `data[].identificador` are declared defensively since `blockId` is
+    // an unvalidated request-argument echo).
     passthroughIdPaths: [
-      "lawId, blockId (public BOE statute ids, not tenant refs)",
+      "lawId",
+      "blockId",
+      "law.lawId",
+      "data[].identificador",
     ],
   },
   lookup_business_registry: {
@@ -385,9 +457,10 @@ export const READ_TOOL_REF_FIELD_MAP = {
     chatProjectable: true,
     inputRefs: [],
     outputRefs: [],
-    passthroughIdPaths: [
-      "templates[].id / template_id (org template handle, no chat ref kind)",
-    ],
+    // Org template handle; `template_id` is a request input, not an output
+    // field, so it needs no output-path declaration. Detail mode's describe
+    // payload carries no id fields at all.
+    passthroughIdPaths: ["templates[].id", "nextCursor"],
   },
 
   // --- Audit log: not projected to chat -------------------------------------
@@ -404,8 +477,10 @@ export const READ_TOOL_REF_FIELD_MAP = {
     // chat surface anyway, so no input dehydration runs.
     inputRefs: [],
     outputRefs: [],
-    passthroughIdPaths: [
-      "items[].workspaceId, items[].resourceId (polymorphic), metadata, changes (unenumerable tenant payload)",
-    ],
+    // `items[].resourceId` is polymorphic and `metadata`/`changes` are
+    // unenumerable free-form tenant JSON, so no path list here could make
+    // this payload safe to walk. Moot in practice: `chatProjectable: false`
+    // means the backstop never runs against this tool's output at all.
+    passthroughIdPaths: ["items[].workspaceId", "items[].resourceId"],
   },
 } as const satisfies Record<RegistryReadToolName, RegistryRefFieldMapEntry>;
