@@ -9,6 +9,8 @@
 // path and its tests. It stores no secrets: only public tool listings.
 
 import { Result } from "better-result";
+import { createHash } from "node:crypto";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { RegistryToolListing } from "./route-types.js";
@@ -59,7 +61,7 @@ export const cacheDir = (env: CacheEnv): string => {
 
 /** A stable sha256 hex of the server origin, used as the cache filename. */
 export const originHash = (serverOrigin: string): string =>
-  new Bun.CryptoHasher("sha256").update(serverOrigin).digest("hex");
+  createHash("sha256").update(serverOrigin).digest("hex");
 
 /** The cache file path for a given origin (one file per origin; spec S5.5 rule 5). */
 export const cachePathFor = (serverOrigin: string, env: CacheEnv): string =>
@@ -206,7 +208,8 @@ export const readCacheFile = async (
   filePath: string,
 ): Promise<RegistryCacheFile | undefined> => {
   const parsed = await Result.tryPromise({
-    try: async (): Promise<unknown> => await Bun.file(filePath).json(),
+    try: async (): Promise<unknown> =>
+      JSON.parse(await readFile(filePath, "utf-8")),
     catch: (cause) => cause,
   });
   if (Result.isError(parsed)) {
@@ -250,5 +253,8 @@ export const writeCacheFile = async (
   filePath: string,
   file: RegistryCacheFile,
 ): Promise<void> => {
-  await Bun.write(filePath, `${JSON.stringify(file, null, 2)}\n`);
+  // `Bun.write` created missing parent directories implicitly; `node:fs`
+  // `writeFile` does not, so mkdir the origin cache dir first (spec S5.3).
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, `${JSON.stringify(file, null, 2)}\n`);
 };

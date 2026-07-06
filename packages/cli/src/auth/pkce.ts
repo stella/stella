@@ -2,8 +2,10 @@
 //
 // Mirrors the existing repo convention for PKCE generation
 // (`apps/api/src/handlers/mcp-connectors/oauth.ts`'s `createPkce`): random
-// bytes via Web Crypto, S256 challenge via `Bun.CryptoHasher` per the
-// "prefer Bun-native APIs" convention.
+// bytes via Web Crypto, S256 challenge via `node:crypto` `createHash` so the
+// published CLI runs under plain Node (Bun executes `node:*` natively).
+
+import { createHash } from "node:crypto";
 
 const VERIFIER_BYTES = 32;
 const STATE_BYTES = 32;
@@ -28,7 +30,7 @@ export const createPkcePair = (): PkcePair => {
 
 /** Derives the S256 code challenge for a given verifier (exported for tests/vectors). */
 export const generateCodeChallenge = (codeVerifier: string): string =>
-  new Bun.CryptoHasher("sha256").update(codeVerifier).digest("base64url");
+  createHash("sha256").update(codeVerifier).digest("base64url");
 
 /** Generates a random `state` parameter used to bind the callback to this login attempt. */
 export const createOAuthState = (): string => randomBase64Url(STATE_BYTES);

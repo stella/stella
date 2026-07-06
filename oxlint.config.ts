@@ -1911,5 +1911,24 @@ export default defineConfig({
         "typescript/no-unsafe-type-assertion": "off",
       },
     },
+    {
+      // @stll/cli is published to npm and must run under plain Node: the `Bun`
+      // global is undefined there, so any `Bun.*` use in shipped source is a
+      // runtime crash (Bun itself runs `node:*` natively, so the dev workflow
+      // is unaffected). Ban the global in source that lands in `dist`; test
+      // files run only under `bun test` and may use it.
+      files: ["packages/cli/src/**/*.{ts,tsx}"],
+      excludeFiles: ["packages/cli/src/**/*.test.ts"],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          {
+            name: "Bun",
+            message:
+              "@stll/cli is published to npm and must run under plain Node; use node:* APIs (node:fs/promises, node:crypto, node:http, node:child_process) instead of the Bun global.",
+          },
+        ],
+      },
+    },
   ],
 });

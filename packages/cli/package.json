@@ -26,6 +26,9 @@
     "README.md"
   ],
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "sideEffects": false,
   "exports": {
     ".": "./src/cli.ts"

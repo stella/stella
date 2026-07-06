@@ -157,7 +157,7 @@ const awaitAuthorizationCode = async (
   io: Io,
   authorizeUrl: string,
   redirectUri: string,
-  listener: ReturnType<typeof startLoopbackListener>,
+  listener: Awaited<ReturnType<typeof startLoopbackListener>>,
   expectedState: string,
 ): Promise<Result<AuthorizationCode, CliAuthError>> => {
   io.print("Opening the stella sign-in page in your browser:");
@@ -235,7 +235,7 @@ export const login = async (
     // will actually be redirected back to (the listener's ephemeral port, or
     // the portless default if binding failed), and it must stay identical
     // through to the token exchange.
-    const listener = startLoopbackListener();
+    const listener = await startLoopbackListener();
     const redirectUri = listener?.redirectUri ?? LOOPBACK_REDIRECT_URI;
 
     const authorizeUrl = buildAuthorizeUrl({

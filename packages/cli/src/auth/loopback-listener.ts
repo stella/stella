@@ -6,6 +6,8 @@
 // matches on hostname/pathname/protocol/search only, so any ephemeral port
 // still satisfies the registered redirect_uri.
 
+import { createServer } from "node:http";
+
 import { LOOPBACK_REDIRECT_PATH } from "./constants.js";
 import { LoopbackCallbackError, LoopbackTimeoutError } from "./errors.js";
 
@@ -56,69 +58,84 @@ const raceWithTimeout = async (
 };
 
 /**
- * Starts the loopback HTTP listener. Returns `undefined` if binding fails
+ * Starts the loopback HTTP listener. Resolves to `undefined` if binding fails
  * (sandboxed/offline environments) so callers can fall back to the manual
- * paste flow instead of crashing.
+ * paste flow instead of crashing. Async because `node:http`'s `listen` reports
+ * its OS-assigned port on the `listening` event, not synchronously.
  */
-export const startLoopbackListener = (): LoopbackListener | undefined => {
+export const startLoopbackListener = async (): Promise<
+  LoopbackListener | undefined
+> => {
   let deliver: ((callback: LoopbackCallback) => void) | undefined;
   const received = new Promise<LoopbackCallback>((resolve) => {
     deliver = resolve;
   });
 
-  let server: ReturnType<typeof Bun.serve>;
-  try {
-    server = Bun.serve({
-      fetch(request) {
-        const url = new URL(request.url);
-        if (url.pathname !== LOOPBACK_REDIRECT_PATH) {
-          return new Response("Not found", { status: 404 });
-        }
+  const server = createServer((request, response) => {
+    // `request.url` is the path+query only; rebuild a full URL against the
+    // fixed loopback host to parse the query string.
+    const url = new URL(request.url ?? "/", "http://127.0.0.1");
+    if (url.pathname !== LOOPBACK_REDIRECT_PATH) {
+      response.writeHead(404);
+      response.end("Not found");
+      return;
+    }
 
-        const error = url.searchParams.get("error");
-        if (error) {
-          const errorDescription = url.searchParams.get("error_description");
-          const state = url.searchParams.get("state");
-          deliver?.({
-            error,
-            kind: "error",
-            ...(errorDescription ? { errorDescription } : {}),
-            ...(state ? { state } : {}),
-          });
-          return new Response(renderCallbackPage(false), {
-            headers: { "Content-Type": "text/html" },
-          });
-        }
+    const error = url.searchParams.get("error");
+    if (error) {
+      const errorDescription = url.searchParams.get("error_description");
+      const state = url.searchParams.get("state");
+      deliver?.({
+        error,
+        kind: "error",
+        ...(errorDescription ? { errorDescription } : {}),
+        ...(state ? { state } : {}),
+      });
+      response.writeHead(200, { "Content-Type": "text/html" });
+      response.end(renderCallbackPage(false));
+      return;
+    }
 
-        const code = url.searchParams.get("code");
-        const state = url.searchParams.get("state");
-        if (!code || !state) {
-          return new Response("Missing code or state", { status: 400 });
-        }
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    if (!code || !state) {
+      response.writeHead(400);
+      response.end("Missing code or state");
+      return;
+    }
 
-        deliver?.({ code, kind: "success", state });
-        return new Response(renderCallbackPage(true), {
-          headers: { "Content-Type": "text/html" },
-        });
-      },
-      hostname: "127.0.0.1",
-      port: 0,
+    deliver?.({ code, kind: "success", state });
+    response.writeHead(200, { "Content-Type": "text/html" });
+    response.end(renderCallbackPage(true));
+  });
+
+  const listenerPort = await new Promise<number | undefined>((resolve) => {
+    // A pre-`listening` bind error (EADDRINUSE, EACCES, sandbox) resolves to
+    // `undefined`; the same handler stays attached afterward so a later socket
+    // error is absorbed rather than thrown as an uncaught `error` event.
+    server.on("error", () => resolve(undefined));
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      resolve(
+        address !== null && typeof address === "object"
+          ? address.port
+          : undefined,
+      );
     });
-  } catch {
+  });
+
+  if (listenerPort === undefined) {
+    server.close();
     return undefined;
   }
 
-  // `Server.port` is typed optional to cover unix-socket servers; a
-  // `hostname`+`port: 0` TCP server (as configured above) always reports a
-  // real port, so this fallback is unreachable in practice.
-  const listenerPort = server.port ?? 0;
-
   return {
-    // `Server.stop()` returns a `Promise<void>` that resolves once in-flight
-    // connections drain; the CLI doesn't need to wait for that; it just
-    // needs the port freed and no more callbacks delivered.
+    // The CLI just needs the port freed and no more callbacks delivered;
+    // `closeAllConnections` drops any lingering keep-alive socket so the
+    // event loop can exit, then `close` stops accepting new connections.
     close: () => {
-      void server.stop(true);
+      server.closeAllConnections();
+      server.close();
     },
     port: listenerPort,
     redirectUri: `http://127.0.0.1:${listenerPort}${LOOPBACK_REDIRECT_PATH}`,

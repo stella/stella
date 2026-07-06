@@ -120,6 +120,43 @@ jobs:
           echo "packages=${packages}" >> "${GITHUB_OUTPUT}"
           printf 'Packed: %s\n' "${packages}"
 
+          # Record whether cli is in this run so the plain-Node smoke test below
+          # only fires when the CLI tarball was actually built.
+          cli_selected=false
+          for p in "${pkgs[@]}"; do [ "${p}" = "cli" ] && cli_selected=true; done
+          echo "cli=${cli_selected}" >> "${GITHUB_OUTPUT}"
+
+      # The CLI is the one published package with an executable entrypoint, and
+      # it must run under plain Node (not Bun). Set up Node, install the packed
+      # tarball into a throwaway project exactly as an external consumer would
+      # (which resolves the CLI's runtime deps and never its workspace-only
+      # devDependencies), then run the real bin under `node`. A `Bun is not
+      # defined` regression (or any other crash) fails the release here instead
+      # of shipping a broken CLI.
+      - name: Set up Node for the CLI smoke test
+        if: ${{ steps.pack.outputs.cli == 'true' }}
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Smoke-test the packed CLI under plain Node
+        if: ${{ steps.pack.outputs.cli == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tgz="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
+          smoke="$(mktemp -d)"
+          cd "${smoke}"
+          npm init -y >/dev/null
+          # Consumer-style install: resolves @stll/cli + its runtime deps only.
+          # --ignore-scripts: no lifecycle hooks run for an untrusted tarball.
+          npm install --ignore-scripts "${tgz}"
+          cli="node_modules/@stll/cli/dist/cli.js"
+          echo "Running: node ${cli} --version"
+          node "${cli}" --version
+          echo "Running: node ${cli} --help"
+          node "${cli}" --help
+
       - name: Upload tarballs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

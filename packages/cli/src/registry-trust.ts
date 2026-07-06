@@ -10,6 +10,7 @@
 // below, exactly as the spec pins them.
 
 import { Result } from "better-result";
+import { createHash } from "node:crypto";
 
 import type { RegistryToolListing } from "./route-types.js";
 
@@ -273,9 +274,7 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
     listings.push(validated.listing);
   }
 
-  const toolsListHash = new Bun.CryptoHasher("sha256")
-    .update(rawBody)
-    .digest("hex");
+  const toolsListHash = createHash("sha256").update(rawBody).digest("hex");
 
   return { ok: true, listings, toolsListHash };
 };

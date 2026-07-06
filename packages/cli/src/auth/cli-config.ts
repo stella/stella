@@ -4,6 +4,8 @@
 // clients). Stored separately from `credential-store.ts`'s file, which holds
 // tokens and is mode 0600.
 
+import { Result } from "better-result";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -44,20 +46,19 @@ export const configFilePath = (configDir: string): string =>
   path.join(configDir, "config.json");
 
 export const readCliConfig = async (configDir: string): Promise<CliConfig> => {
-  const file = Bun.file(configFilePath(configDir));
-  if (!(await file.exists())) {
+  // A missing, corrupt, or empty config file must degrade to defaults, not
+  // crash every CLI invocation at context construction.
+  const raw = await Result.tryPromise(
+    async () => await readFile(configFilePath(configDir), "utf-8"),
+  );
+  if (Result.isError(raw)) {
     return EMPTY_CONFIG;
   }
-
-  // A corrupt or empty config file must degrade to defaults, not crash
-  // every CLI invocation at context construction.
-  let raw: unknown;
-  try {
-    raw = await file.json();
-  } catch {
+  const parsedJson = Result.try((): unknown => JSON.parse(raw.value));
+  if (Result.isError(parsedJson)) {
     return EMPTY_CONFIG;
   }
-  const parsed = v.safeParse(cliConfigSchema, raw);
+  const parsed = v.safeParse(cliConfigSchema, parsedJson.value);
   return parsed.success ? parsed.output : EMPTY_CONFIG;
 };
 
@@ -65,7 +66,11 @@ export const writeCliConfig = async (
   configDir: string,
   config: CliConfig,
 ): Promise<void> => {
-  await Bun.write(
+  // `Bun.write` created the parent directory implicitly; `node:fs` `writeFile`
+  // does not. Mirror `credential-store.ts`'s 0700 config dir (both files live
+  // in the same `~/.config/stella` directory).
+  await mkdir(configDir, { mode: 0o700, recursive: true });
+  await writeFile(
     configFilePath(configDir),
     `${JSON.stringify(config, null, 2)}\n`,
   );

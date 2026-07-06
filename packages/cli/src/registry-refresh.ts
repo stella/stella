@@ -16,6 +16,7 @@
 // build-time path.
 
 import { Result } from "better-result";
+import { readFile } from "node:fs/promises";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
@@ -53,7 +54,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 /** Load the baked-in listings (the committed snapshot) for the delta diff. */
 const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
   const parsed = await Result.tryPromise({
-    try: async (): Promise<unknown> => await Bun.file(SNAPSHOT_URL).json(),
+    try: async (): Promise<unknown> =>
+      JSON.parse(await readFile(SNAPSHOT_URL, "utf-8")),
     catch: (cause) => cause,
   });
   if (Result.isError(parsed) || !Array.isArray(parsed.value)) {
