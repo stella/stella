@@ -5,8 +5,8 @@ import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { createProbeCache } from "@/api/lib/health/probe-cache";
 import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
 import { probeDatabase } from "@/api/lib/health/probe-database";
+import { APP_VERSION } from "@/api/lib/version";
 
-const APP_VERSION = process.env["STELLA_VERSION"] ?? "dev";
 const resolveCommitSha = () => {
   const explicitSha = process.env["STELLA_COMMIT_SHA"];
   if (explicitSha && explicitSha !== "dev") {

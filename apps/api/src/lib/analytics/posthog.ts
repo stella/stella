@@ -5,8 +5,8 @@ import type {
   Analytics,
   ServerAnalyticsCaptureParams,
 } from "@/api/lib/analytics/types";
+import { APP_VERSION } from "@/api/lib/version";
 
-const APP_VERSION = process.env["STELLA_VERSION"] ?? "dev";
 const APP_COMMIT_SHA = process.env["STELLA_COMMIT_SHA"] ?? "dev";
 const ALLOWED_EVENTS = new Set<ServerAnalyticsCaptureParams["event"]>(
   Object.values(SERVER_ANALYTICS_EVENTS),
