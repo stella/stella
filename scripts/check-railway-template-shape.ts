@@ -11,6 +11,7 @@ const RAILWAY_SMOKE_WORKFLOW_PATH = ".github/workflows/railway-smoke.yml";
 const RAILWAY_SMOKE_SCRIPT_PATH = "scripts/check-railway-smoke.ts";
 const RAILWAY_SYNC_SCRIPT_PATH = "scripts/sync-railway-template-source.ts";
 const API_HEALTH_ROUTE_PATH = "apps/api/src/handlers/health/routes.ts";
+const API_VERSION_MODULE_PATH = "apps/api/src/lib/version.ts";
 const WEB_VITE_CONFIG_PATH = "apps/web/vite.config.ts";
 const API_DOCKERFILE_PATH = "apps/api/Dockerfile";
 const WEB_DOCKERFILE_PATH = "apps/web/Dockerfile";
@@ -292,10 +293,16 @@ for (const requiredText of [
   );
 }
 
+const apiVersionModule = readText(API_VERSION_MODULE_PATH);
+expect(
+  apiVersionModule.includes("RAILWAY_GIT_COMMIT_SHA"),
+  "API version module must expose Railway source deploy commit SHAs",
+);
+
 const apiHealthRoute = readText(API_HEALTH_ROUTE_PATH);
 expect(
-  apiHealthRoute.includes("RAILWAY_GIT_COMMIT_SHA"),
-  "API health route must expose Railway source deploy commit SHAs",
+  apiHealthRoute.includes("@/api/lib/version"),
+  "API health route must report build stamps from the shared version module",
 );
 
 const webViteConfig = readText(WEB_VITE_CONFIG_PATH);

@@ -1262,6 +1262,11 @@ export default defineConfig({
               "apps/api/src/lib/s3.ts",
               "apps/api/src/lib/scheduler/runner.ts",
               "apps/api/src/lib/subprocess.ts",
+              // Shared APP_VERSION resolution for routes.ts and posthog.ts
+              // above; reads STELLA_VERSION/RAILWAY_GIT_COMMIT_SHA directly
+              // rather than through env.ts so it stays side-effect-free at
+              // import time, matching the two call sites it replaces.
+              "apps/api/src/lib/version.ts",
               "apps/web/e2e/helpers/api.ts",
               "apps/web/e2e/staging/global-setup.ts",
               // Test-only helper: reads PROPERTY_TEST_NUM_RUNS_FACTOR and CI
