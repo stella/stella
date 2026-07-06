@@ -17,11 +17,22 @@ Create these services in one Railway project:
 - `gotenberg`: image service using `gotenberg/gotenberg:8`, no public domain.
 - Storage bucket, for example `stella-files`.
 
-Point the `api` service at the repository default `railway.json`. Point the
+Point the `api` service config file at `railway/api.railway.json`. Point the
 `web` service config file at `railway/web.railway.json`. Both services use the
 repository root as Docker build context. Railway calls this
 [config as code](https://docs.railway.com/config-as-code); custom config files
 are selected in each service's settings.
+
+The repository root must not contain a `railway.json` or `railway.toml` file.
+Railway auto-discovers a config file at the repository root and applies it to
+every GitHub-sourced service in a template, which would hijack each service's
+build (for example, forcing `web` to build the API Dockerfile). Keeping both
+service configs under `railway/` avoids that root auto-discovery. Because
+serialized template config drops per-service config-file paths, the marketplace
+template instead carries explicit per-service `build` settings in
+`railway/template-manifest.json`. Those `build` settings must stay in sync with
+the `build` blocks in each service's config file; `check:railway-template-draft`
+enforces that the published template's per-service build matches the manifest.
 
 ## API Variables
 
@@ -185,8 +196,10 @@ publishing. Check these items before the first publish:
 
 - `web` source points at the public GitHub repository on the intended branch.
 - `api` source points at the same repository and branch.
-- `api` config path is the repository default `/railway.json`.
+- `api` config path is `/railway/api.railway.json`.
 - `web` config path is `/railway/web.railway.json`.
+- No `railway.json` or `railway.toml` exists at the repository root, so Railway
+  does not auto-apply a root config to every GitHub-sourced service.
 - `api`, `web`, Postgres, Redis, Gotenberg, and the storage bucket all deploy
   from the template into a fresh project.
 - Generated values use `secret(...)`; no deploy-time user credentials are
@@ -279,7 +292,8 @@ notes before applying an upstream template update.
 
 ## Migrations
 
-`railway.json` runs `bun src/db/migrate.ts` as the API pre-deploy command. The
+`railway/api.railway.json` runs `bun src/db/migrate.ts` as the API pre-deploy
+command. The
 migration entrypoint is included in the API runtime image and uses the same
 `DATABASE_URL` as the server.
 

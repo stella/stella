@@ -4,7 +4,7 @@
     "builder": "DOCKERFILE",
     "dockerfilePath": "apps/api/Dockerfile",
     "watchPatterns": [
-      "/railway.json",
+      "/railway/api.railway.json",
       "/apps/api/**",
       "/apps/legal-atlas-runner/**",
       "/packages/**",

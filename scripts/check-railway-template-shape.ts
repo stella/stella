@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
-const API_CONFIG_PATH = "railway.json";
-const LEGACY_API_CONFIG_PATH = "railway/api.railway.json";
+const API_CONFIG_PATH = "railway/api.railway.json";
+const ROOT_RAILWAY_CONFIG_PATHS = ["railway.json", "railway.toml"];
 const WEB_CONFIG_PATH = "railway/web.railway.json";
 const RAILWAY_DOC_PATH = "docs/railway.md";
 const TEMPLATE_README_PATH = "railway/template-readme.md";
@@ -145,11 +145,16 @@ const validateServiceConfig = ({
   );
 };
 
-expect(existsSync(API_CONFIG_PATH), "API config must live at /railway.json");
 expect(
-  !existsSync(LEGACY_API_CONFIG_PATH),
-  "Do not keep duplicate API config at /railway/api.railway.json",
+  existsSync(API_CONFIG_PATH),
+  "API config must live at /railway/api.railway.json",
 );
+for (const rootConfigPath of ROOT_RAILWAY_CONFIG_PATHS) {
+  expect(
+    !existsSync(rootConfigPath),
+    `Root config file /${rootConfigPath} must not exist: Railway auto-discovers repo-root config files and applies them to every GitHub-sourced template service, hijacking per-service config`,
+  );
+}
 expect(existsSync(WEB_CONFIG_PATH), "Web config must exist");
 expect(existsSync(TEMPLATE_MANIFEST_PATH), "Template manifest must exist");
 
@@ -157,7 +162,7 @@ validateServiceConfig({
   path: API_CONFIG_PATH,
   dockerfilePath: "apps/api/Dockerfile",
   requiredWatchPatterns: [
-    "/railway.json",
+    "/railway/api.railway.json",
     "/apps/api/**",
     "/packages/**",
     "/bun.lock",
@@ -183,16 +188,16 @@ expect(
 
 const railwayDoc = readText(RAILWAY_DOC_PATH);
 expect(
-  railwayDoc.includes("`railway.json`"),
-  "Railway docs must reference root API config",
+  railwayDoc.includes("`railway/api.railway.json`"),
+  "Railway docs must reference the API config path",
 );
 expect(
   railwayDoc.includes("`railway/web.railway.json`"),
   "Railway docs must reference web config",
 );
 expect(
-  !railwayDoc.includes("railway/api.railway.json"),
-  "Railway docs must not reference the removed API config path",
+  railwayDoc.includes("repository root must not contain a `railway.json`"),
+  "Railway docs must document the repo-root config invariant (no railway.json/railway.toml)",
 );
 expect(
   railwayDoc.includes("## Source-Backed Smoke Verification"),
@@ -345,8 +350,8 @@ const apiRequiredUserInputs = getStringRecord(
 );
 
 expect(
-  getString(apiTemplate, "configFile") === "/railway.json",
-  "API template service must point at /railway.json",
+  getString(apiTemplate, "configFile") === "/railway/api.railway.json",
+  "API template service must point at /railway/api.railway.json",
 );
 expect(
   getString(webTemplate, "configFile") === "/railway/web.railway.json",

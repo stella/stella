@@ -43,7 +43,11 @@
       }
     },
     "api": {
-      "configFile": "/railway.json",
+      "configFile": "/railway/api.railway.json",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "apps/api/Dockerfile"
+      },
       "publicNetworking": true,
       "requiredUserInputs": {},
       "variables": {
@@ -68,6 +72,10 @@
     },
     "web": {
       "configFile": "/railway/web.railway.json",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "apps/web/Dockerfile"
+      },
       "publicNetworking": true,
       "variables": {
         "PUBLIC_API_URL": "https://${{api.RAILWAY_PUBLIC_DOMAIN}}",
