@@ -21,11 +21,11 @@ import {
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
+import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
-import type { JsonSchema } from "@/api/mcp/tool-types";
 
 /**
  * Chat's code-mode surface, projected from the MCP registry.
@@ -61,21 +61,6 @@ const EAGER_CHAT_READ_TOOLS = new Set<RegistryReadToolName>(["list_matters"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
-/**
- * The MCP registry stores each tool's input as a plain JSON Schema object
- * (`McpTool["inputSchema"]`). code-mode's `toolDefinition` types `inputSchema`
- * as `SchemaInput`, whose plain-JSON-Schema branch is a nominally distinct
- * interface, so the two JSON-Schema *types* do not unify structurally even
- * though the value is a valid JSON Schema. This projected input is only read by
- * code-mode's stub generator for the system prompt (the sole provider tool is
- * `execute_typescript`, with its own Zod schema); the registry handler still
- * validates its args with its own Valibot schema, so no validation is lost.
- */
-const toToolInputSchema = (schema: JsonSchema): SchemaInput =>
-  // SAFETY: JSON-Schema-to-SchemaInput boundary; see the note above.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see note above
-  schema as unknown as SchemaInput;
 
 /**
  * The chat-projectable read tools, in registry order. Derived from the

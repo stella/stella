@@ -14,11 +14,11 @@ import {
 import type { RegistryWriteToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-write-tool";
+import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
-import type { JsonSchema } from "@/api/mcp/tool-types";
 
 /**
  * Chat's write surface, projected from the `access: "write"` slice of the MCP
@@ -52,18 +52,6 @@ export type ProjectedWriteToolName = {
 export type ChatRegistryWriteToolMap = {
   [K in ProjectedWriteToolName]: ServerTool<SchemaInput, SchemaInput, K>;
 };
-
-/**
- * The MCP registry stores each tool's input as a plain JSON Schema object;
- * code-mode's `toolDefinition` types `inputSchema` as the nominally distinct
- * `SchemaInput`. The value is a valid JSON Schema either way, and the MCP
- * handler still validates args with its own Valibot schema, so no validation is
- * lost by this projection. Same boundary as `chat-code-mode.ts`.
- */
-const toToolInputSchema = (schema: JsonSchema): SchemaInput =>
-  // SAFETY: JSON-Schema-to-SchemaInput boundary; see the note above.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see note above
-  schema as unknown as SchemaInput;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

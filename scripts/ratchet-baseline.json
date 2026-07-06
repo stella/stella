@@ -1,6 +1,6 @@
 {
   "as-casts": {
-    "count": 125,
+    "count": 126,
     "files": {
       "apps/api/src/db-url.ts": 1,
       "apps/api/src/handlers/case-law/citation-authority.ts": 1,
@@ -13,6 +13,8 @@
       "apps/api/src/handlers/chat/tools/authorized-workspace-ids.ts": 1,
       "apps/api/src/handlers/chat/tools/business-registry-tools.ts": 1,
       "apps/api/src/handlers/chat/tools/chat-tool-types.ts": 1,
+      "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts": 1,
+      "apps/api/src/handlers/chat/tools/registry-adapter/tool-input-schema.ts": 1,
       "apps/api/src/handlers/chat/tools/workspace-tools.ts": 1,
       "apps/api/src/handlers/clauses/categories.ts": 1,
       "apps/api/src/handlers/clauses/update.ts": 1,
@@ -49,7 +51,6 @@
       "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
       "apps/web/src/components/chat-pasted-text-extension.ts": 1,
       "apps/web/src/components/chat/chat-ui-tools.ts": 2,
-      "apps/web/src/components/chat/tool-call-card.tsx": 1,
       "apps/web/src/components/inspector/chat-tab-panel.tsx": 1,
       "apps/web/src/components/inspector/document-ai-source-bar.tsx": 1,
       "apps/web/src/components/inspector/view-registry.ts": 1,
@@ -91,7 +92,7 @@
     }
   },
   "nullish-array-fallback": {
-    "count": 315,
+    "count": 313,
     "files": {
       "apps/api/src/handlers/case-law/court-weights.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search.ts": 5,
@@ -104,7 +105,6 @@
       "apps/api/src/handlers/chat/get-messages.ts": 1,
       "apps/api/src/handlers/chat/loop-detector.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 3,
-      "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts": 2,
       "apps/api/src/handlers/clauses/export.ts": 2,
       "apps/api/src/handlers/clauses/import.ts": 1,
       "apps/api/src/handlers/contacts/business-registries-lookup.ts": 1,
