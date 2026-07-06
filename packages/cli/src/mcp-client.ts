@@ -11,7 +11,13 @@ import { Result } from "better-result";
 import { CliBaseError } from "./auth/errors.js";
 import { MCP_HTTP_PATH } from "./mcp-constants.js";
 
+// `tools/call` can drive a long server operation (e.g. fill_template), so it
+// keeps a generous ceiling. The `tools/list` metadata fetch, by contrast, runs
+// on the startup refresh path and is awaited before the command executes, so a
+// tighter ceiling bounds how long an offline/slow client stalls before it falls
+// back to the baked-in tree.
 const REQUEST_TIMEOUT_MS = 30_000;
+const LIST_REQUEST_TIMEOUT_MS = 10_000;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -303,7 +309,7 @@ export const fetchToolsListRaw = async ({
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(body),
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+        signal: AbortSignal.timeout(LIST_REQUEST_TIMEOUT_MS),
       }),
     catch: (cause) => cause,
   });

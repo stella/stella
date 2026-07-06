@@ -18,12 +18,18 @@ import type { RegistryToolListing } from "./route-types.js";
 export const MAX_LISTING_BYTES: number = 1024 * 1024; // 1 MiB
 /** Reject a body advertising more tools than this. */
 export const MAX_TOOLS = 200;
+// Depth/enum caps bound recursion and abuse; they must clear the first-party
+// registry with headroom (the `registry snapshot validates` test in
+// registry-trust.test.ts fails closed if a shipped schema outgrows either cap).
+// The deepest baked-in schema is `save_template` (depth 7); the largest enum is
+// `set_practice_jurisdictions` (250). Both were raised from their spec S5.5
+// starting values (depth 6, enum 200) once the real registry exceeded them.
 /** Reject an `inputSchema` nested deeper than this (also catches `$ref` cycles). */
-export const MAX_SCHEMA_DEPTH = 6;
+export const MAX_SCHEMA_DEPTH = 8;
 /** Reject a single tool whose serialized `inputSchema` exceeds this (bytes). */
 export const MAX_TOOL_SCHEMA_BYTES: number = 64 * 1024; // 64 KiB
 /** Reject an `enum` with more members than this. */
-export const MAX_ENUM = 200;
+export const MAX_ENUM = 300;
 /** Reject a `properties` object with more keys than this. */
 export const MAX_PROPS = 100;
 

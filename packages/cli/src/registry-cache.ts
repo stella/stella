@@ -2,7 +2,7 @@
 // under `$XDG_CACHE_HOME/stella/registry/<origin-hash>.json` (`~/.cache/...`
 // fallback). The cache lets a `tools/list` fetched once (at `auth login` or on a
 // TTL refresh) drive the command tree offline until it goes stale, and records
-// the delta vs the baked-in tree so a divergence can be surfaced once on stderr.
+// the delta vs the baked-in tree so a divergence can be surfaced on stderr.
 //
 // This module is I/O-bounded (reads/writes the cache file); pure helpers
 // (`computeDelta`, `isCacheStale`, `isDeltaEmpty`) are exported for the runtime

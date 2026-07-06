@@ -4,6 +4,7 @@ import {
   MAX_ENUM,
   MAX_LISTING_BYTES,
   MAX_PROPS,
+  MAX_SCHEMA_DEPTH,
   MAX_TOOLS,
   validateFetchedToolsList,
 } from "./registry-trust.js";
@@ -118,8 +119,9 @@ describe("validateFetchedToolsList: rule 3 (size/depth caps)", () => {
 
   test("an inputSchema nested beyond MAX_SCHEMA_DEPTH is rejected", () => {
     let nested: Record<string, unknown> = { type: "string" };
-    // inputSchema is depth 1; wrap 7 property levels to exceed a depth cap of 6.
-    for (let level = 0; level < 7; level += 1) {
+    // inputSchema itself is depth 1; wrap MAX_SCHEMA_DEPTH + 1 property levels
+    // so the deepest node lands at depth MAX_SCHEMA_DEPTH + 2 (beyond the cap).
+    for (let level = 0; level < MAX_SCHEMA_DEPTH + 1; level += 1) {
       nested = { type: "object", properties: { child: nested } };
     }
     expect(
@@ -187,5 +189,21 @@ describe("validateFetchedToolsList: rule 4 (no executable content)", () => {
       },
     });
     expect(validateFetchedToolsList(body([tool])).ok).toBe(true);
+  });
+});
+
+describe("validateFetchedToolsList: the committed registry clears every cap", () => {
+  // The runtime path validates a live `tools/list` before it can drive commands.
+  // The baked-in snapshot is what the first-party server serves, so it MUST pass
+  // the trust boundary; otherwise the CLI would reject the real registry and fall
+  // back to the built-in tree on every refresh. This is the guard that keeps the
+  // depth/enum/size caps at or above the shipped registry's actual bounds.
+  test("the committed registry snapshot validates through the trust boundary", async () => {
+    const snapshotUrl = new URL(
+      "generated/registry-snapshot.json",
+      import.meta.url,
+    );
+    const tools = await Bun.file(snapshotUrl).json();
+    expect(validateFetchedToolsList(body(tools)).ok).toBe(true);
   });
 });

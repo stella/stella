@@ -6,6 +6,7 @@
 // directly so stricli's `??=` never overrides them.
 
 import { Result } from "better-result";
+import { createInterface } from "node:readline/promises";
 
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import type { Context } from "./context.js";
@@ -71,7 +72,8 @@ const arrayField = (value: unknown, key: string): readonly unknown[] => {
   return Array.isArray(field) ? field : [];
 };
 
-const writersFor = (context: Context): Writers => ({
+/** Bind a command's `Context` streams to the output layer's `Writers`. */
+export const writersFor = (context: Context): Writers => ({
   stdout: (text) => {
     context.process.stdout.write(text);
   },
@@ -364,8 +366,17 @@ const confirmDestructive = async ({
     writers.stderr("refusing destructive op without --yes on non-TTY\n");
     return "aborted";
   }
-  writers.stdout(`Run destructive command '${label}'? [y/N] `);
-  const answer = (await readAllStdin()).trim().toLowerCase();
+  // A TTY confirmation must read a single line: `readAllStdin` (Bun.stdin.text)
+  // waits for EOF, so `y`+Enter would never complete the prompt on a terminal.
+  const rl = createInterface({
+    input: context.process.stdin,
+    output: context.process.stdout,
+  });
+  const rawAnswer = await rl.question(
+    `Run destructive command '${label}'? [y/N] `,
+  );
+  rl.close();
+  const answer = rawAnswer.trim().toLowerCase();
   return answer === "y" || answer === "yes" ? "proceed" : "aborted";
 };
 
@@ -415,7 +426,11 @@ const classifyToolError = (payload: unknown): ExitCode => {
   return EXIT_CODES.server;
 };
 
-const readOutputFormat = (flags: LeafFlags, context: Context): OutputFormat => {
+/** Resolve the effective `OutputFormat` from the reserved output flags + TTY. */
+export const readOutputFormat = (
+  flags: LeafFlags,
+  context: Context,
+): OutputFormat => {
   const output = flags[RESERVED_FLAG_KEYS.output];
   return selectFormat({
     flags: {

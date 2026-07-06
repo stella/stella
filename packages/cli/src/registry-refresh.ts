@@ -28,6 +28,7 @@ import {
   type RawToolsList,
 } from "./mcp-client.js";
 import {
+  CACHE_SCHEMA_VERSION,
   cachePathFor,
   computeDelta,
   DEFAULT_TTL_SECONDS,
@@ -86,9 +87,13 @@ const divergenceNotice = (file: RegistryCacheFile): string =>
 /**
  * Pick the command tree for this invocation without any network (spec S5.3).
  * The baked-in tree is the default; a valid same-origin cache with a non-empty
- * delta builds from the cached listings and carries a one-time stderr notice.
- * Provenance is pinned: a cache whose `serverOrigin` differs is ignored (rule
- * 5), and a cached tree that fails to build falls back to baked-in (rule 6).
+ * delta builds from the cached listings and carries the one-line stderr notice
+ * for that divergence. The notice reflects a persistent state (the server tree
+ * differs from the built-in tree until the next refresh reconciles the cache),
+ * so it is emitted per invocation while divergent rather than suppressed after
+ * the first: this read path takes no network and writes no disk. Provenance is
+ * pinned: a cache whose `serverOrigin` differs is ignored (rule 5), and a
+ * cached tree that fails to build falls back to baked-in (rule 6).
  */
 export const resolveCommandTree = async ({
   serverOrigin,
@@ -196,7 +201,7 @@ export const refreshRegistryCache = async ({
   const lastNudgedVersion = nudge.nudgeVersion ?? existing?.lastNudgedVersion;
 
   const file: RegistryCacheFile = {
-    version: 2,
+    version: CACHE_SCHEMA_VERSION,
     serverOrigin,
     fetchedAt: new Date(now).toISOString(),
     ttlSeconds,

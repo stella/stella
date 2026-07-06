@@ -13,39 +13,17 @@ import {
   readResource,
 } from "./mcp-client.js";
 import { EXIT_CODES, type ExitCode } from "./mcp-constants.js";
-import {
-  renderResult,
-  selectFormat,
-  type OutputFormat,
-  type Writers,
-} from "./output.js";
+import { renderResult, type OutputFormat, type Writers } from "./output.js";
 import type { ResourceLeafSpec } from "./resource-types.js";
-import { RESERVED_FLAG_KEYS } from "./run-leaf-command.js";
+import {
+  readOutputFormat,
+  RESERVED_FLAG_KEYS,
+  writersFor,
+} from "./run-leaf-command.js";
 
 type LeafFlags = Record<string, unknown>;
 
 const REFERENCE_COLUMNS = ["name", "title", "mimeType"] as const;
-
-const writersFor = (context: Context): Writers => ({
-  stdout: (text) => {
-    context.process.stdout.write(text);
-  },
-  stderr: (text) => {
-    context.process.stderr.write(text);
-  },
-});
-
-const readOutputFormat = (flags: LeafFlags, context: Context): OutputFormat => {
-  const output = flags[RESERVED_FLAG_KEYS.output];
-  return selectFormat({
-    flags: {
-      output: output === "json" || output === "table" ? output : undefined,
-      json: flags[RESERVED_FLAG_KEYS.json] === true,
-      table: flags[RESERVED_FLAG_KEYS.table] === true,
-    },
-    isTTY: context.process.stdout.isTTY,
-  });
-};
 
 /** Resources fail only with unknown-URI: any rpc/404 maps to not-found (spec S4). */
 const mapResourceErrorExit = (error: McpClientError): ExitCode => {
