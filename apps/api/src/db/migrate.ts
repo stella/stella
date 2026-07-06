@@ -28,7 +28,29 @@ if (!url) {
 
 const client = new SQL({ url, max: 1 });
 
+// Bootstrap the `stella` RLS role before migrating. Managed-provider fresh
+// databases (no `docker-entrypoint-initdb.d`) never run
+// `docker/postgres/init.sql`, so the migrator owns role bootstrap; the RLS
+// migrations only GRANT to `stella` and would fail with `role "stella" does
+// not exist` on a clean DB. Keep this in parity with
+// `docker/postgres/init.sql` (init.sql stays the fast path for local
+// containers). Guard with a `pg_roles` lookup inside a DO block: there is no
+// `CREATE ROLE IF NOT EXISTS`, and a bare `CREATE ROLE` would error when the
+// role already exists (local dev, prod, reruns). `unaccent` is not bootstrapped
+// here: the migration that uses it self-runs `CREATE EXTENSION IF NOT EXISTS
+// unaccent`. `stella_ingestion` likewise self-creates in its own migration.
+const bootstrapRoleSql = `
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stella') THEN
+    CREATE ROLE stella NOLOGIN;
+  END IF;
+END
+$$;
+`;
+
 try {
+  await client.unsafe(bootstrapRoleSql);
   await migrate(drizzle({ client }), {
     // cwd is the migrate task's workingDirectory (/app/apps/api); mirrors
     // the path that assert-migrations-applied.ts checks at startup.

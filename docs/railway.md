@@ -281,7 +281,9 @@ notes before applying an upstream template update.
 
 `railway.json` runs `bun src/db/migrate.ts` as the API pre-deploy command. The
 migration entrypoint is included in the API runtime image and uses the same
-`DATABASE_URL` as the server.
+`DATABASE_URL` as the server. It bootstraps the `stella` RLS role idempotently
+before applying migrations, so a fresh managed Postgres needs no manual role
+setup.
 
 If a migration fails, Railway should not promote the API deployment. Fix the
 database/config problem, then redeploy the API service.
