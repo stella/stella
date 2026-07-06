@@ -61,6 +61,7 @@ export type SafeIdType =
   | "pendingUpload"
   | "playbook"
   | "playbookDefinition"
+  | "playbookDefinitionVersion"
   | "property"
   | "promptShortcut"
   | "propertyDependency"

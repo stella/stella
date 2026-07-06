@@ -60,6 +60,7 @@ import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import type {
+  PlaybookDefinitionStatus,
   PlaybookPositions,
   PlaybookScope,
 } from "@/api/handlers/playbooks/positions";
@@ -878,6 +879,21 @@ export const playbookDefinitions = p.pgTable(
     description: p.text(),
     scope: jsonb().$type<PlaybookScope>(),
     positions: jsonb().$type<PlaybookPositions>().notNull(),
+    // Advisory approval status (v1): "draft" | "approved". Editing
+    // (`update-by-id.ts`) always reverts this to "draft"; approving
+    // (`approve.ts`) snapshots the current definition into
+    // `playbookDefinitionVersions` and flips it to "approved". Nothing in
+    // the run/review path hard-blocks on this — see
+    // `PlaybookDefinitionStatus`.
+    status: p
+      .text("status")
+      .notNull()
+      .default("draft")
+      .$type<PlaybookDefinitionStatus>(),
+    approvedAt: p.timestamp("approved_at"),
+    approvedBy: p.text("approved_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
@@ -891,6 +907,50 @@ export const playbookDefinitions = p.pgTable(
     p
       .unique("playbook_definitions_id_org_unq")
       .on(table.id, table.organizationId),
+    ...orgPolicies(),
+  ],
+);
+
+/**
+ * Immutable snapshot of a `playbookDefinitions` row taken on each approval
+ * (`approve.ts`). Mirrors `clauseVersions`/`templateVersions`: append-only,
+ * one row per `(playbookDefinitionId, version)`, never updated in place.
+ * `restore-version.ts` reads a row here and copies it back onto the
+ * definition as a new draft; it never rewrites this table.
+ */
+export const playbookDefinitionVersions = p.pgTable(
+  "playbook_definition_versions",
+  {
+    id: pUuid<"playbookDefinitionVersion">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    playbookDefinitionId: safeUuid<"playbookDefinition">(
+      "playbook_definition_id",
+    ).notNull(),
+    version: p.integer().notNull(),
+    name: p.varchar({ length: 256 }).notNull(),
+    description: p.text(),
+    scope: jsonb().$type<PlaybookScope>(),
+    positions: jsonb().$type<PlaybookPositions>().notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    createdBy: p
+      .text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+  },
+  (table) => [
+    p
+      .uniqueIndex("playbook_def_versions_def_version_uidx")
+      .on(table.playbookDefinitionId, table.version),
+    p
+      .foreignKey({
+        name: "playbook_def_versions_def_fk",
+        columns: [table.playbookDefinitionId, table.organizationId],
+        foreignColumns: [playbookDefinitions.id, playbookDefinitions.organizationId],
+      })
+      .onDelete("cascade"),
+    p
+      .index("playbook_def_versions_organization_id_idx")
+      .on(table.organizationId),
     ...orgPolicies(),
   ],
 );
@@ -4567,6 +4627,7 @@ export const relations = defineRelations(
     properties,
     propertyDependencies,
     playbookDefinitions,
+    playbookDefinitionVersions,
     documentTypes,
     entities,
     taskAssignees,
@@ -4793,6 +4854,22 @@ export const relations = defineRelations(
       dependsOnProperty: r.one.properties({
         from: r.propertyDependencies.dependsOnPropertyId,
         to: r.properties.id,
+      }),
+    },
+    playbookDefinitions: {
+      versions: r.many.playbookDefinitionVersions({
+        from: r.playbookDefinitions.id,
+        to: r.playbookDefinitionVersions.playbookDefinitionId,
+      }),
+    },
+    playbookDefinitionVersions: {
+      playbookDefinition: r.one.playbookDefinitions({
+        from: r.playbookDefinitionVersions.playbookDefinitionId,
+        to: r.playbookDefinitions.id,
+      }),
+      createdByUser: r.one.user({
+        from: r.playbookDefinitionVersions.createdBy,
+        to: r.user.id,
       }),
     },
     entities: {

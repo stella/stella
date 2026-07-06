@@ -206,3 +206,17 @@ export const playbookScopeSchema = t.Object({
 });
 export type PlaybookScope = Static<typeof playbookScopeSchema>;
 export type PlaybookTrigger = NonNullable<PlaybookScope["trigger"]>;
+
+// ── Definition-level status (v1 approvals, advisory only) ─────────
+// Editing a playbook (`update-by-id.ts`) always reverts it to `draft`.
+// Approving (`approve.ts`) snapshots the current name/description/scope/
+// positions into an immutable `playbook_definition_versions` row and flips
+// this to `approved`. This status is advisory: nothing in the run/review
+// path hard-blocks on it.
+export const playbookDefinitionStatusSchema = t.Union([
+  t.Literal("draft"),
+  t.Literal("approved"),
+]);
+export type PlaybookDefinitionStatus = Static<
+  typeof playbookDefinitionStatusSchema
+>;

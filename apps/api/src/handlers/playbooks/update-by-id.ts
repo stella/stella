@@ -83,6 +83,9 @@ const updatePlaybookDefinition = createSafeRootHandler(
             description: body.description ?? null,
             scope: body.scope ?? null,
             positions,
+            // Any edit invalidates a prior approval, regardless of the
+            // definition's current status.
+            status: "draft",
             updatedAt: new Date(),
           })
           .where(
@@ -104,7 +107,7 @@ const updatePlaybookDefinition = createSafeRootHandler(
           changes: {
             fields: {
               old: null,
-              new: ["name", "description", "scope", "positions"],
+              new: ["name", "description", "scope", "positions", "status"],
             },
           },
         });
