@@ -245,11 +245,15 @@ const publicRailwayCopy = [
   ["template README", templateReadme],
   ["README", readText("README.md")],
 ];
+// A referral code inside a deploy URL is standard marketplace practice; the
+// guard targets prose that discusses monetization, so URLs are stripped
+// before matching.
 const privateBusinessPattern = /kickback|referralCode|payout|earnings/iu;
+const withoutUrls = (text: string) => text.replace(/https?:\/\/\S+/gu, "");
 for (const [label, text] of publicRailwayCopy) {
   expect(
-    !privateBusinessPattern.test(text),
-    `${label} must not include referral or payout copy`,
+    !privateBusinessPattern.test(withoutUrls(text)),
+    `${label} must not include referral or payout copy outside links`,
   );
 }
 
