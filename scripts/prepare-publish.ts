@@ -47,7 +47,19 @@ const root =
 pkg.exports = distExports;
 pkg.main = root.import;
 pkg.types = root.types;
-pkg.files = ["dist", "README.md"];
+// Ship built artifacts and the README; drop `src`. Carry over any non-`src`
+// asset dirs the source `files` allowlist opted in (e.g. TanStack Intent's
+// `skills/`), so published tarballs keep shipping them.
+const carried = Array.isArray(pkg.files)
+  ? pkg.files.filter(
+      (entry: unknown): entry is string =>
+        typeof entry === "string" &&
+        entry !== "src" &&
+        entry !== "dist" &&
+        entry !== "README.md",
+    )
+  : [];
+pkg.files = ["dist", "README.md", ...carried];
 
 await Bun.write(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
 console.log(
