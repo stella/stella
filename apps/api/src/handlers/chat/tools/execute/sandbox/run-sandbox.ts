@@ -166,9 +166,14 @@ const raceHostWorkAgainstDeadline = async (
   hostWork: readonly Promise<void>[],
   deadline: number,
 ): Promise<void> => {
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) {
+    return;
+  }
+
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const budget = new Promise<void>((resolve) => {
-    timeoutId = setTimeout(resolve, Math.max(0, deadline - Date.now()));
+    timeoutId = setTimeout(resolve, remainingMs);
   });
   try {
     await Promise.race([Promise.allSettled(hostWork), budget]);
@@ -177,6 +182,36 @@ const raceHostWorkAgainstDeadline = async (
       clearTimeout(timeoutId);
     }
   }
+};
+
+/**
+ * Test-only: read the live admission counters. Concurrency tests use this to
+ * observe "a run is QUEUED behind the cap" as a state transition instead of
+ * sleeping a fixed interval and hoping the queue has settled — a fixed sleep is
+ * exactly what flakes on a loaded CI runner. The waiter push and the admission
+ * flush both happen synchronously inside `runSandbox`'s first await, so polling
+ * this snapshot for `queuedWaiters` is a guaranteed-eventual observation, never
+ * a timing bet.
+ */
+export const getSandboxAdmissionSnapshot = (): SandboxAdmissionSnapshot =>
+  snapshotSandboxAdmission();
+
+/**
+ * Test-only: register host work in the process-global in-flight set exactly as
+ * `runHostCall` does (added on registration, removed when it settles). Drain
+ * tests use it to create a stranded entry (a promise that never settles)
+ * DIRECTLY, instead of racing a real run's wall-clock deadline against QuickJS
+ * startup on a loaded runner: with a small `maxDurationMs`, the deadline can
+ * pass before the script's host call ever executes, so the end-to-end
+ * construction of a strand is nondeterministic under CI load.
+ */
+export const trackSandboxHostWorkForTest = (work: Promise<void>): void => {
+  const tracked: Promise<void> = work
+    .catch(() => undefined)
+    .finally(() => {
+      sandboxHostWorkInFlight.delete(tracked);
+    });
+  sandboxHostWorkInFlight.add(tracked);
 };
 
 /**

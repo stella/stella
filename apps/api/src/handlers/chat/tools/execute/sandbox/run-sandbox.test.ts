@@ -10,7 +10,9 @@ import type {
 import {
   SandboxAdmissionNotIdleError,
   awaitSandboxAdmissionIdle,
+  getSandboxAdmissionSnapshot,
   runSandbox as runSandboxInternal,
+  trackSandboxHostWorkForTest,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 
@@ -61,9 +63,15 @@ type WaitForConditionProps = {
   timeoutMs?: number;
 };
 
+// Poll a condition that is GUARANTEED to become true under correct behaviour
+// (e.g. "the second run has been pushed onto the admission queue"). The
+// timeout is a bug guard, not an observation window: it only fires when the
+// property under test is actually broken, so it is set generously (just below
+// the 15s per-test ceiling) rather than tuned to expected wall-clock progress.
+// Never use this to wait a fixed interval "long enough" for background work.
 const waitForCondition = async ({
   condition,
-  timeoutMs = 3000,
+  timeoutMs = 12_000,
 }: WaitForConditionProps): Promise<void> => {
   const deadline = Date.now() + timeoutMs;
   while (!condition()) {
@@ -75,6 +83,79 @@ const waitForCondition = async ({
       setTimeout(resolve, 5);
     });
   }
+};
+
+// Observe "exactly N runs are parked in the admission queue" as a state
+// transition on the live counters. Once a waiter is visibly queued, admission
+// has already run and denied it a slot, so asserting "it has not started" right
+// after this is deterministic — no sleep window that a slow runner can miss.
+const waitForQueuedWaiters = async (count: number): Promise<void> => {
+  await waitForCondition({
+    condition: () => getSandboxAdmissionSnapshot().queuedWaiters === count,
+  });
+};
+
+type HoldGate = {
+  registry: SandboxFunctionRegistry;
+  startedLabels: string[];
+  whenStarted: (label: string) => Promise<void>;
+  release: (label: string) => void;
+};
+
+/**
+ * A gated `read.hold({ label })` tool whose lifecycle the test controls through
+ * explicit promises instead of wall-clock waits: `whenStarted(label)` resolves
+ * once the host call for that label has begun (its run was admitted and reached
+ * the host bridge) and `release(label)` lets it return. Every gate is created
+ * upfront, so a release can never be lost to timing: even if it fires before
+ * the host call starts, the call finds its gate already resolved. That ordering
+ * hole (releasing a gate that did not exist yet, so the run hung to its
+ * deadline) is exactly what sank the previous sleep-based versions on a loaded
+ * CI runner.
+ */
+const createHoldGate = (labels: readonly string[]): HoldGate => {
+  const startedGates = new Map(
+    labels.map((label) => [label, createDeferredPromise()]),
+  );
+  const releaseGates = new Map(
+    labels.map((label) => [label, createDeferredPromise()]),
+  );
+  const startedLabels: string[] = [];
+
+  const gateFor = (
+    gates: Map<string, DeferredPromise>,
+    label: string,
+  ): DeferredPromise => {
+    const gate = gates.get(label);
+    if (!gate) {
+      throw new Error(`No hold gate was created for label: ${label}`);
+    }
+    return gate;
+  };
+
+  const hold = createToolFunction(
+    {
+      name: "hold",
+      input: v.strictObject({ label: v.string() }),
+      output: v.strictObject({ label: v.string() }),
+      schema: v.any(),
+    },
+    async function* (input) {
+      startedLabels.push(input.label);
+      gateFor(startedGates, input.label).resolve();
+      await gateFor(releaseGates, input.label).promise;
+      return Result.ok({ label: input.label });
+    },
+  );
+
+  return {
+    registry: { hold },
+    startedLabels,
+    whenStarted: async (label) => await gateFor(startedGates, label).promise,
+    release: (label) => {
+      gateFor(releaseGates, label).resolve();
+    },
+  };
 };
 
 const echo = createToolFunction(
@@ -274,20 +355,25 @@ describe("runSandbox", () => {
     }
   });
 
-  it("times out long host work near the deadline instead of the host duration", async () => {
-    const startedAt = Date.now();
+  it("times out at the deadline instead of waiting for unfinished host work", async () => {
+    // The host call blocks on a gate the test releases only AFTER the run has
+    // returned, so the run terminating with `timeout` at all proves the
+    // deadline governs, not the host call's duration. No elapsed-time bound:
+    // wall-clock assertions are exactly what flakes on a loaded runner.
+    const gate = createHoldGate(["slow-host"]);
     const result = await runSandbox({
-      source: `await read.slow({ ms: 800 }); return "ok";`,
-      registry: baseRegistry,
-      limits: { maxDurationMs: 100 },
+      source: `await read.hold({ label: "slow-host" }); return "ok";`,
+      registry: gate.registry,
+      limits: { maxDurationMs: 250 },
     });
-    const elapsedMs = Date.now() - startedAt;
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isError(result)) {
       expect(result.error.reason).toBe("timeout");
     }
-    expect(elapsedMs).toBeLessThan(700);
+
+    // Settle the orphaned host call so the afterEach drain stays instant.
+    gate.release("slow-host");
   });
 
   it("aborts an exponential allocation on memory limit", async () => {
@@ -576,95 +662,57 @@ describe("runSandbox", () => {
 
   it("serializes runs for the same concurrency key", async () => {
     const concurrencyKey = nextSandboxConcurrencyKey();
-    const startedLabels: string[] = [];
-    const holds = new Map<string, DeferredPromise>();
-    const hold = createToolFunction(
-      {
-        name: "hold",
-        input: v.strictObject({ label: v.string() }),
-        output: v.strictObject({ label: v.string() }),
-        schema: v.any(),
-      },
-      async function* (input) {
-        startedLabels.push(input.label);
-        const deferred = createDeferredPromise();
-        holds.set(input.label, deferred);
-        await deferred.promise;
-        return Result.ok({ label: input.label });
-      },
-    );
-    const registry: SandboxFunctionRegistry = { hold };
+    const gate = createHoldGate(["first", "second"]);
 
     const firstPromise = runSandbox({
       source: `return await read.hold({ label: "first" });`,
-      registry,
+      registry: gate.registry,
       concurrencyKey,
     });
-    await waitForCondition({
-      condition: () => startedLabels.length === 1,
-    });
+    await gate.whenStarted("first");
 
     const secondPromise = runSandbox({
       source: `return await read.hold({ label: "second" });`,
-      registry,
+      registry: gate.registry,
       concurrencyKey,
     });
 
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 30);
-    });
+    // Once the second run is visibly parked in the admission queue, it was
+    // definitively denied a slot while the first still holds the per-key slot.
+    await waitForQueuedWaiters(1);
+    expect(gate.startedLabels).toEqual(["first"]);
 
-    expect(startedLabels).toEqual(["first"]);
-
-    holds.get("first")?.resolve();
-    await waitForCondition({
-      condition: () => startedLabels.length === 2,
-    });
-    holds.get("second")?.resolve();
+    gate.release("first");
+    await gate.whenStarted("second");
+    expect(gate.startedLabels).toEqual(["first", "second"]);
+    gate.release("second");
 
     const [first, second] = await Promise.all([firstPromise, secondPromise]);
     expect(Result.isOk(first)).toBe(true);
     expect(Result.isOk(second)).toBe(true);
-    expect(startedLabels).toEqual(["first", "second"]);
   });
 
   it("allows different concurrency keys to run concurrently up to the global cap", async () => {
     const concurrencyKeyPrefix = nextSandboxConcurrencyKey();
-    const startedLabels: string[] = [];
-    const holds = new Map<string, DeferredPromise>();
-    const hold = createToolFunction(
-      {
-        name: "hold",
-        input: v.strictObject({ label: v.string() }),
-        output: v.strictObject({ label: v.string() }),
-        schema: v.any(),
-      },
-      async function* (input) {
-        startedLabels.push(input.label);
-        const deferred = createDeferredPromise();
-        holds.set(input.label, deferred);
-        await deferred.promise;
-        return Result.ok({ label: input.label });
-      },
-    );
-    const registry: SandboxFunctionRegistry = { hold };
+    const labels = ["a", "b", "c", "d"];
+    const gate = createHoldGate(labels);
 
-    const promises = ["a", "b", "c", "d"].map(
+    const promises = labels.map(
       async (label) =>
         await runSandbox({
           source: `return await read.hold({ label: "${label}" });`,
-          registry,
+          registry: gate.registry,
           concurrencyKey: `${concurrencyKeyPrefix}-${label}`,
         }),
     );
 
-    await waitForCondition({
-      condition: () => startedLabels.length === 4,
-    });
-    expect(new Set(startedLabels)).toEqual(new Set(["a", "b", "c", "d"]));
+    // All four host calls start while every release gate is still closed, so
+    // the four runs are provably in flight at the same time.
+    await Promise.all(labels.map(async (label) => gate.whenStarted(label)));
+    expect(new Set(gate.startedLabels)).toEqual(new Set(labels));
 
-    for (const label of startedLabels) {
-      holds.get(label)?.resolve();
+    for (const label of labels) {
+      gate.release(label);
     }
 
     const results = await Promise.all(promises);
@@ -673,48 +721,34 @@ describe("runSandbox", () => {
 
   it("queues a fifth distinct key until a global slot opens", async () => {
     const concurrencyKeyPrefix = nextSandboxConcurrencyKey();
-    const startedLabels: string[] = [];
-    const holds = new Map<string, DeferredPromise>();
-    const hold = createToolFunction(
-      {
-        name: "hold",
-        input: v.strictObject({ label: v.string() }),
-        output: v.strictObject({ label: v.string() }),
-        schema: v.any(),
-      },
-      async function* (input) {
-        startedLabels.push(input.label);
-        const deferred = createDeferredPromise();
-        holds.set(input.label, deferred);
-        await deferred.promise;
-        return Result.ok({ label: input.label });
-      },
-    );
-    const registry: SandboxFunctionRegistry = { hold };
+    const labels = ["a", "b", "c", "d", "e"];
+    const gate = createHoldGate(labels);
 
-    const promises = ["a", "b", "c", "d", "e"].map(
+    // Admission waiters are pushed synchronously in call order, so with the
+    // global cap at 4 exactly a-d are admitted and e is queued.
+    const promises = labels.map(
       async (label) =>
         await runSandbox({
           source: `return await read.hold({ label: "${label}" });`,
-          registry,
+          registry: gate.registry,
           concurrencyKey: `${concurrencyKeyPrefix}-${label}`,
         }),
     );
 
-    await waitForCondition({
-      condition: () => startedLabels.length === 4,
-    });
-    expect(new Set(startedLabels)).toEqual(new Set(["a", "b", "c", "d"]));
-    expect(startedLabels).not.toContain("e");
+    const admitted = ["a", "b", "c", "d"];
+    await Promise.all(admitted.map(async (label) => gate.whenStarted(label)));
+    // e being visibly parked in the queue proves it was denied a slot while
+    // all four admitted runs are still holding theirs.
+    await waitForQueuedWaiters(1);
+    expect(new Set(gate.startedLabels)).toEqual(new Set(admitted));
+    expect(gate.startedLabels).not.toContain("e");
 
-    holds.get("a")?.resolve();
-    await waitForCondition({
-      condition: () => startedLabels.length === 5,
-    });
-    expect(startedLabels).toContain("e");
+    gate.release("a");
+    await gate.whenStarted("e");
+    expect(gate.startedLabels).toContain("e");
 
     for (const label of ["b", "c", "d", "e"]) {
-      holds.get(label)?.resolve();
+      gate.release(label);
     }
 
     const results = await Promise.all(promises);
@@ -723,45 +757,35 @@ describe("runSandbox", () => {
 
   it("does not count queue wait time against maxDurationMs", async () => {
     const concurrencyKey = nextSandboxConcurrencyKey();
-    const holds = new Map<string, DeferredPromise>();
-    const hold = createToolFunction(
-      {
-        name: "hold",
-        input: v.strictObject({ label: v.string() }),
-        output: v.strictObject({ label: v.string() }),
-        schema: v.any(),
-      },
-      async function* (input) {
-        const deferred = createDeferredPromise();
-        holds.set(input.label, deferred);
-        await deferred.promise;
-        return Result.ok({ label: input.label });
-      },
-    );
-    const registry: SandboxFunctionRegistry = { hold };
+    const gate = createHoldGate(["first"]);
 
+    // The first run's deadline must comfortably outlast the queued interval
+    // below plus any load-induced slack; only the second run's budget is under
+    // test.
     const firstPromise = runSandbox({
       source: `return await read.hold({ label: "first" });`,
-      registry,
+      registry: gate.registry,
       concurrencyKey,
-      limits: { maxDurationMs: 2000 },
+      limits: { maxDurationMs: 12_000 },
     });
-    await waitForCondition({
-      condition: () => holds.has("first"),
-    });
+    await gate.whenStarted("first");
 
+    const secondBudgetMs = 2000;
     const secondPromise = runSandbox({
       source: `return 42;`,
-      registry,
+      registry: gate.registry,
       concurrencyKey,
-      limits: { maxDurationMs: 1000 },
+      limits: { maxDurationMs: secondBudgetMs },
     });
+    await waitForQueuedWaiters(1);
 
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 1200);
-    });
-
-    holds.get("first")?.resolve();
+    // Keep the second run queued for strictly longer than its entire execution
+    // budget. The property is inherently about wall-clock, but the wait only
+    // needs a MINIMUM (Bun.sleep guarantees at-least semantics), so runner
+    // load can only lengthen the queued interval — it exercises the property
+    // harder, it can never fake a pass or force a failure.
+    await Bun.sleep(secondBudgetMs + 250);
+    gate.release("first");
 
     const [first, second] = await Promise.all([firstPromise, secondPromise]);
     expect(Result.isOk(first)).toBe(true);
@@ -773,17 +797,16 @@ describe("runSandbox", () => {
 
   it("releases keyed and global slots after a timeout", async () => {
     const concurrencyKey = nextSandboxConcurrencyKey();
+    // Admission waiters are pushed synchronously in call order: the first run
+    // takes the per-key slot and the second queues behind it, no spacing sleep
+    // needed. The second run can only succeed if the first's timeout released
+    // both the keyed and the global slot.
     const firstPromise = runSandbox({
       source: `await read.slow({ ms: 150 }); return "late";`,
       registry: baseRegistry,
       concurrencyKey,
       limits: { maxDurationMs: 50 },
     });
-
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 20);
-    });
-
     const secondPromise = runSandbox({
       source: `return 42;`,
       registry: baseRegistry,
@@ -803,42 +826,25 @@ describe("runSandbox", () => {
 
   it("releases keyed and global slots after a runtime failure", async () => {
     const concurrencyKey = nextSandboxConcurrencyKey();
-    const holds = new Map<string, DeferredPromise>();
-    const hold = createToolFunction(
-      {
-        name: "hold",
-        input: v.strictObject({ label: v.string() }),
-        output: v.strictObject({ label: v.string() }),
-        schema: v.any(),
-      },
-      async function* (input) {
-        const deferred = createDeferredPromise();
-        holds.set(input.label, deferred);
-        await deferred.promise;
-        return Result.ok({ label: input.label });
-      },
-    );
-    const registry: SandboxFunctionRegistry = { hold };
+    const gate = createHoldGate(["first"]);
 
     const firstPromise = runSandbox({
       source: `
         await read.hold({ label: "first" });
         throw new Error("boom");
       `,
-      registry,
+      registry: gate.registry,
       concurrencyKey,
     });
-    await waitForCondition({
-      condition: () => holds.has("first"),
-    });
+    await gate.whenStarted("first");
 
     const secondPromise = runSandbox({
       source: `return 42;`,
-      registry,
+      registry: gate.registry,
       concurrencyKey,
     });
 
-    holds.get("first")?.resolve();
+    gate.release("first");
 
     const [first, second] = await Promise.all([firstPromise, secondPromise]);
     expect(Result.isError(first)).toBe(true);
@@ -984,20 +990,19 @@ describe("runSandbox", () => {
 
   it("passes an abort signal to host handlers so they can avoid committing after timeout", async () => {
     let sideEffect = 0;
+    // The host call blocks on a gate the test releases only AFTER the run has
+    // returned (i.e. after the bridge's AbortController has fired), so the
+    // signal check runs at a deterministic point instead of racing two timers.
+    const commitGate = createDeferredPromise();
     const mutate = createToolFunction(
       {
         name: "mutate",
-        input: v.strictObject({
-          ms: v.number(),
-          value: v.number(),
-        }),
+        input: v.strictObject({ value: v.number() }),
         output: v.strictObject({ ok: v.boolean() }),
         schema: v.any(),
       },
       async function* (input, { signal }) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, input.ms);
-        });
+        await commitGate.promise;
         signal.throwIfAborted();
         sideEffect = input.value;
         return Result.ok({ ok: true });
@@ -1008,9 +1013,9 @@ describe("runSandbox", () => {
     };
 
     const result = await runSandbox({
-      source: `await read.mutate({ ms: 200, value: 7 }); return "done";`,
+      source: `await read.mutate({ value: 7 }); return "done";`,
       registry,
-      limits: { maxDurationMs: 50 },
+      limits: { maxDurationMs: 250 },
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -1018,9 +1023,10 @@ describe("runSandbox", () => {
       expect(result.error.reason).toBe("timeout");
     }
 
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 300);
-    });
+    // Let the (now aborted) host call proceed to its commit check, then await
+    // its full unwind through the drain — an event, not a fixed sleep.
+    commitGate.resolve();
+    await awaitSandboxAdmissionIdle();
 
     expect(sideEffect).toBe(0);
   });
@@ -1049,57 +1055,47 @@ describe("runSandbox", () => {
 });
 
 describe("awaitSandboxAdmissionIdle", () => {
-  // A host binding that never settles and ignores the abort signal strands its
-  // in-flight promise in the process-global set once the run returns at its
-  // deadline. The drain must not then hang for the full per-test timeout on this
-  // test and every later one: it fails fast with the live counters and evicts
-  // the strand so the next drain is clean. This is the class guard for the
-  // "every sandbox test uniformly times out at ~15s" flake.
+  // A host call that never settles (and ignores the abort signal) strands its
+  // in-flight promise in the process-global set once its run returns at the
+  // deadline. The drain must not then hang for the full per-test timeout on
+  // this test and every later one: it fails fast with the live counters and
+  // evicts the strand so the next drain is clean. This is the class guard for
+  // the "every sandbox test uniformly times out at ~15s" flake.
+  //
+  // The strand is injected directly rather than constructed through a real
+  // run: with a real run, a small maxDurationMs races QuickJS startup on a
+  // loaded runner and the host call may never begin, which made the previous
+  // version of this test flake in CI. The injected shape (an entry in the
+  // in-flight set with no admitted run) is byte-for-byte what such a run
+  // leaves behind. The drain budget is an injected parameter here, and the
+  // assertions are about the thrown diagnostic and its counters — never about
+  // wall-clock progress.
   it("fails fast with a diagnostic when a host promise is stranded, then unpoisons", async () => {
-    let started = false;
-    const strand = createToolFunction(
-      {
-        name: "strand",
-        input: v.strictObject({}),
-        output: v.strictObject({}),
-        schema: v.any(),
-      },
-      async function* () {
-        started = true;
-        await new Promise<void>(() => {
-          // never resolves; ignores the abort signal
-        });
-        return Result.ok({});
-      },
+    trackSandboxHostWorkForTest(
+      new Promise<void>(() => {
+        // never settles; models a stranded host call
+      }),
     );
-
-    // Short deadline so the run itself returns quickly (releasing its slot)
-    // while the orphaned host promise lingers in the in-flight set.
-    void runSandbox({
-      source: `return await read.strand({});`,
-      registry: { strand },
-      limits: { maxDurationMs: 200 },
-    });
-
-    await waitForCondition({ condition: () => started });
 
     let thrown: unknown;
     try {
-      await awaitSandboxAdmissionIdle({ timeoutMs: 500 });
+      await awaitSandboxAdmissionIdle({ timeoutMs: 250 });
     } catch (error) {
       thrown = error;
     }
 
     expect(thrown).toBeInstanceOf(SandboxAdmissionNotIdleError);
     if (thrown instanceof SandboxAdmissionNotIdleError) {
-      // The slot was released at the deadline; only the host tail is stranded.
-      expect(thrown.snapshot.activeSandboxCount).toBe(0);
-      expect(thrown.snapshot.queuedWaiters).toBe(0);
-      expect(thrown.snapshot.hostWorkInFlight).toBeGreaterThan(0);
+      // No run is admitted or queued; only the host tail is stranded.
+      expect(thrown.snapshot).toEqual({
+        activeSandboxCount: 0,
+        queuedWaiters: 0,
+        hostWorkInFlight: 1,
+      });
     }
 
-    // The strand was evicted, so a subsequent drain resolves immediately and
-    // the poison does not cascade into the next test or file.
-    await awaitSandboxAdmissionIdle({ timeoutMs: 500 });
+    // The strand was evicted, so a subsequent drain resolves instead of
+    // cascading the poison into the next test or file.
+    await awaitSandboxAdmissionIdle({ timeoutMs: 250 });
   });
 });
