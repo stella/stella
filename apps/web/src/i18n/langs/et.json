@@ -359,7 +359,8 @@
       "denied": "Keelatud",
       "deny": "Keela",
       "externalMcpDescription": "Saadetakse ainult selle tööriistakutse jaoks vajalik teave.",
-      "externalMcpQuestion": "Kas stella tohib selle päringu saata teenusepakkujale {provider}?"
+      "externalMcpQuestion": "Kas stella tohib selle päringu saata teenusepakkujale {provider}?",
+      "uploadedDocumentPlaceholder": "(üles laaditud dokument)"
     },
     "askAnything": "Küsi mida tahes",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, one {# üksus} other {# üksust}} kustutatud",
     "description": "Kirjeldus",
     "details": "Üksikasjad",
+    "document": "Dokument",
     "documentation": "Dokumentatsioon",
     "done": "Valmis",
     "download": "Laadi alla",
@@ -1945,7 +1947,6 @@
       "caseLaw": "Kohtupraktika",
       "chat": "Vestlus",
       "contact": "Kontakt",
-      "document": "Dokument",
       "folder": "Kaust",
       "link": "Link",
       "matter": "Toimik",

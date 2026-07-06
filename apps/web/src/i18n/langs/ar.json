@@ -359,7 +359,8 @@
       "denied": "تم الرفض",
       "deny": "رفض",
       "externalMcpDescription": "لن يُرسَل سوى المعلومات اللازمة لاستدعاء هذه الأداة.",
-      "externalMcpQuestion": "هل يمكن أن ترسل stella هذا الطلب إلى {provider}؟"
+      "externalMcpQuestion": "هل يمكن أن ترسل stella هذا الطلب إلى {provider}؟",
+      "uploadedDocumentPlaceholder": "(مستند مرفوع)"
     },
     "askAnything": "اسأل عن أي شيء",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, zero {تم حذف أي عنصر} one {تم حذف عنصر واحد} two {تم حذف عنصرين} few {تم حذف # عناصر} many {تم حذف # عنصرًا} other {تم حذف # عنصر}}",
     "description": "الوصف",
     "details": "التفاصيل",
+    "document": "مستند",
     "documentation": "التوثيق",
     "done": "تم",
     "download": "تنزيل",
@@ -1945,7 +1947,6 @@
       "caseLaw": "السوابق القضائية",
       "chat": "محادثة",
       "contact": "جهة اتصال",
-      "document": "مستند",
       "folder": "مجلد",
       "link": "رابط",
       "matter": "ملف",

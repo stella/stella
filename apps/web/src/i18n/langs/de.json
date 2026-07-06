@@ -359,7 +359,8 @@
       "denied": "Abgelehnt",
       "deny": "Ablehnen",
       "externalMcpDescription": "Es werden nur die für diesen Tool-Aufruf erforderlichen Informationen gesendet.",
-      "externalMcpQuestion": "Darf stella diese Anfrage an {provider} senden?"
+      "externalMcpQuestion": "Darf stella diese Anfrage an {provider} senden?",
+      "uploadedDocumentPlaceholder": "(hochgeladenes Dokument)"
     },
     "askAnything": "Beliebige Frage stellen",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, one {# Element} other {# Elemente}} gelöscht",
     "description": "Beschreibung",
     "details": "Details",
+    "document": "Dokument",
     "documentation": "Dokumentation",
     "done": "Fertig",
     "download": "Herunterladen",
@@ -1945,7 +1947,6 @@
       "caseLaw": "Rechtsprechung",
       "chat": "Chat",
       "contact": "Kontakt",
-      "document": "Dokument",
       "folder": "Ordner",
       "link": "Link",
       "matter": "Akte",

@@ -3,8 +3,16 @@ import { describe, expect, test } from "bun:test";
 import { buildRegistryWriteSummaryRows } from "./tool-approval-summary";
 
 const EMPTY = "(empty)";
+const DOCUMENT_LABEL = "(document)";
+const UPLOAD_PLACEHOLDER = "(uploaded)";
 const build = (toolName: string, input: unknown) =>
-  buildRegistryWriteSummaryRows({ emptyLabel: EMPTY, input, toolName });
+  buildRegistryWriteSummaryRows({
+    documentLabel: DOCUMENT_LABEL,
+    emptyLabel: EMPTY,
+    input,
+    toolName,
+    uploadPlaceholder: UPLOAD_PLACEHOLDER,
+  });
 
 describe("buildRegistryWriteSummaryRows", () => {
   test("shows ref params as their chat refs, not raw ids", () => {
@@ -35,8 +43,12 @@ describe("buildRegistryWriteSummaryRows", () => {
     });
     const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
     expect(byKey["name"]).toBe("NDA");
-    // The base64 blob is replaced by a short placeholder, never rendered.
-    expect(byKey["docx_base64"]).not.toContain("QUJDR");
+    // The base64 blob is replaced by the caller-supplied placeholder, never
+    // rendered, with a caller-supplied (translated) label.
+    expect(byKey["docx_base64"]).toBe(UPLOAD_PLACEHOLDER);
+    expect(rows.find((row) => row.key === "docx_base64")?.label).toBe(
+      DOCUMENT_LABEL,
+    );
     // The field manifest is summarized as a count.
     expect(byKey["fields"]).toBe("3");
   });

@@ -363,6 +363,7 @@ type Messages = {
       "deny": "Deny";
       "externalMcpDescription": "Only the information needed for this tool call will be sent.";
       "externalMcpQuestion": "Can stella send this request to {provider}?";
+      "uploadedDocumentPlaceholder": "(uploaded document)";
     };
     "askAnything": "Ask anything";
     "askUser": {
@@ -760,6 +761,7 @@ type Messages = {
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "details": "Details";
+    "document": "Document";
     "documentation": "Documentation";
     "done": "Done";
     "download": "Download";
@@ -1948,7 +1950,6 @@ type Messages = {
       "caseLaw": "Case law";
       "chat": "Chat";
       "contact": "Contact";
-      "document": "Document";
       "folder": "Folder";
       "link": "Link";
       "matter": "Matter";

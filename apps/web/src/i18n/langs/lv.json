@@ -359,7 +359,8 @@
       "denied": "Noraidīts",
       "deny": "Noraidīt",
       "externalMcpDescription": "Tiks nosūtīta tikai šim rīka izsaukumam nepieciešamā informācija.",
-      "externalMcpQuestion": "Vai stella drīkst nosūtīt šo pieprasījumu uz {provider}?"
+      "externalMcpQuestion": "Vai stella drīkst nosūtīt šo pieprasījumu uz {provider}?",
+      "uploadedDocumentPlaceholder": "(augšupielādēts dokuments)"
     },
     "askAnything": "Jautājiet jebko",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, zero {# vienumu dzēsts} one {# vienums dzēsts} other {# vienumi dzēsti}}",
     "description": "Apraksts",
     "details": "Detaļas",
+    "document": "Dokuments",
     "documentation": "Dokumentācija",
     "done": "Gatavs",
     "download": "Lejupielādēt",
@@ -1945,7 +1947,6 @@
       "caseLaw": "Judikatūra",
       "chat": "Tērzēšana",
       "contact": "Kontakts",
-      "document": "Dokuments",
       "folder": "Mape",
       "link": "Saite",
       "matter": "Lieta",

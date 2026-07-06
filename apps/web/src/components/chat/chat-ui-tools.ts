@@ -252,7 +252,7 @@ const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
 } as const satisfies Partial<Record<keyof ChatUITools, true>>;
 
 export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
-  toolName in REGISTRY_WRITE_SUMMARY_TOOL_NAMES;
+  Object.hasOwn(REGISTRY_WRITE_SUMMARY_TOOL_NAMES, toolName);
 
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]

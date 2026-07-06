@@ -622,9 +622,11 @@ const RegistryWriteSummary = ({
 }) => {
   const t = useTranslations();
   const rows = buildRegistryWriteSummaryRows({
+    documentLabel: t("common.document"),
     emptyLabel: t("common.empty"),
     input,
     toolName,
+    uploadPlaceholder: t("chat.approval.uploadedDocumentPlaceholder"),
   });
 
   if (rows.length === 0) {

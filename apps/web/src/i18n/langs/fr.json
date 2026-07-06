@@ -359,7 +359,8 @@
       "denied": "Refusé",
       "deny": "Refuser",
       "externalMcpDescription": "Seules les informations nécessaires à cet appel d’outil seront envoyées.",
-      "externalMcpQuestion": "stella peut-elle envoyer cette requête à {provider} ?"
+      "externalMcpQuestion": "stella peut-elle envoyer cette requête à {provider} ?",
+      "uploadedDocumentPlaceholder": "(document importé)"
     },
     "askAnything": "Posez n’importe quelle question",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, one {# élément supprimé} other {# éléments supprimés}}",
     "description": "Description",
     "details": "Détails",
+    "document": "Document",
     "documentation": "Documentation",
     "done": "Terminé",
     "download": "Télécharger",
@@ -1945,7 +1947,6 @@
       "caseLaw": "Jurisprudence",
       "chat": "Chat",
       "contact": "Contact",
-      "document": "Document",
       "folder": "Dossier",
       "link": "Lien",
       "matter": "Dossier client",

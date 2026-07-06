@@ -347,6 +347,9 @@
     "common.details": [
       "de"
     ],
+    "common.document": [
+      "fr"
+    ],
     "common.documentation": [
       "fr"
     ],
@@ -1153,9 +1156,6 @@
       "sk"
     ],
     "search.kinds.contact": [
-      "fr"
-    ],
-    "search.kinds.document": [
       "fr"
     ],
     "search.kinds.folder": [

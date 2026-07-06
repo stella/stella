@@ -359,7 +359,8 @@
       "denied": "Elutasítva",
       "deny": "Elutasítás",
       "externalMcpDescription": "Csak az ehhez az eszközhíváshoz szükséges információ kerül elküldésre.",
-      "externalMcpQuestion": "Elküldheti a stella ezt a kérést a következőnek: {provider}?"
+      "externalMcpQuestion": "Elküldheti a stella ezt a kérést a következőnek: {provider}?",
+      "uploadedDocumentPlaceholder": "(feltöltött dokumentum)"
     },
     "askAnything": "Kérdezzen bármit",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, one {# elem} other {# elem}} törölve",
     "description": "Leírás",
     "details": "Részletek",
+    "document": "Dokumentum",
     "documentation": "Dokumentáció",
     "done": "Kész",
     "download": "Letöltés",
@@ -1945,7 +1947,6 @@
       "caseLaw": "Ítélkezési gyakorlat",
       "chat": "Csevegés",
       "contact": "Kapcsolat",
-      "document": "Dokumentum",
       "folder": "Mappa",
       "link": "Hivatkozás",
       "matter": "Ügy",

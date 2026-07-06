@@ -359,7 +359,8 @@
       "denied": "Odrzucono",
       "deny": "Odmów",
       "externalMcpDescription": "Wysłane zostaną tylko informacje niezbędne do tego wywołania narzędzia.",
-      "externalMcpQuestion": "Czy stella może wysłać to żądanie do {provider}?"
+      "externalMcpQuestion": "Czy stella może wysłać to żądanie do {provider}?",
+      "uploadedDocumentPlaceholder": "(przesłany dokument)"
     },
     "askAnything": "Zapytaj o cokolwiek",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, one {# element usunięto} few {# elementy usunięto} many {# elementów usunięto} other {# elementów usunięto}}",
     "description": "Opis",
     "details": "Szczegóły",
+    "document": "Dokument",
     "documentation": "Dokumentacja",
     "done": "Gotowe",
     "download": "Pobierz",
@@ -1945,7 +1947,6 @@
       "caseLaw": "Orzecznictwo",
       "chat": "Czat",
       "contact": "Kontakt",
-      "document": "Dokument",
       "folder": "Folder",
       "link": "Link",
       "matter": "Sprawa",

@@ -359,7 +359,8 @@
       "denied": "Atmesta",
       "deny": "Atmesti",
       "externalMcpDescription": "Bus išsiųsta tik šiam įrankio iškvietimui reikalinga informacija.",
-      "externalMcpQuestion": "Ar stella gali siųsti šią užklausą tiekėjui {provider}?"
+      "externalMcpQuestion": "Ar stella gali siųsti šią užklausą tiekėjui {provider}?",
+      "uploadedDocumentPlaceholder": "(įkeltas dokumentas)"
     },
     "askAnything": "Klauskite bet ko",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, one {# elementas ištrintas} few {# elementai ištrinti} other {# elementų ištrinta}}",
     "description": "Aprašymas",
     "details": "Detalės",
+    "document": "Dokumentas",
     "documentation": "Dokumentacija",
     "done": "Atlikta",
     "download": "Atsisiųsti",
@@ -1945,7 +1947,6 @@
       "caseLaw": "Teismų praktika",
       "chat": "Pokalbis",
       "contact": "Kontaktas",
-      "document": "Dokumentas",
       "folder": "Aplankas",
       "link": "Nuoroda",
       "matter": "Byla",

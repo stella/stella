@@ -359,7 +359,8 @@
       "denied": "Zamietnuté",
       "deny": "Zamietnuť",
       "externalMcpDescription": "Odošlú sa iba informácie potrebné pre tento dotaz.",
-      "externalMcpQuestion": "Môže stella odoslať tento dotaz do {provider}?"
+      "externalMcpQuestion": "Môže stella odoslať tento dotaz do {provider}?",
+      "uploadedDocumentPlaceholder": "(nahraný dokument)"
     },
     "askAnything": "Opýtajte sa na čokoľvek",
     "askUser": {
@@ -757,6 +758,7 @@
     "deletedCount": "{count, plural, one {# položka zmazaná} few {# položky zmazané} other {# položiek zmazaných}}",
     "description": "Popis",
     "details": "Detaily",
+    "document": "Dokument",
     "documentation": "Dokumentácia",
     "done": "Hotovo",
     "download": "Stiahnuť",
@@ -1945,7 +1947,6 @@
       "caseLaw": "Judikatúra",
       "chat": "Chat",
       "contact": "Kontakt",
-      "document": "Dokument",
       "folder": "Priečinok",
       "link": "Odkaz",
       "matter": "Spis",

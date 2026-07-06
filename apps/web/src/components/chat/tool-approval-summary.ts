@@ -14,13 +14,6 @@ export type ReadableInputRow = {
 /** Longer string values are truncated in the approval summary. */
 const MAX_VALUE_CHARS = 200;
 
-/**
- * Input fields that must never be dumped verbatim into the summary: a base64
- * document upload (`save_template`) is huge and unreadable. Rendered as a short
- * placeholder instead.
- */
-const OPAQUE_UPLOAD_FIELD_LABEL = "(uploaded document)";
-
 export const humanizeIdentifier = (value: string): string =>
   value
     .replaceAll(/[_-]+/gu, " ")
@@ -120,15 +113,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * exact model-visible values, never a raw id. Long values are truncated. Two
  * template tools get bespoke handling so a base64 document upload or a large
  * field manifest is summarized rather than dumped.
+ *
+ * `documentLabel` and `uploadPlaceholder` are supplied by the caller
+ * (translated) so this module stays i18n-free: they label and replace the
+ * `save_template` base64 upload field, which must never be dumped verbatim
+ * into the summary.
  */
 export const buildRegistryWriteSummaryRows = ({
+  documentLabel,
   emptyLabel,
   input,
   toolName,
+  uploadPlaceholder,
 }: {
+  documentLabel: string;
   emptyLabel: string;
   input: unknown;
   toolName: string;
+  uploadPlaceholder: string;
 }): ReadableInputRow[] => {
   if (!isRecord(input)) {
     return getReadableInputRows({
@@ -139,7 +141,12 @@ export const buildRegistryWriteSummaryRows = ({
   }
 
   if (toolName === "save_template") {
-    return buildSaveTemplateRows({ emptyLabel, input });
+    return buildSaveTemplateRows({
+      documentLabel,
+      emptyLabel,
+      input,
+      uploadPlaceholder,
+    });
   }
   if (toolName === "fill_template") {
     return buildFillTemplateRows({ emptyLabel, input });
@@ -157,17 +164,21 @@ export const buildRegistryWriteSummaryRows = ({
 };
 
 const buildSaveTemplateRows = ({
+  documentLabel,
   emptyLabel,
   input,
+  uploadPlaceholder,
 }: {
+  documentLabel: string;
   emptyLabel: string;
   input: Record<string, unknown>;
+  uploadPlaceholder: string;
 }): ReadableInputRow[] => {
   const rows: ReadableInputRow[] = [];
   for (const [key, value] of Object.entries(input)) {
     // Never dump the base64 blob or the full field manifest into the card.
     if (key === "docx_base64") {
-      rows.push({ key, label: "Document", value: OPAQUE_UPLOAD_FIELD_LABEL });
+      rows.push({ key, label: documentLabel, value: uploadPlaceholder });
       continue;
     }
     if (key === "fields") {
