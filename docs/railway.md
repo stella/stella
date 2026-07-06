@@ -274,11 +274,10 @@ After publishing, use Railway's generated template code in any README or website
 button:
 
 ```md
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/new/template/<template-code>?utm_medium=integration&utm_source=button&utm_campaign=stella)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/stella?referralCode=2WofM4&utm_medium=integration&utm_source=button&utm_campaign=stella)
 ```
 
-Do not add this button to the repository until the published template code is
-known and a fresh deploy from the published template has passed.
+The published template code is `stella`; the README button above is live. Re-verify a fresh deploy from the published template after template changes.
 
 ## Updating Template Users
 
