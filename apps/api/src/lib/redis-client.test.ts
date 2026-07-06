@@ -38,9 +38,8 @@ describe("connectWithColdStartRetries", () => {
       }
     };
 
-    await expect(
-      connectWithColdStartRetries(connectOnce),
-    ).resolves.toBeUndefined();
+    // Resolving without throwing is the assertion; a rejection fails the test.
+    await connectWithColdStartRetries(connectOnce);
     expect(calls).toBe(3);
   });
 
@@ -52,7 +51,14 @@ describe("connectWithColdStartRetries", () => {
       throw originalError;
     };
 
-    const rejection = connectWithColdStartRetries(connectOnce);
-    await expect(rejection).rejects.toBe(originalError);
+    let caught: unknown;
+    try {
+      await connectWithColdStartRetries(connectOnce);
+    } catch (error) {
+      caught = error;
+    }
+    // Identity check: the retries-exhausted rethrow must preserve the
+    // original error object, not wrap it.
+    expect(caught).toBe(originalError);
   });
 });

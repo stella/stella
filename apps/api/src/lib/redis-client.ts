@@ -68,7 +68,9 @@ const withColdStartConnectRetries = (
   connection: ReturnType<typeof createBunRedisClient>,
 ): ReturnType<typeof createBunRedisClient> => {
   const connectOnce = connection.connect.bind(connection);
-  connection.connect = () => connectWithColdStartRetries(connectOnce);
+  connection.connect = async () => {
+    await connectWithColdStartRetries(connectOnce);
+  };
   return connection;
 };
 
