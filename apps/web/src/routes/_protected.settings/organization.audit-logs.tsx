@@ -2,8 +2,8 @@ import { useState } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
 import { Result } from "better-result";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
@@ -25,13 +25,17 @@ import {
 } from "@stll/ui/components/table";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
-import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
-import { auditLogOptions, type fetchAuditLogs, type AuditLogsPageKey } from "@/routes/_protected.settings/-queries/audit-logs";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
+import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import {
+  auditLogOptions,
+  type fetchAuditLogs,
+  type AuditLogsPageKey,
+} from "@/routes/_protected.settings/-queries/audit-logs";
+import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/audit-logs",
@@ -42,7 +46,9 @@ export const Route = createFileRoute(
 function AuditLogsPage() {
   const t = useTranslations();
   const [cursor, setCursor] = useState<string | undefined>(undefined);
-  const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>([]);
+  const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>(
+    [],
+  );
   const limit = 20;
 
   // Filter states
@@ -95,11 +101,21 @@ function AuditLogsPage() {
     setExporting(true);
     const result = await Result.tryPromise(async () => {
       const cleanParams: Record<string, string> = {};
-      if (filterAction) {cleanParams["action"] = filterAction;}
-      if (filterResourceType) {cleanParams["resourceType"] = filterResourceType;}
-      if (filterUserId) {cleanParams["userId"] = filterUserId;}
-      if (filterFrom) {cleanParams["from"] = new Date(filterFrom).toISOString();}
-      if (filterTo) {cleanParams["to"] = new Date(filterTo).toISOString();}
+      if (filterAction) {
+        cleanParams["action"] = filterAction;
+      }
+      if (filterResourceType) {
+        cleanParams["resourceType"] = filterResourceType;
+      }
+      if (filterUserId) {
+        cleanParams["userId"] = filterUserId;
+      }
+      if (filterFrom) {
+        cleanParams["from"] = new Date(filterFrom).toISOString();
+      }
+      if (filterTo) {
+        cleanParams["to"] = new Date(filterTo).toISOString();
+      }
 
       const response = await api["audit-logs"].export.get({
         query: cleanParams,
@@ -122,14 +138,16 @@ function AuditLogsPage() {
     }
 
     if (result.value) {
-      const blob = new Blob([result.value], { type: "text/csv;charset=utf-8;" });
+      const blob = new Blob([result.value], {
+        type: "text/csv;charset=utf-8;",
+      });
       downloadFile(blob, "audit-logs.csv");
     }
   };
 
   return (
     <>
-      <div className="flex justify-between items-center mb-6">
+      <div className="mb-6 flex items-center justify-between">
         <SettingsPageHeader
           description={t("settings.organization.auditLogsDescription")}
           title={t("settings.organization.auditLogs")}
@@ -141,7 +159,9 @@ function AuditLogsPage() {
           }}
           variant="outline"
         >
-          {exporting ? t("settings.organization.auditLogsExporting") : t("settings.organization.auditLogsExport")}
+          {exporting
+            ? t("settings.organization.auditLogsExporting")
+            : t("settings.organization.auditLogsExport")}
         </Button>
       </div>
 
@@ -149,57 +169,96 @@ function AuditLogsPage() {
         <FramePanel>
           <div className="flex flex-col gap-6">
             {/* Filters Row */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end bg-muted/30 p-4 rounded-lg border">
+            <div className="bg-muted/30 grid grid-cols-1 items-end gap-2 rounded-lg border p-4 md:grid-cols-3">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="userId-input">
+                <label
+                  className="text-muted-foreground text-xs font-medium"
+                  htmlFor="userId-input"
+                >
                   {t("common.user")} ID
                 </label>
                 <Input
                   id="userId-input"
                   placeholder="Filter by User ID"
                   value={filterUserId}
-                  onChange={(e) => handleFilterChange(setFilterUserId, e.target.value)}
+                  onChange={(e) =>
+                    handleFilterChange(setFilterUserId, e.target.value)
+                  }
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="action-select">
+                <label
+                  className="text-muted-foreground text-xs font-medium"
+                  htmlFor="action-select"
+                >
                   {t("settings.organization.auditLogsAction")}
                 </label>
                 <Select
                   id="action-select"
                   value={filterAction || "all"}
-                  onValueChange={(val) => handleFilterChange(setFilterAction, !val || val === "all" ? "" : val)}
+                  onValueChange={(val) =>
+                    handleFilterChange(
+                      setFilterAction,
+                      !val || val === "all" ? "" : val,
+                    )
+                  }
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder={t("settings.organization.auditLogsAllActions")} />
+                    <SelectValue
+                      placeholder={t(
+                        "settings.organization.auditLogsAllActions",
+                      )}
+                    />
                   </SelectTrigger>
                   <SelectPopup>
-                    <SelectItem value="all">{t("settings.organization.auditLogsAllActions")}</SelectItem>
-                    <SelectItem value="create">{t("settings.organization.auditLogsActionCreate")}</SelectItem>
-                    <SelectItem value="update">{t("settings.organization.auditLogsActionUpdate")}</SelectItem>
-                    <SelectItem value="delete">{t("settings.organization.auditLogsActionDelete")}</SelectItem>
-                    <SelectItem value="download">{t("settings.organization.auditLogsActionDownload")}</SelectItem>
-                    <SelectItem value="execute">{t("settings.organization.auditLogsActionExecute")}</SelectItem>
-                    <SelectItem value="access">{t("settings.organization.auditLogsActionAccess")}</SelectItem>
+                    <SelectItem value="all">
+                      {t("settings.organization.auditLogsAllActions")}
+                    </SelectItem>
+                    <SelectItem value="create">
+                      {t("settings.organization.auditLogsActionCreate")}
+                    </SelectItem>
+                    <SelectItem value="update">
+                      {t("settings.organization.auditLogsActionUpdate")}
+                    </SelectItem>
+                    <SelectItem value="delete">
+                      {t("settings.organization.auditLogsActionDelete")}
+                    </SelectItem>
+                    <SelectItem value="download">
+                      {t("settings.organization.auditLogsActionDownload")}
+                    </SelectItem>
+                    <SelectItem value="execute">
+                      {t("settings.organization.auditLogsActionExecute")}
+                    </SelectItem>
+                    <SelectItem value="access">
+                      {t("settings.organization.auditLogsActionAccess")}
+                    </SelectItem>
                   </SelectPopup>
                 </Select>
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="resourceType-input">
+                <label
+                  className="text-muted-foreground text-xs font-medium"
+                  htmlFor="resourceType-input"
+                >
                   {t("settings.organization.auditLogsResourceType")}
                 </label>
                 <Input
                   id="resourceType-input"
                   placeholder="e.g. workspace"
                   value={filterResourceType}
-                  onChange={(e) => handleFilterChange(setFilterResourceType, e.target.value)}
+                  onChange={(e) =>
+                    handleFilterChange(setFilterResourceType, e.target.value)
+                  }
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="from-input">
+                <label
+                  className="text-muted-foreground text-xs font-medium"
+                  htmlFor="from-input"
+                >
                   {t("settings.organization.auditLogsFrom")}
                 </label>
                 <DatePickerPopover
@@ -209,7 +268,10 @@ function AuditLogsPage() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground" htmlFor="to-input">
+                <label
+                  className="text-muted-foreground text-xs font-medium"
+                  htmlFor="to-input"
+                >
                   {t("settings.organization.auditLogsTo")}
                 </label>
                 <DatePickerPopover
@@ -223,12 +285,22 @@ function AuditLogsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>{t("settings.organization.auditLogsTime")}</TableHead>
+                    <TableHead>
+                      {t("settings.organization.auditLogsTime")}
+                    </TableHead>
                     <TableHead>{t("common.user")}</TableHead>
-                    <TableHead>{t("settings.organization.auditLogsAction")}</TableHead>
-                    <TableHead>{t("settings.organization.auditLogsResourceType")}</TableHead>
-                    <TableHead>{t("settings.organization.auditLogsResourceId")}</TableHead>
-                    <TableHead>{t("settings.organization.auditLogsChanges")}</TableHead>
+                    <TableHead>
+                      {t("settings.organization.auditLogsAction")}
+                    </TableHead>
+                    <TableHead>
+                      {t("settings.organization.auditLogsResourceType")}
+                    </TableHead>
+                    <TableHead>
+                      {t("settings.organization.auditLogsResourceId")}
+                    </TableHead>
+                    <TableHead>
+                      {t("settings.organization.auditLogsChanges")}
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -241,7 +313,7 @@ function AuditLogsPage() {
               </Table>
             </div>
 
-            <div className="flex justify-between items-center px-2">
+            <div className="flex items-center justify-between px-2">
               <Button
                 disabled={cursorHistory.length === 0 || isLoading}
                 onClick={handlePrevPage}
@@ -270,12 +342,19 @@ type AuditLogsTableBodyProps = {
   data: Awaited<ReturnType<typeof fetchAuditLogs>> | undefined;
 };
 
-function AuditLogsTableBody({ isLoading, isError, data }: AuditLogsTableBodyProps) {
+function AuditLogsTableBody({
+  isLoading,
+  isError,
+  data,
+}: AuditLogsTableBodyProps) {
   const t = useTranslations();
   if (isLoading) {
     return (
       <TableRow>
-        <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
+        <TableCell
+          className="text-muted-foreground h-24 text-center"
+          colSpan={6}
+        >
           {t("settings.organization.auditLogsLoading")}
         </TableCell>
       </TableRow>
@@ -285,7 +364,10 @@ function AuditLogsTableBody({ isLoading, isError, data }: AuditLogsTableBodyProp
   if (isError) {
     return (
       <TableRow>
-        <TableCell className="text-destructive h-24 text-center font-medium" colSpan={6}>
+        <TableCell
+          className="text-destructive h-24 text-center font-medium"
+          colSpan={6}
+        >
           {t("settings.organization.auditLogsError")}
         </TableCell>
       </TableRow>
@@ -295,7 +377,10 @@ function AuditLogsTableBody({ isLoading, isError, data }: AuditLogsTableBodyProp
   if (data === undefined || data.items.length === 0) {
     return (
       <TableRow>
-        <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
+        <TableCell
+          className="text-muted-foreground h-24 text-center"
+          colSpan={6}
+        >
           {t("settings.organization.auditLogsEmpty")}
         </TableCell>
       </TableRow>
@@ -306,18 +391,26 @@ function AuditLogsTableBody({ isLoading, isError, data }: AuditLogsTableBodyProp
     <>
       {data.items.map((log) => (
         <TableRow key={log.id}>
-          <TableCell className="whitespace-nowrap text-xs">
+          <TableCell className="text-xs whitespace-nowrap">
             {new Date(log.createdAt).toLocaleString(getFormattingLocale())}
           </TableCell>
-          <TableCell className="text-xs font-mono">
+          <TableCell className="font-mono text-xs">
             {log.user ? `${log.user.name} (${log.user.email})` : log.userId}
           </TableCell>
-          <TableCell className="text-xs capitalize font-medium">{log.action}</TableCell>
+          <TableCell className="text-xs font-medium capitalize">
+            {log.action}
+          </TableCell>
           <TableCell className="text-xs">{log.resourceType}</TableCell>
-          <TableCell className="text-xs font-mono max-w-[120px] truncate" title={log.resourceId}>
+          <TableCell
+            className="max-w-[120px] truncate font-mono text-xs"
+            title={log.resourceId}
+          >
             {log.resourceId}
           </TableCell>
-          <TableCell className="text-xs font-mono max-w-[200px] truncate" title={log.changes ? JSON.stringify(log.changes) : ""}>
+          <TableCell
+            className="max-w-[200px] truncate font-mono text-xs"
+            title={log.changes ? JSON.stringify(log.changes) : ""}
+          >
             {log.changes ? JSON.stringify(log.changes) : "-"}
           </TableCell>
         </TableRow>

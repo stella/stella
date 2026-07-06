@@ -1,4 +1,3 @@
-/* eslint-disable no-offset-pagination/no-offset-pagination -- Endpoint relies on client-provided offset index pagination */
 import { Result } from "better-result";
 import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
