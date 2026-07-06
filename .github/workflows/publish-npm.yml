@@ -1,10 +1,11 @@
 name: Publish npm packages
 
 # Publishes the shared @stll dependency packages (docx-core, docx-utils,
-# conditions, template-conditions) to npm with SLSA provenance via OIDC trusted
-# publishing — no long-lived NPM_TOKEN. These packages live in this monorepo
-# (stella's apps consume them) and are published from here; external consumers
-# install the published versions.
+# conditions, template-conditions) and the @stll/cli command-line client to
+# npm with SLSA provenance via OIDC trusted publishing — no long-lived
+# NPM_TOKEN. These packages live in this monorepo (stella's apps consume the
+# shared packages; the CLI is consumed standalone) and are published from
+# here; external consumers install the published versions.
 #
 # Least privilege: packing and publishing are separate jobs. The `pack` job runs
 # the untrusted build (bun install, prepack, bun pm pack) with NO id-token, so a
@@ -28,7 +29,7 @@ env:
 
 on:
   # Auto-release: a version bump merged to main publishes that package. The
-  # hardened action is idempotent, so the three packages you did not bump are
+  # hardened action is idempotent, so the packages you did not bump are
   # packed but skipped (their version already exists on the registry).
   push:
     branches: [main]
@@ -37,6 +38,7 @@ on:
       - packages/template-conditions/package.json
       - packages/docx-core/package.json
       - packages/docx-utils/package.json
+      - packages/cli/package.json
   workflow_dispatch:
     inputs:
       package:
@@ -48,6 +50,7 @@ on:
           - template-conditions
           - docx-core
           - docx-utils
+          - cli
         default: all
       publish:
         description: Publish to npm (leave unchecked for a build + pack dry run)
@@ -80,11 +83,12 @@ jobs:
           set -euo pipefail
           # On push (auto-release) there is no input, so pack all and let the
           # idempotent publish skip unchanged versions. conditions before
-          # template-conditions (which depends on it); the docx packages are
-          # independent.
+          # template-conditions (which depends on it); the docx packages and
+          # cli are independent (cli has no workspace dependency on any other
+          # published package).
           selected="${{ github.event_name == 'workflow_dispatch' && inputs.package || 'all' }}"
           case "${selected}" in
-            all) pkgs=(conditions template-conditions docx-core docx-utils) ;;
+            all) pkgs=(conditions template-conditions docx-core docx-utils cli) ;;
             *) pkgs=("${selected}") ;;
           esac
 
