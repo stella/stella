@@ -124,8 +124,15 @@ const computeOverallRisk = (
     return "critical";
   }
 
+  // A blocker-severity fallback is not "critical" (a fallback is pre-approved,
+  // non-ideal language), but it must still outrank a plain medium — otherwise
+  // the most severe authored tier would score lower than a lesser one.
   const hasHigh = flagged.some((finding) => finding.severity === "high");
-  if (hasHigh) {
+  const hasBlockerFallback = flagged.some(
+    (finding) =>
+      finding.severity === "blocker" && finding.verdict === "fallback",
+  );
+  if (hasHigh || hasBlockerFallback) {
     return "high";
   }
 

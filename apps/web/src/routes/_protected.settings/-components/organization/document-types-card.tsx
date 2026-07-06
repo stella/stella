@@ -195,6 +195,13 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
   const [draft, setDraft] = useState(type.label);
   const handleReorder = useEffectEvent(onReorder);
 
+  // Resync the rename draft when the label changes upstream (a refetch after
+  // this or another client renames the type); `type.label` is stable while the
+  // user types, so this never clobbers an in-progress edit.
+  useExternalSyncEffect(() => {
+    setDraft(type.label);
+  }, [type.label]);
+
   useExternalSyncEffect(() => {
     if (!rowRef || !gripRef) {
       return undefined;

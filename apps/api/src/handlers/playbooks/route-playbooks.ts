@@ -274,7 +274,18 @@ export const routeClassifiedDocuments = async ({
         recordAuditEvent,
         auditMetadata: ROUTED_AUDIT_METADATA,
       });
-      if (!result.ok || result.materializedPropertyIds.length === 0) {
+      if (!result.ok) {
+        // Fire-and-forget background path with no other feedback channel:
+        // capture the reason so a per-playbook materialization failure (e.g.
+        // hitting the properties cap) is not silently invisible.
+        captureError(new Error(result.message), {
+          workspaceId,
+          playbookId: playbook.id,
+          status: String(result.status),
+        });
+        continue;
+      }
+      if (result.materializedPropertyIds.length === 0) {
         continue;
       }
       ids.push(...result.materializedPropertyIds);

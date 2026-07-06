@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { documentTypes } from "@/api/db/schema";
 import {
@@ -32,6 +32,12 @@ const createDocumentType = createSafeRootHandler(
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
+        // Serialize concurrent creates for the same org so the count check
+        // below cannot race past the configured limit (the read + insert are
+        // otherwise not atomic).
+        await tx.execute(
+          sql`select pg_advisory_xact_lock(hashtext(${organizationId}))`,
+        );
         const existing = await tx
           .select({
             key: documentTypes.key,

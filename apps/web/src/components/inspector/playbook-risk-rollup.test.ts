@@ -39,9 +39,18 @@ describe("computeRiskRollup — overallRisk thresholds", () => {
     expect(rollup.overallRisk).toBe("critical");
   });
 
-  test("a blocker-severity fallback is capped at medium, not critical", () => {
+  test("a blocker-severity fallback is high, not critical", () => {
+    // A fallback is pre-approved, non-ideal language, so it is never critical;
+    // but at blocker severity it must still outrank a plain medium.
     const rollup = computeRiskRollup([
       finding({ positionId: "1", severity: "blocker", verdict: "fallback" }),
+    ]);
+    expect(rollup.overallRisk).toBe("high");
+  });
+
+  test("a medium-severity fallback stays medium", () => {
+    const rollup = computeRiskRollup([
+      finding({ positionId: "1", severity: "medium", verdict: "fallback" }),
     ]);
     expect(rollup.overallRisk).toBe("medium");
   });
