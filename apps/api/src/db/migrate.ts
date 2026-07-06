@@ -36,14 +36,21 @@ const client = new SQL({ url, max: 1 });
 // `docker/postgres/init.sql` (init.sql stays the fast path for local
 // containers). Guard with a `pg_roles` lookup inside a DO block: there is no
 // `CREATE ROLE IF NOT EXISTS`, and a bare `CREATE ROLE` would error when the
-// role already exists (local dev, prod, reruns). `unaccent` is not bootstrapped
+// role already exists (local dev, prod, reruns). The inner exception handler
+// absorbs the duplicate-role race if two bootstraps ever run concurrently;
+// the existence check alone is check-then-act. `unaccent` is not bootstrapped
 // here: the migration that uses it self-runs `CREATE EXTENSION IF NOT EXISTS
 // unaccent`. `stella_ingestion` likewise self-creates in its own migration.
 const bootstrapRoleSql = `
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stella') THEN
-    CREATE ROLE stella NOLOGIN;
+    BEGIN
+      CREATE ROLE stella NOLOGIN;
+    EXCEPTION
+      WHEN duplicate_object OR unique_violation THEN
+        NULL;
+    END;
   END IF;
 END
 $$;
