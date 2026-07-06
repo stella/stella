@@ -51,7 +51,6 @@
     "billing.selectedCount",
     "billing.stopTimer",
     "caseLaw.analysis.categories.reasoning",
-    "caseLaw.analyzing",
     "catalogue.cost.free",
     "catalogue.cost.paid",
     "catalogue.filter.skills",
@@ -66,8 +65,12 @@
     "chat.landing.prompts",
     "chat.stopResponse",
     "chat.suggestionStatus.rejected",
+    "chat.tool.delete_clause",
+    "chat.tool.delete_matter",
+    "chat.tool.run_playbook",
     "chat.toolCall.field",
     "clauses.body",
+    "clauses.deleteClause",
     "consent.deny",
     "contacts.customFields.value",
     "contacts.customFields.valuePlaceholder",
@@ -177,6 +180,7 @@
     "templates.tags",
     "translate.settings.apiKeyLabel",
     "translate.settings.tierFree",
+    "workspaces.deleteWorkspace",
     "workspaces.fields.fieldValueLabel",
     "workspaces.fields.numberLabel",
     "workspaces.filesystem.author",
@@ -192,6 +196,7 @@
     "workspaces.parties.partyRoles.other",
     "workspaces.parties.personalLabel",
     "workspaces.parties.searchContacts",
+    "workspaces.playbooks.run",
     "workspaces.properties.chipMulti",
     "workspaces.properties.chipNumber",
     "workspaces.properties.chipText",
@@ -341,6 +346,9 @@
     ],
     "common.details": [
       "de"
+    ],
+    "common.document": [
+      "fr"
     ],
     "common.documentation": [
       "fr"
@@ -1148,9 +1156,6 @@
       "sk"
     ],
     "search.kinds.contact": [
-      "fr"
-    ],
-    "search.kinds.document": [
       "fr"
     ],
     "search.kinds.folder": [

@@ -12,6 +12,7 @@ import {
 
 import type {
   EntityWorkspaceSource,
+  InputRefParam,
   OutputRefField,
   RegistryReadToolName,
 } from "./ref-field-map";
@@ -93,19 +94,29 @@ export const collectUuidPaths = (payload: unknown): readonly UuidPathHit[] => {
  * as a wholly undeclared path. Returns the offending path, never the value,
  * so callers can log it without leaking the id it is refusing.
  */
+export const findUndeclaredUuidPathIn = ({
+  passthroughIdPaths,
+  payload,
+}: {
+  passthroughIdPaths: readonly string[];
+  payload: unknown;
+}): string | undefined => {
+  const allowedPaths = new Set<string>(passthroughIdPaths);
+  return collectUuidPaths(payload).find((hit) => !allowedPaths.has(hit.path))
+    ?.path;
+};
+
 export const findUndeclaredUuidPath = ({
   toolName,
   payload,
 }: {
   toolName: RegistryReadToolName;
   payload: unknown;
-}): string | undefined => {
-  const allowedPaths = new Set<string>(
-    READ_TOOL_REF_FIELD_MAP[toolName].passthroughIdPaths,
-  );
-  return collectUuidPaths(payload).find((hit) => !allowedPaths.has(hit.path))
-    ?.path;
-};
+}): string | undefined =>
+  findUndeclaredUuidPathIn({
+    passthroughIdPaths: READ_TOOL_REF_FIELD_MAP[toolName].passthroughIdPaths,
+    payload,
+  });
 
 // --- path grammar -----------------------------------------------------------
 // Paths use the same `a.b` / `a[].b` shape as the egress text-field specs. A
@@ -193,12 +204,12 @@ const takeSingle = <T>(values: readonly T[]): T =>
  * workspace ids and entity refs so output hydration can mint entity refs and
  * reuse the request's own entity ref.
  */
-export const dehydrateInputRefs = ({
-  toolName,
+export const dehydrateRefs = ({
+  inputRefs,
   args,
   refRegistry,
 }: {
-  toolName: RegistryReadToolName;
+  inputRefs: readonly InputRefParam[];
   args: Record<string, unknown>;
   refRegistry: ChatRefRegistry;
 }): Result<DehydratedInput, ChatToolError> => {
@@ -207,7 +218,7 @@ export const dehydrateInputRefs = ({
   const resolvedEntityParams: Record<string, SafeId<"workspace">> = {};
   const dehydratedEntityRefs = new Map<string, string>();
 
-  for (const { kind, param } of READ_TOOL_REF_FIELD_MAP[toolName].inputRefs) {
+  for (const { kind, param } of inputRefs) {
     const raw = args[param];
     if (typeof raw !== "string") {
       // The param is optional and absent (or already a non-ref value); nothing
@@ -236,10 +247,19 @@ export const dehydrateInputRefs = ({
       dehydratedEntityRefs.set(entityId, raw);
       continue;
     }
-    // `contact` is the only remaining input ref kind across the read tools; no
-    // read tool declares a `property` input ref (only the write tool
-    // set_field_value does). Adding one would widen `kind` here and break this
-    // `satisfies`, forcing the extra branch to be written.
+    if (kind === "property") {
+      // Only the write tool set_field_value declares a `property` input ref;
+      // no read tool does. Resolving it here keeps input dehydration uniform
+      // across the read and write callers that share this core.
+      const resolved = refRegistry.resolvePropertyRefs([raw]);
+      if (Result.isError(resolved)) {
+        return Result.err(resolved.error);
+      }
+      nextArgs[param] = takeSingle(resolved.value);
+      continue;
+    }
+    // `contact` is the only remaining ref kind; the exhaustiveness check makes
+    // a newly added kind break here until its branch is written.
     kind satisfies "contact";
     const resolved = refRegistry.resolveContactRefs([raw]);
     if (Result.isError(resolved)) {
@@ -255,6 +275,27 @@ export const dehydrateInputRefs = ({
     dehydratedEntityRefs,
   });
 };
+
+/**
+ * Replace every input ref arg (`mat_N`/`ent_N`/`contact_N`/`prop_N`) with the
+ * real UUID the registry read handler expects, via the chat ref registry. An
+ * unknown ref surfaces as the registry's own `ChatToolError`. Delegates to
+ * `dehydrateRefs` with the read tool's declared input refs.
+ */
+export const dehydrateInputRefs = ({
+  toolName,
+  args,
+  refRegistry,
+}: {
+  toolName: RegistryReadToolName;
+  args: Record<string, unknown>;
+  refRegistry: ChatRefRegistry;
+}): Result<DehydratedInput, ChatToolError> =>
+  dehydrateRefs({
+    inputRefs: READ_TOOL_REF_FIELD_MAP[toolName].inputRefs,
+    args,
+    refRegistry,
+  });
 
 // --- output hydration -------------------------------------------------------
 
@@ -361,24 +402,23 @@ const hydrateSimpleSlot = ({
 };
 
 /**
- * Rewrite every tenant UUID a projected read tool emits into its chat ref, in
- * place, driven by the tool's declared output ref fields. The payload is the
- * caller-owned JSON.parsed object, so it is mutated and returned. Fields the map
- * leaves un-refed (non-tenant handles, deferred entity ids) are untouched.
+ * Rewrite every tenant UUID a projected tool emits into its chat ref, in place,
+ * driven by the passed output ref fields. The payload is the caller-owned
+ * JSON.parsed object, so it is mutated and returned. Fields left un-refed
+ * (non-tenant handles, deferred entity ids) are untouched. Shared by the read
+ * and write orchestrators, each supplying its own tool's `outputRefs`.
  */
-export const hydrateOutputRefs = ({
-  toolName,
+export const hydrateRefs = ({
+  outputRefs,
   output,
   refRegistry,
   dehydration,
 }: {
-  toolName: RegistryReadToolName;
+  outputRefs: readonly OutputRefField[];
   output: unknown;
   refRegistry: ChatRefRegistry;
   dehydration: DehydratedInput;
 }): unknown => {
-  const { outputRefs } = READ_TOOL_REF_FIELD_MAP[toolName];
-
   // Entity refs first: an entity's `sibling`/`outputPath` workspace source reads
   // a workspace UUID that a matter ref in the same payload would otherwise
   // overwrite with a `mat_N` ref before the entity ref is minted.
@@ -409,3 +449,26 @@ export const hydrateOutputRefs = ({
 
   return output;
 };
+
+/**
+ * Rewrite every tenant UUID a projected read tool emits into its chat ref, in
+ * place, driven by the read tool's declared output ref fields. Delegates to
+ * `hydrateRefs` with the read tool's `outputRefs`.
+ */
+export const hydrateOutputRefs = ({
+  toolName,
+  output,
+  refRegistry,
+  dehydration,
+}: {
+  toolName: RegistryReadToolName;
+  output: unknown;
+  refRegistry: ChatRefRegistry;
+  dehydration: DehydratedInput;
+}): unknown =>
+  hydrateRefs({
+    outputRefs: READ_TOOL_REF_FIELD_MAP[toolName].outputRefs,
+    output,
+    refRegistry,
+    dehydration,
+  });

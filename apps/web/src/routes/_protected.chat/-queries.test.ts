@@ -310,12 +310,14 @@ describe("buildSendRequestBody", () => {
             role: "assistant",
             parts: [
               {
-                arguments: JSON.stringify({ code: "return entities;" }),
+                arguments: JSON.stringify({
+                  typescriptCode: "return entities;",
+                }),
                 id: "tool-call-A",
-                input: { code: "return entities;" },
-                output: { content: [] },
+                input: { typescriptCode: "return entities;" },
+                output: { success: true, result: [] },
                 state: "complete",
-                name: "run-stella-query",
+                name: "execute_typescript",
                 type: "tool-call",
               },
             ],

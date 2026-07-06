@@ -749,6 +749,11 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     });
     const entry = {
       ...entryRow,
+      // Detail mode may be reached by time_entry_id alone (no matter_id), so
+      // carry the resolved owning workspace on the row itself; the chat
+      // ref-mediation layer reads it to mint the entity's ref instead of
+      // relying on an input arg that can be absent.
+      workspaceId,
       userName: entryRow.userId
         ? (userNames.get(entryRow.userId) ?? null)
         : null,
@@ -1309,6 +1314,10 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
 
     const invoice = {
       id: invoiceRow.id,
+      // Detail mode may be reached by invoice_id alone (no matter_id), so carry
+      // the resolved owning workspace on the invoice; the chat ref-mediation
+      // layer reads it to mint the line items' entity refs.
+      workspaceId,
       invoiceNumber: invoiceRow.invoiceNumber,
       reference: invoiceRow.reference,
       status: invoiceRow.status,

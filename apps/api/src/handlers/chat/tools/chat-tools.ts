@@ -24,10 +24,17 @@ import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
-import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
+import {
+  buildChatCodeModeTools,
+  type ChatCodeModeToolMap,
+} from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import {
+  buildChatWriteTools,
+  type ChatRegistryWriteToolMap,
+} from "@/api/handlers/chat/tools/registry-write-tools";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
 import {
   createTemplateAuthoringTools,
@@ -45,6 +52,7 @@ import {
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getDeployAvailableRegistryHandlers } from "@/api/lib/business-registries/dispatch";
 import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
@@ -108,7 +116,7 @@ export const areTemplateAuthoringToolsRegistered = (
 
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
-type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
+type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
@@ -126,6 +134,7 @@ type CurrentSkillEditTools = Partial<
 >;
 type TemplateTools = ReturnType<typeof createTemplateTools>;
 type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
+type RegistryWriteTools = ChatRegistryWriteToolMap;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -140,7 +149,8 @@ type BuiltInChatTools = OrgTools &
   WebSearchTools &
   ChatHistoryTools &
   TemplateTools &
-  TemplateAuthoringTools;
+  TemplateAuthoringTools &
+  RegistryWriteTools;
 
 export type ChatTools = BuiltInChatTools;
 type BuiltInChatToolPolicyName =
@@ -208,6 +218,17 @@ type GetChatToolsProps = {
   skillMetadata?: readonly SkillMetadata[] | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
+  /**
+   * Status of every accessible (non-deleting) workspace, keyed by id. Threaded
+   * into the projected write tools' MCP context so their `ensureActiveWorkspace`
+   * gate keeps archived matters read-only, matching MCP/REST writes.
+   * `activeWorkspaceIds` includes archived workspaces, so a missing status must
+   * NOT default to "active" on the write path; callers supply real statuses
+   * from `accessibleWorkspaces`.
+   */
+  workspaceStatusById?:
+    | ReadonlyMap<string, AccessibleWorkspace["status"]>
+    | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -230,8 +251,15 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
-  "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
   describe_template: CHAT_TOOL_POLICY_KIND.internal,
+  // Code-mode tool discovery: read-only, gated by the same authorization that
+  // let the request reach chat at all; runs immediately without per-call
+  // approval, alongside the sandbox runner it feeds.
+  discover_tools: CHAT_TOOL_POLICY_KIND.internal,
+  // The sandbox code runner (replaces run-stella-query). Executes only the
+  // ref-mediated read projections in the hardened sandbox, so it is internal
+  // and executes without per-call approval.
+  execute_typescript: CHAT_TOOL_POLICY_KIND.internal,
   [EXPAND_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   // Per-thread `webSearchEnabled` already gates the tools; an
   // additional per-call approval would double-gate and block
@@ -239,18 +267,41 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // official-registry lookups so the model executes immediately
   // once the toggle is on.
   [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  fill_template: CHAT_TOOL_POLICY_KIND.internal,
+  // A write: served by the hand-written template chat tool (not the registry
+  // write projection), but still gated on approval like every other write.
+  fill_template: CHAT_TOOL_POLICY_KIND.mutation,
   infosoud_lookup_case: CHAT_TOOL_POLICY_KIND.publicOfficial,
   list_templates: CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
-  "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
   [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  // Registry write projections: every projected `access: "write"` tool is a
+  // per-call mutation, so it maps to `mutation` (needsApproval). The
+  // `Record<BuiltInChatToolPolicyName, ...>` satisfies below forces a policy
+  // entry for each projected write name, so a newly projected write cannot land
+  // without an approval classification.
+  delete_clause: CHAT_TOOL_POLICY_KIND.mutation,
+  delete_contact: CHAT_TOOL_POLICY_KIND.mutation,
+  delete_document: CHAT_TOOL_POLICY_KIND.mutation,
+  delete_matter: CHAT_TOOL_POLICY_KIND.mutation,
+  delete_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
+  link_matter_contact: CHAT_TOOL_POLICY_KIND.mutation,
+  manage_organization: CHAT_TOOL_POLICY_KIND.mutation,
+  run_playbook: CHAT_TOOL_POLICY_KIND.mutation,
+  save_clause: CHAT_TOOL_POLICY_KIND.mutation,
+  save_contact: CHAT_TOOL_POLICY_KIND.mutation,
+  save_document: CHAT_TOOL_POLICY_KIND.mutation,
+  save_matter: CHAT_TOOL_POLICY_KIND.mutation,
+  save_task: CHAT_TOOL_POLICY_KIND.mutation,
+  save_template: CHAT_TOOL_POLICY_KIND.mutation,
+  save_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
+  set_field_value: CHAT_TOOL_POLICY_KIND.mutation,
+  set_practice_jurisdictions: CHAT_TOOL_POLICY_KIND.mutation,
 } as const satisfies Record<
   BuiltInChatToolPolicyName,
   (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND]
@@ -275,6 +326,7 @@ export const getChatTools = ({
   skillMetadata,
   activeSkillContext,
   recordAuditEvent,
+  workspaceStatusById,
 }: GetChatToolsProps): ChatToolMap => {
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
@@ -286,13 +338,20 @@ export const getChatTools = ({
     webSearchProviders,
     disabledNativeToolSlugs,
   });
-  const executionTools = createChatExecutionTools({
-    accessibleWorkspaceIds: toolWorkspaceIds,
+  // Chat's code-execution surface, projected from the MCP registry through the
+  // hardened sandbox: the single `execute_typescript` runner plus its
+  // `discover_tools` companion. Replaces the hand-written run-stella-query /
+  // describe-stella-api pair; the read functions it exposes as `external_*`
+  // bindings are ref-mediated, so no tenant UUID reaches the model.
+  const executionTools = buildChatCodeModeTools({
+    memberRole,
     organizationId,
+    recordAuditEvent,
     refRegistry,
     safeDb,
+    scopedDb,
+    toolWorkspaceIds,
     userId,
-    webResearchAvailable,
   });
   const skillTools = createSkillTools({
     activeSkillContext,
@@ -388,6 +447,27 @@ export const getChatTools = ({
   // model can see and call it from any chat surface.
   const createDocumentTools = createCreateDocumentTools();
 
+  // Registry write projections: per-call mutation tools (save/delete/etc.),
+  // each behind approval. Gated on a non-empty workspace set exactly like the
+  // hand-written workspace mutation tool (`createWorkspaceTools`), so
+  // anonymous/public surfaces with no accessible workspace never receive write
+  // tools. Real per-workspace statuses are threaded through so the handlers'
+  // `ensureActiveWorkspace` gate keeps archived matters read-only.
+  const registryWriteTools =
+    toolWorkspaceIds.length === 0
+      ? {}
+      : buildChatWriteTools({
+          memberRole,
+          organizationId,
+          recordAuditEvent,
+          refRegistry,
+          safeDb,
+          scopedDb,
+          toolWorkspaceIds,
+          userId,
+          workspaceStatusById,
+        });
+
   return applyChatToolPolicies({
     policyKinds: BUILT_IN_CHAT_TOOL_POLICY_KINDS,
     tools: {
@@ -404,6 +484,7 @@ export const getChatTools = ({
       ...createDocumentTools,
       ...activeDocxEditTools,
       ...webSearchTools,
+      ...registryWriteTools,
       ...externalChatTools,
     },
   });

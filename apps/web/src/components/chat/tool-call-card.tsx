@@ -38,7 +38,18 @@ const getToolInput = (part: ToolPart): unknown => {
   return part.input;
 };
 
-const CODE_TOOL_NAMES = new Set(["execute-typescript", "run-stella-query"]);
+// `execute_typescript` is the live code-mode runner; `execute-typescript`
+// (hyphen) and `run-stella-query` are its retired predecessors, kept so
+// historical threads still render as code cards.
+const CODE_TOOL_NAMES = new Set([
+  "execute_typescript",
+  "execute-typescript",
+  "run-stella-query",
+]);
+// Input keys that carry the sandbox source across the live and legacy code
+// tools: code-mode's `execute_typescript` uses `typescriptCode`; the retired
+// tools used `code`.
+const CODE_SOURCE_INPUT_KEYS = ["typescriptCode", "code"] as const;
 const SKILL_RESOURCE_OUTPUT_TOOL_NAMES = new Set([
   "create-current-skill-resource",
   "read-skill-resource",
@@ -61,15 +72,13 @@ const getCodeToolSource = (
   if (input === undefined || input === null || typeof input !== "object") {
     return undefined;
   }
-  if (!("code" in input)) {
-    return undefined;
+  for (const key of CODE_SOURCE_INPUT_KEYS) {
+    const value = getStringProperty(input, key);
+    if (value !== undefined) {
+      return value;
+    }
   }
-  const code = (input as { code: unknown }).code;
-  if (typeof code !== "string") {
-    return undefined;
-  }
-
-  return code;
+  return undefined;
 };
 
 const getStringInputValue = ({
@@ -89,6 +98,40 @@ const getStringInputValue = ({
   const descriptor = Object.getOwnPropertyDescriptor(input, key);
   const value: unknown = descriptor?.value;
   return typeof value === "string" ? value : undefined;
+};
+
+// `discover_tools` input is `{ toolNames: string[] }`. Names are catalogued in
+// `external_<name>` form; strip the prefix for a human-readable subtitle.
+const getDiscoverToolNames = (part: ToolPart): string[] => {
+  const input = getToolInput(part);
+  if (input === undefined || input === null || typeof input !== "object") {
+    return [];
+  }
+  const raw: unknown = Reflect.get(input, "toolNames");
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw
+    .filter((name): name is string => typeof name === "string")
+    .map((name) => name.replace(/^external_/u, ""));
+};
+
+// Console output captured by a code-mode `execute_typescript` run
+// (`CodeModeToolResult.logs`). Legacy code tools returned no logs array, so this
+// is empty for them and the raw-output block still renders their result.
+const getCodeToolLogs = (part: ToolPart): string[] => {
+  if (!("output" in part)) {
+    return [];
+  }
+  const output: unknown = part.output;
+  if (output === null || typeof output !== "object") {
+    return [];
+  }
+  const raw: unknown = Reflect.get(output, "logs");
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.filter((line): line is string => typeof line === "string");
 };
 
 type SkillResourceOrigin =
@@ -189,10 +232,15 @@ const getToolSubtitle = ({
   toolName: string;
 }) => {
   switch (toolName) {
+    case "execute_typescript":
     case "execute-typescript":
     case "run-stella-query": {
       const source = getCodeToolSource(part, toolName);
       return source ? formatCharacterCount(source.length) : null;
+    }
+    case "discover_tools": {
+      const names = getDiscoverToolNames(part);
+      return names.length > 0 ? names.join(", ") : null;
     }
     case "load-skill":
       return getStringInputValue({ key: "skillName", part }) ?? null;
@@ -264,6 +312,8 @@ const TOOL_ICONS: Record<string, typeof SearchIcon> = {
   "ask-user": CircleHelpIcon,
   "describe-stella-api": CircleHelpIcon,
   "describe-stella-function": CircleHelpIcon,
+  discover_tools: CircleHelpIcon,
+  execute_typescript: CodeIcon,
   "execute-typescript": CodeIcon,
   "run-stella-query": CodeIcon,
   "load-skill": LibraryIcon,
@@ -382,6 +432,7 @@ export const ToolCallCard = ({
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = CODE_TOOL_NAMES.has(name) && hasOutput;
+  const codeToolLogs = showCodeToolOutput ? getCodeToolLogs(part) : [];
   const showMcpExactCall = mcpToolInfo !== null && toolInput !== undefined;
   const skillResourceOutput =
     SKILL_RESOURCE_OUTPUT_TOOL_NAMES.has(name) && hasOutput
@@ -520,6 +571,16 @@ export const ToolCallCard = ({
                 </pre>
               </div>
             )}
+            {codeToolLogs.length > 0 && (
+              <div>
+                <div className="text-muted-foreground mb-1 text-[11px] font-medium">
+                  {t("chat.toolCall.consoleLogs")}
+                </div>
+                <pre className="bg-background/60 text-muted-foreground max-h-40 overflow-auto rounded border px-2 py-1.5 font-mono text-[11px] whitespace-pre-wrap">
+                  {codeToolLogs.join("\n")}
+                </pre>
+              </div>
+            )}
             {hasOutput &&
               (showDetails || showCodeToolOutput) &&
               "output" in part && (
@@ -551,7 +612,16 @@ const getToolOutputError = (output: unknown): string | undefined => {
     return undefined;
   }
   const error = output.error;
-  return typeof error === "string" ? error : undefined;
+  if (typeof error === "string") {
+    return error;
+  }
+  // code-mode's CodeModeToolResult surfaces failures as
+  // `{ error: { message, name?, line? } }`; unwrap the message so a failed
+  // execute_typescript renders its cause rather than a generic fallback.
+  if (typeof error === "object" && error !== null) {
+    return getStringProperty(error, "message");
+  }
+  return undefined;
 };
 
 function ToolCallLeadingIcon({

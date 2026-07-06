@@ -33,11 +33,8 @@ import {
   resolveActiveChatSkillContext,
 } from "@/api/handlers/chat/skills";
 import { CHAT_THREAD_PLACEHOLDER_TITLE } from "@/api/handlers/chat/thread-title";
-import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
-import { buildReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
-import type { ReadonlyFunctionManifest } from "@/api/handlers/chat/tools/execute/readonly-manifest";
+import { CHAT_CODE_MODE_SYSTEM_PROMPT } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
 import { CHAT_REFERENCE_HREF_PREFIXES } from "@/api/handlers/chat/types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -98,21 +95,23 @@ const DEFAULT_CHAT_TOOL_AVAILABILITY = {
 // EXTERNAL-FACT SOURCING has two shapes: with web research the model
 // is steered to `web_search`/`fetch_url`; without it, to skills and
 // then its own knowledge (with an explicit no-source flag). The
-// run-stella-query warning is identical either way — it is never an
+// execute_typescript warning is identical either way — it is never an
 // external-research tool.
 const EXTERNAL_FACT_SOURCING_WITH_WEB =
-  "EXTERNAL-FACT SOURCING: Always try to ground factual answers in an external source before falling back to your own knowledge. The skill catalog is in this prompt — pick a matching skill and `load-skill` if one fits; otherwise call `web_search` (with `fetch_url` follow-up when snippets are short or contradict). Only when those tools return nothing usable may you answer from your own knowledge, and you MUST flag that you have no source for the claim. Never use `run-stella-query` for external research — that tool reads stella's internal workspace data only. Cite tool-returned sources in the reply.";
+  "EXTERNAL-FACT SOURCING: Always try to ground factual answers in an external source before falling back to your own knowledge. The skill catalog is in this prompt — pick a matching skill and `load-skill` if one fits; otherwise call `web_search` (with `fetch_url` follow-up when snippets are short or contradict). Only when those tools return nothing usable may you answer from your own knowledge, and you MUST flag that you have no source for the claim. Never use `execute_typescript` for external research — its `external_*` functions read stella's internal workspace data only. Cite tool-returned sources in the reply.";
 
 const EXTERNAL_FACT_SOURCING_NO_WEB =
-  "EXTERNAL-FACT SOURCING: Ground factual answers in a matching skill when one fits — the skill catalog is in this prompt; `load-skill` before applying it. Web research is not enabled for this thread, so when no skill fits, answer from your own knowledge and explicitly flag that no external source was available in this conversation (the user can enable web search to add one). Never use `run-stella-query` for external research — that tool reads stella's internal workspace data only.";
+  "EXTERNAL-FACT SOURCING: Ground factual answers in a matching skill when one fits — the skill catalog is in this prompt; `load-skill` before applying it. Web research is not enabled for this thread, so when no skill fits, answer from your own knowledge and explicitly flag that no external source was available in this conversation (the user can enable web search to add one). Never use `execute_typescript` for external research — its `external_*` functions read stella's internal workspace data only.";
 
 const buildCoreRuleSections = ({
   webResearch,
 }: ChatToolAvailability): readonly string[] => [
   "You are an AI inside stella, a legal workspace. Answer directly; skip greetings and persona. For complex or ambiguous tasks, call `ask-user` to gather requirements before acting.",
-  "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `run-stella-query`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic. EXCEPTION: `load-skill` may immediately precede `ask-user` in the same turn so the clarifying questions can be informed by the skill's methodology.",
+  "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `execute_typescript`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic. EXCEPTION: `load-skill` may immediately precede `ask-user` in the same turn so the clarifying questions can be informed by the skill's methodology.",
   "REPEATED-QUESTION GUARD: When the user answers a question (even tersely — 'Yes', 'Czechia', 'all parties'), treat the answer as the answer and advance to the next step. Do not re-ask the same question with cosmetic rewording or restate it as confirmation. If their answer leaves a required fact still missing, ask ONLY for that missing fact, never the one they already answered.",
   "TRUTHFULNESS: Never guess, infer, or fabricate document content — retrieve via tools first. Only claim an action occurred when its tool returned success for that action; surface skips, no-ops, and errors plainly.",
+  "WRITES: Creating, updating, or deleting workspace data happens through direct write tools, discoverable the same way as the read surface. Every write is gated — the user approves each call before it runs — so never state or imply a change was made until that tool returns success; a pending approval is not a completed action.",
+  "FRESH DATA: Answer questions about what currently exists in the workspace (which matters, documents, tasks, contacts, or fields there are) from a fresh tool call, never from memory or an earlier turn — workspace data changes between turns.",
   webResearch ? EXTERNAL_FACT_SOURCING_WITH_WEB : EXTERNAL_FACT_SOURCING_NO_WEB,
   "POST-LOAD-SKILL: After `load-skill` returns, never produce a 'Loaded the X skill' confirmation message. In the SAME turn, do one of: (a) immediately apply the skill's methodology to the user's stated task using the appropriate tool(s) and surface the result as your answer; or (b) if the user's request is bare (just a skill reference) or missing facts the skill explicitly requires (jurisdiction, parties, scope, parameters), call `ask-user` with the SPECIFIC clarifying questions the skill methodology calls for — never generic 'what do you want me to do?'. Read the skill body; ask only for what the skill needs to proceed.",
   "SKILL-RESOURCES: When `load-skill` returns a non-empty `resources` list, treat those paths as part of the skill's methodology — not optional appendices. Before producing the final answer, call `read-skill-resource` on every resource the user's task plausibly depends on (criteria checklists, jurisdictional references, templates the skill prescribes). EMIT ALL READ CALLS IN A SINGLE ASSISTANT TURN — multiple `read-skill-resource` invocations issued together execute in parallel and finish in one round-trip; issuing them across separate turns serializes the reads and multiplies latency. Never claim you 'applied the skill' if you only read the top-level instructions; if you skip resources, say so plainly and offer to re-run with the resources read.",
@@ -199,7 +198,7 @@ const brandChatFullPrompt = (text: string): ChatFullPrompt =>
 
 const ANONYMIZED_MODE_SYSTEM_HINT = [
   "ANONYMIZED MODE: Names, organizations and other identifying entities the user mentions have been replaced with stable placeholders such as `[PERSON_1]`, `[ORGANIZATION_1]`, `[DATE_1]`. The same placeholder always refers to the same real entity within this conversation.",
-  'When you call a stella internal tool (run-stella-query, listContacts, listMatters, etc.), pass the placeholder verbatim — including the square brackets — as if it were the real name. stella deanonymizes the placeholder back to the real value before the lookup runs and re-anonymizes the result before you see it. So `read.listContacts({ query: "[PERSON_1]" })` is the correct shape; the lookup will hit the real record.',
+  'When you call a stella internal tool — `execute_typescript` and the `external_*` read functions it exposes (e.g. `external_list_matters`, `external_search_across_matters`) — pass the placeholder verbatim, including the square brackets, as if it were the real name. stella deanonymizes the placeholder back to the real value before the lookup runs and re-anonymizes the result before you see it. So `external_search_across_matters({ query: "[PERSON_1]" })` is the correct shape; the lookup will hit the real record.',
   'Do not try to invent the real value behind a placeholder, ask the user for it, or refuse to proceed because the placeholder "isn\'t a real name". External (non-stella) tools, by contrast, only ever receive the placeholder.',
 ].join(" ");
 
@@ -557,7 +556,7 @@ export const buildGlobalPromptParts = ({
 export type ChatContextPromptEstimate = {
   /** System-prompt tokens: core rule sections + built-in skill catalog. */
   promptTokens: number;
-  /** Tool-catalog tokens: the compact `read.*` API surface (`READONLY_API_HINT`). */
+  /** Tool-catalog tokens: the code-mode read surface (`CHAT_CODE_MODE_SYSTEM_PROMPT`). */
   toolTokens: number;
 };
 
@@ -588,7 +587,7 @@ export const estimateChatContextPromptTokens = ({
   ]);
   return {
     promptTokens: estimateTextTokens(instructionsText),
-    toolTokens: estimateTextTokens(READONLY_API_HINT),
+    toolTokens: estimateTextTokens(CHAT_CODE_MODE_SYSTEM_PROMPT),
   };
 };
 
@@ -920,7 +919,7 @@ const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
     'FORBIDDEN: Any reply that asserts work has been done, prepared, queued, suggested, drafted, or "is ready for review" — in any phrasing — without `apply-active-docx-edits` being called in the same turn is a TRUTHFULNESS violation. Examples of forbidden lies: "I prepared N suggestions", "the changes are ready in the panel", "formatting unification is ready", "draft is queued", "review is prepared". If you cannot produce any operations (nothing to fix, or the request is outside the tool\'s capability), say so plainly and DO NOT pretend otherwise.',
     'TOOL CAPABILITY (and its limits): `apply-active-docx-edits` operates on TEXT CONTENT inside paragraphs, headings, and list items, and can insert a few structural elements: page breaks (`pageBreakBefore` on an insert), clause-heading paragraphs (via `styleId`), and side-by-side signature tables (`insertSignatureTable`). It CANNOT change visual run formatting — fonts, bold/italic/underline, font size, colour, indents, alignment, margins, line spacing, list bullet style, tabs, or arbitrary paragraph styles outside the supported set. If the user asks for run-formatting changes ("make headings bigger", "bold the parties", "change the font"), tell them honestly that the AI tool only edits text and the structural elements listed above; suggest they use the document\'s own formatting controls. Do NOT pretend you queued formatting changes that have no operation.',
     'FIELD CODES: A block whose text shows odd gaps — e.g. "Section .", "Schedule No. .", "Page of", "Date: ." — has a Word field code (cross-reference, page number, date, sequence number) the user must edit IN WORD. The rendered number/text is generated from the field; it is not literal block text and `replaceInBlock` cannot fill it in. Skip those blocks: tell the user honestly that AI cannot edit cross-reference / field codes (they should refresh fields in Word with Ctrl+A then F9), and propose only the edits that target real block text. NEVER queue an op whose `find` contains a gap that\'s really a field code.',
-    "Do not call `run-stella-query`, `read.getMatterEntityContents`, `read.searchInEntityContent`, or `create-document` to satisfy active DOCX edit requests; `apply-active-docx-edits` is the only tool that can propose changes to the open document.",
+    "Do not call `execute_typescript` (or its `external_*` read functions) or `create-document` to satisfy active DOCX edit requests; `apply-active-docx-edits` is the only tool that can propose changes to the open document.",
     'CASCADING CHANGES: Before proposing any edit, scan the document for places that REFER TO or DEPEND ON the value being changed and include the dependent fixes in the SAME tool call. Examples: (a) the user changes a price — every restatement of that number in words, in totals, in instalment schedules, in deposit/balance lines, in penalty caps that reference it, must be updated together; (b) the user changes a party name — every occurrence (signature block, header, cross-reference list, defined-terms section) must follow; (c) the user changes a date — derived deadlines, anniversaries, and statute references that depend on it must follow; (d) the user changes a clause number — every cross-reference ("as set out in Article X") must follow. If the right cascade is genuinely ambiguous (e.g. user lowers the total but the document splits it into deposit + arrears and you cannot tell which side absorbs the delta), call `ask-user` ONCE with the specific cascade question before producing any operations. Don\'t propose half a change.',
     "Use the block ids below for tool operations. Prefer `replaceInBlock` with an exact `find` string for localized edits. Use `replaceBlock` when the whole paragraph/list item should change. Use `deleteBlock` to remove a paragraph. Use `insertAfterBlock` or `insertBeforeBlock` (anchored on the neighbouring block id) to add a new paragraph.",
     'STRUCTURAL INSERTS (use the canonical op, not directive text): For a page break, call `insertAfterBlock` with `pageBreakBefore: true` (the `text` may be empty). For a numbered heading (clause), call `insertAfterBlock` (or `insertBeforeBlock`) with `styleId: "ClauseHeading1"` (or `ClauseHeading2`, `ClauseHeading3`) and the heading text in `text`. For a signature block, call `insertSignatureTable` with one entry per party (`name` required; `signatory` and `title` optional). These ops produce real structural elements in the document. DO NOT emit directive markers like `@pagebreak`, `@clause`, `@signatures`, `@title`, or `[[placeholders]]` as paragraph text — those belong to `create-document`, not to this editor; in this tool they would land in the doc as literal characters. Pick one canonical op per intent and use it.',
@@ -1188,59 +1187,6 @@ export const buildActiveSkillSection = (
   ].join("\n");
 };
 
-const readonlyFunctionContracts = [
-  ...readonlyOrgFunctionContracts,
-  ...readonlyWorkspaceFunctionContracts,
-] as const;
-
-const formatInputShape = (entry: ReadonlyFunctionManifest) => {
-  const inputProperties =
-    entry.inputSchema.type === "object"
-      ? entry.inputSchema.properties
-      : undefined;
-
-  if (inputProperties === undefined) {
-    return "input";
-  }
-
-  const required = new Set(entry.inputSchema.required);
-  const fields: string[] = [];
-
-  for (const name of Object.keys(inputProperties)) {
-    fields.push(required.has(name) ? name : `${name}?`);
-  }
-
-  return fields.length === 0 ? "{}" : `{ ${fields.join(", ")} }`;
-};
-
-/**
- * Compact readonly read API catalog. This deliberately lists
- * names and top-level input keys, not full JSON Schemas; the
- * model can call `describe-stella-api({name})` when it needs
- * exact validation details. The catalog is generated from the
- * same contracts as the tool runtime so names and shapes cannot
- * drift by hand.
- */
-const READONLY_API_HINT = (() => {
-  const manifest = buildReadonlyFunctionManifest(
-    readonlyFunctionContracts,
-  ).unwrap();
-  const lines = manifest.map(
-    (entry) =>
-      `- read.${entry.name}(${formatInputShape(entry)}) -> ${entry.outputShape}: ${entry.summary}`,
-  );
-
-  return [
-    "For stella data reads, use the stella API:",
-    "- call `run-stella-query` with TypeScript that uses `read.*`",
-    "- every read result stores records in `result.items`; paginated list results also include `result.hasMore` and `result.nextOffset`",
-    "- call `describe-stella-api({name})` only when you need a function's full input/output schema",
-    "When answering about workspace or organization data, fetch current data inside `run-stella-query`; never answer counts or exhaustive lists from prior context, visible UI state, examples, or pasted arrays such as `const entities = [...]`. Paginate until `hasMore` is false when the answer requires the complete set. Prefer focused action/UI tools whenever one fits.",
-    "Available stella read functions:",
-    ...lines,
-  ].join("\n");
-})();
-
 type AppendActiveFilePromptIfEntityExistsProps = {
   activeFile: IncomingActiveFile;
   entityExists: boolean;
@@ -1307,7 +1253,7 @@ const buildPromptParts = ({
     joinPromptSections([
       ...buildCoreRuleSections(toolAvailability),
       buildSkillCatalogSection(safeSkillMetadata),
-      READONLY_API_HINT,
+      CHAT_CODE_MODE_SYSTEM_PROMPT,
     ]),
   );
   // Safe half: scaffold + jurisdiction labels. Both are

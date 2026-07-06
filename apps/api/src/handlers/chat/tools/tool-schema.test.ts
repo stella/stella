@@ -18,11 +18,13 @@ import {
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS } from "@/api/lib/provider-safe-json-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 import { createOrgTools } from "./org-tools";
 import { createSkillTools } from "./skill-tools";
@@ -193,7 +195,8 @@ describe("chat tool schemas", () => {
     expect(tools).not.toHaveProperty("update-current-skill-resource");
     expect(tools).toHaveProperty(SEARCH_CHAT_HISTORY_TOOL_NAME);
     expect(tools).toHaveProperty(EXPAND_CHAT_HISTORY_TOOL_NAME);
-    expect(tools).toHaveProperty("run-stella-query");
+    expect(tools).toHaveProperty("execute_typescript");
+    expect(tools).toHaveProperty("discover_tools");
     expect(tools).toHaveProperty("create-document");
     expect(tools).toHaveProperty("update-entity-fields");
     expect(tools).not.toHaveProperty("search-across-matters");
@@ -309,13 +312,13 @@ describe("chat tool schemas", () => {
     const businessRegistryLookup = tools["business_registry_lookup"];
     const updateEntityFields = tools["update-entity-fields"];
     const createDocument = tools["create-document"];
-    const runStellaQuery = tools["run-stella-query"];
+    const executeTypescript = tools["execute_typescript"];
     const searchChatHistory = tools[SEARCH_CHAT_HISTORY_TOOL_NAME];
 
     expect(businessRegistryLookup).toBeDefined();
     expect(updateEntityFields).toBeDefined();
     expect(createDocument).toBeDefined();
-    expect(runStellaQuery).toBeDefined();
+    expect(executeTypescript).toBeDefined();
     expect(searchChatHistory).toBeDefined();
 
     if (
@@ -345,7 +348,7 @@ describe("chat tool schemas", () => {
       needsApproval: false,
       requiresAnonymization: false,
     });
-    expect(runStellaQuery?.needsApproval).toBeUndefined();
+    expect(executeTypescript?.needsApproval).toBeUndefined();
     expect(getChatToolPolicy(searchChatHistory)).toEqual({
       kind: "internal",
       needsApproval: false,
@@ -494,5 +497,72 @@ describe("chat tool schemas", () => {
       href: "#stella-entity-ref=ent_1",
       mention: "[Mzuri_Umowa_Strona_1.docx](#stella-entity-ref=ent_1)",
     });
+  });
+});
+
+describe("registry write tool approval policy", () => {
+  const projectedWriteNames = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (definition) =>
+      definition.access === "write" &&
+      WRITE_TOOL_REF_FIELD_MAP[definition.name].chatProjectable,
+  ).map((definition) => definition.name);
+
+  const buildToolsWithWorkspace = () =>
+    getChatTools({
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      hasActiveDocxEditClient: false,
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+  test("every projected write tool needs approval and is classified mutation", () => {
+    const tools = buildToolsWithWorkspace();
+    expect(projectedWriteNames.length).toBeGreaterThan(0);
+
+    for (const name of projectedWriteNames) {
+      const tool = tools[name];
+      if (!tool) {
+        throw new Error(`Projected write tool ${name} was not registered`);
+      }
+      expect(tool.needsApproval, name).toBe(true);
+      expect(getChatToolPolicy(tool).kind, name).toBe("mutation");
+    }
+  });
+
+  test("no write tools are registered when the workspace set is empty", () => {
+    const tools = getChatTools({
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [],
+      }),
+      hasActiveDocxEditClient: false,
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    for (const name of projectedWriteNames) {
+      expect(tools, name).not.toHaveProperty(name);
+    }
   });
 });

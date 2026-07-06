@@ -262,3 +262,35 @@ const collectUndescribedProperties = (
 
 const getInputProperties = (tool: McpToolDefinition): Record<string, unknown> =>
   isRecord(tool.inputSchema.properties) ? tool.inputSchema.properties : {};
+
+/**
+ * Guards the `delete_` naming convention the chat frontend relies on to
+ * restrict destructive-write approvals to allow-once/deny only (no "allow in
+ * conversation", no "always allow"). The frontend has no access to the MCP
+ * `annotations.destructiveHint`; it keys purely off the `delete_` name prefix
+ * (`isDestructiveChatToolName`). This test keeps that heuristic honest: it must
+ * agree with the registry's own destructive classification in both directions,
+ * so a destructive tool named without the prefix, or a `delete_` tool missing
+ * the hint, fails the build rather than silently letting a delete be
+ * auto-approved (or a save be treated as irreversible).
+ */
+describe("destructive write-tool naming convention", () => {
+  const writeTools: readonly McpToolDefinition[] =
+    DEFAULT_MCP_TOOL_DEFINITIONS.filter((tool) => tool.access === "write");
+
+  test("every destructiveHint write tool is named delete_*", () => {
+    const offenders = writeTools
+      .filter((tool) => tool.annotations?.destructiveHint === true)
+      .filter((tool) => !tool.name.startsWith("delete_"))
+      .map((tool) => tool.name);
+    expect(offenders).toEqual([]);
+  });
+
+  test("every delete_* write tool carries destructiveHint", () => {
+    const offenders = writeTools
+      .filter((tool) => tool.name.startsWith("delete_"))
+      .filter((tool) => tool.annotations?.destructiveHint !== true)
+      .map((tool) => tool.name);
+    expect(offenders).toEqual([]);
+  });
+});

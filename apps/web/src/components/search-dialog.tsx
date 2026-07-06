@@ -133,7 +133,7 @@ const KIND_TRANSLATION_KEYS = {
   matter: "search.kinds.matter",
   contact: "search.kinds.contact",
   "case-law": "search.kinds.caseLaw",
-  document: "search.kinds.document",
+  document: "common.document",
   folder: "search.kinds.folder",
   task: "search.kinds.task",
   message: "search.kinds.message",

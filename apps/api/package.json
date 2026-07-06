@@ -71,6 +71,7 @@
     "@tanstack/ai-anthropic": "catalog:",
     "@tanstack/ai-bedrock": "catalog:",
     "@tanstack/ai-client": "catalog:",
+    "@tanstack/ai-code-mode": "catalog:",
     "@tanstack/ai-gemini": "catalog:",
     "@tanstack/ai-mcp": "catalog:",
     "@tanstack/ai-mistral": "catalog:",

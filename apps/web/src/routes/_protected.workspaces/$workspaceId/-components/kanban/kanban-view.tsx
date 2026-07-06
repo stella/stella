@@ -288,7 +288,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       )
     : {};
   const entityKindLabels = {
-    document: t("search.kinds.document"),
+    document: t("common.document"),
     folder: t("search.kinds.folder"),
     task: t("search.kinds.task"),
     message: t("search.kinds.message"),

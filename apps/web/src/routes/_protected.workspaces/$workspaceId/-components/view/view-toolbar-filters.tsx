@@ -699,7 +699,7 @@ const fieldKey = (field: FieldOption): string => {
 const ENTITY_KINDS = ["document", "task"] as const;
 
 const KIND_LABEL_KEYS = {
-  document: "search.kinds.document",
+  document: "common.document",
   task: "search.kinds.task",
 } as const satisfies Record<(typeof ENTITY_KINDS)[number], TranslationKey>;
 

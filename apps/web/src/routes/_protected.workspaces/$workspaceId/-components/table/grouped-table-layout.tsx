@@ -274,7 +274,7 @@ export const GroupedTableLayout = ({
   // table never needs status labels.
   const statusLabels = {};
   const entityKindLabels = {
-    document: t("search.kinds.document"),
+    document: t("common.document"),
     folder: t("search.kinds.folder"),
     task: t("search.kinds.task"),
     message: t("search.kinds.message"),

@@ -94,6 +94,45 @@ let activeSandboxCount = 0;
 const activeSandboxCountByKey = new Map<string, number>();
 const sandboxAdmissionQueue: SandboxAdmissionWaiter[] = [];
 
+// Every in-flight host-call promise (see `runHostCall`), tracked at module
+// scope purely so tests can await the full unwind of a run. A timed-out run
+// returns at its deadline while its orphaned host promise keeps settling in
+// the background; without a way to await that tail, the leftover work bleeds
+// across test and file boundaries (Bun runs a package's test files in one
+// shared process) and perturbs the timing-sensitive admission-queue tests.
+// Entries are added on registration and removed when the promise settles, so
+// this never retains work and does not alter execution behaviour.
+const sandboxHostWorkInFlight = new Set<Promise<void>>();
+
+/**
+ * Test-only drain hook: resolves once the process-global sandbox admission
+ * state is fully idle — no admitted runs, an empty admission queue, and no
+ * orphaned host work still settling in the background. It only READS module
+ * state and awaits already-scheduled work; it never resets counters or cancels
+ * work, so it cannot mask a real admission-accounting bug. Both sandbox test
+ * files call it in `afterEach` so one test's background host work cannot leak
+ * into the timing of the next.
+ */
+export const awaitSandboxAdmissionIdle = async (): Promise<void> => {
+  while (
+    // oxlint-disable-next-line no-unmodified-loop-condition -- released by admission callbacks that settle during the awaited work below, not in this loop body
+    activeSandboxCount > 0 ||
+    sandboxAdmissionQueue.length > 0 ||
+    sandboxHostWorkInFlight.size > 0
+  ) {
+    if (sandboxHostWorkInFlight.size > 0) {
+      // oxlint-disable-next-line no-await-in-loop -- drain loop: await the current in-flight snapshot, then re-check for work registered while we waited
+      await Promise.allSettled(Array.from(sandboxHostWorkInFlight));
+      continue;
+    }
+
+    // oxlint-disable-next-line no-await-in-loop -- yield a macrotask so a just-released slot's queue flush can settle before re-checking
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0);
+    });
+  }
+};
+
 const buildSandboxScript = (transpiledBody: string): string =>
   `${buildHostBridgePrelude()}\n${transpiledBody}`;
 
@@ -715,8 +754,10 @@ const runHostCall = ({
     })
     .finally(() => {
       state.pendingHostWork.delete(workPromise);
+      sandboxHostWorkInFlight.delete(workPromise);
     });
 
+  sandboxHostWorkInFlight.add(workPromise);
   return workPromise;
 };
 
