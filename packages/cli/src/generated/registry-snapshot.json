@@ -1354,7 +1354,7 @@
   },
   {
     "name": "list_playbooks",
-    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, standards, and grading rules), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
+    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, tiered rules, and ideal language), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
     "inputSchema": {
       "type": "object",
       "properties": {
