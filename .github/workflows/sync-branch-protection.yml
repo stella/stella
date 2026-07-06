@@ -5,6 +5,10 @@ name: Sync Branch Protection
 # so the weekly audit workflow stays green.
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - .github/branch-protection/**
   workflow_dispatch:
     inputs:
       expected-config-path:
@@ -28,6 +32,24 @@ jobs:
     permissions:
       contents: read
 
+    strategy:
+      fail-fast: false
+      matrix:
+        expected-config-path:
+          - .github/branch-protection/ruleset-main.json
+          - .github/branch-protection/tags-v.json
+
+    # On push, only sync configs touched by the commit. On manual
+    # dispatch, sync the selected config only.
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      && matrix.expected-config-path == inputs.expected-config-path
+      || github.event_name == 'push'
+      && (
+        contains(github.event.head_commit.modified, matrix.expected-config-path)
+        || contains(github.event.head_commit.added, matrix.expected-config-path)
+      )
+
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -43,7 +65,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
-          EXPECTED_PATH: ${{ inputs.expected-config-path }}
+          EXPECTED_PATH: ${{ matrix.expected-config-path }}
         shell: bash --noprofile --norc -eo pipefail {0}
         run: |
           if [ ! -f "${EXPECTED_PATH}" ]; then
