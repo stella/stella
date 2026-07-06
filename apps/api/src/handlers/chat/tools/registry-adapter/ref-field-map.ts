@@ -213,6 +213,10 @@ export const READ_TOOL_REF_FIELD_MAP = {
         path: "entityId",
         workspace: { from: "inputEntity", param: "entity_id" },
       },
+      // Both field branches select `{ id, propertyId, content }`: the default
+      // branch via `readEntityByIdHandler` (`fields`), the specific-version
+      // branch via the `version_id` field query (`version.fields`). So
+      // `propertyId` is the property id at both paths, pinned by test.
       { kind: "property", path: "fields[].propertyId" },
       { kind: "property", path: "version.fields[].propertyId" },
     ],
@@ -334,13 +338,19 @@ export const READ_TOOL_REF_FIELD_MAP = {
       {
         kind: "entity",
         path: "entries[].entityId",
+        // List mode always has matter_id (schema-enforced), so the input arg is
+        // the workspace source.
         workspace: { from: "inputParam", param: "matter_id" },
       },
       {
         kind: "entity",
         path: "entry.entityId",
-        workspace: { from: "inputParam", param: "matter_id" },
+        // Detail mode may omit matter_id (time_entry_id alone), so recover the
+        // workspace from the fetched entry row, which now carries it.
+        workspace: { from: "sibling", key: "workspaceId" },
       },
+      // The detail entry's own owning workspace is a matter ref.
+      { kind: "matter", path: "entry.workspaceId" },
     ],
     // Time-entry ids and user ids carry no chat ref kind; `nextCursor` is an
     // opaque `[dateWorked, id]` cursor, not UUID-formatted.
@@ -361,27 +371,33 @@ export const READ_TOOL_REF_FIELD_MAP = {
   list_invoices: {
     chatProjectable: true,
     inputRefs: [{ kind: "matter", param: "matter_id" }],
+    // Detail mode (invoice_id) may omit matter_id, so every line item's entity
+    // recovers its workspace from the invoice's own resolved `workspaceId`
+    // rather than from the (absent) input arg. List mode returns no line items,
+    // so these `invoice.*` paths only ever match the detail branch.
     outputRefs: [
       {
         kind: "entity",
         path: "invoice.timeEntries[].entityId",
-        workspace: { from: "inputParam", param: "matter_id" },
+        workspace: { from: "outputPath", path: "invoice.workspaceId" },
       },
       {
         kind: "entity",
         path: "invoice.timeEntries[].entity.id",
-        workspace: { from: "inputParam", param: "matter_id" },
+        workspace: { from: "outputPath", path: "invoice.workspaceId" },
       },
       {
         kind: "entity",
         path: "invoice.expenses[].entityId",
-        workspace: { from: "inputParam", param: "matter_id" },
+        workspace: { from: "outputPath", path: "invoice.workspaceId" },
       },
       {
         kind: "entity",
         path: "invoice.expenses[].entity.id",
-        workspace: { from: "inputParam", param: "matter_id" },
+        workspace: { from: "outputPath", path: "invoice.workspaceId" },
       },
+      // The detail invoice's own owning workspace is a matter ref.
+      { kind: "matter", path: "invoice.workspaceId" },
     ],
     // Invoice ids and line-item ids (time entry / expense) carry no chat ref
     // kind; `nextCursor` is an opaque `[createdAt, id]` cursor, not
