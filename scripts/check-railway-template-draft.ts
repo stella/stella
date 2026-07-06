@@ -14,13 +14,20 @@ class RailwayTemplateDraftError extends Error {
   }
 }
 
+type ServiceBuild = {
+  builder: string;
+  dockerfilePath: string;
+};
+
 type ServiceTemplate = {
   requiredUserInputs: Record<string, string>;
   variables: Record<string, string>;
+  build?: ServiceBuild;
 };
 
 type TemplateManifest = {
   services: Record<string, ServiceTemplate>;
+  buckets: string[];
 };
 
 const failures: string[] = [];
@@ -67,6 +74,32 @@ const readStringRecord = (
   return result;
 };
 
+const readServiceBuild = (
+  value: unknown,
+  label: string,
+): ServiceBuild | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    throw new RailwayTemplateDraftError(`${label} must be an object`);
+  }
+  return {
+    builder: getString(value, "builder"),
+    dockerfilePath: getString(value, "dockerfilePath"),
+  };
+};
+
+const readManifestBuckets = (value: unknown): string[] => {
+  if (value === undefined) {
+    return [];
+  }
+  if (!isRecord(value)) {
+    throw new RailwayTemplateDraftError(`${MANIFEST_PATH} buckets must be an object`);
+  }
+  return Object.keys(value);
+};
+
 const readManifest = (): TemplateManifest => {
   const value = readJson(MANIFEST_PATH);
   if (!isRecord(value) || !isRecord(value["services"])) {
@@ -91,10 +124,14 @@ const readManifest = (): TemplateManifest => {
         service["variables"] ?? {},
         `services.${serviceName}.variables`,
       ),
+      build: readServiceBuild(
+        service["build"],
+        `services.${serviceName}.build`,
+      ),
     };
   }
 
-  return { services };
+  return { services, buckets: readManifestBuckets(value["buckets"]) };
 };
 
 const readRailwayTokenFromConfig = (config: unknown) => {
@@ -273,6 +310,55 @@ const validateServiceVariables = ({
   }
 };
 
+const validateServiceBuild = ({
+  draftService,
+  serviceName,
+  build,
+}: {
+  draftService: Record<string, unknown>;
+  serviceName: string;
+  build: ServiceBuild;
+}) => {
+  const buildConfig = draftService["build"];
+  if (!isRecord(buildConfig)) {
+    failures.push(`${serviceName} has no build config in the template draft`);
+    return;
+  }
+
+  if (buildConfig["builder"] !== build.builder) {
+    failures.push(
+      `${serviceName}.build.builder is ${String(buildConfig["builder"])}; expected ${build.builder}`,
+    );
+  }
+  if (buildConfig["dockerfilePath"] !== build.dockerfilePath) {
+    failures.push(
+      `${serviceName}.build.dockerfilePath is ${String(buildConfig["dockerfilePath"])}; expected ${build.dockerfilePath}`,
+    );
+  }
+};
+
+const validateBuckets = (
+  serializedConfig: Record<string, unknown>,
+  expectedBuckets: string[],
+) => {
+  const bucketsConfig = serializedConfig["buckets"];
+  const actualNames = new Set<string>();
+  if (isRecord(bucketsConfig)) {
+    for (const [key, bucket] of Object.entries(bucketsConfig)) {
+      actualNames.add(key);
+      if (isRecord(bucket) && typeof bucket["name"] === "string") {
+        actualNames.add(bucket["name"]);
+      }
+    }
+  }
+
+  for (const name of expectedBuckets) {
+    if (!actualNames.has(name)) {
+      failures.push(`Template draft is missing bucket ${name}`);
+    }
+  }
+};
+
 const printUsage = () => {
   console.log(
     "Usage: bun scripts/check-railway-template-draft.ts --template <template-id>",
@@ -327,13 +413,14 @@ const main = async () => {
       `Railway template ${templateId} returned invalid data`,
     );
   }
-  if (!isRecord(template["serializedConfig"])) {
+  const serializedConfig = template["serializedConfig"];
+  if (!isRecord(serializedConfig)) {
     throw new RailwayTemplateDraftError(
       `Railway template ${templateId} has no serialized config`,
     );
   }
 
-  const servicesConfig = template["serializedConfig"]["services"];
+  const servicesConfig = serializedConfig["services"];
   if (!isRecord(servicesConfig)) {
     throw new RailwayTemplateDraftError(
       `Railway template ${templateId} has no service config`,
@@ -352,7 +439,16 @@ const main = async () => {
       serviceName,
       template: serviceTemplate,
     });
+    if (serviceTemplate.build) {
+      validateServiceBuild({
+        draftService,
+        serviceName,
+        build: serviceTemplate.build,
+      });
+    }
   }
+
+  validateBuckets(serializedConfig, manifest.buckets);
 
   if (failures.length > 0) {
     for (const failure of failures) {
