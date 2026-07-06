@@ -29,6 +29,11 @@ import {
   type ChatCodeModeToolMap,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import {
+  createFolioAgentDocTools,
+  FIND_TEXT_TOOL_NAME,
+  READ_DOCUMENT_TOOL_NAME,
+} from "@/api/handlers/chat/tools/folio-agent-tools";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import {
@@ -122,6 +127,7 @@ type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
 type InfosoudTools = ReturnType<typeof createInfosoudTools>;
 type ActiveDocxEditTools = ReturnType<typeof createActiveDocxEditTools>;
+type FolioAgentDocTools = ReturnType<typeof createFolioAgentDocTools>;
 type CreateDocumentTools = ReturnType<typeof createCreateDocumentTools>;
 type WebSearchTools = ReturnType<typeof createWebSearchTools>;
 type ChatHistoryTools = ReturnType<typeof createChatHistoryTools>;
@@ -145,6 +151,7 @@ type BuiltInChatTools = OrgTools &
   InfosoudTools &
   WorkspaceTools &
   ActiveDocxEditTools &
+  FolioAgentDocTools &
   CreateDocumentTools &
   WebSearchTools &
   ChatHistoryTools &
@@ -267,12 +274,14 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // official-registry lookups so the model executes immediately
   // once the toggle is on.
   [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  [FIND_TEXT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   // A write: served by the hand-written template chat tool (not the registry
   // write projection), but still gated on approval like every other write.
   fill_template: CHAT_TOOL_POLICY_KIND.mutation,
   infosoud_lookup_case: CHAT_TOOL_POLICY_KIND.publicOfficial,
   list_templates: CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
+  [READ_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
@@ -391,6 +400,13 @@ export const getChatTools = ({
   const activeDocxEditTools = hasActiveDocxEditClient
     ? createActiveDocxEditTools()
     : {};
+  // Same precondition as `apply-active-docx-edits`: a live editor surface
+  // with a client tool handler mounted. Other surfaces have no
+  // `FolioAgentBridge` to execute these against, so the tools must stay
+  // unregistered there rather than hang waiting for a client result.
+  const folioAgentDocTools = hasActiveDocxEditClient
+    ? createFolioAgentDocTools()
+    : {};
   const historyTools = createChatHistoryTools({
     excludedMessageIds: excludedChatHistoryMessageIds,
     safeDb,
@@ -483,6 +499,7 @@ export const getChatTools = ({
       ...historyTools,
       ...createDocumentTools,
       ...activeDocxEditTools,
+      ...folioAgentDocTools,
       ...webSearchTools,
       ...registryWriteTools,
       ...externalChatTools,

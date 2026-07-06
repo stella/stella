@@ -30,6 +30,10 @@ import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
+import {
+  createEditorRefBridge,
+  executeFolioToolCall,
+} from "@stll/folio-agents";
 import type {
   DocxEditorRef,
   FolioAIEditOperation,
@@ -55,8 +59,15 @@ import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import { getActiveDocxEditApprovalPart } from "@/components/chat/chat-ui-tools";
-import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
+import {
+  getActiveDocxEditApprovalPart,
+  isUnresolvedFolioAgentDocToolCallPart,
+  parseCompletedToolCallArguments,
+} from "@/components/chat/chat-ui-tools";
+import type {
+  ApprovalToolName,
+  UnresolvedFolioAgentDocToolCallPart,
+} from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -1230,6 +1241,73 @@ const FileChatOverlayInner = ({
 
     await handleApprove(approvalId, toolName);
   };
+
+  // Auto-run watcher for the client-executed, no-approval folio-agents doc
+  // tools (`read_document` / `find_text`). Nothing else in the runtime
+  // resolves these — there is no approval click to gate re-entrancy the way
+  // `handleApproveWithDocxUnlock` is, so this effect tracks which
+  // `toolCallId`s it has already dispatched itself.
+  const executedFolioAgentDocToolCallIdsRef = useRef<Set<string>>(new Set());
+  const runFolioAgentDocToolCall = useEffectEvent(
+    async (part: UnresolvedFolioAgentDocToolCallPart) => {
+      try {
+        // Read the ref fresh on every call rather than capturing it in a
+        // memo: `docxEditorRef.current` can change identity (remount,
+        // editor swap) between when this effect schedules the call and
+        // when it actually runs.
+        const ref = docxEditorRef?.current;
+        if (!ref) {
+          await addToolResult({
+            tool: part.name,
+            toolCallId: part.id,
+            output: { ok: false, error: "No document is open." },
+          });
+          return;
+        }
+
+        // Comment tools (`read_comments`, `add_comment`, …) are never
+        // registered server-side (see `folio-agent-tools.ts`), so the model
+        // can never call them — these no-op accessors only satisfy the
+        // bridge's required shape.
+        const bridge = createEditorRefBridge({
+          ref,
+          author: userContext.wordEditAuthorName,
+          getComments: () => [],
+          // oxlint-disable-next-line no-empty-function -- intentional no-op: read_document/find_text never mutate comments, so this setter is never invoked
+          setComments: () => {},
+        });
+        const args = parseCompletedToolCallArguments(part) ?? {};
+        const result = executeFolioToolCall(part.name, args, bridge);
+        await addToolResult({
+          tool: part.name,
+          toolCallId: part.id,
+          output: result,
+        });
+      } catch (toolCallError) {
+        // Allow a retry: a later render of the same unresolved part should
+        // be dispatched again instead of hanging forever.
+        executedFolioAgentDocToolCallIdsRef.current.delete(part.id);
+        getAnalytics().captureError(toolCallError);
+      }
+    },
+  );
+  useExternalSyncEffect(() => {
+    const message = messages.at(-1);
+    if (!message || message.role !== "assistant") {
+      return;
+    }
+
+    for (const part of message.parts) {
+      if (
+        !isUnresolvedFolioAgentDocToolCallPart(part) ||
+        executedFolioAgentDocToolCallIdsRef.current.has(part.id)
+      ) {
+        continue;
+      }
+      executedFolioAgentDocToolCallIdsRef.current.add(part.id);
+      void runFolioAgentDocToolCall(part);
+    }
+  }, [messages]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;

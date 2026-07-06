@@ -12,6 +12,7 @@ import {
   isChatTurnInFlight,
   isPublicOfficialChatToolName,
   isToolApprovedByGrant,
+  isUnresolvedFolioAgentDocToolCallPart,
   sanitizeHydratedRunningToolCalls,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
@@ -394,6 +395,84 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
     expect(hasRunningToolCallInLatestAssistantMessage({ messages })).toBe(
       false,
     );
+  });
+});
+
+describe("isUnresolvedFolioAgentDocToolCallPart", () => {
+  test("matches a completed read_document call awaiting a result", () => {
+    const part = {
+      arguments: "{}",
+      id: "tool-call-1",
+      input: {},
+      state: "input-complete",
+      name: "read_document",
+      type: "tool-call",
+    };
+
+    expect(isUnresolvedFolioAgentDocToolCallPart(part)).toBe(true);
+  });
+
+  test("matches a completed find_text call awaiting a result", () => {
+    const part = {
+      arguments: JSON.stringify({ query: "termination" }),
+      id: "tool-call-2",
+      input: { query: "termination" },
+      state: "input-complete",
+      name: "find_text",
+      type: "tool-call",
+    };
+
+    expect(isUnresolvedFolioAgentDocToolCallPart(part)).toBe(true);
+  });
+
+  test("ignores a read_document call still streaming its input", () => {
+    const part = {
+      arguments: "{",
+      id: "tool-call-1",
+      state: "input-streaming",
+      name: "read_document",
+      type: "tool-call",
+    };
+
+    expect(isUnresolvedFolioAgentDocToolCallPart(part)).toBe(false);
+  });
+
+  test("ignores an already-resolved read_document call", () => {
+    const part = {
+      arguments: "{}",
+      id: "tool-call-1",
+      input: {},
+      output: { ok: true, result: [] },
+      state: "complete",
+      name: "read_document",
+      type: "tool-call",
+    };
+
+    expect(isUnresolvedFolioAgentDocToolCallPart(part)).toBe(false);
+  });
+
+  test("ignores unrelated tool calls", () => {
+    const part = {
+      arguments: JSON.stringify({ query: "consumer credit" }),
+      id: "tool-call-1",
+      input: { query: "consumer credit" },
+      state: "input-complete",
+      name: "mcp__salvia__search_decisions",
+      type: "tool-call",
+    };
+
+    expect(isUnresolvedFolioAgentDocToolCallPart(part)).toBe(false);
+  });
+
+  test("ignores non-tool-call parts", () => {
+    expect(
+      isUnresolvedFolioAgentDocToolCallPart({
+        content: "hello",
+        type: "text",
+      }),
+    ).toBe(false);
+    expect(isUnresolvedFolioAgentDocToolCallPart(null)).toBe(false);
+    expect(isUnresolvedFolioAgentDocToolCallPart("read_document")).toBe(false);
   });
 });
 

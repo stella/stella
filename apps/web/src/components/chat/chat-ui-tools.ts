@@ -77,6 +77,17 @@ const USER_INPUT_TOOL_NAMES = {
   "create-document": true,
 } as const satisfies Record<string, true>;
 
+// Mirrors the `@stll/folio-agents` tool names registered server-side in
+// `apps/api/src/handlers/chat/tools/folio-agent-tools.ts` (`READ_DOCUMENT_TOOL_NAME`
+// / `FIND_TEXT_TOOL_NAME`). Kept as local literals rather than a runtime import from
+// `@stll/api` — this file already follows that pattern for other built-in tool names.
+const READ_DOCUMENT_TOOL_NAME = "read_document";
+const FIND_TEXT_TOOL_NAME = "find_text";
+const FOLIO_AGENT_DOC_TOOL_NAMES = {
+  [FIND_TEXT_TOOL_NAME]: true,
+  [READ_DOCUMENT_TOOL_NAME]: true,
+} as const satisfies Record<string, true>;
+
 const CHAT_TOOL_TITLE_KEYS = {
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
   "ask-user": "chat.tool.ask-user",
@@ -103,6 +114,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   "expand-chat-history": "chat.tool.expand-chat-history",
   fetch_url: "chat.tool.fetch_url",
   fill_template: "chat.tool.fill_template",
+  find_text: "chat.tool.find_text",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   link_matter_contact: "chat.tool.link_matter_contact",
   list_templates: "chat.tool.list_templates",
@@ -119,6 +131,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   set_practice_jurisdictions: "chat.tool.set_practice_jurisdictions",
   suggest_template_fields: "chat.tool.suggest_template_fields",
   "load-skill": "chat.tool.load-skill",
+  read_document: "chat.tool.read_document",
   "read-skill-resource": "chat.tool.read-skill-resource",
   "search-chat-history": "chat.tool.search-chat-history",
   "update-current-skill-body": "common.edit",
@@ -490,6 +503,50 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
   return message.parts.some(isRunningToolPart);
 };
 
+/**
+ * An unresolved `read_document` / `find_text` tool-call part, narrowed by
+ * {@link isUnresolvedFolioAgentDocToolCallPart}.
+ */
+export type UnresolvedFolioAgentDocToolCallPart = ChatToolCallPart & {
+  name: keyof typeof FOLIO_AGENT_DOC_TOOL_NAMES;
+  state: "input-complete";
+};
+
+/**
+ * A `read_document` / `find_text` tool-call part whose input has fully
+ * streamed in but that has not yet been answered with a result.
+ *
+ * These two tools (from `@stll/folio-agents`) are client-executed and
+ * carry no `needsApproval` gate, so nothing else resolves them — the file
+ * overlay's auto-run watcher (`file-chat-overlay.tsx`) uses this predicate
+ * to find calls it still needs to execute against the live editor and
+ * answer via `addToolResult`.
+ */
+export const isUnresolvedFolioAgentDocToolCallPart = (
+  part: unknown,
+): part is UnresolvedFolioAgentDocToolCallPart => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    !("state" in part) ||
+    typeof part.type !== "string" ||
+    typeof part.state !== "string"
+  ) {
+    return false;
+  }
+
+  if (part.type !== "tool-call" || part.state !== "input-complete") {
+    return false;
+  }
+
+  return (
+    "name" in part &&
+    typeof part.name === "string" &&
+    part.name in FOLIO_AGENT_DOC_TOOL_NAMES
+  );
+};
+
 // Terminal state a dead running tool-call part is rewritten to at
 // hydration. "error" is the SDK's own terminal state for a failed tool
 // call: it clears `isRunningToolPart` and renders the card as interrupted
@@ -585,7 +642,9 @@ export const isChatTurnInFlight = ({
  * skipped for those states. Invalid or empty JSON yields `undefined`
  * rather than throwing (JSON boundary, so a local try/catch is fine).
  */
-const parseCompletedToolCallArguments = (part: ChatToolCallPart): unknown => {
+export const parseCompletedToolCallArguments = (
+  part: ChatToolCallPart,
+): unknown => {
   if (part.state === "awaiting-input" || part.state === "input-streaming") {
     return undefined;
   }

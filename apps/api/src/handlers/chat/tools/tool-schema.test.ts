@@ -18,6 +18,10 @@ import {
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import {
+  FIND_TEXT_TOOL_NAME,
+  READ_DOCUMENT_TOOL_NAME,
+} from "@/api/handlers/chat/tools/folio-agent-tools";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -202,6 +206,58 @@ describe("chat tool schemas", () => {
     expect(tools).not.toHaveProperty("search-across-matters");
     expect(tools).not.toHaveProperty("read-content-across-matters");
     expect(tools).not.toHaveProperty("read-contact");
+    // No live editor surface on this turn (`hasActiveDocxEditClient: false`):
+    // the folio-agents doc tools must stay unregistered, same precondition
+    // as `apply-active-docx-edits`.
+    expect(tools).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
+    expect(tools).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
+  });
+
+  test("registers the folio-agents read_document/find_text tools only when a docx edit client is active", () => {
+    const baseArgs = {
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+    } as const;
+
+    const withoutClient = getChatTools({
+      ...baseArgs,
+      hasActiveDocxEditClient: false,
+    });
+    expect(withoutClient).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
+    expect(withoutClient).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
+
+    const withClient = getChatTools({
+      ...baseArgs,
+      hasActiveDocxEditClient: true,
+    });
+    const readDocument = withClient[READ_DOCUMENT_TOOL_NAME];
+    const findText = withClient[FIND_TEXT_TOOL_NAME];
+    expect(readDocument).toBeDefined();
+    expect(findText).toBeDefined();
+    if (!readDocument || !findText) {
+      throw new Error("Expected folio-agents doc tools to be registered");
+    }
+
+    // Client-executed, read-only: no approval gate.
+    expect(readDocument.needsApproval).toBeUndefined();
+    expect(findText.needsApproval).toBeUndefined();
+    expect(getChatToolPolicy(readDocument)).toEqual({
+      kind: "internal",
+      needsApproval: false,
+      requiresAnonymization: false,
+    });
   });
 
   test("only exposes current skill edit tools for editable active skill chats", () => {

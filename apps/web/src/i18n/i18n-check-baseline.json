@@ -323,6 +323,34 @@
     "chat.suggestionSeverity.style": [
       "fr"
     ],
+    "chat.tool.find_text": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.tool.read_document": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "chat.webSearch.sources": [
       "fr"
     ],

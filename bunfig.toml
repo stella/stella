@@ -12,6 +12,7 @@ minimumReleaseAgeExcludes = [
   "@stll/aho-corasick-wasm",
   "@stll/anonymize-data",
   "@stll/anonymize-wasm",
+  "@stll/folio-agents",
   "@stll/folio-core",
   "@stll/folio-react",
   "@stll/fuzzy-search-wasm",
