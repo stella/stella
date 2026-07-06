@@ -28,7 +28,7 @@ describe("stella CLI shell", () => {
     expect(result.stdout.toString()).toContain("Stella command-line client");
   });
 
-  test("tools list stub reports it is not yet implemented", () => {
+  test("tools list enumerates the generated command tree", () => {
     const result = Bun.spawnSync({
       cmd: ["bun", CLI_ENTRYPOINT, "tools", "list"],
       stderr: "pipe",
@@ -36,8 +36,24 @@ describe("stella CLI shell", () => {
     });
 
     expect(result.exitCode).toBe(0);
-    expect(result.stdout.toString().trim()).toBe(
-      "stella tools list: not yet implemented",
-    );
+    const stdout = result.stdout.toString();
+    expect(stdout).toContain("matter list");
+    expect(stdout).toContain("(list_matters)");
+    expect(stdout).toContain("usage get");
+    // Excluded compat shims never surface.
+    expect(stdout).not.toContain("(search)");
+    expect(stdout).not.toContain("(fetch)");
+  });
+
+  test("generated domain commands are wired into the root", () => {
+    const result = Bun.spawnSync({
+      cmd: ["bun", CLI_ENTRYPOINT, "matter", "--help"],
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("list");
+    expect(result.stdout.toString()).toContain("save");
   });
 });

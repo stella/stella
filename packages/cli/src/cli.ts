@@ -20,15 +20,34 @@ import {
   readCredentialFile,
 } from "./auth/credential-store.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
+import { buildGeneratedRoutes } from "./build-cli-tree.js";
 import { authRoute } from "./commands/auth.js";
 import type { Context } from "./context.js";
+import { generatedRouteMap } from "./generated/route-map.js";
+import type { RouteNode } from "./route-types.js";
+
+const collectLeafPaths = (
+  node: RouteNode,
+  path: readonly string[],
+  lines: string[],
+): void => {
+  if (node.kind === "leaf") {
+    lines.push(`${path.join(" ")}\t(${node.spec.toolName})`);
+    return;
+  }
+  for (const [name, child] of Object.entries(node.children)) {
+    collectLeafPaths(child, [...path, name], lines);
+  }
+};
 
 const toolsListCommand = buildCommand({
   docs: {
     brief: "List the CLI commands generated from the stella MCP tool registry",
   },
   func(this: Context): void {
-    this.process.stdout.write("stella tools list: not yet implemented\n");
+    const lines: string[] = [];
+    collectLeafPaths(generatedRouteMap, [], lines);
+    this.process.stdout.write(`${lines.sort().join("\n")}\n`);
   },
   parameters: {},
 });
@@ -40,7 +59,11 @@ const toolsRoute = buildRouteMap({
 
 const rootRoute = buildRouteMap({
   docs: { brief: "Stella command-line client" },
-  routes: { auth: authRoute, tools: toolsRoute },
+  routes: {
+    auth: authRoute,
+    tools: toolsRoute,
+    ...buildGeneratedRoutes(generatedRouteMap),
+  },
 });
 
 const app = buildApplication(rootRoute, {
