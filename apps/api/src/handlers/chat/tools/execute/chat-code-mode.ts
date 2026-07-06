@@ -132,7 +132,7 @@ const buildChatReadTools = (
       description: definition.description,
       inputSchema: toToolInputSchema(definition.inputSchema),
       lazy: !EAGER_CHAT_READ_TOOLS.has(toolName),
-    }).server((args: unknown) => runReadTool(toolName, args));
+    }).server(async (args: unknown) => await runReadTool(toolName, args));
   });
 
 type BuildChatCodeModeProps = ChatRegistryContextDeps & {
