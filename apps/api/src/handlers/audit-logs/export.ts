@@ -43,23 +43,26 @@ const exportAuditLogs = createSafeRootHandler(
 
     // Batch-fetch user names/emails
     const userIds = [...new Set(rows.map((row) => row.userId).filter(Boolean))];
-    const userDetails = userIds.length > 0
-      ? yield* Result.await(
-          safeDb((tx) =>
-            tx
-              .select({ id: user.id, name: user.name, email: user.email })
-              .from(user)
-              .innerJoin(member, eq(member.userId, user.id))
-              .where(
-                and(
-                  eq(member.organizationId, session.activeOrganizationId),
-                  inArray(user.id, userIds),
+    const userDetails =
+      userIds.length > 0
+        ? yield* Result.await(
+            safeDb((tx) =>
+              tx
+                .select({ id: user.id, name: user.name, email: user.email })
+                .from(user)
+                .innerJoin(member, eq(member.userId, user.id))
+                .where(
+                  and(
+                    eq(member.organizationId, session.activeOrganizationId),
+                    inArray(user.id, userIds),
+                  ),
                 ),
-              ),
-          ),
-        )
-      : [];
-    const userMap = new Map(userDetails.map((u) => [u.id, { name: u.name, email: u.email }]));
+            ),
+          )
+        : [];
+    const userMap = new Map(
+      userDetails.map((u) => [u.id, { name: u.name, email: u.email }]),
+    );
 
     const headers = [
       "Time",
@@ -91,7 +94,8 @@ const exportAuditLogs = createSafeRootHandler(
     }
 
     set.headers["content-type"] = "text/csv; charset=utf-8";
-    set.headers["content-disposition"] = 'attachment; filename="audit-logs.csv"';
+    set.headers["content-disposition"] =
+      'attachment; filename="audit-logs.csv"';
 
     return Result.ok(csvRows.join("\n"));
   },

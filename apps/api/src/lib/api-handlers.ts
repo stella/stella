@@ -558,7 +558,7 @@ const createSafeScopedHandler = <
   TConfig extends HandlerConfig,
   TContext extends BaseHandlerContext<TConfig>,
   TResult extends SafeHandlerPayload,
- >(
+>(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
@@ -574,10 +574,7 @@ const createSafeScopedHandler = <
     let hasLogged = false;
 
     if (config.audit !== undefined && config.audit !== false) {
-      const recordAudit = async (
-        tx: Transaction,
-        result: unknown,
-      ) => {
+      const recordAudit = async (tx: Transaction, result: unknown) => {
         if (hasLogged || config.audit === undefined || config.audit === false) {
           return;
         }
@@ -610,22 +607,20 @@ const createSafeScopedHandler = <
       };
 
       const originalSafeDb = ctx.safeDb;
-      ctx.safeDb = async (fn, retry) => 
+      ctx.safeDb = async (fn, retry) =>
         await originalSafeDb(async (tx) => {
           const result = await fn(tx);
           await recordAudit(tx, result);
           return result;
-        }, retry)
-      ;
+        }, retry);
 
       const originalScopedDb = ctx.scopedDb;
-      ctx.scopedDb = async (fn) => 
+      ctx.scopedDb = async (fn) =>
         await originalScopedDb(async (tx) => {
           const result = await fn(tx);
           await recordAudit(tx, result);
           return result;
-        })
-      ;
+        });
     }
 
     // Resolve the metering context only when enforcement is on. It reads
