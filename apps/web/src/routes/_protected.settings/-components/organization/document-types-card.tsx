@@ -130,15 +130,6 @@ export const DocumentTypesCard = () => {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h3 className="text-base font-medium">
-          {t("settings.organization.documentTypes.title")}
-        </h3>
-        <p className="text-muted-foreground text-sm">
-          {t("settings.organization.documentTypes.description")}
-        </p>
-      </div>
-
       {items.length > 0 && (
         <ul className="flex flex-col gap-2">
           {items.map((item) => (
