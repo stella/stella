@@ -21,8 +21,10 @@ import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
   getChatToolTitleKey,
   getApprovalToolName,
+  isDestructiveChatToolName,
   isExternalMcpToolName,
   isPublicOfficialChatToolName,
+  isRegistryWriteSummaryToolName,
   isToolApprovedByGrant,
 } from "@/components/chat/chat-ui-tools";
 import type {
@@ -30,6 +32,11 @@ import type {
   ApprovalToolPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
+import {
+  buildRegistryWriteSummaryRows,
+  getReadableInputRows,
+  humanizeIdentifier,
+} from "@/components/chat/tool-approval-summary";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import type { WorkspaceProperty } from "@/lib/types";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
@@ -327,7 +334,12 @@ export const ToolApprovalCard = ({
     isApprovalResponded || (responded && isApprovalRequested);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
   const isExternalMcpApproval = isExternalMcpToolName(name);
-  const canAllowInConversation = name !== "apply-active-docx-edits";
+  // Destructive (delete_*) writes are irreversible, so they may only be
+  // approved once or denied: no "allow in conversation", no "always allow", so
+  // a stored grant can never auto-approve a delete.
+  const isDestructive = isDestructiveChatToolName(name);
+  const canAllowInConversation =
+    name !== "apply-active-docx-edits" && !isDestructive;
   const canAlwaysAllow = canAllowInConversation;
   const isPublicOfficialApproval = isPublicOfficialChatToolName(name);
   /**
@@ -526,6 +538,14 @@ export const ToolApprovalCard = ({
             }
           />
         )}
+      {isRegistryWriteSummaryToolName(name) &&
+        part.state !== "input-streaming" &&
+        getApprovalPartInput(part) !== undefined && (
+          <RegistryWriteSummary
+            input={getApprovalPartInput(part)}
+            toolName={name}
+          />
+        )}
 
       {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
       {approvalId &&
@@ -589,6 +609,38 @@ export const ToolApprovalCard = ({
             </Button>
           </div>
         )}
+    </div>
+  );
+};
+
+const RegistryWriteSummary = ({
+  input,
+  toolName,
+}: {
+  input: unknown;
+  toolName: string;
+}) => {
+  const t = useTranslations();
+  const rows = buildRegistryWriteSummaryRows({
+    emptyLabel: t("common.empty"),
+    input,
+    toolName,
+  });
+
+  if (rows.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="border-border/50 border-t px-3 py-2">
+      <dl className="space-y-1.5">
+        {rows.map((row) => (
+          <div className="grid gap-1 sm:grid-cols-[9rem_1fr]" key={row.key}>
+            <dt className="text-muted-foreground text-xs">{row.label}</dt>
+            <dd className="text-xs break-words">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
     </div>
   );
 };
@@ -718,92 +770,3 @@ const fallbackIconUrl = (rawUrl: string): string | undefined => {
     return undefined;
   }
 };
-
-type ReadableInputRow = {
-  key: string;
-  label: string;
-  value: string;
-};
-
-const getReadableInputRows = ({
-  emptyLabel,
-  input,
-  requestLabel,
-}: {
-  emptyLabel: string;
-  input: unknown;
-  requestLabel: string;
-}): ReadableInputRow[] => {
-  if (input === undefined || input === null || typeof input !== "object") {
-    return [
-      {
-        key: "request",
-        label: requestLabel,
-        value: formatReadableInputValue({ emptyLabel, value: input }),
-      },
-    ];
-  }
-
-  if (Array.isArray(input)) {
-    return input.map((value, index) => ({
-      key: String(index),
-      label: String(index + 1),
-      value: formatReadableInputValue({ emptyLabel, value }),
-    }));
-  }
-
-  const rows: ReadableInputRow[] = [];
-  for (const [key, value] of Object.entries(input)) {
-    rows.push({
-      key,
-      label: humanizeIdentifier(key),
-      value: formatReadableInputValue({ emptyLabel, value }),
-    });
-  }
-
-  return rows;
-};
-
-const formatReadableInputValue = ({
-  emptyLabel,
-  value,
-}: {
-  emptyLabel: string;
-  value: unknown;
-}): string => {
-  if (value === null || value === undefined) {
-    return emptyLabel;
-  }
-
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
-    return String(value);
-  }
-
-  if (Array.isArray(value)) {
-    return value
-      .map((child) => formatReadableInputValue({ emptyLabel, value: child }))
-      .join(", ");
-  }
-
-  const parts: string[] = [];
-  for (const [key, child] of Object.entries(value)) {
-    parts.push(
-      `${humanizeIdentifier(key)}: ${formatReadableInputValue({
-        emptyLabel,
-        value: child,
-      })}`,
-    );
-  }
-  return parts.join("; ");
-};
-
-const humanizeIdentifier = (value: string): string =>
-  value
-    .replaceAll(/[_-]+/gu, " ")
-    .replaceAll(/\s+/gu, " ")
-    .trim()
-    .replace(/^\p{L}/u, (match) => match.toLocaleUpperCase());

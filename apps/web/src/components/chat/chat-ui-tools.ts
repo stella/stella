@@ -89,6 +89,11 @@ const CHAT_TOOL_TITLE_KEYS = {
   business_registry_lookup: "chat.tool.business_registry_lookup",
   "create-document": "chat.tool.create-document",
   "create-current-skill-resource": "common.edit",
+  delete_clause: "chat.tool.delete_clause",
+  delete_contact: "chat.tool.delete_contact",
+  delete_document: "chat.tool.delete_document",
+  delete_matter: "chat.tool.delete_matter",
+  delete_time_entry: "chat.tool.delete_time_entry",
   describe_template: "chat.tool.describe_template",
   // Code-mode discovery companion to execute_typescript: fetches a read tool's
   // full signature on demand.
@@ -99,7 +104,19 @@ const CHAT_TOOL_TITLE_KEYS = {
   fetch_url: "chat.tool.fetch_url",
   fill_template: "chat.tool.fill_template",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
+  link_matter_contact: "chat.tool.link_matter_contact",
   list_templates: "chat.tool.list_templates",
+  manage_organization: "chat.tool.manage_organization",
+  run_playbook: "chat.tool.run_playbook",
+  save_clause: "chat.tool.save_clause",
+  save_contact: "chat.tool.save_contact",
+  save_document: "chat.tool.save_document",
+  save_matter: "chat.tool.save_matter",
+  save_task: "chat.tool.save_task",
+  save_template: "chat.tool.save_template",
+  save_time_entry: "chat.tool.save_time_entry",
+  set_field_value: "chat.tool.set_field_value",
+  set_practice_jurisdictions: "chat.tool.set_practice_jurisdictions",
   suggest_template_fields: "chat.tool.suggest_template_fields",
   "load-skill": "chat.tool.load-skill",
   "read-skill-resource": "chat.tool.read-skill-resource",
@@ -188,6 +205,54 @@ export const isPublicOfficialChatToolName = (
   toolName: string,
 ): toolName is PublicOfficialToolName =>
   toolName in PUBLIC_OFFICIAL_CHAT_TOOL_NAMES;
+
+/** Prefix marking a destructive (irreversible delete) registry write tool. */
+const DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX = "delete_";
+
+/**
+ * Whether a chat tool is destructive (an irreversible delete). Destructive
+ * writes may only be approved once or denied — never "allow in conversation"
+ * or "always allow" — so a stored grant can never auto-approve a delete.
+ *
+ * The `delete_` prefix is a GUARDED convention, not a loose heuristic: an
+ * api-side test (registry-quality suite) asserts that in the MCP registry every
+ * `access: "write"` tool with `annotations.destructiveHint` is named `delete_*`
+ * and every `delete_*` tool carries `destructiveHint`, so this frontend check
+ * cannot silently drift from the registry's own destructive classification.
+ */
+export const isDestructiveChatToolName = (toolName: string): boolean =>
+  toolName.startsWith(DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX);
+
+/**
+ * Chat tools whose approval card renders the shared registry-write summary
+ * (readable key/value rows, refs shown as chat refs, long values truncated).
+ * Covers the registry write projections plus `fill_template` (served by the
+ * hand-written template tool). Validated against `keyof ChatUITools` so a
+ * renamed tool fails typecheck here.
+ */
+const REGISTRY_WRITE_SUMMARY_TOOL_NAMES = {
+  delete_clause: true,
+  delete_contact: true,
+  delete_document: true,
+  delete_matter: true,
+  delete_time_entry: true,
+  fill_template: true,
+  link_matter_contact: true,
+  manage_organization: true,
+  run_playbook: true,
+  save_clause: true,
+  save_contact: true,
+  save_document: true,
+  save_matter: true,
+  save_task: true,
+  save_template: true,
+  save_time_entry: true,
+  set_field_value: true,
+  set_practice_jurisdictions: true,
+} as const satisfies Partial<Record<keyof ChatUITools, true>>;
+
+export const isRegistryWriteSummaryToolName = (toolName: string): boolean =>
+  toolName in REGISTRY_WRITE_SUMMARY_TOOL_NAMES;
 
 export type ChatToolTitleKey =
   | (typeof CHAT_TOOL_DISPLAY_TITLE_KEYS)[keyof typeof CHAT_TOOL_DISPLAY_TITLE_KEYS]
