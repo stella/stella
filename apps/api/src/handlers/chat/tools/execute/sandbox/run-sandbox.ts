@@ -105,24 +105,160 @@ const sandboxAdmissionQueue: SandboxAdmissionWaiter[] = [];
 const sandboxHostWorkInFlight = new Set<Promise<void>>();
 
 /**
+ * Default budget for {@link awaitSandboxAdmissionIdle}. Generously above the
+ * longest legitimate orphaned host-work tail (bounded by a run's wall-clock
+ * deadline, {@link DEFAULT_SANDBOX_LIMITS}.maxDurationMs) yet below the sandbox
+ * test suite's 15s per-test ceiling, so a genuinely stranded host promise fails
+ * the drain fast with a diagnostic instead of silently 15s-timing-out every
+ * subsequent test.
+ */
+export const SANDBOX_ADMISSION_IDLE_TIMEOUT_MS = 10_000;
+
+type SandboxAdmissionSnapshot = {
+  activeSandboxCount: number;
+  queuedWaiters: number;
+  hostWorkInFlight: number;
+};
+
+const snapshotSandboxAdmission = (): SandboxAdmissionSnapshot => ({
+  activeSandboxCount,
+  queuedWaiters: sandboxAdmissionQueue.length,
+  hostWorkInFlight: sandboxHostWorkInFlight.size,
+});
+
+/**
+ * Thrown by {@link awaitSandboxAdmissionIdle} (a test-only hook) when the
+ * process-global admission state cannot reach idle within its budget. It exists
+ * to make a poisoned state loud and localized: a single host promise that never
+ * settles (e.g. a test that abandons an unresolved gate before releasing it)
+ * otherwise strands an entry in the module-global in-flight set forever, and the
+ * drain — which every sandbox `afterEach` awaits — would then hang for the full
+ * per-test timeout on that test AND every test after it in the shared Bun
+ * process. Surfacing the live counters names the culprit instead of burying it
+ * under a uniform wall of 15s hook timeouts.
+ */
+export class SandboxAdmissionNotIdleError extends Error {
+  readonly snapshot: SandboxAdmissionSnapshot;
+
+  constructor(snapshot: SandboxAdmissionSnapshot, timeoutMs: number) {
+    super(
+      `Sandbox admission did not reach idle within ${timeoutMs}ms: ` +
+        `activeSandboxCount=${snapshot.activeSandboxCount}, ` +
+        `queuedWaiters=${snapshot.queuedWaiters}, ` +
+        `hostWorkInFlight=${snapshot.hostWorkInFlight}. ` +
+        "A host promise was likely stranded (e.g. a test abandoned an unresolved gate); " +
+        "resolve/settle every host call it starts, or lower the run's maxDurationMs.",
+    );
+    this.name = "SandboxAdmissionNotIdleError";
+    this.snapshot = snapshot;
+  }
+}
+
+type AwaitSandboxAdmissionIdleOptions = {
+  /** Drain budget; see {@link SANDBOX_ADMISSION_IDLE_TIMEOUT_MS}. */
+  timeoutMs?: number;
+};
+
+// Await the current in-flight host work, but give up at `deadline` so a
+// never-settling promise cannot hang the drain. The budget timer is always
+// cleared so it can never fire into the following test.
+const raceHostWorkAgainstDeadline = async (
+  hostWork: readonly Promise<void>[],
+  deadline: number,
+): Promise<void> => {
+  const remainingMs = deadline - Date.now();
+  if (remainingMs <= 0) {
+    return;
+  }
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const budget = new Promise<void>((resolve) => {
+    timeoutId = setTimeout(resolve, remainingMs);
+  });
+  try {
+    await Promise.race([Promise.allSettled(hostWork), budget]);
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
+};
+
+/**
+ * Test-only: read the live admission counters. Concurrency tests use this to
+ * observe "a run is QUEUED behind the cap" as a state transition instead of
+ * sleeping a fixed interval and hoping the queue has settled — a fixed sleep is
+ * exactly what flakes on a loaded CI runner. The waiter push and the admission
+ * flush both happen synchronously inside `runSandbox`'s first await, so polling
+ * this snapshot for `queuedWaiters` is a guaranteed-eventual observation, never
+ * a timing bet.
+ */
+export const getSandboxAdmissionSnapshot = (): SandboxAdmissionSnapshot =>
+  snapshotSandboxAdmission();
+
+/**
+ * Test-only: register host work in the process-global in-flight set exactly as
+ * `runHostCall` does (added on registration, removed when it settles). Drain
+ * tests use it to create a stranded entry (a promise that never settles)
+ * DIRECTLY, instead of racing a real run's wall-clock deadline against QuickJS
+ * startup on a loaded runner: with a small `maxDurationMs`, the deadline can
+ * pass before the script's host call ever executes, so the end-to-end
+ * construction of a strand is nondeterministic under CI load.
+ */
+export const trackSandboxHostWorkForTest = (work: Promise<void>): void => {
+  const tracked: Promise<void> = work
+    .catch(() => undefined)
+    .finally(() => {
+      sandboxHostWorkInFlight.delete(tracked);
+    });
+  sandboxHostWorkInFlight.add(tracked);
+};
+
+/**
  * Test-only drain hook: resolves once the process-global sandbox admission
  * state is fully idle — no admitted runs, an empty admission queue, and no
- * orphaned host work still settling in the background. It only READS module
- * state and awaits already-scheduled work; it never resets counters or cancels
- * work, so it cannot mask a real admission-accounting bug. Both sandbox test
- * files call it in `afterEach` so one test's background host work cannot leak
- * into the timing of the next.
+ * orphaned host work still settling in the background. It only READS the
+ * admission counters (`activeSandboxCount`, the queue) and awaits
+ * already-scheduled work; it never resets those counters, so it cannot mask a
+ * real admission-accounting bug. Every sandbox test file registers it in
+ * `afterEach` (see `registerSandboxTestHygiene`) so one test's background host
+ * work cannot leak into the timing of the next.
+ *
+ * The wait is bounded: a host promise that never settles cannot hold an
+ * admission slot (the slot is released in `runSandbox`'s `finally` at the run's
+ * deadline), but it lingers forever in `sandboxHostWorkInFlight`. Without a
+ * bound the drain would then hang for the whole per-test timeout on this test
+ * and every later one. On timeout we therefore evict the stranded in-flight
+ * host work (a test-support set, safe to clear once we have waited past every
+ * legitimate tail) so the poison does not cascade, and throw a diagnostic naming
+ * the live counters. Admission counts are never cleared: if they are the stuck
+ * dimension, that is a genuine accounting bug and it should keep surfacing.
  */
-export const awaitSandboxAdmissionIdle = async (): Promise<void> => {
+export const awaitSandboxAdmissionIdle = async ({
+  timeoutMs = SANDBOX_ADMISSION_IDLE_TIMEOUT_MS,
+}: AwaitSandboxAdmissionIdleOptions = {}): Promise<void> => {
+  const deadline = Date.now() + timeoutMs;
+
   while (
     // oxlint-disable-next-line no-unmodified-loop-condition -- released by admission callbacks that settle during the awaited work below, not in this loop body
     activeSandboxCount > 0 ||
     sandboxAdmissionQueue.length > 0 ||
     sandboxHostWorkInFlight.size > 0
   ) {
+    if (Date.now() >= deadline) {
+      const snapshot = snapshotSandboxAdmission();
+      // Drop the stranded host-work tail so the next test starts clean; keep
+      // the admission counters intact so a real accounting bug still surfaces.
+      sandboxHostWorkInFlight.clear();
+      throw new SandboxAdmissionNotIdleError(snapshot, timeoutMs);
+    }
+
     if (sandboxHostWorkInFlight.size > 0) {
-      // oxlint-disable-next-line no-await-in-loop -- drain loop: await the current in-flight snapshot, then re-check for work registered while we waited
-      await Promise.allSettled(Array.from(sandboxHostWorkInFlight));
+      // oxlint-disable-next-line no-await-in-loop -- drain loop: race the current in-flight snapshot against the remaining budget, then re-check for work registered while we waited
+      await raceHostWorkAgainstDeadline(
+        Array.from(sandboxHostWorkInFlight),
+        deadline,
+      );
       continue;
     }
 

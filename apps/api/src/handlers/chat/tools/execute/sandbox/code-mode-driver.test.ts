@@ -1,25 +1,46 @@
 import type { ToolBinding } from "@tanstack/ai-code-mode";
-import { afterEach, describe, expect, it, setDefaultTimeout } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
 import { createStellaIsolateDriver } from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
-import { awaitSandboxAdmissionIdle } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import { getSandboxAdmissionSnapshot } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 
-// Sandbox runs spin up isolated QuickJS contexts; match run-sandbox.test's ceiling.
-setDefaultTimeout(15_000);
-
-// The sandbox admission state is process-global and Bun runs a package's test
-// files in one shared process, so a timed-out run's orphaned host work must be
-// fully drained before the next test (or file) starts; otherwise it perturbs
-// the timing-sensitive admission-queue assertions.
-afterEach(async () => {
-  await awaitSandboxAdmissionIdle();
-});
+registerSandboxTestHygiene();
 
 let driverKeyCounter = 0;
 const nextKey = (): string => {
   driverKeyCounter += 1;
   return `driver-key-${driverKeyCounter}`;
+};
+
+type Deferred = {
+  promise: Promise<void>;
+  resolve: () => void;
+};
+
+const createDeferred = (): Deferred => {
+  let deferredResolve!: () => void;
+  const promise = new Promise<void>((resolve) => {
+    deferredResolve = resolve;
+  });
+  return { promise, resolve: deferredResolve };
+};
+
+// Poll a condition that is GUARANTEED to become true under correct behaviour
+// (e.g. "the second run is parked in the admission queue"). The timeout is a
+// generous bug guard, never an observation window tuned to expected wall-clock
+// progress; a fixed "long enough" sleep is exactly what flakes on a loaded
+// CI runner.
+const waitForCondition = async (condition: () => boolean): Promise<void> => {
+  const deadline = Date.now() + 12_000;
+  while (!condition()) {
+    if (Date.now() > deadline) {
+      throw new Error("Condition was not met before timeout.");
+    }
+    // oxlint-disable-next-line no-await-in-loop -- polling loop: each tick must wait before re-checking the condition
+    await Bun.sleep(5);
+  }
 };
 
 type BindingImpl = (args: unknown) => Promise<unknown>;
@@ -132,37 +153,59 @@ describe("createStellaIsolateDriver", () => {
     expect(result.error?.name).toBe("forbidden-syntax");
   });
 
-  it("times out long host work near the deadline, not the host duration", async () => {
-    const startedAt = Date.now();
+  it("times out at the deadline instead of waiting for unfinished host work", async () => {
+    // The host call blocks on a gate the test releases only AFTER the run has
+    // returned, so the run terminating with `timeout` at all proves the
+    // deadline governs, not the host call's duration. No elapsed-time bound:
+    // wall-clock assertions are exactly what flakes on a loaded runner.
+    const hostGate = createDeferred();
     const result = await runCode({
       code: `await external_slow({}); return "ok";`,
       bindings: bindingsRecord(
         binding("external_slow", async () => {
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 800);
-          });
+          await hostGate.promise;
           return { done: true };
         }),
       ),
-      limits: { maxDurationMs: 100 },
+      limits: { maxDurationMs: 250 },
     });
-    const elapsedMs = Date.now() - startedAt;
+
     expect(result.success).toBe(false);
     expect(result.error?.name).toBe("timeout");
-    expect(elapsedMs).toBeLessThan(700);
+
+    // Settle the orphaned host call so the afterEach drain stays instant.
+    hostGate.resolve();
   });
 
   it("serializes runs sharing a concurrency key through the admission queue", async () => {
     const key = nextKey();
     const started: string[] = [];
-    const gate = new Map<string, () => void>();
+    // Every gate exists before either run starts, so a release can never be
+    // lost to timing. The previous version created each release callback only
+    // when its host call began and resolved it after a fixed sleep; on a
+    // loaded runner the second call had not begun yet, the release no-oped,
+    // and the run hung to its 10s deadline.
+    const startedGates = new Map([
+      ["first", createDeferred()],
+      ["second", createDeferred()],
+    ]);
+    const releaseGates = new Map([
+      ["first", createDeferred()],
+      ["second", createDeferred()],
+    ]);
+    const gateOf = (gates: Map<string, Deferred>, label: string): Deferred => {
+      const gate = gates.get(label);
+      if (!gate) {
+        throw new Error(`No gate for label: ${label}`);
+      }
+      return gate;
+    };
     const bindings = bindingsRecord(
       binding("external_hold", async (args) => {
         const label = readLabel(args);
         started.push(label);
-        await new Promise<void>((resolve) => {
-          gate.set(label, resolve);
-        });
+        gateOf(startedGates, label).resolve();
+        await gateOf(releaseGates, label).promise;
         return { label };
       }),
     );
@@ -180,18 +223,22 @@ describe("createStellaIsolateDriver", () => {
     };
 
     const first = runOne("first");
+    await gateOf(startedGates, "first").promise;
     const second = runOne("second");
 
-    await Bun.sleep(200);
-    // Same key: only the first run may hold the single per-key slot.
+    // Once the second run is visibly parked in the admission queue, it was
+    // definitively denied the single per-key slot the first still holds.
+    await waitForCondition(
+      () => getSandboxAdmissionSnapshot().queuedWaiters === 1,
+    );
     expect(started).toEqual(["first"]);
 
-    gate.get("first")?.();
-    await Bun.sleep(50);
-    gate.get("second")?.();
+    gateOf(releaseGates, "first").resolve();
+    await gateOf(startedGates, "second").promise;
+    expect(started).toEqual(["first", "second"]);
+    gateOf(releaseGates, "second").resolve();
 
     const [a, b] = await Promise.all([first, second]);
-    expect(started).toEqual(["first", "second"]);
     expect(a).toMatchObject({ success: true });
     expect(b).toMatchObject({ success: true });
   });
