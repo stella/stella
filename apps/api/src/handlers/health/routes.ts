@@ -5,16 +5,8 @@ import { HealthCheckError } from "@/api/lib/errors/tagged-errors";
 import { createProbeCache } from "@/api/lib/health/probe-cache";
 import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
 import { probeDatabase } from "@/api/lib/health/probe-database";
-import { APP_VERSION } from "@/api/lib/version";
+import { APP_COMMIT_SHA, APP_VERSION } from "@/api/lib/version";
 
-const resolveCommitSha = () => {
-  const explicitSha = process.env["STELLA_COMMIT_SHA"];
-  if (explicitSha && explicitSha !== "dev") {
-    return explicitSha;
-  }
-  return process.env["RAILWAY_GIT_COMMIT_SHA"] ?? explicitSha ?? "dev";
-};
-const APP_COMMIT_SHA = resolveCommitSha();
 const BUILD_METADATA = {
   version: APP_VERSION,
   commit: APP_COMMIT_SHA,
