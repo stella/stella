@@ -1,14 +1,17 @@
-import { describe, expect, mock, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-// Running the real QuickJS sandbox needs the run-sandbox.test ceiling.
-setDefaultTimeout(15_000);
+// Drives the real QuickJS sandbox through execute_typescript: share the sandbox
+// suite's 15s ceiling and drain the process-global admission state after each
+// test so a run here cannot bleed into a later sandbox test file.
+registerSandboxTestHygiene();
 
 const captureErrorMock = mock();
 void mock.module("@/api/lib/analytics", () => ({

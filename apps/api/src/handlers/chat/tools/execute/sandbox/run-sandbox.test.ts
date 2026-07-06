@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, describe, expect, it, setDefaultTimeout } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import * as v from "valibot";
 
 import { createToolFunction } from "@/api/handlers/chat/tools/execute/execute-tool-function";
@@ -8,20 +8,13 @@ import type {
   SandboxFunctionRegistry,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import {
+  SandboxAdmissionNotIdleError,
   awaitSandboxAdmissionIdle,
   runSandbox as runSandboxInternal,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 
-// Sandbox runs spin up isolated V8 contexts; raise the bun-test ceiling so CI runner load doesn't flake. Product code enforces its own smaller deadlines.
-setDefaultTimeout(15_000);
-
-// The sandbox admission state is process-global and Bun runs a package's test
-// files in one shared process, so a timed-out run's orphaned host work must be
-// fully drained before the next test (or file) starts; otherwise it perturbs
-// the timing-sensitive admission-queue assertions.
-afterEach(async () => {
-  await awaitSandboxAdmissionIdle();
-});
+registerSandboxTestHygiene();
 
 type RunTestSandboxProps = Omit<RunSandboxInput, "concurrencyKey"> & {
   concurrencyKey?: string;
@@ -1052,5 +1045,61 @@ describe("runSandbox", () => {
     if (Result.isError(result)) {
       expect(result.error.reason).toBe("forbidden-syntax");
     }
+  });
+});
+
+describe("awaitSandboxAdmissionIdle", () => {
+  // A host binding that never settles and ignores the abort signal strands its
+  // in-flight promise in the process-global set once the run returns at its
+  // deadline. The drain must not then hang for the full per-test timeout on this
+  // test and every later one: it fails fast with the live counters and evicts
+  // the strand so the next drain is clean. This is the class guard for the
+  // "every sandbox test uniformly times out at ~15s" flake.
+  it("fails fast with a diagnostic when a host promise is stranded, then unpoisons", async () => {
+    let started = false;
+    const strand = createToolFunction(
+      {
+        name: "strand",
+        input: v.strictObject({}),
+        output: v.strictObject({}),
+        schema: v.any(),
+      },
+      async function* () {
+        started = true;
+        await new Promise<void>(() => {
+          // never resolves; ignores the abort signal
+        });
+        return Result.ok({});
+      },
+    );
+
+    // Short deadline so the run itself returns quickly (releasing its slot)
+    // while the orphaned host promise lingers in the in-flight set.
+    void runSandbox({
+      source: `return await read.strand({});`,
+      registry: { strand },
+      limits: { maxDurationMs: 200 },
+    });
+
+    await waitForCondition({ condition: () => started });
+
+    let thrown: unknown;
+    try {
+      await awaitSandboxAdmissionIdle({ timeoutMs: 500 });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(SandboxAdmissionNotIdleError);
+    if (thrown instanceof SandboxAdmissionNotIdleError) {
+      // The slot was released at the deadline; only the host tail is stranded.
+      expect(thrown.snapshot.activeSandboxCount).toBe(0);
+      expect(thrown.snapshot.queuedWaiters).toBe(0);
+      expect(thrown.snapshot.hostWorkInFlight).toBeGreaterThan(0);
+    }
+
+    // The strand was evicted, so a subsequent drain resolves immediately and
+    // the poison does not cascade into the next test or file.
+    await awaitSandboxAdmissionIdle({ timeoutMs: 500 });
   });
 });

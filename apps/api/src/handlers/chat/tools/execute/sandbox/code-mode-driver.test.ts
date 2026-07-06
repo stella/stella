@@ -1,20 +1,11 @@
 import type { ToolBinding } from "@tanstack/ai-code-mode";
-import { afterEach, describe, expect, it, setDefaultTimeout } from "bun:test";
+import { describe, expect, it } from "bun:test";
 
 import { createStellaIsolateDriver } from "@/api/handlers/chat/tools/execute/sandbox/code-mode-driver";
 import type { SandboxLimits } from "@/api/handlers/chat/tools/execute/sandbox/limits";
-import { awaitSandboxAdmissionIdle } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
 
-// Sandbox runs spin up isolated QuickJS contexts; match run-sandbox.test's ceiling.
-setDefaultTimeout(15_000);
-
-// The sandbox admission state is process-global and Bun runs a package's test
-// files in one shared process, so a timed-out run's orphaned host work must be
-// fully drained before the next test (or file) starts; otherwise it perturbs
-// the timing-sensitive admission-queue assertions.
-afterEach(async () => {
-  await awaitSandboxAdmissionIdle();
-});
+registerSandboxTestHygiene();
 
 let driverKeyCounter = 0;
 const nextKey = (): string => {
