@@ -5,7 +5,7 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
+import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -251,26 +251,23 @@ export const PositionEditor = ({
         element: cardRef,
         dragHandle: gripRef,
         getInitialData: () => ({ type: POSITION_DRAG_TYPE, sourceId }),
-        onGenerateDragPreview: ({ nativeSetDragImage }) => {
-          // Render a compact preview of just the header row; without this the
-          // browser snapshots the whole (possibly expanded) card as the ghost.
+        onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
           setCustomNativeDragPreview({
             nativeSetDragImage,
-            getOffset: centerUnderPointer,
+            // Anchor the ghost to where the grip was actually grabbed (the left
+            // corner), instead of re-centering it under the pointer.
+            getOffset: preserveOffsetOnSource({
+              element: cardRef,
+              input: location.current.input,
+            }),
             render: ({ container }) => {
-              const header = cardRef.firstElementChild;
-              if (!(header instanceof HTMLElement)) {
-                return;
-              }
-              const clone = header.cloneNode(true);
+              // Preview the whole card at its rendered width, keeping its
+              // border/background/shadow frame and full contents.
+              const clone = cardRef.cloneNode(true);
               if (!(clone instanceof HTMLElement)) {
                 return;
               }
               clone.style.width = `${cardRef.getBoundingClientRect().width}px`;
-              clone.className = cn(
-                clone.className,
-                "bg-card rounded-lg border shadow-md",
-              );
               container.append(clone);
             },
           });
