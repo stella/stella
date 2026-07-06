@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { describe, expect, it, setDefaultTimeout } from "bun:test";
+import { afterEach, describe, expect, it, setDefaultTimeout } from "bun:test";
 import * as v from "valibot";
 
 import { createToolFunction } from "@/api/handlers/chat/tools/execute/execute-tool-function";
@@ -7,10 +7,21 @@ import type {
   RunSandboxInput,
   SandboxFunctionRegistry,
 } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
-import { runSandbox as runSandboxInternal } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
+import {
+  awaitSandboxAdmissionIdle,
+  runSandbox as runSandboxInternal,
+} from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 
 // Sandbox runs spin up isolated V8 contexts; raise the bun-test ceiling so CI runner load doesn't flake. Product code enforces its own smaller deadlines.
 setDefaultTimeout(15_000);
+
+// The sandbox admission state is process-global and Bun runs a package's test
+// files in one shared process, so a timed-out run's orphaned host work must be
+// fully drained before the next test (or file) starts; otherwise it perturbs
+// the timing-sensitive admission-queue assertions.
+afterEach(async () => {
+  await awaitSandboxAdmissionIdle();
+});
 
 type RunTestSandboxProps = Omit<RunSandboxInput, "concurrencyKey"> & {
   concurrencyKey?: string;
