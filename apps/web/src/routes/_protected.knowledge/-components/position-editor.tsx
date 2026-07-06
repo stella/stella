@@ -5,6 +5,8 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
+import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { useQuery } from "@tanstack/react-query";
 import {
   ChevronDownIcon,
@@ -249,6 +251,30 @@ export const PositionEditor = ({
         element: cardRef,
         dragHandle: gripRef,
         getInitialData: () => ({ type: POSITION_DRAG_TYPE, sourceId }),
+        onGenerateDragPreview: ({ nativeSetDragImage }) => {
+          // Render a compact preview of just the header row; without this the
+          // browser snapshots the whole (possibly expanded) card as the ghost.
+          setCustomNativeDragPreview({
+            nativeSetDragImage,
+            getOffset: centerUnderPointer,
+            render: ({ container }) => {
+              const header = cardRef.firstElementChild;
+              if (!(header instanceof HTMLElement)) {
+                return;
+              }
+              const clone = header.cloneNode(true);
+              if (!(clone instanceof HTMLElement)) {
+                return;
+              }
+              clone.style.width = `${cardRef.getBoundingClientRect().width}px`;
+              clone.className = cn(
+                clone.className,
+                "bg-card rounded-lg border shadow-md",
+              );
+              container.append(clone);
+            },
+          });
+        },
       }),
       dropTargetForElements({
         element: cardRef,
