@@ -1529,6 +1529,14 @@
       "addPosition": "إضافة موقف",
       "addRule": "القاعدة",
       "advanced": "متقدم",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "نوع الإجابة",
       "askQuestionLabel": "السؤال",
       "askQuestionPlaceholder": "ما الذي ينبغي قراءته من كل مستند؟ اتركه فارغًا للإدخال اليدوي.",
@@ -1679,6 +1687,13 @@
         "deviation": "انحراف",
         "fallback": "بديل",
         "missing": "مفقود"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {

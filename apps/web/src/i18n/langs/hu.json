@@ -1529,6 +1529,14 @@
       "addPosition": "Álláspont hozzáadása",
       "addRule": "Szabály",
       "advanced": "Speciális",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Válasz típusa",
       "askQuestionLabel": "A kérdés szövege",
       "askQuestionPlaceholder": "Mit olvassunk ki minden dokumentumból? Hagyja üresen a kézi bevitelhez.",
@@ -1679,6 +1687,13 @@
         "deviation": "Eltérés",
         "fallback": "Alternatív megfogalmazás",
         "missing": "Hiányzik"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {

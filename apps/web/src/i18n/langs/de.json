@@ -1529,6 +1529,14 @@
       "addPosition": "Standpunkt hinzufügen",
       "addRule": "Regel",
       "advanced": "Erweitert",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Antworttyp",
       "askQuestionLabel": "Frage",
       "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
@@ -1679,6 +1687,13 @@
         "deviation": "Abweichung",
         "fallback": "Alternative",
         "missing": "Fehlt"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {

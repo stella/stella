@@ -146,6 +146,11 @@ const PlaybookRow = ({
               })}
           </p>
         </div>
+        {playbook.status === "approved" && (
+          <span className="bg-success/15 text-success inline-flex shrink-0 items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
+            {t("knowledge.playbooks.approval.statusApproved")}
+          </span>
+        )}
         <span className="sr-only">{t("common.edit")}</span>
       </button>
     </li>

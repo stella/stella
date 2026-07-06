@@ -147,6 +147,11 @@ export const knowledgeKeys = {
       playbookId,
       "detail",
     ],
+    versions: (organizationId: string, playbookId: string) => [
+      ...knowledgeKeys.playbooks.all(organizationId),
+      playbookId,
+      "versions",
+    ],
   },
   playbookStarters: {
     all: (organizationId: string) => ["playbook-starters", organizationId],
@@ -547,6 +552,29 @@ export const playbookDetailOptions = (
       const response = await api
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
         .get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Approval-version history for a playbook: a small, bounded, per-parent
+// collection (one row per approve call), so a plain list is enough — no
+// cursor pagination, mirroring the backend's `list-versions` handler.
+export const playbookVersionsOptions = (
+  organizationId: string,
+  playbookId: string,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.playbooks.versions(organizationId, playbookId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
+        .versions.get({ fetch: { signal } });
 
       if (response.error) {
         throw toAPIError(response.error);

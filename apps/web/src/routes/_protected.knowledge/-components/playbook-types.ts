@@ -16,6 +16,10 @@ type PlaybookDetailData = Exclude<
 export type PlaybookPositionsValue = PlaybookDetailData["positions"];
 export type Position = PlaybookPositionsValue["items"][number];
 
+// Advisory approval status (v1) — draft while unreviewed, approved once
+// snapshotted by `POST /playbooks/:playbookId/approve`.
+export type PlaybookApprovalStatus = PlaybookDetailData["status"];
+
 // Discriminated on `mode`; narrow to the concrete variant with `mode === "…"`.
 export type GradedPosition = Extract<Position, { mode: "graded" }>;
 export type ExtractPosition = Extract<Position, { mode: "extract" }>;
@@ -41,6 +45,17 @@ type PlaybookListData = Exclude<
 >;
 
 export type PlaybookListItem = PlaybookListData["items"][number];
+
+export type PlaybookVersionsResponse = Awaited<
+  ReturnType<ReturnType<typeof api.playbooks>["versions"]["get"]>
+>;
+
+type PlaybookVersionsData = Exclude<
+  NonNullable<Extract<PlaybookVersionsResponse, { data: unknown }>["data"]>,
+  Response
+>;
+
+export type PlaybookVersionItem = PlaybookVersionsData["items"][number];
 
 // ── Constructors ──────────────────────────────────────
 // Every position, rule, and fallback entry carries a client-generated uuid so

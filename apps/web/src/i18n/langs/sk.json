@@ -1529,6 +1529,14 @@
       "addPosition": "Pridať pozíciu",
       "addRule": "Pravidlo",
       "advanced": "Pokročilé",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Typ odpovede",
       "askQuestionLabel": "Znenie otázky",
       "askQuestionPlaceholder": "Čo sa má z každého dokumentu vyčítať? Ponechajte prázdne pre ručné zadanie.",
@@ -1679,6 +1687,13 @@
         "deviation": "Odchýlka",
         "fallback": "Náhradné znenie",
         "missing": "Chýba"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {

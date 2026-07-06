@@ -1529,6 +1529,14 @@
       "addPosition": "Přidat pozici",
       "addRule": "Pravidlo",
       "advanced": "Pokročilé",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Typ odpovědi",
       "askQuestionLabel": "Otázka",
       "askQuestionPlaceholder": "Co se má z každého dokumentu vyčíst? Ponechte prázdné pro ruční zadání.",
@@ -1679,6 +1687,13 @@
         "deviation": "Odchylka",
         "fallback": "Náhradní znění",
         "missing": "Chybí"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {

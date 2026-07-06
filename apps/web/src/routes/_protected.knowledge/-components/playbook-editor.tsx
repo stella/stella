@@ -1,14 +1,16 @@
 import { useRef, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
+  HistoryIcon,
   PlusIcon,
+  ShieldCheckIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import {
   AlertDialog,
@@ -42,7 +44,11 @@ import { cn } from "@stll/ui/lib/utils";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import {
+  toAPIError,
+  userErrorFromThrown,
+  userErrorMessage,
+} from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { usePlaybookNavStore } from "@/routes/_protected.knowledge/-components/playbook-nav-store";
 import {
@@ -54,12 +60,14 @@ import {
   newExtractPosition,
   newGradedPosition,
   normalizePosition,
+  type PlaybookApprovalStatus,
   type PlaybookPositionsValue,
   type Position,
   type PositionErrors,
   type PositionSeverity,
   validatePosition,
 } from "@/routes/_protected.knowledge/-components/playbook-types";
+import { PlaybookVersionHistorySheet } from "@/routes/_protected.knowledge/-components/playbook-version-history-sheet";
 import { PositionEditor } from "@/routes/_protected.knowledge/-components/position-editor";
 import {
   documentTypesOptions,
@@ -85,10 +93,12 @@ export const PlaybookEditor = ({
   if (playbookId === null) {
     return (
       <PlaybookEditorForm
+        initialApprovedAt={null}
         initialDescription=""
         initialDocumentTypeKey={null}
         initialName=""
         initialPerspective={null}
+        initialStatus="draft"
         initialTrigger={null}
         initialPositions={[]}
         onBack={onBack}
@@ -121,6 +131,10 @@ const PlaybookEditorLoader = ({
   onSaved: () => void;
 }) => {
   const t = useTranslations();
+  // Bumped after a version restore so the form below remounts with the
+  // freshly refetched (already-invalidated) detail instead of holding on to
+  // its own stale name/description/positions state.
+  const [reloadKey, setReloadKey] = useState(0);
   const detailQuery = useQuery(
     playbookDetailOptions(organizationId, playbookId),
   );
@@ -148,13 +162,17 @@ const PlaybookEditorLoader = ({
 
   return (
     <PlaybookEditorForm
+      initialApprovedAt={detail.approvedAt}
       initialDescription={detail.description ?? ""}
       initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
       initialName={detail.name}
       initialPerspective={detail.scope?.perspective ?? null}
+      initialStatus={detail.status}
       initialTrigger={detail.scope?.trigger ?? null}
       initialPositions={detail.positions.items}
+      key={reloadKey}
       onBack={onBack}
+      onRestored={() => setReloadKey((current) => current + 1)}
       onSaved={onSaved}
       organizationId={organizationId}
       playbookId={playbookId}
@@ -180,8 +198,14 @@ type PlaybookEditorFormProps = {
   initialPerspective: PlaybookPerspective | null;
   initialTrigger: PlaybookTrigger | null;
   initialPositions: Position[];
+  initialStatus: PlaybookApprovalStatus;
+  initialApprovedAt: string | null;
   onBack: () => void;
   onSaved: () => void;
+  // Only supplied when editing an existing playbook (see
+  // `PlaybookEditorLoader`): forces a remount with the freshly restored
+  // draft after a version restore.
+  onRestored?: () => void;
 };
 
 const PlaybookEditorForm = ({
@@ -193,8 +217,11 @@ const PlaybookEditorForm = ({
   initialPerspective,
   initialTrigger,
   initialPositions,
+  initialStatus,
+  initialApprovedAt,
   onBack,
   onSaved,
+  onRestored,
 }: PlaybookEditorFormProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -203,10 +230,16 @@ const PlaybookEditorForm = ({
     isEdit ? { playbook: ["update"] } : { playbook: ["create"] },
   );
   const canDelete = usePermissions({ playbook: ["delete"] });
+  const canApprove = usePermissions({ playbook: ["approve"] });
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
+  const [status, setStatus] = useState<PlaybookApprovalStatus>(initialStatus);
+  const [approvedAt, setApprovedAt] = useState<string | null>(
+    initialApprovedAt,
+  );
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
   const [positions, setPositions] = useState<Position[]>(() =>
     playbookId === null && initialPositions.length === 0
       ? [newGradedPosition()]
@@ -494,6 +527,43 @@ const PlaybookEditorForm = ({
     onSaved();
   };
 
+  const approveMutation = useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      const response = await api
+        .playbooks({ playbookId: toSafeId<"playbookDefinition">(id) })
+        .approve.post();
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: (data) => {
+      setStatus("approved");
+      setApprovedAt(data.approvedAt);
+      void queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.playbooks.all(organizationId),
+      });
+      stellaToast.add({
+        type: "success",
+        title: t("knowledge.playbooks.approval.approvedToast"),
+      });
+    },
+    onError: (error) => {
+      stellaToast.add({
+        type: "error",
+        title: t("knowledge.playbooks.approval.approveFailed"),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
+      });
+    },
+  });
+
+  const handleApprove = () => {
+    if (playbookId === null) {
+      return;
+    }
+    approveMutation.mutate({ id: playbookId });
+  };
+
   return (
     <div
       className="flex min-h-0 flex-1 flex-col overflow-y-auto"
@@ -507,6 +577,33 @@ const PlaybookEditorForm = ({
               {t("common.back")}
             </Button>
             <div className="flex items-center gap-2">
+              {isEdit && (
+                <PlaybookStatusBadge approvedAt={approvedAt} status={status} />
+              )}
+              {isEdit && (
+                <Button
+                  onClick={() => setVersionHistoryOpen(true)}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <HistoryIcon />
+                  {t("knowledge.playbooks.versions.versionHistory")}
+                </Button>
+              )}
+              {isEdit && canApprove && (
+                <Button
+                  disabled={approveMutation.isPending}
+                  loading={approveMutation.isPending}
+                  onClick={handleApprove}
+                  size="sm"
+                  type="button"
+                  variant="outline"
+                >
+                  <ShieldCheckIcon />
+                  {t("knowledge.playbooks.approval.approve")}
+                </Button>
+              )}
               {isEdit && canDelete && (
                 <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
                   <Button
@@ -693,7 +790,55 @@ const PlaybookEditorForm = ({
           </AlertDialogFooter>
         </AlertDialogPopup>
       </AlertDialog>
+
+      {playbookId !== null && (
+        <PlaybookVersionHistorySheet
+          onOpenChange={setVersionHistoryOpen}
+          onRestored={() => onRestored?.()}
+          open={versionHistoryOpen}
+          organizationId={organizationId}
+          playbookId={playbookId}
+        />
+      )}
     </div>
+  );
+};
+
+// ── Status badge ──────────────────────────────────────
+
+const PlaybookStatusBadge = ({
+  status,
+  approvedAt,
+}: {
+  status: PlaybookApprovalStatus;
+  approvedAt: string | null;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  if (status === "approved") {
+    return (
+      <span
+        className="bg-success/15 text-success inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase"
+        title={
+          approvedAt
+            ? t("knowledge.playbooks.approval.approvedOn", {
+                date: format.dateTime(new Date(approvedAt), {
+                  dateStyle: "medium",
+                }),
+              })
+            : undefined
+        }
+      >
+        {t("knowledge.playbooks.approval.statusApproved")}
+      </span>
+    );
+  }
+
+  return (
+    <span className="bg-muted text-muted-foreground inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
+      {t("knowledge.playbooks.approval.statusDraft")}
+    </span>
   );
 };
 

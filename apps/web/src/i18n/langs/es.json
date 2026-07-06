@@ -1529,6 +1529,14 @@
       "addPosition": "Añadir posición",
       "addRule": "Regla",
       "advanced": "Avanzado",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Tipo de respuesta",
       "askQuestionLabel": "Pregunta",
       "askQuestionPlaceholder": "¿Qué debemos leer de cada documento? Déjalo vacío para introducirlo manualmente.",
@@ -1679,6 +1687,13 @@
         "deviation": "Desviación",
         "fallback": "Alternativa",
         "missing": "Ausente"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {

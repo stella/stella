@@ -1532,6 +1532,14 @@ type Messages = {
       "addPosition": "Add position";
       "addRule": "Rule";
       "advanced": "Advanced";
+      "approval": {
+        "approve": "Approve";
+        "approveFailed": "Failed to approve playbook";
+        "approvedOn": "Approved {date}";
+        "approvedToast": "Playbook approved";
+        "statusApproved": "Approved";
+        "statusDraft": "Draft";
+      };
       "askContentLabel": "Answer type";
       "askQuestionLabel": "Question";
       "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.";
@@ -1682,6 +1690,13 @@ type Messages = {
         "deviation": "Deviation";
         "fallback": "Fallback";
         "missing": "Missing";
+      };
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.";
+        "restore": "Restore";
+        "restoreFailed": "Failed to restore version";
+        "restoredToast": "Version restored";
+        "versionHistory": "Version history";
       };
     };
     "sections": {

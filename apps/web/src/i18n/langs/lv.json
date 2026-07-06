@@ -1529,6 +1529,14 @@
       "addPosition": "Pievienot pozīciju",
       "addRule": "Noteikums",
       "advanced": "Papildu",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Atbildes tips",
       "askQuestionLabel": "Jautājums",
       "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
@@ -1679,6 +1687,13 @@
         "deviation": "Novirze",
         "fallback": "Alternatīva",
         "missing": "Trūkst"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {

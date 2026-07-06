@@ -41,14 +41,18 @@
     "app.versionMismatch.dismiss",
     "appearance.calendar",
     "auth.continueWithEmail",
+    "billing.approve",
     "billing.codes.active",
     "billing.codes.codeLabelField",
     "billing.codes.task",
     "billing.expenses.categories.expert_witness",
     "billing.expenses.categories.other",
     "billing.invoices.dueDate",
+    "billing.invoices.statuses.draft",
     "billing.invoices.statuses.paid",
     "billing.selectedCount",
+    "billing.statuses.approved",
+    "billing.statuses.draft",
     "billing.stopTimer",
     "caseLaw.analysis.categories.reasoning",
     "catalogue.cost.free",
@@ -65,12 +69,9 @@
     "chat.landing.prompts",
     "chat.stopResponse",
     "chat.suggestionStatus.rejected",
-    "chat.tool.delete_clause",
-    "chat.tool.delete_matter",
-    "chat.tool.run_playbook",
     "chat.toolCall.field",
     "clauses.body",
-    "clauses.deleteClause",
+    "clauses.versionRestored",
     "consent.deny",
     "contacts.customFields.value",
     "contacts.customFields.valuePlaceholder",
@@ -91,6 +92,7 @@
     "fileDetail.current",
     "fileDetail.label",
     "fileDetail.redlinePreview",
+    "fileDetail.versionHistory",
     "filters.contains",
     "filters.eq",
     "filters.neq",
@@ -105,6 +107,9 @@
     "knowledge.playbooks.addOption",
     "knowledge.playbooks.addRule",
     "knowledge.playbooks.advanced",
+    "knowledge.playbooks.approval.approve",
+    "knowledge.playbooks.approval.statusApproved",
+    "knowledge.playbooks.approval.statusDraft",
     "knowledge.playbooks.contentType.int",
     "knowledge.playbooks.contentType.text",
     "knowledge.playbooks.review.fixAccepted",
@@ -115,6 +120,8 @@
     "knowledge.playbooks.severity.high",
     "knowledge.playbooks.severity.low",
     "knowledge.playbooks.severity.medium",
+    "knowledge.playbooks.versions.restoredToast",
+    "knowledge.playbooks.versions.versionHistory",
     "knowledge.sections.prompts.title",
     "knowledge.sections.templates.title",
     "knowledge.sections.tools.title",
@@ -185,7 +192,6 @@
     "templates.tags",
     "translate.settings.apiKeyLabel",
     "translate.settings.tierFree",
-    "workspaces.deleteWorkspace",
     "workspaces.fields.fieldValueLabel",
     "workspaces.fields.numberLabel",
     "workspaces.filesystem.author",
@@ -201,7 +207,6 @@
     "workspaces.parties.partyRoles.other",
     "workspaces.parties.personalLabel",
     "workspaces.parties.searchContacts",
-    "workspaces.playbooks.run",
     "workspaces.properties.addOption",
     "workspaces.properties.chipMulti",
     "workspaces.properties.chipNumber",
@@ -353,9 +358,6 @@
     ],
     "common.details": [
       "de"
-    ],
-    "common.document": [
-      "fr"
     ],
     "common.documentation": [
       "fr"
@@ -827,6 +829,90 @@
       "pt-BR",
       "sk"
     ],
+    "knowledge.playbooks.approval.approve": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.approval.approvedOn": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.approval.approvedToast": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.approval.approveFailed": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.approval.statusApproved": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.approval.statusDraft": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "knowledge.playbooks.askQuestionLabel": [
       "fr"
     ],
@@ -1165,6 +1251,76 @@
     "knowledge.playbooks.tier.acceptable": [
       "fr"
     ],
+    "knowledge.playbooks.versions.confirmRestore": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.versions.restore": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.versions.restoredToast": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.versions.restoreFailed": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "knowledge.playbooks.versions.versionHistory": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "knowledge.sections.agents.title": [
       "fr"
     ],
@@ -1478,6 +1634,9 @@
       "sk"
     ],
     "search.kinds.contact": [
+      "fr"
+    ],
+    "search.kinds.document": [
       "fr"
     ],
     "search.kinds.folder": [

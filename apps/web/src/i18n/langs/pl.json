@@ -1529,6 +1529,14 @@
       "addPosition": "Dodaj stanowisko",
       "addRule": "Reguła",
       "advanced": "Zaawansowane",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Typ odpowiedzi",
       "askQuestionLabel": "Treść pytania",
       "askQuestionPlaceholder": "Co odczytać z każdego dokumentu? Pozostaw puste, aby wprowadzić ręcznie.",
@@ -1679,6 +1687,13 @@
         "deviation": "Odstępstwo",
         "fallback": "Alternatywne brzmienie",
         "missing": "Brak"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {

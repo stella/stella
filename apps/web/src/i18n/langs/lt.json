@@ -1529,6 +1529,14 @@
       "addPosition": "Pridėti poziciją",
       "addRule": "Taisyklė",
       "advanced": "Išplėstinis",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Atsakymo tipas",
       "askQuestionLabel": "Klausimas",
       "askQuestionPlaceholder": "Ką turėtume nuskaityti iš kiekvieno dokumento? Palikite tuščią, jei norite įvesti rankiniu būdu.",
@@ -1679,6 +1687,13 @@
         "deviation": "Nukrypimas",
         "fallback": "Alternatyva",
         "missing": "Trūksta"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {
