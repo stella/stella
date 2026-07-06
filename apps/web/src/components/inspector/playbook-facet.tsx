@@ -114,7 +114,7 @@ export const PlaybookFacet = ({
       user.activeOrganizationId,
       session?.playbookId ?? "",
     ),
-    enabled: typeof session?.playbookId === "string",
+    enabled: Boolean(session?.playbookId),
   });
   const negotiationBySourceId = negotiationLookup(playbookDetail);
 

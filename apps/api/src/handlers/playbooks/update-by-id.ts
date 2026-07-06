@@ -84,8 +84,11 @@ const updatePlaybookDefinition = createSafeRootHandler(
             scope: body.scope ?? null,
             positions,
             // Any edit invalidates a prior approval, regardless of the
-            // definition's current status.
+            // definition's current status; clear the stale approval metadata
+            // so a draft never carries a prior approver/timestamp.
             status: "draft",
+            approvedAt: null,
+            approvedBy: null,
             updatedAt: new Date(),
           })
           .where(

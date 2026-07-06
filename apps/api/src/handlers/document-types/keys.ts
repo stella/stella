@@ -43,5 +43,5 @@ export const uniqueDocumentTypeKey = (
       return candidate;
     }
   }
-  panic("unable to derive a unique document type key");
+  return panic("unable to derive a unique document type key");
 };

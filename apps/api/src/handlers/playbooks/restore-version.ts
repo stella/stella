@@ -84,7 +84,11 @@ const restorePlaybookVersion = createSafeRootHandler(
             description: version.description,
             scope: version.scope,
             positions: version.positions,
+            // A restore produces a fresh draft; clear stale approval metadata
+            // so it never carries the pre-restore approver/timestamp.
             status: "draft",
+            approvedAt: null,
+            approvedBy: null,
             updatedAt: new Date(),
           })
           .where(

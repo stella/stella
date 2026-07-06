@@ -99,7 +99,7 @@ const mockStructuredData = (outputSchema: unknown): Record<string, unknown> => {
     "properties" in outputSchema &&
     typeof outputSchema.properties === "object" &&
     outputSchema.properties !== null
-      ? (outputSchema.properties as Record<string, unknown>)
+      ? outputSchema.properties
       : {};
 
   // playbook.verdict — tier-match. Return a plain "deviation" with no `matched`

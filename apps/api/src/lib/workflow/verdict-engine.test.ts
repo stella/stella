@@ -135,18 +135,17 @@ describe("computeVerdictBatch — pre-v2 verdict row without tiers", () => {
     const tx = {
       select: () => ({
         from: () => ({
-          where: () =>
-            Promise.resolve([
-              {
-                id: toSafeId<"field">("field_1"),
-                propertyId: askPropertyId,
-                content: {
-                  type: "text",
-                  version: 1,
-                  value: "Some extracted clause value.",
-                },
+          where: async () => [
+            {
+              id: toSafeId<"field">("field_1"),
+              propertyId: askPropertyId,
+              content: {
+                type: "text",
+                version: 1,
+                value: "Some extracted clause value.",
               },
-            ]),
+            },
+          ],
         }),
       }),
     };

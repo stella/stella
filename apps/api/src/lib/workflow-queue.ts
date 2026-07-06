@@ -1886,8 +1886,8 @@ const maybeRouteClassifiedDocuments = async ({
   if (planPropertyIds.length === 0) {
     return;
   }
-  const classifier = await scopedDb((tx) =>
-    resolveDocTypeClassifier(tx, workspaceId),
+  const classifier = await scopedDb(
+    async (tx) => await resolveDocTypeClassifier(tx, workspaceId),
   );
   if (
     !classifier ||

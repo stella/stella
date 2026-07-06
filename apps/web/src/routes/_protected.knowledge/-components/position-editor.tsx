@@ -1515,7 +1515,12 @@ const checkFieldOption = (
   label: string,
 ): FieldOption => {
   const operand = { type: "property" as const, propertyId: position.sourceId };
-  const content = position.ask.mode === "manual" ? position.ask.content : null;
+  // A manual ask carries its content type directly; an auto ask carries it on
+  // the derived result once populated. Fall back to null (→ text) otherwise.
+  const content =
+    position.ask.mode === "manual"
+      ? position.ask.content
+      : (position.ask.derived?.content ?? null);
   if (
     content &&
     (content.type === "single-select" || content.type === "multi-select")
