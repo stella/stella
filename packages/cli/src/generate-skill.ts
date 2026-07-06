@@ -6,6 +6,8 @@
 // the real `generateRouteMap` output, so the documented surface can never drift
 // from the command surface the CLI actually dispatches.
 
+import { panic } from "better-result";
+
 import { generateRouteMap } from "./generate-route-map.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type {
@@ -23,22 +25,23 @@ import type {
 export const SKILL_NAME = "stella-cli";
 
 /**
- * Human meaning for each `EXIT_CODES` key, in numeric-code order. Keys are
- * constrained to `keyof typeof EXIT_CODES` so this stays exhaustive, and the
- * rendered code column is read from `EXIT_CODES` itself, so the table can never
- * drift from the compiled exit-code constant.
+ * Human meaning for each `EXIT_CODES` key. Typed `satisfies
+ * Record<keyof typeof EXIT_CODES, string>` so a new exit code fails typecheck
+ * here until it is described; the rendered code column is read from
+ * `EXIT_CODES` itself, so the table can never drift from the compiled
+ * exit-code constant. Declaration order is irrelevant: the table is rendered
+ * sorted numerically by exit-code value.
  */
-const EXIT_CODE_TABLE: readonly (readonly [keyof typeof EXIT_CODES, string])[] =
-  [
-    ["ok", "success"],
-    ["unexpected", "unexpected internal error"],
-    ["validation", "usage or input validation error"],
-    ["auth", "authentication required or failed (run `stella auth login`)"],
-    ["server", "server or tool error"],
-    ["featureDisabled", "feature disabled for this organization"],
-    ["notFound", "resource not found"],
-    ["aborted", "confirmation aborted (a destructive op was declined)"],
-  ];
+const EXIT_CODE_DESCRIPTIONS = {
+  ok: "success",
+  unexpected: "unexpected internal error",
+  validation: "usage or input validation error",
+  auth: "authentication required or failed (run `stella auth login`)",
+  server: "server or tool error",
+  featureDisabled: "feature disabled for this organization",
+  notFound: "resource not found",
+  aborted: "confirmation aborted (a destructive op was declined)",
+} satisfies Record<keyof typeof EXIT_CODES, string>;
 
 type CommandRow = {
   domain: string;
@@ -85,7 +88,9 @@ const commandRows = (tree: RouteNode): readonly CommandRow[] => {
     };
   });
   // Sort for determinism independent of registry/annotation iteration order.
-  return rows.toSorted((a, b) => a.command.localeCompare(b.command));
+  // Explicit locale keeps the ordering byte-identical across machines; the
+  // drift guard diffs the emitted SKILL.md against a committed snapshot.
+  return rows.toSorted((a, b) => a.command.localeCompare(b.command, "en"));
 };
 
 const renderCommandTable = (rows: readonly CommandRow[]): string => {
@@ -103,8 +108,15 @@ const renderCommandTable = (rows: readonly CommandRow[]): string => {
 
 const renderExitCodeTable = (): string => {
   const lines = ["| Code | Meaning |", "| --- | --- |"];
-  for (const [key, meaning] of EXIT_CODE_TABLE) {
-    lines.push(`| ${EXIT_CODES[key]} | ${meaning} |`);
+  // Iterate `EXIT_CODES` (the source of truth) and look descriptions up
+  // through a widened alias, so no cast is needed: exhaustiveness is already
+  // compile-forced on the `EXIT_CODE_DESCRIPTIONS` literal by its `satisfies`.
+  const descriptions: Record<string, string> = EXIT_CODE_DESCRIPTIONS;
+  const sorted = Object.entries(EXIT_CODES).toSorted(([, a], [, b]) => a - b);
+  for (const [key, code] of sorted) {
+    const meaning =
+      descriptions[key] ?? panic(`exit code ${key} has no description`);
+    lines.push(`| ${code} | ${meaning} |`);
   }
   return lines.join("\n");
 };
