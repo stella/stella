@@ -972,7 +972,7 @@ const NegotiationBlock = ({
   ) {
     return null;
   }
-  const talkingPoints = negotiation.talkingPoints ?? [];
+  const { talkingPoints } = negotiation;
   return (
     <div className="border-border/70 mt-1 space-y-1.5 rounded-md border border-dashed p-2">
       <p className="text-foreground-strong-muted text-[11px] font-medium">
@@ -986,7 +986,7 @@ const NegotiationBlock = ({
           {negotiation.rationale}
         </p>
       )}
-      {talkingPoints.length > 0 && (
+      {talkingPoints !== undefined && talkingPoints.length > 0 && (
         <div className="text-xs leading-snug">
           <span className="text-foreground-strong-muted">
             {t("knowledge.playbooks.negotiation.talkingPointsLabel")}:

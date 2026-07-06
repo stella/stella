@@ -1,6 +1,6 @@
 {
   "as-casts": {
-    "count": 126,
+    "count": 125,
     "files": {
       "apps/api/src/db-url.ts": 1,
       "apps/api/src/handlers/case-law/citation-authority.ts": 1,
@@ -24,6 +24,7 @@
       "apps/api/src/handlers/files/file-object-ids.ts": 2,
       "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts": 2,
       "apps/api/src/handlers/mcp-connectors/crypto.ts": 1,
+      "apps/api/src/handlers/playbooks/route-playbooks.ts": 2,
       "apps/api/src/handlers/skills/create.ts": 1,
       "apps/api/src/handlers/skills/update.ts": 1,
       "apps/api/src/lib/auth.ts": 2,
@@ -68,7 +69,7 @@
       "apps/web/src/routes/_protected.contacts/index.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/clause-directive-node.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx": 5,
+      "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
@@ -92,7 +93,7 @@
     }
   },
   "nullish-array-fallback": {
-    "count": 313,
+    "count": 314,
     "files": {
       "apps/api/src/handlers/case-law/court-weights.ts": 2,
       "apps/api/src/handlers/case-law/decisions/search.ts": 5,
@@ -136,7 +137,6 @@
       "apps/api/src/handlers/mcp-connectors/probe.ts": 1,
       "apps/api/src/handlers/organization-settings/practice-jurisdictions.ts": 1,
       "apps/api/src/handlers/organization-settings/read.ts": 1,
-      "apps/api/src/handlers/playbooks/resolve-standards.ts": 1,
       "apps/api/src/handlers/playbooks/review-grade.ts": 1,
       "apps/api/src/handlers/properties/create-schema.ts": 3,
       "apps/api/src/handlers/properties/preview.ts": 4,
@@ -162,7 +162,6 @@
       "apps/api/src/lib/workflow-targets.ts": 1,
       "apps/api/src/lib/workflow/docx-blocks.ts": 1,
       "apps/api/src/lib/workflow/get-execution-plan.ts": 2,
-      "apps/api/src/lib/workflow/verdict-engine.ts": 1,
       "apps/api/src/mcp/stella-tools.ts": 3,
       "apps/api/src/mcp/template-tools.ts": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 2,
@@ -211,6 +210,8 @@
       "apps/web/src/routes/_protected.knowledge/-components/fill-clauses-section.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx": 4,
       "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 9,
@@ -223,6 +224,7 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-versions-tab.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 6,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx": 1,
       "apps/web/src/routes/_protected.settings/account.profile.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx": 1,
