@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { PlaybookEditor } from "@/routes/_protected.knowledge/-components/playbook-editor";
 import { PlaybookList } from "@/routes/_protected.knowledge/-components/playbook-list";
+import { PlaybookStarterGallerySheet } from "@/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet";
 import type { PlaybookListItem } from "@/routes/_protected.knowledge/-components/playbook-types";
 import {
   knowledgeKeys,
@@ -69,6 +70,7 @@ function RouteComponent() {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const [view, setView] = useState<View>({ kind: "list" });
+  const [starterGalleryOpen, setStarterGalleryOpen] = useState(false);
 
   // Extra playbooks from cursor-based pagination. nextCursor is three-state:
   // undefined = "not yet loaded extras" (fall back to initialNextCursor),
@@ -206,20 +208,32 @@ function RouteComponent() {
   }
 
   return (
-    <PlaybookList
-      loading={loadingMore}
-      nextCursor={currentNextCursor}
-      onLoadMore={() => {
-        handleLoadMore().catch(() => {
-          /* fire-and-forget */
-        });
-      }}
-      onNewPlaybook={() => setView({ kind: "editor", playbookId: null })}
-      onRefresh={handleRefresh}
-      onSelect={(playbook) =>
-        setView({ kind: "editor", playbookId: playbook.id })
-      }
-      playbooks={playbooks}
-    />
+    <>
+      <PlaybookList
+        loading={loadingMore}
+        nextCursor={currentNextCursor}
+        onBrowseStarters={() => setStarterGalleryOpen(true)}
+        onLoadMore={() => {
+          handleLoadMore().catch(() => {
+            /* fire-and-forget */
+          });
+        }}
+        onNewPlaybook={() => setView({ kind: "editor", playbookId: null })}
+        onRefresh={handleRefresh}
+        onSelect={(playbook) =>
+          setView({ kind: "editor", playbookId: playbook.id })
+        }
+        playbooks={playbooks}
+      />
+      <PlaybookStarterGallerySheet
+        onCreated={(playbook) => {
+          handleRefresh();
+          setView({ kind: "editor", playbookId: playbook.id });
+        }}
+        onOpenChange={setStarterGalleryOpen}
+        open={starterGalleryOpen}
+        organizationId={activeOrganizationId}
+      />
+    </>
   );
 }

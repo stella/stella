@@ -1649,6 +1649,13 @@ type Messages = {
         "medium": "Medium";
       };
       "severityLabel": "Severity";
+      "starters": {
+        "addedToast": "Playbook added";
+        "browseButton": "Browse starter playbooks";
+        "positionCount": "{count, plural, one {# position} other {# positions}}";
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.";
+        "title": "Starter playbooks";
+      };
       "switchToAuto": "Back to automatic";
       "switchToManual": "Switch to manual";
       "tier": {

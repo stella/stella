@@ -1646,6 +1646,13 @@
         "medium": "Keskmine"
       },
       "severityLabel": "Raskusaste",
+      "starters": {
+        "addedToast": "Playbook added",
+        "browseButton": "Browse starter playbooks",
+        "positionCount": "{count, plural, one {# position} other {# positions}}",
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
+        "title": "Starter playbooks"
+      },
       "switchToAuto": "Tagasi automaatsele",
       "switchToManual": "Lülitu käsitsile",
       "tier": {

@@ -1,4 +1,9 @@
-import { ClipboardCheckIcon, PlusIcon, RotateCcwIcon } from "lucide-react";
+import {
+  ClipboardCheckIcon,
+  LibraryIcon,
+  PlusIcon,
+  RotateCcwIcon,
+} from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -10,6 +15,7 @@ type PlaybookListProps = {
   playbooks: PlaybookListItem[];
   nextCursor: string | null;
   loading: boolean;
+  onBrowseStarters: () => void;
   onNewPlaybook: () => void;
   onSelect: (playbook: PlaybookListItem) => void;
   onLoadMore: () => void;
@@ -20,6 +26,7 @@ export const PlaybookList = ({
   playbooks,
   nextCursor,
   loading,
+  onBrowseStarters,
   onNewPlaybook,
   onSelect,
   onLoadMore,
@@ -40,6 +47,20 @@ export const PlaybookList = ({
         >
           <RotateCcwIcon />
         </Button>
+        {canCreate && (
+          <Button
+            aria-label={t("knowledge.playbooks.starters.browseButton")}
+            onClick={onBrowseStarters}
+            size="sm"
+            title={t("knowledge.playbooks.starters.browseButton")}
+            variant="outline"
+          >
+            <LibraryIcon />
+            <span className="hidden sm:inline">
+              {t("knowledge.playbooks.starters.browseButton")}
+            </span>
+          </Button>
+        )}
         {canCreate && (
           <Button
             aria-label={t("knowledge.playbooks.createPlaybook")}

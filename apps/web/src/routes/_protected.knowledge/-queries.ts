@@ -148,6 +148,9 @@ export const knowledgeKeys = {
       "detail",
     ],
   },
+  playbookStarters: {
+    all: (organizationId: string) => ["playbook-starters", organizationId],
+  },
   mcp: {
     all: (organizationId: string) => ["mcp", organizationId],
     connectors: (organizationId: string) => [
@@ -506,6 +509,24 @@ export const documentTypesOptions = (organizationId: string) =>
     queryKey: ["document-types", organizationId] as const,
     queryFn: async ({ signal }) => {
       const response = await api["document-types"].get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// Ready-made starter playbooks (NDA, DPA, MSA) a user can instantiate into
+// their org in one click. Minimal metadata only — the gallery does not need
+// the full position bodies.
+export const playbookStartersOptions = (organizationId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.playbookStarters.all(organizationId),
+    queryFn: async ({ signal }) => {
+      const response = await api.playbooks.starters.get({ fetch: { signal } });
 
       if (response.error) {
         throw toAPIError(response.error);

@@ -1646,6 +1646,13 @@
         "medium": "Vidēja"
       },
       "severityLabel": "Nopietnība",
+      "starters": {
+        "addedToast": "Playbook added",
+        "browseButton": "Browse starter playbooks",
+        "positionCount": "{count, plural, one {# position} other {# positions}}",
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
+        "title": "Starter playbooks"
+      },
       "switchToAuto": "Atpakaļ uz automātisko režīmu",
       "switchToManual": "Pārslēgt uz manuālo režīmu",
       "tier": {
