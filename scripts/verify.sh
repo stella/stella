@@ -138,11 +138,12 @@ run_mcp_coverage_guard() {
 }
 
 run_cli_registry_snapshot() {
-  # The stella CLI's committed registry snapshot and generated route map must
-  # match the live MCP registry: regenerate both and fail on any diff so a
-  # registry change cannot silently ship a stale CLI surface.
+  # The stella CLI's committed registry snapshot, generated route map, and the
+  # generated TanStack Intent agent skill must match the live MCP registry:
+  # regenerate all of them and fail on any diff so a registry change cannot
+  # silently ship a stale CLI surface (or stale skill docs).
   (cd packages/cli && bun run codegen) || return 1
-  git diff --exit-code -- packages/cli/src/generated
+  git diff --exit-code -- packages/cli/src/generated packages/cli/skills
 }
 
 run_knip() {
