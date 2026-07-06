@@ -57,16 +57,16 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   list_audit_log: RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
-const firstTextContent = (result: CallToolResult): string => {
+export const firstTextContent = (result: CallToolResult): string => {
   const item = result.content.at(0);
   return item?.type === "text" ? item.text : "";
 };
 
 /** Fallback for an `isError` result whose content carries no text block. */
-const DEFAULT_TOOL_ERROR_MESSAGE = "Tool execution failed.";
+export const DEFAULT_TOOL_ERROR_MESSAGE = "Tool execution failed.";
 
 /** Surfaced to the model when a hydrated payload still carries a raw uuid. */
-const ANONYMIZATION_FAILURE_MESSAGE =
+export const ANONYMIZATION_FAILURE_MESSAGE =
   "Tool output failed anonymization of internal identifiers.";
 
 /**
@@ -76,7 +76,7 @@ const ANONYMIZATION_FAILURE_MESSAGE =
  * try/catch is a boundary parse of an already-serialized payload, not control
  * flow.
  */
-const parsePayload = (
+export const parsePayload = (
   result: CallToolResult,
 ): Result<unknown, ChatToolError> => {
   try {

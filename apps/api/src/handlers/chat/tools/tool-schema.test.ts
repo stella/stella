@@ -18,11 +18,13 @@ import {
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS } from "@/api/lib/provider-safe-json-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
+import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 import { createOrgTools } from "./org-tools";
 import { createSkillTools } from "./skill-tools";
@@ -495,5 +497,72 @@ describe("chat tool schemas", () => {
       href: "#stella-entity-ref=ent_1",
       mention: "[Mzuri_Umowa_Strona_1.docx](#stella-entity-ref=ent_1)",
     });
+  });
+});
+
+describe("registry write tool approval policy", () => {
+  const projectedWriteNames = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
+    (definition) =>
+      definition.access === "write" &&
+      WRITE_TOOL_REF_FIELD_MAP[definition.name].chatProjectable,
+  ).map((definition) => definition.name);
+
+  const buildToolsWithWorkspace = () =>
+    getChatTools({
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      hasActiveDocxEditClient: false,
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+  test("every projected write tool needs approval and is classified mutation", () => {
+    const tools = buildToolsWithWorkspace();
+    expect(projectedWriteNames.length).toBeGreaterThan(0);
+
+    for (const name of projectedWriteNames) {
+      const tool = tools[name];
+      if (!tool) {
+        throw new Error(`Projected write tool ${name} was not registered`);
+      }
+      expect(tool.needsApproval, name).toBe(true);
+      expect(getChatToolPolicy(tool).kind, name).toBe("mutation");
+    }
+  });
+
+  test("no write tools are registered when the workspace set is empty", () => {
+    const tools = getChatTools({
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [],
+      }),
+      hasActiveDocxEditClient: false,
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    for (const name of projectedWriteNames) {
+      expect(tools, name).not.toHaveProperty(name);
+    }
   });
 });

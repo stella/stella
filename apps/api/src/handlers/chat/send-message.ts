@@ -112,6 +112,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
@@ -161,6 +162,7 @@ const config = {
 const sendMessage = createSafeRootHandler(
   config,
   async function* ({
+    accessibleWorkspaces,
     activeWorkspaceIds,
     body,
     memberRole,
@@ -182,6 +184,13 @@ const sendMessage = createSafeRootHandler(
     const externalMcpNullUnionStrategy = "json-schema";
 
     const accessibleWorkspaceIds = activeWorkspaceIds;
+    // Real per-workspace statuses for the projected write tools' MCP context.
+    // `activeWorkspaceIds` includes archived workspaces, so the write handlers'
+    // `ensureActiveWorkspace` gate must see the true status (not a default) to
+    // keep archived matters read-only.
+    const workspaceStatusById = new Map<string, AccessibleWorkspace["status"]>(
+      accessibleWorkspaces.map((workspace) => [workspace.id, workspace.status]),
+    );
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
     const scope = yield* resolveChatScope({
       accessibleWorkspaceIds,
@@ -293,6 +302,7 @@ const sendMessage = createSafeRootHandler(
       disabledNativeToolSlugs,
       activeSkillContext: validationActiveSkillContext,
       recordAuditEvent,
+      workspaceStatusById,
     });
 
     const validatedMessageResult = await validateMessage({
@@ -674,6 +684,7 @@ const sendMessage = createSafeRootHandler(
       skillMetadata: chatContext.skillMetadata,
       activeSkillContext: chatContext.activeSkillContext,
       recordAuditEvent,
+      workspaceStatusById,
     });
     // A named scope narrows the streaming turn to its server-defined
     // allowlist (validation above stays broad so persisted tool parts
