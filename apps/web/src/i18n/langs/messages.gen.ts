@@ -532,6 +532,7 @@ type Messages = {
       "describe-stella-api": "Preparing data lookup";
       "describe-stella-function": "Preparing data lookup";
       "describe_template": "Reading template fields";
+      "discover_tools": "Preparing data lookup";
       "docxCommentSummary": "Add a comment to {blockId}";
       "docxDeleteSummary": "Delete {blockId}";
       "docxEditMore": "{count, plural, one {# more edit} other {# more edits}}";
@@ -542,6 +543,7 @@ type Messages = {
       "docxReplaceSummary": "Replace “{find}” with “{replace}”";
       "docxSignatureTableSummary": "Insert signature table near {blockId}";
       "execute-typescript": "Reading workspace data";
+      "execute_typescript": "Reading workspace data";
       "expand-chat-history": "Reading chat history";
       "fetch_url": "Reading page";
       "fill_template": "Filling template";
@@ -561,6 +563,7 @@ type Messages = {
     };
     "toolCall": {
       "characterCount": "{count, plural, one {# character} other {# characters}}";
+      "consoleLogs": "Console output";
       "exactCall": "Exact call";
       "field": "Field";
       "input": "Input";

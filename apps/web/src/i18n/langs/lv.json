@@ -529,6 +529,7 @@
       "describe-stella-api": "Datu meklēšanas sagatavošana",
       "describe-stella-function": "Datu meklēšanas sagatavošana",
       "describe_template": "Veidnes lauku lasīšana",
+      "discover_tools": "Datu meklēšanas sagatavošana",
       "docxCommentSummary": "Pievienot komentāru pie {blockId}",
       "docxDeleteSummary": "Dzēst {blockId}",
       "docxEditMore": "{count, plural, zero {vēl # labojumu} one {vēl # labojums} other {vēl # labojumi}}",
@@ -539,6 +540,7 @@
       "docxReplaceSummary": "Aizstāt „{find}” ar „{replace}”",
       "docxSignatureTableSummary": "Ievietot parakstu tabulu pie {blockId}",
       "execute-typescript": "Lietas datu lasīšana",
+      "execute_typescript": "Lietas datu lasīšana",
       "expand-chat-history": "Lasa tērzēšanas vēsturi",
       "fetch_url": "Lapas lasīšana",
       "fill_template": "Veidnes aizpildīšana",
@@ -558,6 +560,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
+      "consoleLogs": "Konsoles izvade",
       "exactCall": "Precīzs izsaukums",
       "field": "Lauks",
       "input": "Ievade",

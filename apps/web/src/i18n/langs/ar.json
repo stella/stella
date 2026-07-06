@@ -529,6 +529,7 @@
       "describe-stella-api": "جارٍ تجهيز عملية البحث عن البيانات",
       "describe-stella-function": "جارٍ تجهيز عملية البحث عن البيانات",
       "describe_template": "قراءة حقول القالب",
+      "discover_tools": "جارٍ تجهيز عملية البحث عن البيانات",
       "docxCommentSummary": "إضافة تعليق إلى {blockId}",
       "docxDeleteSummary": "حذف {blockId}",
       "docxEditMore": "{count, plural, zero {# تعديل إضافي} one {# تعديل إضافي} two {# تعديلان إضافيان} few {# تعديلات إضافية} many {# تعديلاً إضافياً} other {# تعديل إضافي}}",
@@ -539,6 +540,7 @@
       "docxReplaceSummary": "استبدال «{find}» بـ «{replace}»",
       "docxSignatureTableSummary": "إدراج جدول توقيع بالقرب من {blockId}",
       "execute-typescript": "قراءة بيانات الملف",
+      "execute_typescript": "قراءة بيانات الملف",
       "expand-chat-history": "قراءة سجلّ المحادثة",
       "fetch_url": "قراءة الصفحة",
       "fill_template": "تعبئة القالب",
@@ -558,6 +560,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, zero {# حرف} one {# حرف} two {# حرفين} few {# أحرف} many {# حرفاً} other {# حرف}}",
+      "consoleLogs": "مخرجات وحدة التحكم",
       "exactCall": "الاستدعاء الدقيق",
       "field": "الحقل",
       "input": "المدخلات",

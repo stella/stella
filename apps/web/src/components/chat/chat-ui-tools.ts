@@ -89,15 +89,18 @@ const CHAT_TOOL_TITLE_KEYS = {
   business_registry_lookup: "chat.tool.business_registry_lookup",
   "create-document": "chat.tool.create-document",
   "create-current-skill-resource": "common.edit",
-  "describe-stella-api": "chat.tool.describe-stella-api",
   describe_template: "chat.tool.describe_template",
+  // Code-mode discovery companion to execute_typescript: fetches a read tool's
+  // full signature on demand.
+  discover_tools: "chat.tool.discover_tools",
+  // Code-mode sandbox runner (replaces run-stella-query).
+  execute_typescript: "chat.tool.execute_typescript",
   "expand-chat-history": "chat.tool.expand-chat-history",
   fetch_url: "chat.tool.fetch_url",
   fill_template: "chat.tool.fill_template",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
   list_templates: "chat.tool.list_templates",
   suggest_template_fields: "chat.tool.suggest_template_fields",
-  "run-stella-query": "chat.tool.run-stella-query",
   "load-skill": "chat.tool.load-skill",
   "read-skill-resource": "chat.tool.read-skill-resource",
   "search-chat-history": "chat.tool.search-chat-history",
@@ -114,10 +117,15 @@ const CHAT_TOOL_TITLE_KEYS = {
 const LEGACY_CHAT_TOOL_TITLE_KEYS = {
   ares_lookup_company: "chat.tool.ares_lookup_company",
   ares_search_companies: "chat.tool.ares_search_companies",
+  // Retired hand-rolled code-execution tools, replaced by the code-mode
+  // execute_typescript / discover_tools pair. Kept so historical threads that
+  // reference them still render a recognisable label.
+  "describe-stella-api": "chat.tool.describe-stella-api",
   "describe-stella-function": "chat.tool.describe-stella-function",
   "execute-typescript": "chat.tool.execute-typescript",
   "read-contact": "chat.tool.read-contact",
   "read-content-across-matters": "chat.tool.read-content-across-matters",
+  "run-stella-query": "chat.tool.run-stella-query",
   "search-across-matters": "chat.tool.search-across-matters",
 } as const satisfies Record<string, TranslationKey>;
 

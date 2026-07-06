@@ -529,6 +529,7 @@
       "describe-stella-api": "Pripravujem vyhľadanie dát",
       "describe-stella-function": "Pripravujem vyhľadanie dát",
       "describe_template": "Čítanie polí vzoru",
+      "discover_tools": "Pripravujem vyhľadanie dát",
       "docxCommentSummary": "Pridať komentár k {blockId}",
       "docxDeleteSummary": "Vymazať {blockId}",
       "docxEditMore": "{count, plural, one {# ďalšia úprava} few {# ďalšie úpravy} other {# ďalších úprav}}",
@@ -539,6 +540,7 @@
       "docxReplaceSummary": "Nahradiť „{find}“ za „{replace}“",
       "docxSignatureTableSummary": "Vložiť podpisovú tabuľku k {blockId}",
       "execute-typescript": "Čítam dáta spisu",
+      "execute_typescript": "Čítam dáta spisu",
       "expand-chat-history": "Čítanie histórie chatu",
       "fetch_url": "Čítanie stránky",
       "fill_template": "Vypĺňanie vzoru",
@@ -558,6 +560,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaky} other {# znakov}}",
+      "consoleLogs": "Výstup konzoly",
       "exactCall": "Presné volanie",
       "field": "Pole",
       "input": "Vstup",

@@ -529,6 +529,7 @@
       "describe-stella-api": "Préparation de la recherche de données",
       "describe-stella-function": "Préparation de la recherche de données",
       "describe_template": "Lecture des champs du modèle",
+      "discover_tools": "Préparation de la recherche de données",
       "docxCommentSummary": "Ajouter un commentaire à {blockId}",
       "docxDeleteSummary": "Supprimer {blockId}",
       "docxEditMore": "{count, plural, one {# modification de plus} many {# modifications de plus} other {# modifications de plus}}",
@@ -539,6 +540,7 @@
       "docxReplaceSummary": "Remplacer « {find} » par « {replace} »",
       "docxSignatureTableSummary": "Insérer un bloc de signature près de {blockId}",
       "execute-typescript": "Lecture des données du dossier",
+      "execute_typescript": "Lecture des données du dossier",
       "expand-chat-history": "Lecture de l’historique du chat",
       "fetch_url": "Lecture de la page",
       "fill_template": "Remplissage du modèle",
@@ -558,6 +560,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# caractère} many {# caractères} other {# caractères}}",
+      "consoleLogs": "Sortie de la console",
       "exactCall": "Appel exact",
       "field": "Champ",
       "input": "Entrée",

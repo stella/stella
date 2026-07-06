@@ -529,6 +529,7 @@
       "describe-stella-api": "Andmepäringu ettevalmistamine",
       "describe-stella-function": "Andmepäringu ettevalmistamine",
       "describe_template": "Malli väljade lugemine",
+      "discover_tools": "Andmepäringu ettevalmistamine",
       "docxCommentSummary": "Lisa kommentaar plokile {blockId}",
       "docxDeleteSummary": "Kustuta {blockId}",
       "docxEditMore": "{count, plural, one {veel # muudatus} other {veel # muudatust}}",
@@ -539,6 +540,7 @@
       "docxReplaceSummary": "Asenda „{find}“ sõnaga „{replace}“",
       "docxSignatureTableSummary": "Lisa allkirjatabel ploki {blockId} lähedale",
       "execute-typescript": "Toimiku andmete lugemine",
+      "execute_typescript": "Toimiku andmete lugemine",
       "expand-chat-history": "Vestlusajaloo lugemine",
       "fetch_url": "Lehe lugemine",
       "fill_template": "Malli täitmine",
@@ -558,6 +560,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# märk} other {# märki}}",
+      "consoleLogs": "Konsooli väljund",
       "exactCall": "Täpne kutse",
       "field": "Väli",
       "input": "Sisend",

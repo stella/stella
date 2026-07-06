@@ -529,6 +529,7 @@
       "describe-stella-api": "Przygotowywanie odczytu danych",
       "describe-stella-function": "Przygotowywanie odczytu danych",
       "describe_template": "Odczytywanie pól szablonu",
+      "discover_tools": "Przygotowywanie odczytu danych",
       "docxCommentSummary": "Dodaj komentarz do {blockId}",
       "docxDeleteSummary": "Usuń {blockId}",
       "docxEditMore": "{count, plural, one {# kolejna zmiana} few {# kolejne zmiany} many {# kolejnych zmian} other {# kolejnej zmiany}}",
@@ -539,6 +540,7 @@
       "docxReplaceSummary": "Zastąp „{find}” tekstem „{replace}”",
       "docxSignatureTableSummary": "Wstaw tabelę podpisów w pobliżu {blockId}",
       "execute-typescript": "Odczytywanie danych sprawy",
+      "execute_typescript": "Odczytywanie danych sprawy",
       "expand-chat-history": "Odczytywanie historii czatu",
       "fetch_url": "Czytanie strony",
       "fill_template": "Wypełnianie szablonu",
@@ -558,6 +560,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaku}}",
+      "consoleLogs": "Dane wyjściowe konsoli",
       "exactCall": "Dokładne wywołanie",
       "field": "Pole",
       "input": "Dane wejściowe",

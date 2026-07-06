@@ -529,6 +529,7 @@
       "describe-stella-api": "Datensuche vorbereiten",
       "describe-stella-function": "Datensuche vorbereiten",
       "describe_template": "Vorlagenfelder lesen",
+      "discover_tools": "Datensuche vorbereiten",
       "docxCommentSummary": "Kommentar zu {blockId} hinzufügen",
       "docxDeleteSummary": "{blockId} löschen",
       "docxEditMore": "{count, plural, one {# weitere Änderung} other {# weitere Änderungen}}",
@@ -539,6 +540,7 @@
       "docxReplaceSummary": "„{find}“ durch „{replace}“ ersetzen",
       "docxSignatureTableSummary": "Signaturtabelle in der Nähe von {blockId} einfügen",
       "execute-typescript": "Akten-Daten lesen",
+      "execute_typescript": "Akten-Daten lesen",
       "expand-chat-history": "Chatverlauf lesen",
       "fetch_url": "Seite lesen",
       "fill_template": "Vorlage ausfüllen",
@@ -558,6 +560,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# Zeichen} other {# Zeichen}}",
+      "consoleLogs": "Konsolenausgabe",
       "exactCall": "Exakter Aufruf",
       "field": "Feld",
       "input": "Eingabe",

@@ -529,6 +529,7 @@
       "describe-stella-api": "Preparando búsqueda de datos",
       "describe-stella-function": "Preparando búsqueda de datos",
       "describe_template": "Leyendo campos de la plantilla",
+      "discover_tools": "Preparando búsqueda de datos",
       "docxCommentSummary": "Añadir un comentario a {blockId}",
       "docxDeleteSummary": "Eliminar {blockId}",
       "docxEditMore": "{count, plural, one {# edición más} many {# ediciones más} other {# ediciones más}}",
@@ -539,6 +540,7 @@
       "docxReplaceSummary": "Reemplazar «{find}» por «{replace}»",
       "docxSignatureTableSummary": "Insertar una tabla de firmas cerca de {blockId}",
       "execute-typescript": "Leyendo datos del asunto",
+      "execute_typescript": "Leyendo datos del asunto",
       "expand-chat-history": "Leyendo el historial del chat",
       "fetch_url": "Leyendo página",
       "fill_template": "Rellenando plantilla",
@@ -558,6 +560,7 @@
     },
     "toolCall": {
       "characterCount": "{count, plural, one {# carácter} many {# caracteres} other {# caracteres}}",
+      "consoleLogs": "Salida de consola",
       "exactCall": "Llamada exacta",
       "field": "Campo",
       "input": "Entrada",
