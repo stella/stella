@@ -263,6 +263,89 @@ export const listTools = async ({
   return Result.ok({ tools: value["tools"] });
 };
 
+/** Header names carrying the advertised/minimum CLI version (spec 051 addendum). */
+const CLI_LATEST_HEADER = "x-stella-cli-latest";
+const CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
+
+/** The raw `tools/list` body plus the CLI-version headers riding on it. */
+export type RawToolsList = {
+  rawBody: string;
+  cliLatest?: string;
+  cliMinimum?: string;
+};
+
+/**
+ * Fetch the raw `tools/list` response body (spec S5.5). The runtime trust
+ * boundary hashes and validates the exact bytes the server returned, so this
+ * returns the unparsed text rather than a decoded envelope, plus the advertised
+ * CLI-version headers (spec 051 addendum) for the update nudge.
+ */
+export const fetchToolsListRaw = async ({
+  serverUrl,
+  token,
+}: {
+  serverUrl: string;
+  token: string;
+}): Promise<Result<RawToolsList, McpClientError>> => {
+  const body: JsonRpcRequest = {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/list",
+    params: {},
+  };
+  const response = await Result.tryPromise({
+    try: async () =>
+      await fetch(mcpUrl(serverUrl), {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(response)) {
+    return Result.err(
+      new McpClientError({
+        kind: "transport",
+        message: `Request to the MCP server failed: ${
+          response.error instanceof Error
+            ? response.error.message
+            : "network error"
+        }`,
+      }),
+    );
+  }
+  const httpResponse = response.value;
+  const rawText = await Result.tryPromise({
+    try: async () => await httpResponse.text(),
+    catch: (cause) => cause,
+  });
+  const text = Result.isOk(rawText) ? rawText.value : "";
+  if (!httpResponse.ok) {
+    return Result.err(
+      new McpClientError({
+        kind: "http",
+        httpStatus: httpResponse.status,
+        message: `MCP server returned HTTP ${httpResponse.status}`,
+      }),
+    );
+  }
+  const out: RawToolsList = { rawBody: text };
+  const cliLatest = httpResponse.headers.get(CLI_LATEST_HEADER);
+  if (cliLatest !== null) {
+    out.cliLatest = cliLatest;
+  }
+  const cliMinimum = httpResponse.headers.get(CLI_MINIMUM_HEADER);
+  if (cliMinimum !== null) {
+    out.cliMinimum = cliMinimum;
+  }
+  return Result.ok(out);
+};
+
 /** Enumerate the server's static resources via `resources/list`. */
 export const listResources = async ({
   serverUrl,

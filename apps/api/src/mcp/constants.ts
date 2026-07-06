@@ -65,7 +65,18 @@ export const MCP_ALLOWED_HEADERS = [
   "MCP-Protocol-Version",
 ] as const;
 
-export const MCP_EXPOSE_HEADERS = ["WWW-Authenticate"] as const;
+// Feeds the @stll/cli update nudge: the CLI reads `x-stella-cli-latest` off its
+// runtime `tools/list` fetch and, if this is newer than the running CLI, prints
+// one stderr hint. Bump this line when publishing a new @stll/cli. The header
+// name is mirrored (by design, no shared module) in
+// `packages/cli/src/cli-version-nudge.ts`.
+export const STELLA_CLI_LATEST_VERSION = "0.1.0";
+export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
+
+export const MCP_EXPOSE_HEADERS = [
+  "WWW-Authenticate",
+  STELLA_CLI_LATEST_HEADER,
+] as const;
 
 const MCP_MODE_CONFIG = {
   default: {

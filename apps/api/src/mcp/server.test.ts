@@ -6,6 +6,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { STELLA_CLI_LATEST_VERSION } from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
   McpOrganizationAccessError,
@@ -190,6 +191,10 @@ describe("handleMcpHttpRequest", () => {
     expect(body.result.tools.map((tool) => tool.name)).toEqual([
       "list_matters",
     ]);
+    // The response carries the CLI update-nudge header (spec 051 addendum).
+    expect(response.headers.get("x-stella-cli-latest")).toBe(
+      STELLA_CLI_LATEST_VERSION,
+    );
   });
 
   test("rejects tool calls missing the required scope before dynamic resolution", async () => {
