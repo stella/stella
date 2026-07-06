@@ -270,6 +270,70 @@ describe("generateRouteMap: collisions (S1)", () => {
   });
 });
 
+describe("generateRouteMap: Phase 4 domains (S1/S3)", () => {
+  test("list_templates is cursor-only paginated: no --limit, no cursor value flag", () => {
+    const list = findLeaf(tree, ["template", "list"]);
+    expect(list?.paginated).toBe(true);
+    expect(flagFor(list ?? errorSpec(), "--cursor")).toBeUndefined();
+    expect(flagFor(list ?? errorSpec(), "--limit")).toBeUndefined();
+    // `template_id` (single-read flip) stays a normal value flag.
+    expect(flagFor(list ?? errorSpec(), "--template-id")?.kind).toBe("string");
+  });
+
+  test("a fully paginated list keeps --limit as a pagination flag", () => {
+    // list_clauses has both cursor and limit -> `full` pagination mode.
+    const clauses = findLeaf(tree, ["clause", "list"]);
+    expect(clauses?.paginated).toBe(true);
+    expect(clauses?.itemsKey).toBe("clauses");
+    expect(flagFor(clauses ?? errorSpec(), "--limit")).toBeUndefined();
+    expect(flagFor(clauses ?? errorSpec(), "--cursor")).toBeUndefined();
+  });
+
+  test("audit-log and legislation carry the items Page envelope key", () => {
+    expect(findLeaf(tree, ["audit-log", "list"])?.itemsKey).toBe("items");
+    expect(findLeaf(tree, ["legislation", "search"])?.itemsKey).toBe("items");
+    expect(findLeaf(tree, ["legislation", "search"])?.paginated).toBe(true);
+  });
+
+  test("feature-gated tools are present in the tree (never client-hidden)", () => {
+    for (const path of [
+      ["time-entry", "list"],
+      ["time-entry", "save"],
+      ["time-entry", "delete"],
+      ["invoice", "list"],
+      ["case-law", "search"],
+      ["case-law", "read"],
+      ["legislation", "search"],
+    ]) {
+      expect(findLeaf(tree, path)).toBeDefined();
+    }
+  });
+
+  test("run_playbook required[] props become required flags", () => {
+    const run = findLeaf(tree, ["playbook", "run"]);
+    expect(flagFor(run ?? errorSpec(), "--matter-id")?.required).toBe(true);
+    expect(flagFor(run ?? errorSpec(), "--playbook-id")?.required).toBe(true);
+  });
+});
+
+describe("generateRouteMap: unknown fetched tools (S1 rule 5)", () => {
+  test("a tool with no annotation gets a heuristic verb/domain command path", () => {
+    const unknown: RegistryToolListing = {
+      name: "list_widgets",
+      description: "d",
+      inputSchema: {
+        type: "object",
+        properties: { query: { type: "string" } },
+      },
+    };
+    const node = generateRouteMap([unknown], {});
+    const leaf = findLeaf(node, ["widgets", "list"]);
+    expect(leaf?.toolName).toBe("list_widgets");
+    expect(leaf?.scope).toBeUndefined();
+    expect(flagFor(leaf ?? errorSpec(), "--query")?.kind).toBe("string");
+  });
+});
+
 describe("generateRouteMap: parity (S6)", () => {
   test("build-time listings and a mocked tools/list body produce the same tree", () => {
     // A distinct object graph carrying the identical wire fields, as a

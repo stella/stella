@@ -20,9 +20,10 @@ import {
   readCredentialFile,
 } from "./auth/credential-store.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
-import { buildGeneratedRoutes } from "./build-cli-tree.js";
+import { buildGeneratedRoutes, buildResourceRoutes } from "./build-cli-tree.js";
 import { authRoute } from "./commands/auth.js";
 import type { Context } from "./context.js";
+import { generatedResourceTree } from "./generated/resource-tree.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import type { RouteNode } from "./route-types.js";
 
@@ -62,6 +63,7 @@ const rootRoute = buildRouteMap({
   routes: {
     auth: authRoute,
     tools: toolsRoute,
+    reference: buildResourceRoutes(generatedResourceTree),
     ...buildGeneratedRoutes(generatedRouteMap),
   },
 });

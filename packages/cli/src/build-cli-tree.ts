@@ -15,12 +15,14 @@ import type {
 } from "@stricli/core";
 
 import type { Context } from "./context.js";
+import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
 import type { FlagSpec, LeafCommandSpec, RouteNode } from "./route-types.js";
 import {
   flagKey,
   RESERVED_FLAG_KEYS,
   runLeafCommand,
 } from "./run-leaf-command.js";
+import { runResourceCommand } from "./run-resource-command.js";
 
 /** A stricli routing target: a leaf command or a nested route map. */
 type RoutingTarget = Command<Context> | RouteMap<Context>;
@@ -169,6 +171,71 @@ export const buildGeneratedRoutes = (
     routes[name] = buildRouteNode(child, `The ${name} command group`);
   }
   return routes;
+};
+
+const outputOnlyFlags = (): Record<string, unknown> => ({
+  [RESERVED_FLAG_KEYS.output]: parsedStringFlag("Output format: json | table"),
+  [RESERVED_FLAG_KEYS.json]: booleanFlag(
+    "Output JSON (= --output json)",
+    false,
+  ),
+  [RESERVED_FLAG_KEYS.table]: booleanFlag(
+    "Output a table (= --output table)",
+    false,
+  ),
+});
+
+const resourceLeafBrief = (spec: ResourceLeafSpec): string =>
+  spec.kind === "list"
+    ? "List the static reference resources exposed by the stella server"
+    : `Read the ${spec.name} reference resource`;
+
+const buildResourceLeaf = (spec: ResourceLeafSpec): RoutingTarget => {
+  const builderArgs = {
+    docs: { brief: resourceLeafBrief(spec) },
+    parameters: { flags: outputOnlyFlags() },
+    func: async function func(
+      this: Context,
+      parsedFlags: Record<string, unknown>,
+    ): Promise<void> {
+      await runResourceCommand({ context: this, flags: parsedFlags, spec });
+    },
+  };
+  const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
+    // eslint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
+    builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
+  return buildCommand(typedArgs);
+};
+
+const buildResourceNode = (
+  node: ResourceNode,
+  brief: string,
+): RoutingTarget => {
+  if (node.kind === "leaf") {
+    return buildResourceLeaf(node.spec);
+  }
+  const routes: Record<string, RoutingTarget> = {};
+  for (const [name, child] of Object.entries(node.children)) {
+    routes[name] = buildResourceNode(child, `The ${name} command group`);
+  }
+  return buildRouteMap({ docs: { brief }, routes });
+};
+
+/**
+ * Fold a generated resource `ResourceNode` (route) into a single stricli
+ * `RouteMap` for the reserved `reference` top-level command (spec S5.4).
+ */
+export const buildResourceRoutes = (node: ResourceNode): RouteMap<Context> => {
+  const routes: Record<string, RoutingTarget> = {};
+  if (node.kind === "route") {
+    for (const [name, child] of Object.entries(node.children)) {
+      routes[name] = buildResourceNode(child, `The ${name} command group`);
+    }
+  }
+  return buildRouteMap({
+    docs: { brief: "Read the server's static reference resources" },
+    routes,
+  });
 };
 
 export type { RouteMap };

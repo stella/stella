@@ -35,6 +35,16 @@ export type ListedTool = {
 
 export type ListToolsResult = { tools: readonly unknown[] };
 
+/** One `content` block of a `resources/read` result. */
+export type ResourceContent = {
+  uri?: string;
+  mimeType?: string;
+  text?: string;
+};
+
+/** The `resources/read` result envelope. */
+export type ReadResourceResult = { contents: readonly ResourceContent[] };
+
 /**
  * A transport/HTTP/protocol failure. The three tiers (spec 051 S0/S4) are
  * carried on `kind` so the exit-code mapping can distinguish them:
@@ -251,4 +261,80 @@ export const listTools = async ({
     );
   }
   return Result.ok({ tools: value["tools"] });
+};
+
+/** Enumerate the server's static resources via `resources/list`. */
+export const listResources = async ({
+  serverUrl,
+  token,
+}: {
+  serverUrl: string;
+  token: string;
+}): Promise<Result<{ resources: readonly unknown[] }, McpClientError>> => {
+  const result = await callRpc({
+    serverUrl,
+    token,
+    method: "resources/list",
+    params: {},
+  });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
+  }
+  const value = result.value;
+  if (!isRecord(value) || !Array.isArray(value["resources"])) {
+    return Result.err(
+      new McpClientError({
+        kind: "transport",
+        message: "resources/list returned an unexpected result shape",
+      }),
+    );
+  }
+  return Result.ok({ resources: value["resources"] });
+};
+
+/** Read one resource by URI via `resources/read`. */
+export const readResource = async ({
+  serverUrl,
+  token,
+  uri,
+}: {
+  serverUrl: string;
+  token: string;
+  uri: string;
+}): Promise<Result<ReadResourceResult, McpClientError>> => {
+  const result = await callRpc({
+    serverUrl,
+    token,
+    method: "resources/read",
+    params: { uri },
+  });
+  if (Result.isError(result)) {
+    return Result.err(result.error);
+  }
+  const value = result.value;
+  if (!isRecord(value) || !Array.isArray(value["contents"])) {
+    return Result.err(
+      new McpClientError({
+        kind: "transport",
+        message: "resources/read returned an unexpected result shape",
+      }),
+    );
+  }
+  const contents: ResourceContent[] = [];
+  for (const entry of value["contents"]) {
+    if (isRecord(entry)) {
+      const content: ResourceContent = {};
+      if (typeof entry["uri"] === "string") {
+        content.uri = entry["uri"];
+      }
+      if (typeof entry["mimeType"] === "string") {
+        content.mimeType = entry["mimeType"];
+      }
+      if (typeof entry["text"] === "string") {
+        content.text = entry["text"];
+      }
+      contents.push(content);
+    }
+  }
+  return Result.ok({ contents });
 };

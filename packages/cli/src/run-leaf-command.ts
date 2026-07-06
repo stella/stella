@@ -17,6 +17,7 @@ import {
 } from "./mcp-client.js";
 import {
   EXIT_CODES,
+  FEATURE_DISABLED_ERROR_CODES,
   MAX_ALL_BYTES,
   MAX_ALL_ITEMS,
   MAX_ALL_PAGES,
@@ -396,6 +397,24 @@ const parsePayload = (result: CallToolResult): unknown => {
   return Result.isOk(parsed) ? parsed.value : undefined;
 };
 
+/**
+ * Map a tool `isError` result to an exit class (spec 051 S4). A feature-disabled
+ * failure is exit 5 only when the server tags the error payload with a known
+ * machine code; a plain-text error (today's server) has no code and falls to
+ * exit 4. Text is never pattern-matched (it is locale-dependent server output).
+ */
+const classifyToolError = (payload: unknown): ExitCode => {
+  if (!isRecord(payload)) {
+    return EXIT_CODES.server;
+  }
+  const code =
+    stringField(payload, "code") ?? stringField(payload["error"], "code");
+  if (code !== null && FEATURE_DISABLED_ERROR_CODES.has(code)) {
+    return EXIT_CODES.featureDisabled;
+  }
+  return EXIT_CODES.server;
+};
+
 const readOutputFormat = (flags: LeafFlags, context: Context): OutputFormat => {
   const output = flags[RESERVED_FLAG_KEYS.output];
   return selectFormat({
@@ -502,7 +521,7 @@ const renderCallResult = ({
 }): void => {
   if (result.isError) {
     writers.stderr(`${result.content.at(0)?.text ?? "Tool error"}\n`);
-    setExit(context, EXIT_CODES.server);
+    setExit(context, classifyToolError(parsePayload(result)));
     return;
   }
   const payload = parsePayload(result);

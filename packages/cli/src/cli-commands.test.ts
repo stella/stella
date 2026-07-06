@@ -26,12 +26,13 @@ const makeToken = (scopes: readonly string[]): string => {
 
 type JsonRpcRequest = {
   method: string;
-  params: { name?: string; arguments?: Record<string, unknown> };
+  params: { name?: string; arguments?: Record<string, unknown>; uri?: string };
 };
 
 type MockResponse =
   | { httpStatus: number; body?: string }
   | { toolPayload: unknown; isError?: boolean }
+  | { rpcResult: unknown }
   | { rpc: { code: number; message: string } };
 
 type MockHandler = (request: JsonRpcRequest, callIndex: number) => MockResponse;
@@ -52,6 +53,13 @@ const startMockServer = (handler: MockHandler) => {
       }
       if ("rpc" in response) {
         return Response.json({ jsonrpc: "2.0", id: 1, error: response.rpc });
+      }
+      if ("rpcResult" in response) {
+        return Response.json({
+          jsonrpc: "2.0",
+          id: 1,
+          result: response.rpcResult,
+        });
       }
       return Response.json({
         jsonrpc: "2.0",
@@ -540,5 +548,234 @@ describe("help surfaces --input for inputOnly tools", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stdout).toContain("--input");
     expect(result.stdout).toContain("fields");
+  });
+
+  test("clause save --help documents both --input-only fields", async () => {
+    const server = startMockServer(() => ({ toolPayload: {} }));
+    const result = await runCli({
+      args: ["clause", "save", "--help"],
+      url: server.url,
+      token: makeToken(["knowledge_write"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("--input");
+    expect(result.stdout).toContain("body");
+    expect(result.stdout).toContain("metadata");
+  });
+});
+
+describe("organization discriminator split (S2/Phase 4)", () => {
+  test("add-member injects action and forwards the flag args", async () => {
+    const server = startMockServer(() => ({ toolPayload: { ok: true } }));
+    const result = await runCli({
+      args: [
+        "organization",
+        "add-member",
+        "--matter-id",
+        "m1",
+        "--user-id",
+        "u1",
+      ],
+      url: server.url,
+      token: makeToken(["admin_write"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.name).toBe("manage_organization");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      action: "add_member",
+      matter_id: "m1",
+      user_id: "u1",
+    });
+  });
+
+  test("remove-member is destructive: non-TTY without --yes aborts (exit 7)", async () => {
+    const server = startMockServer(() => ({ toolPayload: { ok: true } }));
+    const result = await runCli({
+      args: [
+        "organization",
+        "remove-member",
+        "--matter-id",
+        "m1",
+        "--user-id",
+        "u1",
+      ],
+      url: server.url,
+      token: makeToken(["admin_write"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(7);
+    expect(server.requests).toHaveLength(0);
+  });
+
+  test("update-settings injects its action value", async () => {
+    const server = startMockServer(() => ({ toolPayload: { ok: true } }));
+    const result = await runCli({
+      args: ["organization", "update-settings", "--matter-number-padding", "4"],
+      url: server.url,
+      token: makeToken(["admin_write"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      action: "update_org_settings",
+      matter_number_padding: 4,
+    });
+  });
+});
+
+describe("legislation multi-shape rendering (Phase 4)", () => {
+  test("search-mode list renders the items Page envelope", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        items: [{ id: "l1", title: "Act 1" }],
+        nextCursor: null,
+      },
+    }));
+    const result = await runCli({
+      args: ["legislation", "search", "--query", "tax", "--table"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("l1");
+    expect(result.stdout).toContain("Act 1");
+  });
+
+  test("read-mode single block shape renders without crashing the table path", async () => {
+    // No `items` array: the payload is a single block; the table path must fall
+    // back to a key/value object render, not throw.
+    const server = startMockServer(() => ({
+      toolPayload: { law_id: "l1", block_id: "b1", text: "Section text" },
+    }));
+    const result = await runCli({
+      args: ["legislation", "search", "--law-id", "l1", "--table"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("law_id");
+    expect(result.stdout).toContain("Section text");
+  });
+});
+
+describe("audit-log Page envelope (Phase 4)", () => {
+  test("audit-log list renders the items array as rows", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        items: [{ action: "matter.create", user_id: "u1" }],
+        nextCursor: "next",
+      },
+    }));
+    const result = await runCli({
+      args: ["audit-log", "list", "--table"],
+      url: server.url,
+      token: makeToken(["admin_read"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout).toContain("matter.create");
+    expect(result.stderr).toContain("more: --cursor next");
+  });
+});
+
+describe("feature-disabled exit class (S4/Phase 4)", () => {
+  test("a plain-text feature error has no machine code and falls to exit 4", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: "This feature is not enabled on this deployment",
+      isError: true,
+    }));
+    const result = await runCli({
+      args: ["time-entry", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(4);
+    expect(result.stderr).toContain("not enabled");
+  });
+
+  test("a tagged feature-disabled machine code maps to exit 5", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: { code: "feature_disabled", message: "disabled" },
+      isError: true,
+    }));
+    const result = await runCli({
+      args: ["time-entry", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(5);
+  });
+});
+
+describe("reference resources (S5.4/Phase 4)", () => {
+  test("reference list renders the resource table", async () => {
+    const server = startMockServer(() => ({
+      rpcResult: {
+        resources: [
+          {
+            uri: "stella://reference/template-markers",
+            name: "template-markers",
+            title: "Template marker grammar",
+            mimeType: "text/markdown",
+          },
+        ],
+      },
+    }));
+    const result = await runCli({
+      args: ["reference", "list", "--table"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.method).toBe("resources/list");
+    expect(result.stdout).toContain("template-markers");
+    expect(result.stdout).toContain("text/markdown");
+  });
+
+  test("reference show template-markers reads its URI and prints contents[0].text", async () => {
+    const server = startMockServer(() => ({
+      rpcResult: {
+        contents: [
+          {
+            uri: "stella://reference/template-markers",
+            mimeType: "text/markdown",
+            text: "# Marker grammar",
+          },
+        ],
+      },
+    }));
+    const result = await runCli({
+      args: ["reference", "show", "template-markers"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.method).toBe("resources/read");
+    expect(server.requests.at(0)?.params).toMatchObject({
+      uri: "stella://reference/template-markers",
+    });
+    expect(result.stdout.trim()).toBe("# Marker grammar");
+  });
+
+  test("an unknown resource (server rejection) maps to exit 6", async () => {
+    const server = startMockServer(() => ({
+      rpc: { code: -32_602, message: "Unknown resource: stella://x" },
+    }));
+    const result = await runCli({
+      args: ["reference", "show", "template-markers"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(6);
+    expect(result.stderr).toContain("Unknown resource");
   });
 });

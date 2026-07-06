@@ -11,6 +11,7 @@
 // `bun run codegen` from `packages/cli` (which runs this first, then the pure
 // generator). The snapshot is committed, so registry drift shows up as a diff.
 
+import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 // The four wire fields exposed by `tools/list` (scope/feature/access/anonymized
@@ -43,6 +44,47 @@ await Bun.write(snapshotPath, `${JSON.stringify(listings, null, 2)}\n`);
 
 process.stderr.write(
   `Wrote ${listings.length} tool listings to ${snapshotPath.pathname}\n`,
+);
+
+// The resource surface (spec 051 S5.4) is generated the same way: project
+// `resources/list` to its wire fields so the CLI's `reference` tree never drifts
+// from the server's static resources. The set is mode-independent; export the
+// default-mode projection.
+type ResourceListing = {
+  uri: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+};
+
+const resourceListings: ResourceListing[] = [];
+for (const resource of listMcpResources("default")) {
+  const listing: ResourceListing = { uri: resource.uri, name: resource.name };
+  if (resource.title !== undefined) {
+    listing.title = resource.title;
+  }
+  if (resource.description !== undefined) {
+    listing.description = resource.description;
+  }
+  if (resource.mimeType !== undefined) {
+    listing.mimeType = resource.mimeType;
+  }
+  resourceListings.push(listing);
+}
+
+const resourceSnapshotPath = new URL(
+  "../../../packages/cli/src/generated/resources-snapshot.json",
+  import.meta.url,
+);
+
+await Bun.write(
+  resourceSnapshotPath,
+  `${JSON.stringify(resourceListings, null, 2)}\n`,
+);
+
+process.stderr.write(
+  `Wrote ${resourceListings.length} resource listings to ${resourceSnapshotPath.pathname}\n`,
 );
 
 // The registry transitively pulls in `@/api/lib/sse.ts`, which opens a
