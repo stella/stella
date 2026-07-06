@@ -1593,6 +1593,7 @@ type Messages = {
       "issuePlaceholder": "e.g. Limitation of liability";
       "loadFailed": "Failed to load playbooks";
       "loading": "Loading playbooks…";
+      "manageTypes": "Manage types…";
       "namePlaceholder": "e.g. NDA review";
       "nameRequired": "Add a name.";
       "noPositions": "No positions yet. Add the first one.";
@@ -1645,11 +1646,6 @@ type Messages = {
         "fallback": "Fallback";
         "notAcceptable": "Not acceptable";
       };
-      "trigger": {
-        "manual": "Manually";
-        "onClassified": "Automatically when the document type matches";
-      };
-      "triggerLabel": "Runs";
       "untitledPosition": "Untitled position";
       "updated": "Playbook updated";
       "verdict": {
@@ -2082,6 +2078,14 @@ type Messages = {
         "labelPickerPlaceholder": "Label";
         "termAddedToast": "Added \"{value}\" to the team-wide deny list.";
         "title": "Anonymization";
+      };
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)";
+        "deleteFailed": "Couldn't delete document type";
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.";
+        "labelAria": "Document type name";
+        "reorder": "Reorder document type";
+        "title": "Document types";
       };
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";

@@ -1590,6 +1590,7 @@
       "issuePlaceholder": "p. ej. Limitación de responsabilidad",
       "loadFailed": "No se pudieron cargar los playbooks",
       "loading": "Cargando playbooks…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "p. ej. Revisión de NDA",
       "nameRequired": "Añade un nombre.",
       "noPositions": "Aún no hay posiciones. Añade la primera.",
@@ -1642,11 +1643,6 @@
         "fallback": "Alternativa",
         "notAcceptable": "Inaceptable"
       },
-      "trigger": {
-        "manual": "Manualmente",
-        "onClassified": "Automáticamente al detectar el tipo de documento"
-      },
-      "triggerLabel": "Ejecución",
       "untitledPosition": "Posición sin título",
       "updated": "Playbook actualizado",
       "verdict": {
@@ -2079,6 +2075,14 @@
         "labelPickerPlaceholder": "Tipo",
         "termAddedToast": "«{value}» se añadió a la lista del equipo.",
         "title": "Anonimización"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Numeración de asuntos",
       "matterNumberingDescription": "Configura cómo se generan los números de referencia de los asuntos nuevos",

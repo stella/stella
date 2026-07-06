@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   ChevronDownIcon,
@@ -226,11 +227,6 @@ const PlaybookEditorForm = ({
   const [documentTypeKey, setDocumentTypeKey] = useState<string | null>(
     initialDocumentTypeKey,
   );
-  // How runs start: manual only, or auto-routed when the Document Type
-  // classifier resolves a matching document (slice D routing).
-  const [trigger, setTrigger] = useState<PlaybookTrigger>(
-    initialTrigger ?? "manual",
-  );
   const { data: documentTypesData } = useQuery(
     documentTypesOptions(organizationId),
   );
@@ -397,10 +393,14 @@ const PlaybookEditorForm = ({
     const items = positions.map(normalizePosition);
     const positionsPayload: PlaybookPositionsValue = { version: 2, items };
     const trimmedDescription = description.trim();
-    // Rebuild the scope from the document-type and trigger pickers, preserving
-    // any existing perspective. Omitted entirely in the all-defaults case so
-    // the handler clears it; whenever a scope is sent, `trigger` rides along
-    // explicitly (absent optional fields must not be left to server defaults).
+    // Rebuild the scope from the document-type picker, preserving any existing
+    // perspective and trigger. "When to run" is no longer a playbook setting
+    // (it belongs to a future Workflows layer), so the editor never mutates the
+    // trigger; it just carries the stored value through the routing seam.
+    // Omitted entirely in the all-defaults case so the handler clears it;
+    // whenever a scope is sent, `trigger` rides along explicitly (absent
+    // optional fields must not be left to server defaults).
+    const trigger = initialTrigger ?? "manual";
     const scope =
       documentTypeKey === null &&
       initialPerspective === null &&
@@ -606,32 +606,14 @@ const PlaybookEditorForm = ({
                   ))}
                 </SelectPopup>
               </Select>
+              <Link
+                className="text-muted-foreground hover:text-foreground text-xs"
+                to="/settings/organization/document-types"
+              >
+                {t("knowledge.playbooks.manageTypes")}
+              </Link>
             </div>
           )}
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="playbook-trigger">
-              {t("knowledge.playbooks.triggerLabel")}
-            </Label>
-            <Select
-              onValueChange={(next) =>
-                setTrigger(next === "onClassified" ? "onClassified" : "manual")
-              }
-              value={trigger}
-            >
-              <SelectTrigger id="playbook-trigger">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectPopup>
-                <SelectItem value="manual">
-                  {t("knowledge.playbooks.trigger.manual")}
-                </SelectItem>
-                <SelectItem value="onClassified">
-                  {t("knowledge.playbooks.trigger.onClassified")}
-                </SelectItem>
-              </SelectPopup>
-            </Select>
-          </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">

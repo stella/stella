@@ -29,6 +29,7 @@ export const AUDIT_RESOURCE_TYPE = {
   CLAUSE_TEMPLATE_LINK: "clause_template_link",
   CLAUSE_VARIANT: "clause_variant",
   CONTACT: "contact",
+  DOCUMENT_TYPE: "document_type",
   USAGE_ALLOCATION: "usage_allocation",
   USAGE_ENTITLEMENT: "usage_entitlement",
   USAGE_EVENT: "usage_event",

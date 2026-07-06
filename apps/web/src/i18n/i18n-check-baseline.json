@@ -112,7 +112,6 @@
     "knowledge.playbooks.severity.high",
     "knowledge.playbooks.severity.low",
     "knowledge.playbooks.severity.medium",
-    "knowledge.playbooks.trigger.manual",
     "knowledge.sections.prompts.title",
     "knowledge.sections.templates.title",
     "knowledge.sections.tools.title",
@@ -206,7 +205,6 @@
     "workspaces.properties.chipText",
     "workspaces.properties.text",
     "workspaces.team",
-    "workspaces.tools.manualInput",
     "workspaces.views.advancedFilter",
     "workspaces.views.fieldsSelected",
     "workspaces.views.layouts.calendar"
@@ -839,6 +837,20 @@
       "es",
       "pt-BR"
     ],
+    "knowledge.playbooks.manageTypes": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "knowledge.playbooks.optionsLabel": [
       "fr"
     ],
@@ -1185,6 +1197,90 @@
     ],
     "settings.account.desktop": [
       "de"
+    ],
+    "settings.organization.documentTypes.addPlaceholder": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "settings.organization.documentTypes.deleteFailed": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "settings.organization.documentTypes.description": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "settings.organization.documentTypes.labelAria": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "settings.organization.documentTypes.reorder": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "settings.organization.documentTypes.title": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "tasks.priorityValues.urgent": [
       "fr"

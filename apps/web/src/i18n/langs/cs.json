@@ -1590,6 +1590,7 @@
       "issuePlaceholder": "např. Omezení odpovědnosti",
       "loadFailed": "Playbooky se nepodařilo načíst",
       "loading": "Načítám playbooky…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "např. revize NDA",
       "nameRequired": "Zadejte název.",
       "noPositions": "Zatím žádné pozice. Přidejte první.",
@@ -1642,11 +1643,6 @@
         "fallback": "Náhradní",
         "notAcceptable": "Nepřijatelné"
       },
-      "trigger": {
-        "manual": "Ručně",
-        "onClassified": "Automaticky při rozpoznání typu dokumentu"
-      },
-      "triggerLabel": "Spouštění",
       "untitledPosition": "Pozice bez názvu",
       "updated": "Playbook aktualizován",
       "verdict": {
@@ -2079,6 +2075,14 @@
         "labelPickerPlaceholder": "Typ",
         "termAddedToast": "Pojem „{value}“ byl přidán do týmového seznamu.",
         "title": "Anonymizace"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",

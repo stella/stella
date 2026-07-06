@@ -1590,6 +1590,7 @@
       "issuePlaceholder": "nt Vastutuse piiramine",
       "loadFailed": "Playbookide laadimine ebaõnnestus",
       "loading": "Playbookide laadimine…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "nt NDA ülevaatus",
       "nameRequired": "Lisage nimi.",
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
@@ -1642,11 +1643,6 @@
         "fallback": "Alternatiiv",
         "notAcceptable": "Vastuvõetamatu"
       },
-      "trigger": {
-        "manual": "Käsitsi",
-        "onClassified": "Automaatselt dokumenditüübi tuvastamisel"
-      },
-      "triggerLabel": "Käivitamine",
       "untitledPosition": "Pealkirjata seisukoht",
       "updated": "Playbook uuendatud",
       "verdict": {
@@ -2079,6 +2075,14 @@
         "labelPickerPlaceholder": "Tüüp",
         "termAddedToast": "„{value}“ lisati meeskonna keelduloendisse.",
         "title": "Anonüümistamine"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",

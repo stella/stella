@@ -7,6 +7,7 @@ import {
   MonitorIcon,
   ShieldIcon,
   SparklesIcon,
+  TagsIcon,
   UserIcon,
   UsersIcon,
 } from "lucide-react";
@@ -34,6 +35,7 @@ type NavTo =
   | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
+  | "/settings/organization/document-types"
   | "/settings/organization/ai"
   | "/settings/organization/anonymization"
   | "/settings/organization/usage";
@@ -88,6 +90,11 @@ const ORGANIZATION_SECTION = {
       to: "/settings/organization/matter-numbering",
       labelKey: "settings.organization.matterNumbering",
       icon: HashIcon,
+    },
+    {
+      to: "/settings/organization/document-types",
+      labelKey: "settings.organization.documentTypes.title",
+      icon: TagsIcon,
     },
     {
       to: "/settings/organization/ai",

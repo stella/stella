@@ -1590,6 +1590,7 @@
       "issuePlaceholder": "z.B. Haftungsbeschränkung",
       "loadFailed": "Playbooks konnten nicht geladen werden",
       "loading": "Playbooks werden geladen…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "z.B. NDA-Prüfung",
       "nameRequired": "Fügen Sie einen Namen hinzu.",
       "noPositions": "Noch keine Standpunkte. Fügen Sie den ersten hinzu.",
@@ -1642,11 +1643,6 @@
         "fallback": "Alternative",
         "notAcceptable": "Nicht akzeptabel"
       },
-      "trigger": {
-        "manual": "Manuell",
-        "onClassified": "Automatisch bei erkanntem Dokumenttyp"
-      },
-      "triggerLabel": "Ausführung",
       "untitledPosition": "Standpunkt ohne Titel",
       "updated": "Playbook aktualisiert",
       "verdict": {
@@ -2079,6 +2075,14 @@
         "labelPickerPlaceholder": "Typ",
         "termAddedToast": "„{value}“ wurde zur teamweiten Sperrliste hinzugefügt.",
         "title": "Anonymisierung"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",

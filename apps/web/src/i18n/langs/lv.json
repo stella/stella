@@ -1590,6 +1590,7 @@
       "issuePlaceholder": "piem., Atbildības ierobežojums",
       "loadFailed": "Neizdevās ielādēt pārbaudes ceļvežus",
       "loading": "Ielādē pārbaudes ceļvežus…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "piem., NDA pārbaude",
       "nameRequired": "Pievienojiet nosaukumu.",
       "noPositions": "Vēl nav pozīciju. Pievienojiet pirmo.",
@@ -1642,11 +1643,6 @@
         "fallback": "Alternatīva",
         "notAcceptable": "Nav pieņemams"
       },
-      "trigger": {
-        "manual": "Manuāli",
-        "onClassified": "Automātiski, kad noteikts dokumenta veids"
-      },
-      "triggerLabel": "Palaišana",
       "untitledPosition": "Nenosaukta pozīcija",
       "updated": "Pārbaudes ceļvedis atjaunināts",
       "verdict": {
@@ -2079,6 +2075,14 @@
         "labelPickerPlaceholder": "Veids",
         "termAddedToast": "„{value}” pievienots komandas sarakstam.",
         "title": "Anonimizācija"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
