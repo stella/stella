@@ -1,0 +1,9 @@
+[
+  {
+    "uri": "stella://reference/template-markers",
+    "name": "template-markers",
+    "title": "Template marker grammar",
+    "description": "stella's {{...}} template marker grammar: fillable values, conditional and repeating blocks, clause slots, and numbering inside a DOCX. Read this before authoring a DOCX for save_template.",
+    "mimeType": "text/markdown"
+  }
+]

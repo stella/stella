@@ -25,6 +25,7 @@
   "sideEffects": false,
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "codegen": "cd ../../apps/api && bun scripts/export-mcp-tool-registry.ts && cd ../../packages/cli && bun run src/codegen.ts && oxfmt .",
     "build": "rm -rf dist && tsgo -p tsconfig.build.json",
     "test": "bun test src",
     "typecheck": "tsgo --noEmit",

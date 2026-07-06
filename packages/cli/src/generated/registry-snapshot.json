@@ -1,0 +1,1785 @@
+[
+  {
+    "name": "search",
+    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns results with id, title, and url for follow-up fetch calls.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search call to fetch the next page",
+          "maxLength": 512
+        }
+      },
+      "required": ["query"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "fetch",
+    "description": "Fetch a knowledge document by id using the OpenAI-compatible fetch tool shape. Use ids returned by the search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document/entity ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous fetch call to read the next window of text",
+          "maxLength": 512
+        }
+      },
+      "required": ["id"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "list_matters",
+    "description": "List the matters you can access, or get one matter's overview. Omit matter_id to list accessible matters (filter with status, page with cursor); list first when the user does not name a matter or you need matter IDs for follow-up tools. Pass matter_id to return that matter's overview instead: counts, recent entities, linked contacts, and members.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to return a single matter's overview; omit to list matters"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "all"],
+          "description": "Filter by matter status (list mode)"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max matters to return (list mode)",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_matters call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "search_across_matters",
+    "description": "Search across all accessible matters. Use this when the user explicitly asks to search outside a single matter or you do not yet know the right matter.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max results to return",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_across_matters call to fetch the next page",
+          "maxLength": 512
+        }
+      },
+      "required": ["query"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "search_case_law",
+    "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max results to return",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_case_law call",
+          "maxLength": 128
+        },
+        "court": {
+          "type": "string",
+          "description": "Filter by court name",
+          "maxLength": 512
+        },
+        "country": {
+          "type": "string",
+          "description": "Filter by country code",
+          "maxLength": 3
+        },
+        "language": {
+          "type": "string",
+          "description": "Filter by language code",
+          "maxLength": 8
+        },
+        "decision_type": {
+          "type": "string",
+          "description": "Filter by decision type",
+          "maxLength": 128
+        },
+        "source_id": {
+          "type": "string",
+          "description": "Filter by source ID",
+          "maxLength": 36
+        },
+        "date_from": {
+          "type": "string",
+          "description": "Filter decisions from this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        }
+      },
+      "required": ["query"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "read_content_across_matters",
+    "description": "Read extracted text from a document found anywhere in your accessible matters. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Entity ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous call to read the next window of text",
+          "maxLength": 512
+        }
+      },
+      "required": ["entity_id"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "read_case_law_decision",
+    "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, and source URLs. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "description": "Case-law decision ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous call to read the next window of decision text and citations",
+          "maxLength": 512
+        }
+      },
+      "required": ["decision_id"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "read_contact",
+    "description": "Read a contact by ID. Use this after matter overview or entity metadata surfaces a contact the user wants to inspect more closely.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID"
+        }
+      },
+      "required": ["contact_id"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "set_practice_jurisdictions",
+    "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {countryCode, isPrimary}; exactly one entry should be primary.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "jurisdictions": {
+          "type": "array",
+          "description": "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "properties": {
+              "countryCode": {
+                "type": "string",
+                "description": "ISO 3166-1 alpha-2 country code",
+                "enum": [
+                  "AD",
+                  "AE",
+                  "AF",
+                  "AG",
+                  "AI",
+                  "AL",
+                  "AM",
+                  "AO",
+                  "AQ",
+                  "AR",
+                  "AS",
+                  "AT",
+                  "AU",
+                  "AW",
+                  "AX",
+                  "AZ",
+                  "BA",
+                  "BB",
+                  "BD",
+                  "BE",
+                  "BF",
+                  "BG",
+                  "BH",
+                  "BI",
+                  "BJ",
+                  "BL",
+                  "BM",
+                  "BN",
+                  "BO",
+                  "BQ",
+                  "BR",
+                  "BS",
+                  "BT",
+                  "BV",
+                  "BW",
+                  "BY",
+                  "BZ",
+                  "CA",
+                  "CC",
+                  "CD",
+                  "CF",
+                  "CG",
+                  "CH",
+                  "CI",
+                  "CK",
+                  "CL",
+                  "CM",
+                  "CN",
+                  "CO",
+                  "CR",
+                  "CU",
+                  "CV",
+                  "CW",
+                  "CX",
+                  "CY",
+                  "CZ",
+                  "DE",
+                  "DJ",
+                  "DK",
+                  "DM",
+                  "DO",
+                  "DZ",
+                  "EC",
+                  "EE",
+                  "EG",
+                  "EH",
+                  "ER",
+                  "ES",
+                  "ET",
+                  "FI",
+                  "FJ",
+                  "FK",
+                  "FM",
+                  "FO",
+                  "FR",
+                  "GA",
+                  "GB",
+                  "GD",
+                  "GE",
+                  "GF",
+                  "GG",
+                  "GH",
+                  "GI",
+                  "GL",
+                  "GM",
+                  "GN",
+                  "GP",
+                  "GQ",
+                  "GR",
+                  "GS",
+                  "GT",
+                  "GU",
+                  "GW",
+                  "GY",
+                  "HK",
+                  "HM",
+                  "HN",
+                  "HR",
+                  "HT",
+                  "HU",
+                  "ID",
+                  "IE",
+                  "IL",
+                  "IM",
+                  "IN",
+                  "IO",
+                  "IQ",
+                  "IR",
+                  "IS",
+                  "IT",
+                  "JE",
+                  "JM",
+                  "JO",
+                  "JP",
+                  "KE",
+                  "KG",
+                  "KH",
+                  "KI",
+                  "KM",
+                  "KN",
+                  "KP",
+                  "KR",
+                  "KW",
+                  "KY",
+                  "KZ",
+                  "LA",
+                  "LB",
+                  "LC",
+                  "LI",
+                  "LK",
+                  "LR",
+                  "LS",
+                  "LT",
+                  "LU",
+                  "LV",
+                  "LY",
+                  "MA",
+                  "MC",
+                  "MD",
+                  "ME",
+                  "MF",
+                  "MG",
+                  "MH",
+                  "MK",
+                  "ML",
+                  "MM",
+                  "MN",
+                  "MO",
+                  "MP",
+                  "MQ",
+                  "MR",
+                  "MS",
+                  "MT",
+                  "MU",
+                  "MV",
+                  "MW",
+                  "MX",
+                  "MY",
+                  "MZ",
+                  "NA",
+                  "NC",
+                  "NE",
+                  "NF",
+                  "NG",
+                  "NI",
+                  "NL",
+                  "NO",
+                  "NP",
+                  "NR",
+                  "NU",
+                  "NZ",
+                  "OM",
+                  "PA",
+                  "PE",
+                  "PF",
+                  "PG",
+                  "PH",
+                  "PK",
+                  "PL",
+                  "PM",
+                  "PN",
+                  "PR",
+                  "PS",
+                  "PT",
+                  "PW",
+                  "PY",
+                  "QA",
+                  "RE",
+                  "RO",
+                  "RS",
+                  "RU",
+                  "RW",
+                  "SA",
+                  "SB",
+                  "SC",
+                  "SD",
+                  "SE",
+                  "SG",
+                  "SH",
+                  "SI",
+                  "SJ",
+                  "SK",
+                  "SL",
+                  "SM",
+                  "SN",
+                  "SO",
+                  "SR",
+                  "SS",
+                  "ST",
+                  "SV",
+                  "SX",
+                  "SY",
+                  "SZ",
+                  "TC",
+                  "TD",
+                  "TF",
+                  "TG",
+                  "TH",
+                  "TJ",
+                  "TK",
+                  "TL",
+                  "TM",
+                  "TN",
+                  "TO",
+                  "TR",
+                  "TT",
+                  "TV",
+                  "TW",
+                  "TZ",
+                  "UA",
+                  "UG",
+                  "UM",
+                  "US",
+                  "UY",
+                  "UZ",
+                  "VA",
+                  "VC",
+                  "VE",
+                  "VG",
+                  "VI",
+                  "VN",
+                  "VU",
+                  "WF",
+                  "WS",
+                  "XK",
+                  "YE",
+                  "YT",
+                  "ZA",
+                  "ZM",
+                  "ZW"
+                ]
+              },
+              "isPrimary": {
+                "type": "boolean",
+                "description": "Whether this is the organization's primary jurisdiction"
+              }
+            },
+            "required": ["countryCode", "isPrimary"]
+          }
+        }
+      },
+      "required": ["jurisdictions"]
+    }
+  },
+  {
+    "name": "list_templates",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases), or describe one template's fillable fields. Omit template_id to list templates: each template's id, name, field count, tags, and usage guidance (whenToUse / whenNotToUse); prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies. Pass template_id to return that template's full field configuration (path, label, inputType, required, hint, options, optionsFrom, aiPrompt / aiAdapt, date format, composite parts, registry-lookup formats) plus its named conditions and formula fields; feed the same shape to save_template to update it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "description": "Template id to describe its fields in detail; omit to list templates"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_templates call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "fill_template",
+    "description": "Fill a template with values and return the assembled document text plus the filled DOCX as base64. Call list_templates with a template_id first to learn the field paths. 'values' maps each field path to its value, e.g. {\"tenant.name\": \"ACME Sp. z o.o.\", \"signing_date\": \"2026-06-08\"}. Registry lookups, composite fields, formula fields, and AI-fillable fields are resolved automatically; AI-fillable fields are drafted when you omit them. Returns the rendered text and any placeholders left unfilled.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "description": "Template id, as returned by list_templates"
+        },
+        "values": {
+          "type": "object",
+          "description": "Map of field path to value.",
+          "additionalProperties": true
+        }
+      },
+      "required": ["template_id", "values"]
+    }
+  },
+  {
+    "name": "save_template",
+    "description": "Create a document template from a DOCX, or configure an existing template's fields. To create, pass docx_base64 (base64-encoded .docx / Office Open XML bytes, max ~10 MB decoded) and a name; the {{field}} markers in the file become the template's fillable fields, and you can pass fields to configure them in the same call. To configure an existing template, pass template_id with fields and no docx_base64; only the manifest changes, the document's {{markers}} stay untouched. Each fields entry's path must match a {{marker}} in the template. Read the marker grammar from the template-markers reference resource when unsure. Returns the template id and field count when creating, or the updated field list when configuring.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "description": "Existing template id to configure its fields; omit (with docx_base64) to create a new template"
+        },
+        "name": {
+          "type": "string",
+          "description": "Template display name; required when creating",
+          "maxLength": 256
+        },
+        "docx_base64": {
+          "type": "string",
+          "description": "Base64-encoded DOCX file bytes (Office Open XML, max ~10 MB decoded); required when creating, omit when configuring"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Field configuration overlay, one entry per field to configure. Each entry's 'path' must match a {{marker}} in the template. Configurable: label, hint, inputType, required, options, optionsFrom (dependent select), date format, composite parts + format, and who-fills the field — a person (default), AI (aiPrompt), Person+AI (aiAdapt), a formula, or a company-register lookup (registry + named output formats). formula is mutually exclusive with aiPrompt/aiAdapt/lookup/parts.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Field path — must match a {{marker}} in the template"
+              },
+              "label": {
+                "type": "string",
+                "description": "Human-readable field label"
+              },
+              "hint": {
+                "type": "string",
+                "description": "Short fill guidance shown to the person filling the field"
+              },
+              "inputType": {
+                "type": "string",
+                "enum": ["text", "number", "boolean", "date", "select"],
+                "description": "Input control type"
+              },
+              "required": {
+                "type": "boolean",
+                "description": "Whether a value is required"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Allowed values when inputType is 'select'"
+              },
+              "optionsFrom": {
+                "type": "string",
+                "description": "Dependent select: path of another field whose value(s) supply the options"
+              },
+              "aiPrompt": {
+                "type": "string",
+                "description": "Who-fills = AI: instruction the model uses to draft the value at fill time"
+              },
+              "aiAdapt": {
+                "type": "boolean",
+                "description": "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence"
+              },
+              "formula": {
+                "type": "string",
+                "description": "Who-fills = formula: arithmetic expression over other fields, derived at fill time"
+              },
+              "condition": {
+                "type": "string",
+                "description": "Boolean field derived by rule: a condition expression (e.g. client_type == \"company\"), evaluated at fill time. A {{#if field_path}} marker references it by path. Mutually exclusive with formula/aiPrompt/aiAdapt/lookup/parts."
+              },
+              "parts": {
+                "type": "array",
+                "description": "Composite field parts (joined by 'format')",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "format": {
+                "type": "string",
+                "description": "Join template over composite part keys, e.g. '{{title}} {{name}}'"
+              },
+              "dateFormat": {
+                "type": "object",
+                "description": "Locale-aware date rendering for a date field",
+                "properties": {
+                  "locale": {
+                    "type": "string",
+                    "description": "BCP-47 language tag, e.g. 'cs', 'de', 'pl'"
+                  },
+                  "style": {
+                    "type": "string",
+                    "enum": ["long", "medium", "short", "iso"],
+                    "description": "Date style"
+                  }
+                },
+                "required": ["locale", "style"]
+              },
+              "lookup": {
+                "type": "object",
+                "description": "Who-fills = company-register lookup",
+                "properties": {
+                  "registry": {
+                    "type": "string",
+                    "description": "Registry slug, e.g. 'krs'"
+                  },
+                  "formats": {
+                    "type": "array",
+                    "description": "Named output renderings; the first is the default for the bare {{marker}}",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "description": "Marker segment after the path: {{path.key}}"
+                        },
+                        "template": {
+                          "type": "string",
+                          "description": "[token]-substituted rendering of the registry hit"
+                        }
+                      },
+                      "required": ["key", "template"]
+                    }
+                  }
+                },
+                "required": ["registry", "formats"]
+              }
+            },
+            "required": ["path"],
+            "additionalProperties": false
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "list_documents",
+    "description": "List the documents and folders in a matter. Use 'flat' mode to enumerate every document and folder in the matter, or 'children' mode to walk the folder tree one level at a time (pass parent_id to list a folder's direct children, or omit it for the matter root). Returns each entity's id, name, kind (document or folder), and parentId. Read a document's metadata, fields, or versions with read_document.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list documents in"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["flat", "children"],
+          "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
+        },
+        "parent_id": {
+          "type": "string",
+          "description": "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max entities to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_documents call to fetch the next page",
+          "maxLength": 512
+        }
+      },
+      "required": ["matter_id"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "read_document",
+    "description": "Read a document's metadata and field values by entity ID. By default returns the current version's name, kind, and field/property values. Pass version_id to inspect a specific version instead. Pass version_id and compare_with_version_id to get a plain-text line diff between two versions. Pass include_versions to also return the version history. To read the document's extracted text content, use read_content_across_matters.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Document entity ID"
+        },
+        "version_id": {
+          "type": "string",
+          "description": "Return this version's metadata and field values instead of the current version"
+        },
+        "compare_with_version_id": {
+          "type": "string",
+          "description": "With version_id, return a plain-text line diff of this version (base) against version_id (target)"
+        },
+        "include_versions": {
+          "type": "boolean",
+          "description": "Also return the document's version history"
+        },
+        "versions_cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous call to fetch the next page of version history",
+          "maxLength": 512
+        }
+      },
+      "required": ["entity_id"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "save_document",
+    "description": "Create a document or folder, or update an existing one. Omit entity_id to create: pass matter_id and name, optionally a parent_id folder and kind ('document' by default, or 'folder'). Creating makes an empty named entity; uploading file content is a separate step. Pass entity_id to update: set name to rename; parent_id to move it into a folder or move_to_root to move it to the matter root; version_id with label and/or description to annotate a version. An update needs at least one change. Returns the entity ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Document entity ID to update; omit to create"
+        },
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to create the entity in; required when creating"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name: required when creating, or the new name when renaming",
+          "maxLength": 255
+        },
+        "parent_id": {
+          "type": "string",
+          "description": "Folder entity ID: to place the new entity inside when creating, or to move the document into when updating"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["document", "folder"],
+          "description": "Entity kind to create; defaults to 'document'. Only valid when creating."
+        },
+        "move_to_root": {
+          "type": "boolean",
+          "description": "Move the document to the matter root (no parent folder). Only valid when updating."
+        },
+        "version_id": {
+          "type": "string",
+          "description": "Version ID to annotate; required when setting label or description. Only valid when updating."
+        },
+        "label": {
+          "type": ["string", "null"],
+          "description": "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+          "maxLength": 128
+        },
+        "description": {
+          "type": ["string", "null"],
+          "description": "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
+          "maxLength": 1024
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_document",
+    "description": "Delete a document and all its versions, or delete a single version when version_id is provided (the current version is promoted to the next latest; the only remaining version cannot be deleted). This is irreversible.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Document entity ID to delete"
+        },
+        "version_id": {
+          "type": "string",
+          "description": "Delete only this version instead of the whole document"
+        }
+      },
+      "required": ["entity_id"]
+    },
+    "annotations": {
+      "destructiveHint": true
+    }
+  },
+  {
+    "name": "list_properties",
+    "description": "List the property (column) definitions of a matter. Returns each property's id, name, value type (text, single-select, multi-select, date, or int), and status. Use the returned property id with set_field_value to set a document's value for that property.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list properties for"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max properties to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_properties call to fetch the next page",
+          "maxLength": 512
+        }
+      },
+      "required": ["matter_id"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "set_field_value",
+    "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Document entity ID whose cell to set"
+        },
+        "property_id": {
+          "type": "string",
+          "description": "Property ID, as returned by list_properties"
+        },
+        "content": {
+          "type": "object",
+          "description": "The value to set; 'type' must match the property.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["text", "single-select", "multi-select", "date", "int"],
+              "description": "Value type; must match the property's value type"
+            },
+            "value": {
+              "description": "The value: string for text, string or null for single-select, array of strings for multi-select, ISO YYYY-MM-DD or null for date, integer for int. Null or empty clears the cell."
+            },
+            "currency": {
+              "type": "string",
+              "description": "For int values only: 3-letter ISO currency code, or null",
+              "maxLength": 3
+            }
+          },
+          "required": ["type", "value"]
+        }
+      },
+      "required": ["entity_id", "property_id", "content"]
+    }
+  },
+  {
+    "name": "save_matter",
+    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to update; omit to create a new matter"
+        },
+        "name": {
+          "type": "string",
+          "description": "Matter name; required when creating",
+          "maxLength": 256
+        },
+        "client_id": {
+          "type": "string",
+          "description": "Contact ID to attach in the client role. Only valid when creating a matter."
+        },
+        "reference": {
+          "type": "string",
+          "description": "Matter reference (file number). Only valid when updating.",
+          "maxLength": 64
+        },
+        "billing_reference": {
+          "type": ["string", "null"],
+          "description": "Billing reference; pass null to clear. Only valid when updating.",
+          "maxLength": 128
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived"],
+          "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_matter",
+    "description": "Permanently delete a matter and all its documents, tasks, fields, and chat history. This is irreversible.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to delete"
+        }
+      },
+      "required": ["matter_id"]
+    },
+    "annotations": {
+      "destructiveHint": true
+    }
+  },
+  {
+    "name": "save_contact",
+    "description": "Create or update a contact (a person or organization in the address book, shared across the whole organization). Omit contact_id to create (type and display_name required); pass contact_id to update. String fields other than display_name accept null to clear them.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID to update; omit to create"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["person", "organization"],
+          "description": "Contact kind; required when creating"
+        },
+        "display_name": {
+          "type": "string",
+          "description": "Display name; required when creating, non-empty when updating",
+          "maxLength": 512
+        },
+        "first_name": {
+          "type": ["string", "null"],
+          "description": "First name; pass null to clear",
+          "maxLength": 256
+        },
+        "last_name": {
+          "type": ["string", "null"],
+          "description": "Last name; pass null to clear",
+          "maxLength": 256
+        },
+        "organization_name": {
+          "type": ["string", "null"],
+          "description": "Organization name; pass null to clear",
+          "maxLength": 512
+        },
+        "notes": {
+          "type": ["string", "null"],
+          "description": "Free-text notes; pass null to clear"
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_contact",
+    "description": "Permanently delete a contact from the organization address book. Rejected while the contact is still the client of any matter. This is irreversible.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID to delete"
+        }
+      },
+      "required": ["contact_id"]
+    },
+    "annotations": {
+      "destructiveHint": true
+    }
+  },
+  {
+    "name": "lookup_business_registry",
+    "description": "Look up a company in a public business register (ARES, Brreg, Companies House, EDGAR, GCIS, KRS, ORSR, PRH, recherche-entreprises, or VIES). Pass a canonical identifier (company/registration number, VAT number) for an exact match, or a company name to search where the register supports it. Returns registered names, addresses, and registry-specific details.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "registry": {
+          "type": "string",
+          "enum": [
+            "ares",
+            "brreg",
+            "companies-house",
+            "edgar",
+            "gcis",
+            "krs",
+            "orsr",
+            "prh",
+            "recherche-entreprises",
+            "vies"
+          ],
+          "description": "Business register to query"
+        },
+        "query": {
+          "type": "string",
+          "description": "Canonical identifier (e.g. company number, VAT number) or company name",
+          "maxLength": 256
+        }
+      },
+      "required": ["registry", "query"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "list_tasks",
+    "description": "List tasks in a matter, or read one task in detail. Pass task_id to get a single task's fields, assignees, and linked entities. Otherwise pass matter_id to list the matter's tasks, optionally filtered by a due-date range (date_from/date_to, ISO YYYY-MM-DD) and status. Returns each task's id, name, status, priority, and due date.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list tasks in; required unless task_id is given"
+        },
+        "task_id": {
+          "type": "string",
+          "description": "Task entity ID to read in detail"
+        },
+        "date_from": {
+          "type": "string",
+          "description": "List only tasks due on or after this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "List only tasks due on or before this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "status": {
+          "type": "string",
+          "description": "List only tasks with this status",
+          "maxLength": 32
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max tasks to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_tasks call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "save_task",
+    "description": "Create or update a task, and manage its assignees and entity links. Omit task_id to create a task (matter_id and name required). Pass task_id to update: set name, status, priority, or due_date (ISO YYYY-MM-DD, null to clear); add or remove one assignee (add_assignee_user_id / remove_assignee_user_id); link the task to another entity (link_entity_id) or remove a link (unlink_link_id). Returns the task ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "description": "Task entity ID to update; omit to create"
+        },
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to create the task in; required when creating"
+        },
+        "name": {
+          "type": "string",
+          "description": "Task name; required when creating",
+          "maxLength": 255
+        },
+        "status": {
+          "type": "string",
+          "description": "Task status (e.g. open, in_progress, done)",
+          "maxLength": 32
+        },
+        "priority": {
+          "type": "string",
+          "description": "Task priority (e.g. none, low, medium, high)",
+          "maxLength": 16
+        },
+        "due_date": {
+          "type": ["string", "null"],
+          "description": "Due date (ISO YYYY-MM-DD); pass null to clear",
+          "maxLength": 10
+        },
+        "add_assignee_user_id": {
+          "type": "string",
+          "description": "User ID to assign to the task (must be a workspace member)"
+        },
+        "remove_assignee_user_id": {
+          "type": "string",
+          "description": "User ID to unassign from the task"
+        },
+        "link_entity_id": {
+          "type": "string",
+          "description": "Entity ID to link to the task (document, folder, or another task)"
+        },
+        "unlink_link_id": {
+          "type": "string",
+          "description": "Entity-link ID to remove"
+        }
+      }
+    }
+  },
+  {
+    "name": "link_matter_contact",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass workspace_contact_id (precise, from list_matters) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID"
+        },
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID: with role to link the contact, or alone to unlink it from the matter"
+        },
+        "role": {
+          "type": "string",
+          "enum": [
+            "opposing_party",
+            "opposing_counsel",
+            "co_counsel",
+            "witness",
+            "expert_witness",
+            "third_party",
+            "judge",
+            "mediator",
+            "other"
+          ],
+          "description": "Party role for the linked contact; provide it only when linking"
+        },
+        "workspace_contact_id": {
+          "type": "string",
+          "description": "Existing matter-contact link ID to remove, from list_matters"
+        }
+      },
+      "required": ["matter_id"]
+    }
+  },
+  {
+    "name": "list_clauses",
+    "description": "List the clause library for this organization, or read one clause in detail. Pass clause_id to get a clause's body, description, usage notes, variants, and version history; add version_id to read one version's body. Otherwise list clauses (newest first), optionally filtered by category_id or a text query, and set include_categories to also return the category tree. Returns each clause's id, title, category, language, and current version.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "clause_id": {
+          "type": "string",
+          "description": "Clause id to read in detail; omit to list"
+        },
+        "version_id": {
+          "type": "string",
+          "description": "With clause_id, return this version's body instead of the current clause"
+        },
+        "category_id": {
+          "type": "string",
+          "description": "List only clauses filed under this category (list mode)"
+        },
+        "query": {
+          "type": "string",
+          "description": "Filter clauses by a text query over title and body (list mode)"
+        },
+        "include_categories": {
+          "type": "boolean",
+          "description": "Also return the organization's clause categories (list mode)"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max clauses to return",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_clauses call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "save_clause",
+    "description": "Create or update a clause in the organization's clause library. Omit clause_id to create (title and body required); pass clause_id to update. body is an ordered array of paragraphs, each with text and optional formatting. category_id, language, description, usage_notes, and metadata accept null to clear them on update. Set snapshot_version true on an update to also append a version snapshot of the body. Returns the clause id.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "clause_id": {
+          "type": "string",
+          "description": "Clause id to update; omit to create"
+        },
+        "title": {
+          "type": "string",
+          "description": "Clause title; required when creating",
+          "maxLength": 256
+        },
+        "body": {
+          "type": "array",
+          "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Paragraph plain text"
+              },
+              "style": {
+                "type": "string",
+                "description": "Optional paragraph style name"
+              },
+              "level": {
+                "type": "integer",
+                "description": "Optional heading/outline level"
+              },
+              "runs": {
+                "type": "array",
+                "description": "Optional inline formatting runs whose text concatenates to the paragraph",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "Run text"
+                    },
+                    "bold": {
+                      "type": "boolean",
+                      "description": "Render the run bold"
+                    },
+                    "italic": {
+                      "type": "boolean",
+                      "description": "Render the run italic"
+                    }
+                  },
+                  "required": ["text"]
+                }
+              },
+              "listKind": {
+                "type": "string",
+                "enum": ["bullet", "ordered"],
+                "description": "List item kind when the paragraph is a list item"
+              },
+              "listLevel": {
+                "type": "integer",
+                "description": "0-based list nesting depth for a list item"
+              },
+              "isDirective": {
+                "type": "boolean",
+                "description": "Whether the paragraph is a template directive marker"
+              },
+              "directiveKind": {
+                "type": "string",
+                "enum": ["if", "elseif", "else", "endif", "each", "endeach"],
+                "description": "Directive kind when isDirective is set"
+              },
+              "directiveExpression": {
+                "type": "string",
+                "description": "Directive expression for an if/each directive"
+              }
+            },
+            "required": ["text"]
+          }
+        },
+        "category_id": {
+          "type": ["string", "null"],
+          "description": "Category id to file the clause under; pass null to clear"
+        },
+        "language": {
+          "type": ["string", "null"],
+          "description": "BCP-47 language tag for the clause; pass null to clear",
+          "maxLength": 10
+        },
+        "description": {
+          "type": ["string", "null"],
+          "description": "Short clause description; pass null to clear",
+          "maxLength": 2000
+        },
+        "usage_notes": {
+          "type": ["string", "null"],
+          "description": "Guidance on when to use the clause; pass null to clear",
+          "maxLength": 2000
+        },
+        "metadata": {
+          "type": ["object", "null"],
+          "description": "Free-form metadata object; pass null to clear",
+          "additionalProperties": true
+        },
+        "snapshot_version": {
+          "type": "boolean",
+          "description": "When updating, also append a version snapshot of the body"
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_clause",
+    "description": "Permanently delete a clause and all its variants and versions from the organization's clause library. This is irreversible.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "clause_id": {
+          "type": "string",
+          "description": "Clause id to delete"
+        }
+      },
+      "required": ["clause_id"]
+    },
+    "annotations": {
+      "destructiveHint": true
+    }
+  },
+  {
+    "name": "list_playbooks",
+    "description": "List the review playbooks in this organization, or read one in detail. Pass playbook_id to get a playbook's positions (the issues it reviews, their questions, standards, and grading rules), scope, and description. Otherwise list playbooks (newest first). Returns each playbook's id, name, and description.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "playbook_id": {
+          "type": "string",
+          "description": "Playbook id to read in detail; omit to list playbooks"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max playbooks to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_playbooks call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "run_playbook",
+    "description": "Run a review playbook over a matter's documents. Materializes the playbook's extraction and verdict columns onto the matter's table and starts the AI review; findings populate asynchronously. Pass matter_id and playbook_id. Returns the number of columns queued for review.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace id to run the playbook over"
+        },
+        "playbook_id": {
+          "type": "string",
+          "description": "Playbook id to run"
+        }
+      },
+      "required": ["matter_id", "playbook_id"]
+    }
+  },
+  {
+    "name": "list_time_entries",
+    "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list time entries in; required unless time_entry_id is given"
+        },
+        "time_entry_id": {
+          "type": "string",
+          "description": "Time entry ID to read in detail"
+        },
+        "entity_id": {
+          "type": "string",
+          "description": "List only entries logged against this entity (document, folder, or task the time is billed to)"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "List only entries recorded by this user"
+        },
+        "date_from": {
+          "type": "string",
+          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "approved", "billed", "written_off"],
+          "description": "List only entries with this status"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max entries to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_time_entries call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "save_time_entry",
+    "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, entity_id, date_worked, timezone_id, duration_minutes, rate_at_entry, currency, and narrative all required). Pass time_entry_id to update: set date_worked, duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, activity_code, rate_at_entry, currency, and/or status (draft or approved). Rates and amounts are integer minor currency units (e.g. cents); durations are whole minutes. Returns the time entry ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "time_entry_id": {
+          "type": "string",
+          "description": "Time entry ID to update; omit to create"
+        },
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to create the entry in; required when creating"
+        },
+        "entity_id": {
+          "type": "string",
+          "description": "Entity the time is logged against (document, folder, or task). Required when creating; when updating, moves the entry to a different entity in the same matter."
+        },
+        "date_worked": {
+          "type": "string",
+          "description": "Date the work was done (ISO YYYY-MM-DD); required when creating",
+          "maxLength": 10
+        },
+        "timezone_id": {
+          "type": "string",
+          "description": "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating",
+          "maxLength": 64
+        },
+        "duration_minutes": {
+          "type": "integer",
+          "description": "Minutes worked (whole minutes); required when creating",
+          "minimum": 1
+        },
+        "rate_at_entry": {
+          "type": "integer",
+          "description": "Hourly rate in integer minor currency units (e.g. cents); required when creating",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "description": "3-letter ISO currency code; required when creating",
+          "maxLength": 3
+        },
+        "narrative": {
+          "type": "string",
+          "description": "Description of the work; required when creating",
+          "maxLength": 10000
+        },
+        "invoice_narrative": {
+          "type": ["string", "null"],
+          "description": "Client-facing narrative shown on the invoice; pass null to clear. Only valid when updating.",
+          "maxLength": 10000
+        },
+        "billable": {
+          "type": "boolean",
+          "description": "Whether the entry is billable to the client"
+        },
+        "no_charge": {
+          "type": "boolean",
+          "description": "Whether the entry is recorded but not charged. Only valid when updating."
+        },
+        "task_code": {
+          "type": ["string", "null"],
+          "description": "UTBMS/LEDES task code; pass null to clear",
+          "maxLength": 20
+        },
+        "activity_code": {
+          "type": ["string", "null"],
+          "description": "UTBMS/LEDES activity code; pass null to clear",
+          "maxLength": 20
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "approved"],
+          "description": "Set the entry's status. Only valid when updating."
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_time_entry",
+    "description": "Delete a time entry. A draft entry is permanently deleted; an approved entry is written off instead (kept for the audit trail, excluded from billing). A billed entry cannot be deleted until its invoice is reverted. Returns whether the entry was hard-deleted.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "time_entry_id": {
+          "type": "string",
+          "description": "Time entry ID to delete or write off"
+        }
+      },
+      "required": ["time_entry_id"]
+    },
+    "annotations": {
+      "destructiveHint": true
+    }
+  },
+  {
+    "name": "resolve_rate",
+    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using the matter's default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to resolve the rate in"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User ID to resolve the rate for"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date to resolve the rate on (ISO YYYY-MM-DD)",
+          "maxLength": 10
+        }
+      },
+      "required": ["matter_id", "user_id", "date"]
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "list_invoices",
+    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list invoices in; required unless invoice_id is given"
+        },
+        "invoice_id": {
+          "type": "string",
+          "description": "Invoice ID to read in detail"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max invoices to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_invoices call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "get_usage",
+    "description": "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "search_legislation",
+    "description": "Search and read Spanish consolidated legislation from the BOE. In search mode, pass query (free text) and/or filters (title, department_code, legal_range_code, matter_code, date_from/date_to as YYYYMMDD); at least one filter is required. In read mode, pass law_id (e.g. BOE-A-1889-4763) to return the law with its block structure; add full_text to include the consolidated text, block_id to return one text block, or relation_type to list related laws instead. Returns public statutory data.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Free-text search over consolidated legislation",
+          "maxLength": 256
+        },
+        "title": {
+          "type": "string",
+          "description": "Filter search results by title text",
+          "maxLength": 256
+        },
+        "department_code": {
+          "type": "string",
+          "description": "Filter search results by department code",
+          "maxLength": 32
+        },
+        "legal_range_code": {
+          "type": "string",
+          "description": "Filter search results by legal-range code (law rank)",
+          "maxLength": 32
+        },
+        "matter_code": {
+          "type": "string",
+          "description": "Filter search results by subject-matter code",
+          "maxLength": 32
+        },
+        "date_from": {
+          "type": "string",
+          "description": "Only laws published on or after this date (YYYYMMDD)",
+          "maxLength": 8
+        },
+        "date_to": {
+          "type": "string",
+          "description": "Only laws published on or before this date (YYYYMMDD)",
+          "maxLength": 8
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max search results to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_legislation call for the next page",
+          "maxLength": 5
+        },
+        "law_id": {
+          "type": "string",
+          "description": "BOE consolidated-law id (e.g. BOE-A-1889-4763) to read; omit to search"
+        },
+        "block_id": {
+          "type": "string",
+          "description": "With law_id, return this text block's content instead of the whole law",
+          "maxLength": 128
+        },
+        "relation_type": {
+          "type": "string",
+          "enum": ["modifies", "modifiedBy", "derogates", "derogatedBy", "all"],
+          "description": "With law_id, list related laws of this relation kind instead of the law body"
+        },
+        "full_text": {
+          "type": "boolean",
+          "description": "With law_id (no block_id/relation_type), include the consolidated full text"
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "list_audit_log",
+    "description": "Read the organization's audit trail (compliance view). Returns audit entries newest first, each with its action, resource type and id, actor user id, workspace, timestamp, and change detail. Filter by workspace_id, action, resource_type (with optional resource_id), user_id, and a created-at range (from/to, ISO date-time). Paginate with limit and cursor. Requires organization audit-log access.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "workspace_id": {
+          "type": "string",
+          "description": "Only entries scoped to this matter/workspace"
+        },
+        "action": {
+          "type": "string",
+          "description": "Only entries with this audit action"
+        },
+        "resource_type": {
+          "type": "string",
+          "description": "Only entries about this resource type"
+        },
+        "resource_id": {
+          "type": "string",
+          "description": "Only entries about this resource id; requires resource_type"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "Only entries whose actor is this user"
+        },
+        "from": {
+          "type": "string",
+          "description": "Only entries created on or after this ISO date-time",
+          "maxLength": 40
+        },
+        "to": {
+          "type": "string",
+          "description": "Only entries created on or before this ISO date-time",
+          "maxLength": 40
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max entries to return",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_audit_log call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    },
+    "annotations": {
+      "readOnlyHint": true
+    }
+  },
+  {
+    "name": "manage_organization",
+    "description": "Administer the organization (owner/admin actions). Set action to add_member or remove_member to add/remove a workspace member (matter_id and user_id required); or update_org_settings to change non-secret organization settings: matter_number_pattern with matter_number_padding (sent together) and/or prompt_caching_enabled. Provider API keys and other secrets are managed only in the dashboard, not here.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["add_member", "remove_member", "update_org_settings"],
+          "description": "Administrative action to perform"
+        },
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace id for add_member and remove_member"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User id to add or remove for the member actions"
+        },
+        "matter_number_pattern": {
+          "type": "string",
+          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding",
+          "maxLength": 128
+        },
+        "matter_number_padding": {
+          "type": "integer",
+          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
+          "minimum": 1,
+          "maximum": 6
+        },
+        "prompt_caching_enabled": {
+          "type": "boolean",
+          "description": "Toggle AI prompt caching for the organization (update_org_settings)"
+        }
+      },
+      "required": ["action"]
+    }
+  }
+]
