@@ -1471,15 +1471,19 @@ describe("MCP anonymization canary corpus", () => {
     expectSeedsQueuedForAnonymization(seeds);
   });
 
-  test("list_playbooks (detail) anonymizes name, description, and position issue/question/guidance/standard fields", async () => {
+  test("list_playbooks (detail) anonymizes name, description, and position issue/question/guidance and tier fields", async () => {
     const tool = "list_playbooks";
     const nameSeed = mkSeed(tool, 2);
     const descriptionSeed = mkSeed(tool, 3);
     const issueSeed = mkSeed(tool, 4);
     const questionSeed = mkSeed(tool, 5);
     const guidanceSeed = mkSeed(tool, 6);
-    const preferredSeed = mkSeed(tool, 7);
-    const fallbackTextSeed = mkSeed(tool, 8);
+    const acceptableRuleSeed = mkSeed(tool, 7);
+    const idealSeed = mkSeed(tool, 8);
+    const fallbackTextSeed = mkSeed(tool, 9);
+    const fallbackLabelSeed = mkSeed(tool, 10);
+    const notAcceptableRuleSeed = mkSeed(tool, 11);
+    const derivedQuestionSeed = mkSeed(tool, 12);
     const tx = {
       query: {
         playbookDefinitions: {
@@ -1489,15 +1493,71 @@ describe("MCP anonymization canary corpus", () => {
             description: descriptionSeed,
             scope: "organization",
             positions: {
+              version: 2,
               items: [
+                // Graded, manual ask: exercises the manual question plus every
+                // tier text field (acceptable/not-acceptable rules, inline
+                // ideal language, and each fallback entry's text and label).
                 {
+                  mode: "graded",
+                  sourceId: "11111111-1111-4111-8111-111111111111",
                   issue: issueSeed,
-                  ask: { question: questionSeed },
+                  severity: "high",
                   guidance: guidanceSeed,
-                  standard: {
-                    source: "inline",
-                    preferred: preferredSeed,
-                    fallbacks: [{ label: "fallback", text: fallbackTextSeed }],
+                  enabled: true,
+                  ask: {
+                    mode: "manual",
+                    question: questionSeed,
+                    content: { type: "text" },
+                  },
+                  tiers: {
+                    acceptable: {
+                      rules: [
+                        {
+                          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                          text: acceptableRuleSeed,
+                        },
+                      ],
+                      ideal: { source: "inline", text: idealSeed },
+                    },
+                    fallback: {
+                      entries: [
+                        {
+                          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                          text: fallbackTextSeed,
+                          label: fallbackLabelSeed,
+                        },
+                      ],
+                    },
+                    notAcceptable: {
+                      rules: [
+                        {
+                          id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                          text: notAcceptableRuleSeed,
+                        },
+                      ],
+                    },
+                  },
+                },
+                // Graded, auto ask: exercises the derived question redaction.
+                {
+                  mode: "graded",
+                  sourceId: "22222222-2222-4222-8222-222222222222",
+                  issue: "issue-2",
+                  severity: "low",
+                  enabled: true,
+                  ask: {
+                    mode: "auto",
+                    derived: {
+                      question: derivedQuestionSeed,
+                      content: { type: "text" },
+                      rulesHash: "hash",
+                    },
+                  },
+                  tiers: {
+                    acceptable: { rules: [] },
+                    fallback: { entries: [] },
+                    notAcceptable: { rules: [] },
                   },
                 },
               ],
@@ -1522,8 +1582,12 @@ describe("MCP anonymization canary corpus", () => {
       issueSeed,
       questionSeed,
       guidanceSeed,
-      preferredSeed,
+      acceptableRuleSeed,
+      idealSeed,
       fallbackTextSeed,
+      fallbackLabelSeed,
+      notAcceptableRuleSeed,
+      derivedQuestionSeed,
     ];
     expectNoSeedLeak(result, seeds);
     expectSeedsQueuedForAnonymization(seeds);
