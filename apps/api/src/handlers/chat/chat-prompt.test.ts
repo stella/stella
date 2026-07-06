@@ -67,7 +67,7 @@ describe("chat prompt builders", () => {
     expect(prompt).not.toContain("Status");
   });
 
-  test("system prompts include a compact stella API catalog", () => {
+  test("system prompts include the code-mode read surface", () => {
     const refRegistry = createChatRefRegistry();
     const workspacePrompt = buildWorkspacePromptText({
       entityCount: 1,
@@ -86,21 +86,23 @@ describe("chat prompt builders", () => {
       expect(prompt).toContain(
         "Never use it to request tool-call permission or consent",
       );
-      expect(prompt).toContain("For stella data reads, use the stella API");
-      expect(prompt).toContain("describe-stella-api");
-      expect(prompt).toContain("run-stella-query");
-      expect(prompt).toContain("result.items");
-      expect(prompt).toContain("Available stella read functions");
-      expect(prompt).toContain("read.listContacts({");
-      expect(prompt).toContain("read.getMatterEntityContents({");
+      // Code-mode surface: the sandbox runner and its discovery companion.
+      expect(prompt).toContain("execute_typescript");
+      expect(prompt).toContain("discover_tools");
+      // Only the entry-point read is documented eagerly; the rest are held
+      // out of the eager catalog and reached via discover_tools, keeping the
+      // injected section in the same size class as the old compact hint.
+      expect(prompt).toContain("declare function external_list_matters");
+      expect(prompt).toContain("### Discoverable APIs");
+      expect(prompt).toContain("external_search_across_matters");
+      expect(prompt).not.toContain("declare function external_list_invoices");
       expect(prompt).toContain("DOCX REVIEW TAGS");
       expect(prompt).toContain(DOCX_REVIEW_MARKUP_EXAMPLES.insertion);
       expect(prompt).toContain(DOCX_REVIEW_MARKUP_EXAMPLES.deletion);
       expect(prompt).toContain(DOCX_REVIEW_MARKUP_EXAMPLES.comment);
-      // Full declarations and JSON schemas stay out of the prompt;
-      // `describe-stella-api({name})` remains the detailed fallback.
-      expect(prompt).not.toContain("namespace read {");
-      expect(prompt).not.toContain("declare global {");
+      // The retired hand-written catalog and its tools are gone.
+      expect(prompt).not.toContain("For stella data reads, use the stella API");
+      expect(prompt).not.toContain("run-stella-query");
     }
   });
 
@@ -462,8 +464,8 @@ describe("system prompt tool-reference guard", () => {
   // the map for the configurations swept here.
   const ALWAYS_REGISTERED_TOOL_NAMES = new Set([
     "ask-user",
-    "run-stella-query",
-    "describe-stella-api",
+    "execute_typescript",
+    "discover_tools",
     "load-skill",
     "read-skill-resource",
     "create-document",
@@ -488,6 +490,8 @@ describe("system prompt tool-reference guard", () => {
     "instructions",
     "severity",
     "area",
+    // Code-mode system prompt: JS keyword, not a tool.
+    "await",
   ]);
   // A backtick span is "tool-name-shaped" when it is a bare lowercase
   // identifier with `-`/`_` separators: excludes `read.*` (dot),

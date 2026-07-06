@@ -193,7 +193,8 @@ describe("chat tool schemas", () => {
     expect(tools).not.toHaveProperty("update-current-skill-resource");
     expect(tools).toHaveProperty(SEARCH_CHAT_HISTORY_TOOL_NAME);
     expect(tools).toHaveProperty(EXPAND_CHAT_HISTORY_TOOL_NAME);
-    expect(tools).toHaveProperty("run-stella-query");
+    expect(tools).toHaveProperty("execute_typescript");
+    expect(tools).toHaveProperty("discover_tools");
     expect(tools).toHaveProperty("create-document");
     expect(tools).toHaveProperty("update-entity-fields");
     expect(tools).not.toHaveProperty("search-across-matters");
@@ -309,13 +310,13 @@ describe("chat tool schemas", () => {
     const businessRegistryLookup = tools["business_registry_lookup"];
     const updateEntityFields = tools["update-entity-fields"];
     const createDocument = tools["create-document"];
-    const runStellaQuery = tools["run-stella-query"];
+    const executeTypescript = tools["execute_typescript"];
     const searchChatHistory = tools[SEARCH_CHAT_HISTORY_TOOL_NAME];
 
     expect(businessRegistryLookup).toBeDefined();
     expect(updateEntityFields).toBeDefined();
     expect(createDocument).toBeDefined();
-    expect(runStellaQuery).toBeDefined();
+    expect(executeTypescript).toBeDefined();
     expect(searchChatHistory).toBeDefined();
 
     if (
@@ -345,7 +346,7 @@ describe("chat tool schemas", () => {
       needsApproval: false,
       requiresAnonymization: false,
     });
-    expect(runStellaQuery?.needsApproval).toBeUndefined();
+    expect(executeTypescript?.needsApproval).toBeUndefined();
     expect(getChatToolPolicy(searchChatHistory)).toEqual({
       kind: "internal",
       needsApproval: false,

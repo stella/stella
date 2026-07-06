@@ -1,6 +1,12 @@
-import { toolDefinition, type SchemaInput } from "@tanstack/ai";
+import {
+  toolDefinition,
+  type SchemaInput,
+  type ServerTool,
+} from "@tanstack/ai";
 import {
   createCodeMode,
+  createCodeModeSystemPrompt,
+  type CodeModeTool,
   type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
 import { panic, Result } from "better-result";
@@ -35,24 +41,23 @@ import type { JsonSchema } from "@/api/mcp/tool-types";
  */
 
 /**
- * Read tools kept out of the eager system-prompt catalog and reached through
- * `discover_tools` instead. These are the low-frequency domains the brief calls
- * out (billing, research-admin, case-law); keeping them lazy holds the eager
- * catalog near today's budget while still making the full read surface
- * reachable. Everything else chat-projects eagerly.
+ * The only read tool documented eagerly (full type stub) in the system prompt;
+ * every other chat-projectable read is held out of the eager catalog and reached
+ * through `discover_tools`.
+ *
+ * Rationale: code-mode's eager catalog emits a full `interface` + JSDoc +
+ * `declare function` per tool, so documenting all reads eagerly ballooned the
+ * injected section to ~5.6x the hand-written `READONLY_API_HINT` it replaces.
+ * Jan's hard rule is that system prompts stay brief. `list_matters` is the
+ * entry-point read (the model almost always lists matters first to get the refs
+ * later tools need), so it keeps its eager stub; every other read is advertised
+ * by name + first sentence in the Discoverable APIs catalog and its exact schema
+ * is fetched on demand via `discover_tools` — the same describe-on-demand
+ * ergonomics the old `describe-stella-api` tool gave. This holds the eager
+ * section in the same size class as `READONLY_API_HINT` while keeping the full
+ * read surface reachable.
  */
-const LAZY_CHAT_READ_TOOLS = new Set<RegistryReadToolName>([
-  // billing
-  "list_time_entries",
-  "resolve_rate",
-  "list_invoices",
-  "get_usage",
-  // research-admin
-  "search_legislation",
-  // case-law
-  "search_case_law",
-  "read_case_law_decision",
-]);
+const EAGER_CHAT_READ_TOOLS = new Set<RegistryReadToolName>(["list_matters"]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -91,6 +96,45 @@ const chatProjectableReadToolNames = (): readonly RegistryReadToolName[] => {
   return names;
 };
 
+/**
+ * The `execute_typescript` runner that Stella's sandbox owns unchanged. Passed to
+ * `createCodeMode`/`createCodeModeSystemPrompt`: identity transpile (Stella's
+ * sandbox owns transpilation and forbidden-syntax rejection, so its taxonomy
+ * survives; the driver wraps the source in an async IIFE downstream, which
+ * tolerates the top-level `return`/`await` code-mode emits) and the sandbox's own
+ * wall-clock deadline instead of code-mode's larger default.
+ */
+const CODE_MODE_RUNTIME_CONFIG = {
+  transpile: (code: string) => code,
+  timeout: DEFAULT_SANDBOX_LIMITS.maxDurationMs,
+  lazyToolsConfig: { includeDescription: "first-sentence" },
+} as const;
+
+/**
+ * Build the read-tool projections in registry order. The server binding is
+ * supplied by the caller so the same definitions (names, descriptions, schemas,
+ * lazy flags) back both the runtime tools (real registry runner) and the static
+ * system-prompt constant (no-op runner, never invoked for prompt generation).
+ */
+const buildChatReadTools = (
+  runReadTool: (
+    toolName: RegistryReadToolName,
+    args: unknown,
+  ) => Promise<unknown>,
+): CodeModeTool[] =>
+  chatProjectableReadToolNames().map((toolName) => {
+    const definition =
+      getStaticMcpToolDefinition(toolName) ??
+      panic(`Chat read tool ${toolName} is missing from the static registry`);
+
+    return toolDefinition({
+      name: toolName,
+      description: definition.description,
+      inputSchema: toToolInputSchema(definition.inputSchema),
+      lazy: !EAGER_CHAT_READ_TOOLS.has(toolName),
+    }).server((args: unknown) => runReadTool(toolName, args));
+  });
+
 type BuildChatCodeModeProps = ChatRegistryContextDeps & {
   refRegistry: ChatRefRegistry;
 };
@@ -101,39 +145,71 @@ export const buildChatCodeMode = (
   const { refRegistry, ...contextDeps } = props;
   const context = buildMcpContextFromChat(contextDeps);
 
-  const tools = chatProjectableReadToolNames().map((toolName) => {
-    const definition =
-      getStaticMcpToolDefinition(toolName) ??
-      panic(`Chat read tool ${toolName} is missing from the static registry`);
-
-    return toolDefinition({
-      name: toolName,
-      description: definition.description,
-      inputSchema: toToolInputSchema(definition.inputSchema),
-      lazy: LAZY_CHAT_READ_TOOLS.has(toolName),
-    }).server(async (args: unknown) => {
-      const result = await runRegistryReadTool({
-        toolName,
-        args: isRecord(args) ? args : {},
-        context,
-        refRegistry,
-      });
-      if (Result.isError(result)) {
-        throw result.error;
-      }
-      return result.value;
+  const tools = buildChatReadTools(async (toolName, args) => {
+    const result = await runRegistryReadTool({
+      toolName,
+      args: isRecord(args) ? args : {},
+      context,
+      refRegistry,
     });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
   });
 
   return createCodeMode({
     driver: createStellaIsolateDriver({ concurrencyKey: contextDeps.userId }),
     tools,
-    // Stella's sandbox owns transpilation and forbidden-syntax rejection (so its
-    // taxonomy survives), so skip code-mode's sucrase step with an identity
-    // transpile; the driver wraps the source in an async IIFE downstream, which
-    // tolerates the top-level `return`/`await` code-mode emits.
-    transpile: (code) => code,
-    timeout: DEFAULT_SANDBOX_LIMITS.maxDurationMs,
-    lazyToolsConfig: { includeDescription: "first-sentence" },
+    ...CODE_MODE_RUNTIME_CONFIG,
   });
 };
+
+/**
+ * The keyed code-mode tool surface chat registers: the `execute_typescript`
+ * runner and its `discover_tools` companion, keyed by their own names so the
+ * map satisfies the `ChatToolMap` name-equals-key invariant and flows the two
+ * tool names into `ChatUITools` for the frontend. `discover_tools` is always
+ * present: every read but `list_matters` is lazy, so code-mode always emits the
+ * discovery companion.
+ */
+export type ChatCodeModeToolMap = {
+  execute_typescript: ServerTool<
+    SchemaInput,
+    SchemaInput,
+    "execute_typescript"
+  >;
+  discover_tools: ServerTool<SchemaInput, SchemaInput, "discover_tools">;
+};
+
+export const buildChatCodeModeTools = (
+  props: BuildChatCodeModeProps,
+): ChatCodeModeToolMap => {
+  const { tool, discoveryTool } = buildChatCodeMode(props);
+  return {
+    execute_typescript: tool,
+    discover_tools:
+      discoveryTool ??
+      panic(
+        "chat code mode always has lazy read tools, so discover_tools must exist",
+      ),
+  };
+};
+
+/**
+ * The chat code-mode system-prompt section, injected in place of the
+ * hand-written `READONLY_API_HINT`. Generated once from the static tool
+ * definitions (names/descriptions/schemas/lazy flags), so it is request-
+ * independent and cache-stable, exactly like the constant it replaces. Built
+ * from the same `buildChatReadTools` definitions the runtime uses, so the prompt
+ * and the registered tools never drift. The no-op runner is never invoked here;
+ * `createCodeModeSystemPrompt` only reads the definitions.
+ */
+export const CHAT_CODE_MODE_SYSTEM_PROMPT: string = createCodeModeSystemPrompt({
+  driver: createStellaIsolateDriver({
+    concurrencyKey: "chat-code-mode-prompt",
+  }),
+  // eslint-disable-next-line require-await -- prompt generation never invokes the runner; an async no-op keeps the ServerTool execute contract
+  tools: buildChatReadTools(async () => ({})),
+  ...CODE_MODE_RUNTIME_CONFIG,
+});

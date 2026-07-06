@@ -24,7 +24,10 @@ import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
 } from "@/api/handlers/chat/tools/create-document-tool";
-import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat-execution-tools";
+import {
+  buildChatCodeModeTools,
+  type ChatCodeModeToolMap,
+} from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
@@ -108,7 +111,7 @@ export const areTemplateAuthoringToolsRegistered = (
 
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
-type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
+type ChatExecutionTools = ChatCodeModeToolMap;
 type SkillTools = ReturnType<typeof createSkillTools>;
 type BusinessRegistryTools = ReturnType<typeof createBusinessRegistryTools>;
 type BoeTools = ReturnType<typeof createBoeTools>;
@@ -230,8 +233,15 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
-  "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
   describe_template: CHAT_TOOL_POLICY_KIND.internal,
+  // Code-mode tool discovery: read-only, gated by the same authorization that
+  // let the request reach chat at all; runs immediately without per-call
+  // approval, alongside the sandbox runner it feeds.
+  discover_tools: CHAT_TOOL_POLICY_KIND.internal,
+  // The sandbox code runner (replaces run-stella-query). Executes only the
+  // ref-mediated read projections in the hardened sandbox, so it is internal
+  // and executes without per-call approval.
+  execute_typescript: CHAT_TOOL_POLICY_KIND.internal,
   [EXPAND_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   // Per-thread `webSearchEnabled` already gates the tools; an
   // additional per-call approval would double-gate and block
@@ -244,7 +254,6 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   list_templates: CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
-  "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
@@ -286,13 +295,20 @@ export const getChatTools = ({
     webSearchProviders,
     disabledNativeToolSlugs,
   });
-  const executionTools = createChatExecutionTools({
-    accessibleWorkspaceIds: toolWorkspaceIds,
+  // Chat's code-execution surface, projected from the MCP registry through the
+  // hardened sandbox: the single `execute_typescript` runner plus its
+  // `discover_tools` companion. Replaces the hand-written run-stella-query /
+  // describe-stella-api pair; the read functions it exposes as `external_*`
+  // bindings are ref-mediated, so no tenant UUID reaches the model.
+  const executionTools = buildChatCodeModeTools({
+    memberRole,
     organizationId,
+    recordAuditEvent,
     refRegistry,
     safeDb,
+    scopedDb,
+    toolWorkspaceIds,
     userId,
-    webResearchAvailable,
   });
   const skillTools = createSkillTools({
     activeSkillContext,
