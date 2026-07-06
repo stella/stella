@@ -44,6 +44,7 @@ Project: root
 - @streamdown/cjk 1.0.3 — Apache-2.0
 - @streamdown/math 1.0.2 — Apache-2.0
 - @streamdown/mermaid 1.0.2 — Apache-2.0
+- @stricli/core 1.2.8 — Apache-2.0
 - @t3-oss/env-core 0.13.11 — MIT
 - @tailwindcss/vite 4.3.1 — MIT
 - @tanstack/ai 0.39.1 — MIT
