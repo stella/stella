@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import type {
   PlaybookFinding,
   PlaybookSeverity,
-  PlaybookVerdict,
 } from "@/components/ai-suggestions/playbook-review-store";
 
 import { computeRiskRollup } from "./playbook-risk-rollup";
@@ -168,7 +167,6 @@ describe("computeRiskRollup — topIssues", () => {
   });
 
   test("caps top issues to 5 even with more flagged findings", () => {
-    const positionIds = Array.from({ length: 8 }, (_, index) => `p${index}`);
     const severities: PlaybookSeverity[] = [
       "blocker",
       "blocker",
@@ -180,11 +178,11 @@ describe("computeRiskRollup — topIssues", () => {
       "low",
     ];
     const rollup = computeRiskRollup(
-      positionIds.map((positionId, index) =>
+      severities.map((severity, index) =>
         finding({
-          positionId,
-          severity: severities[index] as PlaybookSeverity,
-          verdict: "deviation" as PlaybookVerdict,
+          positionId: `p${index}`,
+          severity,
+          verdict: "deviation",
         }),
       ),
     );

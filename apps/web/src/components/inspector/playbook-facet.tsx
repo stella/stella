@@ -612,8 +612,8 @@ const RiskSummaryCard = ({
 
       <p className="text-muted-foreground text-xs">
         {t("knowledge.playbooks.risk.flaggedCount", {
-          flagged: rollup.flaggedCount,
-          total: rollup.totalPositions,
+          flagged: String(rollup.flaggedCount),
+          total: String(rollup.totalPositions),
         })}
       </p>
 
@@ -735,10 +735,8 @@ type FindingCardProps = {
 // Negotiation guidance only helps once a clause has actually been flagged: a
 // compliant/missing verdict has nothing to negotiate, so the block is gated
 // on the two verdicts a reviewer would actually raise with the counterparty.
-const NEGOTIABLE_VERDICTS: readonly PlaybookVerdict[] = new Set([
-  "deviation",
-  "fallback",
-]);
+const NEGOTIABLE_VERDICTS: ReadonlySet<PlaybookVerdict> =
+  new Set<PlaybookVerdict>(["deviation", "fallback"]);
 
 const FindingCard = ({
   finding,
