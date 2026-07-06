@@ -231,16 +231,6 @@ export const LIMITS = {
    *  this so a send cannot load an unbounded history; sized well above the
    *  compaction trigger so a checkpointed thread's window is unaffected. */
   chatSendHistoryWindowMax: 500,
-  /** Max characters of TypeScript source the chat run-stella-query tool accepts. */
-  chatRunCodeMaxLength: 16_000,
-  /** Default page size for readonly chat execute functions. */
-  chatExecutePageSizeDefault: 50,
-  /** Max page size for readonly chat execute functions. */
-  chatExecutePageSizeMax: 500,
-  /** Max IDs accepted by readonly chat execute detail functions. */
-  chatExecuteDetailIdsMax: 100,
-  /** Max entity IDs accepted by readonly chat execute content functions. */
-  chatExecuteContentIdsMax: 20,
   /** Max DOCX size for stamp injection (bytes). */
   docxStampMaxBytes: 50 * 1024 * 1024,
   /** Max org-wide custom blacklist terms for anonymization. */
