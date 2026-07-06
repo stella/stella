@@ -270,6 +270,16 @@ jobs:
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
+      - name: CLI registry snapshot guard
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        # The stella CLI's committed registry snapshot and generated route map
+        # must match the live MCP registry: regenerate both and fail on any
+        # diff so a registry change cannot silently ship a stale CLI surface.
+        # Regenerate: `bun run codegen` in packages/cli.
+        run: |
+          (cd packages/cli && bun run codegen)
+          git diff --exit-code -- packages/cli/src/generated
+
       - name: exactMirror route guard
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         # Elysia builds an "exactMirror" serializer per route schema. Some

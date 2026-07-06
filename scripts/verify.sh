@@ -137,6 +137,14 @@ run_mcp_coverage_guard() {
   bun apps/api/scripts/mcp-coverage-guard.ts
 }
 
+run_cli_registry_snapshot() {
+  # The stella CLI's committed registry snapshot and generated route map must
+  # match the live MCP registry: regenerate both and fail on any diff so a
+  # registry change cannot silently ship a stale CLI surface.
+  (cd packages/cli && bun run codegen) || return 1
+  git diff --exit-code -- packages/cli/src/generated
+}
+
 run_knip() {
   local workspace
   for workspace in apps/api apps/legal-atlas-runner apps/web; do
@@ -166,6 +174,7 @@ run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_step "Ratchet guard" run_ratchet_guard
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
+run_step "CLI registry snapshot" run_cli_registry_snapshot
 run_step "Knip production deps" run_knip
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh

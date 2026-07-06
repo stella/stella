@@ -44,3 +44,11 @@ await Bun.write(snapshotPath, `${JSON.stringify(listings, null, 2)}\n`);
 process.stderr.write(
   `Wrote ${listings.length} tool listings to ${snapshotPath.pathname}\n`,
 );
+
+// The registry transitively pulls in `@/api/lib/sse.ts`, which opens a
+// Redis subscriber connection at import time (for cross-instance SSE
+// broadcast) and never unrefs it. That's correct for the long-running API
+// process but leaves this one-off script's event loop open indefinitely.
+// The export is done at this point, so exit explicitly instead of waiting
+// on a handle this script never needed.
+process.exit(0);
