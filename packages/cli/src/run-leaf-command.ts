@@ -6,7 +6,9 @@
 // directly so stricli's `??=` never overrides them.
 
 import { Result } from "better-result";
+import { readFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
+import { text as readStreamText } from "node:stream/consumers";
 
 import { decodeAccessTokenClaims } from "./auth/jwt.js";
 import type { Context } from "./context.js";
@@ -86,7 +88,10 @@ const setExit = (context: Context, code: ExitCode): void => {
   context.process.exitCode = code;
 };
 
-const readAllStdin = async (): Promise<string> => await Bun.stdin.text();
+// Read all of stdin to a string (the `@-` / `--input -` escape hatch). Consumes
+// `process.stdin` to EOF so the published CLI runs under plain Node.
+const readAllStdin = async (): Promise<string> =>
+  await readStreamText(process.stdin);
 
 /** Apply gh-style `@file`/`@-`/`@@` sugar to a string flag value (spec S3). */
 const resolveStringValue = async (
@@ -101,7 +106,7 @@ const resolveStringValue = async (
   if (raw.startsWith("@")) {
     const path = raw.slice(1);
     const read = await Result.tryPromise({
-      try: async () => await Bun.file(path).text(),
+      try: async () => await readFile(path, "utf-8"),
       catch: (cause) => cause,
     });
     if (Result.isError(read)) {
@@ -301,7 +306,7 @@ const buildArgsFromInput = async ({
     jsonText = await readAllStdin();
   } else if (inputRaw.startsWith("@")) {
     const read = await Result.tryPromise({
-      try: async () => await Bun.file(inputRaw.slice(1)).text(),
+      try: async () => await readFile(inputRaw.slice(1), "utf-8"),
       catch: (cause) => cause,
     });
     if (Result.isError(read)) {
@@ -366,8 +371,8 @@ const confirmDestructive = async ({
     writers.stderr("refusing destructive op without --yes on non-TTY\n");
     return "aborted";
   }
-  // A TTY confirmation must read a single line: `readAllStdin` (Bun.stdin.text)
-  // waits for EOF, so `y`+Enter would never complete the prompt on a terminal.
+  // A TTY confirmation must read a single line: `readAllStdin` waits for EOF,
+  // so `y`+Enter would never complete the prompt on a terminal.
   const rl = createInterface({
     input: context.process.stdin,
     output: context.process.stdout,

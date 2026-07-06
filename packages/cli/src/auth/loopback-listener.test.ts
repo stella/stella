@@ -3,8 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { startLoopbackListener } from "./loopback-listener.js";
 
 describe("startLoopbackListener", () => {
-  test("binds an ephemeral 127.0.0.1 port and reports it in redirectUri", () => {
-    const listener = startLoopbackListener();
+  test("binds an ephemeral 127.0.0.1 port and reports it in redirectUri", async () => {
+    const listener = await startLoopbackListener();
     try {
       expect(listener).toBeDefined();
       expect(listener?.port).toBeGreaterThan(0);
@@ -17,7 +17,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("delivers a success callback parsed from the redirect query string", async () => {
-    const listener = startLoopbackListener();
+    const listener = await startLoopbackListener();
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -41,7 +41,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("delivers an error callback with error_description when the provider redirects an error", async () => {
-    const listener = startLoopbackListener();
+    const listener = await startLoopbackListener();
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -67,7 +67,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("responds 400 and does not resolve when code or state is missing", async () => {
-    const listener = startLoopbackListener();
+    const listener = await startLoopbackListener();
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -81,7 +81,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("responds 404 for a path other than the callback path", async () => {
-    const listener = startLoopbackListener();
+    const listener = await startLoopbackListener();
     if (!listener) {
       throw new Error("listener failed to bind");
     }
@@ -95,7 +95,7 @@ describe("startLoopbackListener", () => {
   });
 
   test("waitForCallback times out with a LoopbackTimeoutError when nothing arrives", async () => {
-    const listener = startLoopbackListener();
+    const listener = await startLoopbackListener();
     if (!listener) {
       throw new Error("listener failed to bind");
     }

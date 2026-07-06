@@ -1,10 +1,11 @@
 name: Publish npm packages
 
 # Publishes the shared @stll dependency packages (docx-core, docx-utils,
-# conditions, template-conditions) to npm with SLSA provenance via OIDC trusted
-# publishing — no long-lived NPM_TOKEN. These packages live in this monorepo
-# (stella's apps consume them) and are published from here; external consumers
-# install the published versions.
+# conditions, template-conditions) and the @stll/cli command-line client to
+# npm with SLSA provenance via OIDC trusted publishing — no long-lived
+# NPM_TOKEN. These packages live in this monorepo (stella's apps consume the
+# shared packages; the CLI is consumed standalone) and are published from
+# here; external consumers install the published versions.
 #
 # Least privilege: packing and publishing are separate jobs. The `pack` job runs
 # the untrusted build (bun install, prepack, bun pm pack) with NO id-token, so a
@@ -28,7 +29,7 @@ env:
 
 on:
   # Auto-release: a version bump merged to main publishes that package. The
-  # hardened action is idempotent, so the three packages you did not bump are
+  # hardened action is idempotent, so the packages you did not bump are
   # packed but skipped (their version already exists on the registry).
   push:
     branches: [main]
@@ -37,6 +38,7 @@ on:
       - packages/template-conditions/package.json
       - packages/docx-core/package.json
       - packages/docx-utils/package.json
+      - packages/cli/package.json
   workflow_dispatch:
     inputs:
       package:
@@ -48,6 +50,7 @@ on:
           - template-conditions
           - docx-core
           - docx-utils
+          - cli
         default: all
       publish:
         description: Publish to npm (leave unchecked for a build + pack dry run)
@@ -80,11 +83,12 @@ jobs:
           set -euo pipefail
           # On push (auto-release) there is no input, so pack all and let the
           # idempotent publish skip unchanged versions. conditions before
-          # template-conditions (which depends on it); the docx packages are
-          # independent.
+          # template-conditions (which depends on it); the docx packages and
+          # cli are independent (cli has no workspace dependency on any other
+          # published package).
           selected="${{ github.event_name == 'workflow_dispatch' && inputs.package || 'all' }}"
           case "${selected}" in
-            all) pkgs=(conditions template-conditions docx-core docx-utils) ;;
+            all) pkgs=(conditions template-conditions docx-core docx-utils cli) ;;
             *) pkgs=("${selected}") ;;
           esac
 
@@ -115,6 +119,43 @@ jobs:
           packages="$(printf '%s\n' "${pkgs[@]}" | jq -Rnc '[inputs]')"
           echo "packages=${packages}" >> "${GITHUB_OUTPUT}"
           printf 'Packed: %s\n' "${packages}"
+
+          # Record whether cli is in this run so the plain-Node smoke test below
+          # only fires when the CLI tarball was actually built.
+          cli_selected=false
+          for p in "${pkgs[@]}"; do [ "${p}" = "cli" ] && cli_selected=true; done
+          echo "cli=${cli_selected}" >> "${GITHUB_OUTPUT}"
+
+      # The CLI is the one published package with an executable entrypoint, and
+      # it must run under plain Node (not Bun). Set up Node, install the packed
+      # tarball into a throwaway project exactly as an external consumer would
+      # (which resolves the CLI's runtime deps and never its workspace-only
+      # devDependencies), then run the real bin under `node`. A `Bun is not
+      # defined` regression (or any other crash) fails the release here instead
+      # of shipping a broken CLI.
+      - name: Set up Node for the CLI smoke test
+        if: ${{ steps.pack.outputs.cli == 'true' }}
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Smoke-test the packed CLI under plain Node
+        if: ${{ steps.pack.outputs.cli == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tgz="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
+          smoke="$(mktemp -d)"
+          cd "${smoke}"
+          npm init -y >/dev/null
+          # Consumer-style install: resolves @stll/cli + its runtime deps only.
+          # --ignore-scripts: no lifecycle hooks run for an untrusted tarball.
+          npm install --ignore-scripts "${tgz}"
+          cli="node_modules/@stll/cli/dist/cli.js"
+          echo "Running: node ${cli} --version"
+          node "${cli}" --version
+          echo "Running: node ${cli} --help"
+          node "${cli}" --help
 
       - name: Upload tarballs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
