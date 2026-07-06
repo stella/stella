@@ -12,6 +12,18 @@ process.env["S3_REGION"] ??= "us-east-1";
 process.env["S3_ACCESS_KEY_ID"] ??= "minioadmin";
 process.env["S3_SECRET_ACCESS_KEY"] ??= "minioadmin";
 
+// Bun auto-loads the developer-local (gitignored) apps/api/.env into
+// `bun test`. Real social-provider credentials there flip the auth
+// capabilities endpoint to `available` and break the hermetic
+// "unavailable when not configured" test in
+// handlers/auth/metadata.test.ts. Force the unconfigured baseline; no
+// test needs live provider credentials.
+delete process.env["GOOGLE_AUTH_CLIENT_ID"];
+delete process.env["GOOGLE_AUTH_CLIENT_SECRET"];
+delete process.env["MICROSOFT_AUTH_CLIENT_ID"];
+delete process.env["MICROSOFT_AUTH_CLIENT_SECRET"];
+delete process.env["MICROSOFT_AUTH_TENANT_ID"];
+
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);
 process.env["BETTER_AUTH_URL"] ??= "http://localhost:3001";
