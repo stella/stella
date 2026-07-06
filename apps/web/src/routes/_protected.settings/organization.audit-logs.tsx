@@ -28,7 +28,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
-import { auditLogOptions, type AuditLogsPageKey } from "@/routes/_protected.settings/-queries/audit-logs";
+import { auditLogOptions, type fetchAuditLogs, type AuditLogsPageKey } from "@/routes/_protected.settings/-queries/audit-logs";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getFormattingLocale } from "@/i18n/i18n-store";
@@ -236,7 +236,6 @@ function AuditLogsPage() {
                     isLoading={isLoading}
                     isError={isError}
                     data={data}
-                    t={t}
                   />
                 </TableBody>
               </Table>
@@ -268,11 +267,11 @@ function AuditLogsPage() {
 type AuditLogsTableBodyProps = {
   isLoading: boolean;
   isError: boolean;
-  data: any;
-  t: (key: any) => string;
+  data: Awaited<ReturnType<typeof fetchAuditLogs>> | undefined;
 };
 
-function AuditLogsTableBody({ isLoading, isError, data, t }: AuditLogsTableBodyProps) {
+function AuditLogsTableBody({ isLoading, isError, data }: AuditLogsTableBodyProps) {
+  const t = useTranslations();
   if (isLoading) {
     return (
       <TableRow>
@@ -293,7 +292,7 @@ function AuditLogsTableBody({ isLoading, isError, data, t }: AuditLogsTableBodyP
     );
   }
 
-  if (!data || data.items.length === 0) {
+  if (data === undefined || data.items.length === 0) {
     return (
       <TableRow>
         <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
@@ -305,7 +304,7 @@ function AuditLogsTableBody({ isLoading, isError, data, t }: AuditLogsTableBodyP
 
   return (
     <>
-      {data.items.map((log: any) => (
+      {data.items.map((log) => (
         <TableRow key={log.id}>
           <TableCell className="whitespace-nowrap text-xs">
             {new Date(log.createdAt).toLocaleString(getFormattingLocale())}
@@ -318,7 +317,7 @@ function AuditLogsTableBody({ isLoading, isError, data, t }: AuditLogsTableBodyP
           <TableCell className="text-xs font-mono max-w-[120px] truncate" title={log.resourceId}>
             {log.resourceId}
           </TableCell>
-          <TableCell className="text-xs font-mono max-w-[200px] truncate" title={JSON.stringify(log.changes)}>
+          <TableCell className="text-xs font-mono max-w-[200px] truncate" title={log.changes ? JSON.stringify(log.changes) : ""}>
             {log.changes ? JSON.stringify(log.changes) : "-"}
           </TableCell>
         </TableRow>
