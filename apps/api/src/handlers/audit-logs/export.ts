@@ -13,7 +13,7 @@ import { readAuditLogsQuerySchema, toAuditLogConditions } from "./read";
 
 const config = {
   permissions: { auditLog: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "ui_navigation_state" },
   query: readAuditLogsQuerySchema,
   audit: {
     action: AUDIT_ACTION.DOWNLOAD,
