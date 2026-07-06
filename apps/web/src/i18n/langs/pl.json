@@ -1593,6 +1593,16 @@
       "manageTypes": "Manage types…",
       "namePlaceholder": "np. przegląd NDA",
       "nameRequired": "Podaj nazwę.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Brak stanowisk. Dodaj pierwsze.",
       "optionPlaceholder": "Wartość opcji",
       "optionsLabel": "Opcje",

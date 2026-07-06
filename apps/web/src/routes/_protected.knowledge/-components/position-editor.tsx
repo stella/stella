@@ -15,6 +15,7 @@ import {
   FlagIcon,
   GripVerticalIcon,
   Link2Icon,
+  MessageSquareIcon,
   PlusIcon,
   RepeatIcon,
   SearchIcon,
@@ -70,6 +71,7 @@ import {
   type GradedPosition,
   type IdealLanguage,
   moveAdjacent,
+  type Negotiation,
   newFallbackEntry,
   newTierRule,
   type Position,
@@ -702,6 +704,8 @@ const GradedBody = ({
         ))}
       </TierSection>
 
+      <NegotiationSection onChange={onChange} position={position} />
+
       <GradedFooter
         onChange={onChange}
         onConvertMode={onConvertMode}
@@ -1052,6 +1056,159 @@ const ClausePicker = ({
         </ComboboxEmpty>
       </ComboboxPopup>
     </Combobox>
+  );
+};
+
+// ── Negotiation: reviewer-facing guidance for a flagged verdict ──
+// Collapsible like the Advanced panel below, but its own toggle: this is
+// review-time content a reviewer reads (why we want this, what to say,
+// when to escalate), not a technical grading setting.
+
+const NEGOTIATION_FIELD_LIMITS = { escalation: 500 } as const;
+
+const updateNegotiation = (
+  position: GradedPosition,
+  patch: Partial<Negotiation>,
+): GradedPosition => ({
+  ...position,
+  negotiation: { ...position.negotiation, ...patch },
+});
+
+const hasNegotiationContent = (negotiation: Negotiation | undefined): boolean =>
+  negotiation !== undefined &&
+  ((negotiation.rationale?.trim().length ?? 0) > 0 ||
+    (negotiation.talkingPoints?.length ?? 0) > 0 ||
+    (negotiation.escalation?.trim().length ?? 0) > 0);
+
+const NegotiationSection = ({
+  position,
+  onChange,
+}: {
+  position: GradedPosition;
+  onChange: (position: Position) => void;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const { negotiation } = position;
+  const talkingPoints = negotiation?.talkingPoints ?? [];
+
+  const setTalkingPoints = (points: string[]) =>
+    onChange(updateNegotiation(position, { talkingPoints: points }));
+
+  return (
+    <div className="border-border/70 border-t border-dashed pt-3">
+      <InlineAction
+        aria-expanded={open}
+        onClick={() => setOpen((prev) => !prev)}
+      >
+        <MessageSquareIcon className="size-3" />
+        {t("knowledge.playbooks.negotiation.title")}
+        {!open && hasNegotiationContent(negotiation) && (
+          <span
+            aria-hidden="true"
+            className="bg-primary size-1.5 rounded-full"
+          />
+        )}
+      </InlineAction>
+
+      {open && (
+        <div className="bg-muted/50 mt-3 space-y-4 rounded-md p-3">
+          <div className="grid gap-1.5">
+            <Label
+              className="text-xs"
+              htmlFor={`position-negotiation-rationale-${position.sourceId}`}
+            >
+              {t("knowledge.playbooks.negotiation.rationaleLabel")}
+            </Label>
+            <Textarea
+              className="min-h-[52px] text-sm"
+              id={`position-negotiation-rationale-${position.sourceId}`}
+              onChange={(e) =>
+                onChange(
+                  updateNegotiation(position, { rationale: e.target.value }),
+                )
+              }
+              placeholder={t(
+                "knowledge.playbooks.negotiation.rationalePlaceholder",
+              )}
+              value={negotiation?.rationale ?? ""}
+            />
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label className="text-xs">
+              {t("knowledge.playbooks.negotiation.talkingPointsLabel")}
+            </Label>
+            <div className="space-y-1.5">
+              {talkingPoints.map((point, index) => (
+                <div className="flex items-center gap-2" key={index}>
+                  <Input
+                    className="h-8 flex-1 text-sm"
+                    onChange={(e) =>
+                      setTalkingPoints(
+                        talkingPoints.map((existing, i) =>
+                          i === index ? e.target.value : existing,
+                        ),
+                      )
+                    }
+                    placeholder={t(
+                      "knowledge.playbooks.negotiation.talkingPointPlaceholder",
+                    )}
+                    value={point}
+                  />
+                  <Button
+                    aria-label={t("common.remove")}
+                    onClick={() =>
+                      setTalkingPoints(
+                        talkingPoints.filter((_, i) => i !== index),
+                      )
+                    }
+                    size="icon-xs"
+                    type="button"
+                    variant="ghost"
+                  >
+                    <XIcon />
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <Button
+              className="w-fit"
+              onClick={() => setTalkingPoints([...talkingPoints, ""])}
+              size="xs"
+              type="button"
+              variant="outline"
+            >
+              <PlusIcon />
+              {t("knowledge.playbooks.negotiation.addTalkingPoint")}
+            </Button>
+          </div>
+
+          <div className="grid gap-1.5">
+            <Label
+              className="text-xs"
+              htmlFor={`position-negotiation-escalation-${position.sourceId}`}
+            >
+              {t("knowledge.playbooks.negotiation.escalationLabel")}
+            </Label>
+            <Input
+              className="h-8 text-sm"
+              id={`position-negotiation-escalation-${position.sourceId}`}
+              maxLength={NEGOTIATION_FIELD_LIMITS.escalation}
+              onChange={(e) =>
+                onChange(
+                  updateNegotiation(position, { escalation: e.target.value }),
+                )
+              }
+              placeholder={t(
+                "knowledge.playbooks.negotiation.escalationPlaceholder",
+              )}
+              value={negotiation?.escalation ?? ""}
+            />
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

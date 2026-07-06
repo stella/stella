@@ -57,8 +57,13 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
+import type {
+  Negotiation,
+  PlaybookPositionsValue,
+} from "@/routes/_protected.knowledge/-components/playbook-types";
 import {
   PLAYBOOK_PICKER_LIMIT,
+  playbookDetailOptions,
   playbooksOptions,
 } from "@/routes/_protected.knowledge/-queries";
 
@@ -96,6 +101,20 @@ export const PlaybookFacet = ({
   );
   const playbooks =
     playbooksData && "items" in playbooksData ? playbooksData.items : [];
+
+  // Negotiation guidance is authored on the playbook definition, not the
+  // review response (the backend Finding shape stays unchanged): fetch the
+  // reviewed playbook's positions and look each finding's guidance up by
+  // `sourceId` (== `finding.positionId`) so a deviation/fallback card can
+  // surface what to say without threading new fields through grading.
+  const { data: playbookDetail } = useQuery({
+    ...playbookDetailOptions(
+      user.activeOrganizationId,
+      session?.playbookId ?? "",
+    ),
+    enabled: typeof session?.playbookId === "string",
+  });
+  const negotiationBySourceId = negotiationLookup(playbookDetail);
 
   const editorAvailable = registration !== undefined;
   const playbookName =
@@ -224,6 +243,7 @@ export const PlaybookFacet = ({
         editorAvailable={editorAvailable}
         findings={session.findings}
         fixStateByPosition={session.fixState}
+        negotiationBySourceId={negotiationBySourceId}
         onAcceptFix={acceptFix}
         onInsertFix={(finding) => {
           void insertFix(finding);
@@ -415,6 +435,7 @@ const ErrorState = ({
 type ResultsViewProps = {
   findings: readonly PlaybookFinding[];
   fixStateByPosition: Record<string, PlaybookFixState>;
+  negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   playbookName: string;
   editorAvailable: boolean;
   onReviewAgain: () => void;
@@ -428,6 +449,7 @@ type ResultsViewProps = {
 const ResultsView = ({
   findings,
   fixStateByPosition,
+  negotiationBySourceId,
   playbookName,
   editorAvailable,
   onReviewAgain,
@@ -504,6 +526,7 @@ const ResultsView = ({
                     finding={finding}
                     fixState={fixStateByPosition[finding.positionId]}
                     key={finding.positionId}
+                    negotiation={negotiationBySourceId.get(finding.positionId)}
                     onAcceptFix={onAcceptFix}
                     onInsertFix={onInsertFix}
                     onRejectFix={onRejectFix}
@@ -523,6 +546,7 @@ const ResultsView = ({
 type FindingCardProps = {
   finding: PlaybookFinding;
   fixState: PlaybookFixState | undefined;
+  negotiation: Negotiation | undefined;
   editorAvailable: boolean;
   onScrollToBlock: (blockId: string) => void;
   onInsertFix: (finding: PlaybookFinding) => void;
@@ -531,9 +555,18 @@ type FindingCardProps = {
   onRejectFix: (positionId: string, revisionIds: readonly number[]) => void;
 };
 
+// Negotiation guidance only helps once a clause has actually been flagged: a
+// compliant/missing verdict has nothing to negotiate, so the block is gated
+// on the two verdicts a reviewer would actually raise with the counterparty.
+const NEGOTIABLE_VERDICTS: readonly PlaybookVerdict[] = new Set([
+  "deviation",
+  "fallback",
+]);
+
 const FindingCard = ({
   finding,
   fixState,
+  negotiation,
   editorAvailable,
   onScrollToBlock,
   onInsertFix,
@@ -616,6 +649,7 @@ const FindingCard = ({
             ))}
           </div>
         )}
+        <NegotiationBlock negotiation={negotiation} verdict={finding.verdict} />
       </div>
 
       {finding.fix !== null && (
@@ -741,6 +775,84 @@ const MatchedRefLine = ({
       <span className="text-foreground-strong-muted">{label}</span> {text}
     </p>
   );
+};
+
+// Reviewer-facing "what to say" guidance authored on the position, not the
+// finding: surfaced only for the two verdicts a reviewer would actually raise
+// with the counterparty (a compliant/missing verdict has nothing to
+// negotiate). Tolerant of `negotiation` being absent (position authored no
+// guidance) the same way `MatchedRefLine` tolerates a missing `matchedRef`.
+const NegotiationBlock = ({
+  negotiation,
+  verdict,
+}: {
+  negotiation: Negotiation | undefined;
+  verdict: PlaybookVerdict | null;
+}) => {
+  const t = useTranslations();
+  if (
+    negotiation === undefined ||
+    verdict === null ||
+    !NEGOTIABLE_VERDICTS.has(verdict)
+  ) {
+    return null;
+  }
+  const talkingPoints = negotiation.talkingPoints ?? [];
+  return (
+    <div className="border-border/70 mt-1 space-y-1.5 rounded-md border border-dashed p-2">
+      <p className="text-foreground-strong-muted text-[11px] font-medium">
+        {t("knowledge.playbooks.negotiation.title")}
+      </p>
+      {negotiation.rationale !== undefined && (
+        <p className="text-muted-foreground text-xs leading-snug">
+          <span className="text-foreground-strong-muted">
+            {t("knowledge.playbooks.negotiation.rationaleLabel")}:
+          </span>{" "}
+          {negotiation.rationale}
+        </p>
+      )}
+      {talkingPoints.length > 0 && (
+        <div className="text-xs leading-snug">
+          <span className="text-foreground-strong-muted">
+            {t("knowledge.playbooks.negotiation.talkingPointsLabel")}:
+          </span>
+          <ul className="text-muted-foreground ms-4 list-disc">
+            {talkingPoints.map((point, index) => (
+              // Plain authored strings with no stable id; this list is
+              // read-only and never reordered from the review facet.
+              <li key={index}>{point}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {negotiation.escalation !== undefined && (
+        <p className="text-muted-foreground text-xs leading-snug">
+          <span className="text-foreground-strong-muted">
+            {t("knowledge.playbooks.negotiation.escalationLabel")}:
+          </span>{" "}
+          {negotiation.escalation}
+        </p>
+      )}
+    </div>
+  );
+};
+
+// The reviewed playbook's positions, keyed by `sourceId` (== `finding.positionId`)
+// so a finding can be joined back to the negotiation guidance its position
+// authored. Tolerant of the detail query still loading / erroring (empty map).
+const negotiationLookup = (
+  detail: { positions: PlaybookPositionsValue } | undefined,
+): ReadonlyMap<string, Negotiation> => {
+  const map = new Map<string, Negotiation>();
+  if (!detail) {
+    return map;
+  }
+  for (const position of detail.positions.items) {
+    if (position.mode === "graded" && position.negotiation !== undefined) {
+      map.set(position.sourceId, position.negotiation);
+    }
+  }
+  return map;
 };
 
 // -- helpers --

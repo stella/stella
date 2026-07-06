@@ -95,6 +95,57 @@ describe("positionSchema — extract / graded discriminated union", () => {
   });
 });
 
+describe("negotiation — optional reviewer guidance on a graded position", () => {
+  test("accepts a graded position without negotiation", () => {
+    expect(Value.Check(positionSchema, gradedPosition)).toBe(true);
+  });
+
+  test("accepts a graded position with a full negotiation block", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        negotiation: {
+          rationale: "We want English law for predictable enforcement.",
+          talkingPoints: [
+            "Ask why local law is preferred over a neutral jurisdiction.",
+            "Offer arbitration as a compromise.",
+          ],
+          escalation: "Escalate to the deal lead if counterparty refuses.",
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("accepts negotiation with only some fields set", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        negotiation: { rationale: "Why we want this." },
+      }),
+    ).toBe(true);
+  });
+
+  test("rejects a talking point below the minimum length", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        negotiation: { talkingPoints: [""] },
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects more than the max talking points", () => {
+    expect(
+      Value.Check(positionSchema, {
+        ...gradedPosition,
+        negotiation: {
+          talkingPoints: Array.from({ length: 21 }, (_, i) => `Point ${i}`),
+        },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("askConfigSchema — auto vs manual", () => {
   test("accepts an auto ask with no stored derived result", () => {
     expect(

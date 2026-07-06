@@ -1593,6 +1593,16 @@
       "manageTypes": "Manage types…",
       "namePlaceholder": "pl. NDA felülvizsgálata",
       "nameRequired": "Adjon meg egy nevet.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Még nincsenek álláspontok. Adja hozzá az elsőt.",
       "optionPlaceholder": "Lehetőség értéke",
       "optionsLabel": "Lehetőségek",

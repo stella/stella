@@ -1593,6 +1593,16 @@
       "manageTypes": "Manage types…",
       "namePlaceholder": "مثال: مراجعة اتفاقية عدم الإفصاح",
       "nameRequired": "أضِف اسمًا.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "لا توجد مواقف بعد. أضِف الأول.",
       "optionPlaceholder": "قيمة الخيار",
       "optionsLabel": "الخيارات",

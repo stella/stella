@@ -1593,6 +1593,16 @@
       "manageTypes": "Manage types…",
       "namePlaceholder": "nt NDA ülevaatus",
       "nameRequired": "Lisage nimi.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Seisukohti veel pole. Lisage esimene.",
       "optionPlaceholder": "Valiku väärtus",
       "optionsLabel": "Valikud",

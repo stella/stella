@@ -139,6 +139,20 @@ const extractPositionSchema = t.Object({
   enabled: t.Boolean(),
 });
 
+// ── Negotiation: reviewer-facing guidance for a deviation/fallback verdict ──
+// Authored alongside the tier ladder so a reviewer who sees a flagged clause
+// knows what to say, not just that it is off-standard. Graded positions only:
+// an extract position never grades, so it never surfaces a verdict to
+// negotiate against.
+export const negotiationSchema = t.Object({
+  rationale: t.Optional(t.String({ maxLength: 2000 })),
+  talkingPoints: t.Optional(
+    t.Array(t.String({ minLength: 1, maxLength: 500 }), { maxItems: 20 }),
+  ),
+  escalation: t.Optional(t.String({ maxLength: 500 })),
+});
+export type Negotiation = Static<typeof negotiationSchema>;
+
 const gradedPositionSchema = t.Object({
   mode: t.Literal("graded"),
   sourceId: t.String({ format: "uuid" }),
@@ -148,6 +162,7 @@ const gradedPositionSchema = t.Object({
   check: t.Optional(deterministicCheckSchema),
   ask: askConfigSchema,
   guidance: t.Optional(t.String({ maxLength: 2000 })),
+  negotiation: t.Optional(negotiationSchema),
   enabled: t.Boolean(),
 });
 

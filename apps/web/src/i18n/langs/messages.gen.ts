@@ -1596,6 +1596,16 @@ type Messages = {
       "manageTypes": "Manage types…";
       "namePlaceholder": "e.g. NDA review";
       "nameRequired": "Add a name.";
+      "negotiation": {
+        "addTalkingPoint": "Add talking point";
+        "escalationLabel": "Escalation";
+        "escalationPlaceholder": "When/to whom to escalate (optional)";
+        "rationaleLabel": "Rationale";
+        "rationalePlaceholder": "Why we want this (optional)";
+        "talkingPointPlaceholder": "What to say";
+        "talkingPointsLabel": "Talking points";
+        "title": "Negotiation";
+      };
       "noPositions": "No positions yet. Add the first one.";
       "optionPlaceholder": "Option value";
       "optionsLabel": "Options";

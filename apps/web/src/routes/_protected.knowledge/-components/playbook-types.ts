@@ -26,6 +26,7 @@ export type TierRule = PositionTiers["acceptable"]["rules"][number];
 export type FallbackEntry = PositionTiers["fallback"]["entries"][number];
 export type IdealLanguage = NonNullable<PositionTiers["acceptable"]["ideal"]>;
 export type DeterministicCheck = NonNullable<GradedPosition["check"]>;
+export type Negotiation = NonNullable<GradedPosition["negotiation"]>;
 export type GradedAskConfig = GradedPosition["ask"];
 export type AskManual = ExtractPosition["ask"];
 export type PositionAskContent = AskManual["content"];
@@ -261,11 +262,12 @@ export const normalizePosition = (position: Position): Position => {
     };
   }
 
-  const { tiers } = position;
+  const { tiers, negotiation: rawNegotiation, ...rest } = position;
   const ideal = tiers.acceptable.ideal;
   const keepIdeal = hasUsableIdeal(ideal);
+  const negotiation = normalizeNegotiation(rawNegotiation);
   return {
-    ...position,
+    ...rest,
     issue,
     tiers: {
       acceptable: {
@@ -283,7 +285,35 @@ export const normalizePosition = (position: Position): Position => {
             content: normalizeContent(position.ask.content),
           }
         : position.ask,
+    ...(negotiation !== undefined ? { negotiation } : {}),
   };
+};
+
+// Trim rationale/escalation, drop blank talking points (server requires
+// minLength 1), and drop the whole facet when every field ends up empty so an
+// untouched "Negotiation" section never round-trips as `{}`.
+const normalizeNegotiation = (
+  negotiation: Negotiation | undefined,
+): Negotiation | undefined => {
+  if (negotiation === undefined) {
+    return undefined;
+  }
+  const rationale = negotiation.rationale?.trim();
+  const talkingPoints = negotiation.talkingPoints
+    ?.map((point) => point.trim())
+    .filter((point) => point.length > 0);
+  const escalation = negotiation.escalation?.trim();
+
+  const next: Negotiation = {
+    ...(rationale !== undefined && rationale.length > 0 ? { rationale } : {}),
+    ...(talkingPoints !== undefined && talkingPoints.length > 0
+      ? { talkingPoints }
+      : {}),
+    ...(escalation !== undefined && escalation.length > 0
+      ? { escalation }
+      : {}),
+  };
+  return Object.keys(next).length > 0 ? next : undefined;
 };
 
 const cleanRules = (rules: readonly TierRule[]): TierRule[] =>

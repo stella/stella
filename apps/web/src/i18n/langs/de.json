@@ -1593,6 +1593,16 @@
       "manageTypes": "Manage types…",
       "namePlaceholder": "z.B. NDA-Prüfung",
       "nameRequired": "Fügen Sie einen Namen hinzu.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Noch keine Standpunkte. Fügen Sie den ersten hinzu.",
       "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
