@@ -5,7 +5,8 @@
   "keywords": [
     "cli",
     "legal",
-    "stella"
+    "stella",
+    "tanstack-intent"
   ],
   "homepage": "https://github.com/stella/stella/tree/main/packages/cli",
   "bugs": {
@@ -23,12 +24,10 @@
   "files": [
     "dist",
     "src",
+    "skills",
     "README.md"
   ],
   "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
   "sideEffects": false,
   "exports": {
     ".": "./src/cli.ts"
@@ -56,5 +55,8 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
