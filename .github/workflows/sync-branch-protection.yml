@@ -1,0 +1,116 @@
+name: Sync Branch Protection
+
+# Applies checked-in ruleset JSON to the live GitHub repository
+# rulesets. Run after changing `.github/branch-protection/*.json`
+# so the weekly audit workflow stays green.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/branch-protection/**
+      - .github/workflows/sync-branch-protection.yml
+  workflow_dispatch:
+    inputs:
+      expected-config-path:
+        description: Path to the ruleset JSON to apply
+        type: choice
+        options:
+          - .github/branch-protection/ruleset-main.json
+          - .github/branch-protection/tags-v.json
+        default: .github/branch-protection/tags-v.json
+
+concurrency:
+  group: sync-branch-protection
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        expected-config-path:
+          - .github/branch-protection/ruleset-main.json
+          - .github/branch-protection/tags-v.json
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.BRANCH_PROTECTION_APP_ID }}
+          private-key: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
+
+      - name: Apply ruleset
+        # On push, sync configs touched by the commit. When the sync
+        # workflow itself changes, apply every checked-in ruleset so a
+        # prior config-only merge cannot leave live GitHub behind.
+        # On manual dispatch, sync the selected config only.
+        if: >-
+          github.event_name == 'workflow_dispatch'
+          && matrix.expected-config-path == inputs.expected-config-path
+          || github.event_name == 'push'
+          && (
+            contains(github.event.head_commit.modified, matrix.expected-config-path)
+            || contains(github.event.head_commit.added, matrix.expected-config-path)
+            || contains(github.event.head_commit.modified, '.github/workflows/sync-branch-protection.yml')
+            || contains(github.event.head_commit.added, '.github/workflows/sync-branch-protection.yml')
+          )
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REPO: ${{ github.repository }}
+          EXPECTED_PATH: ${{ matrix.expected-config-path }}
+        shell: bash --noprofile --norc -eo pipefail {0}
+        run: |
+          if [ ! -f "${EXPECTED_PATH}" ]; then
+            echo "::error::Expected config not found: ${EXPECTED_PATH}"
+            exit 1
+          fi
+
+          EXPECTED_NAME=$(jq -r '.name' "${EXPECTED_PATH}")
+          echo "Syncing ruleset: ${EXPECTED_NAME}"
+
+          MATCHED_ID=$(
+            gh api "repos/${REPO}/rulesets" \
+              --paginate \
+              --slurp \
+              | jq --arg name "${EXPECTED_NAME}" '[add // [] | .[] | select(.name == $name) | .id] | first'
+          )
+
+          if [ -z "${MATCHED_ID}" ] || [ "${MATCHED_ID}" = "null" ]; then
+            echo "::error::Ruleset '${EXPECTED_NAME}' not found on GitHub."
+            exit 1
+          fi
+
+          jq '{
+            name,
+            target,
+            enforcement,
+            conditions,
+            rules,
+            bypass_actors
+          }' "${EXPECTED_PATH}" > ruleset-payload.json
+
+          echo "::group::Payload"
+          jq . ruleset-payload.json
+          echo "::endgroup::"
+
+          gh api --method PUT "repos/${REPO}/rulesets/${MATCHED_ID}" \
+            --input ruleset-payload.json \
+            > live-updated.json
+
+          echo "::group::Live ruleset (after sync)"
+          jq . live-updated.json
+          echo "::endgroup::"
+
+          echo "Synced ruleset '${EXPECTED_NAME}' (id ${MATCHED_ID})."
