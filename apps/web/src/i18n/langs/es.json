@@ -1636,6 +1636,18 @@
         "viewClause": "Ver cláusula",
         "violatedRedLine": "Viola la línea roja:"
       },
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
+      },
       "ruleNumber": "Regla {index}",
       "rulePlaceholder": "Regla en lenguaje sencillo",
       "saveFailed": "No se pudo guardar el playbook",

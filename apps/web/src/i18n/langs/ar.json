@@ -1636,6 +1636,18 @@
         "viewClause": "عرض البند",
         "violatedRedLine": "الخط الأحمر المخالف:"
       },
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
+      },
       "ruleNumber": "القاعدة {index}",
       "rulePlaceholder": "قاعدة بلغة بسيطة",
       "saveFailed": "فشل حفظ دليل المراجعة",

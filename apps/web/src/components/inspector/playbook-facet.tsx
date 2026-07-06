@@ -52,6 +52,8 @@ import type {
   PlaybookSeverity,
   PlaybookVerdict,
 } from "@/components/ai-suggestions/playbook-review-store";
+import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
+import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -500,6 +502,11 @@ const ResultsView = ({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-2 py-2">
+          <RiskSummaryCard
+            editorAvailable={editorAvailable}
+            findings={findings}
+            onScrollToBlock={onScrollToBlock}
+          />
           {groups.map((group) => (
             <section className="mb-4" key={group.severity}>
               <h3 className="text-muted-foreground mb-2 flex items-center gap-2 px-1 text-[11px] font-medium tracking-[0.06em] uppercase">
@@ -540,6 +547,176 @@ const ResultsView = ({
         </div>
       )}
     </div>
+  );
+};
+
+// -- Risk summary --
+
+// At-a-glance rollup shown above the findings list: the overall risk level,
+// how many of the reviewed positions were flagged, the verdict breakdown, and
+// the handful of issues that matter most — so a reviewer sees the contract's
+// shape without reading every finding. Purely derived from `findings`
+// (`computeRiskRollup`, no LLM call); reuses the citations already on each
+// finding to make a top issue clickable through the same `onScrollToBlock`
+// the finding cards use, rather than adding a second query.
+type RiskSummaryCardProps = {
+  findings: readonly PlaybookFinding[];
+  editorAvailable: boolean;
+  onScrollToBlock: (blockId: string) => void;
+};
+
+const RISK_BREAKDOWN_ORDER: readonly PlaybookVerdict[] = [
+  "deviation",
+  "missing",
+  "fallback",
+  "compliant",
+];
+
+const RiskSummaryCard = ({
+  findings,
+  editorAvailable,
+  onScrollToBlock,
+}: RiskSummaryCardProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const verdictLabels = useVerdictLabels();
+  const riskLabels = useRiskLevelLabels();
+
+  const rollup = computeRiskRollup(findings);
+  const findingByPositionId = new Map(
+    findings.map((finding) => [finding.positionId, finding]),
+  );
+
+  return (
+    <div className="bg-card mb-3 space-y-2.5 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase">
+          {t("knowledge.playbooks.risk.summaryTitle")}
+        </h3>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+            riskChipClass(rollup.overallRisk),
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 rounded-full",
+              riskDotClass(rollup.overallRisk),
+            )}
+          />
+          {riskLabels[rollup.overallRisk]}
+        </span>
+      </div>
+
+      <p className="text-muted-foreground text-xs">
+        {t("knowledge.playbooks.risk.flaggedCount", {
+          flagged: rollup.flaggedCount,
+          total: rollup.totalPositions,
+        })}
+      </p>
+
+      {rollup.flaggedCount > 0 && (
+        <ul className="flex flex-wrap gap-x-3 gap-y-1">
+          {RISK_BREAKDOWN_ORDER.map((verdict) => {
+            const count = rollup.verdictCounts[verdict];
+            if (count === 0) {
+              return null;
+            }
+            return (
+              <li
+                className="text-muted-foreground flex items-center gap-1 text-[11px]"
+                key={verdict}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    verdictDotClass(verdict),
+                  )}
+                />
+                {verdictLabels[verdict]}
+                <span className="text-foreground-ghost tabular-nums">
+                  {format.number(count)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {rollup.topIssues.length > 0 && (
+        <div className="space-y-1 border-t pt-2">
+          <p className="text-muted-foreground text-[11px] font-medium tracking-[0.06em] uppercase">
+            {t("knowledge.playbooks.risk.topIssuesTitle")}
+          </p>
+          <ul className="space-y-1">
+            {rollup.topIssues.map((topIssue) => (
+              <TopIssueRow
+                blockId={
+                  findingByPositionId.get(topIssue.positionId)?.citations.at(0)
+                    ?.blockId ?? null
+                }
+                editorAvailable={editorAvailable}
+                key={topIssue.positionId}
+                onScrollToBlock={onScrollToBlock}
+                severity={topIssue.severity}
+                text={topIssue.issue}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+type TopIssueRowProps = {
+  text: string;
+  severity: PlaybookSeverity;
+  blockId: string | null;
+  editorAvailable: boolean;
+  onScrollToBlock: (blockId: string) => void;
+};
+
+const TopIssueRow = ({
+  text,
+  severity,
+  blockId,
+  editorAvailable,
+  onScrollToBlock,
+}: TopIssueRowProps) => {
+  const dot = (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "size-1.5 shrink-0 rounded-full",
+        severityDotClass(severity),
+      )}
+    />
+  );
+
+  if (blockId === null || !editorAvailable) {
+    return (
+      <li className="text-foreground flex items-center gap-1.5 text-xs">
+        {dot}
+        <span className="truncate">{text}</span>
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <button
+        className="text-foreground hover:bg-muted flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-start text-xs transition-colors"
+        onClick={() => onScrollToBlock(blockId)}
+        type="button"
+      >
+        {dot}
+        <span className="truncate">{text}</span>
+      </button>
+    </li>
   );
 };
 
@@ -883,6 +1060,67 @@ const useSeverityLabels = (): Record<PlaybookSeverity, string> => {
     medium: t("knowledge.playbooks.severity.medium"),
     low: t("knowledge.playbooks.severity.low"),
   };
+};
+
+const useRiskLevelLabels = (): Record<OverallRisk, string> => {
+  const t = useTranslations();
+  return {
+    critical: t("knowledge.playbooks.risk.riskLevel.critical"),
+    high: t("knowledge.playbooks.risk.riskLevel.high"),
+    medium: t("knowledge.playbooks.risk.riskLevel.medium"),
+    low: t("knowledge.playbooks.risk.riskLevel.low"),
+    none: t("knowledge.playbooks.risk.riskLevel.none"),
+  };
+};
+
+// The overall-risk chip escalates visually with the level: "critical" is the
+// one solid-fill state (it means an outright violation of a non-negotiable
+// position), the rest reuse the same outlined verdict/severity token pairs
+// as the finding cards below.
+const RISK_CHIP_CRITICAL =
+  "border-transparent bg-destructive text-destructive-foreground";
+const RISK_CHIP_HIGH = "border-destructive/30 text-destructive";
+const RISK_CHIP_MEDIUM = "border-warning/30 text-warning-foreground";
+const RISK_CHIP_LOW = "border-border text-muted-foreground";
+const RISK_CHIP_NONE = "border-success/30 text-success";
+
+const riskChipClass = (risk: OverallRisk): string => {
+  switch (risk) {
+    case "critical":
+      return RISK_CHIP_CRITICAL;
+    case "high":
+      return RISK_CHIP_HIGH;
+    case "medium":
+      return RISK_CHIP_MEDIUM;
+    case "low":
+      return RISK_CHIP_LOW;
+    case "none":
+      return RISK_CHIP_NONE;
+    default:
+      risk satisfies never;
+      return "";
+  }
+};
+
+const riskDotClass = (risk: OverallRisk): string => {
+  switch (risk) {
+    // The "critical" dot sits on the chip's own solid destructive
+    // background, so it needs the foreground shade for contrast; "high"
+    // sits on a transparent chip like the severity dots elsewhere.
+    case "critical":
+      return "bg-destructive-foreground";
+    case "high":
+      return "bg-destructive";
+    case "medium":
+      return "bg-warning";
+    case "low":
+      return "bg-foreground-strong-muted";
+    case "none":
+      return "bg-success";
+    default:
+      risk satisfies never;
+      return "";
+  }
 };
 
 // Verdict tiers map to the same green/amber/red/gray semantic

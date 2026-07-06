@@ -1636,6 +1636,18 @@
         "viewClause": "Vaata klauslit",
         "violatedRedLine": "Rikutud punane joon:"
       },
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
+      },
       "ruleNumber": "Reegel {index}",
       "rulePlaceholder": "Tavakeelne reegel",
       "saveFailed": "Playbooki salvestamine ebaõnnestus",

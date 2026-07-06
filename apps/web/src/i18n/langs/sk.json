@@ -1636,6 +1636,18 @@
         "viewClause": "Zobraziť ustanovenie",
         "violatedRedLine": "Porušuje neprijateľné pravidlo:"
       },
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
+      },
       "ruleNumber": "Pravidlo {index}",
       "rulePlaceholder": "Pravidlo v jednoduchom jazyku",
       "saveFailed": "Playbook sa nepodarilo uložiť",

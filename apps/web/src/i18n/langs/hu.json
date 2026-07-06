@@ -1636,6 +1636,18 @@
         "viewClause": "Záradék megtekintése",
         "violatedRedLine": "Nem elfogadható szabályt sért:"
       },
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
+      },
       "ruleNumber": "{index}. szabály",
       "rulePlaceholder": "Egyszerű nyelvű szabály",
       "saveFailed": "A playbook mentése nem sikerült",

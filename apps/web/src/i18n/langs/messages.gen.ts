@@ -1639,6 +1639,18 @@ type Messages = {
         "viewClause": "View clause";
         "violatedRedLine": "Violates red line:";
       };
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged";
+        "riskLevel": {
+          "critical": "Critical";
+          "high": "High";
+          "low": "Low";
+          "medium": "Medium";
+          "none": "No risk";
+        };
+        "summaryTitle": "Risk summary";
+        "topIssuesTitle": "Top issues";
+      };
       "ruleNumber": "Rule {index}";
       "rulePlaceholder": "Plain-language rule";
       "saveFailed": "Failed to save playbook";

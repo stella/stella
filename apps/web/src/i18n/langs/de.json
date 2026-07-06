@@ -1636,6 +1636,18 @@
         "viewClause": "Klausel anzeigen",
         "violatedRedLine": "Verstößt gegen rote Linie:"
       },
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
+      },
       "ruleNumber": "Regel {index}",
       "rulePlaceholder": "Regel in einfacher Sprache",
       "saveFailed": "Playbook konnte nicht gespeichert werden",

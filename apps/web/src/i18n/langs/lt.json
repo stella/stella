@@ -1636,6 +1636,18 @@
         "viewClause": "Žiūrėti sąlygą",
         "violatedRedLine": "Pažeista raudona linija:"
       },
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
+      },
       "ruleNumber": "Taisyklė {index}",
       "rulePlaceholder": "Paprasta kalba suformuluota taisyklė",
       "saveFailed": "Nepavyko išsaugoti peržiūros vadovo",
