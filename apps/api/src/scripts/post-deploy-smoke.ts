@@ -28,6 +28,10 @@ import * as v from "valibot";
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
 const READ_CHECK_TIMEOUT_MS = 15_000;
 const CHAT_SEND_TIMEOUT_MS = 60_000;
+const REVISION_READINESS_TIMEOUT_MS = 600_000;
+const REVISION_READINESS_INTERVAL_MS = 5000;
+const REVISION_READINESS_LOG_INTERVAL_MS = 30_000;
+const REVISION_READINESS_STABLE_SAMPLES = 3;
 // Cap how much of the chat SSE stream we read while looking for an
 // early error frame. A healthy turn streams far more than this; we only
 // need the opening frames to tell "started streaming" from "failed".
@@ -241,6 +245,59 @@ export const evaluateChatStreamPrefix = (prefix: string): EvaluatedCheck => {
 export const allChecksPassed = (checks: EvaluatedCheck[]): boolean =>
   checks.every((check) => check.ok);
 
+type HealthRevisionInput = {
+  body: unknown;
+  expectedCommit: string | undefined;
+  status: number;
+};
+
+const getObjectProperty = (value: unknown, property: string): unknown => {
+  if (typeof value !== "object" || value === null || !(property in value)) {
+    return undefined;
+  }
+  return Reflect.get(value, property);
+};
+
+const getCommitFromHealthBody = (body: unknown): string | null => {
+  const commit = getObjectProperty(body, "commit");
+  if (typeof commit === "string") {
+    return commit;
+  }
+  return null;
+};
+
+export const evaluateHealthRevision = ({
+  body,
+  expectedCommit,
+  status,
+}: HealthRevisionInput): EvaluatedCheck => {
+  const httpCheck = evaluateHttpCheck({
+    name: "GET /health",
+    status,
+    mode: CHECK_MODE.okOnly,
+  });
+  if (!httpCheck.ok || !expectedCommit) {
+    return httpCheck;
+  }
+
+  const commit = getCommitFromHealthBody(body);
+  if (commit === expectedCommit) {
+    return {
+      name: "GET /health",
+      ok: true,
+      detail: `${String(status)} serving ${commit}`,
+    };
+  }
+
+  return {
+    name: "GET /health",
+    ok: false,
+    detail: commit
+      ? `${String(status)} serving stale commit ${commit}`
+      : `${String(status)} without a commit marker`,
+  };
+};
+
 const sessionCookieHeader = (session: SmokeSession): string =>
   `${session.cookieName}=${session.cookieValue}`;
 
@@ -316,10 +373,78 @@ const readHealth = async (baseUrl: string): Promise<EvaluatedCheck> => {
   const response = await fetch(`${baseUrl}/health`, {
     signal: AbortSignal.timeout(READ_CHECK_TIMEOUT_MS),
   });
-  return evaluateHttpCheck({
-    name: "GET /health",
+  return evaluateHealthRevision({
+    body: response.ok ? await response.json().catch(() => null) : null,
+    expectedCommit: process.env["EXPECTED_COMMIT"],
     status: response.status,
-    mode: CHECK_MODE.okOnly,
+  });
+};
+
+const sleep = async (ms: number): Promise<void> =>
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+
+const writeReadinessLog = (message: string): void => {
+  process.stdout.write(`[api-readiness] ${message}\n`);
+};
+
+const waitForApiRevision = async (baseUrl: string): Promise<void> => {
+  const expectedCommit = process.env["EXPECTED_COMMIT"];
+  if (!expectedCommit) {
+    return;
+  }
+
+  const deadline = Date.now() + REVISION_READINESS_TIMEOUT_MS;
+  let consecutive = 0;
+  let lastDetail = "no readiness samples collected";
+  let nextPeriodicLogAt = 0;
+
+  writeReadinessLog(
+    `waiting for ${expectedCommit} for up to ${
+      REVISION_READINESS_TIMEOUT_MS / 1000
+    }s`,
+  );
+
+  while (Date.now() < deadline) {
+    let check: EvaluatedCheck;
+    try {
+      // oxlint-disable-next-line no-await-in-loop -- readiness must be sampled sequentially to build a stable streak
+      check = await readHealth(baseUrl);
+    } catch (error) {
+      check = {
+        name: "GET /health",
+        ok: false,
+        detail: `request failed: ${errorMessage(error)}`,
+      };
+    }
+
+    const now = Date.now();
+    consecutive = check.ok ? consecutive + 1 : 0;
+    if (check.detail !== lastDetail || now >= nextPeriodicLogAt) {
+      writeReadinessLog(
+        `${check.ok ? "ready" : "waiting"} (${check.detail}); stable samples ${String(
+          consecutive,
+        )}/${String(REVISION_READINESS_STABLE_SAMPLES)}`,
+      );
+      nextPeriodicLogAt = now + REVISION_READINESS_LOG_INTERVAL_MS;
+    }
+    lastDetail = check.detail;
+
+    if (consecutive >= REVISION_READINESS_STABLE_SAMPLES) {
+      writeReadinessLog(`ready after ${String(consecutive)} stable samples`);
+      return;
+    }
+
+    // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between readiness samples
+    await sleep(REVISION_READINESS_INTERVAL_MS);
+  }
+
+  throw new PostDeploySmokeError({
+    message:
+      `API did not stably serve ${expectedCommit} within ` +
+      `${String(REVISION_READINESS_TIMEOUT_MS / 1000)}s. ` +
+      `Last sample: ${lastDetail}`,
   });
 };
 
@@ -485,6 +610,8 @@ const main = async (): Promise<void> => {
         "SMOKE_SESSION_SECRET is required to authenticate the post-deploy smoke",
     });
   }
+
+  await waitForApiRevision(baseUrl);
 
   const session = await mintSmokeSession(baseUrl, secret);
   const cookie = sessionCookieHeader(session);
