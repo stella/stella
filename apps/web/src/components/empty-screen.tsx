@@ -91,6 +91,8 @@ type EmptyScreenProps = {
 
 type CredentiallessIframeProps = ComponentProps<"iframe"> & {
   credentialless?: boolean;
+  sandbox: string;
+  title: string;
 };
 
 export const EmptyScreen = ({
@@ -495,8 +497,12 @@ const EmptyScreenVideoOverlay = ({
   );
 };
 
-const CredentiallessIframe = (props: CredentiallessIframeProps) => (
-  <iframe {...props} />
+const CredentiallessIframe = ({
+  sandbox,
+  title,
+  ...props
+}: CredentiallessIframeProps) => (
+  <iframe {...props} sandbox={sandbox} title={title} />
 );
 
 const toYouTubeEmbedUrl = (url: string): string | undefined => {
