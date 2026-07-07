@@ -2102,9 +2102,6 @@ export const TemplateStudioPage = ({
 
       markSaved();
       stellaToast.add({ title: t("templates.templateSaved"), type: "success" });
-      void queryClient.invalidateQueries({
-        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
-      });
 
       // Flush deferred link-row slot renames now that the document (with its
       // already-rewritten {{@clause:...}} markers) is persisted, so the row
@@ -2129,18 +2126,29 @@ export const TemplateStudioPage = ({
         // obsolete: drop it and keep replaying.
         let resolvedCount = 0;
         for (const step of pendingSlotRenames) {
-          // eslint-disable-next-line no-await-in-loop -- sequencing is the point: steps must replay in recorded order so each rename lands against the state the prior steps produced, respecting the unique-slot constraint.
-          const patched = await api
-            .templates({ templateId: toSafeId<"template">(templateId) })
-            .clauses({ linkId: toSafeId<"templateClause">(step.linkId) })
-            .patch({ slotName: step.slotName });
-          if (patched.error && patched.error.status !== 404) {
-            // Capture the first hard failure for a single toast, then stop: this
-            // step and everything after it stay pending for the next save.
-            slotRenameErrorMessage = userErrorMessage(
-              patched.error,
-              t("common.unexpectedError"),
-            );
+          // A rejected request (network drop) must land in the same retryable
+          // path as an error response: letting it escape to the outer catch
+          // after markSaved() would leave the pending steps stranded with the
+          // Save affordance (gated on isDirty) gone.
+          try {
+            // eslint-disable-next-line no-await-in-loop -- sequencing is the point: steps must replay in recorded order so each rename lands against the state the prior steps produced, respecting the unique-slot constraint.
+            const patched = await api
+              .templates({ templateId: toSafeId<"template">(templateId) })
+              .clauses({ linkId: toSafeId<"templateClause">(step.linkId) })
+              .patch({ slotName: step.slotName });
+            if (patched.error && patched.error.status !== 404) {
+              // Capture the first hard failure for a single toast, then stop:
+              // this step and everything after it stay pending for the next
+              // save.
+              slotRenameErrorMessage = userErrorMessage(
+                patched.error,
+                t("common.unexpectedError"),
+              );
+            }
+          } catch {
+            slotRenameErrorMessage = t("common.unexpectedError");
+          }
+          if (slotRenameErrorMessage !== null) {
             break;
           }
           // Success, or an obsolete (404) step: either way this leading step is
@@ -2160,13 +2168,16 @@ export const TemplateStudioPage = ({
             description: slotRenameErrorMessage,
           });
         }
-        void queryClient.invalidateQueries({
-          queryKey: knowledgeKeys.templates.clauses(
-            activeOrganizationId,
-            templateId,
-          ),
-        });
       }
+      // Invalidate the templates subtree (which nests the clauses, check, and
+      // preview keys) only AFTER the flush: refetching between the document
+      // POST and the link-row PATCHes would observe the intermediate state
+      // where the stored DOCX already carries the renamed {{@clause:...}}
+      // markers but template_clauses.slotName does not, showing a false
+      // check-badge mismatch.
+      void queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+      });
       // Report overall failure when a slot PATCH hard-failed: the document
       // itself saved, but "Save and leave" must stay in the Studio so the
       // still-pending steps (and their retry) are not discarded by the
