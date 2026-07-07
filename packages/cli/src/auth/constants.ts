@@ -45,11 +45,17 @@ export const AUTHORIZATION_SERVER_METADATA_PATHS = [
 export const LOOPBACK_REDIRECT_PATH = "/callback";
 export const LOOPBACK_REDIRECT_URI: string = `http://127.0.0.1${LOOPBACK_REDIRECT_PATH}`;
 
-/** Default scopes requested when `stella auth login` is run without `--scopes`. */
+/**
+ * Default scopes requested when `stella auth login` is run without
+ * `--scopes`. Includes `offline_access` so the stored credential carries a
+ * refresh token; without it the access token dies after 15 minutes and
+ * every command would demand a fresh browser login.
+ */
 export const CLI_DEFAULT_SCOPES = [
   "openid",
   "profile",
   "email",
+  "offline_access",
   "stella:read",
   "stella:search",
 ] as const;
@@ -59,6 +65,7 @@ export const CLI_KNOWN_SCOPES = [
   "openid",
   "profile",
   "email",
+  "offline_access",
   "stella:search",
   "stella:read",
   "stella:templates",

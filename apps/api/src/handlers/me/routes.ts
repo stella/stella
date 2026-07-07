@@ -1,6 +1,8 @@
 import Elysia from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
+import disconnectOAuthConnection from "@/api/handlers/me/disconnect-oauth-connection";
+import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
 import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
 import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
@@ -17,6 +19,10 @@ const isDeleteAccountOtpSendPath = (pathname: string): boolean =>
 export const meRoute = new Elysia({ prefix: "/me" })
   .use(sessionAuthMacro)
   .guard({ validateSession: true })
+  .get("/oauth-connections", listOAuthConnections.handler)
+  .delete("/oauth-connections/:consentId", disconnectOAuthConnection.handler, {
+    params: disconnectOAuthConnection.config.params,
+  })
   .group("/delete", (app) =>
     app
       .get("/pending-tasks", deleteAccountPendingTasks.handler)

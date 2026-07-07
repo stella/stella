@@ -91,6 +91,10 @@ export const LIMITS = {
   mcpCustomConnectorsPerOrgMax: 50,
   /** Max per-user MCP connection rows returned by the connections listing. */
   mcpConnectionsPageSizeMax: 100,
+  /** Max OAuth consent rows ("connected apps") returned by the user's
+   *  connections-settings listing. Naturally bounded per user (one row per
+   *  authorized client), but still capped defensively. */
+  oauthConnectionsPageSizeMax: 100,
   /** Default/max page sizes for the MCP `list_matters`-style list tools. */
   mcpListPageSizeDefault: 25,
   mcpListPageSizeMax: 100,

@@ -5,6 +5,7 @@ import {
   GaugeIcon,
   HashIcon,
   MonitorIcon,
+  PlugIcon,
   ShieldIcon,
   SparklesIcon,
   TagsIcon,
@@ -32,6 +33,7 @@ export const Route = createFileRoute("/_protected/settings")({
 type NavTo =
   | "/settings/account/profile"
   | "/settings/account/desktop"
+  | "/settings/account/connections"
   | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
@@ -71,6 +73,11 @@ const ACCOUNT_SECTION = {
       to: "/settings/account/desktop",
       labelKey: "settings.account.desktop",
       icon: MonitorIcon,
+    },
+    {
+      to: "/settings/account/connections",
+      labelKey: "settings.connections.title",
+      icon: PlugIcon,
     },
     // Beta features: only on hosts where users may flip them (dev,
     // staging); appended conditionally in SettingsLayout.

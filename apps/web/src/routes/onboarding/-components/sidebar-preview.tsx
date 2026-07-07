@@ -112,17 +112,15 @@ export const SidebarPreview = ({
 
       {/* Org name */}
       <div className="border-b px-4 py-2.5">
-        <span className="text-foreground text-sm font-medium">
-          {organizationName ? (
-            <span className="animate-slide-in inline-block max-w-full truncate">
-              {organizationName}
-            </span>
-          ) : (
-            <span className="text-foreground-subtle">
-              {t("onboarding.orgNameLabel")}
-            </span>
-          )}
-        </span>
+        {organizationName ? (
+          <div className="animate-slide-in text-foreground truncate text-sm font-medium">
+            {organizationName}
+          </div>
+        ) : (
+          <div className="text-foreground-subtle text-sm font-medium">
+            {t("onboarding.orgNameLabel")}
+          </div>
+        )}
       </div>
 
       {/* Nav items */}

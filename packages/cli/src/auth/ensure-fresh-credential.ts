@@ -2,14 +2,12 @@
 // and reactively (a future Phase 3+ HTTP client on a 401) to keep a stored
 // credential usable without forcing a full re-login.
 //
-// Today's server config issues no refresh tokens at all (the oauthProvider's
-// `scopes` list has no `offline_access`, which is what
-// `@better-auth/oauth-provider` gates refresh-token issuance on — see
-// `packages/cli/src/auth/login.ts`'s module comment and the design brief).
-// This function is still exercised end-to-end against a mocked provider
-// (see `ensure-fresh-credential.test.ts`) so it is ready the moment that
-// scope is added server-side; until then every credential this CLI stores
-// simply has no `refreshToken` and expires after `ACCESS_TOKEN_EXPIRES_IN`.
+// `@better-auth/oauth-provider` gates refresh-token issuance on the
+// `offline_access` scope, which the stella server grants and
+// `CLI_DEFAULT_SCOPES` requests by default. A credential can still lack a
+// `refreshToken` (explicit `--scopes` without `offline_access`, or an older
+// self-hosted server that does not grant it); it then simply expires after
+// `ACCESS_TOKEN_EXPIRES_IN` and the next command asks for a re-login.
 
 import { Result } from "better-result";
 

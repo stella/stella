@@ -137,7 +137,6 @@
     "onboarding.catalogueDetailJurisdictions",
     "onboarding.cataloguePartial",
     "onboarding.continue",
-    "onboarding.stepDesktop",
     "onboarding.stepOrganization",
     "organization.aiConfig.active",
     "organization.aiConfig.apiKey",
@@ -1577,9 +1576,6 @@
     "navigation.shortcutCategories.navigation": [
       "de",
       "fr"
-    ],
-    "onboarding.stepDesktop": [
-      "de"
     ],
     "onboarding.stepOrganization": [
       "de"

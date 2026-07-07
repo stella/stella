@@ -22,14 +22,13 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { LanguagePicker } from "@/components/language-picker";
 import { ThemePicker } from "@/components/theme-picker";
-import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
-import { sessionOptions } from "@/routes/-queries";
+import { rootKeys, sessionOptions } from "@/routes/-queries";
 import { aiConfigKeys } from "@/routes/_protected.organization/-ai-config-queries";
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
@@ -45,7 +44,11 @@ import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
 import { CatalogueStep } from "@/routes/onboarding/-components/steps/catalogue-step";
 import type { Phase } from "@/routes/onboarding/-components/steps/creating-step";
 import { CreatingStep } from "@/routes/onboarding/-components/steps/creating-step";
-import { DownloadStep } from "@/routes/onboarding/-components/steps/download-step";
+import type { DownloadTarget } from "@/routes/onboarding/-components/steps/download-step";
+import {
+  DownloadSetupPreview,
+  DownloadStep,
+} from "@/routes/onboarding/-components/steps/download-step";
 import { InviteStep } from "@/routes/onboarding/-components/steps/invite-step";
 import {
   JurisdictionGlobePreview,
@@ -88,7 +91,6 @@ export const OnboardingWizard = () => {
   const t = useTranslations();
   const navigate = useNavigate();
   const analytics = useAnalytics();
-  const invalidateSession = useInvalidateSession();
   const queryClient = useQueryClient();
   const { data: sessionData } = useQuery(sessionOptions);
   const { data: nativeToolDeployAvailability } = useQuery(
@@ -102,6 +104,8 @@ export const OnboardingWizard = () => {
   const [catalogueRemovedSlugs, setCatalogueRemovedSlugs] = useState<
     readonly string[]
   >([]);
+  const [downloadTarget, setDownloadTarget] =
+    useState<DownloadTarget>("desktop");
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
     orgSlug: "",
@@ -251,7 +255,7 @@ export const OnboardingWizard = () => {
           title: createOrgError.message ?? t("errors.actionFailed"),
           type: "error",
         });
-        setStep("organization");
+        setStep("invite");
         return;
       }
 
@@ -270,15 +274,25 @@ export const OnboardingWizard = () => {
           title: setActiveError.message ?? t("errors.actionFailed"),
           type: "error",
         });
-        setStep("organization");
+        setStep("invite");
         return;
       }
 
       // From here the org already exists; if anything fails
-      // the safest recovery is to navigate to the main chat.
+      // the safest recovery is to continue on to the apps step.
       try {
-        // Refresh session so the app recognizes the new org
-        await invalidateSession.mutateAsync();
+        // Refresh the session/role query cache so the rest of setup (and
+        // the apps step after it) sees the new active org. This
+        // deliberately refetches the queries directly instead of going
+        // through `useInvalidateSession`, which also calls
+        // `router.invalidate()`: that re-runs this route's `beforeLoad`
+        // immediately, and since the session now has an
+        // `activeOrganizationId`, the guard would redirect away from
+        // /onboarding before the wizard ever reaches the apps step.
+        await Promise.all([
+          queryClient.refetchQueries({ queryKey: rootKeys.session }),
+          queryClient.refetchQueries({ queryKey: rootKeys.role }),
+        ]);
         await delay(500);
         setCreatingProgress(50);
 
@@ -475,19 +489,9 @@ export const OnboardingWizard = () => {
         analytics.captureError(error);
       }
 
-      await navigate({
-        to: "/chat",
-        replace: true,
-      });
+      setStep("download");
     },
-    [
-      analytics,
-      invalidateSession,
-      navigate,
-      queryClient,
-      t,
-      unavailableNativeToolBackendSlugs,
-    ],
+    [analytics, queryClient, t, unavailableNativeToolBackendSlugs],
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
@@ -553,6 +557,8 @@ export const OnboardingWizard = () => {
         roleModels={data.aiRoleModels}
       />
     );
+  } else if (step === "download") {
+    preview = <DownloadSetupPreview target={downloadTarget} />;
   }
 
   const renderStep = () => {
@@ -682,8 +688,9 @@ export const OnboardingWizard = () => {
             onEmailCountChange={setPreviewEmailCount}
             userEmail={userEmail}
             onNext={({ emails }) => {
-              setData((d) => ({ ...d, emails }));
-              setStep("download");
+              const finalData = { ...data, emails };
+              setData(finalData);
+              void executeSetup(finalData);
             }}
           />
         </OnboardingLayout>
@@ -731,20 +738,23 @@ export const OnboardingWizard = () => {
       );
     }
 
-    // step === "download"
+    // step === "download": the org already exists by this point, so there
+    // is no back affordance and no further setup to run — the buttons just
+    // land the user in the app.
     return (
       <OnboardingLayout
         currentStep={STEP_TO_PROGRESS.download}
-        onBack={() => setStep("invite")}
         preview={preview}
         totalSteps={TOTAL_STEPS}
       >
         <DownloadStep
+          onSelect={setDownloadTarget}
+          selected={downloadTarget}
           onNext={() => {
-            void executeSetup(data);
+            void navigate({ to: "/chat", replace: true });
           }}
           onSkip={() => {
-            void executeSetup(data);
+            void navigate({ to: "/chat", replace: true });
           }}
         />
       </OnboardingLayout>

@@ -1,0 +1,39 @@
+import { queryOptions } from "@tanstack/react-query";
+
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
+
+export const connectedAppsKeys = {
+  all: ["settings", "connections", "connected-apps"] as const,
+};
+
+type ListConnectedAppsFn = (typeof api.me)["oauth-connections"]["get"];
+
+/** The session user's authorized OAuth clients ("connected apps"). */
+export type ConnectedAppsResponse = NonNullable<
+  Awaited<ReturnType<ListConnectedAppsFn>>["data"]
+>;
+
+export type ConnectedApp = ConnectedAppsResponse["connections"][number];
+
+const fetchConnectedApps = async ({
+  signal,
+}: {
+  signal: AbortSignal;
+}): Promise<ConnectedAppsResponse> => {
+  const response = await api.me["oauth-connections"].get({
+    fetch: { signal },
+  });
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+  return response.data;
+};
+
+// No parameters (the list is always the session user's own), so this stays
+// a flat `queryOptions` value rather than a keyed factory — see
+// `sessionsOptions` in `_protected.account/-queries.ts` for the same shape.
+export const connectedAppsOptions = queryOptions({
+  queryKey: connectedAppsKeys.all,
+  queryFn: fetchConnectedApps,
+});

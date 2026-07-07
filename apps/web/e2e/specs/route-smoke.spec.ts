@@ -89,6 +89,10 @@ const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
     path: "/settings/account/beta",
     expectation: { kind: "settles" },
   },
+  {
+    template: "/settings/account/connections",
+    path: "/settings/account/connections",
+  },
   { template: "/settings/account/desktop", path: "/settings/account/desktop" },
   { template: "/settings/account/profile", path: "/settings/account/profile" },
   {
