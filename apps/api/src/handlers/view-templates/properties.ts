@@ -26,7 +26,7 @@ type WorkspacePropertyTemplateSource = {
   content: typeof properties.$inferSelect.content;
   tool: typeof properties.$inferSelect.tool;
   system: boolean;
-  role?: typeof properties.$inferSelect.role | undefined;
+  role: typeof properties.$inferSelect.role;
 };
 
 type WorkspacePropertyDependencySource = {
@@ -621,6 +621,16 @@ const validateTemplatePropertyConfig = (
 const normalizePropertyName = (name: string): string =>
   name.trim().toLocaleLowerCase();
 
+const DOCUMENT_TYPE_CLASSIFIER_ROLE = "document-type-classifier";
+
+const isLegacyDocumentTypeClassifierTemplate = (
+  templateProperty: ViewTemplateProperty,
+): boolean =>
+  templateProperty.role === undefined &&
+  normalizePropertyName(templateProperty.name) === "document type" &&
+  templateProperty.content.type === "single-select" &&
+  templateProperty.tool.type === "ai-model";
+
 const findUniquePropertyByRole = (
   existingProperties: readonly {
     id: string;
@@ -629,14 +639,18 @@ const findUniquePropertyByRole = (
   templateProperty: ViewTemplateProperty,
   consumedExistingPropertyIds: ReadonlySet<string>,
 ) => {
-  if (templateProperty.role === undefined) {
+  const role = isLegacyDocumentTypeClassifierTemplate(templateProperty)
+    ? DOCUMENT_TYPE_CLASSIFIER_ROLE
+    : templateProperty.role;
+
+  if (role === undefined) {
     return undefined;
   }
 
   return existingProperties.find(
     (property) =>
       !consumedExistingPropertyIds.has(property.id) &&
-      property.role === templateProperty.role,
+      property.role === role,
   );
 };
 

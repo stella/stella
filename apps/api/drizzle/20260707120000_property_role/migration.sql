@@ -1,20 +1,6 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "properties" ADD COLUMN IF NOT EXISTS "role" text;--> statement-breakpoint
-UPDATE "properties" AS p
-SET "role" = 'document-type-classifier'
-FROM (
-	SELECT id,
-		row_number() OVER (
-			PARTITION BY workspace_id
-			ORDER BY created_at ASC, id ASC
-		) AS rn
-	FROM "properties"
-	WHERE lower(trim("name")) = 'document type'
-		AND "content"->>'type' = 'single-select'
-		AND "tool"->>'type' = 'ai-model'
-) AS c
-WHERE p.id = c.id AND c.rn = 1;--> statement-breakpoint
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
