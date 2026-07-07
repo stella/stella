@@ -1,10 +1,9 @@
 import { loadNameDictionaries } from "@stll/anonymize-data";
 import {
+  createNativePipelineFromConfig,
   createPipelineContext,
-  DEFAULT_OPERATOR_CONFIG,
-  preparePipelineSearch,
-  redactText,
-  runPipeline,
+  deanonymise,
+  getBinding,
 } from "@stll/anonymize-wasm";
 
 import { loadAnonymizationAllowlistCanonicals } from "@/api/lib/anonymization-allowlist";
@@ -32,14 +31,13 @@ const runWithPipelineContext = async <T>(
 };
 
 const anonymizeTextFieldsDependencies = {
+  getBinding,
+  createNativePipelineFromConfig,
   createPipelineContext,
-  defaultOperatorConfig: DEFAULT_OPERATOR_CONFIG,
+  deanonymise,
   loadAnonymizationGazetteerEntries,
   loadAnonymizationAllowlistCanonicals,
   loadNameDictionaries: getNameDictionaries,
-  preparePipelineSearch,
-  redactText,
-  runPipeline,
 };
 
 export const anonymizeTextFields = async (input: AnonymizeTextFieldsInput) => {

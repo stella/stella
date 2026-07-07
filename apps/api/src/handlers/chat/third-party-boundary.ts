@@ -55,11 +55,12 @@ export type ChatThirdPartyBoundary =
       organizationId: SafeId<"organization">;
       /**
        * Shared pipeline context for every anonymization call on
-       * this boundary. The wasm pipeline's placeholder counter
-       * lives on the context — reusing the same instance means a
-       * later batch (tool output, system prompt) keeps numbering
-       * from where the previous batch (user prompt) left off, and
-       * `[PERSON_1]` can never resolve to two different originals.
+       * this boundary. On the native pipeline (2.0+) this is only a
+       * prepared-package assembly cache, not a placeholder-numbering
+       * cache: reusing it across calls avoids re-assembling the same
+       * config, but each `redactText` call numbers its own
+       * placeholders from `[LABEL_1]` again. See the `redactionMap`
+       * doc below for what this means for cross-call numbering.
        */
       pipelineContext: PipelineContext;
       /**
@@ -69,6 +70,21 @@ export type ChatThirdPartyBoundary =
        * stream-back path reads this to deanonymize assistant text /
        * tool outputs before they reach the user. Default operator
        * is "replace", which is reversible.
+       *
+       * Known limitation: the native pipeline numbers placeholders
+       * fresh within each `redactText` call (see `pipelineContext`
+       * above), so `[PERSON_1]` from the initial message batch and
+       * `[PERSON_1]` from a later tool-output batch can legitimately
+       * refer to different originals. `mergeRedactionMap` below
+       * keeps the *first* observed mapping per placeholder and
+       * ignores later collisions, so a later batch's same-numbered
+       * placeholder silently deanonymizes to the earlier value. This
+       * boundary already combines every message part it can see
+       * up-front into one `anonymizeFields` call (see
+       * `prepareMessagesForThirdParty`); tool outputs still arrive
+       * one at a time as the model calls tools, so those remain
+       * genuinely sequential calls that this boundary cannot merge
+       * into the first batch.
        */
       redactionMap: Map<string, string>;
       scopedDb: ScopedDb;
@@ -130,12 +146,14 @@ const mergeRedactionMap = (
     return;
   }
   for (const [placeholder, original] of source) {
-    // Stable mapping per request: the same placeholder must always
-    // resolve to the same original. If a later call disagrees we
-    // keep the first observation rather than silently rewriting it
-    // — in practice the wasm pipeline gives stable numbers within a
-    // single context, so collisions only arise from independent
-    // anonymization batches.
+    // First observation wins per placeholder. This was originally
+    // meant only to guard against unexpected drift within a single
+    // numbering sequence; on the native pipeline (2.0+), placeholder
+    // numbering restarts at `[LABEL_1]` on every `redactText` call
+    // (see the `redactionMap` doc on `ChatThirdPartyBoundary`), so a
+    // later batch's `[PERSON_1]` colliding with an earlier one is
+    // expected, not just a defensive edge case — and the later
+    // value is the one that gets silently dropped.
     if (!target.has(placeholder)) {
       target.set(placeholder, original);
     }

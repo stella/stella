@@ -1,5 +1,5 @@
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
-import type { ChatAnonResult } from "@stll/anonymize-chat";
+import type { ChatAnonResult, ChatAnonRuntime } from "@stll/anonymize-chat";
 import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
 
 import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
@@ -27,9 +27,10 @@ const getDictionaries = (): Promise<
 
 /**
  * Run the same wasm pipeline the server uses against a single
- * chat-sized text from the main thread. Calls run serially, but
- * each input gets its own `PipelineContext` so coreference aliases
- * cannot carry between unrelated drafts.
+ * chat-sized text from the main thread. Calls run serially; each
+ * input gets its own `PipelineContext` (now purely a prepared-package
+ * assembly cache — the native pipeline no longer carries coreference
+ * or placeholder-counter state across calls).
  */
 export const anonymizeChatText = async ({
   gazetteerEntries = [],
@@ -48,12 +49,11 @@ export const anonymizeChatText = async ({
   ]);
   return await runWithPipelineContext(async () => {
     const context = wasm.createPipelineContext();
-    const runtime = {
+    const runtime: ChatAnonRuntime = {
+      getBinding: wasm.getBinding,
+      createNativePipelineFromConfig: wasm.createNativePipelineFromConfig,
       createPipelineContext: wasm.createPipelineContext,
-      defaultOperatorConfig: wasm.DEFAULT_OPERATOR_CONFIG,
-      preparePipelineSearch: wasm.preparePipelineSearch,
-      redactText: wasm.redactText,
-      runPipeline: wasm.runPipeline,
+      deanonymise: wasm.deanonymise,
     };
     return await runChatAnonPipeline({
       runtime,
