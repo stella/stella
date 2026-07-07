@@ -13,6 +13,7 @@ import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
+  isDocumentTypeClassifierShape,
 } from "@/api/handlers/properties/create-schema";
 import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
@@ -37,6 +38,39 @@ type PropertyWithDeps = {
   tool: PropertyTool;
   role: PropertyRole | null;
   dependencies: { dependsOnPropertyId: SafeId<"property"> }[];
+};
+
+const resolveUpdatedClassifierRole = ({
+  content,
+  name,
+  oldProperty,
+  tool,
+}: {
+  content: PropertyContent;
+  name: string;
+  oldProperty: Pick<PropertyWithDeps, "content" | "name" | "role" | "tool">;
+  tool: PropertyTool;
+}): PropertyRole | null => {
+  const hadClassifierIdentity =
+    oldProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE ||
+    isDocumentTypeClassifierProperty({
+      content: oldProperty.content,
+      name: oldProperty.name,
+      role: null,
+      tool: oldProperty.tool,
+    });
+
+  if (hadClassifierIdentity) {
+    return isDocumentTypeClassifierShape({ content, tool })
+      ? DOCUMENT_TYPE_CLASSIFIER_ROLE
+      : null;
+  }
+
+  if (isDocumentTypeClassifierProperty({ content, name, role: null, tool })) {
+    return DOCUMENT_TYPE_CLASSIFIER_ROLE;
+  }
+
+  return null;
 };
 
 /**
@@ -242,17 +276,12 @@ const updateProperty = createSafeHandler(
           };
         }
 
-        const nextRole = isDocumentTypeClassifierProperty({
+        const nextRole = resolveUpdatedClassifierRole({
           content,
           name,
-          role:
-            oldProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE
-              ? DOCUMENT_TYPE_CLASSIFIER_ROLE
-              : null,
+          oldProperty,
           tool: dbTool,
-        })
-          ? DOCUMENT_TYPE_CLASSIFIER_ROLE
-          : null;
+        });
         const isAcquiringClassifierRole =
           oldProperty.role !== DOCUMENT_TYPE_CLASSIFIER_ROLE &&
           nextRole === DOCUMENT_TYPE_CLASSIFIER_ROLE;

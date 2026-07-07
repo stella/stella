@@ -994,6 +994,51 @@ describe("resolveTemplateProperties", () => {
     expect(returningMock).not.toHaveBeenCalled();
   });
 
+  test("reuses roleless legacy classifiers for legacy roleless templates", async () => {
+    const templateContent = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const templateTool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "Classify the document type.",
+    } satisfies ViewTemplateProperty["tool"];
+    const { returningMock, tx } = createTemplateReuseTx({
+      id: "existing_property",
+      name: "Document Type",
+      content: templateContent,
+      tool: templateTool,
+      role: null,
+    });
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_document_type",
+      name: "Document Type",
+      content: templateContent,
+      tool: templateTool,
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      layout: tableLayout("existing_property"),
+      propertyIds: ["existing_property"],
+    });
+    expect(returningMock).not.toHaveBeenCalled();
+  });
+
   test("tags legacy roleless classifier templates when creating", async () => {
     const templateContent = {
       version: 1,

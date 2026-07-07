@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -296,6 +297,80 @@ describe("updateProperty", () => {
 
     expect(result).toEqual({});
     expect(updatePatch).toMatchObject({ role: null });
+  });
+
+  test("preserves legacy classifier identity when renaming before backfill", async () => {
+    let updatePatch: unknown;
+    const content = {
+      version: 1,
+      type: "single-select",
+      options: [{ value: "NDA", color: "blue" }],
+      fallback: null,
+    } satisfies PropertyContent;
+    const tool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "classify",
+    } satisfies PropertyTool;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              {
+                id: toSafeId<"property">("property_test"),
+                name: "Document Type",
+                content,
+                tool,
+                role: null,
+                status: "fresh",
+                playbookDefinitionId: null,
+              },
+            ],
+          }),
+        }),
+      }),
+      query: {
+        propertyDependencies: { findMany: async () => [] },
+        properties: {
+          findMany: async () => [
+            {
+              id: toSafeId<"property">("property_test"),
+              name: "Document Type",
+              content,
+              tool,
+              role: null,
+              dependencies: [],
+            },
+          ],
+        },
+      },
+      update: () => ({
+        set: (patch: unknown) => {
+          updatePatch = patch;
+          return { where: async () => undefined };
+        },
+      }),
+      delete: () => ({ where: async () => undefined }),
+    });
+
+    const result = await updateProperty.handler(
+      createContext({
+        safeDb,
+        scopedDb,
+        body: {
+          name: "Type de document",
+          content,
+          tool: {
+            ...tool,
+            dependencies: [],
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({});
+    expect(updatePatch).toMatchObject({ role: DOCUMENT_TYPE_CLASSIFIER_ROLE });
   });
 
   test("allows edits to a tagged classifier when legacy duplicates remain", async () => {

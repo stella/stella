@@ -726,6 +726,7 @@ const resolveTemplatePropertyRole = (
 
 type PropertyRoleMatchCandidate = {
   id: string;
+  name: string;
   content: typeof properties.$inferSelect.content;
   tool: typeof properties.$inferSelect.tool;
   role: typeof properties.$inferSelect.role;
@@ -750,13 +751,35 @@ const findUniquePropertyByRole = ({
     return undefined;
   }
 
-  return existingProperties.find(
+  const tagged = existingProperties.find(
     (property) =>
       !consumedExistingPropertyIds.has(property.id) &&
       property.role === role &&
       isDocumentTypeClassifierShape(property),
   );
+  if (tagged) {
+    return tagged;
+  }
+
+  if (
+    !isLegacyDocumentTypeClassifierTemplate(templateProperty, roleResolution)
+  ) {
+    return undefined;
+  }
+
+  return existingProperties.find(
+    (property) =>
+      !consumedExistingPropertyIds.has(property.id) &&
+      isLegacyDocumentTypeClassifierProperty(property),
+  );
 };
+
+const isLegacyDocumentTypeClassifierProperty = (
+  property: PropertyRoleMatchCandidate,
+): boolean =>
+  property.role === null &&
+  normalizePropertyName(property.name) === "document type" &&
+  isDocumentTypeClassifierShape(property);
 
 const hasMalformedPropertyByRole = ({
   existingProperties,
@@ -801,7 +824,14 @@ const canReusePropertyByExactId = ({
     return true;
   }
 
-  return property.role === role && isDocumentTypeClassifierShape(property);
+  if (property.role === role && isDocumentTypeClassifierShape(property)) {
+    return true;
+  }
+
+  return (
+    isLegacyDocumentTypeClassifierTemplate(templateProperty, roleResolution) &&
+    isLegacyDocumentTypeClassifierProperty(property)
+  );
 };
 
 const findUniquePropertyByShape = (
@@ -830,8 +860,11 @@ const findUniquePropertyByShape = (
         normalizePropertyName(templateProperty.name) &&
       property.content.type === templateProperty.content.type &&
       property.tool.type === templateProperty.tool.type &&
-      property.role ===
-        resolveTemplatePropertyRole(templateProperty, roleResolution) &&
+      propertyMatchesResolvedRole({
+        property,
+        templateProperty,
+        roleResolution,
+      }) &&
       hasSamePropertyConfig(property, templateProperty) &&
       !(
         templateHasDependencies || propertyIdsWithDependencies.has(property.id)
@@ -839,6 +872,27 @@ const findUniquePropertyByShape = (
   );
 
   return matches.length === 1 ? matches[0] : undefined;
+};
+
+const propertyMatchesResolvedRole = ({
+  property,
+  templateProperty,
+  roleResolution,
+}: {
+  property: PropertyRoleMatchCandidate;
+  templateProperty: ViewTemplateProperty;
+  roleResolution: TemplateRoleResolution;
+}): boolean => {
+  const role = resolveTemplatePropertyRole(templateProperty, roleResolution);
+  if (property.role === role) {
+    return true;
+  }
+
+  return (
+    role === DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+    isLegacyDocumentTypeClassifierTemplate(templateProperty, roleResolution) &&
+    isLegacyDocumentTypeClassifierProperty(property)
+  );
 };
 
 const hasSamePropertyConfig = (
