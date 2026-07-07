@@ -1870,8 +1870,6 @@ type Messages = {
     "orgNamePlaceholder": "Smith & Associates";
     "orgSubtitle": "This is how your colleagues will find you.";
     "orgTitle": "Name your team";
-    "setupAssistantNote": "The connection will start working after you finish this setup.";
-    "setupAssistantOthers": "Other AI tools that support custom connectors, such as Cursor, work the same way.";
     "setupChatgptStep1": "In ChatGPT, open Settings → Connectors and add a connector.";
     "setupClaudeStep1": "In Claude, open Settings → Connectors and choose “Add custom connector”.";
     "setupClaudeStep3": "Sign in with your stella account and approve access.";

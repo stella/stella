@@ -1867,8 +1867,6 @@
     "orgNamePlaceholder": "Novák a partneri",
     "orgSubtitle": "Tak vás nájdu vaši kolegovia.",
     "orgTitle": "Pomenujte svoj tím",
-    "setupAssistantNote": "Pripojenie začne fungovať po dokončení tohto nastavenia.",
-    "setupAssistantOthers": "Rovnako fungujú aj ďalšie AI nástroje s podporou vlastných konektorov, napríklad Cursor.",
     "setupChatgptStep1": "V aplikácii ChatGPT otvorte Nastavenia → Konektory a pridajte konektor.",
     "setupClaudeStep1": "V aplikácii Claude otvorte Nastavenia → Konektory a zvoľte „Pridať vlastný konektor“.",
     "setupClaudeStep3": "Prihláste sa svojím účtom stella a potvrďte prístup.",

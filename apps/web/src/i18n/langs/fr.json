@@ -1867,8 +1867,6 @@
     "orgNamePlaceholder": "Dupont & Associés",
     "orgSubtitle": "C'est ainsi que vos collègues vous trouveront.",
     "orgTitle": "Nommez votre équipe",
-    "setupAssistantNote": "La connexion sera opérationnelle une fois cette configuration terminée.",
-    "setupAssistantOthers": "D’autres outils d’IA prenant en charge les connecteurs personnalisés, comme Cursor, fonctionnent de la même façon.",
     "setupChatgptStep1": "Dans ChatGPT, ouvrez Paramètres → Connecteurs et ajoutez un connecteur.",
     "setupClaudeStep1": "Dans Claude, ouvrez Paramètres → Connecteurs et choisissez « Ajouter un connecteur personnalisé ».",
     "setupClaudeStep3": "Connectez-vous avec votre compte stella et approuvez l’accès.",

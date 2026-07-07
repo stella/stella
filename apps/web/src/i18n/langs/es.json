@@ -1867,8 +1867,6 @@
     "orgNamePlaceholder": "García y Asociados",
     "orgSubtitle": "Así es como sus colegas le encontrarán.",
     "orgTitle": "Nombre de su equipo",
-    "setupAssistantNote": "La conexión empezará a funcionar cuando termine esta configuración.",
-    "setupAssistantOthers": "Otras herramientas de IA compatibles con conectores personalizados, como Cursor, funcionan igual.",
     "setupChatgptStep1": "En ChatGPT, abra Configuración → Conectores y añada un conector.",
     "setupClaudeStep1": "En Claude, abra Configuración → Conectores y elija «Añadir conector personalizado».",
     "setupClaudeStep3": "Inicie sesión con su cuenta de stella y apruebe el acceso.",

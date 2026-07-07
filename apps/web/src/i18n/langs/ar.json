@@ -1867,8 +1867,6 @@
     "orgNamePlaceholder": "السالم وشركاه",
     "orgSubtitle": "هكذا سيجدك زملاؤك.",
     "orgTitle": "سمِّ فريقك",
-    "setupAssistantNote": "سيبدأ الاتصال بالعمل بمجرد إنهاء هذا الإعداد.",
-    "setupAssistantOthers": "تعمل بالطريقة نفسها أدوات ذكاء اصطناعي أخرى تدعم الموصلات المخصصة، مثل Cursor.",
     "setupChatgptStep1": "في ChatGPT، افتح الإعدادات ← الموصلات وأضف موصلاً.",
     "setupClaudeStep1": "في Claude، افتح الإعدادات ← الموصلات واختر «إضافة موصل مخصص».",
     "setupClaudeStep3": "سجّل الدخول بحساب stella الخاص بك ووافق على الوصول.",

@@ -1867,8 +1867,6 @@
     "orgNamePlaceholder": "Tamm & Partnerid",
     "orgSubtitle": "Nii leiavad teid kolleegid.",
     "orgTitle": "Nimetage oma meeskond",
-    "setupAssistantNote": "Ühendus hakkab tööle, kui olete selle seadistuse lõpetanud.",
-    "setupAssistantOthers": "Samamoodi töötavad ka teised kohandatud konnektoreid toetavad AI tööriistad, näiteks Cursor.",
     "setupChatgptStep1": "Avage ChatGPT-s Seaded → Konnektorid ja lisage konnektor.",
     "setupClaudeStep1": "Avage Claude'is Seaded → Konnektorid ja valige „Lisa kohandatud konnektor“.",
     "setupClaudeStep3": "Logige sisse oma stella kontoga ja kinnitage juurdepääs.",

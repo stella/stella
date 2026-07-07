@@ -8,6 +8,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { CopyField } from "@/components/copy-field";
 import { env } from "@/env";
+import type { TranslationKey } from "@/i18n/types";
 import {
   detectDesktopPlatform,
   MACOS_DMG_URL,
@@ -15,7 +16,14 @@ import {
   WINDOWS_MSI_URL,
 } from "@/lib/desktop-downloads";
 
-export type DownloadTarget = "desktop" | "assistant" | "terminal";
+/**
+ * Single source of truth for the card order: drives the rendered card
+ * list, the footer button's next-card lookup, and the last-card check,
+ * so reordering cards can never desync the walkthrough flow.
+ */
+const DOWNLOAD_TARGETS = ["desktop", "assistant", "terminal"] as const;
+
+export type DownloadTarget = (typeof DOWNLOAD_TARGETS)[number];
 
 type DownloadStepProps = {
   onNext: () => void;
@@ -32,6 +40,11 @@ export const DownloadStep = ({
   onSelect,
 }: DownloadStepProps) => {
   const t = useTranslations();
+  // Footer walkthrough: while a next card exists the primary button
+  // advances the selection; on the last card it starts the setup.
+  const nextTarget = DOWNLOAD_TARGETS.at(
+    DOWNLOAD_TARGETS.indexOf(selected) + 1,
+  );
 
   return (
     <>
@@ -43,35 +56,36 @@ export const DownloadStep = ({
       </p>
 
       <div className="mt-8 flex flex-col gap-3">
-        <TargetCard
-          description={t("settings.account.desktopAppDescription")}
-          icon={MonitorIcon}
-          onSelect={() => onSelect("desktop")}
-          selected={selected === "desktop"}
-          title={t("settings.account.desktop")}
-        />
-        <TargetCard
-          description={t("onboarding.mcpCardDescription")}
-          icon={PlugIcon}
-          onSelect={() => onSelect("assistant")}
-          selected={selected === "assistant"}
-          title={t("onboarding.mcpCardTitle")}
-        />
-        <TargetCard
-          description={t("onboarding.cliCardDescription")}
-          icon={TerminalIcon}
-          onSelect={() => onSelect("terminal")}
-          selected={selected === "terminal"}
-          title={t("onboarding.cliCardTitle")}
-        />
+        {DOWNLOAD_TARGETS.map((target) => {
+          const meta = TARGET_CARD_META[target];
+          return (
+            <TargetCard
+              description={t(meta.descriptionKey)}
+              icon={meta.icon}
+              key={target}
+              onSelect={() => onSelect(target)}
+              selected={selected === target}
+              title={t(meta.titleKey)}
+            />
+          );
+        })}
       </div>
 
       <div className="mt-auto flex items-center justify-between gap-3 pt-8">
         <Button onClick={onSkip} type="button" variant="ghost">
           {t("onboarding.skipStep")}
         </Button>
-        <Button onClick={onNext} type="button">
-          {t("onboarding.getStarted")}
+        <Button
+          type="button"
+          onClick={() => {
+            if (nextTarget) {
+              onSelect(nextTarget);
+              return;
+            }
+            onNext();
+          }}
+        >
+          {nextTarget ? t("common.next") : t("onboarding.getStarted")}
         </Button>
       </div>
     </>
@@ -96,6 +110,30 @@ export const DownloadSetupPreview = ({ target }: DownloadSetupPreviewProps) => {
   }
   return <AssistantSetupPanel />;
 };
+
+type TargetCardMeta = {
+  icon: typeof MonitorIcon;
+  titleKey: TranslationKey;
+  descriptionKey: TranslationKey;
+};
+
+const TARGET_CARD_META = {
+  desktop: {
+    icon: MonitorIcon,
+    titleKey: "settings.account.desktop",
+    descriptionKey: "settings.account.desktopAppDescription",
+  },
+  assistant: {
+    icon: PlugIcon,
+    titleKey: "onboarding.mcpCardTitle",
+    descriptionKey: "onboarding.mcpCardDescription",
+  },
+  terminal: {
+    icon: TerminalIcon,
+    titleKey: "onboarding.cliCardTitle",
+    descriptionKey: "onboarding.cliCardDescription",
+  },
+} as const satisfies Record<DownloadTarget, TargetCardMeta>;
 
 type TargetCardProps = {
   title: string;
@@ -194,14 +232,6 @@ const AssistantSetupPanel = () => {
           t("onboarding.setupPasteAddressStep"),
         ]}
       />
-      <div className="flex flex-col gap-1">
-        <p className="text-muted-foreground text-xs">
-          {t("onboarding.setupAssistantOthers")}
-        </p>
-        <p className="text-muted-foreground text-xs">
-          {t("onboarding.setupAssistantNote")}
-        </p>
-      </div>
     </SetupPanel>
   );
 };

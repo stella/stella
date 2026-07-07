@@ -107,7 +107,7 @@ export const OnboardingWizard = () => {
     readonly string[]
   >([]);
   const [downloadTarget, setDownloadTarget] =
-    useState<DownloadTarget>("assistant");
+    useState<DownloadTarget>("desktop");
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
     orgSlug: "",

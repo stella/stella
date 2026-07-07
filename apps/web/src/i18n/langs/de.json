@@ -1867,8 +1867,6 @@
     "orgNamePlaceholder": "Müller & Partner",
     "orgSubtitle": "So finden Ihre Kollegen Sie.",
     "orgTitle": "Benennen Sie Ihr Team",
-    "setupAssistantNote": "Die Verbindung funktioniert, sobald Sie diese Einrichtung abgeschlossen haben.",
-    "setupAssistantOthers": "Andere KI-Tools mit Unterstützung für eigene Konnektoren, etwa Cursor, funktionieren genauso.",
     "setupChatgptStep1": "Öffnen Sie in ChatGPT Einstellungen → Konnektoren und fügen Sie einen Konnektor hinzu.",
     "setupClaudeStep1": "Öffnen Sie in Claude Einstellungen → Konnektoren und wählen Sie „Benutzerdefinierten Konnektor hinzufügen“.",
     "setupClaudeStep3": "Melden Sie sich mit Ihrem stella-Konto an und bestätigen Sie den Zugriff.",

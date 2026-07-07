@@ -1867,8 +1867,6 @@
     "orgNamePlaceholder": "Kowalski i Wspólnicy",
     "orgSubtitle": "Tak Cię znajdą Twoi koledzy.",
     "orgTitle": "Nazwij swój zespół",
-    "setupAssistantNote": "Połączenie zacznie działać po zakończeniu tej konfiguracji.",
-    "setupAssistantOthers": "Tak samo działają inne narzędzia AI obsługujące własne konektory, na przykład Cursor.",
     "setupChatgptStep1": "W ChatGPT otwórz Ustawienia → Konektory i dodaj konektor.",
     "setupClaudeStep1": "W Claude otwórz Ustawienia → Konektory i wybierz „Dodaj własny konektor”.",
     "setupClaudeStep3": "Zaloguj się kontem stella i zatwierdź dostęp.",
