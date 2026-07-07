@@ -1328,11 +1328,50 @@
     "deleted": "Pracovní postup smazán",
     "descriptionPlaceholder": "Co tento pracovní postup dělá",
     "disableFlow": "Zakázat pracovní postup",
+    "editor": {
+      "newFlowIntro": "Kroky definujete jednou a poté pracovní postup spouštíte z libovolného spisu. Běh se zastaví na kontrolních bodech, dokud jej někdo neschválí."
+    },
     "empty": "Zatím žádné pracovní postupy",
     "emptyDescription": "Vytvořte pracovní postup, který z dokumentů a cíle vytvoří hotový výstup.",
+    "emptyState": {
+      "blankAction": "Začít od prázdného",
+      "description": "Spusťte jej ze záložky Pracovní postupy ve spisu, podle plánu, nebo při nahrání souboru. Běh se zastaví na kontrolním bodě, dokud jej někdo neschválí, a výsledek lze uložit jako dokument do spisu.",
+      "examplesTitle": "Začít od příkladu",
+      "title": "Pracovní postup je uložená posloupnost kroků AI a kontroly, kterou tým opakovaně spouští nad dokumenty spisu, aby vznikl konzistentní výstup."
+    },
     "enableFlow": "Povolit pracovní postup",
     "enabledDescription": "Zakázané pracovní postupy nelze spustit ani vyvolat.",
     "enabledLabel": "Povoleno",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Vytvořte souhrn",
+        "description": "Shrne dokumenty spisu pro kolegu, který je nečetl.",
+        "documentTitle": "Souhrn dokumentů",
+        "name": "Souhrn dokumentů ve spisu",
+        "summaryStepName": "Shrňte dokumenty",
+        "summaryStepPrompt": "Shrňte každý vstupní dokument: strany, předmět, klíčová data, povinnosti a otevřené body. Pište pro kolegu, který dokument nečetl."
+      },
+      "dueDiligence": {
+        "createStepName": "Vytvořte zprávu",
+        "description": "Odhalí rizika změny kontroly, postoupení a odpovědnosti napříč datovou místností.",
+        "documentTitle": "Zpráva o rizikových oblastech",
+        "name": "Due diligence – rizikové oblasti",
+        "reviewGateInstructions": "Před vytvořením zprávy zkontrolujte rizikové oblasti.",
+        "reviewGateStepName": "Zkontrolujte rizikové oblasti",
+        "reviewStepName": "Najděte rizikové oblasti",
+        "reviewStepPrompt": "Projděte vstupní dokumenty a vytvořte zprávu o rizikových oblastech: změna kontroly, omezení postoupení, práva na ukončení, exkluzivita a limity odpovědnosti. Citujte relevantní ustanovení."
+      },
+      "ndaIntake": {
+        "createStepName": "Vytvořte memorandum",
+        "description": "Označí neobvyklá ustanovení v NDA, než se na ně tým bude spoléhat.",
+        "documentTitle": "Memorandum ke kontrole NDA",
+        "name": "Kontrola příjmu NDA",
+        "reviewGateInstructions": "Před vytvořením memoranda zkontrolujte označená ustanovení.",
+        "reviewGateStepName": "Zkontrolujte označená ustanovení",
+        "reviewStepName": "Zkontrolujte NDA",
+        "reviewStepPrompt": "Zkontrolujte přiloženou NDA podle běžných tržních standardů: doba trvání, rozsah důvěrnosti, výjimky a rozhodné právo. Označte neobvyklá ustanovení stupněm závažnosti a citujte dané ustanovení."
+      }
+    },
     "fileUpload": {
       "allWorkspaces": "Všechny spisy",
       "anyExtension": "Jakýkoli typ souboru",
@@ -1374,7 +1413,7 @@
       "startFailed": "Pracovní postup se nepodařilo spustit.",
       "started": "Pracovní postup spuštěn",
       "stepProgress": "Krok {current} z {total}",
-      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
+      "tooManyInputDocuments": "Vyberte až {max} dokumentů pro spuštění tohoto pracovního postupu."
     },
     "saveFailed": "Pracovní postup se nepodařilo uložit.",
     "schedule": {
@@ -1402,7 +1441,9 @@
     "steps": {
       "add": "Přidat krok:",
       "ai": "Krok AI",
+      "aiHelp": "Podle vašich pokynů vytvoří text a může číst vybrané vstupní dokumenty.",
       "createDocument": "Vytvořit dokument",
+      "createDocumentHelp": "Uloží poslední výstup AI jako dokument do spisu, ve kterém byl běh spuštěn.",
       "documentTitle": "Název dokumentu",
       "documentTitlePlaceholder": "např. Souhrnná zpráva",
       "documentTitleRequired": "Zadejte název dokumentu.",
@@ -1410,13 +1451,14 @@
       "includeDocuments": "Zahrnout vstupní dokumenty",
       "instructions": "Pokyny",
       "instructionsPlaceholder": "Co má kontrolující zkontrolovat",
-      "namePlaceholder": "Název kroku",
+      "namePlaceholder": "např. Zkontrolujte NDA",
       "nameRequired": "Zadejte název pro každý krok.",
       "prompt": "Prompt",
-      "promptPlaceholder": "Pokyny pro krok AI",
+      "promptPlaceholder": "např. Zkontrolujte přiloženou NDA podle tržních standardů a označte neobvyklá ustanovení",
       "promptRequired": "Zadejte prompt pro krok AI.",
       "required": "Přidejte alespoň jeden krok.",
       "reviewGate": "Kontrolní bod",
+      "reviewGateHelp": "Zastaví běh, dokud jej člověk neschválí nebo nezamítne.",
       "title": "Kroky"
     },
     "trigger": {

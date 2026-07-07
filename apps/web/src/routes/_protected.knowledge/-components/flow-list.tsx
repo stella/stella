@@ -6,6 +6,11 @@ import { Button } from "@stll/ui/components/button";
 import { FlowTriggerBadge } from "@/components/flows/flow-badges";
 import { FlowSwitch } from "@/components/flows/flow-switch";
 import { usePermissions } from "@/hooks/use-permissions";
+import {
+  buildFlowExample,
+  FLOW_EXAMPLE_KEYS,
+  type FlowExampleKey,
+} from "@/routes/_protected.knowledge/-components/flow-examples";
 import type { FlowListItem } from "@/routes/_protected.knowledge/-components/flow-types";
 
 type FlowListProps = {
@@ -13,6 +18,7 @@ type FlowListProps = {
   togglingId: string | null;
   onNewFlow: () => void;
   onSelect: (flow: FlowListItem) => void;
+  onStartExample: (example: FlowExampleKey) => void;
   onToggleEnabled: (flow: FlowListItem, enabled: boolean) => void;
   onRefresh: () => void;
 };
@@ -22,6 +28,7 @@ export const FlowList = ({
   togglingId,
   onNewFlow,
   onSelect,
+  onStartExample,
   onToggleEnabled,
   onRefresh,
 }: FlowListProps) => {
@@ -56,12 +63,11 @@ export const FlowList = ({
 
       <div className="flex-1 overflow-y-auto">
         {flows.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-1 p-8">
-            <p className="text-sm font-medium">{t("flows.empty")}</p>
-            <p className="text-muted-foreground text-sm">
-              {t("flows.emptyDescription")}
-            </p>
-          </div>
+          <FlowEmptyState
+            canCreate={canCreate}
+            onNewFlow={onNewFlow}
+            onStartExample={onStartExample}
+          />
         )}
 
         <ul className="divide-y">
@@ -78,6 +84,82 @@ export const FlowList = ({
         </ul>
       </div>
     </div>
+  );
+};
+
+const FlowEmptyState = ({
+  canCreate,
+  onNewFlow,
+  onStartExample,
+}: {
+  canCreate: boolean;
+  onNewFlow: () => void;
+  onStartExample: (example: FlowExampleKey) => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-10">
+      <div className="text-center">
+        <h2 className="text-foreground text-base font-medium text-balance">
+          {t("flows.emptyState.title")}
+        </h2>
+        <p className="text-muted-foreground mt-2 text-sm text-balance">
+          {t("flows.emptyState.description")}
+        </p>
+      </div>
+
+      {canCreate && (
+        <>
+          <div className="mt-8">
+            <h3 className="text-muted-foreground text-sm font-medium">
+              {t("flows.emptyState.examplesTitle")}
+            </h3>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              {FLOW_EXAMPLE_KEYS.map((key) => (
+                <FlowExampleCard
+                  key={key}
+                  exampleKey={key}
+                  onSelect={() => onStartExample(key)}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 flex justify-center">
+            <Button onClick={onNewFlow} type="button" variant="outline">
+              {t("flows.emptyState.blankAction")}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+const FlowExampleCard = ({
+  exampleKey,
+  onSelect,
+}: {
+  exampleKey: FlowExampleKey;
+  onSelect: () => void;
+}) => {
+  const t = useTranslations();
+  const example = buildFlowExample(exampleKey, t);
+
+  return (
+    <button
+      className="border-border hover:border-foreground/30 hover:bg-muted/40 flex flex-col items-start gap-1 rounded-lg border p-4 text-start transition-colors"
+      onClick={onSelect}
+      type="button"
+    >
+      <span className="text-foreground text-sm font-medium">
+        {example.name}
+      </span>
+      <span className="text-muted-foreground text-sm">
+        {example.description}
+      </span>
+    </button>
   );
 };
 

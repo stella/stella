@@ -1328,11 +1328,50 @@
     "deleted": "Munkafolyamat törölve",
     "descriptionPlaceholder": "Mit csinál ez a munkafolyamat",
     "disableFlow": "Munkafolyamat letiltása",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
     "empty": "Még nincsenek munkafolyamatok",
     "emptyDescription": "Hozzon létre munkafolyamatot, amely a dokumentumokból és egy célból kész eredményt készít.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
     "enableFlow": "Munkafolyamat engedélyezése",
     "enabledDescription": "A letiltott munkafolyamatokat nem lehet futtatni vagy elindítani.",
     "enabledLabel": "Engedélyezve",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
     "fileUpload": {
       "allWorkspaces": "Minden ügy",
       "anyExtension": "Bármilyen fájltípus",
@@ -1374,7 +1413,7 @@
       "startFailed": "A munkafolyamatot nem sikerült elindítani.",
       "started": "Munkafolyamat elindítva",
       "stepProgress": "{current}/{total}. lépés",
-      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
+      "tooManyInputDocuments": "Válasszon ki legfeljebb {max} dokumentumot a munkafolyamat futtatásához."
     },
     "saveFailed": "A munkafolyamatot nem sikerült menteni.",
     "schedule": {
@@ -1402,7 +1441,9 @@
     "steps": {
       "add": "Lépés hozzáadása:",
       "ai": "AI-lépés",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
       "createDocument": "Dokumentum létrehozása",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
       "documentTitle": "Dokumentum címe",
       "documentTitlePlaceholder": "pl. Összefoglaló feljegyzés",
       "documentTitleRequired": "Adja meg a dokumentum címét.",
@@ -1417,6 +1458,7 @@
       "promptRequired": "Adjon meg egy promptot az AI-lépéshez.",
       "required": "Adjon hozzá legalább egy lépést.",
       "reviewGate": "Ellenőrzési pont",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
       "title": "Lépések"
     },
     "trigger": {

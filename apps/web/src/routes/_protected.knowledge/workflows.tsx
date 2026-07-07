@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { FlowEditor } from "@/routes/_protected.knowledge/-components/flow-editor";
+import type { FlowExampleKey } from "@/routes/_protected.knowledge/-components/flow-examples";
 import { FlowList } from "@/routes/_protected.knowledge/-components/flow-list";
 import type {
   FlowDefinitionBody,
@@ -24,7 +25,9 @@ import {
   knowledgeKeys,
 } from "@/routes/_protected.knowledge/-queries";
 
-type View = { kind: "list" } | { kind: "editor"; flowId: string | null };
+type View =
+  | { kind: "list" }
+  | { kind: "editor"; flowId: string | null; example?: FlowExampleKey };
 
 export const Route = createFileRoute("/_protected/knowledge/workflows")({
   component: RouteComponent,
@@ -148,6 +151,7 @@ function RouteComponent() {
   if (view.kind === "editor") {
     return (
       <FlowEditor
+        example={view.example}
         flowId={view.flowId}
         onBack={handleBackToList}
         onSaved={handleBackToList}
@@ -178,6 +182,9 @@ function RouteComponent() {
         });
       }}
       onSelect={(flow) => setView({ kind: "editor", flowId: flow.id })}
+      onStartExample={(example) =>
+        setView({ kind: "editor", flowId: null, example })
+      }
       onToggleEnabled={(flow, enabled) => {
         void handleToggleEnabled(flow, enabled);
       }}

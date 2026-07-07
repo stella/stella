@@ -1328,11 +1328,50 @@
     "deleted": "Workflow deleted",
     "descriptionPlaceholder": "What this workflow does",
     "disableFlow": "Disable workflow",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
     "empty": "No workflows yet",
     "emptyDescription": "Create a workflow to turn documents and a goal into a finished deliverable.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
     "enableFlow": "Enable workflow",
     "enabledDescription": "Disabled workflows can't be run or triggered.",
     "enabledLabel": "Enabled",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
     "fileUpload": {
       "allWorkspaces": "All matters",
       "anyExtension": "Any file type",
@@ -1402,7 +1441,9 @@
     "steps": {
       "add": "Add step:",
       "ai": "AI step",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
       "createDocument": "Create document",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
       "documentTitle": "Document title",
       "documentTitlePlaceholder": "e.g. Summary memo",
       "documentTitleRequired": "Enter a document title.",
@@ -1410,13 +1451,14 @@
       "includeDocuments": "Include input documents",
       "instructions": "Instructions",
       "instructionsPlaceholder": "What the reviewer should check",
-      "namePlaceholder": "Step name",
+      "namePlaceholder": "e.g. Review the NDA",
       "nameRequired": "Enter a name for each step.",
       "prompt": "Prompt",
-      "promptPlaceholder": "Instructions for the AI step",
+      "promptPlaceholder": "e.g. Review the attached NDA against market-standard terms and flag unusual clauses",
       "promptRequired": "Enter a prompt for the AI step.",
       "required": "Add at least one step.",
       "reviewGate": "Review gate",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
       "title": "Steps"
     },
     "trigger": {

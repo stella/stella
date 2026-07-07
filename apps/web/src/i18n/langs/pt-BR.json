@@ -1328,11 +1328,50 @@
     "deleted": "Fluxo de trabalho excluído",
     "descriptionPlaceholder": "O que este fluxo de trabalho faz",
     "disableFlow": "Desativar fluxo de trabalho",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
     "empty": "Ainda não há fluxos de trabalho",
     "emptyDescription": "Crie um fluxo de trabalho para transformar documentos e um objetivo em um resultado finalizado.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
     "enableFlow": "Ativar fluxo de trabalho",
     "enabledDescription": "Fluxos de trabalho desativados não podem ser executados nem acionados.",
     "enabledLabel": "Ativado",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
     "fileUpload": {
       "allWorkspaces": "Todos os casos",
       "anyExtension": "Qualquer tipo de arquivo",
@@ -1374,7 +1413,7 @@
       "startFailed": "Não foi possível iniciar o fluxo de trabalho.",
       "started": "Fluxo de trabalho iniciado",
       "stepProgress": "Etapa {current} de {total}",
-      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
+      "tooManyInputDocuments": "Selecione até {max} documentos para executar este fluxo de trabalho."
     },
     "saveFailed": "Não foi possível salvar o fluxo de trabalho.",
     "schedule": {
@@ -1402,7 +1441,9 @@
     "steps": {
       "add": "Adicionar etapa:",
       "ai": "Etapa de IA",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
       "createDocument": "Criar documento",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
       "documentTitle": "Título do documento",
       "documentTitlePlaceholder": "ex.: Memorando de resumo",
       "documentTitleRequired": "Insira um título de documento.",
@@ -1417,6 +1458,7 @@
       "promptRequired": "Insira um prompt para a etapa de IA.",
       "required": "Adicione pelo menos uma etapa.",
       "reviewGate": "Ponto de revisão",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
       "title": "Etapas"
     },
     "trigger": {

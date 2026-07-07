@@ -1328,11 +1328,50 @@
     "deleted": "Darbplūsma izdzēsta",
     "descriptionPlaceholder": "Ko šī darbplūsma dara",
     "disableFlow": "Atspējot darbplūsmu",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
     "empty": "Vēl nav darbplūsmu",
     "emptyDescription": "Izveidojiet darbplūsmu, lai no dokumentiem un mērķa iegūtu pabeigtu rezultātu.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
     "enableFlow": "Iespējot darbplūsmu",
     "enabledDescription": "Atspējotas darbplūsmas nevar palaist vai aktivizēt.",
     "enabledLabel": "Iespējota",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
     "fileUpload": {
       "allWorkspaces": "Visas lietas",
       "anyExtension": "Jebkurš faila tips",
@@ -1374,7 +1413,7 @@
       "startFailed": "Neizdevās palaist darbplūsmu.",
       "started": "Darbplūsma palaista",
       "stepProgress": "{current}. solis no {total}",
-      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
+      "tooManyInputDocuments": "Atlasiet ne vairāk kā {max} dokumentus, lai palaistu šo darbplūsmu."
     },
     "saveFailed": "Neizdevās saglabāt darbplūsmu.",
     "schedule": {
@@ -1402,7 +1441,9 @@
     "steps": {
       "add": "Pievienot soli:",
       "ai": "AI solis",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
       "createDocument": "Izveidot dokumentu",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
       "documentTitle": "Dokumenta nosaukums",
       "documentTitlePlaceholder": "piem., Kopsavilkuma memorands",
       "documentTitleRequired": "Ievadiet dokumenta nosaukumu.",
@@ -1417,6 +1458,7 @@
       "promptRequired": "Ievadiet uzvedni AI solim.",
       "required": "Pievienojiet vismaz vienu soli.",
       "reviewGate": "Pārbaudes kontrolpunkts",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
       "title": "Soļi"
     },
     "trigger": {

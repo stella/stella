@@ -82,6 +82,12 @@ export const FLOW_STEP_KIND_ICONS = {
   "create-document": FilePlus2Icon,
 } as const satisfies Record<FlowStepKind, LucideIcon>;
 
+export const FLOW_STEP_KIND_HELP_KEYS = {
+  ai: "flows.steps.aiHelp",
+  "review-gate": "flows.steps.reviewGateHelp",
+  "create-document": "flows.steps.createDocumentHelp",
+} as const satisfies Record<FlowStepKind, TranslationKey>;
+
 export const FLOW_TRIGGER_TYPE_LABEL_KEYS = {
   manual: "flows.trigger.manual",
   schedule: "flows.trigger.schedule",

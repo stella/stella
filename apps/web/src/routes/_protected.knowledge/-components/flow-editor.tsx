@@ -35,6 +35,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import {
   FLOW_SCHEDULE_FREQUENCIES,
   FLOW_SCHEDULE_FREQUENCY_LABEL_KEYS,
+  FLOW_STEP_KIND_HELP_KEYS,
   FLOW_STEP_KIND_ICONS,
   FLOW_STEP_KIND_LABEL_KEYS,
   FLOW_STEP_KINDS,
@@ -49,6 +50,10 @@ import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import {
+  buildFlowExample,
+  type FlowExampleKey,
+} from "@/routes/_protected.knowledge/-components/flow-examples";
 import { FlowExtensionInput } from "@/routes/_protected.knowledge/-components/flow-extension-input";
 import type {
   FlowDefinitionBody,
@@ -68,6 +73,7 @@ const MAX_FLOW_STEPS = 20;
 type FlowEditorProps = {
   organizationId: string;
   flowId: string | null;
+  example?: FlowExampleKey;
   onBack: () => void;
   onSaved: () => void;
 };
@@ -75,20 +81,26 @@ type FlowEditorProps = {
 export const FlowEditor = ({
   organizationId,
   flowId,
+  example,
   onBack,
   onSaved,
 }: FlowEditorProps) => {
+  const t = useTranslations();
+
   if (flowId === null) {
+    const preset = example ? buildFlowExample(example, t) : null;
     return (
       <FlowEditorForm
         flowId={null}
-        initialDescription=""
+        initialDescription={preset?.description ?? ""}
         initialEnabled={true}
-        initialSteps={[
-          { kind: "ai", name: "", prompt: "", includeDocuments: true },
-        ]}
+        initialSteps={
+          preset?.steps ?? [
+            { kind: "ai", name: "", prompt: "", includeDocuments: true },
+          ]
+        }
         initialTrigger={{ type: "manual" }}
-        initialName=""
+        initialName={preset?.name ?? ""}
         onBack={onBack}
         onSaved={onSaved}
         organizationId={organizationId}
@@ -500,6 +512,12 @@ const FlowEditorForm = ({
             </Button>
           </div>
         </div>
+
+        {!isEdit && (
+          <p className="text-muted-foreground text-sm">
+            {t("flows.editor.newFlowIntro")}
+          </p>
+        )}
 
         <div className="grid gap-1.5">
           <Label htmlFor="flow-name">{t("common.name")}</Label>
@@ -923,6 +941,7 @@ const StepsSection = ({
               key={kind}
               onClick={() => onAdd(kind)}
               size="sm"
+              title={t(FLOW_STEP_KIND_HELP_KEYS[kind])}
               type="button"
               variant="outline"
             >
@@ -1001,6 +1020,10 @@ const FlowStepEditor = ({
           </Button>
         </div>
       </div>
+
+      <p className="text-muted-foreground text-xs">
+        {t(FLOW_STEP_KIND_HELP_KEYS[step.kind])}
+      </p>
 
       <div className="grid gap-1.5">
         <Label htmlFor={`flow-step-name-${index}`}>{t("common.name")}</Label>
