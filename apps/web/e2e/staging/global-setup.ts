@@ -62,7 +62,7 @@ type ReadinessSample = {
 };
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const fetchCommit = async (url: string): Promise<VersionProbe> => {
   try {
@@ -73,7 +73,7 @@ const fetchCommit = async (url: string): Promise<VersionProbe> => {
     if (!response.ok) {
       return { type: "http-error", status: response.status };
     }
-    const body: unknown = await response.json();
+    const body: unknown = await response.json().catch(() => null);
     if (!isObject(body)) {
       return { type: "invalid-json" };
     }
