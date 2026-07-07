@@ -144,6 +144,7 @@ import type {
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -2071,6 +2072,14 @@ export const TemplateStudioPage = ({
     }
     setIsSaving(true);
     try {
+      // Snapshot the pending rename log BEFORE the bytes are produced: a
+      // rename made while the save is in flight is not represented in the
+      // saved DOCX, so flushing it would move the link row ahead of the
+      // stored markers. The log is replaced immutably on append, so this
+      // reference holds exactly the steps the saved bytes can contain; steps
+      // appended mid-save stay pending for the next save.
+      const pendingAtSave =
+        useTemplateStudioStore.getState().pendingSlotRenames;
       const bytes = await editor.save();
       if (!bytes) {
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
@@ -2105,9 +2114,10 @@ export const TemplateStudioPage = ({
 
       // Flush deferred link-row slot renames now that the document (with its
       // already-rewritten {{@clause:...}} markers) is persisted, so the row
-      // rename can never outlive an unsaved document edit.
-      const { pendingSlotRenames, dropPendingSlotRenames } =
-        useTemplateStudioStore.getState();
+      // rename can never outlive an unsaved document edit. Only the
+      // pre-save snapshot flushes; the live log may have grown mid-save.
+      const { dropPendingSlotRenames } = useTemplateStudioStore.getState();
+      const pendingSlotRenames = pendingAtSave;
       let slotRenameErrorMessage: string | null = null;
       if (pendingSlotRenames.length > 0) {
         // Flush SEQUENTIALLY by replaying the ordered step log in recorded (edit)
@@ -2168,6 +2178,12 @@ export const TemplateStudioPage = ({
             description: slotRenameErrorMessage,
           });
         }
+      }
+      // Steps appended while the save was in flight (their markers are not in
+      // the stored bytes) survive at the tail of the live log; markSaved()
+      // above would otherwise hide the Save affordance they need.
+      if (useTemplateStudioStore.getState().pendingSlotRenames.length > 0) {
+        markDirty();
       }
       // Invalidate the templates subtree (which nests the clauses, check, and
       // preview keys) only AFTER the flush: refetching between the document
@@ -4153,7 +4169,15 @@ function TemplateStudioInspectorView({
 }: InspectorViewRenderProps<TemplateStudioPayload>) {
   const t = useTranslations();
   const { templateId } = tab.payload;
-  const [facet, setFacet] = useState<StudioFacet>("fields");
+  // Fill performs real fills (and fill-to-matter writes), which the backend
+  // gates on template:use; without it the tab would be a form that can only
+  // fail at the last click.
+  const canUseTemplate = usePermissions({ template: ["use"] });
+  const [rawFacet, setFacet] = useState<StudioFacet>("fields");
+  const facet = !canUseTemplate && rawFacet === "fill" ? "fields" : rawFacet;
+  const visibleFacets = canUseTemplate
+    ? STUDIO_FACETS
+    : STUDIO_FACETS.filter((f) => f !== "fill");
   const [editReturnFacet, setEditReturnFacet] = useState<StudioFacet | null>(
     null,
   );
@@ -4274,7 +4298,7 @@ function TemplateStudioInspectorView({
       />
       <FacetBar
         facet={facet}
-        facets={STUDIO_FACETS}
+        facets={visibleFacets}
         labels={facetLabels}
         onChange={(next) => {
           // Re-clicking Fields returns to the template overview.
