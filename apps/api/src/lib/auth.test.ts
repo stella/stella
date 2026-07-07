@@ -8,12 +8,12 @@ import {
 } from "bun:test";
 import type { HookEndpointContext } from "better-auth";
 
-<<<<<<< HEAD
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   isSixDigitOtpBody,
   resolveMemberAuthorization,
+  TWO_FACTOR_MANAGE_PATHS,
   withEmailOtpSignInGate,
 } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -313,6 +313,29 @@ describe("withEmailOtpSignInGate", () => {
     const [wrappedHook] = withEmailOtpSignInGate(plugin).hooks.after;
 
     expect(wrappedHook?.matcher(fakeCtx("/two-factor/enable"))).toBe(false);
+  });
+});
+
+describe("TWO_FACTOR_MANAGE_PATHS", () => {
+  test("matches every two-factor management path that exposes or changes the second factor", () => {
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/enable")).toBe(true);
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/disable")).toBe(true);
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/get-totp-uri")).toBe(
+      true,
+    );
+    expect(
+      TWO_FACTOR_MANAGE_PATHS.has("/two-factor/generate-backup-codes"),
+    ).toBe(true);
+  });
+
+  test("does not match an unrelated two-factor path", () => {
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/verify-totp")).toBe(
+      false,
+    );
+    expect(
+      TWO_FACTOR_MANAGE_PATHS.has("/two-factor/verify-backup-code"),
+    ).toBe(false);
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/sign-in/email-otp")).toBe(false);
   });
 });
 

@@ -94,13 +94,22 @@ const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
 
 /**
- * The two-factor plugin's own disable endpoint only requires an active
- * (fresh) session — see node_modules/better-auth/dist/plugins/two-factor/index.mjs.
- * A hijacked session could otherwise silently strip 2FA, so this path is
- * additionally gated on a fresh email verification code (see
- * `requireTwoFactorDisableOtp`), mirroring the delete-account flow.
+ * The two-factor plugin's own management endpoints only require an active
+ * (fresh) session — see node_modules/better-auth/dist/plugins/two-factor/index.mjs
+ * (enable, disable) and its totp/backup-codes sub-plugins (get-totp-uri,
+ * generate-backup-codes). A hijacked session could otherwise silently strip
+ * 2FA, re-enable it to rotate the secret out from under the real owner,
+ * read back the current TOTP secret to clone the authenticator, or mint
+ * fresh backup codes, so these paths are additionally gated on a fresh
+ * email verification code (see `requireTwoFactorManageOtp`), mirroring the
+ * delete-account flow.
  */
-const TWO_FACTOR_DISABLE_PATH = "/two-factor/disable";
+export const TWO_FACTOR_MANAGE_PATHS = new Set([
+  "/two-factor/enable",
+  "/two-factor/disable",
+  "/two-factor/get-totp-uri",
+  "/two-factor/generate-backup-codes",
+]);
 const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/u;
 
 export const isSixDigitOtpBody = (body: unknown): body is { otp: string } =>
@@ -111,7 +120,7 @@ export const isSixDigitOtpBody = (body: unknown): body is { otp: string } =>
   SIX_DIGIT_OTP_PATTERN.test(body.otp);
 
 /**
- * Structural shape `requireTwoFactorDisableOtp` needs off the hook context.
+ * Structural shape `requireTwoFactorManageOtp` needs off the hook context.
  * Not `HookEndpointContext`: `createAuthMiddleware`'s single-argument
  * overload — used for this app's top-level `hooks.before` — infers its own
  * middleware context type, which is a structurally different (and
@@ -119,21 +128,24 @@ export const isSixDigitOtpBody = (body: unknown): body is { otp: string } =>
  * narrower type lets the function stay unit-testable with a minimal stub
  * instead of a fully constructed better-auth context of either shape.
  */
-type TwoFactorDisableHookCtx = { path: string; body: unknown };
+type TwoFactorManageHookCtx = { path: string; body: unknown };
 
 /**
- * Requires a fresh, single-use email verification code before letting
- * `/two-factor/disable` proceed, so a hijacked session cannot silently
- * disable 2FA with nothing but the session cookie.
+ * Requires a fresh, single-use email verification code before letting any
+ * path in `TWO_FACTOR_MANAGE_PATHS` proceed, so a hijacked session cannot
+ * silently disable 2FA, rotate the TOTP secret via re-enable, read back the
+ * current TOTP secret, or mint fresh backup codes with nothing but the
+ * session cookie.
  *
  * Resolves the session itself (this runs as a global `before` hook, ahead of
- * the endpoint's own `sensitiveSessionMiddleware`) and no-ops when there is
- * no session (the endpoint's own middleware will reject the request) or the
- * user does not currently have 2FA enabled (disable is then a no-op left to
- * the plugin).
+ * each endpoint's own session middleware) and no-ops when there is no
+ * session (the endpoint's own middleware will reject the request) or the
+ * user does not currently have 2FA enabled — first-time enrollment
+ * (`/two-factor/enable` for a user without 2FA yet) is then left ungated as
+ * a no-op for the plugin.
  */
-const requireTwoFactorDisableOtp = async (
-  ctx: TwoFactorDisableHookCtx,
+const requireTwoFactorManageOtp = async (
+  ctx: TwoFactorManageHookCtx,
 ): Promise<void> => {
   // `getSessionFromCtx` wants a `GenericEndpointContext`, which requires
   // `request` to always be present. better-auth's own middleware context
@@ -156,12 +168,12 @@ const requireTwoFactorDisableOtp = async (
   if (!isSixDigitOtpBody(ctx.body)) {
     throw new APIError("BAD_REQUEST", {
       message:
-        "Verification code required to disable two-factor authentication",
+        "Verification code required to change two-factor authentication settings",
     });
   }
 
   const verifyResult = await verifyConfirmationOtp({
-    purpose: "two-factor-disable",
+    purpose: "two-factor-manage",
     email: session.user.email,
     code: ctx.body.otp,
   });
@@ -654,8 +666,8 @@ const createAuth = () => {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
-        if (ctx.path === TWO_FACTOR_DISABLE_PATH) {
-          await requireTwoFactorDisableOtp(ctx);
+        if (TWO_FACTOR_MANAGE_PATHS.has(ctx.path)) {
+          await requireTwoFactorManageOtp(ctx);
           return;
         }
 

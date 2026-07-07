@@ -2226,6 +2226,7 @@ type Messages = {
         "regenerateBackupCodes": "Regenerate backup codes";
         "regenerateConfirmDescription": "Your existing backup codes will stop working immediately.";
         "regenerateConfirmTitle": "Regenerate backup codes?";
+        "regenerateOtpDescription": "We sent a verification code to your email. Enter it below to confirm regenerating your backup codes.";
         "scanQrDescription": "Scan this QR code with your authenticator app, or enter the setup key manually.";
         "setupTitle": "Set up two-factor authentication";
         "title": "Two-factor authentication";

@@ -29,7 +29,7 @@
     "preview": "Použite tento kód na overenie vašej identity",
     "signIn": "Použite tento kód na prihlásenie do svojho účtu stella.",
     "subject": "Váš overovací kód stella",
-    "twoFactorDisable": "Použite tento kód na overenie vypnutia dvojfaktorového overenia."
+    "twoFactorManage": "Použite tento kód na potvrdenie zmien v nastaveniach dvojfaktorového overenia."
   },
   "reportExportStatus": {
     "action": "Otvoriť stella",

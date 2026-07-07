@@ -11,7 +11,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  * verification-table identifier (`${purpose}:${email}`) so codes issued for
  * different flows never collide, even for the same email.
  */
-export type ConfirmationOtpPurpose = "delete-account" | "two-factor-disable";
+export type ConfirmationOtpPurpose = "delete-account" | "two-factor-manage";
 
 const CONFIRMATION_OTP_EXPIRY_MS = 5 * 60 * 1000;
 

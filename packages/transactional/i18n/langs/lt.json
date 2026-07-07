@@ -29,7 +29,7 @@
     "preview": "Naudokite šį kodą savo tapatybei patvirtinti",
     "signIn": "Naudokite šį kodą prisijungimui prie savo stella paskyros.",
     "subject": "Jūsų stella patvirtinimo kodas",
-    "twoFactorDisable": "Naudokite šį kodą dviejų veiksnių autentifikavimo išjungimui patvirtinti."
+    "twoFactorManage": "Naudokite šį kodą dviejų veiksnių autentifikavimo nustatymų pakeitimams patvirtinti."
   },
   "reportExportStatus": {
     "action": "Atidaryti stella",

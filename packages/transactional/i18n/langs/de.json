@@ -29,7 +29,7 @@
     "preview": "Verwenden Sie diesen Code zur Bestätigung Ihrer Identität",
     "signIn": "Verwenden Sie diesen Code, um sich bei Ihrem stella-Konto anzumelden.",
     "subject": "Ihr stella-Bestätigungscode",
-    "twoFactorDisable": "Verwenden Sie diesen Code, um die Deaktivierung der Zwei-Faktor-Authentifizierung zu bestätigen."
+    "twoFactorManage": "Verwenden Sie diesen Code, um Änderungen an Ihren Einstellungen für die Zwei-Faktor-Authentifizierung zu bestätigen."
   },
   "reportExportStatus": {
     "action": "stella öffnen",

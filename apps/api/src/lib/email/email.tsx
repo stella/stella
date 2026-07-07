@@ -100,7 +100,7 @@ type SendOTPEmailProps = {
     | "forget-password"
     | "change-email"
     | "delete-account"
-    | "two-factor-disable";
+    | "two-factor-manage";
   lang: SupportedLang;
 };
 

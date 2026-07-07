@@ -29,7 +29,7 @@
     "preview": "Kasutage seda koodi oma identiteedi kinnitamiseks",
     "signIn": "Kasutage seda koodi oma stella kontole sisselogimiseks.",
     "subject": "Teie stella kinnituskood",
-    "twoFactorDisable": "Kasutage seda koodi kahefaktorilise autentimise keelamise kinnitamiseks."
+    "twoFactorManage": "Kasutage seda koodi oma kahefaktorilise autentimise seadete muudatuste kinnitamiseks."
   },
   "reportExportStatus": {
     "action": "Ava stella",

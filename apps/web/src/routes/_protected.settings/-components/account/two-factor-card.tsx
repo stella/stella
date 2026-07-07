@@ -6,6 +6,7 @@ import {
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { renderSVG } from "uqr";
 import { useTranslations } from "use-intl";
 
@@ -115,6 +116,26 @@ export const TwoFactorCard = () => {
       />
     </Frame>
   );
+};
+
+/**
+ * Structural narrowing for the untyped `$fetch` response of
+ * `/two-factor/generate-backup-codes` (see the call site for why the typed
+ * client method cannot be used). better-auth always returns
+ * `{ backupCodes: string[] }` on 200; anything else is exceptional.
+ */
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((entry) => typeof entry === "string");
+
+const extractBackupCodes = (data: unknown): string[] => {
+  const backupCodes =
+    typeof data === "object" && data !== null && "backupCodes" in data
+      ? data.backupCodes
+      : null;
+  if (!isStringArray(backupCodes)) {
+    panic("Unexpected response from backup code regeneration");
+  }
+  return backupCodes;
 };
 
 const getTotpSecret = (totpURI: string): string | null => {
@@ -408,7 +429,7 @@ const DisableTwoFactorDialog = ({
 
   const sendDisableOtpMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.me["two-factor"]["send-disable-otp"].post();
+      const res = await api.me["two-factor"]["send-otp"].post();
       if (res.error) {
         throw toAPIError(res.error);
       }
@@ -433,7 +454,7 @@ const DisableTwoFactorDialog = ({
     mutationFn: async () => {
       // `authClient.twoFactor.disable`'s typed body has no `otp` field (the
       // server's `before` hook validates it separately from the plugin's own
-      // schema — see `requireTwoFactorDisableOtp` in apps/api/src/lib/auth.ts),
+      // schema — see `requireTwoFactorManageOtp` in apps/api/src/lib/auth.ts),
       // so this calls the underlying `$fetch` directly with the raw path.
       const { error } = await authClient.$fetch("/two-factor/disable", {
         method: "POST",
@@ -531,6 +552,8 @@ const DisableTwoFactorDialog = ({
   );
 };
 
+type RegenerateStep = "confirm" | "code" | "codes";
+
 const RegenerateBackupCodesDialog = ({
   onOpenChange,
   open,
@@ -540,19 +563,55 @@ const RegenerateBackupCodesDialog = ({
 }) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const [step, setStep] = useState<RegenerateStep>("confirm");
+  const [code, setCode] = useState("");
   const [codes, setCodes] = useState<string[] | null>(null);
 
   const handleOpenChange = (nextOpen: boolean) => {
     onOpenChange(nextOpen);
     if (!nextOpen) {
+      setStep("confirm");
+      setCode("");
       setCodes(null);
     }
   };
 
+  const sendOtpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.me["two-factor"]["send-otp"].post();
+      if (res.error) {
+        throw toAPIError(res.error);
+      }
+    },
+    onSuccess: () => {
+      setStep("code");
+      stellaToast.add({
+        title: t("settings.account.otpSentSuccess"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      stellaToast.add({
+        title: error.message || t("errors.actionFailed"),
+        type: "error",
+      });
+      analytics.captureError(error);
+    },
+  });
+
   const regenerateMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await authClient.twoFactor.generateBackupCodes(
-        {},
+      // `authClient.twoFactor.generateBackupCodes`'s typed body has no `otp`
+      // field (the server's `before` hook validates it separately from the
+      // plugin's own schema — see `requireTwoFactorManageOtp` in
+      // apps/api/src/lib/auth.ts), so this calls the underlying `$fetch`
+      // directly with the raw path and narrows the response structurally.
+      const { data, error } = await authClient.$fetch(
+        "/two-factor/generate-backup-codes",
+        {
+          method: "POST",
+          body: { otp: code },
+        },
       );
 
       if (error) {
@@ -563,16 +622,18 @@ const RegenerateBackupCodesDialog = ({
         throw toAuthClientError(error);
       }
 
-      return data;
+      return extractBackupCodes(data);
     },
-    onSuccess: (data) => {
-      setCodes(data.backupCodes);
+    onSuccess: (backupCodes) => {
+      setStep("codes");
+      setCodes(backupCodes);
       stellaToast.add({
         title: t("settings.account.twoFactor.backupCodesRegenerated"),
         type: "success",
       });
     },
     onError: (error) => {
+      setCode("");
       analytics.captureError(error);
     },
   });
@@ -584,19 +645,44 @@ const RegenerateBackupCodesDialog = ({
           <DialogTitle>
             {t("settings.account.twoFactor.regenerateConfirmTitle")}
           </DialogTitle>
-          {!codes && (
+          {step !== "codes" && (
             <DialogDescription>
-              {t("settings.account.twoFactor.regenerateConfirmDescription")}
+              {step === "confirm"
+                ? t("settings.account.twoFactor.regenerateConfirmDescription")
+                : t("settings.account.twoFactor.regenerateOtpDescription")}
             </DialogDescription>
           )}
         </DialogHeader>
-        {codes && (
+        {step === "code" && (
+          <div className="mx-auto flex w-fit flex-col items-stretch gap-2 px-6 pb-2">
+            <InputOTP
+              autoFocus
+              maxLength={TOTP_LENGTH}
+              onChange={setCode}
+              onComplete={(nextCode: string) => {
+                setCode(nextCode);
+                regenerateMutation.mutate();
+              }}
+              value={code}
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+        )}
+        {step === "codes" && codes && (
           <div className="flex flex-col gap-3 px-6 pb-6">
             <BackupCodesList codes={codes} />
           </div>
         )}
         <DialogFooter>
-          {codes ? (
+          {step === "codes" ? (
             <Button onClick={() => handleOpenChange(false)}>
               {t("common.done")}
             </Button>
@@ -605,13 +691,27 @@ const RegenerateBackupCodesDialog = ({
               <DialogClose render={<Button variant="ghost" />}>
                 {t("common.cancel")}
               </DialogClose>
-              <Button
-                loading={regenerateMutation.isPending}
-                onClick={() => regenerateMutation.mutate()}
-                variant="destructive"
-              >
-                {t("settings.account.twoFactor.regenerateBackupCodes")}
-              </Button>
+              {step === "confirm" && (
+                <Button
+                  loading={sendOtpMutation.isPending}
+                  onClick={() => sendOtpMutation.mutate()}
+                  variant="destructive"
+                >
+                  {t("settings.account.twoFactor.regenerateBackupCodes")}
+                </Button>
+              )}
+              {step === "code" && (
+                <Button
+                  disabled={
+                    code.length !== TOTP_LENGTH || regenerateMutation.isPending
+                  }
+                  loading={regenerateMutation.isPending}
+                  onClick={() => regenerateMutation.mutate()}
+                  variant="destructive"
+                >
+                  {t("common.verify")}
+                </Button>
+              )}
             </>
           )}
         </DialogFooter>

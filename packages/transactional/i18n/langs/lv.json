@@ -29,7 +29,7 @@
     "preview": "Izmantojiet šo kodu savas identitātes apstiprināšanai",
     "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam stella kontam.",
     "subject": "Jūsu stella verifikācijas kods",
-    "twoFactorDisable": "Izmantojiet šo kodu, lai apstiprinātu divfaktoru autentifikācijas atspējošanu."
+    "twoFactorManage": "Izmantojiet šo kodu, lai apstiprinātu izmaiņas divfaktoru autentifikācijas iestatījumos."
   },
   "reportExportStatus": {
     "action": "Atvērt stella",

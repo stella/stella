@@ -22,7 +22,7 @@ const otpTypeKey = {
   "forget-password": "otp.forgetPassword",
   "change-email": "otp.changeEmail",
   "delete-account": "otp.deleteAccount",
-  "two-factor-disable": "otp.twoFactorDisable",
+  "two-factor-manage": "otp.twoFactorManage",
 } as const;
 
 type Props = {

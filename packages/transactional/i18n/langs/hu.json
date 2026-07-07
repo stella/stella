@@ -29,7 +29,7 @@
     "preview": "Használja ezt a kódot személyazonossága igazolásához",
     "signIn": "Használja ezt a kódot a stella fiókjába való bejelentkezéshez.",
     "subject": "Az Ön stella ellenőrző kódja",
-    "twoFactorDisable": "Használja ezt a kódot a kétfaktoros hitelesítés kikapcsolásának ellenőrzéséhez."
+    "twoFactorManage": "Használja ezt a kódot a kétfaktoros hitelesítés beállításainak módosítására vonatkozó megerősítéshez."
   },
   "reportExportStatus": {
     "action": "stella megnyitása",

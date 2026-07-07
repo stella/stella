@@ -14,14 +14,14 @@ const config = {
   mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;
 
-const twoFactorSendDisableOtp = createSafeSessionHandler(
+const twoFactorSendManageOtp = createSafeSessionHandler(
   config,
   async function* (ctx) {
     const currentUserId = ctx.user.id;
     const request = ctx.request;
 
     // 1. Fetch user details; refuse if 2FA is not currently enabled — there
-    // is nothing to gate a disable-confirmation code for.
+    // is nothing to gate a management-confirmation code for.
     const { email: emailStr, twoFactorEnabled } = yield* Result.await(
       getUserEmailAndTwoFactorEnabled(currentUserId),
     );
@@ -37,7 +37,7 @@ const twoFactorSendDisableOtp = createSafeSessionHandler(
 
     // 2. Generate and store a cryptographically secure 6-digit OTP
     const otp = yield* Result.await(
-      createConfirmationOtp({ purpose: "two-factor-disable", email: emailStr }),
+      createConfirmationOtp({ purpose: "two-factor-manage", email: emailStr }),
     );
 
     // 3. Send email (log + stash to the dev OTP store in development)
@@ -47,7 +47,7 @@ const twoFactorSendDisableOtp = createSafeSessionHandler(
         await sendOTPEmail({
           email: emailStr,
           otp,
-          type: "two-factor-disable",
+          type: "two-factor-manage",
           lang,
         }),
       catch: (err) => err,
@@ -56,7 +56,7 @@ const twoFactorSendDisableOtp = createSafeSessionHandler(
     if (env.isDev) {
       // eslint-disable-next-line no-console -- Local dev fallback prints OTPs when SMTP is unavailable.
       console.log(
-        `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: two-factor-disable)\x1b[0m\n`,
+        `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: two-factor-manage)\x1b[0m\n`,
       );
       stashDevOtp(emailStr, otp);
       if (emailResult.isErr()) {
@@ -81,4 +81,4 @@ const twoFactorSendDisableOtp = createSafeSessionHandler(
   },
 );
 
-export default twoFactorSendDisableOtp;
+export default twoFactorSendManageOtp;
