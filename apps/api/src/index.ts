@@ -1,5 +1,6 @@
 import cors from "@elysiajs/cors";
 import { Elysia } from "elysia";
+import type { Context } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
@@ -69,6 +70,11 @@ import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { captureRequestError, getAnalytics } from "@/api/lib/analytics";
 import { getAuth } from "@/api/lib/auth";
+import {
+  beginRequestQueryCounter,
+  currentQueryCount,
+  DB_QUERY_COUNT_HEADER,
+} from "@/api/lib/db-query-counter";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
@@ -99,6 +105,10 @@ import { initWorkflowWorker } from "@/api/lib/workflow-queue";
 
 const HEALTH_PATH = "/health";
 const DEFAULT_API_PORT = 3001;
+// Emit the per-request query count in local/CI runs only, so the e2e guard
+// can assert per-route budgets without deployed environments paying any
+// per-query cost. Must match the logger gate in db/root.ts.
+const DB_QUERY_COUNTER_ENABLED = env.isDev;
 const SESSION_ID_HEADER = "x-posthog-session-id";
 const SESSION_ID_MAX_LENGTH = 64;
 const SESSION_ID_PATTERN = /^[\w-]+$/u;
@@ -127,6 +137,20 @@ const getApiPort = () => {
 
 const getRequestPath = (request: Request): string =>
   new URL(request.url).pathname;
+
+// Stamp the per-request query count onto the outgoing response. Reads the
+// active counter store, so it is a no-op when the store was never started
+// (production, or a request that bypassed `onRequest`).
+const setDbQueryCountHeader = (set: Context["set"]) => {
+  if (!DB_QUERY_COUNTER_ENABLED) {
+    return;
+  }
+  const queryCount = currentQueryCount();
+  if (queryCount === undefined) {
+    return;
+  }
+  set.headers[DB_QUERY_COUNT_HEADER] = String(queryCount);
+};
 
 const shouldLogRequest = (path: string): boolean => path !== HEALTH_PATH;
 
@@ -189,6 +213,14 @@ const buildRequestLogAttributes = ({
 
 const api = new Elysia()
   .onRequest(({ request, set }) => {
+    // Start the per-request query counter before any handler (or better-auth
+    // session lookup) can issue a query, so those queries are attributed to
+    // this request. `enterWith` binds the store to this request's async
+    // context; each request enters its own context, so counts do not leak.
+    if (DB_QUERY_COUNTER_ENABLED) {
+      beginRequestQueryCounter();
+    }
+
     setSecurityHeaders(set);
 
     const rawSessionId = request.headers.get(SESSION_ID_HEADER);
@@ -230,6 +262,7 @@ const api = new Elysia()
   )
   .onError(({ error, set, code, request, route }) => {
     delete set.headers["X-Powered-By"];
+    setDbQueryCountHeader(set);
 
     const path = getRequestPath(request);
     const reqCtx = getRequestContext(request);
@@ -284,6 +317,7 @@ const api = new Elysia()
   })
   .onAfterHandle(async ({ request, route, set }) => {
     delete set.headers["X-Powered-By"];
+    setDbQueryCountHeader(set);
 
     const path = getRequestPath(request);
     const reqCtx = getRequestContext(request);
@@ -339,6 +373,13 @@ const api = new Elysia()
           generator: scopedGenerator("api"),
           context: new InMemoryRateLimitContext(),
           skip: (req) => {
+            // The e2e route walk fires hundreds of /v1 requests per minute
+            // from one IP; abuse limits are not what those runs measure. The
+            // flag is dev-only by env validation and CI's e2e job already
+            // sets it for the API it boots.
+            if (env.E2E_DISABLE_AUTH_RATE_LIMIT) {
+              return true;
+            }
             // Endpoints with a dedicated rate-limit budget are excluded
             // from the shared `api` bucket so unrelated `/v1` traffic on
             // the same IP cannot drain their quota (see `upload` and
@@ -371,6 +412,10 @@ const api = new Elysia()
               max: API_RATE_LIMITS.folioCollab.max,
               generator: scopedGenerator("folio-collab"),
               context: new InMemoryRateLimitContext(),
+              // Same e2e escape hatch as the shared `api` bucket above: the
+              // route walk opens the document editor repeatedly and would
+              // drain this 30/min budget across back-to-back runs.
+              skip: () => env.E2E_DISABLE_AUTH_RATE_LIMIT,
             }),
           )
           .use(folioCollabRoute),
