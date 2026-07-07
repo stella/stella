@@ -592,6 +592,60 @@ describe("resolveTemplateProperties", () => {
     );
   });
 
+  test("reuses structural role matches before shape matches", async () => {
+    const templateContent = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const { returningMock, tx } = createTemplateReuseTx({
+      id: "existing_property",
+      name: "Dokumenttyp",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [{ color: "green", value: "Invoice" }],
+        fallback: null,
+      },
+      tool: { version: 1, type: "manual-input" },
+      role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+    });
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_document_type",
+      name: "Type de document",
+      content: templateContent,
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify the document type.",
+      },
+      role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+    const layout = tableLayout(templateProperty.sourceId);
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout,
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      layout: {
+        ...layout,
+        columnOrder: ["existing_property"],
+      },
+      propertyIds: ["existing_property"],
+    });
+    expect(returningMock).not.toHaveBeenCalled();
+  });
+
   test("does not reuse shape matches with different config", async () => {
     const { returningMock, tx } = createTemplateReuseTx({
       id: "existing_property",

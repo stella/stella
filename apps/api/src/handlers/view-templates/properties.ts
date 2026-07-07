@@ -190,6 +190,17 @@ export const resolveTemplateProperties = async ({
       continue;
     }
 
+    const existingByRole = findUniquePropertyByRole(
+      existingProperties,
+      templateProperty,
+      consumedExistingPropertyIds,
+    );
+    if (existingByRole) {
+      propertyIdBySourceId.set(templateProperty.sourceId, existingByRole.id);
+      consumedExistingPropertyIds.add(existingByRole.id);
+      continue;
+    }
+
     const existingByShape = findUniquePropertyByShape(
       existingProperties,
       templateProperty,
@@ -609,6 +620,25 @@ const validateTemplatePropertyConfig = (
 
 const normalizePropertyName = (name: string): string =>
   name.trim().toLocaleLowerCase();
+
+const findUniquePropertyByRole = (
+  existingProperties: readonly {
+    id: string;
+    role: typeof properties.$inferSelect.role;
+  }[],
+  templateProperty: ViewTemplateProperty,
+  consumedExistingPropertyIds: ReadonlySet<string>,
+) => {
+  if (templateProperty.role === undefined) {
+    return undefined;
+  }
+
+  return existingProperties.find(
+    (property) =>
+      !consumedExistingPropertyIds.has(property.id) &&
+      property.role === templateProperty.role,
+  );
+};
 
 const findUniquePropertyByShape = (
   existingProperties: readonly {
