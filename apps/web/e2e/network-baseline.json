@@ -1030,6 +1030,9 @@
       "POST /v1/chat/workspaces/:id/file-thread",
       "POST /v1/workspaces/:id/justifications/query"
     ],
+    "requestCounts": {
+      "GET /v1/files/:id/url/:id": 2
+    },
     "dbQueries": {
       "GET /api/auth/get-session": 3,
       "GET /api/auth/organization/get-active-member-role": 4,
