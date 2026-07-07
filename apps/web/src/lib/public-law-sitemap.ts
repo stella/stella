@@ -256,8 +256,7 @@ export const createPublicLawSitemapIndexXml = (
           publicLawIndexingEnabled:
             options.publicLawIndexingEnabled ?? isPublicLawSitemapEnabled(),
           publicToolsIndexingEnabled:
-            options.publicToolsIndexingEnabled ??
-            isPublicToolsSitemapEnabled(),
+            options.publicToolsIndexingEnabled ?? isPublicToolsSitemapEnabled(),
         };
 
   const lawEntries = publicLawIndexingEnabled

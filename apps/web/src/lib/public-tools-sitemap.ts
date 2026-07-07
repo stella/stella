@@ -4,7 +4,7 @@ import {
   assertPublicLawSitemapXmlWithinProtocolLimits,
   SITEMAP_XML_RESPONSE_HEADERS,
 } from "@/lib/public-law-sitemap";
-import { isPublicToolsIndexingEnabled } from "@/lib/public-tools-launch";
+import { isPublicToolsSitemapEnabled } from "@/lib/public-tools-launch";
 import { createPublicToolsCanonicalUrl } from "@/lib/public-tools-seo";
 
 export const TOOLS_SITEMAP_PATH = "/sitemaps/tools.xml";
@@ -33,7 +33,7 @@ const collectToolPaths = (): readonly `/${string}`[] => [
 ];
 
 export const createPublicToolsSitemapXml = ({
-  publicToolsIndexingEnabled = isPublicToolsIndexingEnabled(),
+  publicToolsIndexingEnabled = isPublicToolsSitemapEnabled(),
 }: PublicToolsSitemapOptions = {}): string => {
   if (!publicToolsIndexingEnabled) {
     return `<?xml version="1.0" encoding="UTF-8"?>

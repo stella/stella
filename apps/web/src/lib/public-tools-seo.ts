@@ -4,19 +4,19 @@ import {
   type JsonLdObject,
   type PublicHeadInput,
 } from "@/lib/public-seo";
-import { isPublicToolsIndexingEnabled } from "@/lib/public-tools-launch";
+import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 import { spdxLicenseUrl } from "@/routes/tools/-components/tool-detail.logic";
 
-type PublicToolsHeadInput = Omit<PublicHeadInput, "indexingEnabled"> & {
-  indexingEnabled?: boolean;
+type PublicToolsHeadInput = Omit<PublicHeadInput, "crawlAllowed"> & {
+  crawlAllowed?: boolean;
 };
 
 export const createPublicToolsCanonicalUrl = createPublicCanonicalUrl;
 
 export const createPublicToolsHead = ({
-  indexingEnabled = isPublicToolsIndexingEnabled(),
+  crawlAllowed = isPublicToolsCrawlAllowed(),
   ...rest
-}: PublicToolsHeadInput) => createPublicHead({ indexingEnabled, ...rest });
+}: PublicToolsHeadInput) => createPublicHead({ crawlAllowed, ...rest });
 
 type ToolEntryJsonLdInput = {
   author: string;
