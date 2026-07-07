@@ -118,7 +118,15 @@ export const resolveDocTypeClassifier = async (
       name: properties.name,
     })
     .from(properties)
-    .where(eq(properties.workspaceId, workspaceId));
+    .where(
+      and(
+        eq(properties.workspaceId, workspaceId),
+        or(
+          eq(properties.role, "document-type-classifier"),
+          sql`lower(trim(${properties.name})) = 'document type'`,
+        ),
+      ),
+    );
   const byRole = candidates.find(
     (row) => row.role === "document-type-classifier",
   );

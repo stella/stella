@@ -43,7 +43,7 @@ import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import {
   buildDocTypeGate,
-  isDocumentTypeClassifier,
+  resolveDocumentTypeClassifier,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
@@ -279,7 +279,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
   // Shared "applies to" scope: gate every AI column added here to one document
   // type (or all). Offered only when a Document Type classifier exists.
   const classifier = useMemo(
-    () => properties.find(isDocumentTypeClassifier),
+    () => resolveDocumentTypeClassifier(properties),
     [properties],
   );
   const docTypeOptions =

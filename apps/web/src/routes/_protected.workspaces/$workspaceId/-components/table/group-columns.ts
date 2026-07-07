@@ -17,6 +17,26 @@ export const isDocumentTypeClassifier = (
     property.tool.type === "ai-model" &&
     property.name.trim().toLowerCase() === DOCUMENT_TYPE_CLASSIFIER_NAME);
 
+export const resolveDocumentTypeClassifier = (
+  properties: WorkspaceProperty[],
+): WorkspaceProperty | null => {
+  const byRole = properties.find(
+    (property) => property.role === "document-type-classifier",
+  );
+  if (byRole) {
+    return byRole;
+  }
+
+  return (
+    properties.find(
+      (property) =>
+        property.content.type === "single-select" &&
+        property.tool.type === "ai-model" &&
+        property.name.trim().toLowerCase() === DOCUMENT_TYPE_CLASSIFIER_NAME,
+    ) ?? null
+  );
+};
+
 // A playbook column scoped to a document type carries a dependency on the
 // classifier whose condition is `classifier == <document-type label>` — the exact
 // gate `materializePlaybookRun` writes. Reading that label back lets the grouped

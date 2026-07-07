@@ -68,7 +68,7 @@ import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$wor
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
-import { isDocumentTypeClassifier } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
+import { resolveDocumentTypeClassifier } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
@@ -818,7 +818,7 @@ const GroupByControl = ({
   // playbook review — so it leads the menu, marked, above the basic groupings.
   // The playbook verdict groupings are collected into their own section below so
   // they don't drown the important choices.
-  const documentTypeProp = eligible.find(isDocumentTypeClassifier);
+  const documentTypeProp = resolveDocumentTypeClassifier(eligible);
   const verdictProps = eligible.filter(
     (property) => property.tool.type === "playbook-verdict",
   );

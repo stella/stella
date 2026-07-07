@@ -18,7 +18,12 @@ WHERE p.id = c.id AND c.rn = 1;--> statement-breakpoint
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "properties_ws_document_type_classifier_unq" ON "properties" USING btree ("workspace_id") WHERE "role" = 'document-type-classifier';
+-- A cancelled concurrent index build can leave an INVALID index with this
+-- name. Drop any leftover index first, then recreate without IF NOT EXISTS so
+-- retries cannot record the migration without enforcing the invariant.
+DROP INDEX CONCURRENTLY IF EXISTS "properties_ws_document_type_classifier_unq";
+--> statement-breakpoint
+CREATE UNIQUE INDEX CONCURRENTLY "properties_ws_document_type_classifier_unq" ON "properties" USING btree ("workspace_id") WHERE "role" = 'document-type-classifier';
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
