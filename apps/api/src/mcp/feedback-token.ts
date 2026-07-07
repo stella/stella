@@ -25,6 +25,13 @@ export type FeedbackTokenContent = {
   sanitizedBody: string;
 };
 
+const serializeContent = (content: FeedbackTokenContent): string =>
+  JSON.stringify([
+    content.kind,
+    content.sanitizedTitle,
+    content.sanitizedBody,
+  ]);
+
 /** SHA-256 of the exact content the token authorizes, hex-encoded. */
 const contentHash = ({
   kind,
@@ -32,7 +39,7 @@ const contentHash = ({
   sanitizedTitle,
 }: FeedbackTokenContent): string =>
   createHash("sha256")
-    .update(`${kind}\n${sanitizedTitle}\n${sanitizedBody}`)
+    .update(serializeContent({ kind, sanitizedTitle, sanitizedBody }))
     .digest("hex");
 
 const sign = (contentDigest: string, expiresAtMs: number): string =>

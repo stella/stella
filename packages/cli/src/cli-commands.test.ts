@@ -62,7 +62,7 @@ const startMockServer = (handler: MockHandler) => {
         });
       }
       const result: {
-        content: Array<{ type: "text"; text: string }>;
+        content: { type: "text"; text: string }[];
         isError?: true;
       } = {
         content: [

@@ -72,6 +72,19 @@ export type RunRegistryWriteToolProps = {
   refRegistry: ChatRefRegistry;
 };
 
+export const applyChatApprovalConfirmation = ({
+  args,
+  toolName,
+}: {
+  toolName: RegistryWriteToolName;
+  args: Record<string, unknown>;
+}): Record<string, unknown> => {
+  if (toolName === "manage_organization" && args["action"] === "remove_member") {
+    return { ...args, confirm: true };
+  }
+  return args;
+};
+
 /**
  * Run one write MCP registry tool as a per-call chat tool. Mirrors
  * `runRegistryReadTool`; the differences are intrinsic to writes:
@@ -129,7 +142,10 @@ export const runRegistryWriteTool = async ({
   }
 
   const response = await REGISTRY_WRITE_TOOL_HANDLERS[toolName]({
-    args: dehydrated.value.args,
+    args: applyChatApprovalConfirmation({
+      args: dehydrated.value.args,
+      toolName,
+    }),
     context,
   });
   const finished = await finalizeMcpEgress({

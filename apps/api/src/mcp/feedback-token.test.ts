@@ -59,6 +59,28 @@ describe("feedback confirmation token", () => {
     ).toBe(false);
   });
 
+  test("keeps title and body boundaries distinct", () => {
+    const now = 1_000_000;
+    const token = createFeedbackToken(
+      {
+        kind: "bug",
+        sanitizedTitle: "A",
+        sanitizedBody: "B\nC",
+      },
+      now,
+    );
+
+    expect(
+      verifyFeedbackToken({
+        token,
+        nowMs: now,
+        kind: "bug",
+        sanitizedTitle: "A\nB",
+        sanitizedBody: "C",
+      }),
+    ).toBe(false);
+  });
+
   test("rejects a tampered expiry (extending the window forges the MAC)", () => {
     const now = 1_000_000;
     const token = createFeedbackToken(content, now);
