@@ -125,6 +125,29 @@ export const collectJurisdictions = (
   return [...set].sort();
 };
 
+export type CatalogueStats = {
+  toolCount: number;
+  contributorCount: number;
+};
+
+/**
+ * Social-proof counters for the catalogue header. Contributors are the
+ * distinct non-blank author names across the bundle, so a malformed
+ * manifest with an empty author cannot inflate the count.
+ */
+export const catalogueStats = (
+  entries: readonly { author?: string | undefined }[],
+): CatalogueStats => {
+  const authors = new Set<string>();
+  for (const entry of entries) {
+    const author = entry.author?.trim();
+    if (author) {
+      authors.add(author);
+    }
+  }
+  return { toolCount: entries.length, contributorCount: authors.size };
+};
+
 /** Present a kebab-case practice-area slug as a human label. */
 export const prettifyPracticeArea = (tag: string): string =>
   tag

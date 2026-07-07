@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  catalogueStats,
   collectJurisdictions,
   collectPracticeAreas,
   filterToolEntries,
@@ -114,6 +115,20 @@ describe("facet collectors", () => {
       "data-protection",
     ]);
     expect(collectJurisdictions(entries)).toEqual(["CZ", "EU"]);
+  });
+});
+
+describe("catalogueStats", () => {
+  test("counts entries and distinct non-blank authors", () => {
+    expect(
+      catalogueStats([
+        { author: "Anthropic" },
+        { author: "Anthropic" },
+        { author: "Jane Doe" },
+        { author: "  " },
+        {},
+      ]),
+    ).toEqual({ toolCount: 5, contributorCount: 2 });
   });
 });
 
