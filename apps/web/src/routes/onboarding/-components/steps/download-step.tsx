@@ -284,9 +284,6 @@ const DesktopSetupPanel = () => {
   return (
     <SetupPanel title={t("settings.account.desktop")}>
       <div className="flex flex-col gap-2">{downloads}</div>
-      <p className="text-foreground-muted text-xs">
-        {t("onboarding.desktopHint")}
-      </p>
     </SetupPanel>
   );
 };
