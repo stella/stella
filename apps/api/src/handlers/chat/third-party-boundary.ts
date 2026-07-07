@@ -117,7 +117,7 @@ export const createChatThirdPartyBoundary = ({
               organizationId,
               scopeId: workspaceId,
               scopedDb,
-        }),
+            }),
         organizationId,
         pipelineContext: createPipelineContext(),
         placeholderOffsets: new Map<string, number>(),
@@ -184,6 +184,36 @@ const rewritePlaceholders = (
     const replacement = replacements.get(placeholder);
     return replacement ?? placeholder;
   });
+};
+
+const protectBoundaryPlaceholders = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  fields: string[],
+): {
+  fields: string[];
+  restore: (protectedFields: string[]) => string[];
+} => {
+  if (boundary.redactionMap.size === 0) {
+    return { fields, restore: (protectedFields) => protectedFields };
+  }
+
+  const replacements = new Map<string, string>();
+  const restoreReplacements = new Map<string, string>();
+  let index = 0;
+  for (const placeholder of boundary.redactionMap.keys()) {
+    const sentinel = `\uE000BOUNDARY_PLACEHOLDER_${index}\uE001`;
+    replacements.set(placeholder, sentinel);
+    restoreReplacements.set(sentinel, placeholder);
+    index += 1;
+  }
+
+  return {
+    fields: fields.map((field) => rewritePlaceholders(field, replacements)),
+    restore: (protectedFields) =>
+      protectedFields.map((field) =>
+        rewritePlaceholders(field, restoreReplacements),
+      ),
+  };
 };
 
 const rewriteBoundaryPlaceholders = (
@@ -404,11 +434,12 @@ export const prepareTextForThirdParty = async ({
   }
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  const protectedInput = protectBoundaryPlaceholders(boundary, [text]);
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
         context: boundary.pipelineContext,
-        fields: [text],
+        fields: protectedInput.fields,
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -429,7 +460,7 @@ export const prepareTextForThirdParty = async ({
 
   const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
   mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
-  return Result.ok(rewritten.fields.at(0) ?? "");
+  return Result.ok(protectedInput.restore(rewritten.fields).at(0) ?? "");
 };
 
 const prepareTextBatchForThirdParty = async ({
@@ -445,11 +476,12 @@ const prepareTextBatchForThirdParty = async ({
   }
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  const protectedInput = protectBoundaryPlaceholders(boundary, fields);
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
         context: boundary.pipelineContext,
-        fields,
+        fields: protectedInput.fields,
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -470,6 +502,7 @@ const prepareTextBatchForThirdParty = async ({
 
   const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
   mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
+  const restoredFields = protectedInput.restore(rewritten.fields);
 
   for (let index = 0; index < replacements.length; index += 1) {
     const replacement = replacements[index];
@@ -477,7 +510,7 @@ const prepareTextBatchForThirdParty = async ({
       continue;
     }
 
-    replacement.apply(rewritten.fields.at(index) ?? "");
+    replacement.apply(restoredFields.at(index) ?? "");
   }
 
   return Result.ok(undefined);
