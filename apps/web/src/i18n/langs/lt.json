@@ -648,7 +648,6 @@
     "outdatedVersion": "Galimas atnaujinimas",
     "renameSlot": "Pervadinti nišą",
     "renameSlotInvalid": "Nišų pavadinimai turi būti unikalūs ir negali turėti tarpų, dvitaškių ar riestinių skliaustų.",
-    "renameSlotLinkedHint": "Norėdami pervadinti šią nišą, pašalinkite susietą sąlygą.",
     "restoreVersion": "Atkurti šią versiją",
     "saveAsVersion": "Išsaugoti kaip naują versiją",
     "saveFailed": "Nepavyko išsaugoti",

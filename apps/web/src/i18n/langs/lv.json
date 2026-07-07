@@ -648,7 +648,6 @@
     "outdatedVersion": "Pieejams atjauninājums",
     "renameSlot": "Pārdēvēt slotu",
     "renameSlotInvalid": "Slotu nosaukumiem jābūt unikāliem, un tie nedrīkst saturēt atstarpes, kolus vai figūriekavas.",
-    "renameSlotLinkedHint": "Lai pārdēvētu šo slotu, noņemiet saistīto klauzulu.",
     "restoreVersion": "Atjaunot šo versiju",
     "saveAsVersion": "Saglabāt kā jaunu versiju",
     "saveFailed": "Neizdevās saglabāt",

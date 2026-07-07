@@ -648,7 +648,6 @@
     "outdatedVersion": "Uuendus saadaval",
     "renameSlot": "Nimeta pesa ümber",
     "renameSlotInvalid": "Pesade nimed peavad olema kordumatud ega tohi sisaldada tühikuid, kooloneid ega loogsulge.",
-    "renameSlotLinkedHint": "Selle pesa ümbernimetamiseks eemalda seotud klausel.",
     "restoreVersion": "Taasta see versioon",
     "saveAsVersion": "Salvesta uue versioonina",
     "saveFailed": "Salvestamine ebaõnnestus",

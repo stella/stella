@@ -6327,6 +6327,46 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     });
   };
 
+  // Rename a clause slot. When a clause is linked, the link row carries the
+  // slot name too, so rename the row first (API-first) and only rewrite the
+  // document markers on success: a failed call then never leaves the document
+  // renamed against a stale link.
+  const handleRename = async (next: string): Promise<boolean> => {
+    const trimmed = next.trim();
+    if (trimmed === selected.expr) {
+      return true;
+    }
+    if (!isClauseSlotName(trimmed)) {
+      return false;
+    }
+    if (link === undefined) {
+      return actions?.renameClauseSlot(selected.expr, trimmed) ?? false;
+    }
+    if (templateId === null) {
+      return false;
+    }
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses({ linkId: toSafeId<"templateClause">(link.id) })
+      .patch({ slotName: trimmed });
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("common.error"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      // Handled: the row is unchanged, so keep the document untouched and
+      // suppress the generic invalid-name toast.
+      return true;
+    }
+    actions?.renameClauseSlot(selected.expr, trimmed);
+    invalidateLinks();
+    return true;
+  };
+
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
@@ -6339,24 +6379,11 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
           <span className="text-muted-foreground text-xs font-medium">
             {t("clauses.slotName")}
           </span>
-          {link === undefined ? (
-            <ClauseSlotEditor
-              key={selected.expr}
-              onRename={(next) =>
-                actions?.renameClauseSlot(selected.expr, next) ?? false
-              }
-              slotName={selected.expr}
-            />
-          ) : (
-            <>
-              <code className="text-xs" dir="auto">
-                {selected.expr}
-              </code>
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {t("clauses.renameSlotLinkedHint")}
-              </p>
-            </>
-          )}
+          <ClauseSlotEditor
+            key={selected.expr}
+            onRename={handleRename}
+            slotName={selected.expr}
+          />
         </div>
         <p className="text-muted-foreground text-xs leading-relaxed">
           {t("templates.studio.clauseSlotHelp")}
@@ -7749,25 +7776,26 @@ const SaveRecipeDialog = ({
 };
 
 /** Click-to-edit clause slot name: rewrites the `{{@clause:name}}` markers in
- *  the document. Only offered for slots with no linked clause; renaming a linked
- *  slot here would orphan its stored `slotName` link (no endpoint updates it). */
+ *  the document. When a clause is linked, `onRename` also renames the stored
+ *  `slotName` link row (see {@link ClauseFace}); it may run asynchronously and
+ *  resolves `false` only when the new name is rejected as invalid. */
 const ClauseSlotEditor = ({
   slotName,
   onRename,
 }: {
   slotName: string;
-  onRename: (next: string) => boolean;
+  onRename: (next: string) => boolean | Promise<boolean>;
 }) => {
   const t = useTranslations();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(slotName);
 
-  const commit = () => {
+  const commit = async () => {
     if (value.trim() === slotName) {
       setEditing(false);
       return;
     }
-    if (onRename(value)) {
+    if (await onRename(value)) {
       setEditing(false);
       return;
     }
@@ -7796,11 +7824,11 @@ const ClauseSlotEditor = ({
     <Input
       autoFocus
       className="h-7 font-mono text-xs"
-      onBlur={commit}
+      onBlur={() => void commit()}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {
         if (e.key === "Enter") {
-          commit();
+          void commit();
         }
         if (e.key === "Escape") {
           setValue(slotName);

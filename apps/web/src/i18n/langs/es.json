@@ -648,7 +648,6 @@
     "outdatedVersion": "Actualización disponible",
     "renameSlot": "Cambiar nombre del espacio",
     "renameSlotInvalid": "Los nombres de los espacios deben ser únicos y no pueden contener espacios en blanco, dos puntos ni llaves.",
-    "renameSlotLinkedHint": "Quita la cláusula vinculada para cambiar el nombre de este espacio.",
     "restoreVersion": "Restaurar esta versión",
     "saveAsVersion": "Guardar como nueva versión",
     "saveFailed": "Error al guardar",

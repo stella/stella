@@ -648,7 +648,6 @@
     "outdatedVersion": "Update available",
     "renameSlot": "Rename slot",
     "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.",
-    "renameSlotLinkedHint": "Remove the linked clause to rename this slot.",
     "restoreVersion": "Restore this version",
     "saveAsVersion": "Save as new version",
     "saveFailed": "Failed to save",

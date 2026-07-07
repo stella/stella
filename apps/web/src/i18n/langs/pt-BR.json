@@ -648,7 +648,6 @@
     "outdatedVersion": "Atualização disponível",
     "renameSlot": "Renomear slot",
     "renameSlotInvalid": "Os nomes dos slots devem ser únicos e não podem conter espaços, dois-pontos ou chaves.",
-    "renameSlotLinkedHint": "Remova a cláusula vinculada para renomear este slot.",
     "restoreVersion": "Restaurar esta versão",
     "saveAsVersion": "Salvar como nova versão",
     "saveFailed": "Falha ao salvar",

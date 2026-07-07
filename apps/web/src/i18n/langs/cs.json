@@ -648,7 +648,6 @@
     "outdatedVersion": "Je dostupná aktualizace",
     "renameSlot": "Přejmenovat slot",
     "renameSlotInvalid": "Názvy slotů musí být jedinečné a nesmí obsahovat mezery, dvojtečky ani složené závorky.",
-    "renameSlotLinkedHint": "Chcete-li tento slot přejmenovat, nejprve odeberte propojené ustanovení.",
     "restoreVersion": "Obnovit tuto verzi",
     "saveAsVersion": "Uložit jako novou verzi",
     "saveFailed": "Uložení se nezdařilo",

@@ -648,7 +648,6 @@
     "outdatedVersion": "Frissítés elérhető",
     "renameSlot": "Foglalat átnevezése",
     "renameSlotInvalid": "A foglalatok neveinek egyedinek kell lenniük, és nem tartalmazhatnak szóközt, kettőspontot vagy kapcsos zárójelet.",
-    "renameSlotLinkedHint": "A foglalat átnevezéséhez távolítsa el a csatolt kikötést.",
     "restoreVersion": "Verzió visszaállítása",
     "saveAsVersion": "Mentés új verzióként",
     "saveFailed": "A mentés nem sikerült",

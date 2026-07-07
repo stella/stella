@@ -648,7 +648,6 @@
     "outdatedVersion": "Aktualisierung verfügbar",
     "renameSlot": "Slot umbenennen",
     "renameSlotInvalid": "Slot-Namen müssen eindeutig sein und dürfen keine Leerzeichen, Doppelpunkte oder geschweiften Klammern enthalten.",
-    "renameSlotLinkedHint": "Entfernen Sie die verknüpfte Klausel, um diesen Slot umzubenennen.",
     "restoreVersion": "Diese Version wiederherstellen",
     "saveAsVersion": "Als neue Version speichern",
     "saveFailed": "Speichern fehlgeschlagen",

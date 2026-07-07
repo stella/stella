@@ -648,7 +648,6 @@
     "outdatedVersion": "Mise à jour disponible",
     "renameSlot": "Renommer l'emplacement",
     "renameSlotInvalid": "Les noms d'emplacement doivent être uniques et ne peuvent pas contenir d'espaces, de deux-points ni d'accolades.",
-    "renameSlotLinkedHint": "Retirez la clause liée pour renommer cet emplacement.",
     "restoreVersion": "Restaurer cette version",
     "saveAsVersion": "Enregistrer comme nouvelle version",
     "saveFailed": "Impossible d'enregistrer",
