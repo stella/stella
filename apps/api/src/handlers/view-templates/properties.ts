@@ -591,7 +591,7 @@ const validateTemplateProperties = (
     }
 
     const role = resolveTemplatePropertyRole(templateProperty);
-    if (role !== undefined) {
+    if (role !== null) {
       if (roles.has(role)) {
         return {
           ok: false,
@@ -691,10 +691,10 @@ const isLegacyDocumentTypeClassifierTemplate = (
 
 const resolveTemplatePropertyRole = (
   templateProperty: ViewTemplateProperty,
-): typeof properties.$inferSelect.role | undefined =>
+): typeof properties.$inferSelect.role =>
   isLegacyDocumentTypeClassifierTemplate(templateProperty)
     ? DOCUMENT_TYPE_CLASSIFIER_ROLE
-    : templateProperty.role;
+    : (templateProperty.role ?? null);
 
 type PropertyRoleMatchCandidate = {
   id: string;
@@ -716,7 +716,7 @@ const findUniquePropertyByRole = ({
 }: PropertyRoleMatchArgs) => {
   const role = resolveTemplatePropertyRole(templateProperty);
 
-  if (role === undefined) {
+  if (role === null) {
     return undefined;
   }
 
@@ -734,7 +734,7 @@ const hasMalformedPropertyByRole = ({
   consumedExistingPropertyIds,
 }: PropertyRoleMatchArgs): boolean => {
   const role = resolveTemplatePropertyRole(templateProperty);
-  if (role === undefined) {
+  if (role === null) {
     return false;
   }
 
@@ -751,7 +751,7 @@ const isMalformedPropertyByRole = (
 ): boolean => {
   const role = resolveTemplatePropertyRole(templateProperty);
   return (
-    role !== undefined &&
+    role !== null &&
     property.role === role &&
     !isDocumentTypeClassifierShape(property)
   );

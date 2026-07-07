@@ -38,19 +38,21 @@ const verdictTool = (
 });
 
 const properties = [
-  { id: ASK_LAW, name: "Governing law", tool: aiTool },
+  { id: ASK_LAW, name: "Governing law", role: null, tool: aiTool },
   {
     id: VERDICT_LAW,
     name: "Governing law verdict",
+    role: null,
     tool: verdictTool(ASK_LAW, "high"),
   },
-  { id: ASK_TERM, name: "Term", tool: aiTool },
+  { id: ASK_TERM, name: "Term", role: null, tool: aiTool },
   {
     id: VERDICT_TERM,
     name: "Term verdict",
+    role: null,
     tool: verdictTool(ASK_TERM, "blocker"),
   },
-  { id: ASK_CAP, name: "Liability cap", tool: aiTool },
+  { id: ASK_CAP, name: "Liability cap", role: null, tool: aiTool },
 ];
 
 const text = (value: string): FieldContent => ({
@@ -343,9 +345,9 @@ describe("Due Diligence Report built-in template", () => {
   test("plain view (no verdicts, no doc types) renders the no-Verdict table with no dangling labels", async () => {
     // A view with only ASK columns and no playbook: hasVerdicts is false.
     const bareProps = [
-      { id: ASK_LAW, name: "Governing law", tool: aiTool },
-      { id: ASK_TERM, name: "Term", tool: aiTool },
-      { id: ASK_CAP, name: "Liability cap", tool: aiTool },
+      { id: ASK_LAW, name: "Governing law", role: null, tool: aiTool },
+      { id: ASK_TERM, name: "Term", role: null, tool: aiTool },
+      { id: ASK_CAP, name: "Liability cap", role: null, tool: aiTool },
     ];
     const bareLayout: Extract<ViewLayout, { type: "table" }> = {
       type: "table",

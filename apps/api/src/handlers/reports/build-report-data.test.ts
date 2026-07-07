@@ -300,7 +300,9 @@ describe("assembleReportData", () => {
   test("empty-playbook view yields empty risks and a valid report", () => {
     const layout = tableLayout({ columnOrder: [ASK_LAW] });
     // Only the ASK property; no verdict property present.
-    const bare = [{ id: ASK_LAW, name: "Governing law", tool: aiTool }];
+    const bare = [
+      { id: ASK_LAW, name: "Governing law", role: null, tool: aiTool },
+    ];
     const columns = buildExportColumns(layout, bare);
     const entity = makeEntity(ENTITY_A, "NDA", [
       field("f1", ASK_LAW, text("Czech law")),
