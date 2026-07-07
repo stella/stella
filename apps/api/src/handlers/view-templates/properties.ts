@@ -26,6 +26,7 @@ type WorkspacePropertyTemplateSource = {
   content: typeof properties.$inferSelect.content;
   tool: typeof properties.$inferSelect.tool;
   system: boolean;
+  role?: typeof properties.$inferSelect.role | undefined;
 };
 
 type WorkspacePropertyDependencySource = {
@@ -104,6 +105,9 @@ export const collectTemplateProperties = ({
       };
       if (propertyDeps && propertyDeps.length > 0) {
         result.dependencies = propertyDeps;
+      }
+      if (property.role !== null && property.role !== undefined) {
+        result.role = property.role;
       }
       return result;
     });
@@ -245,6 +249,7 @@ export const resolveTemplateProperties = async ({
         name: templateProperty.name,
         content: templateProperty.content,
         tool: sanitizeTemplatePropertyTool(templateProperty.tool),
+        role: templateProperty.role ?? null,
         status: templateProperty.tool.type === "ai-model" ? "stale" : "fresh",
       })
       .returning({ id: properties.id });
@@ -306,6 +311,7 @@ const readExistingProperties = (
       content: true,
       tool: true,
       system: true,
+      role: true,
     },
     orderBy: { createdAt: "asc" },
     limit: LIMITS.propertiesCount,
@@ -610,6 +616,7 @@ const findUniquePropertyByShape = (
     name: string;
     content: typeof properties.$inferSelect.content;
     tool: typeof properties.$inferSelect.tool;
+    role: typeof properties.$inferSelect.role;
   }[],
   templateProperty: ViewTemplateProperty,
   consumedExistingPropertyIds: ReadonlySet<string>,
@@ -628,6 +635,7 @@ const findUniquePropertyByShape = (
         normalizePropertyName(templateProperty.name) &&
       property.content.type === templateProperty.content.type &&
       property.tool.type === templateProperty.tool.type &&
+      property.role === (templateProperty.role ?? null) &&
       hasSamePropertyConfig(property, templateProperty) &&
       !(
         templateHasDependencies || propertyIdsWithDependencies.has(property.id)

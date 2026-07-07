@@ -40,7 +40,7 @@ import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import {
   buildDocTypeGateLabels,
-  isDocumentTypeClassifier,
+  resolveDocumentTypeClassifier,
   selectGroupColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
@@ -177,17 +177,22 @@ export const GroupedTableLayout = ({
   // renders the common columns plus only the playbook columns scoped to that
   // section's document type, read from each column's materialized doc-type gate.
   // Any other grouping keeps the shared column set.
+  const documentTypeClassifier = useMemo(
+    () => resolveDocumentTypeClassifier(properties),
+    [properties],
+  );
   const isDocTypeGrouping =
-    groupByProperty !== null && isDocumentTypeClassifier(groupByProperty);
+    groupByPropertyId !== null &&
+    documentTypeClassifier?.id === groupByPropertyId;
   const gateLabelsByColumnId = useMemo(
     () =>
-      isDocTypeGrouping && groupByPropertyId !== null
+      isDocTypeGrouping && documentTypeClassifier !== null
         ? buildDocTypeGateLabels({
             properties,
-            classifierPropertyId: groupByPropertyId,
+            classifierPropertyId: documentTypeClassifier.id,
           })
         : EMPTY_DOC_TYPE_GATE,
-    [isDocTypeGrouping, properties, groupByPropertyId],
+    [isDocTypeGrouping, properties, documentTypeClassifier],
   );
   // The whole-view "+ new document" row carries the common (ungated) columns: a
   // freshly created, unclassified document has no document type, so no playbook

@@ -265,6 +265,7 @@ export const tViewTemplatePropertySchema = t.Object(
     name: tDefaultVarchar,
     content: propertyContentSchema,
     tool: tViewTemplatePropertyToolSchema,
+    role: t.Optional(t.UnionEnum(["document-type-classifier"])),
     createIfMissing: t.Boolean(),
     dependencies: t.Optional(
       t.Array(

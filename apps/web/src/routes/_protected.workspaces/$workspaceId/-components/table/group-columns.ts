@@ -12,7 +12,9 @@ const DOCUMENT_TYPE_CLASSIFIER_NAME = "document type";
 export const isDocumentTypeClassifier = (
   property: WorkspaceProperty,
 ): boolean =>
-  property.role === "document-type-classifier" ||
+  (property.role === "document-type-classifier" &&
+    property.content.type === "single-select" &&
+    property.tool.type === "ai-model") ||
   (property.content.type === "single-select" &&
     property.tool.type === "ai-model" &&
     property.name.trim().toLowerCase() === DOCUMENT_TYPE_CLASSIFIER_NAME);
@@ -21,7 +23,10 @@ export const resolveDocumentTypeClassifier = (
   properties: WorkspaceProperty[],
 ): WorkspaceProperty | null => {
   const byRole = properties.find(
-    (property) => property.role === "document-type-classifier",
+    (property) =>
+      property.role === "document-type-classifier" &&
+      property.content.type === "single-select" &&
+      property.tool.type === "ai-model",
   );
   if (byRole) {
     return byRole;

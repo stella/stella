@@ -128,7 +128,10 @@ export const resolveDocTypeClassifier = async (
       ),
     );
   const byRole = candidates.find(
-    (row) => row.role === "document-type-classifier",
+    (row) =>
+      row.role === "document-type-classifier" &&
+      row.content.type === "single-select" &&
+      row.tool.type === "ai-model",
   );
   if (byRole) {
     return { id: byRole.id };

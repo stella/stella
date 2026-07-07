@@ -110,6 +110,8 @@ type ExistingTemplateReuseProperty = {
   name: string;
   content: typeof properties.$inferSelect.content;
   tool: typeof properties.$inferSelect.tool;
+  system?: boolean;
+  role?: typeof properties.$inferSelect.role | undefined;
 };
 
 const defaultExistingTemplateReuseProperty = {
@@ -145,7 +147,9 @@ const createTemplateReuseTx = (
     execute: mock(async () => undefined),
     query: {
       properties: {
-        findMany: mock(async () => [existingProperty]),
+        findMany: mock(async () => [
+          { system: false, role: null, ...existingProperty },
+        ]),
       },
       propertyDependencies: {
         findMany: mock(async () => existingDependencies),
@@ -237,6 +241,39 @@ describe("collectTemplateProperties", () => {
         tool: unrelatedHiddenProperty.tool,
         createIfMissing: false,
       },
+    ]);
+  });
+
+  test("preserves structural roles when exporting template columns", () => {
+    const classifier = {
+      id: "document_type",
+      name: "Type de document",
+      content: {
+        version: 1,
+        type: "single-select",
+        options: [{ color: "blue", value: "Contract" }],
+        fallback: null,
+      },
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify the document type.",
+      },
+      system: false,
+      role: "document-type-classifier",
+    } as const;
+
+    const templateProperties = collectTemplateProperties({
+      layout: tableLayout(classifier.id),
+      properties: [classifier],
+      dependencies: [],
+    });
+
+    expect(templateProperties).toEqual([
+      expect.objectContaining({
+        sourceId: classifier.id,
+        role: "document-type-classifier",
+      }),
     ]);
   });
 });
@@ -503,6 +540,53 @@ describe("resolveTemplateProperties", () => {
       persistedTool?.type === "ai-model" ? persistedTool.prompt : "";
     expect(prompt).not.toContain("<script>");
     expect(prompt).toContain("**Bold**");
+  });
+
+  test("preserves structural roles when creating template columns", async () => {
+    const content = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } as const;
+    const tool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "Classify the document type.",
+    } as const;
+    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx({
+      id: "existing_property",
+      name: "Type de document",
+      content,
+      tool,
+      role: null,
+    });
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_document_type",
+      name: "Type de document",
+      content,
+      tool,
+      role: "document-type-classifier",
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(returningMock).toHaveBeenCalledTimes(1);
+    expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        role: "document-type-classifier",
+      }),
+    );
   });
 
   test("does not reuse shape matches with different config", async () => {
