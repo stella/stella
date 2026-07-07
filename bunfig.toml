@@ -28,7 +28,6 @@ minimumReleaseAgeExcludes = [
   "@tanstack/ai-code-mode",
   "@tanstack/ai-bedrock",
   "@tanstack/ai-client",
-  "@tanstack/ai-code-mode",
   "@tanstack/ai-event-client",
   "@tanstack/ai-gemini",
   "@tanstack/ai-mcp",
