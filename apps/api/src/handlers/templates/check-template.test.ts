@@ -131,7 +131,6 @@ describe("template check: invalid markers", () => {
       severity: "error",
       marker: "{{my name}}",
       paragraphIndex: 0,
-      context: "Signed by {{my name}} on {{date}}",
     });
   });
 

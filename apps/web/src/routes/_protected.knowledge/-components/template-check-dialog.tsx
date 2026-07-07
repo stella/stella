@@ -127,7 +127,6 @@ type CheckFinding =
       severity: "error";
       marker: string;
       paragraphIndex: number;
-      context: string;
     };
 
 const FINDING_MESSAGE_KEY = {

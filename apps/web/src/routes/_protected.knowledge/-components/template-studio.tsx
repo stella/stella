@@ -2112,24 +2112,27 @@ export const TemplateStudioPage = ({
       const { pendingSlotRenames, clearPendingSlotRename } =
         useTemplateStudioStore.getState();
       const pendingEntries = Object.entries(pendingSlotRenames);
+      let slotRenameErrorMessage: string | null = null;
       if (pendingEntries.length > 0) {
-        // Links are independent, so patch them in parallel and reconcile after.
-        const results = await Promise.all(
-          pendingEntries.map(async ([linkId, slotName]) => {
-            const patched = await api
-              .templates({ templateId: toSafeId<"template">(templateId) })
-              .clauses({ linkId: toSafeId<"templateClause">(linkId) })
-              .patch({ slotName });
-            return { error: patched.error, linkId };
-          }),
-        );
-        let slotRenameErrorMessage: string | null = null;
-        for (const { error, linkId } of results) {
-          if (error) {
+        // Flush SEQUENTIALLY in recorded order (insertion order of the record):
+        // a chained reuse of a freed slot name (link1 A→C, then link2 B→A) must
+        // patch link1 before link2, or link2 collides with the still-present old
+        // slotName under the per-template unique-slot constraint. The document
+        // side already enforced the same ordering in renameClauseSlot, so the
+        // recorded order is exactly the order that avoids collisions. Continue
+        // past a failure so later independent renames can still land; each
+        // failed entry stays pending for the next save's retry.
+        for (const [linkId, slotName] of pendingEntries) {
+          // eslint-disable-next-line no-await-in-loop -- sequencing is the point: patches must land in recorded order to respect the unique-slot constraint.
+          const patched = await api
+            .templates({ templateId: toSafeId<"template">(templateId) })
+            .clauses({ linkId: toSafeId<"templateClause">(linkId) })
+            .patch({ slotName });
+          if (patched.error) {
             // Keep the failed entry pending; the next save retries it. Capture
             // the first failure for a single toast rather than one per link.
             slotRenameErrorMessage ??= userErrorMessage(
-              error,
+              patched.error,
               t("common.unexpectedError"),
             );
             continue;
@@ -2153,7 +2156,10 @@ export const TemplateStudioPage = ({
           ),
         });
       }
-      return true;
+      // Report overall failure when any slot PATCH failed: the document itself
+      // saved, but "Save and leave" must stay in the Studio so the still-pending
+      // rename (and its retry) is not discarded by the unmount's store reset.
+      return slotRenameErrorMessage === null;
     } catch {
       stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
       return false;
@@ -6374,10 +6380,15 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     activeOrganizationId,
     templateId ?? "",
   );
-  const { data: linksData } = useQuery({
+  const { data: linksData, status: linksStatus } = useQuery({
     ...clausesOptions,
     enabled: templateId !== null,
   });
+  // Only "success" means the link set is known. While pending (including the
+  // disabled state before templateId seeds) or errored, `link` stays undefined
+  // for want of data, not because the slot is genuinely unlinked; a rename
+  // must be held back rather than silently treated as unlinked.
+  const linksReady = linksStatus === "success";
   const pendingSlotRenames = useTemplateStudioStore(
     (s) => s.pendingSlotRenames,
   );
@@ -6411,6 +6422,11 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     if (trimmed === selected.expr) {
       return true;
     }
+    // Defensive: the editor is read-only until the links resolve, but never
+    // rewrite the document while a linked-clause rename could go unrecorded.
+    if (!linksReady) {
+      return false;
+    }
     if (!isClauseSlotName(trimmed)) {
       return false;
     }
@@ -6434,6 +6450,7 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
             {t("clauses.slotName")}
           </span>
           <ClauseSlotEditor
+            disabled={!linksReady}
             key={selected.expr}
             onRename={handleRename}
             slotName={selected.expr}
@@ -6442,18 +6459,17 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
         <p className="text-muted-foreground text-xs leading-relaxed">
           {t("templates.studio.clauseSlotHelp")}
         </p>
-        {link === undefined ? (
+        {linksReady && link === undefined && (
           <p className="text-muted-foreground text-xs">
             {t("clauses.noLinkedClauses")}
           </p>
-        ) : (
-          templateId !== null && (
-            <LinkedClauseCard
-              link={link}
-              onChanged={invalidateLinks}
-              templateId={templateId}
-            />
-          )
+        )}
+        {link !== undefined && templateId !== null && (
+          <LinkedClauseCard
+            link={link}
+            onChanged={invalidateLinks}
+            templateId={templateId}
+          />
         )}
         <Button onClick={() => setLinkOpen(true)} size="sm" variant="outline">
           {t("clauses.linkClause")}
@@ -7950,13 +7966,29 @@ const SaveRecipeDialog = ({
 const ClauseSlotEditor = ({
   slotName,
   onRename,
+  disabled = false,
 }: {
   slotName: string;
   onRename: (next: string) => boolean | Promise<boolean>;
+  /** Read-only while the link query is still resolving: a rename in that window
+   *  cannot know whether the slot is linked, so it would rewrite the document
+   *  without recording the deferred link-row rename (see {@link ClauseFace}). */
+  disabled?: boolean;
 }) => {
   const t = useTranslations();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(slotName);
+
+  if (disabled) {
+    // Non-interactive presentation: same slot-name display, no edit affordance.
+    return (
+      <div className="text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 px-1 py-0.5">
+        <code className="truncate text-xs" dir="auto" title={slotName}>
+          {slotName}
+        </code>
+      </div>
+    );
+  }
 
   const commit = async () => {
     if (value.trim() === slotName) {

@@ -50,8 +50,6 @@ export type TemplateCheckFinding =
       /** The full `{{...}}` span, e.g. `{{my field}}`. */
       marker: string;
       paragraphIndex: number;
-      /** The whole paragraph the span was found in, for author context. */
-      context: string;
     };
 
 /** Hard cap so a pathological template cannot produce an unbounded payload. */
@@ -158,7 +156,6 @@ const invalidMarkerFindings = (
         severity: "error",
         marker: invalid.raw,
         paragraphIndex,
-        context: text,
       });
     }
   }
