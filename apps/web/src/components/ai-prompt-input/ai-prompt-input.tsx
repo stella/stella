@@ -1,6 +1,6 @@
 import { useMemo, useRef } from "react";
 
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import type { AnyExtension } from "@tiptap/core";
 import History from "@tiptap/extension-history";
@@ -16,7 +16,10 @@ import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
-import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
+import {
+  buildChatSlashItems,
+  commandShortcutRowsFromSkillPages,
+} from "@/components/chat-editor-slash-items";
 import { PastedText } from "@/components/chat-pasted-text-extension";
 import {
   createPromptSlashSuggestion,
@@ -30,10 +33,7 @@ import {
   PromptEditorContent,
 } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import {
-  skillCommandsOptions,
-  skillsOptions,
-} from "@/routes/_protected.knowledge/-queries";
+import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
@@ -107,23 +107,22 @@ export const AIPromptInput = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: commandSkills = [] } = useQuery(
-    skillCommandsOptions(activeOrganizationId),
-  );
-  const { data: skillPages } = useInfiniteQuery(
-    skillsOptions(activeOrganizationId),
-  );
+  const {
+    data: skillPages,
+    fetchNextPage: fetchNextSkillPage,
+    hasNextPage: hasNextSkillPage,
+    isFetchingNextPage: isFetchingNextSkillPage,
+  } = useInfiniteQuery(skillsOptions(activeOrganizationId));
   const slashShortcutRows = useMemo(
-    () =>
-      commandSkills.map((row) => ({
-        id: row.id,
-        scope: row.scope,
-        name: row.name,
-        command: row.command,
-        prompt: row.body,
-      })),
-    [commandSkills],
+    () => commandShortcutRowsFromSkillPages(skillPages?.pages),
+    [skillPages],
   );
+  useExternalSyncEffect(() => {
+    if (!hasNextSkillPage || isFetchingNextSkillPage) {
+      return;
+    }
+    void fetchNextSkillPage();
+  }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
   const slashItemsRef = useRef<SlashItem[]>([]);
   // eslint-disable-next-line react/react-compiler -- latest-value ref mirror: the memoized slash items are read later by the TipTap suggestion factory (outside render), never during render
   slashItemsRef.current = useMemo<SlashItem[]>(

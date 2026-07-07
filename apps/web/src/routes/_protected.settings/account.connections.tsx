@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { env } from "@/env";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { CliCard } from "@/routes/_protected.settings/-components/account/cli-card";
 import {
   ConnectedAppsCard,
@@ -11,11 +12,17 @@ import {
 } from "@/routes/_protected.settings/-components/account/connected-apps-card";
 import { McpServerCard } from "@/routes/_protected.settings/-components/account/mcp-server-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 
 export const Route = createFileRoute(
   "/_protected/settings/account/connections",
 )({
   component: ConnectionsPage,
+  loader: async ({ context }) => {
+    // Prime the connected-apps query the page suspends on so the fetch starts
+    // during navigation instead of after the component mounts and suspends.
+    await ensureRouteQueryData(context.queryClient, connectedAppsOptions);
+  },
   pendingComponent: ConnectionsPagePending,
 });
 

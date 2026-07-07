@@ -502,7 +502,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/web/*|packages/*|VERSION|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
+              apps/web/*|packages/*|scripts/bundle-baseline.ts|scripts/bundle-baseline.json|VERSION|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -538,6 +538,12 @@ jobs:
       - name: Build web
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/web build
+
+      - name: Bundle size guard
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          bun scripts/bundle-baseline.ts --self-test
+          bun scripts/bundle-baseline.ts --check
 
       - name: Prod-deps web boot smoke
         if: steps.changed.outputs.run == 'true'

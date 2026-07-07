@@ -339,6 +339,7 @@ export const useEntitiesOptions = (key: EntitiesOptionsInput) =>
 export const entityOptions = (workspaceId: string, entityId: string) =>
   queryOptions({
     queryKey: [...entitiesKeys.all(workspaceId), entityId],
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })

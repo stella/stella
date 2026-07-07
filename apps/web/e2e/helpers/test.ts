@@ -14,8 +14,11 @@ type BrowserErrorFixtures = {
 // Transport-layer connection drops the browser reports as console errors.
 // These are dev-server infra flakes, not app errors. Match only dropped
 // connection codes, not the broader "failed to load resource" family.
+// IO_SUSPENDED and SOCKET_NOT_CONNECTED fire when the host sleeps or the
+// network stack resets mid-request (laptop lid, VPN reconnect) — possible on
+// local runs, same transport family, never an app bug.
 const TRANSIENT_NETWORK_ERROR =
-  /net::(?:ERR_EMPTY_RESPONSE|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_NETWORK_CHANGED)/u;
+  /net::(?:ERR_EMPTY_RESPONSE|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_NETWORK_CHANGED|ERR_NETWORK_IO_SUSPENDED|ERR_SOCKET_NOT_CONNECTED)/u;
 const RESOURCE_NOT_FOUND_CONSOLE_ERROR =
   /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/u;
 
@@ -42,6 +45,20 @@ const REACT_QUERY_COLD_MOUNT_WARNING =
 const isToleratedResourceNotFound = (message: ConsoleMessage): boolean =>
   RESOURCE_NOT_FOUND_CONSOLE_ERROR.test(message.text()) &&
   !STATIC_ASSET_URL.test(message.location().url);
+
+const redactUrlQuery = (url: string): string => {
+  if (url === "") {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    const suffixIndex = url.search(/[?#]/u);
+    return suffixIndex === -1 ? url : url.slice(0, suffixIndex);
+  }
+};
 
 type BrowserErrorCollectorOptions = {
   // Only route-smoke opts in: it walks every authenticated route and so hits
@@ -93,7 +110,15 @@ export const createBrowserErrorCollector = (
           return;
         }
 
-        errors.push(`console.error: ${text}`);
+        // "Failed to load resource" console errors carry the failing URL only
+        // in message.location(); without it a 4xx/5xx failure is undebuggable
+        // from the assertion output alone.
+        const failedUrl = redactUrlQuery(message.location().url);
+        errors.push(
+          failedUrl === ""
+            ? `console.error: ${text}`
+            : `console.error: ${text} (${failedUrl})`,
+        );
       };
 
       page.on("pageerror", onPageError);

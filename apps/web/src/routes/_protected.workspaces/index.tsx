@@ -44,6 +44,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { pageTitle } from "@/lib/page-title";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { AlphabetIndex } from "@/routes/_protected.workspaces/-components/alphabet-index";
 import { ClientGroupHeader } from "@/routes/_protected.workspaces/-components/client-group-header";
 import { MatterCard } from "@/routes/_protected.workspaces/-components/matter-card";
@@ -56,7 +57,7 @@ import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-la
 import { getMatterOrganizationResetPatch } from "@/routes/_protected.workspaces/-organization-reset";
 import {
   workspacesKeys,
-  workspacesOptions,
+  workspacesRouteOptions,
 } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import type {
@@ -79,6 +80,14 @@ const searchSchema = v.object({
 
 export const Route = createFileRoute("/_protected/workspaces/")({
   validateSearch: searchSchema,
+  loader: async ({ context }) => {
+    // Prime the workspaces query the page suspends on so the fetch starts
+    // during navigation instead of after the component mounts and suspends.
+    await ensureRouteQueryData(
+      context.queryClient,
+      workspacesRouteOptions(context.user.activeOrganizationId),
+    );
+  },
   head: () => ({
     meta: [{ title: pageTitle("common.matters") }],
   }),
@@ -95,7 +104,7 @@ function RouteComponent() {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const { data, isFetching } = useSuspenseQuery(
-    workspacesOptions(activeOrganizationId),
+    workspacesRouteOptions(activeOrganizationId),
   );
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
