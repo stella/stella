@@ -264,7 +264,9 @@ describe("collectTemplateProperties", () => {
       tool,
       system: false,
       role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
-    };
+    } satisfies Parameters<
+      typeof collectTemplateProperties
+    >[0]["properties"][number];
 
     const templateProperties = collectTemplateProperties({
       layout: tableLayout(classifier.id),
@@ -637,10 +639,7 @@ describe("resolveTemplateProperties", () => {
 
     expect(result).toEqual({
       ok: true,
-      layout: {
-        ...layout,
-        columnOrder: ["existing_property"],
-      },
+      layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
     });
     expect(returningMock).not.toHaveBeenCalled();
