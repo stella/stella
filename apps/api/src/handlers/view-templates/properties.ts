@@ -188,17 +188,16 @@ export const resolveTemplateProperties = async ({
     const existingById = existingProperties.find(
       (property) => property.id === templateProperty.sourceId,
     );
-    if (existingById) {
-      if (
-        canReusePropertyByExactId({
-          property: existingById,
-          templateProperty,
-        })
-      ) {
-        propertyIdBySourceId.set(templateProperty.sourceId, existingById.id);
-        consumedExistingPropertyIds.add(existingById.id);
-        continue;
-      }
+    if (
+      existingById &&
+      canReusePropertyByExactId({
+        property: existingById,
+        templateProperty,
+      })
+    ) {
+      propertyIdBySourceId.set(templateProperty.sourceId, existingById.id);
+      consumedExistingPropertyIds.add(existingById.id);
+      continue;
     }
 
     const existingByRole = findUniquePropertyByRole({

@@ -153,13 +153,25 @@ const createTemplateReuseTx = (
     execute: mock(async () => undefined),
     query: {
       properties: {
-        findMany: mock(async () =>
-          existingProperties.map((property) => ({
-            system: false,
-            role: null,
-            ...property,
-          })),
-        ),
+        findMany: mock(async () => {
+          const rows: Array<
+            ExistingTemplateReuseProperty & {
+              role: typeof properties.$inferSelect.role | null;
+              system: boolean;
+            }
+          > = [];
+          for (const property of existingProperties) {
+            rows.push({
+              id: property.id,
+              name: property.name,
+              content: property.content,
+              tool: property.tool,
+              system: property.system ?? false,
+              role: property.role ?? null,
+            });
+          }
+          return rows;
+        }),
       },
       propertyDependencies: {
         findMany: mock(async () => existingDependencies),
