@@ -1073,6 +1073,36 @@ describe("resolveTemplateProperties", () => {
     );
   });
 
+  test("allows explicit roleless ordinary templates when creating", async () => {
+    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx();
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_notes",
+      name: "Notes",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+      role: null,
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(returningMock).toHaveBeenCalledTimes(1);
+    expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        role: null,
+      }),
+    );
+  });
+
   test("keeps roleless legacy duplicates ordinary when an explicit classifier exists", async () => {
     const templateContent = {
       version: 1,

@@ -590,7 +590,10 @@ const validateTemplateProperties = (
     }
     sourceIds.add(templateProperty.sourceId);
 
-    const validationError = validateTemplatePropertyConfig(templateProperty);
+    const validationError = validateTemplatePropertyConfig(
+      templateProperty,
+      roleResolution,
+    );
     if (validationError) {
       return validationError;
     }
@@ -638,9 +641,10 @@ const isDocumentTypeClassifierShape = ({
 
 const validateTemplatePropertyConfig = (
   templateProperty: ViewTemplateProperty,
+  roleResolution: TemplateRoleResolution,
 ): ResolveTemplatePropertiesResult | null => {
   if (
-    hasTemplatePropertyRole(templateProperty) &&
+    resolveTemplatePropertyRole(templateProperty, roleResolution) &&
     !isDocumentTypeClassifierShape(templateProperty)
   ) {
     return {
