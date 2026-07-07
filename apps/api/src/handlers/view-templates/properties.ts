@@ -190,11 +190,11 @@ export const resolveTemplateProperties = async ({
       continue;
     }
 
-    const existingByRole = findUniquePropertyByRole(
+    const existingByRole = findUniquePropertyByRole({
       existingProperties,
       templateProperty,
       consumedExistingPropertyIds,
-    );
+    });
     if (existingByRole) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByRole.id);
       consumedExistingPropertyIds.add(existingByRole.id);
@@ -202,11 +202,11 @@ export const resolveTemplateProperties = async ({
     }
 
     if (
-      hasMalformedPropertyByRole(
+      hasMalformedPropertyByRole({
         existingProperties,
         templateProperty,
         consumedExistingPropertyIds,
-      )
+      })
     ) {
       return {
         ok: false,
@@ -675,16 +675,24 @@ const resolveTemplatePropertyRole = (
     ? DOCUMENT_TYPE_CLASSIFIER_ROLE
     : templateProperty.role;
 
-const findUniquePropertyByRole = (
-  existingProperties: readonly {
-    id: string;
-    content: typeof properties.$inferSelect.content;
-    tool: typeof properties.$inferSelect.tool;
-    role: typeof properties.$inferSelect.role;
-  }[],
-  templateProperty: ViewTemplateProperty,
-  consumedExistingPropertyIds: ReadonlySet<string>,
-) => {
+type PropertyRoleMatchCandidate = {
+  id: string;
+  content: typeof properties.$inferSelect.content;
+  tool: typeof properties.$inferSelect.tool;
+  role: typeof properties.$inferSelect.role;
+};
+
+type PropertyRoleMatchArgs = {
+  existingProperties: readonly PropertyRoleMatchCandidate[];
+  templateProperty: ViewTemplateProperty;
+  consumedExistingPropertyIds: ReadonlySet<string>;
+};
+
+const findUniquePropertyByRole = ({
+  existingProperties,
+  templateProperty,
+  consumedExistingPropertyIds,
+}: PropertyRoleMatchArgs) => {
   const role = resolveTemplatePropertyRole(templateProperty);
 
   if (role === undefined) {
@@ -699,16 +707,11 @@ const findUniquePropertyByRole = (
   );
 };
 
-const hasMalformedPropertyByRole = (
-  existingProperties: readonly {
-    id: string;
-    content: typeof properties.$inferSelect.content;
-    tool: typeof properties.$inferSelect.tool;
-    role: typeof properties.$inferSelect.role;
-  }[],
-  templateProperty: ViewTemplateProperty,
-  consumedExistingPropertyIds: ReadonlySet<string>,
-): boolean => {
+const hasMalformedPropertyByRole = ({
+  existingProperties,
+  templateProperty,
+  consumedExistingPropertyIds,
+}: PropertyRoleMatchArgs): boolean => {
   const role = resolveTemplatePropertyRole(templateProperty);
   if (role === undefined) {
     return false;

@@ -1,4 +1,4 @@
-SET lock_timeout = '1s';--> statement-breakpoint
+SET lock_timeout = 0;--> statement-breakpoint
 SET statement_timeout = 0;--> statement-breakpoint
 CREATE TEMP TABLE "_property_role_backfill_candidates" ON COMMIT DROP AS
 SELECT id
@@ -14,26 +14,8 @@ FROM (
 		AND "tool"->>'type' = 'ai-model'
 ) AS candidates
 WHERE rn = 1;--> statement-breakpoint
-DO $$
-DECLARE
-	batch_size integer := 500;
-	updated_count integer;
-BEGIN
-	LOOP
-		WITH next_batch AS (
-			SELECT p.id
-			FROM "properties" AS p
-			INNER JOIN "_property_role_backfill_candidates" AS c ON c.id = p.id
-			WHERE p."role" IS DISTINCT FROM 'document-type-classifier'
-			LIMIT batch_size
-			FOR UPDATE OF p SKIP LOCKED
-		)
-		UPDATE "properties" AS p
-		SET "role" = 'document-type-classifier'
-		FROM next_batch
-		WHERE p.id = next_batch.id;
-
-		GET DIAGNOSTICS updated_count = ROW_COUNT;
-		EXIT WHEN updated_count = 0;
-	END LOOP;
-END $$;--> statement-breakpoint
+UPDATE "properties" AS p
+SET "role" = 'document-type-classifier'
+FROM "_property_role_backfill_candidates" AS c
+WHERE p.id = c.id
+	AND p."role" IS DISTINCT FROM 'document-type-classifier';--> statement-breakpoint
