@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 
 import { oauthClient, oauthConsent, organization } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -57,6 +57,10 @@ export const listOAuthConnectionsForUser = async (
         .innerJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
         .leftJoin(organization, eq(organization.id, oauthConsent.referenceId))
         .where(eq(oauthConsent.userId, userId))
+        // Newest grants first so the cap always keeps the most recent
+        // connections visible; exceeding it is pathological (every row
+        // requires an explicit user consent), so no pagination envelope.
+        .orderBy(desc(oauthConsent.createdAt))
         .limit(LIMITS.oauthConnectionsPageSizeMax),
     catch: (err) =>
       new HandlerError({

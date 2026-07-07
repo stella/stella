@@ -71,6 +71,14 @@ export const DownloadStep = ({
         })}
       </div>
 
+      {/* Below md the wizard hides the whole preview column, which is the
+          only other place the download buttons and copy commands render;
+          without this inline fallback the step would be action-less on
+          phones. */}
+      <div className="mt-4 md:hidden">
+        <DownloadSetupPreview target={selected} />
+      </div>
+
       <div className="mt-auto flex items-center justify-between gap-3 pt-8">
         <Button onClick={onSkip} type="button" variant="ghost">
           {t("onboarding.skipStep")}

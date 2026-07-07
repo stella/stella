@@ -1,8 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
 import {
   oauthAccessToken,
+  oauthConsent,
   oauthRefreshToken,
   session as sessionTable,
 } from "@/api/db/auth-schema";
@@ -35,6 +36,18 @@ export const revokeOrganizationMemberAuthArtifacts = async (
       ),
     );
 
+  // Org-scoped consent grants die with the membership: leaving them behind
+  // would keep the organization listed on the ex-member's connected-apps
+  // page and let a client silently re-mint tokens on the next authorize.
+  await tx
+    .delete(oauthConsent)
+    .where(
+      and(
+        eq(oauthConsent.userId, userId),
+        eq(oauthConsent.referenceId, organizationId),
+      ),
+    );
+
   await tx
     .delete(sessionTable)
     .where(
@@ -49,19 +62,26 @@ type RevokeOAuthClientAuthArtifactsOptions = {
   userId: SafeId<"user">;
   clientId: string;
   /**
-   * The consent's organization scope. When set, only tokens issued for
-   * that organization are revoked; `null` revokes the client's tokens
-   * regardless of organization (an org-unscoped grant).
+   * The consent's organization scope. Token revocation matches it exactly:
+   * an org-scoped grant only revokes that organization's tokens, and a
+   * `null` (org-unscoped) grant only revokes tokens that carry no
+   * organization, so sibling grants of the same client stay intact.
    */
   referenceId: string | null;
 };
 
 /**
- * Revokes every OAuth token one client holds for one user (per-consent
- * disconnect from the connections settings page). Unlike
+ * Revokes every OAuth token one client holds for one user under one grant
+ * (per-consent disconnect from the connections settings page). Unlike
  * `revokeOrganizationMemberAuthArtifacts` this must NOT touch `session`
  * rows: disconnecting an OAuth app ends that app's access, not the
  * user's own web sessions.
+ *
+ * Access tokens are verified statelessly (JWT via JWKS), so an already
+ * issued token keeps working until its expiry (15 minutes, see
+ * `ACCESS_TOKEN_EXPIRES_IN`); deleting the refresh token guarantees it
+ * cannot be renewed. Checking the DB on every MCP request to close that
+ * window was deliberately rejected as a hot-path cost.
  */
 export const revokeOAuthClientAuthArtifacts = async (
   tx: Transaction,
@@ -73,7 +93,9 @@ export const revokeOAuthClientAuthArtifacts = async (
       and(
         eq(oauthAccessToken.userId, userId),
         eq(oauthAccessToken.clientId, clientId),
-        referenceId ? eq(oauthAccessToken.referenceId, referenceId) : undefined,
+        referenceId
+          ? eq(oauthAccessToken.referenceId, referenceId)
+          : isNull(oauthAccessToken.referenceId),
       ),
     );
 
@@ -85,7 +107,7 @@ export const revokeOAuthClientAuthArtifacts = async (
         eq(oauthRefreshToken.clientId, clientId),
         referenceId
           ? eq(oauthRefreshToken.referenceId, referenceId)
-          : undefined,
+          : isNull(oauthRefreshToken.referenceId),
       ),
     );
 };

@@ -23,7 +23,10 @@ import {
   getOauthRedirectUrl,
 } from "@/lib/oauth-provider";
 import type { OAuthScopeDisplayEntry } from "@/lib/oauth-scopes";
-import { toOAuthScopeDisplayEntries } from "@/lib/oauth-scopes";
+import {
+  toOAuthScopeDisplayEntries,
+  translateOAuthScopeEntry,
+} from "@/lib/oauth-scopes";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
@@ -247,15 +250,5 @@ function ConsentPage() {
 function ScopeLabel({ entry }: { entry: OAuthScopeDisplayEntry }) {
   const t = useTranslations();
 
-  if (entry.type === "unknown") {
-    return entry.scope;
-  }
-
-  // SAFETY: OAUTH_SCOPE_LABELS `satisfies Record<McpOAuthScope,
-  // TranslationKey>` enforces at compile time that every value is a valid
-  // key. The `as never` is required only because use-intl's `t()` overloads
-  // bind tighter for literal keys; a non-literal `TranslationKey` is
-  // rejected by the no-args overload.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-  return t(entry.label as never);
+  return translateOAuthScopeEntry(t, entry);
 }

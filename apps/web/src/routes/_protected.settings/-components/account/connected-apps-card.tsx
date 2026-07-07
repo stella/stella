@@ -35,7 +35,10 @@ import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { toOAuthScopeDisplayEntries } from "@/lib/oauth-scopes";
+import {
+  toOAuthScopeDisplayEntries,
+  translateOAuthScopeEntry,
+} from "@/lib/oauth-scopes";
 import type { OAuthScopeDisplayEntry } from "@/lib/oauth-scopes";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { ConnectedApp } from "@/routes/_protected.settings/-queries/connections";
@@ -175,16 +178,7 @@ const ConnectedAppRow = ({ connection }: { connection: ConnectedApp }) => {
 const ScopeList = ({ entries }: { entries: OAuthScopeDisplayEntry[] }) => {
   const t = useTranslations();
 
-  const labels = entries.map((entry) =>
-    entry.type === "known"
-      ? // SAFETY: OAUTH_SCOPE_LABELS `satisfies Record<McpOAuthScope,
-        // TranslationKey>` enforces at compile time that every value is a
-        // valid key; `as never` only works around use-intl's stricter
-        // no-args overload for literal keys.
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-        t(entry.label as never)
-      : entry.scope,
-  );
+  const labels = entries.map((entry) => translateOAuthScopeEntry(t, entry));
 
   // `Intl.ListFormat` (not a hardcoded ", ") so the separator and
   // conjunction follow the active locale's conventions.
@@ -229,16 +223,16 @@ const DisconnectButton = ({ clientName, consentId }: DisconnectButtonProps) => {
       await queryClient.invalidateQueries({
         queryKey: connectedAppsKeys.all,
       });
+      setIsOpen(false);
     },
+    // On error the dialog stays open so the user keeps the per-app
+    // context and can retry.
     onError: (error) => {
       stellaToast.add({
         title: t("errors.actionFailed"),
         type: "error",
       });
       analytics.captureError(error);
-    },
-    onSettled: () => {
-      setIsOpen(false);
     },
   });
 
