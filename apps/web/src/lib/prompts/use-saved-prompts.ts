@@ -1,6 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 
 import { commandShortcutRowsFromSkillPages } from "@/components/chat-editor-slash-items";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 
@@ -23,10 +24,25 @@ export const useSavedPrompts = (): ChatPrompt[] => {
   // surfaces) simply have no saved prompts.
   const activeOrganizationId =
     useMaybeAuthenticatedUser()?.activeOrganizationId;
-  const { data: skillPages } = useInfiniteQuery({
+  const {
+    data: skillPages,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
     ...skillsOptions(activeOrganizationId ?? ""),
     enabled: activeOrganizationId !== undefined,
   });
+  useExternalSyncEffect(() => {
+    if (
+      activeOrganizationId === undefined ||
+      !hasNextPage ||
+      isFetchingNextPage
+    ) {
+      return;
+    }
+    void fetchNextPage();
+  }, [activeOrganizationId, fetchNextPage, hasNextPage, isFetchingNextPage]);
   const rows = commandShortcutRowsFromSkillPages(skillPages?.pages);
 
   return rows.slice(0, MAX_SUGGESTIONS).map<ChatPrompt>((row) => ({
@@ -34,6 +50,6 @@ export const useSavedPrompts = (): ChatPrompt[] => {
     scope: row.scope,
     name: row.name,
     command: row.command,
-    body: row.body,
+    body: row.prompt,
   }));
 };
