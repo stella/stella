@@ -754,9 +754,11 @@ const isMalformedPropertyByRole = (
   templateProperty: ViewTemplateProperty,
 ): boolean => {
   const role = resolveTemplatePropertyRole(templateProperty);
-  return (
-    role && property.role === role && !isDocumentTypeClassifierShape(property)
-  );
+  if (!role) {
+    return false;
+  }
+
+  return property.role === role && !isDocumentTypeClassifierShape(property);
 };
 
 const findUniquePropertyByShape = (
