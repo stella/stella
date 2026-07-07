@@ -41,6 +41,13 @@ export const workspacesOptions = (activeOrganizationId: string) =>
   queryOptions({
     queryKey: workspacesKeys.list(activeOrganizationId),
     queryFn: async ({ signal }) => await readWorkspaces(signal),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+
+export const workspacesRouteOptions = (activeOrganizationId: string) =>
+  queryOptions({
+    ...workspacesOptions(activeOrganizationId),
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 

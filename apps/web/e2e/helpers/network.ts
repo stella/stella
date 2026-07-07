@@ -197,6 +197,8 @@ export const waterfallDepth = (
 export type RouteNetworkMetrics = {
   // Observed request keys, unique + sorted.
   requests: string[];
+  // Per request key, how many times it was observed.
+  requestCounts: Record<string, number>;
   // Depth over ALL observed intervals, including duplicate keys.
   depth: number;
   // Per request key, the max `x-db-queries` observed this run. Keys whose
@@ -208,6 +210,8 @@ export type RouteNetworkMetrics = {
 export type NetworkBaselineEntry = {
   depth: number;
   requests: string[];
+  // Optional so baselines written before request multiplicity existed still parse.
+  requestCounts?: Record<string, number>;
   // Optional so baselines written before the counter existed still parse.
   dbQueries?: Record<string, number>;
 };
@@ -218,15 +222,20 @@ export const summarizeCapture = (
   capture: NetworkCapture,
 ): RouteNetworkMetrics => {
   const dbQueries: Record<string, number> = {};
+  const requestCounts: Record<string, number> = {};
   for (const request of capture.requests) {
+    const key = requestKey(request);
+    requestCounts[key] = (requestCounts[key] ?? 0) + 1;
     if (request.dbQueries === null || Number.isNaN(request.dbQueries)) {
       continue;
     }
-    const key = requestKey(request);
     dbQueries[key] = Math.max(dbQueries[key] ?? 0, request.dbQueries);
   }
   return {
-    requests: [...new Set(capture.requests.map(requestKey))].sort(),
+    requests: Object.keys(requestCounts).sort(),
+    requestCounts: Object.fromEntries(
+      Object.entries(requestCounts).sort(([a], [b]) => a.localeCompare(b)),
+    ),
     depth: waterfallDepth(capture.intervals),
     dbQueries,
   };
@@ -244,6 +253,13 @@ export type NetworkBaselineDiff = {
 // without masking the failure mode it exists for.
 export const dbQueryAllowance = (budget: number): number =>
   budget + Math.max(2, Math.ceil(budget * 0.15));
+
+const requestCountBudget = (
+  entry: NetworkBaselineEntry,
+): Record<string, number> => ({
+  ...Object.fromEntries(entry.requests.map((key) => [key, 1])),
+  ...(entry.requestCounts ?? {}),
+});
 
 // The guard is deliberately one-directional: it only fails when a route grows a
 // NEW request or a DEEPER waterfall. A request that disappears or a shallower
@@ -298,6 +314,20 @@ export const diffNetworkBaseline = (
           `  instead of after another request resolves. If the extra round is\n` +
           `  genuinely required, ${WRITE_HINT}.`,
       );
+    }
+
+    const baselineRequestCounts = requestCountBudget(entry);
+    for (const [key, observed] of Object.entries(metrics.requestCounts)) {
+      const budget = baselineRequestCounts[key];
+      if (budget !== undefined && observed > budget) {
+        problems.push(
+          `API request repeated on ${route}: ${key} ran ${budget} -> ${observed} times\n` +
+            `  Duplicate route requests usually come from duplicate mounts,\n` +
+            `  normalized UUID fan-out, or a cache key/refetch policy that lets\n` +
+            `  the same endpoint fire twice. Reuse the in-flight query or, if\n` +
+            `  the duplicate is genuinely required, ${WRITE_HINT}.`,
+        );
+      }
     }
 
     // DB-count budgets only fail on exceed: a lower count is common (cache
@@ -375,6 +405,15 @@ export const mergeNetworkBaseline = (
       continue;
     }
     const previous = existing?.[route];
+    const requestCounts: Record<string, number> = {};
+    for (const source of [
+      previous ? requestCountBudget(previous) : {},
+      metrics.requestCounts,
+    ]) {
+      for (const [key, count] of Object.entries(source)) {
+        requestCounts[key] = Math.max(requestCounts[key] ?? 0, count);
+      }
+    }
     const dbQueries: Record<string, number> = {};
     for (const source of [previous?.dbQueries ?? {}, metrics.dbQueries]) {
       for (const [key, count] of Object.entries(source)) {
@@ -386,6 +425,9 @@ export const mergeNetworkBaseline = (
       requests: [
         ...new Set([...metrics.requests, ...(previous?.requests ?? [])]),
       ].sort(),
+      requestCounts: Object.fromEntries(
+        Object.entries(requestCounts).sort(([a], [b]) => a.localeCompare(b)),
+      ),
       dbQueries: Object.fromEntries(
         Object.entries(dbQueries).sort(([a], [b]) => a.localeCompare(b)),
       ),

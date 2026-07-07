@@ -97,8 +97,12 @@ const metrics = (
   requests: string[],
   depth: number,
   dbQueries: Record<string, number> = {},
+  requestCounts: Record<string, number> = Object.fromEntries(
+    requests.map((request) => [request, 1]),
+  ),
 ): RouteNetworkMetrics => ({
   requests: [...requests].sort(),
+  requestCounts,
   depth,
   dbQueries,
 });
@@ -154,6 +158,38 @@ test.describe("diffNetworkBaseline", () => {
       new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
     );
     expect(problems.some((p) => p.includes("2 -> 3"))).toBe(true);
+  });
+
+  test("a repeated API request is a problem", () => {
+    const { problems } = diffNetworkBaseline(
+      baseline,
+      new Map([
+        [
+          "/contacts",
+          metrics(["GET /v1/contacts"], 2, {}, { "GET /v1/contacts": 2 }),
+        ],
+      ]),
+    );
+    expect(problems.some((p) => p.includes("1 -> 2"))).toBe(true);
+  });
+
+  test("a repeated API request within an explicit budget passes", () => {
+    const { problems } = diffNetworkBaseline(
+      {
+        "/contacts": {
+          depth: 2,
+          requests: ["GET /v1/contacts"],
+          requestCounts: { "GET /v1/contacts": 2 },
+        },
+      },
+      new Map([
+        [
+          "/contacts",
+          metrics(["GET /v1/contacts"], 2, {}, { "GET /v1/contacts": 2 }),
+        ],
+      ]),
+    );
+    expect(problems).toEqual([]);
   });
 
   test("a stale baseline entry is a problem", () => {
@@ -251,7 +287,12 @@ test.describe("mergeNetworkBaseline", () => {
       new Map([["/contacts", metrics(["GET /v1/contacts"], 2)]]),
     );
     expect(merged).toEqual({
-      "/contacts": { depth: 2, requests: ["GET /v1/contacts"], dbQueries: {} },
+      "/contacts": {
+        depth: 2,
+        requests: ["GET /v1/contacts"],
+        requestCounts: { "GET /v1/contacts": 1 },
+        dbQueries: {},
+      },
     });
   });
 
@@ -267,8 +308,34 @@ test.describe("mergeNetworkBaseline", () => {
       "/contacts": {
         depth: 3,
         requests: ["GET /v1/contacts", "GET /v1/views/:id"],
+        requestCounts: {
+          "GET /v1/contacts": 1,
+          "GET /v1/views/:id": 1,
+        },
         dbQueries: {},
       },
+    });
+  });
+
+  test("request counts merge to the per-key max", () => {
+    const existing: NetworkBaseline = {
+      "/contacts": {
+        depth: 2,
+        requests: ["GET /v1/contacts"],
+        requestCounts: { "GET /v1/contacts": 2 },
+      },
+    };
+    const merged = mergeNetworkBaseline(
+      existing,
+      new Map([
+        [
+          "/contacts",
+          metrics(["GET /v1/contacts"], 2, {}, { "GET /v1/contacts": 3 }),
+        ],
+      ]),
+    );
+    expect(merged["/contacts"]?.requestCounts).toEqual({
+      "GET /v1/contacts": 3,
     });
   });
 

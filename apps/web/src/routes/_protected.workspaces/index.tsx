@@ -58,6 +58,7 @@ import { getMatterOrganizationResetPatch } from "@/routes/_protected.workspaces/
 import {
   workspacesKeys,
   workspacesOptions,
+  workspacesRouteOptions,
 } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import type {
@@ -85,7 +86,7 @@ export const Route = createFileRoute("/_protected/workspaces/")({
     // during navigation instead of after the component mounts and suspends.
     await ensureRouteQueryData(
       context.queryClient,
-      workspacesOptions(context.user.activeOrganizationId),
+      workspacesRouteOptions(context.user.activeOrganizationId),
     );
   },
   head: () => ({
