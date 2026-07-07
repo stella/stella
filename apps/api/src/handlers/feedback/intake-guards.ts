@@ -31,6 +31,7 @@ type CounterEntry = { count: number; expiresAt: number };
 const REDIS_KEY_PREFIX = "feedback:intake:";
 const REDIS_COMMAND_TIMEOUT_MS = 500;
 const FALLBACK_CLEANUP_THRESHOLD = 10_000;
+const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
 
 // INCR the counter and, only on the first increment of a window, set its
 // expiry. A fixed window (not a sliding one): simple, and adequate for coarse
@@ -48,6 +49,10 @@ type FeedbackIntakeGuardsOptions = {
   createRedis?: () => RedisLike;
   now?: () => number;
   onRedisError?: (error: unknown) => void;
+};
+
+type FallbackCleanupState = {
+  nextCleanupAt: number;
 };
 
 export type FeedbackIntakeGuards = {
@@ -81,6 +86,8 @@ export const createFeedbackIntakeGuards = ({
   let redis: RedisLike | null = null;
   const counterFallback = new Map<string, CounterEntry>();
   const dedupFallback = new Map<string, number>();
+  const counterCleanupState: FallbackCleanupState = { nextCleanupAt: 0 };
+  const dedupCleanupState: FallbackCleanupState = { nextCleanupAt: 0 };
 
   const getRedis = () => {
     redis ??= createRedis();
@@ -109,6 +116,7 @@ export const createFeedbackIntakeGuards = ({
         key: scoped,
         max,
         now: now(),
+        cleanupState: counterCleanupState,
         windowMs,
       });
     }
@@ -137,6 +145,7 @@ export const createFeedbackIntakeGuards = ({
         fallback: dedupFallback,
         key,
         now: now(),
+        cleanupState: dedupCleanupState,
         ttlMs,
       });
     }
@@ -182,12 +191,14 @@ const evalCounter = async ({
 };
 
 const consumeCounterFallback = ({
+  cleanupState,
   fallback,
   key,
   max,
   now,
   windowMs,
 }: {
+  cleanupState: FallbackCleanupState;
   fallback: Map<string, CounterEntry>;
   key: string;
   max: number;
@@ -197,7 +208,7 @@ const consumeCounterFallback = ({
   const current = fallback.get(key);
   if (!current || current.expiresAt <= now) {
     fallback.set(key, { count: 1, expiresAt: now + windowMs });
-    cleanupCounterFallback(fallback, now);
+    cleanupCounterFallback(fallback, now, cleanupState);
     return true;
   }
   if (current.count >= max) {
@@ -208,11 +219,13 @@ const consumeCounterFallback = ({
 };
 
 const claimDedupFallback = ({
+  cleanupState,
   fallback,
   key,
   now,
   ttlMs,
 }: {
+  cleanupState: FallbackCleanupState;
   fallback: Map<string, number>;
   key: string;
   now: number;
@@ -223,17 +236,19 @@ const claimDedupFallback = ({
     return false;
   }
   fallback.set(key, now + ttlMs);
-  cleanupDedupFallback(fallback, now);
+  cleanupDedupFallback(fallback, now, cleanupState);
   return true;
 };
 
 const cleanupCounterFallback = (
   fallback: Map<string, CounterEntry>,
   now: number,
+  state: FallbackCleanupState,
 ) => {
-  if (fallback.size < FALLBACK_CLEANUP_THRESHOLD) {
+  if (fallback.size < FALLBACK_CLEANUP_THRESHOLD || now < state.nextCleanupAt) {
     return;
   }
+  state.nextCleanupAt = now + FALLBACK_CLEANUP_INTERVAL_MS;
   for (const [key, entry] of fallback) {
     if (entry.expiresAt <= now) {
       fallback.delete(key);
@@ -241,10 +256,15 @@ const cleanupCounterFallback = (
   }
 };
 
-const cleanupDedupFallback = (fallback: Map<string, number>, now: number) => {
-  if (fallback.size < FALLBACK_CLEANUP_THRESHOLD) {
+const cleanupDedupFallback = (
+  fallback: Map<string, number>,
+  now: number,
+  state: FallbackCleanupState,
+) => {
+  if (fallback.size < FALLBACK_CLEANUP_THRESHOLD || now < state.nextCleanupAt) {
     return;
   }
+  state.nextCleanupAt = now + FALLBACK_CLEANUP_INTERVAL_MS;
   for (const [key, expiresAt] of fallback) {
     if (expiresAt <= now) {
       fallback.delete(key);

@@ -73,7 +73,8 @@ void mock.module("@/api/handlers/feedback/intake-guards", () => ({
   },
 }));
 
-const { FEEDBACK_TOOL_HANDLERS } = await import("@/api/mcp/feedback-tools");
+const { FEEDBACK_TOOL_HANDLERS, sliceWithoutDanglingHighSurrogate } =
+  await import("@/api/mcp/feedback-tools");
 
 type FeedbackPayload = {
   channel?: string;
@@ -237,6 +238,12 @@ describe("MCP send_feedback tool", () => {
     expect(issueUrl).toContain("body+truncated");
     // The full sanitized body is still returned to the caller, untruncated.
     expect(String(payload.sanitized_body).length).toBeGreaterThan(7500);
+  });
+
+  test("github URL truncation never leaves a dangling high surrogate", () => {
+    const sliced = sliceWithoutDanglingHighSurrogate("😀", 1);
+    expect(sliced).toBe("");
+    expect(sliced).not.toContain("\uFFFD");
   });
 
   test("email channel: phase 1 returns a token, phase 2 sends the email", async () => {

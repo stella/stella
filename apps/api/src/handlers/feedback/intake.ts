@@ -160,6 +160,38 @@ const contentDedupKey = ({
     .update(`${kind}\n${title}\n${body}`)
     .digest("hex");
 
+const truncateSourceField = (value: string): string =>
+  Array.from(value).slice(0, MAX_SOURCE_FIELD_CHARS).join("");
+
+const sanitizeSourceField = (value: string | undefined): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  const sanitized = truncateSourceField(sanitizeFeedbackText(value).text.trim());
+  return sanitized.length === 0 ? undefined : sanitized;
+};
+
+const sanitizeSource = (
+  source: FeedbackSource | undefined,
+): FeedbackSource | undefined => {
+  if (source === undefined) {
+    return undefined;
+  }
+  const instance = sanitizeSourceField(source.instance);
+  const version = sanitizeSourceField(source.version);
+  if (instance === undefined && version === undefined) {
+    return undefined;
+  }
+  const sanitized: FeedbackSource = {};
+  if (instance !== undefined) {
+    sanitized.instance = instance;
+  }
+  if (version !== undefined) {
+    sanitized.version = version;
+  }
+  return sanitized;
+};
+
 const composeDeliveryBody = (
   sanitizedBody: string,
   source: FeedbackSource | undefined,
@@ -272,6 +304,7 @@ export const receivePublicFeedback = async ({
   // Never trust the caller's sanitization: re-run it on both fields.
   const sanitizedTitle = sanitizeFeedbackText(body.title).text;
   const sanitizedBody = sanitizeFeedbackText(body.body).text;
+  const sanitizedSource = sanitizeSource(body.source);
 
   const withinRate = await guards.consumeCounter({
     bucket: "ip",
@@ -307,10 +340,10 @@ export const receivePublicFeedback = async ({
   }
 
   const outcome = await deliver({
-    composedBody: composeDeliveryBody(sanitizedBody, body.source),
+    composedBody: composeDeliveryBody(sanitizedBody, sanitizedSource),
     emailTo,
     kind: body.kind,
-    source: body.source,
+    source: sanitizedSource,
     title: sanitizedTitle,
   });
 

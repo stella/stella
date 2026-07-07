@@ -61,15 +61,21 @@ const startMockServer = (handler: MockHandler) => {
           result: response.rpcResult,
         });
       }
+      const result: {
+        content: Array<{ type: "text"; text: string }>;
+        isError?: true;
+      } = {
+        content: [
+          { type: "text", text: JSON.stringify(response.toolPayload) },
+        ],
+      };
+      if (response.isError) {
+        result.isError = true;
+      }
       return Response.json({
         jsonrpc: "2.0",
         id: 1,
-        result: {
-          content: [
-            { type: "text", text: JSON.stringify(response.toolPayload) },
-          ],
-          ...(response.isError === true ? { isError: true } : {}),
-        },
+        result,
       });
     },
   });

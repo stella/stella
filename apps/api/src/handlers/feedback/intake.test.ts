@@ -110,6 +110,35 @@ describe("public feedback intake", () => {
     });
   });
 
+  test("sanitizes source metadata before email delivery", async () => {
+    const response = await receivePublicFeedback({
+      rawBody: raw({
+        source: {
+          instance: "jane@example.com",
+          version: "https://private.example/internal",
+        },
+      }),
+      clientIp: "203.0.113.13",
+      deps: {
+        guards: memoryGuards(),
+        emailTo: "maintainer@example.com",
+      },
+    });
+
+    expect(response.status).toBe(200);
+    expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(1);
+    const emailArgs = sendFeedbackEmailMock.mock.calls.at(0)?.[0];
+    expect(emailArgs?.body).toContain("instance=[redacted-email]");
+    expect(emailArgs?.body).toContain("version=[redacted-url]");
+    expect(emailArgs?.body).not.toContain("jane@example.com");
+    expect(emailArgs?.body).not.toContain("private.example");
+    expect(emailArgs?.reporter).toEqual({
+      via: "intake",
+      instance: "[redacted-email]",
+      version: "[redacted-url]",
+    });
+  });
+
   test("refuses with feature_disabled when no email is configured", async () => {
     const response = await receivePublicFeedback({
       rawBody: raw(),

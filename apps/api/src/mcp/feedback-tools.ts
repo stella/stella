@@ -157,6 +157,15 @@ const buildGithubIssueUrl = ({
   return `${GITHUB_NEW_ISSUE_URL}?${params.toString()}`;
 };
 
+export const sliceWithoutDanglingHighSurrogate = (
+  value: string,
+  end: number,
+): string => {
+  const sliced = value.slice(0, end);
+  const last = sliced.charCodeAt(sliced.length - 1);
+  return last >= 0xd800 && last <= 0xdbff ? sliced.slice(0, -1) : sliced;
+};
+
 /**
  * Prefilled issue URL bounded to `MAX_GITHUB_ISSUE_URL_CHARS`. When the full
  * body overflows, the URL carries a truncated body with a paste-the-rest
@@ -175,7 +184,9 @@ const buildBoundedGithubIssueUrl = ({
   }
   for (let keep = composedBody.length; keep > 0; keep -= 128) {
     const candidate = buildGithubIssueUrl({
-      body: composedBody.slice(0, keep) + GITHUB_BODY_TRUNCATION_MARKER,
+      body:
+        sliceWithoutDanglingHighSurrogate(composedBody, keep) +
+        GITHUB_BODY_TRUNCATION_MARKER,
       title,
     });
     if (candidate.length <= MAX_GITHUB_ISSUE_URL_CHARS) {
