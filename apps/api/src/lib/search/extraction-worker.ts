@@ -18,6 +18,8 @@
 import { PDF } from "@libpdf/core";
 import { load } from "cheerio";
 
+import { FolioDocxReviewer } from "@stll/folio-core/server";
+
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -27,7 +29,6 @@ import {
   type EmailAttachment,
 } from "@/api/handlers/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
-import { extractFolioBlockTextFromDocxBuffer } from "@/api/lib/workflow/docx-blocks";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const EMAIL_ATTACHMENT_MAX_COUNT = 25;
@@ -178,7 +179,12 @@ const extract = async (
   if (normalizedMimeType === PDF_MIME_TYPE) {
     text = await extractPdfPlaintext(fileBytes);
   } else if (normalizedMimeType === DOCX_MIME_TYPE) {
-    text = await extractFolioBlockTextFromDocxBuffer(fileBytes);
+    const reviewer = await FolioDocxReviewer.fromBuffer(
+      toArrayBuffer(fileBytes),
+    );
+    const body = reviewer.getContentAsText({ annotated: true });
+    const notes = reviewer.getNotesAsText();
+    text = [body, notes].filter((s) => s.trim().length > 0).join("\n");
   } else if (isDirectTextMimeType(normalizedMimeType)) {
     text = extractDirectText(fileBytes, normalizedMimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
