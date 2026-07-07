@@ -107,12 +107,17 @@ export const isDocumentTypeClassifierProperty = ({
   name: string;
   role: InferredPropertyRole;
   tool: PropertyTool;
-}): boolean =>
-  role === DOCUMENT_TYPE_CLASSIFIER_ROLE ||
-  (role === null &&
+}): boolean => {
+  if (role !== null) {
+    return true;
+  }
+
+  return (
     normalizePropertyName(name) === "document type" &&
     content.type === "single-select" &&
-    tool.type === "ai-model");
+    tool.type === "ai-model"
+  );
+};
 
 const inferPropertyRole = ({
   content,
