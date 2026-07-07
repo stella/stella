@@ -126,7 +126,7 @@ export type ChatInputDraft = {
 
 export type ChatInputMentionSource = {
   id: string;
-  getItems: () => ChatMentionOption[];
+  getItems: () => ChatMentionOption[] | Promise<ChatMentionOption[]>;
   searchItems?: ((query: string) => Promise<ChatMentionOption[]>) | undefined;
 };
 
@@ -244,7 +244,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const [extensionVersion, setExtensionVersion] = useState(0);
   const [activeThreadKey, setActiveThreadKey] = useState<string | null>(null);
 
-  const getMentionItems = useCallback(() => {
+  const getMentionItems = useCallback(async () => {
     const items: ChatMentionOption[] = [];
 
     for (const { registration } of registrationsRef.current.values()) {
@@ -253,7 +253,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       }
 
       for (const source of registration.mentionSources) {
-        items.push(...source.getItems());
+        items.push(...(await source.getItems()));
       }
     }
 

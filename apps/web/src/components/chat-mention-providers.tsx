@@ -1,6 +1,7 @@
 import { createContext, use, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import type {
   ChatMentionOption,
@@ -13,7 +14,9 @@ import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queri
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
 type MentionProviders = {
-  getItems: (categories: MentionCategory[]) => ChatMentionOption[];
+  getItems: (
+    categories: MentionCategory[],
+  ) => ChatMentionOption[] | Promise<ChatMentionOption[]>;
 };
 
 const MentionProvidersContext = createContext<MentionProviders>({
@@ -21,6 +24,38 @@ const MentionProvidersContext = createContext<MentionProviders>({
 });
 
 export const useMentionProviders = () => use(MentionProvidersContext);
+
+type MentionWorkspace = {
+  id: string;
+  name: string;
+};
+
+const firstViewIdsByWorkspaceIdOptions = ({
+  queryClient,
+  workspaces,
+}: {
+  queryClient: QueryClient;
+  workspaces: MentionWorkspace[];
+}) => ({
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- the query client is an app-scope dependency, not part of this query's cache identity.
+  queryKey: [
+    "chat-mention-workspace-views",
+    workspaces.map((workspace) => workspace.id),
+  ],
+  queryFn: async () => {
+    const viewEntries = await Promise.all(
+      workspaces.map(async (workspace) => {
+        const views = await queryClient.ensureQueryData(
+          viewsOptions(workspace.id),
+        );
+
+        return [workspace.id, views.at(0)?.id ?? null] as const;
+      }),
+    );
+
+    return Object.fromEntries(viewEntries);
+  },
+});
 
 /** Provides org-level mention sources to any ChatEditor below. */
 export const ChatMentionProviders = ({
@@ -39,25 +74,11 @@ export const ChatMentionProviders = ({
     workspacesNavigationOptions(activeOrganizationId),
   );
   const workspaces = workspacesData?.workspaces;
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- the query client is an app-scope dependency, not part of this query's cache identity.
   const { data: firstViewIdsByWorkspaceId } = useChromeQuery({
-    queryKey: [
-      "chat-mention-workspace-views",
-      (workspaces ?? []).map((workspace) => workspace.id),
-    ],
-    queryFn: async () => {
-      const viewEntries = await Promise.all(
-        (workspaces ?? []).map(async (workspace) => {
-          const views = await queryClient.ensureQueryData(
-            viewsOptions(workspace.id),
-          );
-
-          return [workspace.id, views.at(0)?.id ?? null] as const;
-        }),
-      );
-
-      return Object.fromEntries(viewEntries);
-    },
+    ...firstViewIdsByWorkspaceIdOptions({
+      queryClient,
+      workspaces: workspaces ?? [],
+    }),
     enabled:
       workspaceMentionsRequested &&
       workspaces !== undefined &&
@@ -65,7 +86,7 @@ export const ChatMentionProviders = ({
   });
 
   const value: MentionProviders = {
-    getItems: (categories) => {
+    getItems: async (categories) => {
       const items: ChatMentionOption[] = [];
 
       if (categories.includes("workspace")) {
@@ -73,9 +94,14 @@ export const ChatMentionProviders = ({
           setWorkspaceMentionsRequested(true);
         }
         if (workspaces) {
+          const viewIdsByWorkspaceId =
+            firstViewIdsByWorkspaceId ??
+            (await queryClient.ensureQueryData(
+              firstViewIdsByWorkspaceIdOptions({ queryClient, workspaces }),
+            ));
           items.push(
             ...buildWorkspaceMentionOptions({
-              firstViewIdsByWorkspaceId,
+              firstViewIdsByWorkspaceId: viewIdsByWorkspaceId,
               workspaces,
             }),
           );

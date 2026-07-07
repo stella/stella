@@ -323,16 +323,13 @@ export const GroupedTableLayout = ({
     // full table width (their bands then run the whole scroll width).
     <MobileTableOrientationGate>
       <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
-        {groups.map((group, index) => (
+        {groups.map((group) => (
           <GroupSection
             columns={columns}
             count={
               countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
             }
-            eager={
-              eagerGroupValues?.has(group.value) ??
-              index < GROUP_EAGER_LOAD_COUNT
-            }
+            eager={eagerGroupValues?.has(group.value) ?? false}
             fieldIds={fieldIds}
             gateLabelsByColumnId={gateLabelsByColumnId}
             group={group}
