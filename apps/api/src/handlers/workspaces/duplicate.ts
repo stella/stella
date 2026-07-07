@@ -641,6 +641,7 @@ const duplicateWorkspace = createSafeHandler(
             tool: property.tool,
             system: property.system,
             kinds: property.kinds,
+            role: property.role,
           };
         });
         await tx.insert(properties).values(newProperties);

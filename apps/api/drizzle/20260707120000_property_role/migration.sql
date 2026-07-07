@@ -1,6 +1,6 @@
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
-ALTER TABLE "properties" ADD COLUMN "role" text;--> statement-breakpoint
+ALTER TABLE "properties" ADD COLUMN IF NOT EXISTS "role" text;--> statement-breakpoint
 UPDATE "properties" AS p
 SET "role" = 'document-type-classifier'
 FROM (
@@ -18,9 +18,14 @@ WHERE p.id = c.id AND c.rn = 1;--> statement-breakpoint
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
--- A cancelled concurrent index build can leave an INVALID index with this
--- name. Drop any leftover index first, then recreate without IF NOT EXISTS so
--- retries cannot record the migration without enforcing the invariant.
+SET statement_timeout = 0;
+--> statement-breakpoint
+-- stella-migration-safety: reviewed destructive-change - this drops only this
+-- migration's partial index by name before recreating it below; retries must not
+-- record the migration without the unique classifier invariant in place.
+-- A cancelled concurrent index build can leave an INVALID index with this name.
+-- Drop any leftover index first, then recreate without IF NOT EXISTS so retries
+-- cannot record the migration without enforcing the invariant.
 DROP INDEX CONCURRENTLY IF EXISTS "properties_ws_document_type_classifier_unq";
 --> statement-breakpoint
 CREATE UNIQUE INDEX CONCURRENTLY "properties_ws_document_type_classifier_unq" ON "properties" USING btree ("workspace_id") WHERE "role" = 'document-type-classifier';
