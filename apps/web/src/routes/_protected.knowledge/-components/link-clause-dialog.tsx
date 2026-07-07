@@ -55,7 +55,7 @@ type LinkClauseDialogProps = {
    *  The server still records the old name, so these slots look free in the
    *  links query; treat them as taken so a second link row can't be created
    *  for a name a pending rename is about to occupy. */
-  reservedSlotNames?: readonly string[];
+  reservedSlotNames: readonly string[];
 };
 
 // Select values for the slot picker. Discovered slot names are
@@ -132,7 +132,7 @@ export const LinkClauseDialog = ({
           link.slotName === null ? [] : [link.slotName],
         )
       : []),
-    ...(reservedSlotNames ?? []),
+    ...reservedSlotNames,
   ]);
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- resets the slot draft on close and seeds a default slot once the preview/links queries land while open; setSlotValue/setCustomSlotName are also driven by user selection so this is not pure derived state, and the dialog stays mounted (open is controlled) so a key reset cannot replace it

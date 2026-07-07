@@ -1135,18 +1135,24 @@ export const TemplateStudioPage = ({
     insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range, true);
   const insertClause = () => insertInline("{{@clause:Clause}}");
 
-  // A clause-slot name not already taken by another `{{@clause:...}}` marker in
-  // the document, so inserting two clauses never collides their slots.
+  // A clause-slot name not already taken by another `{{@clause:...}}` marker
+  // in the document, or claimed by a deferred slot rename: a pending step's
+  // fromSlot is absent from the document but still on the server row (or
+  // transiently claimed mid-replay), so linking a new clause under it would
+  // collide with the per-template unique-slot constraint at PUT time.
   const uniqueClauseSlotName = (base: string): string => {
     const view = editorViewRef.current;
     const seed = base === "" ? "clause" : base;
-    const taken = new Set(
-      view
+    const taken = new Set([
+      ...(view
         ? getTemplateDirectives(view.state)
             .filter((d) => d.kind === "clause")
             .map((d) => d.expr)
-        : [],
-    );
+        : []),
+      ...useTemplateStudioStore
+        .getState()
+        .pendingSlotRenames.flatMap((step) => [step.fromSlot, step.slotName]),
+    ]);
     let candidate = seed;
     for (let n = 2; taken.has(candidate); n++) {
       candidate = `${seed}_${n}`;
@@ -4969,7 +4975,13 @@ const StudioInsertRow = () => {
   const effectiveSlots = effectiveSlotByLink(pendingSlotRenames);
   // Every deferred-rename target is spoken for until the next save flushes the
   // log, so the link dialog must not offer these names for a new link row.
-  const reservedSlotNames = pendingSlotRenames.map((r) => r.slotName);
+  // Reserve both sides of every pending step: targets are about to be
+  // claimed, and sources (incl. mid-replay intermediates) stay claimed
+  // server-side until the flush lands.
+  const reservedSlotNames = pendingSlotRenames.flatMap((r) => [
+    r.fromSlot,
+    r.slotName,
+  ]);
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -6464,7 +6476,13 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
   // Every deferred-rename target is spoken for until the next save flushes the
   // log; reserve them so this face's "Link clause" dialog can't create a second
   // row for a name a pending rename (including this face's own) is about to take.
-  const reservedSlotNames = pendingSlotRenames.map((r) => r.slotName);
+  // Reserve both sides of every pending step: targets are about to be
+  // claimed, and sources (incl. mid-replay intermediates) stay claimed
+  // server-side until the flush lands.
+  const reservedSlotNames = pendingSlotRenames.flatMap((r) => [
+    r.fromSlot,
+    r.slotName,
+  ]);
   // Match by the link's effective slot name (the LAST pending step for the
   // link, else the server record): a link with a pending (not-yet-flushed)
   // rename matches its NEW name, not the stale one still on the server, so the
@@ -6503,7 +6521,9 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     }
     const renamed = actions?.renameClauseSlot(selected.expr, trimmed) ?? false;
     if (renamed && link !== undefined) {
-      setPendingSlotRename(link.id, trimmed);
+      // selected.expr is the marker's current (effective) name — the name this
+      // step renames away from, which stays claimed until the flush lands.
+      setPendingSlotRename(link.id, trimmed, selected.expr);
     }
     return renamed;
   };

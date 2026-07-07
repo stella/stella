@@ -38,8 +38,11 @@ type TemplateStudioSession = {
 };
 
 /** One deferred link-row slot rename in the replay log
- *  (see {@link TemplateStudioState.pendingSlotRenames}). */
-type PendingSlotRename = { linkId: string; slotName: string };
+ *  (see {@link TemplateStudioState.pendingSlotRenames}). `fromSlot` is the
+ *  name the step renames away from: until the flush lands, the server row
+ *  (first step) or the replay sequence (intermediate steps) still claims it,
+ *  so new-slot pickers must treat both names as reserved. */
+type PendingSlotRename = { linkId: string; slotName: string; fromSlot: string };
 
 /** Document actions the page owns; the inspector tab renders the buttons. */
 export type StudioActions = {
@@ -194,7 +197,11 @@ type TemplateStudioState = {
    *  pointing at a slot name the stored document lacks. */
   pendingSlotRenames: PendingSlotRename[];
   /** Append a replay step for a linked clause's slot rename. */
-  setPendingSlotRename: (linkId: string, slotName: string) => void;
+  setPendingSlotRename: (
+    linkId: string,
+    slotName: string,
+    fromSlot: string,
+  ) => void;
   /** Remove every pending step for a link (unlink-side cleanup). */
   clearPendingSlotRename: (linkId: string) => void;
   /** Drop the first `count` steps once the flush has replayed them, keeping any
@@ -280,9 +287,12 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       isDirty: true,
     })),
   pendingSlotRenames: [],
-  setPendingSlotRename: (linkId, slotName) =>
+  setPendingSlotRename: (linkId, slotName, fromSlot) =>
     set((state) => ({
-      pendingSlotRenames: [...state.pendingSlotRenames, { linkId, slotName }],
+      pendingSlotRenames: [
+        ...state.pendingSlotRenames,
+        { linkId, slotName, fromSlot },
+      ],
     })),
   clearPendingSlotRename: (linkId) =>
     set((state) => {

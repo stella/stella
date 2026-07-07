@@ -214,6 +214,9 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
         onLinked={invalidateLinks}
         onOpenChange={setLinkOpen}
         open={linkOpen}
+        // Deferred slot renames exist only in the Studio session; this
+        // standalone tab has none to reserve.
+        reservedSlotNames={[]}
         templateId={templateId}
       />
     </div>
