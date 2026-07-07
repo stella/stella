@@ -1,4 +1,4 @@
-import { createContext, use } from "react";
+import { createContext, use, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -30,6 +30,11 @@ export const ChatMentionProviders = ({
 }) => {
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  // Defer the per-workspace first-view-id prefetch (one GET /views per
+  // workspace) until a workspace @-mention is actually requested, so it
+  // doesn't storm the network on initial page load.
+  const [workspaceMentionsRequested, setWorkspaceMentionsRequested] =
+    useState(false);
   const { data: workspacesData } = useChromeQuery(
     workspacesNavigationOptions(activeOrganizationId),
   );
@@ -53,20 +58,28 @@ export const ChatMentionProviders = ({
 
       return Object.fromEntries(viewEntries);
     },
-    enabled: workspaces !== undefined && workspaces.length > 0,
+    enabled:
+      workspaceMentionsRequested &&
+      workspaces !== undefined &&
+      workspaces.length > 0,
   });
 
   const value: MentionProviders = {
     getItems: (categories) => {
       const items: ChatMentionOption[] = [];
 
-      if (categories.includes("workspace") && workspaces) {
-        items.push(
-          ...buildWorkspaceMentionOptions({
-            firstViewIdsByWorkspaceId,
-            workspaces,
-          }),
-        );
+      if (categories.includes("workspace")) {
+        if (!workspaceMentionsRequested) {
+          setWorkspaceMentionsRequested(true);
+        }
+        if (workspaces) {
+          items.push(
+            ...buildWorkspaceMentionOptions({
+              firstViewIdsByWorkspaceId,
+              workspaces,
+            }),
+          );
+        }
       }
 
       return items;

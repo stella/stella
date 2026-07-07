@@ -82,11 +82,11 @@ import {
 
 const GROUP_TABLE_PAGE_SIZE = 200;
 
-// Grouped views with at most this many sections load every section's rows
-// upfront (a few parallel fetches) instead of the lazy scroll-gate, so small
-// grouped tables appear at once and an already-visible section can't stall
-// behind its IntersectionObserver. Larger views keep the lazy per-section load.
-const GROUP_EAGER_LOAD_MAX = 8;
+// Grouped views eager-load only the first few sections' rows upfront; every
+// later section rides its IntersectionObserver scroll-gate (400px lookahead)
+// so it loads as it nears the viewport. This caps the initial burst of
+// per-section /kanban-group fetches instead of firing one per group at once.
+const GROUP_EAGER_LOAD_COUNT = 3;
 
 // A grouped document table never lists folders or tasks as rows, matching the
 // flat window query; passed to the kanban-group endpoint so its rows (and the
@@ -291,7 +291,6 @@ export const GroupedTableLayout = ({
   // group server-side (the row/count queries treat "no current-option value" as
   // uncategorized), so the sections are just the option groups plus uncategorized.
   const groups = getEntityGroups(options, t("common.uncategorized"));
-  const eagerLoadSections = groups.length <= GROUP_EAGER_LOAD_MAX;
 
   return (
     // Flex column so empty categories can sink below populated ones via
@@ -304,13 +303,13 @@ export const GroupedTableLayout = ({
     // full table width (their bands then run the whole scroll width).
     <MobileTableOrientationGate>
       <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
-        {groups.map((group) => (
+        {groups.map((group, index) => (
           <GroupSection
             columns={columns}
             count={
               countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
             }
-            eager={eagerLoadSections}
+            eager={index < GROUP_EAGER_LOAD_COUNT}
             fieldIds={fieldIds}
             gateLabelsByColumnId={gateLabelsByColumnId}
             group={group}
