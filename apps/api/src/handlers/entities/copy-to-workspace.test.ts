@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { auditLogs, documentCounters, entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
+import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -87,9 +88,15 @@ const childDocId = toSafeId<"entity">("child_doc");
 // Properties in source workspace
 const sourceFilePropertyId = toSafeId<"property">("source_file_prop");
 const sourceCustomPropertyId = toSafeId<"property">("source_custom_prop");
+const sourceClassifierPropertyId = toSafeId<"property">(
+  "source_classifier_prop",
+);
 
 // Matching property in target workspace (same name+type as sourceFilePropertyId)
 const targetFilePropertyId = toSafeId<"property">("target_file_prop");
+const targetClassifierPropertyId = toSafeId<"property">(
+  "target_classifier_prop",
+);
 
 const filePropertyContent: PropertyContent = { version: 1, type: "file" };
 const textPropertyContent: PropertyContent = { version: 1, type: "text" };
@@ -110,6 +117,19 @@ const textFieldContent: FieldContent = {
   type: "text",
   version: 1,
   value: "Custom value",
+};
+
+const classifierPropertyContent: PropertyContent = {
+  version: 1,
+  type: "single-select",
+  options: [{ value: "NDA", color: "blue" }],
+  fallback: null,
+};
+
+const classifierFieldContent: FieldContent = {
+  type: "single-select",
+  version: 1,
+  value: "NDA",
 };
 
 type InsertedEntity = {
@@ -370,6 +390,123 @@ describe("copy-to-workspace", () => {
     // S3 file was copied
     expect(fileMock).toHaveBeenCalled();
     expect(writeMock).toHaveBeenCalled();
+  });
+
+  test("maps document type classifier fields by role before name fallback", async () => {
+    const insertedFields: InsertedField[] = [];
+    let nextDocumentSequence = 0;
+    const sourceEntity = {
+      id: documentId,
+      kind: "document" as const,
+      name: "Localized.pdf",
+      parentId: null,
+      readOnly: false,
+      currentVersion: {
+        id: toSafeId<"entityVersion">("version_1"),
+        fields: [
+          {
+            propertyId: sourceClassifierPropertyId,
+            content: classifierFieldContent,
+          },
+        ],
+      },
+    };
+    const sourceProperties = [
+      {
+        id: sourceClassifierPropertyId,
+        name: "Document Type",
+        content: classifierPropertyContent,
+        system: false,
+        role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+      },
+    ];
+    const targetProperties = [
+      {
+        id: targetFilePropertyId,
+        name: "Documents",
+        content: filePropertyContent,
+        system: true,
+        role: null,
+      },
+      {
+        id: targetClassifierPropertyId,
+        name: "Type de document",
+        content: classifierPropertyContent,
+        system: false,
+        role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+      },
+    ];
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => sourceEntity,
+          findMany: async () => [sourceEntity],
+        },
+        properties: {
+          findMany: async (opts: {
+            where: { workspaceId: { eq: string } };
+          }) => {
+            if (opts.where.workspaceId.eq === sourceWorkspaceId) {
+              return sourceProperties;
+            }
+            if (opts.where.workspaceId.eq === targetWorkspaceId) {
+              return targetProperties;
+            }
+            return [];
+          },
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          where: async () => [],
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  nextDocumentSequence += 1;
+                  return [{ lastValue: nextDocumentSequence }];
+                },
+              }),
+            };
+          }
+          if (table === fields && Array.isArray(value)) {
+            for (const row of value) {
+              if (isInsertedField(row)) {
+                insertedFields.push(row);
+              }
+            }
+          }
+          return undefined;
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {},
+        }),
+      }),
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    const result = await copyToWorkspace.handler(
+      createContext({ safeDb, entityId: documentId }),
+    );
+
+    expect(result).toEqual({
+      entityId: expect.any(String),
+      entityIds: expect.any(Array),
+    });
+    expect(insertedFields).toHaveLength(1);
+    expect(insertedFields.at(0)?.propertyId).toBe(targetClassifierPropertyId);
+    expect(insertedFields.at(0)?.content).toEqual(classifierFieldContent);
+    expect(fileMock).not.toHaveBeenCalled();
   });
 
   test("does not copy files for fields without a target property", async () => {

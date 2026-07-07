@@ -21,6 +21,7 @@ import {
   type FieldFileRef,
 } from "@/api/handlers/files/field-file-refs";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
+import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -85,6 +86,7 @@ type PropertyMappingRow = {
   name: string;
   content: { type: string };
   system: boolean;
+  role: string | null;
 };
 
 /**
@@ -102,9 +104,13 @@ const buildPropertyIdMap = (
   const propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
   const targetByKey = new Map<string, SafeId<"property">>();
   let targetSystemFileId: SafeId<"property"> | undefined;
+  let targetClassifierId: SafeId<"property"> | undefined;
   for (const prop of targetProperties) {
     if (prop.system && prop.content.type === "file") {
       targetSystemFileId = prop.id;
+    }
+    if (prop.role === DOCUMENT_TYPE_CLASSIFIER_ROLE) {
+      targetClassifierId = prop.id;
     }
     targetByKey.set(`${prop.name}:${prop.content.type}`, prop.id);
   }
@@ -117,6 +123,13 @@ const buildPropertyIdMap = (
   for (const sourceProp of sourceProperties) {
     if (sourceProp.system && sourceProp.content.type === "file") {
       propertyIdMap.set(sourceProp.id, targetSystemFileId);
+      continue;
+    }
+    if (
+      sourceProp.role === DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+      targetClassifierId !== undefined
+    ) {
+      propertyIdMap.set(sourceProp.id, targetClassifierId);
       continue;
     }
     const targetId = targetByKey.get(
@@ -341,12 +354,24 @@ const copyToWorkspaceHandler = async function* ({
               workspaceId: { eq: sourceWorkspaceId },
               id: { in: [...requiredPropertyIds] },
             },
-            columns: { id: true, name: true, content: true, system: true },
+            columns: {
+              id: true,
+              name: true,
+              content: true,
+              system: true,
+              role: true,
+            },
             limit: LIMITS.propertiesCount,
           }),
           tx.query.properties.findMany({
             where: { workspaceId: { eq: targetWorkspaceId } },
-            columns: { id: true, name: true, content: true, system: true },
+            columns: {
+              id: true,
+              name: true,
+              content: true,
+              system: true,
+              role: true,
+            },
             limit: LIMITS.propertiesCount,
           }),
         ]);
