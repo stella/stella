@@ -305,7 +305,6 @@ type Messages = {
     "filterHint": "Filtered to {codes}";
     "firstParty": "stella";
     "firstPartyTooltip": "Built by the stella team";
-    "install": "Install";
     "installFailed": "Install failed";
     "installPack": "Install {count, plural, one {# tool} other {# tools}}";
     "installed": "Installed {name}";
@@ -761,6 +760,7 @@ type Messages = {
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
     "details": "Details";
+    "disconnect": "Disconnect";
     "document": "Document";
     "documentation": "Documentation";
     "done": "Done";
@@ -1499,7 +1499,6 @@ type Messages = {
       "detected": "Detected {authType}";
       "disable": "Disable";
       "disabled": "Connected · disabled";
-      "disconnect": "Disconnect";
       "emptyDescription": "Curated legal integrations will appear here as they are enabled for your workspace.";
       "emptyTitle": "No integrations yet";
       "enable": "Enable";
@@ -1813,6 +1812,8 @@ type Messages = {
     "aiConfigFailed": "Couldn't save your AI configuration. You can finish it from settings.";
     "aiSubtitle": "Bring your own API key. You can change providers and models anytime.";
     "aiTitle": "Connect your AI provider";
+    "appsSubtitle": "Use the desktop app, connect an MCP client, or automate from the command line.";
+    "appsTitle": "Get stella everywhere";
     "catalogueAlwaysOn": "Always on";
     "catalogueClearSearch": "Clear search";
     "catalogueCommunityHeading": "Others";
@@ -1835,6 +1836,7 @@ type Messages = {
     "catalogueThirdPartyConfirm": "Add anyway";
     "catalogueThirdPartyDisclaimer": "This is third-party code contributed by {author}. stella has not reviewed, endorsed, or maintained it. You are solely responsible for verifying it is suitable for your practice and compliant with your team's policies. By adding it, you accept that you use it at your own risk.";
     "catalogueTitle": "Customize your AI";
+    "cliCardDescription": "Install @stll/cli from npm, then sign in with stella auth login. Full setup steps are in Settings → Connections.";
     "continue": "Continue";
     "creating": {
       "ai": "Saving AI configuration...";
@@ -1844,7 +1846,6 @@ type Messages = {
     };
     "creatingTrust": "Your data is encrypted at rest and in transit.";
     "desktopHint": "You can also do this later from your account settings.";
-    "desktopTitle": "Get the desktop app";
     "enterTeamName": "Enter your team name above";
     "getStarted": "Get Started";
     "inviteExternal": "External — will have access to your documents";
@@ -1862,6 +1863,7 @@ type Messages = {
     "jurisdictionSubtitle": "Choose the countries you commonly work with. stella will use this to customize your experience.";
     "jurisdictionSuggested": "Suggested";
     "jurisdictionTitle": "Pick your practice jurisdictions";
+    "mcpCardDescription": "Connect MCP clients like Claude or Cursor to stella. Find the server URL and setup steps in Settings → Connections after you finish setting up.";
     "orgNameLabel": "Team name";
     "orgNamePlaceholder": "Smith & Associates";
     "orgSubtitle": "This is how your colleagues will find you.";
@@ -1869,8 +1871,8 @@ type Messages = {
     "skipStep": "Skip this step";
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
     "stepAi": "AI";
+    "stepApps": "Apps & tools";
     "stepCatalogue": "Catalogue";
-    "stepDesktop": "Desktop";
     "stepJurisdiction": "Jurisdiction";
     "stepOrganization": "Team";
     "stepTeam": "Invite";
@@ -2103,6 +2105,31 @@ type Messages = {
       "wordEditShortcut": "Word edit shortcut";
       "wordEditShortcutDescription": "Short tag for your initials on Word edits.";
       "wordEditShortcutPlaceholder": "e.g. JK";
+    };
+    "connections": {
+      "cliDescription": "Install the stella command-line client and sign in to script matters, documents, and templates from a terminal.";
+      "cliHelpHint": "Run \"stella --help\" for the full list of commands.";
+      "cliInstallLabel": "Install";
+      "cliLoginLabel": "Log in";
+      "cliTitle": "Command-line interface";
+      "connectedAppsDescription": "Applications and tools you have authorized to access your account.";
+      "connectedAppsEmpty": "Apps you authorize, like Claude or the stella CLI, will appear here.";
+      "connectedAppsTitle": "Connected apps";
+      "connectedColumn": "Connected";
+      "description": "Connect MCP clients and the command-line interface to your account.";
+      "disconnectConfirmDescription": "This revokes {clientName}'s access to your account, along with any tokens it has issued. You can reconnect at any time.";
+      "disconnectConfirmTitle": "Disconnect {clientName}?";
+      "disconnectSuccess": "Disconnected {clientName}";
+      "mcpAnonymizedLabel": "Anonymized endpoint";
+      "mcpAnonymizedNote": "An anonymized endpoint is also available; it exposes the same tools with personal data masked.";
+      "mcpDescription": "Connect an MCP-compatible client, such as Claude or Cursor, to your stella account using this server URL.";
+      "mcpStep1": "Add the URL above as a custom connector or MCP server in your client.";
+      "mcpStep2": "Sign in when the browser prompts you.";
+      "mcpStep3": "Approve access on the consent screen.";
+      "mcpTitle": "MCP server";
+      "mcpUrlLabel": "Server URL";
+      "scopesLabel": "Access";
+      "title": "Connections";
     };
     "organization": {
       "activeMembers": "Active members";

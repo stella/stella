@@ -18,7 +18,7 @@ export const OnboardingProgress = ({
     t("onboarding.stepCatalogue"),
     t("onboarding.stepAi"),
     t("onboarding.stepTeam"),
-    t("onboarding.stepDesktop"),
+    t("onboarding.stepApps"),
   ];
 
   return (
