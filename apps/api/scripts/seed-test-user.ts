@@ -300,10 +300,16 @@ async function seed() {
   });
 
   if (existingSession) {
+    // createdAt must be refreshed along with expiresAt: better-auth gates
+    // sensitive endpoints (e.g. /list-sessions) on session *freshness*, which
+    // is derived from createdAt. On a long-lived dev database an old row would
+    // 403 those endpoints even though the session is otherwise valid.
     await rootDb
       .update(session)
       .set({
         expiresAt,
+        createdAt: now,
+        updatedAt: now,
         activeOrganizationId: TEST_ORG.id,
       })
       .where(eq(session.id, SESSION_ID));
