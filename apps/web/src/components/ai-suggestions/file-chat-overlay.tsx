@@ -1277,7 +1277,7 @@ const FileChatOverlayInner = ({
           setComments: () => {},
         });
         const args = parseCompletedToolCallArguments(part) ?? {};
-        const result = executeFolioToolCall(part.name, args, bridge);
+        const result = await executeFolioToolCall(part.name, args, bridge);
         await addToolResult({
           tool: part.name,
           toolCallId: part.id,
@@ -1288,6 +1288,21 @@ const FileChatOverlayInner = ({
         // be dispatched again instead of hanging forever.
         executedFolioAgentDocToolCallIdsRef.current.delete(part.id);
         getAnalytics().captureError(toolCallError);
+        try {
+          await addToolResult({
+            tool: part.name,
+            toolCallId: part.id,
+            output: {
+              ok: false,
+              error:
+                toolCallError instanceof Error
+                  ? toolCallError.message
+                  : String(toolCallError),
+            },
+          });
+        } catch (reportError) {
+          getAnalytics().captureError(reportError);
+        }
       }
     },
   );
