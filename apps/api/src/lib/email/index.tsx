@@ -10,29 +10,24 @@ import type { ProductFeedbackKind } from "@stll/transactional/emails/product-fee
 import { env } from "@/api/env";
 import type { SupportedLang } from "@/api/lib/locale";
 
+import { isEmailTransportConfigComplete } from "./config";
 import { formatTransactionalEmailFrom } from "./from";
 import { createSESTransport } from "./ses";
 import { createSMTPTransport } from "./smtp";
 import type { EmailTransport } from "./transport";
 
-export const isTransactionalEmailConfigured = () => {
-  if (!env.TRANSACTIONAL_EMAIL_FROM) {
-    return false;
-  }
-
-  switch (env.EMAIL_PROVIDER) {
-    case "ses":
-      return !!env.SES_REGION;
-    case "smtp":
-      return !!env.SMTP_HOST && env.SMTP_PORT !== undefined;
-    case undefined:
-      return false;
-    default: {
-      const _exhaustive: never = env.EMAIL_PROVIDER;
-      return _exhaustive;
-    }
-  }
-};
+export const isTransactionalEmailConfigured = () =>
+  isEmailTransportConfigComplete({
+    emailProvider: env.EMAIL_PROVIDER,
+    sesAccessKeyId: env.SES_ACCESS_KEY_ID,
+    sesRegion: env.SES_REGION,
+    sesSecretAccessKey: env.SES_SECRET_ACCESS_KEY,
+    smtpHost: env.SMTP_HOST,
+    smtpPassword: env.SMTP_PASSWORD,
+    smtpPort: env.SMTP_PORT,
+    smtpUsername: env.SMTP_USERNAME,
+    transactionalEmailFrom: env.TRANSACTIONAL_EMAIL_FROM,
+  });
 
 const resolveTransport = (): EmailTransport => {
   switch (env.EMAIL_PROVIDER) {
