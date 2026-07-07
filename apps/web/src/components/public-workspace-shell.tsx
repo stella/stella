@@ -35,7 +35,6 @@ import {
   SidebarProvider,
   useSidebar,
 } from "@/components/sidebar";
-import { SidebarUserMenu } from "@/components/sidebar-user-menu";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
@@ -70,6 +69,15 @@ const CreateMatterDialog = lazy(async () => {
 const SearchDialog = lazy(async () => {
   const module = await import("@/components/search-dialog");
   return { default: module.SearchDialog };
+});
+
+// Loaded lazily so its authed deps (the browser auth client via
+// use-sign-out, and the organization query module) never enter the
+// SSR-reachable graph of this public shell. It only renders client-side
+// once auth resolves to authenticated.
+const SidebarUserMenu = lazy(async () => {
+  const module = await import("@/components/sidebar-user-menu");
+  return { default: module.SidebarUserMenu };
 });
 
 // Routes reachable without authentication. Their nav entries render as
@@ -311,7 +319,9 @@ function PublicSidebar({
             </SidebarMenuItem>
           )}
           {authStatus.isAuthenticated && (
-            <SidebarUserMenu user={authStatus.user} />
+            <Suspense fallback={null}>
+              <SidebarUserMenu user={authStatus.user} />
+            </Suspense>
           )}
         </SidebarMenu>
       </SidebarFooter>
