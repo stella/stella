@@ -4943,6 +4943,9 @@ const StudioInsertRow = () => {
     (s) => s.pendingSlotRenames,
   );
   const effectiveSlots = effectiveSlotByLink(pendingSlotRenames);
+  // Every deferred-rename target is spoken for until the next save flushes the
+  // log, so the link dialog must not offer these names for a new link row.
+  const reservedSlotNames = pendingSlotRenames.map((r) => r.slotName);
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -5136,6 +5139,7 @@ const StudioInsertRow = () => {
           }}
           onOpenChange={setLinkClauseOpen}
           open={linkClauseOpen}
+          reservedSlotNames={reservedSlotNames}
           templateId={sessionTemplateId}
         />
       )}
@@ -6433,6 +6437,10 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     (s) => s.setPendingSlotRename,
   );
   const effectiveSlots = effectiveSlotByLink(pendingSlotRenames);
+  // Every deferred-rename target is spoken for until the next save flushes the
+  // log; reserve them so this face's "Link clause" dialog can't create a second
+  // row for a name a pending rename (including this face's own) is about to take.
+  const reservedSlotNames = pendingSlotRenames.map((r) => r.slotName);
   // Match by the link's effective slot name (the LAST pending step for the
   // link, else the server record): a link with a pending (not-yet-flushed)
   // rename matches its NEW name, not the stale one still on the server, so the
@@ -6520,6 +6528,7 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
           onLinked={invalidateLinks}
           onOpenChange={setLinkOpen}
           open={linkOpen}
+          reservedSlotNames={reservedSlotNames}
           templateId={templateId}
         />
       )}
