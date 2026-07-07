@@ -1812,7 +1812,7 @@ type Messages = {
     "aiConfigFailed": "Couldn't save your AI configuration. You can finish it from settings.";
     "aiSubtitle": "Bring your own API key. You can change providers and models anytime.";
     "aiTitle": "Connect your AI provider";
-    "appsSubtitle": "Use the desktop app, connect an MCP client, or automate from the command line.";
+    "appsSubtitle": "stella also works outside the browser: on your desktop, in your AI assistant, and in the terminal.";
     "appsTitle": "Get stella everywhere";
     "catalogueAlwaysOn": "Always on";
     "catalogueClearSearch": "Clear search";
@@ -1836,7 +1836,8 @@ type Messages = {
     "catalogueThirdPartyConfirm": "Add anyway";
     "catalogueThirdPartyDisclaimer": "This is third-party code contributed by {author}. stella has not reviewed, endorsed, or maintained it. You are solely responsible for verifying it is suitable for your practice and compliant with your team's policies. By adding it, you accept that you use it at your own risk.";
     "catalogueTitle": "Customize your AI";
-    "cliCardDescription": "Install @stll/cli from npm, then sign in with stella auth login. Full setup steps are in Settings → Connections.";
+    "cliCardDescription": "For technical users: script and automate your work.";
+    "cliCardTitle": "Automate stella from the terminal";
     "continue": "Continue";
     "creating": {
       "ai": "Saving AI configuration...";
@@ -1863,11 +1864,20 @@ type Messages = {
     "jurisdictionSubtitle": "Choose the countries you commonly work with. stella will use this to customize your experience.";
     "jurisdictionSuggested": "Suggested";
     "jurisdictionTitle": "Pick your practice jurisdictions";
-    "mcpCardDescription": "Connect MCP clients like Claude or Cursor to stella. Find the server URL and setup steps in Settings → Connections after you finish setting up.";
+    "mcpCardDescription": "AI assistants like Claude can work with your matters and documents.";
+    "mcpCardTitle": "Use stella from your AI assistant";
     "orgNameLabel": "Team name";
     "orgNamePlaceholder": "Smith & Associates";
     "orgSubtitle": "This is how your colleagues will find you.";
     "orgTitle": "Name your team";
+    "setupAssistantNote": "The connection will start working after you finish this setup.";
+    "setupAssistantOthers": "Other AI tools that support custom connectors, such as Cursor, work the same way.";
+    "setupChatgptStep1": "In ChatGPT, open Settings → Connectors and add a connector.";
+    "setupClaudeStep1": "In Claude, open Settings → Connectors and choose “Add custom connector”.";
+    "setupClaudeStep3": "Sign in with your stella account and approve access.";
+    "setupPasteAddressStep": "Paste the server address shown above.";
+    "setupServerAddressLabel": "Server address";
+    "setupTerminalHint": "For technical users: run these commands to install the stella command-line tool and sign in.";
     "skipStep": "Skip this step";
     "someInvitesFailed": "{count, plural, one {# invitation failed} other {# invitations failed}}";
     "stepAi": "AI";

@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 
-import { CopyField } from "@/routes/_protected.settings/-components/account/copy-field";
+import { CopyField } from "@/components/copy-field";
 
 const CLI_INSTALL_COMMAND = "npm i -g @stll/cli";
 

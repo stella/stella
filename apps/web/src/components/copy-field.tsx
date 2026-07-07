@@ -15,7 +15,8 @@ type CopyFieldProps = {
 };
 
 /** A read-only value with a copy-to-clipboard button, used for the MCP
- * server URL and CLI commands on the connections settings page. */
+ * server URL and CLI commands on the connections settings page and in
+ * the onboarding setup preview. */
 export const CopyField = ({ label, value }: CopyFieldProps) => {
   const t = useTranslations();
 

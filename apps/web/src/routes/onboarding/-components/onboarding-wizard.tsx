@@ -45,7 +45,11 @@ import { AIStep } from "@/routes/onboarding/-components/steps/ai-step";
 import { CatalogueStep } from "@/routes/onboarding/-components/steps/catalogue-step";
 import type { Phase } from "@/routes/onboarding/-components/steps/creating-step";
 import { CreatingStep } from "@/routes/onboarding/-components/steps/creating-step";
-import { DownloadStep } from "@/routes/onboarding/-components/steps/download-step";
+import type { DownloadTarget } from "@/routes/onboarding/-components/steps/download-step";
+import {
+  DownloadSetupPreview,
+  DownloadStep,
+} from "@/routes/onboarding/-components/steps/download-step";
 import { InviteStep } from "@/routes/onboarding/-components/steps/invite-step";
 import {
   JurisdictionGlobePreview,
@@ -102,6 +106,8 @@ export const OnboardingWizard = () => {
   const [catalogueRemovedSlugs, setCatalogueRemovedSlugs] = useState<
     readonly string[]
   >([]);
+  const [downloadTarget, setDownloadTarget] =
+    useState<DownloadTarget>("assistant");
   const [data, setData] = useState<WizardData>(() => ({
     orgName: "",
     orgSlug: "",
@@ -553,6 +559,8 @@ export const OnboardingWizard = () => {
         roleModels={data.aiRoleModels}
       />
     );
+  } else if (step === "download") {
+    preview = <DownloadSetupPreview target={downloadTarget} />;
   }
 
   const renderStep = () => {
@@ -740,6 +748,8 @@ export const OnboardingWizard = () => {
         totalSteps={TOTAL_STEPS}
       >
         <DownloadStep
+          onSelect={setDownloadTarget}
+          selected={downloadTarget}
           onNext={() => {
             void executeSetup(data);
           }}

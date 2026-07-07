@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 
-import { CopyField } from "@/routes/_protected.settings/-components/account/copy-field";
+import { CopyField } from "@/components/copy-field";
 
 // Mirrors `MCP_HTTP_PATH` / `MCP_ANONYMIZED_HTTP_PATH` in
 // `apps/api/src/mcp/constants.ts`. Not imported directly: that module pulls
