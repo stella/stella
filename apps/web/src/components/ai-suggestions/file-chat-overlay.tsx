@@ -1277,7 +1277,9 @@ const FileChatOverlayInner = ({
           setComments: () => {},
         });
         const args = parseCompletedToolCallArguments(part) ?? {};
-        const result = await executeFolioToolCall(part.name, args, bridge);
+        const result = await Promise.resolve(
+          executeFolioToolCall(part.name, args, bridge),
+        );
         await addToolResult({
           tool: part.name,
           toolCallId: part.id,
