@@ -660,7 +660,7 @@ const renderCallResult = ({
   // any tool name): a phase-1 `approval_required` response carries a
   // `confirmation_token` the human approves before a phase-2 re-run.
   const hint = approvalReRunHint({
-    isTTY: context.process.stdout.isTTY === true,
+    isTTY: context.process.stdout.isTTY,
     payload,
   });
   if (hint !== null) {
