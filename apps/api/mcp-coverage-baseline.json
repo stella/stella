@@ -121,6 +121,7 @@
   "apps/api/src/handlers/templates/clause-slots.ts",
   "apps/api/src/handlers/templates/clauses-link.ts",
   "apps/api/src/handlers/templates/clauses-list.ts",
+  "apps/api/src/handlers/templates/clauses-slot-update.ts",
   "apps/api/src/handlers/templates/clauses-sync-all.ts",
   "apps/api/src/handlers/templates/clauses-sync.ts",
   "apps/api/src/handlers/templates/clauses-unlink.ts",

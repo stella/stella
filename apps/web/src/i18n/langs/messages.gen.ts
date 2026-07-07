@@ -649,6 +649,8 @@ type Messages = {
     "noResults": "No clauses yet";
     "noVariants": "No variants";
     "outdatedVersion": "Update available";
+    "renameSlot": "Rename slot";
+    "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.";
     "restoreVersion": "Restore this version";
     "saveAsVersion": "Save as new version";
     "saveFailed": "Failed to save";
@@ -658,6 +660,7 @@ type Messages = {
     "selectFile": "Select JSON file";
     "selectVersionToCompare": "Select a version to compare with current";
     "slotCustom": "Custom slot name…";
+    "slotHelp": "A slot is a named position in the document ('{{'@clause:name'}}') where the linked clause is inserted when the template is filled.";
     "slotName": "Slot name";
     "slotNamePlaceholder": "e.g. NonCompete";
     "slotNone": "No slot";
@@ -2290,6 +2293,7 @@ type Messages = {
     "checkFindingFieldMissingInputType": "The field has no input type; a plain text input will be used";
     "checkFindingFieldMissingLabel": "The field has no label; people filling in the template will see the raw placeholder name";
     "checkFindingFormulaUnknownPath": "The formula references an unknown field: {reference}";
+    "checkFindingInvalidMarker": "This looks like a field marker but won't work. Marker names can only use letters, numbers, dots, dashes, and underscores, so it will be printed as-is.";
     "checkFindingLinkWithoutSlot": "A clause is linked under this slot name, but the document has no such slot";
     "checkFindingMarkerWithoutField": "The placeholder appears in the document but has no field definition";
     "checkFindingSelectWithoutOptions": "The select field has no options and no source of options";
@@ -2386,6 +2390,7 @@ type Messages = {
     "fieldUpdateFailed": "Failed to update fields";
     "fields": "Fields";
     "fieldsUpdated": "Fields updated";
+    "fill": "Fill";
     "fillFailed": "Failed to generate document";
     "fillForm": "Fill template";
     "generate": "Generate document";
@@ -2439,6 +2444,7 @@ type Messages = {
     "saveAndLeave": "Save and leave";
     "saveFailed": "Failed to save template";
     "searchTemplates": "Search templates…";
+    "structureWarningParagraph": "Paragraph {paragraph, number}";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {
       "aiAdaptInstructionPlaceholder": "Optional: how AI should adapt the wording (e.g. match the surrounding grammar)";
@@ -2453,7 +2459,7 @@ type Messages = {
       "aiScopeSelectionPrompt": "Only suggest fields within this selected part of the document:";
       "aiSeesDocument": "Let the AI read the document";
       "aiSuggest": "Suggest fields";
-      "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
+      "clauseSlotHelp": "The linked clause is inserted here when the template is filled. Link or change it in this panel, or from the insert menu.";
       "conceptClause": "Inserts a reusable clause from your library.";
       "conceptCondition": "Shows this text only when a condition holds.";
       "conceptField": "A value you fill in at use time.";
@@ -2492,6 +2498,10 @@ type Messages = {
       "formulaNonNumberFields": "Not a number: {fields}";
       "formulaNumbersOnlyHelp": "Calculations use number fields only — dates and text can't be used.";
       "formulaUnknownFields": "Not a field: {fields}";
+      "gettingStartedField": "Write your text, then select a phrase → right-click → Make field.";
+      "gettingStartedFill": "Try the result in the Fill tab.";
+      "gettingStartedSlash": "Type / in the document to insert fields, conditions, and clauses.";
+      "gettingStartedTitle": "Get started";
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
       "insertConditionIntoTemplate": "Insert condition";
@@ -2504,6 +2514,12 @@ type Messages = {
       "loop": "Loop";
       "loopBoundsHint": "Set how many times this block may repeat when the template is filled.";
       "makeField": "Make field";
+      "markerCount": "The total number of items.";
+      "markerIndex": "The current item's number.";
+      "markerNum": "Auto-numbers items that share this key.";
+      "markerRef": "Cross-references a numbered item.";
+      "markerSyntaxNote": "You can type markers by hand, but the selection popover and the / menu insert them correctly for you.";
+      "markerSyntaxTitle": "Marker syntax";
       "maxRepeats": "Maximum repeats";
       "minRepeats": "Minimum repeats";
       "mirrorBlockAction": "Mirror";
@@ -2555,7 +2571,6 @@ type Messages = {
     "templateNamePlaceholder": "e.g. Employment Agreement";
     "templateRenamed": "Template renamed";
     "templateSaved": "Template saved";
-    "testFill": "Fill";
     "unmatchedPlaceholders": "Some placeholders were not filled: {list}";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "untitledTemplate": "Untitled template";

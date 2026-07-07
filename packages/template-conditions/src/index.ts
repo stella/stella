@@ -210,12 +210,19 @@ export {
   hasNumberingPattern,
   indexPattern,
   isBlockDirectiveKind,
+  isClauseSlotName,
   isFieldPath,
   isSafeFieldPath,
   markerPattern,
   numPattern,
   placeholderPattern,
   refPattern,
+  scanInvalidMarkers,
   scanMarkers,
 } from "./markers.js";
-export type { DirectiveKind, MarkerMeta, ScannedMarker } from "./markers.js";
+export type {
+  DirectiveKind,
+  InvalidMarker,
+  MarkerMeta,
+  ScannedMarker,
+} from "./markers.js";

@@ -5,6 +5,7 @@ import type { SafeDb, ScopedDb } from "@/api/db";
 import { listTemplateClausesHandler } from "@/api/handlers/clauses/template-links";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
+import { extractText } from "@/api/handlers/docx/extract-text";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { buildTemplateCheckFindings } from "@/api/handlers/templates/check-template";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -51,10 +52,11 @@ const checkTemplateHandler = async function* ({
 
   const buffer = Buffer.from(await getS3().file(template.s3Key).arrayBuffer());
 
-  const [discovered, manifest, clauseSlots] = await Promise.all([
+  const [discovered, manifest, clauseSlots, extracted] = await Promise.all([
     discoverTemplate(buffer),
     readManifest(buffer),
     discoverClauseSlots(buffer),
+    extractText(buffer),
   ]);
 
   const linksResult = yield* Result.await(
@@ -87,6 +89,7 @@ const checkTemplateHandler = async function* ({
     manifest,
     clauseSlots,
     clauseLinks: linksResult.links,
+    paragraphs: extracted.paragraphs.map((p) => p.text),
   });
 
   return Result.ok({ findings });

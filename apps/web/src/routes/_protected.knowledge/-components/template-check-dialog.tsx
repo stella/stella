@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -30,6 +31,12 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 type TemplateCheckDialogProps = {
   templateId: string;
+  /**
+   * Custom trigger element. When omitted the default outline button is used;
+   * the ambient Studio health badge passes its own compact control here so a
+   * single dialog backs both entry points.
+   */
+  trigger?: ReactElement;
 };
 
 /**
@@ -39,6 +46,7 @@ type TemplateCheckDialogProps = {
  */
 export const TemplateCheckDialog = ({
   templateId,
+  trigger,
 }: TemplateCheckDialogProps) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
@@ -53,10 +61,16 @@ export const TemplateCheckDialog = ({
 
   return (
     <Dialog onOpenChange={setOpen} open={open}>
-      <DialogTrigger render={<Button size="sm" variant="outline" />}>
-        <ListChecksIcon className="size-4" />
-        {t("templates.checkTemplate")}
-      </DialogTrigger>
+      <DialogTrigger
+        render={
+          trigger ?? (
+            <Button size="sm" variant="outline">
+              <ListChecksIcon className="size-4" />
+              {t("templates.checkTemplate")}
+            </Button>
+          )
+        }
+      />
       <DialogPopup className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{t("templates.checkTemplate")}</DialogTitle>
@@ -107,6 +121,12 @@ type CheckFinding =
       severity: "error";
       conditionName: string;
       reference: string;
+    }
+  | {
+      code: "invalidMarker";
+      severity: "error";
+      marker: string;
+      paragraphIndex: number;
     };
 
 const FINDING_MESSAGE_KEY = {
@@ -120,6 +140,7 @@ const FINDING_MESSAGE_KEY = {
   selectWithoutOptions: "templates.checkFindingSelectWithoutOptions",
   formulaUnknownPath: "templates.checkFindingFormulaUnknownPath",
   conditionUnknownPath: "templates.checkFindingConditionUnknownPath",
+  invalidMarker: "templates.checkFindingInvalidMarker",
 } as const satisfies Record<CheckFinding["code"], TranslationKey>;
 
 /** Stable list key: code + subject + (reference, where one exists) — a
@@ -131,6 +152,10 @@ const findingKey = (finding: CheckFinding): string => {
     finding.code === "conditionUnknownPath"
   ) {
     return `${base}-${finding.reference}`;
+  }
+  // The same near-miss marker can repeat across paragraphs; disambiguate.
+  if (finding.code === "invalidMarker") {
+    return `${base}-${finding.paragraphIndex}`;
   }
   return base;
 };
@@ -145,6 +170,8 @@ const findingSubject = (finding: CheckFinding): string => {
       return finding.slotName;
     case "conditionUnknownPath":
       return finding.conditionName;
+    case "invalidMarker":
+      return finding.marker;
     default:
       return finding.path;
   }

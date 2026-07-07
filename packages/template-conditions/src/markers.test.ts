@@ -7,6 +7,7 @@ import {
   isBlockDirectiveKind,
   isFieldPath,
   isSafeFieldPath,
+  scanInvalidMarkers,
   scanMarkers,
 } from "./markers.js";
 
@@ -130,6 +131,39 @@ describe("scanMarkers", () => {
         meta: { kind: "placeholder", expr: "tenant.name" },
       },
     ]);
+  });
+});
+
+describe("scanInvalidMarkers", () => {
+  test("flags brace spans that look like markers but fail classification", () => {
+    const text = "Hi {{my field}} and {{@clause:}} but {{tenant.name}}.";
+    const invalid = scanInvalidMarkers(text);
+
+    expect(invalid.map((m) => m.raw)).toEqual(["{{my field}}", "{{@clause:}}"]);
+    // Offsets round-trip back to the exact source span.
+    for (const marker of invalid) {
+      expect(text.slice(marker.start, marker.end)).toBe(marker.raw);
+    }
+  });
+
+  test("ignores every recognized directive", () => {
+    const text =
+      "{{@num:scope}} {{#if a}} {{tenant.name}} {{/if}} {{@clause:X}}";
+    expect(scanInvalidMarkers(text)).toEqual([]);
+  });
+
+  test("trims the reported inner text", () => {
+    const [only] = scanInvalidMarkers("{{ has spaces }}");
+    expect(only?.raw).toBe("{{ has spaces }}");
+    expect(only?.inner).toBe("has spaces");
+  });
+
+  test("is the exact complement of scanMarkers", () => {
+    const text = "{{good}} {{not good}} {{@ref:k}} {{@bad:}}";
+    const recognized = scanMarkers(text).length;
+    const invalid = scanInvalidMarkers(text).length;
+    // Every `{{...}}` span lands in exactly one of the two scans.
+    expect(recognized + invalid).toBe(4);
   });
 });
 

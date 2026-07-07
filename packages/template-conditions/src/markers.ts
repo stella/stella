@@ -131,6 +131,22 @@ export const isFieldPath = (value: string): boolean =>
 export const isSafeFieldPath = (value: string): boolean =>
   isFieldPath(value) &&
   value.split(".").every((segment) => !UNSAFE_FIELD_PATH_SEGMENTS.has(segment));
+
+// A NEW `{{@clause:NAME}}` slot name. Deliberately tighter than the parse
+// grammar (`clauseSlotPattern`'s name group is `[^:}\s]+`): the fill pipeline
+// substitutes marker text through `placeholderPattern`, whose name charset is
+// `[\p{L}\p{N}_.@:-]`, so a name this validator admits but that charset lacks
+// (e.g. `foo/bar`) would pass discovery and the health check yet survive as
+// literal text in the filled document. Restrict authoring to the
+// letters/digits/`_.-` intersection (`@` and `:` are structural in the clause
+// marker itself).
+const CLAUSE_SLOT_NAME_RE = /^[\p{L}\p{N}_.-]+$/u;
+
+/** Whether `value` is a valid name for authoring a `{{@clause:NAME}}` slot:
+ *  the intersection of the clause-slot parse grammar and the fill pipeline's
+ *  placeholder charset, so every accepted name round-trips through fill. */
+export const isClauseSlotName = (value: string): boolean =>
+  CLAUSE_SLOT_NAME_RE.test(value);
 const CLAUSE_INNER_RE = /^@clause:(?<name>[^:}\s]+)(?::(?<version>[^}\s]+))?$/u;
 const NUM_INNER_RE = /^@num:(?<key>[\p{L}\p{N}_.-]+)$/u;
 const REF_INNER_RE = /^@ref:(?<key>[\p{L}\p{N}_.-]+)$/u;
@@ -239,6 +255,45 @@ export const scanMarkers = (text: string): ScannedMarker[] => {
         raw: match[0],
         inner,
         meta,
+      });
+    }
+    match = re.exec(text);
+  }
+  return out;
+};
+
+/** A `{{...}}` span that looks like a marker but classifies to nothing. */
+export type InvalidMarker = {
+  /** Offset of `{{` in the source text. */
+  start: number;
+  /** Offset just past `}}`. */
+  end: number;
+  /** The full matched span, e.g. `{{my field}}`. */
+  raw: string;
+  /** The (trimmed) inner text. */
+  inner: string;
+};
+
+/**
+ * Find every `{{...}}` span whose inner text is NOT a recognized directive —
+ * near-misses an author clearly meant as markers but that every recognizer
+ * skips, so they print literally at fill time (e.g. `{{my field}}` with a
+ * space, `{{@clause:}}` with no name). Offsets and raw text are shaped like
+ * {@link scanMarkers} results, minus the classified `meta`. This is the exact
+ * complement of {@link scanMarkers}: a span is in one list or the other.
+ */
+export const scanInvalidMarkers = (text: string): InvalidMarker[] => {
+  const re = markerPattern();
+  const out: InvalidMarker[] = [];
+  let match = re.exec(text);
+  while (match !== null) {
+    const inner = (match[1] ?? "").trim();
+    if (classifyMarker(inner) === null) {
+      out.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        raw: match[0],
+        inner,
       });
     }
     match = re.exec(text);

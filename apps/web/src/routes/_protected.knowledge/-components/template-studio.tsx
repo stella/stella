@@ -19,6 +19,7 @@ import {
   BookmarkIcon,
   BookmarkPlusIcon,
   BracesIcon,
+  CheckCircle2Icon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -32,11 +33,13 @@ import {
   Loader2Icon,
   MessageCircleQuestionIcon,
   PencilIcon,
+  PlayIcon,
   PlusIcon,
   RefreshCwIcon,
   RepeatIcon,
   SaveIcon,
   SigmaIcon,
+  SlashIcon,
   SplitIcon,
   Trash2Icon,
   UserIcon,
@@ -81,6 +84,7 @@ import type {
 } from "@stll/folio-react";
 import { displayLanguageName } from "@stll/locales";
 import {
+  isClauseSlotName,
   isFieldPath,
   isSafeFieldPath,
   renderDeterministicFieldValue,
@@ -140,6 +144,7 @@ import type {
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -157,6 +162,7 @@ import {
   toRuleFields,
 } from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
+import { TemplateCheckDialog } from "@/routes/_protected.knowledge/-components/template-check-dialog";
 import {
   OutdatedChanges,
   UnlinkButton,
@@ -193,6 +199,7 @@ import {
 import {
   clausesOptions as clauseLibraryOptions,
   knowledgeKeys,
+  templateCheckOptions,
   templateClausesOptions,
   templateClausePreviewOptions,
   templateDetailOptions,
@@ -655,6 +662,8 @@ export const TemplateStudioPage = ({
       save: async () => (await actionsRef.current?.save()) ?? false,
       renameFieldPath: (oldPath, newPath) =>
         actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
+      renameClauseSlot: (oldSlot, newSlot) =>
+        actionsRef.current?.renameClauseSlot(oldSlot, newSlot) ?? false,
       rewriteConditionExpr: (next) =>
         actionsRef.current?.rewriteConditionExpr(next) ?? false,
       wrapFieldInCondition: (path) =>
@@ -1126,18 +1135,24 @@ export const TemplateStudioPage = ({
     insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range, true);
   const insertClause = () => insertInline("{{@clause:Clause}}");
 
-  // A clause-slot name not already taken by another `{{@clause:...}}` marker in
-  // the document, so inserting two clauses never collides their slots.
+  // A clause-slot name not already taken by another `{{@clause:...}}` marker
+  // in the document, or claimed by a deferred slot rename: a pending step's
+  // fromSlot is absent from the document but still on the server row (or
+  // transiently claimed mid-replay), so linking a new clause under it would
+  // collide with the per-template unique-slot constraint at PUT time.
   const uniqueClauseSlotName = (base: string): string => {
     const view = editorViewRef.current;
     const seed = base === "" ? "clause" : base;
-    const taken = new Set(
-      view
+    const taken = new Set([
+      ...(view
         ? getTemplateDirectives(view.state)
             .filter((d) => d.kind === "clause")
             .map((d) => d.expr)
-        : [],
-    );
+        : []),
+      ...useTemplateStudioStore
+        .getState()
+        .pendingSlotRenames.flatMap((step) => [step.fromSlot, step.slotName]),
+    ]);
     let candidate = seed;
     for (let n = 2; taken.has(candidate); n++) {
       candidate = `${seed}_${n}`;
@@ -2063,6 +2078,14 @@ export const TemplateStudioPage = ({
     }
     setIsSaving(true);
     try {
+      // Snapshot the pending rename log BEFORE the bytes are produced: a
+      // rename made while the save is in flight is not represented in the
+      // saved DOCX, so flushing it would move the link row ahead of the
+      // stored markers. The log is replaced immutably on append, so this
+      // reference holds exactly the steps the saved bytes can contain; steps
+      // appended mid-save stay pending for the next save.
+      const pendingAtSave =
+        useTemplateStudioStore.getState().pendingSlotRenames;
       const bytes = await editor.save();
       if (!bytes) {
         stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
@@ -2094,10 +2117,92 @@ export const TemplateStudioPage = ({
 
       markSaved();
       stellaToast.add({ title: t("templates.templateSaved"), type: "success" });
+
+      // Flush deferred link-row slot renames now that the document (with its
+      // already-rewritten {{@clause:...}} markers) is persisted, so the row
+      // rename can never outlive an unsaved document edit. Only the
+      // pre-save snapshot flushes; the live log may have grown mid-save.
+      const { dropPendingSlotRenames } = useTemplateStudioStore.getState();
+      const pendingSlotRenames = pendingAtSave;
+      let slotRenameErrorMessage: string | null = null;
+      if (pendingSlotRenames.length > 0) {
+        // Flush SEQUENTIALLY by replaying the ordered step log in recorded (edit)
+        // order. A chained or cyclic reuse of a freed slot name — e.g. a swap
+        // (link1 A→C, link2 B→A, link1 C→B) — is only resolvable one step at a
+        // time: the collapsed final state can be an unresolvable single-pass
+        // order under the per-template unique-slot constraint, so we never
+        // collapse. Each step was already validated against the live document
+        // when recorded, so the log order is always replayable.
+        //
+        // On a hard failure STOP (do not skip ahead): a later step may depend on
+        // this one freeing its old slot name, so running it out of order would
+        // collide. The unresolved suffix stays pending for the next save's
+        // retry. A 404 is NOT a failure — the link (or template) is gone
+        // mid-session, so the rename target no longer exists and the step is
+        // obsolete: drop it and keep replaying.
+        const resolvedSteps: typeof pendingSlotRenames = [];
+        for (const step of pendingSlotRenames) {
+          // A rejected request (network drop) must land in the same retryable
+          // path as an error response: letting it escape to the outer catch
+          // after markSaved() would leave the pending steps stranded with the
+          // Save affordance (gated on isDirty) gone.
+          try {
+            // eslint-disable-next-line no-await-in-loop -- sequencing is the point: steps must replay in recorded order so each rename lands against the state the prior steps produced, respecting the unique-slot constraint.
+            const patched = await api
+              .templates({ templateId: toSafeId<"template">(templateId) })
+              .clauses({ linkId: toSafeId<"templateClause">(step.linkId) })
+              .patch({ slotName: step.slotName });
+            if (patched.error && patched.error.status !== 404) {
+              // Capture the first hard failure for a single toast, then stop:
+              // this step and everything after it stay pending for the next
+              // save.
+              slotRenameErrorMessage = userErrorMessage(
+                patched.error,
+                t("common.unexpectedError"),
+              );
+            }
+          } catch {
+            slotRenameErrorMessage = t("common.unexpectedError");
+          }
+          if (slotRenameErrorMessage !== null) {
+            break;
+          }
+          // Success, or an obsolete (404) step: either way this leading step is
+          // resolved and drops out of the log below.
+          resolvedSteps.push(step);
+        }
+        dropPendingSlotRenames(resolvedSteps);
+        if (slotRenameErrorMessage !== null) {
+          // Re-mark dirty so the Save affordance (gated on isDirty) stays live
+          // for the retry; the document itself already saved successfully.
+          markDirty();
+          stellaToast.add({
+            type: "error",
+            title: t("common.error"),
+            description: slotRenameErrorMessage,
+          });
+        }
+      }
+      // Steps appended while the save was in flight (their markers are not in
+      // the stored bytes) survive at the tail of the live log; markSaved()
+      // above would otherwise hide the Save affordance they need.
+      if (useTemplateStudioStore.getState().pendingSlotRenames.length > 0) {
+        markDirty();
+      }
+      // Invalidate the templates subtree (which nests the clauses, check, and
+      // preview keys) only AFTER the flush: refetching between the document
+      // POST and the link-row PATCHes would observe the intermediate state
+      // where the stored DOCX already carries the renamed {{@clause:...}}
+      // markers but template_clauses.slotName does not, showing a false
+      // check-badge mismatch.
       void queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
       });
-      return true;
+      // Report overall failure when a slot PATCH hard-failed: the document
+      // itself saved, but "Save and leave" must stay in the Studio so the
+      // still-pending steps (and their retry) are not discarded by the
+      // unmount's store reset.
+      return slotRenameErrorMessage === null;
     } catch {
       stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
       return false;
@@ -2580,6 +2685,50 @@ export const TemplateStudioPage = ({
         view.dispatch(tr);
       }
       useTemplateStudioStore.getState().renameField(oldPath, trimmed);
+      markDirty();
+      return true;
+    },
+    renameClauseSlot: (oldSlot, newSlot) => {
+      const view = editorViewRef.current;
+      const trimmed = newSlot.trim();
+      if (!view || trimmed === oldSlot || !isClauseSlotName(trimmed)) {
+        return false;
+      }
+      const clauseDirectives = getTemplateDirectives(view.state).filter(
+        (d) => d.kind === "clause",
+      );
+      // Reject a collision with a different slot already in the document.
+      if (
+        clauseDirectives.some((d) => d.expr !== oldSlot && d.expr === trimmed)
+      ) {
+        return false;
+      }
+      const targets = clauseDirectives.filter((d) => d.expr === oldSlot);
+      if (targets.length === 0) {
+        return false;
+      }
+      const tr = view.state.tr;
+      // Rewrite highest position first so earlier ranges stay valid as the
+      // transaction accumulates. Preserve each marker's version modifier.
+      for (const d of targets.toSorted((a, b) => b.from - a.from)) {
+        const marker =
+          d.clauseVersion === undefined
+            ? `{{@clause:${trimmed}}}`
+            : `{{@clause:${trimmed}:${d.clauseVersion}}}`;
+        tr.insertText(marker, d.from, d.to);
+      }
+      // Park the caret inside the first (lowest-position) rewritten marker so
+      // selection sync re-derives the clause face with the new slot name.
+      let firstFrom = Number.POSITIVE_INFINITY;
+      for (const target of targets) {
+        firstFrom = Math.min(firstFrom, target.from);
+      }
+      tr.setSelection(
+        TextSelection.near(
+          tr.doc.resolve(Math.min(firstFrom + 2, tr.doc.content.size)),
+        ),
+      );
+      view.dispatch(tr);
       markDirty();
       return true;
     },
@@ -4024,7 +4173,15 @@ function TemplateStudioInspectorView({
 }: InspectorViewRenderProps<TemplateStudioPayload>) {
   const t = useTranslations();
   const { templateId } = tab.payload;
-  const [facet, setFacet] = useState<StudioFacet>("fields");
+  // Fill performs real fills (and fill-to-matter writes), which the backend
+  // gates on template:use; without it the tab would be a form that can only
+  // fail at the last click.
+  const canUseTemplate = usePermissions({ template: ["use"] });
+  const [rawFacet, setFacet] = useState<StudioFacet>("fields");
+  const facet = !canUseTemplate && rawFacet === "fill" ? "fields" : rawFacet;
+  const visibleFacets = canUseTemplate
+    ? STUDIO_FACETS
+    : STUDIO_FACETS.filter((f) => f !== "fill");
   const [editReturnFacet, setEditReturnFacet] = useState<StudioFacet | null>(
     null,
   );
@@ -4089,7 +4246,7 @@ function TemplateStudioInspectorView({
     fields: t("templates.fields"),
     guidance: t("templates.whenToUse"),
     history: t("common.history"),
-    fill: t("templates.testFill"),
+    fill: t("templates.fill"),
   };
 
   // Leaving the field-settings face returns to wherever the edit was launched
@@ -4111,7 +4268,12 @@ function TemplateStudioInspectorView({
   return (
     <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
       <InspectorTabHeader
-        actions={<StudioSaveAction />}
+        actions={
+          <>
+            <StudioHealthBadge templateId={templateId} />
+            <StudioSaveAction />
+          </>
+        }
         label={tab.label}
         matter={
           languages.length > 0 ? (
@@ -4140,7 +4302,7 @@ function TemplateStudioInspectorView({
       />
       <FacetBar
         facet={facet}
-        facets={STUDIO_FACETS}
+        facets={visibleFacets}
         labels={facetLabels}
         onChange={(next) => {
           // Re-clicking Fields returns to the template overview.
@@ -4192,6 +4354,58 @@ function TemplateStudioInspectorView({
     </div>
   );
 }
+
+/**
+ * Ambient template-health indicator in the tab title row. Runs the pre-flight
+ * check as calm chrome (`useQuery`, never suspending): a subtle check when the
+ * template is clean, a tinted issue count when it is not. Clicking opens the
+ * full check dialog. The check query lives under the templates subtree, so the
+ * save handler's `templates.all` invalidation refetches it after every save.
+ */
+const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const organizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data } = useQuery(templateCheckOptions(organizationId, templateId));
+
+  // Nothing to show until the first result lands; keeps the row from flashing
+  // a placeholder state on cold mount.
+  if (!data) {
+    return null;
+  }
+
+  const issueCount = data.findings.length;
+  const hasErrors = data.findings.some(
+    (finding) => finding.severity === "error",
+  );
+
+  const badge = (
+    <Button
+      aria-label={t("templates.checkTemplate")}
+      className={cn(
+        issueCount === 0 && "text-success",
+        issueCount > 0 && !hasErrors && "text-warning-foreground",
+        hasErrors && "text-destructive",
+      )}
+      size="xs"
+      title={t("templates.checkTemplate")}
+      variant="ghost"
+    >
+      {issueCount === 0 ? (
+        <CheckCircle2Icon className="size-3.5" />
+      ) : (
+        <>
+          <AlertTriangleIcon className="size-3.5" />
+          {format.number(issueCount)}
+        </>
+      )}
+    </Button>
+  );
+
+  return <TemplateCheckDialog templateId={templateId} trigger={badge} />;
+};
 
 /** Save lives in the tab's title row; enabled only with unsaved edits. */
 const StudioSaveAction = () => {
@@ -4732,6 +4946,19 @@ const StudioPrimaryInsertButton = ({
   );
 };
 
+/** The effective (document-visible) slot name per link: the LAST recorded step
+ *  for each link in the pending-rename replay log wins, superseding the stale
+ *  server record. Derive once per render, then look up by link id. */
+const effectiveSlotByLink = (
+  pending: readonly { linkId: string; slotName: string }[],
+): Map<string, string> => {
+  const byLink = new Map<string, string>();
+  for (const step of pending) {
+    byLink.set(step.linkId, step.slotName);
+  }
+  return byLink;
+};
+
 /** Document actions row — rendered in the inspector tab's top area; the page
  *  registers the handlers + UI state in the session store. */
 const StudioInsertRow = () => {
@@ -4740,6 +4967,19 @@ const StudioInsertRow = () => {
   const fields = useTemplateStudioStore((s) => s.fields);
   const selected = useTemplateStudioStore((s) => s.selected);
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
+  const pendingSlotRenames = useTemplateStudioStore(
+    (s) => s.pendingSlotRenames,
+  );
+  const effectiveSlots = effectiveSlotByLink(pendingSlotRenames);
+  // Every deferred-rename target is spoken for until the next save flushes the
+  // log, so the link dialog must not offer these names for a new link row.
+  // Reserve both sides of every pending step: targets are about to be
+  // claimed, and sources (incl. mid-replay intermediates) stay claimed
+  // server-side until the flush lands.
+  const reservedSlotNames = pendingSlotRenames.flatMap((r) => [
+    r.fromSlot,
+    r.slotName,
+  ]);
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -4775,7 +5015,9 @@ const StudioInsertRow = () => {
               ? [
                   {
                     id: link.id,
-                    slotName: link.slotName,
+                    // A pending (unsaved) rename supersedes the server slot
+                    // name, so the menu inserts the marker the document uses.
+                    slotName: effectiveSlots.get(link.id) ?? link.slotName,
                     title: link.clause.title,
                   },
                 ]
@@ -4912,6 +5154,9 @@ const StudioInsertRow = () => {
           </MenuSub>
         </MenuPopup>
       </Menu>
+      <div className="ms-auto">
+        <StudioMarkerSyntaxPopover />
+      </div>
       {sessionTemplateId !== null && (
         <LinkClauseDialog
           onLinked={() => {
@@ -4928,6 +5173,7 @@ const StudioInsertRow = () => {
           }}
           onOpenChange={setLinkClauseOpen}
           open={linkClauseOpen}
+          reservedSlotNames={reservedSlotNames}
           templateId={sessionTemplateId}
         />
       )}
@@ -6209,19 +6455,75 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     activeOrganizationId,
     templateId ?? "",
   );
-  const { data: linksData } = useQuery({
+  const { data: linksData, status: linksStatus } = useQuery({
     ...clausesOptions,
     enabled: templateId !== null,
   });
+  // Only "success" means the link set is known. While pending (including the
+  // disabled state before templateId seeds) or errored, `link` stays undefined
+  // for want of data, not because the slot is genuinely unlinked; a rename
+  // must be held back rather than silently treated as unlinked.
+  const linksReady = linksStatus === "success";
+  const pendingSlotRenames = useTemplateStudioStore(
+    (s) => s.pendingSlotRenames,
+  );
+  const setPendingSlotRename = useTemplateStudioStore(
+    (s) => s.setPendingSlotRename,
+  );
+  const effectiveSlots = effectiveSlotByLink(pendingSlotRenames);
+  // Every deferred-rename target is spoken for until the next save flushes the
+  // log; reserve them so this face's "Link clause" dialog can't create a second
+  // row for a name a pending rename (including this face's own) is about to take.
+  // Reserve both sides of every pending step: targets are about to be
+  // claimed, and sources (incl. mid-replay intermediates) stay claimed
+  // server-side until the flush lands.
+  const reservedSlotNames = pendingSlotRenames.flatMap((r) => [
+    r.fromSlot,
+    r.slotName,
+  ]);
+  // Match by the link's effective slot name (the LAST pending step for the
+  // link, else the server record): a link with a pending (not-yet-flushed)
+  // rename matches its NEW name, not the stale one still on the server, so the
+  // face stays resolved to the same clause across a rename.
   const link =
     linksData && "links" in linksData
-      ? linksData.links.find((l) => l.slotName === selected.expr)
+      ? linksData.links.find(
+          (l) => (effectiveSlots.get(l.id) ?? l.slotName) === selected.expr,
+        )
       : undefined;
 
   const invalidateLinks = () => {
     void queryClient.invalidateQueries({
       queryKey: clausesOptions.queryKey,
     });
+  };
+
+  // Rename a clause slot. Rewrite the `{{@clause:...}}` document markers now
+  // (this marks the session dirty). When a clause is linked, the link row
+  // carries the slot name too, but that row rename is deferred to the save flow
+  // (see handleSave): recording it as a pending rename keeps the document edit
+  // and the row rename discardable together, so leaving without saving can never
+  // orphan the link against the stored document's old slot name.
+  const handleRename = (next: string): boolean => {
+    const trimmed = next.trim();
+    if (trimmed === selected.expr) {
+      return true;
+    }
+    // Defensive: the editor is read-only until the links resolve, but never
+    // rewrite the document while a linked-clause rename could go unrecorded.
+    if (!linksReady) {
+      return false;
+    }
+    if (!isClauseSlotName(trimmed)) {
+      return false;
+    }
+    const renamed = actions?.renameClauseSlot(selected.expr, trimmed) ?? false;
+    if (renamed && link !== undefined) {
+      // selected.expr is the marker's current (effective) name — the name this
+      // step renames away from, which stays claimed until the flush lands.
+      setPendingSlotRename(link.id, trimmed, selected.expr);
+    }
+    return renamed;
   };
 
   return (
@@ -6232,21 +6534,31 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
         title={t("templates.studio.scopeClause")}
       />
       <div className="flex flex-col gap-3 px-4 py-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs font-medium">
+            {t("clauses.slotName")}
+          </span>
+          <ClauseSlotEditor
+            disabled={!linksReady}
+            key={selected.expr}
+            onRename={handleRename}
+            slotName={selected.expr}
+          />
+        </div>
         <p className="text-muted-foreground text-xs leading-relaxed">
           {t("templates.studio.clauseSlotHelp")}
         </p>
-        {link === undefined ? (
+        {linksReady && link === undefined && (
           <p className="text-muted-foreground text-xs">
             {t("clauses.noLinkedClauses")}
           </p>
-        ) : (
-          templateId !== null && (
-            <LinkedClauseCard
-              link={link}
-              onChanged={invalidateLinks}
-              templateId={templateId}
-            />
-          )
+        )}
+        {link !== undefined && templateId !== null && (
+          <LinkedClauseCard
+            link={link}
+            onChanged={invalidateLinks}
+            templateId={templateId}
+          />
         )}
         <Button onClick={() => setLinkOpen(true)} size="sm" variant="outline">
           {t("clauses.linkClause")}
@@ -6258,6 +6570,7 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
           onLinked={invalidateLinks}
           onOpenChange={setLinkOpen}
           open={linkOpen}
+          reservedSlotNames={reservedSlotNames}
           templateId={templateId}
         />
       )}
@@ -6433,6 +6746,13 @@ const FieldNavigator = ({
       f.inputType !== "boolean" &&
       !fieldHasLoopBounds(f),
   );
+  // A blank template (no fields, conditions, or clause slots) has an empty
+  // outline and no fields, so show getting-started guidance instead of a bare
+  // empty list. Conditions are boolean fields, so `fields.length` covers them;
+  // clause slots and loops surface as outline nodes.
+  if (fields.length === 0 && outline.length === 0) {
+    return <StudioGettingStarted />;
+  }
   return (
     <div className="px-4 py-3">
       <ul className="flex flex-col">
@@ -6474,6 +6794,112 @@ const FieldNavigator = ({
         </div>
       )}
     </div>
+  );
+};
+
+/** Shown in the overview when the template has no fields, conditions, or clause
+ *  slots yet: three plain-language steps pointing at the selection popover, the
+ *  `/` menu, and the Fill tab. Disappears as soon as the first marker exists. */
+const StudioGettingStarted = () => {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-col gap-3 px-4 py-4">
+      <p className="text-muted-foreground text-xs font-medium">
+        {t("templates.studio.gettingStartedTitle")}
+      </p>
+      <ol className="flex flex-col gap-2.5">
+        <li className="flex items-start gap-2">
+          <WandSparklesIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+          <span className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.studio.gettingStartedField")}
+          </span>
+        </li>
+        <li className="flex items-start gap-2">
+          <SlashIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+          <span className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.studio.gettingStartedSlash")}
+          </span>
+        </li>
+        <li className="flex items-start gap-2">
+          <PlayIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+          <span className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.studio.gettingStartedFill")}
+          </span>
+        </li>
+      </ol>
+    </div>
+  );
+};
+
+/** Marker syntax reference popover: each marker kind's literal grammar (kept in
+ *  code, never translated) beside a one-line translated description. Reuses the
+ *  concept captions for the four primary kinds and adds numbering/loop tokens.
+ *  The literals live here rather than in i18n to avoid ICU brace escaping. */
+const StudioMarkerSyntaxPopover = () => {
+  const t = useTranslations();
+  // `as const satisfies` instead of a `TranslationKey` annotation: widening
+  // to the full union (whose ICU-variable members make t() demand a values
+  // argument) breaks the plain t(key) calls below. The literal keys stay
+  // narrow this way while still being checked against the union.
+  const markers = [
+    { syntax: "{{field.path}}", description: "templates.studio.conceptField" },
+    {
+      syntax: "{{#if …}}…{{/if}}",
+      description: "templates.studio.conceptCondition",
+    },
+    {
+      syntax: "{{#each …}}…{{/each}}",
+      description: "templates.studio.conceptLoop",
+    },
+    {
+      syntax: "{{@clause:Name}}",
+      description: "templates.studio.conceptClause",
+    },
+    { syntax: "{{@num:Key}}", description: "templates.studio.markerNum" },
+    { syntax: "{{@ref:Key}}", description: "templates.studio.markerRef" },
+    { syntax: "{{@index}}", description: "templates.studio.markerIndex" },
+    { syntax: "{{@count}}", description: "templates.studio.markerCount" },
+  ] as const satisfies readonly {
+    syntax: string;
+    description: TranslationKey;
+  }[];
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            aria-label={t("templates.studio.markerSyntaxTitle")}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <CircleHelpIcon />
+          </Button>
+        }
+      />
+      <PopoverPopup className="w-80 p-3">
+        <p className="mb-2 text-xs font-medium">
+          {t("templates.studio.markerSyntaxTitle")}
+        </p>
+        <ul className="flex flex-col gap-1.5">
+          {markers.map((marker) => (
+            <li className="flex flex-col gap-0.5" key={marker.syntax}>
+              <code
+                className="bg-muted text-foreground w-fit rounded px-1 py-0.5 text-xs"
+                dir="ltr"
+              >
+                {marker.syntax}
+              </code>
+              <span className="text-muted-foreground text-xs leading-relaxed">
+                {t(marker.description)}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-muted-foreground mt-2 border-t pt-2 text-xs leading-relaxed">
+          {t("templates.studio.markerSyntaxNote")}
+        </p>
+      </PopoverPopup>
+    </Popover>
   );
 };
 
@@ -7619,6 +8045,88 @@ const SaveRecipeDialog = ({
         </DialogFooter>
       </DialogPopup>
     </Dialog>
+  );
+};
+
+/** Click-to-edit clause slot name: rewrites the `{{@clause:name}}` markers in
+ *  the document. When a clause is linked, `onRename` also records a deferred
+ *  rename of the stored `slotName` link row, flushed on the next template save
+ *  (see {@link ClauseFace}); it returns `false` only when the new name is
+ *  rejected as invalid. */
+const ClauseSlotEditor = ({
+  slotName,
+  onRename,
+  disabled = false,
+}: {
+  slotName: string;
+  onRename: (next: string) => boolean | Promise<boolean>;
+  /** Read-only while the link query is still resolving: a rename in that window
+   *  cannot know whether the slot is linked, so it would rewrite the document
+   *  without recording the deferred link-row rename (see {@link ClauseFace}). */
+  disabled?: boolean;
+}) => {
+  const t = useTranslations();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(slotName);
+
+  if (disabled) {
+    // Non-interactive presentation: same slot-name display, no edit affordance.
+    return (
+      <div className="text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 px-1 py-0.5">
+        <code className="truncate text-xs" dir="auto" title={slotName}>
+          {slotName}
+        </code>
+      </div>
+    );
+  }
+
+  const commit = async () => {
+    if (value.trim() === slotName) {
+      setEditing(false);
+      return;
+    }
+    if (await onRename(value)) {
+      setEditing(false);
+      return;
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("clauses.renameSlotInvalid"),
+    });
+  };
+
+  if (!editing) {
+    return (
+      <button
+        className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+        onClick={() => setEditing(true)}
+        title={t("clauses.renameSlot")}
+        type="button"
+      >
+        <code className="truncate text-xs" dir="auto" title={slotName}>
+          {slotName}
+        </code>
+        <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  }
+  return (
+    <Input
+      autoFocus
+      className="h-7 font-mono text-xs"
+      onBlur={() => void commit()}
+      onChange={(e) => setValue(e.currentTarget.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          void commit();
+        }
+        if (e.key === "Escape") {
+          setValue(slotName);
+          setEditing(false);
+        }
+      }}
+      value={value}
+    />
   );
 };
 

@@ -51,6 +51,11 @@ type LinkClauseDialogProps = {
   onLinked: () => void;
   /** Preselect this slot (e.g. opened from the slot's inspector face). */
   defaultSlotName?: string | undefined;
+  /** Slot names already claimed by a not-yet-saved (deferred) link-row rename.
+   *  The server still records the old name, so these slots look free in the
+   *  links query; treat them as taken so a second link row can't be created
+   *  for a name a pending rename is about to occupy. */
+  reservedSlotNames: readonly string[];
 };
 
 // Select values for the slot picker. Discovered slot names are
@@ -70,6 +75,7 @@ export const LinkClauseDialog = ({
   templateId,
   onLinked,
   defaultSlotName,
+  reservedSlotNames,
 }: LinkClauseDialogProps) => {
   const t = useTranslations();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -116,13 +122,18 @@ export const LinkClauseDialog = ({
 
   const discoveredSlots =
     previewData && "clauseSlots" in previewData ? previewData.clauseSlots : [];
-  const takenSlots = new Set(
-    linksData && "links" in linksData
+  // A slot is unavailable if a saved link already carries it OR a deferred
+  // rename is about to claim it. Both read the same to the author (the slot is
+  // spoken for), so they share the "already linked" presentation and block a
+  // second link row for the same name.
+  const takenSlots = new Set([
+    ...(linksData && "links" in linksData
       ? linksData.links.flatMap((link) =>
           link.slotName === null ? [] : [link.slotName],
         )
-      : [],
-  );
+      : []),
+    ...reservedSlotNames,
+  ]);
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- resets the slot draft on close and seeds a default slot once the preview/links queries land while open; setSlotValue/setCustomSlotName are also driven by user selection so this is not pure derived state, and the dialog stays mounted (open is controlled) so a key reset cannot replace it
   useEffect(() => {
@@ -132,7 +143,12 @@ export const LinkClauseDialog = ({
       setCustomSlotName("");
       return;
     }
-    if (slotValue === null && defaultSlotName !== undefined) {
+    const reserved = new Set(reservedSlotNames);
+    if (
+      slotValue === null &&
+      defaultSlotName !== undefined &&
+      !reserved.has(defaultSlotName)
+    ) {
       setSlotValue(SLOT_VALUE_PREFIX + defaultSlotName);
       return;
     }
@@ -140,20 +156,28 @@ export const LinkClauseDialog = ({
       return;
     }
     const slots = "clauseSlots" in previewData ? previewData.clauseSlots : [];
-    const taken = new Set(
-      linksData && "links" in linksData
+    const taken = new Set([
+      ...(linksData && "links" in linksData
         ? linksData.links.flatMap((link) =>
             link.slotName === null ? [] : [link.slotName],
           )
-        : [],
-    );
+        : []),
+      ...reserved,
+    ]);
     const firstUnfilled = slots.find((slot) => !taken.has(slot));
     setSlotValue(
       firstUnfilled === undefined
         ? SLOT_VALUE_NONE
         : SLOT_VALUE_PREFIX + firstUnfilled,
     );
-  }, [open, slotValue, previewData, linksData, defaultSlotName]);
+  }, [
+    open,
+    slotValue,
+    previewData,
+    linksData,
+    defaultSlotName,
+    reservedSlotNames,
+  ]);
 
   const categories =
     catData && "categories" in catData ? catData.categories : [];
@@ -205,10 +229,17 @@ export const LinkClauseDialog = ({
     return undefined;
   };
 
+  // Whether the chosen slot name is already spoken for (a saved link or a
+  // deferred rename). Discovered options are disabled, but a preselected
+  // default or a hand-typed custom name can still resolve to a taken slot.
+  const resolvedSlotName = resolveSlotName();
+  const slotUnavailable =
+    resolvedSlotName !== undefined && takenSlots.has(resolvedSlotName);
+
   // No useCallback: React Compiler handles memoization, and the
   // closure depends on half the dialog state anyway.
   const handleLink = async () => {
-    if (!selectedClauseId) {
+    if (!selectedClauseId || slotUnavailable) {
       return;
     }
 
@@ -394,6 +425,9 @@ export const LinkClauseDialog = ({
 
           <div className="grid gap-1">
             <span className="text-sm font-medium">{t("clauses.slotName")}</span>
+            <p className="text-muted-foreground text-xs">
+              {t("clauses.slotHelp")}
+            </p>
             <Select
               onValueChange={(value: string | null) =>
                 setSlotValue(value ?? SLOT_VALUE_NONE)
@@ -425,12 +459,21 @@ export const LinkClauseDialog = ({
               </SelectPopup>
             </Select>
             {slotValue === SLOT_VALUE_CUSTOM && (
-              <Input
-                aria-label={t("clauses.slotName")}
-                onChange={(e) => setCustomSlotName(e.target.value)}
-                placeholder={t("clauses.slotNamePlaceholder")}
-                value={customSlotName}
-              />
+              <>
+                <Input
+                  aria-label={t("clauses.slotName")}
+                  onChange={(e) => setCustomSlotName(e.target.value)}
+                  placeholder={t("clauses.slotNamePlaceholder")}
+                  value={customSlotName}
+                />
+                {/* slotUnavailable is an aliased condition, so its truth
+                    already narrows resolvedSlotName to string here. */}
+                {slotUnavailable && (
+                  <p className="text-destructive text-xs">
+                    {t("clauses.slotTaken", { slot: resolvedSlotName })}
+                  </p>
+                )}
+              </>
             )}
           </div>
         </DialogPanel>
@@ -439,7 +482,7 @@ export const LinkClauseDialog = ({
             {t("common.cancel")}
           </DialogClose>
           <Button
-            disabled={linking || !selectedClauseId}
+            disabled={linking || !selectedClauseId || slotUnavailable}
             onClick={() => {
               void handleLink();
             }}

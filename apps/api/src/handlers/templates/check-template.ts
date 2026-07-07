@@ -7,6 +7,7 @@
  */
 
 import type { NamedCondition } from "@stll/template-conditions";
+import { scanInvalidMarkers } from "@stll/template-conditions";
 
 import type { ClauseSlot } from "@/api/handlers/docx/discover-clause-slots";
 import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
@@ -42,6 +43,13 @@ export type TemplateCheckFinding =
       severity: "error";
       conditionName: string;
       reference: string;
+    }
+  | {
+      code: "invalidMarker";
+      severity: "error";
+      /** The full `{{...}}` span, e.g. `{{my field}}`. */
+      marker: string;
+      paragraphIndex: number;
     };
 
 /** Hard cap so a pathological template cannot produce an unbounded payload. */
@@ -115,6 +123,8 @@ type BuildTemplateCheckFindingsOptions = {
   manifest: TemplateManifest | null;
   clauseSlots: readonly ClauseSlot[];
   clauseLinks: readonly TemplateCheckClauseLink[];
+  /** Document paragraph text (body + headers/footers), in extraction order. */
+  paragraphs: readonly string[];
 };
 
 const rootOf = (path: string): string => path.split(".")[0] ?? path;
@@ -130,6 +140,37 @@ const structureFindings = (
     directive: err.directive,
     paragraphIndex: err.paragraphIndex,
   }));
+
+// `markerPattern()` accepts any non-brace run until the closing `}}`, so a
+// pasted pathological span can be arbitrarily long; echo at most this much of
+// it back in the finding (enough for the author to recognize the culprit) so
+// the check payload stays bounded even at MAX_CHECK_FINDINGS.
+const INVALID_MARKER_EXCERPT_LENGTH = 80;
+
+// Near-miss markers: `{{...}}` spans an author clearly meant as markers but
+// that no recognizer sees (a space in the name, an empty directive), so they
+// print literally at fill time. Scanned over paragraph text since discovery
+// only surfaces recognized placeholders.
+const invalidMarkerFindings = (
+  paragraphs: readonly string[],
+): TemplateCheckFinding[] => {
+  const findings: TemplateCheckFinding[] = [];
+  for (const [paragraphIndex, text] of paragraphs.entries()) {
+    for (const invalid of scanInvalidMarkers(text)) {
+      const marker =
+        invalid.raw.length > INVALID_MARKER_EXCERPT_LENGTH
+          ? `${invalid.raw.slice(0, INVALID_MARKER_EXCERPT_LENGTH - 1)}…`
+          : invalid.raw;
+      findings.push({
+        code: "invalidMarker",
+        severity: "error",
+        marker,
+        paragraphIndex,
+      });
+    }
+  }
+  return findings;
+};
 
 type MarkerCoverageOptions = {
   markerNames: readonly string[];
@@ -349,6 +390,7 @@ export const buildTemplateCheckFindings = ({
   manifest,
   clauseSlots,
   clauseLinks,
+  paragraphs,
 }: BuildTemplateCheckFindingsOptions): TemplateCheckFinding[] => {
   const manifestFields = manifest?.fields ?? [];
   // @-prefixed markers (clause slots, numbering) are already excluded by
@@ -357,6 +399,7 @@ export const buildTemplateCheckFindings = ({
 
   const findings: TemplateCheckFinding[] = [
     ...structureFindings(discovered),
+    ...invalidMarkerFindings(paragraphs),
     ...markerCoverageFindings({ markerNames, manifestFields }),
     ...clauseSlotFindings({ clauseSlots, clauseLinks }),
     ...fieldMetadataFindings(manifestFields),

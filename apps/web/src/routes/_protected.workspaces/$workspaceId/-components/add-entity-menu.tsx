@@ -20,6 +20,7 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { NewDocumentFromTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog";
@@ -82,6 +83,7 @@ export const AddEntityMenu = ({
     select: (data) => data.some((p) => p.content.type === "file"),
   });
   const createEntities = useCreateEntities();
+  const canUseTemplate = usePermissions({ template: ["use"] });
   const t = useTranslations();
 
   if (isEntitiesLimitReached) {
@@ -203,13 +205,15 @@ export const AddEntityMenu = ({
                 <UploadIcon />
                 {t("common.uploadFiles")}
               </MenuItem>
-              <MenuItem
-                disabled={isWorkflowRunning}
-                onClick={() => setTemplateDialogOpen(true)}
-              >
-                <LayoutTemplateIcon />
-                {t("templates.newFromTemplate")}
-              </MenuItem>
+              {canUseTemplate && (
+                <MenuItem
+                  disabled={isWorkflowRunning}
+                  onClick={() => setTemplateDialogOpen(true)}
+                >
+                  <LayoutTemplateIcon />
+                  {t("templates.newFromTemplate")}
+                </MenuItem>
+              )}
               <MenuSeparator />
             </>
           )}
@@ -233,12 +237,14 @@ export const AddEntityMenu = ({
         </MenuPopup>
       </Menu>
       {fileInput}
-      <NewDocumentFromTemplateDialog
-        onOpenChange={setTemplateDialogOpen}
-        open={templateDialogOpen}
-        parentId={parentId}
-        workspaceId={workspaceId}
-      />
+      {canUseTemplate && (
+        <NewDocumentFromTemplateDialog
+          onOpenChange={setTemplateDialogOpen}
+          open={templateDialogOpen}
+          parentId={parentId}
+          workspaceId={workspaceId}
+        />
+      )}
     </>
   );
 };

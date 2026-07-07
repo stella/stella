@@ -75,6 +75,7 @@ const checkDocument = async ({
     manifest,
     clauseSlots,
     clauseLinks,
+    paragraphs,
   });
 };
 
@@ -111,6 +112,50 @@ describe("template check: structure errors", () => {
     });
 
     expect(codesOf(findings)).not.toContain("structureError");
+  });
+});
+
+// ── Invalid (near-miss) markers ──────────────────────────
+
+describe("template check: invalid markers", () => {
+  test("flags a near-miss marker that no recognizer sees", async () => {
+    const findings = await checkDocument({
+      paragraphs: ["Signed by {{my name}} on {{date}}"],
+      manifest: { ...emptyManifest, fields: [field("date")] },
+    });
+
+    const invalid = findings.filter((f) => f.code === "invalidMarker");
+    expect(invalid).toHaveLength(1);
+    expect(invalid[0]).toMatchObject({
+      code: "invalidMarker",
+      severity: "error",
+      marker: "{{my name}}",
+      paragraphIndex: 0,
+    });
+  });
+
+  test("recognized markers produce no invalidMarker finding", async () => {
+    const findings = await checkDocument({
+      paragraphs: ["{{@clause:NDA}} {{date}} {{#if x}}{{/if}}"],
+      manifest: { ...emptyManifest, fields: [field("date")] },
+    });
+
+    expect(codesOf(findings)).not.toContain("invalidMarker");
+  });
+
+  test("truncates a pathological marker span to a bounded excerpt", async () => {
+    const findings = await checkDocument({
+      paragraphs: [`{{${"pasted text ".repeat(500)}}}`],
+    });
+
+    const invalid = findings.filter((f) => f.code === "invalidMarker");
+    expect(invalid).toHaveLength(1);
+    const finding = invalid[0];
+    if (finding?.code !== "invalidMarker") {
+      throw new Error("expected an invalidMarker finding");
+    }
+    expect(finding.marker.length).toBe(80);
+    expect(finding.marker.endsWith("…")).toBe(true);
   });
 });
 
@@ -482,6 +527,7 @@ describe("template check: bounds", () => {
       manifest,
       clauseSlots,
       clauseLinks: [],
+      paragraphs: ["Client: {{clientName}}"],
     });
 
     expect(findings).toEqual([
