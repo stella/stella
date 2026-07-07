@@ -256,10 +256,13 @@ export const dbQueryAllowance = (budget: number): number =>
 
 const requestCountBudget = (
   entry: NetworkBaselineEntry,
-): Record<string, number> => ({
-  ...Object.fromEntries(entry.requests.map((key) => [key, 1])),
-  ...(entry.requestCounts ?? {}),
-});
+): Record<string, number> => {
+  const budget = Object.fromEntries(entry.requests.map((key) => [key, 1]));
+  if (entry.requestCounts === undefined) {
+    return budget;
+  }
+  return { ...budget, ...entry.requestCounts };
+};
 
 // The guard is deliberately one-directional: it only fails when a route grows a
 // NEW request or a DEEPER waterfall. A request that disappears or a shallower
@@ -380,11 +383,40 @@ const readNetworkBaseline = (): NetworkBaseline | null => {
   if (!existsSync(BASELINE_PATH)) {
     return null;
   }
-  const parsed: NetworkBaseline = JSON.parse(
-    readFileSync(BASELINE_PATH, "utf-8"),
-  );
+  const parsed: unknown = JSON.parse(readFileSync(BASELINE_PATH, "utf-8"));
+  if (!isNetworkBaseline(parsed)) {
+    throw new Error(`Invalid network baseline shape in ${BASELINE_RELATIVE}`);
+  }
   return parsed;
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
+
+const isNumberRecord = (value: unknown): value is Record<string, number> =>
+  isRecord(value) &&
+  Object.values(value).every((item) => typeof item === "number");
+
+const isNetworkBaselineEntry = (
+  value: unknown,
+): value is NetworkBaselineEntry => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value.depth === "number" &&
+    isStringArray(value.requests) &&
+    (value.requestCounts === undefined ||
+      isNumberRecord(value.requestCounts)) &&
+    (value.dbQueries === undefined || isNumberRecord(value.dbQueries))
+  );
+};
+
+const isNetworkBaseline = (value: unknown): value is NetworkBaseline =>
+  isRecord(value) && Object.values(value).every(isNetworkBaselineEntry);
 
 // Some requests are timing-conditional: they fire only when an idle prefetch
 // lands inside the route's settle window (e.g. a views warmup racing a 250ms
@@ -405,6 +437,7 @@ export const mergeNetworkBaseline = (
       continue;
     }
     const previous = existing?.[route];
+    const previousRequests = previous?.requests ?? [];
     const requestCounts: Record<string, number> = {};
     for (const source of [
       previous ? requestCountBudget(previous) : {},
@@ -422,9 +455,7 @@ export const mergeNetworkBaseline = (
     }
     merged[route] = {
       depth: Math.max(metrics.depth, previous?.depth ?? 0),
-      requests: [
-        ...new Set([...metrics.requests, ...(previous?.requests ?? [])]),
-      ].sort(),
+      requests: [...new Set([...metrics.requests, ...previousRequests])].sort(),
       requestCounts: Object.fromEntries(
         Object.entries(requestCounts).sort(([a], [b]) => a.localeCompare(b)),
       ),
