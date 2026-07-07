@@ -466,7 +466,9 @@ export const LinkClauseDialog = ({
                   placeholder={t("clauses.slotNamePlaceholder")}
                   value={customSlotName}
                 />
-                {slotUnavailable && resolvedSlotName !== undefined && (
+                {/* slotUnavailable is an aliased condition, so its truth
+                    already narrows resolvedSlotName to string here. */}
+                {slotUnavailable && (
                   <p className="text-destructive text-xs">
                     {t("clauses.slotTaken", { slot: resolvedSlotName })}
                   </p>
