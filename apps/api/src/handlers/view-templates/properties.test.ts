@@ -12,6 +12,7 @@ import type { ViewLayout, ViewTemplateProperty } from "@/api/lib/views-schema";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const workspaceId = toSafeId<"workspace">("workspace_1");
+const DOCUMENT_TYPE_CLASSIFIER_ROLE = "document-type-classifier";
 const noopAuditRecorder: AuditRecorder = async () => {
   await Promise.resolve();
 };
@@ -245,23 +246,25 @@ describe("collectTemplateProperties", () => {
   });
 
   test("preserves structural roles when exporting template columns", () => {
+    const content = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const tool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "Classify the document type.",
+    } satisfies ViewTemplateProperty["tool"];
     const classifier = {
       id: "document_type",
       name: "Type de document",
-      content: {
-        version: 1,
-        type: "single-select",
-        options: [{ color: "blue", value: "Contract" }],
-        fallback: null,
-      },
-      tool: {
-        version: 1,
-        type: "ai-model",
-        prompt: "Classify the document type.",
-      },
+      content,
+      tool,
       system: false,
-      role: "document-type-classifier",
-    } as const;
+      role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+    };
 
     const templateProperties = collectTemplateProperties({
       layout: tableLayout(classifier.id),
@@ -272,7 +275,7 @@ describe("collectTemplateProperties", () => {
     expect(templateProperties).toEqual([
       expect.objectContaining({
         sourceId: classifier.id,
-        role: "document-type-classifier",
+        role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
       }),
     ]);
   });
@@ -548,12 +551,12 @@ describe("resolveTemplateProperties", () => {
       type: "single-select",
       options: [{ color: "blue", value: "Contract" }],
       fallback: null,
-    } as const;
+    } satisfies ViewTemplateProperty["content"];
     const tool = {
       version: 1,
       type: "ai-model",
       prompt: "Classify the document type.",
-    } as const;
+    } satisfies ViewTemplateProperty["tool"];
     const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx({
       id: "existing_property",
       name: "Type de document",
@@ -567,7 +570,7 @@ describe("resolveTemplateProperties", () => {
       name: "Type de document",
       content,
       tool,
-      role: "document-type-classifier",
+      role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
       createIfMissing: true,
     } satisfies ViewTemplateProperty;
 
@@ -584,7 +587,7 @@ describe("resolveTemplateProperties", () => {
     expect(returningMock).toHaveBeenCalledTimes(1);
     expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
-        role: "document-type-classifier",
+        role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
       }),
     );
   });
