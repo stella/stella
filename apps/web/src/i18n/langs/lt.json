@@ -1520,58 +1520,107 @@
       "whatIsAnMcpServer": "Kas yra MCP serveris?"
     },
     "playbooks": {
-      "addFallback": "Pridėti alternatyvą",
+      "addCheck": "Pridėti patikrą",
+      "addExtractPosition": "Tik ištraukti",
+      "addExtractPositionHint": "Užfiksuoja reikšmę, be vertinimo",
+      "addGradedPosition": "Įvertinama pozicija",
+      "addGradedPositionHint": "Pakopinės taisyklės su išvada",
+      "addOption": "Pridėti parinktį",
       "addPosition": "Pridėti poziciją",
-      "ask": "Užklausa",
+      "addRule": "Taisyklė",
+      "advanced": "Išplėstinis",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Atsakymo tipas",
       "askQuestionLabel": "Klausimas",
       "askQuestionPlaceholder": "Ką turėtume nuskaityti iš kiekvieno dokumento? Palikite tuščią, jei norite įvesti rankiniu būdu.",
-      "clauseLabel": "Sąlyga",
+      "check": "Patikra",
+      "checkHint": "Vertinkite pagal determinuotą taisyklę, o ne DI.",
+      "checkKind": {
+        "constraint": "Reikšmės apribojimas",
+        "presence": "Buvimas"
+      },
       "clausePlaceholder": "Ieškoti sąlygų…",
-      "clauseRequired": "Pasirinkite sąlygą kiekvienam sąlygomis pagrįstam standartui.",
       "clauseSearchEmpty": "Sąlygų nerasta",
-      "conditionPlaceholder": "Sukonfigūruokite šį apribojimą vėlesniame žingsnyje.",
+      "collapsePosition": "Suskleisti poziciją",
       "confirmDelete": "Tai visam laikui ištrins peržiūros vadovą.",
       "contentType": {
         "int": "Skaičius",
         "singleSelect": "Vienas pasirinkimas",
         "text": "Tekstas"
       },
+      "convertToExtract": "Konvertuoti į tik ištraukimą",
+      "convertToExtractDescription": "Tai pašalins šios pozicijos pakopų sistemą ir vertinimą. Šio veiksmo atšaukti negalima.",
+      "convertToExtractTitle": "Konvertuoti į tik ištraukimą?",
+      "convertToGraded": "Konvertuoti į įvertinamą",
       "createPlaybook": "Naujas peržiūros vadovas",
       "created": "Peržiūros vadovas sukurtas",
       "deleteFailed": "Nepavyko ištrinti peržiūros vadovo",
       "deletePlaybook": "Ištrinti peržiūros vadovą",
+      "deletePosition": "Ištrinti poziciją",
       "deleted": "Peržiūros vadovas ištrintas",
+      "derivedAutomatically": "Klausimas ir atsakymo tipas išvedami automatiškai, kai išsaugote.",
+      "derivedQuestion": "Išvestas klausimas",
+      "derivedType": "Išvestas tipas",
       "descriptionPlaceholder": "Ką tikrina šis peržiūros vadovas?",
+      "disabledBadge": "Išjungta — praleidžiama peržiūrose",
+      "duplicatePosition": "Dubliuoti poziciją",
       "empty": "Peržiūros vadovų dar nėra",
       "emptyDescription": "Sukurkite peržiūros vadovą, kad galėtumėte tikrinti dokumentus pagal savo standartus.",
-      "expect": "Tikėtina",
-      "expectSourceLabel": "Standartas",
+      "enablePosition": "Įjungti poziciją",
+      "entryLabelPlaceholder": "Žymė (neprivaloma)",
+      "entryPlaceholder": "Priimtina alternatyvi formuluotė",
+      "entryRank": "#{index}",
+      "expandPosition": "Išskleisti poziciją",
       "expectation": {
         "restricted": "Draudžiama"
       },
-      "expectationLabel": "Lūkestis",
-      "fallbackLabelPlaceholder": "Žymė (neprivaloma)",
-      "fallbackTextPlaceholder": "Priimtina alternatyvi formuluotė",
-      "fallbacksLabel": "Alternatyvos",
-      "grade": "Vertinimas",
-      "gradeRuleLabel": "Taisyklė",
+      "extractOnlyBadge": "Tik ištraukti",
+      "extractOnlyDescription": "Be vertinimo — reikšmė užfiksuojama lentelėje.",
+      "extraction": "Ištraukimas",
+      "extractionAuto": "Automatiškai",
+      "extractionManual": "Rankiniu būdu",
+      "fixErrorsBeforeSaving": "Prieš išsaugodami ištaisykite paryškintus laukus.",
+      "gradedNeedsContent": "Pridėkite bent vieną taisyklę, alternatyvų įrašą arba idealią formuluotę.",
       "guidanceLabel": "Gairės",
       "guidancePlaceholder": "Pastabos vertintojams (neprivaloma)",
+      "idealFromClause": "Iš sąlygų bibliotekos",
+      "idealInline": "Įvestas tekstas",
+      "idealInlinePlaceholder": "Įklijuokite idealią formuluotę…",
+      "idealLanguage": "Ideali formuluotė",
       "issueLabel": "Tema",
       "issuePlaceholder": "pvz., Atsakomybės ribojimas",
       "loadFailed": "Nepavyko įkelti peržiūros vadovų",
       "loading": "Įkeliami peržiūros vadovai…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "pvz., NDA peržiūra",
       "nameRequired": "Pridėkite pavadinimą.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Pozicijų dar nėra. Pridėkite pirmąją.",
+      "optionPlaceholder": "Parinkties reikšmė",
       "optionsLabel": "Parinktys",
-      "optionsPlaceholder": "Po vieną parinktį eilutėje",
-      "positionIssueRequired": "Kiekvienai pozicijai reikia temos.",
-      "positionLabel": "Pozicija {index}",
+      "outline": "Struktūra",
+      "positionOfTotal": "Pozicija {index} iš {total}",
       "positions": "Pozicijos",
-      "preferredLabel": "Pageidaujama formuluotė",
-      "preferredPlaceholder": "Pageidaujama formuluotė",
+      "redLinePlaceholder": "Formuluotė, kuri niekada nėra priimtina",
+      "removeCheck": "Pašalinti patikrą",
+      "removeIdeal": "Pašalinti idealią formuluotę",
+      "reorderPosition": "Pertvarkyti poziciją",
       "review": {
         "changePlaybook": "Pasirinkti kitą peržiūros vadovą",
         "extractedLabel": "Rasta:",
@@ -1581,6 +1630,7 @@
         "insertFailed": "Nepavyko įterpti pageidaujamos sąlygos",
         "insertPreferred": "Įterpti pageidaujamą sąlygą",
         "launcherDescription": "Patikrinkite šį dokumentą pagal organizacijos peržiūros vadovą ir gaukite išvadas tiesiog tekste.",
+        "matchedFallback": "Atitinkanti alternatyva:",
         "noFindings": "Problemų nerasta",
         "playbookLabel": "Peržiūros vadovas",
         "playbookPlaceholder": "Pasirinkite peržiūros vadovą",
@@ -1591,14 +1641,23 @@
         "reviewingHint": "Dideliems peržiūros vadovams tai gali užtrukti kelias minutes.",
         "run": "Peržiūrėti",
         "scrollToChange": "Eiti į pakeitimą",
-        "viewClause": "Žiūrėti sąlygą"
+        "viewClause": "Žiūrėti sąlygą",
+        "violatedRedLine": "Pažeista raudona linija:"
       },
-      "rule": {
-        "extractOnly": "Tik ištraukti",
-        "positionMatch": "Pozicijos atitiktis",
-        "presence": "Buvimas",
-        "propertyConstraint": "Reikšmės apribojimas"
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
       },
+      "ruleNumber": "Taisyklė {index}",
+      "rulePlaceholder": "Paprasta kalba suformuluota taisyklė",
       "saveFailed": "Nepavyko išsaugoti peržiūros vadovo",
       "severity": {
         "blocker": "Blokuojanti",
@@ -1607,17 +1666,34 @@
         "medium": "Vidutinė"
       },
       "severityLabel": "Svarba",
-      "source": {
-        "clause": "Sąlygų biblioteka",
-        "inline": "Įvestas tekstas",
-        "none": "Nėra standarto"
+      "starters": {
+        "addedToast": "Playbook added",
+        "browseButton": "Browse starter playbooks",
+        "positionCount": "{count, plural, one {# position} other {# positions}}",
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
+        "title": "Starter playbooks"
       },
+      "switchToAuto": "Grįžti į automatinį režimą",
+      "switchToManual": "Perjungti į rankinį režimą",
+      "tier": {
+        "acceptable": "Priimtina",
+        "fallback": "Alternatyva",
+        "notAcceptable": "Nepriimtina"
+      },
+      "untitledPosition": "Pozicija be pavadinimo",
       "updated": "Peržiūros vadovas atnaujintas",
       "verdict": {
         "compliant": "Atitinka",
         "deviation": "Nukrypimas",
         "fallback": "Alternatyva",
         "missing": "Trūksta"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {
@@ -2043,6 +2119,14 @@
         "labelPickerPlaceholder": "Tipas",
         "termAddedToast": "„{value}“ pridėtas į komandos sąrašą.",
         "title": "Anonimizavimas"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",

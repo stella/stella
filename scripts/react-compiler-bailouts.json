@@ -73,6 +73,7 @@
   "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon.tsx": 0,
   "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx": 0,
   "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx": 4,
+  "apps/web/src/routes/_protected.knowledge/-components/playbook-types.ts": 0,
   "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx": 3,
   "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 11,
   "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx": 1,

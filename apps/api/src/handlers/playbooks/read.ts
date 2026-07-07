@@ -100,6 +100,7 @@ export const listPlaybookDefinitionsHandler = async function* ({
           id: playbookDefinitions.id,
           name: playbookDefinitions.name,
           description: playbookDefinitions.description,
+          status: playbookDefinitions.status,
           createdAt: playbookDefinitions.createdAt,
           updatedAt: playbookDefinitions.updatedAt,
         })
@@ -125,6 +126,7 @@ export const listPlaybookDefinitionsHandler = async function* ({
       id: row.id,
       name: row.name,
       description: row.description,
+      status: row.status,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     })),
@@ -157,6 +159,8 @@ export const getPlaybookDefinitionHandler = async function* ({
           description: true,
           scope: true,
           positions: true,
+          status: true,
+          approvedAt: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -176,6 +180,8 @@ export const getPlaybookDefinitionHandler = async function* ({
     description: playbook.description,
     scope: playbook.scope,
     positions: playbook.positions,
+    status: playbook.status,
+    approvedAt: playbook.approvedAt ? playbook.approvedAt.toISOString() : null,
     createdAt: playbook.createdAt.toISOString(),
     updatedAt: playbook.updatedAt.toISOString(),
   });

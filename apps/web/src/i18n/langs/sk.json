@@ -1520,58 +1520,107 @@
       "whatIsAnMcpServer": "Čo je MCP server?"
     },
     "playbooks": {
-      "addFallback": "Pridať náhradné znenie",
+      "addCheck": "Pridať kontrolu",
+      "addExtractPosition": "Iba extrakcia",
+      "addExtractPositionHint": "Zachytí hodnotu, bez hodnotenia",
+      "addGradedPosition": "Hodnotená pozícia",
+      "addGradedPositionHint": "Odstupňované pravidlá s výsledkom",
+      "addOption": "Pridať možnosť",
       "addPosition": "Pridať pozíciu",
-      "ask": "Otázka",
+      "addRule": "Pravidlo",
+      "advanced": "Pokročilé",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Typ odpovede",
       "askQuestionLabel": "Znenie otázky",
       "askQuestionPlaceholder": "Čo sa má z každého dokumentu vyčítať? Ponechajte prázdne pre ručné zadanie.",
-      "clauseLabel": "Ustanovenie",
+      "check": "Kontrola",
+      "checkHint": "Ohodnoťte pomocou deterministického pravidla namiesto AI.",
+      "checkKind": {
+        "constraint": "Obmedzenie hodnoty",
+        "presence": "Prítomnosť"
+      },
       "clausePlaceholder": "Hľadať ustanovenia...",
-      "clauseRequired": "Pri každom štandarde napojenom na knižnicu ustanovení vyberte ustanovenie.",
       "clauseSearchEmpty": "Nenašli sa žiadne ustanovenia",
-      "conditionPlaceholder": "Toto obmedzenie nastavíte v ďalšom kroku.",
+      "collapsePosition": "Zbaliť pozíciu",
       "confirmDelete": "Týmto natrvalo odstránite playbook.",
       "contentType": {
         "int": "Číslo",
         "singleSelect": "Jednoduchý výber",
         "text": "Voľný text"
       },
+      "convertToExtract": "Previesť iba na extrakciu",
+      "convertToExtractDescription": "Týmto sa odstránia úrovne hodnotenia aj samotné hodnotenie tejto pozície. Túto akciu nemožno vrátiť späť.",
+      "convertToExtractTitle": "Previesť iba na extrakciu?",
+      "convertToGraded": "Previesť na hodnotenú pozíciu",
       "createPlaybook": "Nový playbook",
       "created": "Playbook vytvorený",
       "deleteFailed": "Playbook sa nepodarilo odstrániť",
       "deletePlaybook": "Odstrániť playbook",
+      "deletePosition": "Odstrániť pozíciu",
       "deleted": "Playbook odstránený",
+      "derivedAutomatically": "Otázka a typ odpovede sa pri uložení odvodia automaticky.",
+      "derivedQuestion": "Odvodená otázka",
+      "derivedType": "Odvodený typ",
       "descriptionPlaceholder": "Čo tento playbook kontroluje?",
+      "disabledBadge": "Vypnuté — pri spustení sa preskočí",
+      "duplicatePosition": "Duplikovať pozíciu",
       "empty": "Zatiaľ žiadne playbooky",
       "emptyDescription": "Vytvorte playbook a kontrolujte dokumenty podľa svojich štandardov.",
-      "expect": "Očakávanie",
-      "expectSourceLabel": "Štandard",
+      "enablePosition": "Zapnúť pozíciu",
+      "entryLabelPlaceholder": "Popis (voliteľné)",
+      "entryPlaceholder": "Prijateľné náhradné znenie",
+      "entryRank": "#{index}",
+      "expandPosition": "Rozbaliť pozíciu",
       "expectation": {
         "restricted": "Zakázané"
       },
-      "expectationLabel": "Požiadavka",
-      "fallbackLabelPlaceholder": "Označenie (voliteľné)",
-      "fallbackTextPlaceholder": "Prijateľné náhradné znenie",
-      "fallbacksLabel": "Náhradné znenia",
-      "grade": "Hodnotenie",
-      "gradeRuleLabel": "Pravidlo",
+      "extractOnlyBadge": "Iba extrakcia",
+      "extractOnlyDescription": "Bez hodnotenia — hodnota sa zapíše do tabuľky.",
+      "extraction": "Extrakcia",
+      "extractionAuto": "Automatická",
+      "extractionManual": "Ručná",
+      "fixErrorsBeforeSaving": "Pred uložením opravte zvýraznené polia.",
+      "gradedNeedsContent": "Pridajte aspoň jedno pravidlo, náhradný záznam alebo ideálne znenie.",
       "guidanceLabel": "Pokyny",
       "guidancePlaceholder": "Poznámky pre posudzovateľov (voliteľné)",
+      "idealFromClause": "Z knižnice ustanovení",
+      "idealInline": "Vlastný text",
+      "idealInlinePlaceholder": "Vložte ideálne znenie…",
+      "idealLanguage": "Ideálne znenie",
       "issueLabel": "Téma",
       "issuePlaceholder": "napr. Obmedzenie zodpovednosti",
       "loadFailed": "Playbooky sa nepodarilo načítať",
       "loading": "Načítavam playbooky…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "napr. revízia NDA",
       "nameRequired": "Zadajte názov.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Zatiaľ žiadne pozície. Pridajte prvú.",
+      "optionPlaceholder": "Hodnota možnosti",
       "optionsLabel": "Možnosti",
-      "optionsPlaceholder": "Jedna možnosť na riadok",
-      "positionIssueRequired": "Každá pozícia musí mať tému.",
-      "positionLabel": "Pozícia {index}",
+      "outline": "Osnova",
+      "positionOfTotal": "Pozícia {index} z {total}",
       "positions": "Pozície",
-      "preferredLabel": "Preferované znenie",
-      "preferredPlaceholder": "Preferovaná formulácia",
+      "redLinePlaceholder": "Znenie, ktoré nie je nikdy prijateľné",
+      "removeCheck": "Odstrániť kontrolu",
+      "removeIdeal": "Odstrániť ideálne znenie",
+      "reorderPosition": "Zmeniť poradie pozície",
       "review": {
         "changePlaybook": "Vybrať iný playbook",
         "extractedLabel": "Nájdené:",
@@ -1581,6 +1630,7 @@
         "insertFailed": "Preferované ustanovenie sa nepodarilo vložiť",
         "insertPreferred": "Vložiť preferované ustanovenie",
         "launcherDescription": "Skontrolujte tento dokument podľa playbooku organizácie a získajte zistenia priamo v texte.",
+        "matchedFallback": "Zhoda s náhradným znením:",
         "noFindings": "Nenašli sa žiadne problémy",
         "playbookLabel": "Playbook",
         "playbookPlaceholder": "Vyberte playbook",
@@ -1591,14 +1641,23 @@
         "reviewingHint": "Pri rozsiahlych playbookoch to môže trvať až niekoľko minút.",
         "run": "Skontrolovať",
         "scrollToChange": "Prejsť na zmenu",
-        "viewClause": "Zobraziť ustanovenie"
+        "viewClause": "Zobraziť ustanovenie",
+        "violatedRedLine": "Porušuje neprijateľné pravidlo:"
       },
-      "rule": {
-        "extractOnly": "Iba extrakcia",
-        "positionMatch": "Zhoda s pozíciou",
-        "presence": "Prítomnosť",
-        "propertyConstraint": "Obmedzenie hodnoty"
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
       },
+      "ruleNumber": "Pravidlo {index}",
+      "rulePlaceholder": "Pravidlo v jednoduchom jazyku",
       "saveFailed": "Playbook sa nepodarilo uložiť",
       "severity": {
         "blocker": "Blokujúca",
@@ -1607,17 +1666,34 @@
         "medium": "Stredná"
       },
       "severityLabel": "Závažnosť",
-      "source": {
-        "clause": "Knižnica ustanovení",
-        "inline": "Vlastný text",
-        "none": "Bez štandardu"
+      "starters": {
+        "addedToast": "Playbook added",
+        "browseButton": "Browse starter playbooks",
+        "positionCount": "{count, plural, one {# position} other {# positions}}",
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
+        "title": "Starter playbooks"
       },
+      "switchToAuto": "Späť na automatický režim",
+      "switchToManual": "Prepnúť na ručné zadanie",
+      "tier": {
+        "acceptable": "Prijateľné",
+        "fallback": "Náhradné",
+        "notAcceptable": "Neprijateľné"
+      },
+      "untitledPosition": "Pozícia bez názvu",
       "updated": "Playbook aktualizovaný",
       "verdict": {
         "compliant": "Vyhovuje",
         "deviation": "Odchýlka",
         "fallback": "Náhradné znenie",
         "missing": "Chýba"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {
@@ -2043,6 +2119,14 @@
         "labelPickerPlaceholder": "Typ",
         "termAddedToast": "Pojem „{value}“ bol pridaný do tímového zoznamu.",
         "title": "Anonymizácia"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",

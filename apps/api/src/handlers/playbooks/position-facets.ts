@@ -3,11 +3,12 @@ import type { Static } from "elysia";
 
 import { tConditionNode } from "@/api/lib/conditions/contract";
 
-// Leaf module: the EXPECT/GRADE/severity facets of a Position, with no
-// dependency on db/schema-validators. This lets both positions.ts (which also
-// needs propertyContentSchema for ASK) and schema-validators.ts (which embeds
-// the rule/severity in the playbook-verdict property tool) import these without
-// an import cycle.
+// Leaf module: the run-time grading facets of a Position (the `rule`
+// discriminator, `severity`, and the `ResolvedTiers` verdict-time snapshot),
+// with no dependency on db/schema-validators. This lets both positions.ts (which
+// also needs propertyContentSchema for ASK) and schema-validators.ts (which
+// embeds the rule/severity/tiers in the playbook-verdict property tool) import
+// these without an import cycle.
 
 // ── Severity ──────────────────────────────────────────
 // `blocker` is the walk-away / non-negotiable tier; the rest are the
@@ -19,34 +20,6 @@ export const positionSeveritySchema = t.UnionEnum([
   "low",
 ]);
 export type PositionSeverity = Static<typeof positionSeveritySchema>;
-
-// ── EXPECT: the standard / answer key ─────────────────
-// Discriminated on `source`. FIX (insert preferred language) is only meaningful
-// for `clause` and `inline`; `none` can flag but has no language to insert, so
-// the absence of language is structural, not a runtime flag.
-const inlineFallbackSchema = t.Object({
-  rank: t.Integer({ minimum: 0 }),
-  label: t.Optional(t.String({ maxLength: 256 })),
-  text: t.String({ minLength: 1, maxLength: 10_000 }),
-});
-
-export const positionStandardSchema = t.Union([
-  t.Object({
-    source: t.Literal("clause"),
-    clauseId: t.String({ format: "uuid" }),
-    // Pinned clause version; the latest is resolved at run time when absent.
-    clauseVersion: t.Optional(t.Integer({ minimum: 1 })),
-  }),
-  t.Object({
-    source: t.Literal("inline"),
-    preferred: t.Optional(t.String({ maxLength: 10_000 })),
-    fallbacks: t.Optional(t.Array(inlineFallbackSchema, { maxItems: 10 })),
-  }),
-  t.Object({
-    source: t.Literal("none"),
-  }),
-]);
-export type PositionStandard = Static<typeof positionStandardSchema>;
 
 // ── GRADE: how the extracted answer is judged ─────────
 export const positionRuleSchema = t.Union([
@@ -69,20 +42,35 @@ export const positionRuleSchema = t.Union([
 ]);
 export type PositionRule = Static<typeof positionRuleSchema>;
 
-// ── Resolved standard (verdict-time snapshot) ─────────
-// A clause-source standard is resolved to its preferred body + ranked fallback
-// texts at run time and snapshotted onto the verdict tool, so grading does not
-// re-read the (mutable, separately-versioned) clause library.
-export const resolvedStandardSchema = t.Object({
-  preferred: t.Optional(t.String({ maxLength: 10_000 })),
-  fallbacks: t.Optional(
-    t.Array(
-      t.Object({
-        rank: t.Integer({ minimum: 0 }),
-        text: t.String({ minLength: 1, maxLength: 10_000 }),
-      }),
-      { maxItems: 10 },
-    ),
-  ),
+// ── Resolved tiers (verdict-time snapshot) ────────────
+// The tiered ladder resolved at run time and snapshotted onto the verdict tool,
+// so grading is judged against exactly what the author saw even if the playbook
+// definition (or a clause-sourced ideal) changes mid-run:
+//   - `ideal`: the acceptable tier's resolved ideal language (inline text, or a
+//     clause body at its pinned/latest version). FIX inserts this text.
+//   - `fallbacks`: ranked accepted alternatives — explicit fallback entries
+//     first (in authored order), then clause variants when the ideal is
+//     clause-sourced. `rank` is the position in THIS array, so a grader's
+//     `matched.rank` indexes it directly.
+//   - `acceptableRules` / `notAcceptableRules`: the plain-language rules a
+//     graded LLM tier-match compares against; red-line ids let a finding cite
+//     which line was violated.
+const resolvedTierRuleSchema = t.Object({
+  id: t.String({ minLength: 1, maxLength: 128 }),
+  text: t.String({ minLength: 1, maxLength: 500 }),
 });
-export type ResolvedStandard = Static<typeof resolvedStandardSchema>;
+
+export const resolvedTiersSchema = t.Object({
+  ideal: t.Optional(t.String({ maxLength: 10_000 })),
+  fallbacks: t.Array(
+    t.Object({
+      rank: t.Integer({ minimum: 0 }),
+      label: t.Optional(t.String({ maxLength: 256 })),
+      text: t.String({ minLength: 1, maxLength: 10_000 }),
+    }),
+    { maxItems: 10 },
+  ),
+  acceptableRules: t.Array(resolvedTierRuleSchema, { maxItems: 50 }),
+  notAcceptableRules: t.Array(resolvedTierRuleSchema, { maxItems: 50 }),
+});
+export type ResolvedTiers = Static<typeof resolvedTiersSchema>;

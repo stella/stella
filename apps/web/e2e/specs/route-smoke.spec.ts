@@ -107,6 +107,10 @@ const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
     expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
   },
   {
+    template: "/settings/organization/document-types",
+    path: "/settings/organization/document-types",
+  },
+  {
     template: "/settings/organization/matter-numbering",
     path: "/settings/organization/matter-numbering",
   },

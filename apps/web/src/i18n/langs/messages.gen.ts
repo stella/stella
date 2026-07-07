@@ -1523,58 +1523,107 @@ type Messages = {
       "whatIsAnMcpServer": "What is an MCP server?";
     };
     "playbooks": {
-      "addFallback": "Add fallback";
+      "addCheck": "Add a check";
+      "addExtractPosition": "Extract only";
+      "addExtractPositionHint": "Capture a value, no grading";
+      "addGradedPosition": "Graded position";
+      "addGradedPositionHint": "Tiered rules with a verdict";
+      "addOption": "Add option";
       "addPosition": "Add position";
-      "ask": "Ask";
+      "addRule": "Rule";
+      "advanced": "Advanced";
+      "approval": {
+        "approve": "Approve";
+        "approveFailed": "Failed to approve playbook";
+        "approvedOn": "Approved {date}";
+        "approvedToast": "Playbook approved";
+        "statusApproved": "Approved";
+        "statusDraft": "Draft";
+      };
       "askContentLabel": "Answer type";
       "askQuestionLabel": "Question";
       "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.";
-      "clauseLabel": "Clause";
+      "check": "Check";
+      "checkHint": "Grade with a deterministic rule instead of the AI.";
+      "checkKind": {
+        "constraint": "Value constraint";
+        "presence": "Presence";
+      };
       "clausePlaceholder": "Search clauses…";
-      "clauseRequired": "Pick a clause for each clause-backed standard.";
       "clauseSearchEmpty": "No clauses found";
-      "conditionPlaceholder": "Configure this constraint in a later step.";
+      "collapsePosition": "Collapse position";
       "confirmDelete": "This will permanently delete the playbook.";
       "contentType": {
         "int": "Number";
         "singleSelect": "Single select";
         "text": "Text";
       };
+      "convertToExtract": "Convert to extract only";
+      "convertToExtractDescription": "This removes the tier ladder and grading for this position. This can't be undone.";
+      "convertToExtractTitle": "Convert to extract only?";
+      "convertToGraded": "Convert to graded";
       "createPlaybook": "New playbook";
       "created": "Playbook created";
       "deleteFailed": "Failed to delete playbook";
       "deletePlaybook": "Delete playbook";
+      "deletePosition": "Delete position";
       "deleted": "Playbook deleted";
+      "derivedAutomatically": "The question and answer type are derived automatically when you save.";
+      "derivedQuestion": "Derived question";
+      "derivedType": "Derived type";
       "descriptionPlaceholder": "What does this playbook check?";
+      "disabledBadge": "Off — skipped in runs";
+      "duplicatePosition": "Duplicate position";
       "empty": "No playbooks yet";
       "emptyDescription": "Create a playbook to review documents against your standards.";
-      "expect": "Expect";
-      "expectSourceLabel": "Standard";
+      "enablePosition": "Enable position";
+      "entryLabelPlaceholder": "Label (optional)";
+      "entryPlaceholder": "Acceptable fallback wording";
+      "entryRank": "#{index}";
+      "expandPosition": "Expand position";
       "expectation": {
         "restricted": "Restricted";
       };
-      "expectationLabel": "Expectation";
-      "fallbackLabelPlaceholder": "Label (optional)";
-      "fallbackTextPlaceholder": "Acceptable fallback wording";
-      "fallbacksLabel": "Fallbacks";
-      "grade": "Grade";
-      "gradeRuleLabel": "Rule";
+      "extractOnlyBadge": "Extract only";
+      "extractOnlyDescription": "No grading — captures the value into the table.";
+      "extraction": "Extraction";
+      "extractionAuto": "Auto";
+      "extractionManual": "Manual";
+      "fixErrorsBeforeSaving": "Fix the highlighted fields before saving.";
+      "gradedNeedsContent": "Add at least one rule, fallback entry, or ideal language.";
       "guidanceLabel": "Guidance";
       "guidancePlaceholder": "Notes for reviewers (optional)";
+      "idealFromClause": "From clause library";
+      "idealInline": "Inline text";
+      "idealInlinePlaceholder": "Paste the ideal wording…";
+      "idealLanguage": "Ideal language";
       "issueLabel": "Issue";
       "issuePlaceholder": "e.g. Limitation of liability";
       "loadFailed": "Failed to load playbooks";
       "loading": "Loading playbooks…";
+      "manageTypes": "Manage types…";
       "namePlaceholder": "e.g. NDA review";
       "nameRequired": "Add a name.";
+      "negotiation": {
+        "addTalkingPoint": "Add talking point";
+        "escalationLabel": "Escalation";
+        "escalationPlaceholder": "When/to whom to escalate (optional)";
+        "rationaleLabel": "Rationale";
+        "rationalePlaceholder": "Why we want this (optional)";
+        "talkingPointPlaceholder": "What to say";
+        "talkingPointsLabel": "Talking points";
+        "title": "Negotiation";
+      };
       "noPositions": "No positions yet. Add the first one.";
+      "optionPlaceholder": "Option value";
       "optionsLabel": "Options";
-      "optionsPlaceholder": "One option per line";
-      "positionIssueRequired": "Each position needs an issue.";
-      "positionLabel": "Position {index}";
+      "outline": "Outline";
+      "positionOfTotal": "Position {index} of {total}";
       "positions": "Positions";
-      "preferredLabel": "Preferred language";
-      "preferredPlaceholder": "Preferred wording";
+      "redLinePlaceholder": "Wording that is never acceptable";
+      "removeCheck": "Remove check";
+      "removeIdeal": "Remove ideal language";
+      "reorderPosition": "Reorder position";
       "review": {
         "changePlaybook": "Choose another playbook";
         "extractedLabel": "Found:";
@@ -1584,6 +1633,7 @@ type Messages = {
         "insertFailed": "Couldn't insert the preferred clause";
         "insertPreferred": "Insert preferred clause";
         "launcherDescription": "Check this document against an organization playbook and get findings inline.";
+        "matchedFallback": "Matched fallback:";
         "noFindings": "No issues found";
         "playbookLabel": "Playbook";
         "playbookPlaceholder": "Choose a playbook";
@@ -1595,13 +1645,22 @@ type Messages = {
         "run": "Review";
         "scrollToChange": "Go to change";
         "viewClause": "View clause";
+        "violatedRedLine": "Violates red line:";
       };
-      "rule": {
-        "extractOnly": "Extract only";
-        "positionMatch": "Position match";
-        "presence": "Presence";
-        "propertyConstraint": "Value constraint";
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged";
+        "riskLevel": {
+          "critical": "Critical";
+          "high": "High";
+          "low": "Low";
+          "medium": "Medium";
+          "none": "No risk";
+        };
+        "summaryTitle": "Risk summary";
+        "topIssuesTitle": "Top issues";
       };
+      "ruleNumber": "Rule {index}";
+      "rulePlaceholder": "Plain-language rule";
       "saveFailed": "Failed to save playbook";
       "severity": {
         "blocker": "Blocker";
@@ -1610,17 +1669,34 @@ type Messages = {
         "medium": "Medium";
       };
       "severityLabel": "Severity";
-      "source": {
-        "clause": "Clause library";
-        "inline": "Inline text";
-        "none": "No standard";
+      "starters": {
+        "addedToast": "Playbook added";
+        "browseButton": "Browse starter playbooks";
+        "positionCount": "{count, plural, one {# position} other {# positions}}";
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.";
+        "title": "Starter playbooks";
       };
+      "switchToAuto": "Back to automatic";
+      "switchToManual": "Switch to manual";
+      "tier": {
+        "acceptable": "Acceptable";
+        "fallback": "Fallback";
+        "notAcceptable": "Not acceptable";
+      };
+      "untitledPosition": "Untitled position";
       "updated": "Playbook updated";
       "verdict": {
         "compliant": "Compliant";
         "deviation": "Deviation";
         "fallback": "Fallback";
         "missing": "Missing";
+      };
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.";
+        "restore": "Restore";
+        "restoreFailed": "Failed to restore version";
+        "restoredToast": "Version restored";
+        "versionHistory": "Version history";
       };
     };
     "sections": {
@@ -2046,6 +2122,14 @@ type Messages = {
         "labelPickerPlaceholder": "Label";
         "termAddedToast": "Added \"{value}\" to the team-wide deny list.";
         "title": "Anonymization";
+      };
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)";
+        "deleteFailed": "Couldn't delete document type";
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.";
+        "labelAria": "Document type name";
+        "reorder": "Reorder document type";
+        "title": "Document types";
       };
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";

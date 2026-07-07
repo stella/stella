@@ -1520,58 +1520,107 @@
       "whatIsAnMcpServer": "Was ist ein MCP-Server?"
     },
     "playbooks": {
-      "addFallback": "Alternative hinzufügen",
+      "addCheck": "Prüfung hinzufügen",
+      "addExtractPosition": "Nur Extraktion",
+      "addExtractPositionHint": "Erfasst einen Wert, keine Bewertung",
+      "addGradedPosition": "Bewerteter Standpunkt",
+      "addGradedPositionHint": "Gestufte Regeln mit einem Urteil",
+      "addOption": "Option hinzufügen",
       "addPosition": "Standpunkt hinzufügen",
-      "ask": "Abfrage",
+      "addRule": "Regel",
+      "advanced": "Erweitert",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Antworttyp",
       "askQuestionLabel": "Frage",
       "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
-      "clauseLabel": "Klausel",
+      "check": "Prüfung",
+      "checkHint": "Bewertet mit einer deterministischen Regel statt mit der KI.",
+      "checkKind": {
+        "constraint": "Wertbeschränkung",
+        "presence": "Vorhandensein"
+      },
       "clausePlaceholder": "Klauseln durchsuchen…",
-      "clauseRequired": "Wählen Sie für jede klauselbasierte Vorgabe eine Klausel aus.",
       "clauseSearchEmpty": "Keine Klauseln gefunden",
-      "conditionPlaceholder": "Konfigurieren Sie diese Beschränkung in einem späteren Schritt.",
+      "collapsePosition": "Standpunkt einklappen",
       "confirmDelete": "Dadurch wird das Playbook dauerhaft gelöscht.",
       "contentType": {
         "int": "Zahl",
         "singleSelect": "Einfachauswahl",
         "text": "Text"
       },
+      "convertToExtract": "In „Nur Extraktion“ umwandeln",
+      "convertToExtractDescription": "Dies entfernt die Stufenleiter und die Bewertung für diesen Standpunkt. Diese Aktion kann nicht rückgängig gemacht werden.",
+      "convertToExtractTitle": "In „Nur Extraktion“ umwandeln?",
+      "convertToGraded": "In bewerteten Standpunkt umwandeln",
       "createPlaybook": "Neues Playbook",
       "created": "Playbook erstellt",
       "deleteFailed": "Playbook konnte nicht gelöscht werden",
       "deletePlaybook": "Playbook löschen",
+      "deletePosition": "Standpunkt löschen",
       "deleted": "Playbook gelöscht",
+      "derivedAutomatically": "Frage und Antworttyp werden beim Speichern automatisch abgeleitet.",
+      "derivedQuestion": "Abgeleitete Frage",
+      "derivedType": "Abgeleiteter Typ",
       "descriptionPlaceholder": "Was prüft dieses Playbook?",
+      "disabledBadge": "Aus — wird bei der Prüfung übersprungen",
+      "duplicatePosition": "Standpunkt duplizieren",
       "empty": "Noch keine Playbooks",
       "emptyDescription": "Erstellen Sie ein Playbook, um Dokumente anhand Ihrer Vorgaben zu prüfen.",
-      "expect": "Erwartung",
-      "expectSourceLabel": "Vorgabe",
+      "enablePosition": "Standpunkt aktivieren",
+      "entryLabelPlaceholder": "Bezeichnung (optional)",
+      "entryPlaceholder": "Akzeptable Alternativformulierung",
+      "entryRank": "#{index}",
+      "expandPosition": "Standpunkt erweitern",
       "expectation": {
         "restricted": "Unzulässig"
       },
-      "expectationLabel": "Anforderung",
-      "fallbackLabelPlaceholder": "Bezeichnung (optional)",
-      "fallbackTextPlaceholder": "Akzeptable Alternativformulierung",
-      "fallbacksLabel": "Alternativen",
-      "grade": "Bewertung",
-      "gradeRuleLabel": "Regel",
+      "extractOnlyBadge": "Nur Extraktion",
+      "extractOnlyDescription": "Keine Bewertung — erfasst den Wert in der Tabelle.",
+      "extraction": "Extraktion",
+      "extractionAuto": "Automatisch",
+      "extractionManual": "Manuell",
+      "fixErrorsBeforeSaving": "Beheben Sie die hervorgehobenen Felder, bevor Sie speichern.",
+      "gradedNeedsContent": "Fügen Sie mindestens eine Regel, einen Alternativeintrag oder eine ideale Formulierung hinzu.",
       "guidanceLabel": "Hinweise",
       "guidancePlaceholder": "Hinweise für Prüfer (optional)",
+      "idealFromClause": "Aus der Klauselbibliothek",
+      "idealInline": "Freitext",
+      "idealInlinePlaceholder": "Ideale Formulierung einfügen…",
+      "idealLanguage": "Ideale Formulierung",
       "issueLabel": "Thema",
       "issuePlaceholder": "z.B. Haftungsbeschränkung",
       "loadFailed": "Playbooks konnten nicht geladen werden",
       "loading": "Playbooks werden geladen…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "z.B. NDA-Prüfung",
       "nameRequired": "Fügen Sie einen Namen hinzu.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Noch keine Standpunkte. Fügen Sie den ersten hinzu.",
+      "optionPlaceholder": "Optionswert",
       "optionsLabel": "Optionen",
-      "optionsPlaceholder": "Eine Option pro Zeile",
-      "positionIssueRequired": "Jeder Standpunkt benötigt ein Thema.",
-      "positionLabel": "Standpunkt {index}",
+      "outline": "Gliederung",
+      "positionOfTotal": "Standpunkt {index} von {total}",
       "positions": "Standpunkte",
-      "preferredLabel": "Bevorzugter Wortlaut",
-      "preferredPlaceholder": "Bevorzugte Formulierung",
+      "redLinePlaceholder": "Formulierung, die niemals akzeptabel ist",
+      "removeCheck": "Prüfung entfernen",
+      "removeIdeal": "Ideale Formulierung entfernen",
+      "reorderPosition": "Standpunkt neu anordnen",
       "review": {
         "changePlaybook": "Anderes Playbook wählen",
         "extractedLabel": "Gefunden:",
@@ -1581,6 +1630,7 @@
         "insertFailed": "Bevorzugte Klausel konnte nicht eingefügt werden",
         "insertPreferred": "Bevorzugte Klausel einfügen",
         "launcherDescription": "Prüfen Sie dieses Dokument anhand eines Playbooks Ihrer Organisation und erhalten Sie die Ergebnisse direkt im Dokument.",
+        "matchedFallback": "Passende Alternative:",
         "noFindings": "Keine Probleme gefunden",
         "playbookLabel": "Playbook",
         "playbookPlaceholder": "Playbook auswählen",
@@ -1591,14 +1641,23 @@
         "reviewingHint": "Bei großen Playbooks kann dies einige Minuten dauern.",
         "run": "Prüfen",
         "scrollToChange": "Zur Änderung",
-        "viewClause": "Klausel anzeigen"
+        "viewClause": "Klausel anzeigen",
+        "violatedRedLine": "Verstößt gegen rote Linie:"
       },
-      "rule": {
-        "extractOnly": "Nur extrahieren",
-        "positionMatch": "Standpunktabgleich",
-        "presence": "Vorhandensein",
-        "propertyConstraint": "Wertbeschränkung"
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
       },
+      "ruleNumber": "Regel {index}",
+      "rulePlaceholder": "Regel in einfacher Sprache",
       "saveFailed": "Playbook konnte nicht gespeichert werden",
       "severity": {
         "blocker": "Kritisch",
@@ -1607,17 +1666,34 @@
         "medium": "Mittel"
       },
       "severityLabel": "Schweregrad",
-      "source": {
-        "clause": "Klauselbibliothek",
-        "inline": "Freitext",
-        "none": "Keine Vorgabe"
+      "starters": {
+        "addedToast": "Playbook added",
+        "browseButton": "Browse starter playbooks",
+        "positionCount": "{count, plural, one {# position} other {# positions}}",
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
+        "title": "Starter playbooks"
       },
+      "switchToAuto": "Zurück zu automatisch",
+      "switchToManual": "Zu manuell wechseln",
+      "tier": {
+        "acceptable": "Akzeptabel",
+        "fallback": "Alternative",
+        "notAcceptable": "Nicht akzeptabel"
+      },
+      "untitledPosition": "Standpunkt ohne Titel",
       "updated": "Playbook aktualisiert",
       "verdict": {
         "compliant": "Konform",
         "deviation": "Abweichung",
         "fallback": "Alternative",
         "missing": "Fehlt"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {
@@ -2043,6 +2119,14 @@
         "labelPickerPlaceholder": "Typ",
         "termAddedToast": "„{value}“ wurde zur teamweiten Sperrliste hinzugefügt.",
         "title": "Anonymisierung"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",

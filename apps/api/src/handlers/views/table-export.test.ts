@@ -627,9 +627,13 @@ describe("table export", () => {
       version: 1,
       type: "playbook-verdict",
       askPropertyId: "ask",
-      rule: { kind: "extractOnly" },
+      rule: { kind: "positionMatch" },
       severity: "high",
-      standard: {},
+      tiers: {
+        fallbacks: [],
+        acceptableRules: [],
+        notAcceptableRules: [],
+      },
     };
     const columns = buildExportColumns(tableLayout(), [
       { id: "ask", name: "Payment terms", tool: aiTool },
@@ -652,7 +656,6 @@ describe("table export", () => {
             {
               kind: "playbook-verdict",
               rationale: "Net 30 exceeds the Net 15 standard.",
-              matched: "none",
             },
           ],
         },

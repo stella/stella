@@ -3,10 +3,15 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { clauses } from "@/api/db/schema";
-import type { PlaybookPositions } from "@/api/handlers/playbooks/positions";
+import type {
+  PlaybookPositions,
+  Position,
+} from "@/api/handlers/playbooks/positions";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
+
+type GradedPosition = Extract<Position, { mode: "graded" }>;
 
 export const findDuplicatePositionSourceId = (
   positions: PlaybookPositions,
@@ -21,13 +26,55 @@ export const findDuplicatePositionSourceId = (
   return null;
 };
 
+// A graded position needs something to grade against. A deterministic `check`
+// (presence/constraint) grades on its own, so it always satisfies this. Without
+// a check, LLM tier-match needs at least one authored signal — a rule in any
+// tier, a fallback entry, or ideal language — otherwise there is nothing to
+// compare. v1's silent forced-deviation path is rejected here instead.
+const gradedPositionHasContent = (position: GradedPosition): boolean => {
+  if (position.check !== undefined) {
+    return true;
+  }
+  const { tiers } = position;
+  return (
+    tiers.acceptable.rules.length > 0 ||
+    tiers.notAcceptable.rules.length > 0 ||
+    tiers.fallback.entries.length > 0 ||
+    tiers.acceptable.ideal !== undefined
+  );
+};
+
+// Rule and fallback-entry ids must be unique within a position: findings and DnD
+// reorder cite these ids as stable identity, so a collision would make two lines
+// indistinguishable. Returns the first colliding id, or null when all are unique.
+const findDuplicateTierId = (position: GradedPosition): string | null => {
+  const { tiers } = position;
+  const seen = new Set<string>();
+  const ids = [
+    ...tiers.acceptable.rules.map((rule) => rule.id),
+    ...tiers.notAcceptable.rules.map((rule) => rule.id),
+    ...tiers.fallback.entries.map((entry) => entry.id),
+  ];
+  for (const id of ids) {
+    if (seen.has(id)) {
+      return id;
+    }
+    seen.add(id);
+  }
+  return null;
+};
+
 const collectClauseRefIds = (
   positions: PlaybookPositions,
 ): SafeId<"clause">[] => {
   const ids = new Set<string>();
   for (const position of positions.items) {
-    if (position.standard.source === "clause") {
-      ids.add(position.standard.clauseId);
+    // Clause ideal language now lives at tiers.acceptable.ideal (graded only).
+    if (
+      position.mode === "graded" &&
+      position.tiers.acceptable.ideal?.source === "clause"
+    ) {
+      ids.add(position.tiers.acceptable.ideal.clauseId);
     }
   }
   return [...ids].map((id) => brandPersistedClauseId(id));
@@ -60,6 +107,30 @@ export const assertPositionsValid = async ({
         message: "Positions must have unique sourceIds",
       }),
     );
+  }
+
+  for (const position of positions.items) {
+    if (position.mode !== "graded") {
+      continue;
+    }
+    if (!gradedPositionHasContent(position)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "A graded position must have at least one tier rule, fallback entry, or ideal language",
+        }),
+      );
+    }
+    const duplicateTierId = findDuplicateTierId(position);
+    if (duplicateTierId !== null) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Tier rule and fallback entry ids must be unique",
+        }),
+      );
+    }
   }
 
   const clauseIds = collectClauseRefIds(positions);

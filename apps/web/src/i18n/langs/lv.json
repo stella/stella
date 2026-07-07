@@ -1520,58 +1520,107 @@
       "whatIsAnMcpServer": "Kas ir MCP serveris?"
     },
     "playbooks": {
-      "addFallback": "Pievienot alternatīvu",
+      "addCheck": "Pievienot pārbaudi",
+      "addExtractPosition": "Tikai izvilkt",
+      "addExtractPositionHint": "Nofiksē vērtību, bez vērtējuma",
+      "addGradedPosition": "Novērtēta pozīcija",
+      "addGradedPositionHint": "Pakāpju noteikumi ar vērtējumu",
+      "addOption": "Pievienot iespēju",
       "addPosition": "Pievienot pozīciju",
-      "ask": "Vaicājums",
+      "addRule": "Noteikums",
+      "advanced": "Papildu",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Atbildes tips",
       "askQuestionLabel": "Jautājums",
       "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
-      "clauseLabel": "Klauzula",
+      "check": "Pārbaude",
+      "checkHint": "Vērtē ar deterministisku noteikumu, nevis ar MI.",
+      "checkKind": {
+        "constraint": "Vērtības ierobežojums",
+        "presence": "Esamība"
+      },
       "clausePlaceholder": "Meklēt klauzulas…",
-      "clauseRequired": "Izvēlieties klauzulu katram uz klauzulu balstītam standartam.",
       "clauseSearchEmpty": "Klauzulas nav atrastas",
-      "conditionPlaceholder": "Konfigurējiet šo ierobežojumu vēlākā solī.",
+      "collapsePosition": "Sakļaut pozīciju",
       "confirmDelete": "Tas neatgriezeniski izdzēsīs pārbaudes ceļvedi.",
       "contentType": {
         "int": "Skaitlis",
         "singleSelect": "Viena izvēle",
         "text": "Teksts"
       },
+      "convertToExtract": "Pārveidot par tikai izvilkšanu",
+      "convertToExtractDescription": "Tas noņems šīs pozīcijas pakāpju sistēmu un vērtējumu. To nevar atsaukt.",
+      "convertToExtractTitle": "Pārveidot par tikai izvilkšanu?",
+      "convertToGraded": "Pārveidot par novērtētu",
       "createPlaybook": "Jauns pārbaudes ceļvedis",
       "created": "Pārbaudes ceļvedis izveidots",
       "deleteFailed": "Neizdevās izdzēst pārbaudes ceļvedi",
       "deletePlaybook": "Dzēst pārbaudes ceļvedi",
+      "deletePosition": "Dzēst pozīciju",
       "deleted": "Pārbaudes ceļvedis izdzēsts",
+      "derivedAutomatically": "Jautājums un atbildes tips tiek atvasināti automātiski, kad saglabājat.",
+      "derivedQuestion": "Atvasināts jautājums",
+      "derivedType": "Atvasināts tips",
       "descriptionPlaceholder": "Ko šis pārbaudes ceļvedis pārbauda?",
+      "disabledBadge": "Izslēgts — tiek izlaista pārbaudēs",
+      "duplicatePosition": "Dublēt pozīciju",
       "empty": "Vēl nav pārbaudes ceļvežu",
       "emptyDescription": "Izveidojiet pārbaudes ceļvedi, lai pārbaudītu dokumentus atbilstoši saviem standartiem.",
-      "expect": "Sagaidāmais",
-      "expectSourceLabel": "Standarts",
+      "enablePosition": "Iespējot pozīciju",
+      "entryLabelPlaceholder": "Apzīmējums (neobligāti)",
+      "entryPlaceholder": "Pieņemams alternatīvs formulējums",
+      "entryRank": "#{index}",
+      "expandPosition": "Izvērst pozīciju",
       "expectation": {
         "restricted": "Aizliegts"
       },
-      "expectationLabel": "Gaidas",
-      "fallbackLabelPlaceholder": "Apzīmējums (neobligāti)",
-      "fallbackTextPlaceholder": "Pieņemams alternatīvs formulējums",
-      "fallbacksLabel": "Alternatīvas",
-      "grade": "Vērtējums",
-      "gradeRuleLabel": "Noteikums",
+      "extractOnlyBadge": "Tikai izvilkt",
+      "extractOnlyDescription": "Bez vērtējuma — vērtība tiek saglabāta tabulā.",
+      "extraction": "Izvilkšana",
+      "extractionAuto": "Automātiski",
+      "extractionManual": "Manuāli",
+      "fixErrorsBeforeSaving": "Pirms saglabāšanas izlabojiet iezīmētos laukus.",
+      "gradedNeedsContent": "Pievienojiet vismaz vienu noteikumu, alternatīvu ierakstu vai ideālu formulējumu.",
       "guidanceLabel": "Norādījumi",
       "guidancePlaceholder": "Piezīmes pārbaudītājiem (neobligāti)",
+      "idealFromClause": "No klauzulu bibliotēkas",
+      "idealInline": "Ievadīts teksts",
+      "idealInlinePlaceholder": "Ielīmējiet ideālo formulējumu…",
+      "idealLanguage": "Ideāls formulējums",
       "issueLabel": "Tēma",
       "issuePlaceholder": "piem., Atbildības ierobežojums",
       "loadFailed": "Neizdevās ielādēt pārbaudes ceļvežus",
       "loading": "Ielādē pārbaudes ceļvežus…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "piem., NDA pārbaude",
       "nameRequired": "Pievienojiet nosaukumu.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Vēl nav pozīciju. Pievienojiet pirmo.",
+      "optionPlaceholder": "Iespējas vērtība",
       "optionsLabel": "Iespējas",
-      "optionsPlaceholder": "Viena iespēja katrā rindā",
-      "positionIssueRequired": "Katrai pozīcijai nepieciešama tēma.",
-      "positionLabel": "Pozīcija {index}",
+      "outline": "Struktūra",
+      "positionOfTotal": "Pozīcija {index} no {total}",
       "positions": "Pozīcijas",
-      "preferredLabel": "Vēlamais formulējums",
-      "preferredPlaceholder": "Vēlamais formulējums",
+      "redLinePlaceholder": "Formulējums, kas nekad nav pieņemams",
+      "removeCheck": "Noņemt pārbaudi",
+      "removeIdeal": "Noņemt ideālo formulējumu",
+      "reorderPosition": "Pārkārtot pozīciju",
       "review": {
         "changePlaybook": "Izvēlēties citu pārbaudes ceļvedi",
         "extractedLabel": "Atrasts:",
@@ -1581,6 +1630,7 @@
         "insertFailed": "Neizdevās ievietot vēlamo klauzulu",
         "insertPreferred": "Ievietot vēlamo klauzulu",
         "launcherDescription": "Pārbaudiet šo dokumentu atbilstoši organizācijas pārbaudes ceļvedim un saņemiet secinājumus tieši tekstā.",
+        "matchedFallback": "Atbilstošā alternatīva:",
         "noFindings": "Problēmas nav atrastas",
         "playbookLabel": "Pārbaudes ceļvedis",
         "playbookPlaceholder": "Izvēlieties pārbaudes ceļvedi",
@@ -1591,14 +1641,23 @@
         "reviewingHint": "Lieliem pārbaudes ceļvežiem tas var aizņemt dažas minūtes.",
         "run": "Pārbaudīt",
         "scrollToChange": "Pāriet uz izmaiņu",
-        "viewClause": "Skatīt klauzulu"
+        "viewClause": "Skatīt klauzulu",
+        "violatedRedLine": "Pārkāptā sarkanā līnija:"
       },
-      "rule": {
-        "extractOnly": "Tikai izvilkt",
-        "positionMatch": "Pozīcijas atbilstība",
-        "presence": "Esamība",
-        "propertyConstraint": "Vērtības ierobežojums"
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
       },
+      "ruleNumber": "Noteikums {index}",
+      "rulePlaceholder": "Vienkāršā valodā formulēts noteikums",
       "saveFailed": "Neizdevās saglabāt pārbaudes ceļvedi",
       "severity": {
         "blocker": "Bloķējoša",
@@ -1607,17 +1666,34 @@
         "medium": "Vidēja"
       },
       "severityLabel": "Nopietnība",
-      "source": {
-        "clause": "Klauzulu bibliotēka",
-        "inline": "Ievadīts teksts",
-        "none": "Nav standarta"
+      "starters": {
+        "addedToast": "Playbook added",
+        "browseButton": "Browse starter playbooks",
+        "positionCount": "{count, plural, one {# position} other {# positions}}",
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
+        "title": "Starter playbooks"
       },
+      "switchToAuto": "Atpakaļ uz automātisko režīmu",
+      "switchToManual": "Pārslēgt uz manuālo režīmu",
+      "tier": {
+        "acceptable": "Pieņemams",
+        "fallback": "Alternatīva",
+        "notAcceptable": "Nav pieņemams"
+      },
+      "untitledPosition": "Nenosaukta pozīcija",
       "updated": "Pārbaudes ceļvedis atjaunināts",
       "verdict": {
         "compliant": "Atbilst",
         "deviation": "Novirze",
         "fallback": "Alternatīva",
         "missing": "Trūkst"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {
@@ -2043,6 +2119,14 @@
         "labelPickerPlaceholder": "Veids",
         "termAddedToast": "„{value}” pievienots komandas sarakstam.",
         "title": "Anonimizācija"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",

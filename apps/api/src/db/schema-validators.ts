@@ -4,7 +4,7 @@ import type { Static } from "elysia";
 import {
   positionRuleSchema,
   positionSeveritySchema,
-  resolvedStandardSchema,
+  resolvedTiersSchema,
 } from "@/api/handlers/playbooks/position-facets";
 import type { JsonObject } from "@/api/lib/json-value";
 
@@ -116,15 +116,16 @@ export type ManualInputTool = Static<typeof manualInputToolSchema>;
 // A derived property whose value is the GRADE verdict for a playbook position.
 // Computed after its ASK property extracts (it depends on `askPropertyId`):
 // deterministically for `presence`/`propertyConstraint` (condition AST, no LLM)
-// or via an LLM compare for `positionMatch`. `standard` is the run-time snapshot
-// of the EXPECT preferred/fallback texts used by positionMatch grading.
+// or via an LLM tier-match for `positionMatch`. `tiers` is the run-time snapshot
+// of the resolved tiered ladder (ideal, ranked fallbacks, acceptable/red-line
+// rules) the tier-match grading compares against.
 export const playbookVerdictToolSchema = t.Object({
   version: v1,
   type: t.Literal("playbook-verdict"),
   askPropertyId: t.String({ format: "uuid" }),
   rule: positionRuleSchema,
   severity: positionSeveritySchema,
-  standard: resolvedStandardSchema,
+  tiers: resolvedTiersSchema,
 });
 export type PlaybookVerdictTool = Static<typeof playbookVerdictToolSchema>;
 

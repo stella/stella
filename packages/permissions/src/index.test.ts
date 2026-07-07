@@ -103,6 +103,19 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("only owner and admin can approve playbooks", () => {
+    for (const role of ["owner", "admin"] as const) {
+      expect(roles[role].authorize({ playbook: ["approve"] }).success).toBe(
+        true,
+      );
+    }
+    for (const role of ["member", "intern", "external"] as const) {
+      expect(roles[role].authorize({ playbook: ["approve"] }).success).toBe(
+        false,
+      );
+    }
+  });
+
   test("every role can read its workspace", () => {
     for (const role of [
       "owner",

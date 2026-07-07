@@ -230,7 +230,7 @@ describe("MCP knowledge tools", () => {
       args: { matter_id: "ws_1", playbook_id: "pb_1" },
       context: createContext({
         scopedDb: createPlaybookScopedDb({
-          positions: { version: 1, items: [] },
+          positions: { version: 2, items: [] },
           scope: null,
         }),
       }),

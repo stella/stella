@@ -48,16 +48,24 @@ import type {
   PlaybookFinding,
   PlaybookFindingFix,
   PlaybookFixState,
+  PlaybookMatchedRef,
   PlaybookSeverity,
   PlaybookVerdict,
 } from "@/components/ai-suggestions/playbook-review-store";
+import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
+import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
+import type {
+  Negotiation,
+  PlaybookPositionsValue,
+} from "@/routes/_protected.knowledge/-components/playbook-types";
 import {
   PLAYBOOK_PICKER_LIMIT,
+  playbookDetailOptions,
   playbooksOptions,
 } from "@/routes/_protected.knowledge/-queries";
 
@@ -95,6 +103,20 @@ export const PlaybookFacet = ({
   );
   const playbooks =
     playbooksData && "items" in playbooksData ? playbooksData.items : [];
+
+  // Negotiation guidance is authored on the playbook definition, not the
+  // review response (the backend Finding shape stays unchanged): fetch the
+  // reviewed playbook's positions and look each finding's guidance up by
+  // `sourceId` (== `finding.positionId`) so a deviation/fallback card can
+  // surface what to say without threading new fields through grading.
+  const { data: playbookDetail } = useQuery({
+    ...playbookDetailOptions(
+      user.activeOrganizationId,
+      session?.playbookId ?? "",
+    ),
+    enabled: Boolean(session?.playbookId),
+  });
+  const negotiationBySourceId = negotiationLookup(playbookDetail);
 
   const editorAvailable = registration !== undefined;
   const playbookName =
@@ -223,6 +245,7 @@ export const PlaybookFacet = ({
         editorAvailable={editorAvailable}
         findings={session.findings}
         fixStateByPosition={session.fixState}
+        negotiationBySourceId={negotiationBySourceId}
         onAcceptFix={acceptFix}
         onInsertFix={(finding) => {
           void insertFix(finding);
@@ -414,6 +437,7 @@ const ErrorState = ({
 type ResultsViewProps = {
   findings: readonly PlaybookFinding[];
   fixStateByPosition: Record<string, PlaybookFixState>;
+  negotiationBySourceId: ReadonlyMap<string, Negotiation>;
   playbookName: string;
   editorAvailable: boolean;
   onReviewAgain: () => void;
@@ -427,6 +451,7 @@ type ResultsViewProps = {
 const ResultsView = ({
   findings,
   fixStateByPosition,
+  negotiationBySourceId,
   playbookName,
   editorAvailable,
   onReviewAgain,
@@ -477,6 +502,11 @@ const ResultsView = ({
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto px-2 py-2">
+          <RiskSummaryCard
+            editorAvailable={editorAvailable}
+            findings={findings}
+            onScrollToBlock={onScrollToBlock}
+          />
           {groups.map((group) => (
             <section className="mb-4" key={group.severity}>
               <h3 className="text-muted-foreground mb-2 flex items-center gap-2 px-1 text-[11px] font-medium tracking-[0.06em] uppercase">
@@ -503,6 +533,7 @@ const ResultsView = ({
                     finding={finding}
                     fixState={fixStateByPosition[finding.positionId]}
                     key={finding.positionId}
+                    negotiation={negotiationBySourceId.get(finding.positionId)}
                     onAcceptFix={onAcceptFix}
                     onInsertFix={onInsertFix}
                     onRejectFix={onRejectFix}
@@ -519,9 +550,180 @@ const ResultsView = ({
   );
 };
 
+// -- Risk summary --
+
+// At-a-glance rollup shown above the findings list: the overall risk level,
+// how many of the reviewed positions were flagged, the verdict breakdown, and
+// the handful of issues that matter most — so a reviewer sees the contract's
+// shape without reading every finding. Purely derived from `findings`
+// (`computeRiskRollup`, no LLM call); reuses the citations already on each
+// finding to make a top issue clickable through the same `onScrollToBlock`
+// the finding cards use, rather than adding a second query.
+type RiskSummaryCardProps = {
+  findings: readonly PlaybookFinding[];
+  editorAvailable: boolean;
+  onScrollToBlock: (blockId: string) => void;
+};
+
+const RISK_BREAKDOWN_ORDER: readonly PlaybookVerdict[] = [
+  "deviation",
+  "missing",
+  "fallback",
+  "compliant",
+];
+
+const RiskSummaryCard = ({
+  findings,
+  editorAvailable,
+  onScrollToBlock,
+}: RiskSummaryCardProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const verdictLabels = useVerdictLabels();
+  const riskLabels = useRiskLevelLabels();
+
+  const rollup = computeRiskRollup(findings);
+  const findingByPositionId = new Map(
+    findings.map((finding) => [finding.positionId, finding]),
+  );
+
+  return (
+    <div className="bg-card mb-3 space-y-2.5 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-foreground-strong-muted text-[11px] font-medium tracking-[0.06em] uppercase">
+          {t("knowledge.playbooks.risk.summaryTitle")}
+        </h3>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+            riskChipClass(rollup.overallRisk),
+          )}
+        >
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 rounded-full",
+              riskDotClass(rollup.overallRisk),
+            )}
+          />
+          {riskLabels[rollup.overallRisk]}
+        </span>
+      </div>
+
+      <p className="text-muted-foreground text-xs">
+        {t("knowledge.playbooks.risk.flaggedCount", {
+          flagged: String(rollup.flaggedCount),
+          total: String(rollup.totalPositions),
+        })}
+      </p>
+
+      {rollup.flaggedCount > 0 && (
+        <ul className="flex flex-wrap gap-x-3 gap-y-1">
+          {RISK_BREAKDOWN_ORDER.map((verdict) => {
+            const count = rollup.verdictCounts[verdict];
+            if (count === 0) {
+              return null;
+            }
+            return (
+              <li
+                className="text-muted-foreground flex items-center gap-1 text-[11px]"
+                key={verdict}
+              >
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "size-1.5 rounded-full",
+                    verdictDotClass(verdict),
+                  )}
+                />
+                {verdictLabels[verdict]}
+                <span className="text-foreground-ghost tabular-nums">
+                  {format.number(count)}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {rollup.topIssues.length > 0 && (
+        <div className="space-y-1 border-t pt-2">
+          <p className="text-muted-foreground text-[11px] font-medium tracking-[0.06em] uppercase">
+            {t("knowledge.playbooks.risk.topIssuesTitle")}
+          </p>
+          <ul className="space-y-1">
+            {rollup.topIssues.map((topIssue) => (
+              <TopIssueRow
+                blockId={
+                  findingByPositionId.get(topIssue.positionId)?.citations.at(0)
+                    ?.blockId ?? null
+                }
+                editorAvailable={editorAvailable}
+                key={topIssue.positionId}
+                onScrollToBlock={onScrollToBlock}
+                severity={topIssue.severity}
+                text={topIssue.issue}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+};
+
+type TopIssueRowProps = {
+  text: string;
+  severity: PlaybookSeverity;
+  blockId: string | null;
+  editorAvailable: boolean;
+  onScrollToBlock: (blockId: string) => void;
+};
+
+const TopIssueRow = ({
+  text,
+  severity,
+  blockId,
+  editorAvailable,
+  onScrollToBlock,
+}: TopIssueRowProps) => {
+  const dot = (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "size-1.5 shrink-0 rounded-full",
+        severityDotClass(severity),
+      )}
+    />
+  );
+
+  if (blockId === null || !editorAvailable) {
+    return (
+      <li className="text-foreground flex items-center gap-1.5 text-xs">
+        {dot}
+        <span className="truncate">{text}</span>
+      </li>
+    );
+  }
+
+  return (
+    <li>
+      <button
+        className="text-foreground hover:bg-muted flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-start text-xs transition-colors"
+        onClick={() => onScrollToBlock(blockId)}
+        type="button"
+      >
+        {dot}
+        <span className="truncate">{text}</span>
+      </button>
+    </li>
+  );
+};
+
 type FindingCardProps = {
   finding: PlaybookFinding;
   fixState: PlaybookFixState | undefined;
+  negotiation: Negotiation | undefined;
   editorAvailable: boolean;
   onScrollToBlock: (blockId: string) => void;
   onInsertFix: (finding: PlaybookFinding) => void;
@@ -530,9 +732,16 @@ type FindingCardProps = {
   onRejectFix: (positionId: string, revisionIds: readonly number[]) => void;
 };
 
+// Negotiation guidance only helps once a clause has actually been flagged: a
+// compliant/missing verdict has nothing to negotiate, so the block is gated
+// on the two verdicts a reviewer would actually raise with the counterparty.
+const NEGOTIABLE_VERDICTS: ReadonlySet<PlaybookVerdict> =
+  new Set<PlaybookVerdict>(["deviation", "fallback"]);
+
 const FindingCard = ({
   finding,
   fixState,
+  negotiation,
   editorAvailable,
   onScrollToBlock,
   onInsertFix,
@@ -594,6 +803,7 @@ const FindingCard = ({
             {finding.rationale}
           </p>
         )}
+        <MatchedRefLine matchedRef={finding.matchedRef} />
         {finding.citations.length > 0 && (
           <div className="flex flex-col gap-1">
             {finding.citations.map((citation, index) => (
@@ -614,6 +824,7 @@ const FindingCard = ({
             ))}
           </div>
         )}
+        <NegotiationBlock negotiation={negotiation} verdict={finding.verdict} />
       </div>
 
       {finding.fix !== null && (
@@ -714,6 +925,111 @@ const FixActions = ({
   );
 };
 
+// Additive line under the rationale: the fallback that matched or the red line
+// that was violated. Tolerant of `matchedRef` being absent (older findings) or
+// null (verdicts that were not decided by a specific tier reference).
+const MatchedRefLine = ({
+  matchedRef,
+}: {
+  matchedRef: PlaybookMatchedRef | null | undefined;
+}) => {
+  const t = useTranslations();
+  if (matchedRef === undefined || matchedRef === null) {
+    return null;
+  }
+  const label =
+    matchedRef.kind === "fallback"
+      ? t("knowledge.playbooks.review.matchedFallback")
+      : t("knowledge.playbooks.review.violatedRedLine");
+  const text =
+    matchedRef.kind === "fallback" && matchedRef.label
+      ? `${matchedRef.label}: ${matchedRef.text}`
+      : matchedRef.text;
+  return (
+    <p className="text-muted-foreground text-xs leading-snug">
+      <span className="text-foreground-strong-muted">{label}</span> {text}
+    </p>
+  );
+};
+
+// Reviewer-facing "what to say" guidance authored on the position, not the
+// finding: surfaced only for the two verdicts a reviewer would actually raise
+// with the counterparty (a compliant/missing verdict has nothing to
+// negotiate). Tolerant of `negotiation` being absent (position authored no
+// guidance) the same way `MatchedRefLine` tolerates a missing `matchedRef`.
+const NegotiationBlock = ({
+  negotiation,
+  verdict,
+}: {
+  negotiation: Negotiation | undefined;
+  verdict: PlaybookVerdict | null;
+}) => {
+  const t = useTranslations();
+  if (
+    negotiation === undefined ||
+    verdict === null ||
+    !NEGOTIABLE_VERDICTS.has(verdict)
+  ) {
+    return null;
+  }
+  const { talkingPoints } = negotiation;
+  return (
+    <div className="border-border/70 mt-1 space-y-1.5 rounded-md border border-dashed p-2">
+      <p className="text-foreground-strong-muted text-[11px] font-medium">
+        {t("knowledge.playbooks.negotiation.title")}
+      </p>
+      {negotiation.rationale !== undefined && (
+        <p className="text-muted-foreground text-xs leading-snug">
+          <span className="text-foreground-strong-muted">
+            {t("knowledge.playbooks.negotiation.rationaleLabel")}:
+          </span>{" "}
+          {negotiation.rationale}
+        </p>
+      )}
+      {talkingPoints !== undefined && talkingPoints.length > 0 && (
+        <div className="text-xs leading-snug">
+          <span className="text-foreground-strong-muted">
+            {t("knowledge.playbooks.negotiation.talkingPointsLabel")}:
+          </span>
+          <ul className="text-muted-foreground ms-4 list-disc">
+            {talkingPoints.map((point, index) => (
+              // Plain authored strings with no stable id; this list is
+              // read-only and never reordered from the review facet.
+              <li key={index}>{point}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {negotiation.escalation !== undefined && (
+        <p className="text-muted-foreground text-xs leading-snug">
+          <span className="text-foreground-strong-muted">
+            {t("knowledge.playbooks.negotiation.escalationLabel")}:
+          </span>{" "}
+          {negotiation.escalation}
+        </p>
+      )}
+    </div>
+  );
+};
+
+// The reviewed playbook's positions, keyed by `sourceId` (== `finding.positionId`)
+// so a finding can be joined back to the negotiation guidance its position
+// authored. Tolerant of the detail query still loading / erroring (empty map).
+const negotiationLookup = (
+  detail: { positions: PlaybookPositionsValue } | undefined,
+): ReadonlyMap<string, Negotiation> => {
+  const map = new Map<string, Negotiation>();
+  if (!detail) {
+    return map;
+  }
+  for (const position of detail.positions.items) {
+    if (position.mode === "graded" && position.negotiation !== undefined) {
+      map.set(position.sourceId, position.negotiation);
+    }
+  }
+  return map;
+};
+
 // -- helpers --
 
 const toFolioFixOperation = (fix: PlaybookFindingFix): FolioAIEditOperation => {
@@ -742,6 +1058,67 @@ const useSeverityLabels = (): Record<PlaybookSeverity, string> => {
     medium: t("knowledge.playbooks.severity.medium"),
     low: t("knowledge.playbooks.severity.low"),
   };
+};
+
+const useRiskLevelLabels = (): Record<OverallRisk, string> => {
+  const t = useTranslations();
+  return {
+    critical: t("knowledge.playbooks.risk.riskLevel.critical"),
+    high: t("knowledge.playbooks.risk.riskLevel.high"),
+    medium: t("knowledge.playbooks.risk.riskLevel.medium"),
+    low: t("knowledge.playbooks.risk.riskLevel.low"),
+    none: t("knowledge.playbooks.risk.riskLevel.none"),
+  };
+};
+
+// The overall-risk chip escalates visually with the level: "critical" is the
+// one solid-fill state (it means an outright violation of a non-negotiable
+// position), the rest reuse the same outlined verdict/severity token pairs
+// as the finding cards below.
+const RISK_CHIP_CRITICAL =
+  "border-transparent bg-destructive text-destructive-foreground";
+const RISK_CHIP_HIGH = "border-destructive/30 text-destructive";
+const RISK_CHIP_MEDIUM = "border-warning/30 text-warning-foreground";
+const RISK_CHIP_LOW = "border-border text-muted-foreground";
+const RISK_CHIP_NONE = "border-success/30 text-success";
+
+const riskChipClass = (risk: OverallRisk): string => {
+  switch (risk) {
+    case "critical":
+      return RISK_CHIP_CRITICAL;
+    case "high":
+      return RISK_CHIP_HIGH;
+    case "medium":
+      return RISK_CHIP_MEDIUM;
+    case "low":
+      return RISK_CHIP_LOW;
+    case "none":
+      return RISK_CHIP_NONE;
+    default:
+      risk satisfies never;
+      return "";
+  }
+};
+
+const riskDotClass = (risk: OverallRisk): string => {
+  switch (risk) {
+    // The "critical" dot sits on the chip's own solid destructive
+    // background, so it needs the foreground shade for contrast; "high"
+    // sits on a transparent chip like the severity dots elsewhere.
+    case "critical":
+      return "bg-destructive-foreground";
+    case "high":
+      return "bg-destructive";
+    case "medium":
+      return "bg-warning";
+    case "low":
+      return "bg-foreground-strong-muted";
+    case "none":
+      return "bg-success";
+    default:
+      risk satisfies never;
+      return "";
+  }
 };
 
 // Verdict tiers map to the same green/amber/red/gray semantic

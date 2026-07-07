@@ -1520,58 +1520,107 @@
       "whatIsAnMcpServer": "Qu'est-ce qu'un serveur MCP ?"
     },
     "playbooks": {
-      "addFallback": "Ajouter une alternative",
+      "addCheck": "Ajouter une vérification",
+      "addExtractPosition": "Extraction seule",
+      "addExtractPositionHint": "Capture une valeur, sans évaluation",
+      "addGradedPosition": "Critère évalué",
+      "addGradedPositionHint": "Règles à paliers avec un verdict",
+      "addOption": "Ajouter une option",
       "addPosition": "Ajouter un critère",
-      "ask": "Demande",
+      "addRule": "Règle",
+      "advanced": "Avancé",
+      "approval": {
+        "approve": "Approve",
+        "approveFailed": "Failed to approve playbook",
+        "approvedOn": "Approved {date}",
+        "approvedToast": "Playbook approved",
+        "statusApproved": "Approved",
+        "statusDraft": "Draft"
+      },
       "askContentLabel": "Type de réponse",
       "askQuestionLabel": "Question",
       "askQuestionPlaceholder": "Que devons-nous lire dans chaque document ? Laissez vide pour une saisie manuelle.",
-      "clauseLabel": "Clause",
+      "check": "Vérification",
+      "checkHint": "Évalue avec une règle déterministe plutôt qu’avec l’IA.",
+      "checkKind": {
+        "constraint": "Contrainte de valeur",
+        "presence": "Présence"
+      },
       "clausePlaceholder": "Rechercher des clauses…",
-      "clauseRequired": "Sélectionnez une clause pour chaque référence basée sur une clause.",
       "clauseSearchEmpty": "Aucune clause trouvée",
-      "conditionPlaceholder": "Configurez cette contrainte à une étape ultérieure.",
+      "collapsePosition": "Réduire le critère",
       "confirmDelete": "Cette action supprimera définitivement le playbook.",
       "contentType": {
         "int": "Nombre",
         "singleSelect": "Sélection unique",
         "text": "Texte"
       },
+      "convertToExtract": "Convertir en extraction seule",
+      "convertToExtractDescription": "Cela supprime l'échelle de paliers et l'évaluation de ce critère. Cette action est irréversible.",
+      "convertToExtractTitle": "Convertir en extraction seule ?",
+      "convertToGraded": "Convertir en critère évalué",
       "createPlaybook": "Nouveau playbook",
       "created": "Playbook créé",
       "deleteFailed": "Échec de la suppression du playbook",
       "deletePlaybook": "Supprimer le playbook",
+      "deletePosition": "Supprimer le critère",
       "deleted": "Playbook supprimé",
+      "derivedAutomatically": "La question et le type de réponse sont dérivés automatiquement lors de l'enregistrement.",
+      "derivedQuestion": "Question dérivée",
+      "derivedType": "Type dérivé",
       "descriptionPlaceholder": "Que vérifie ce playbook ?",
+      "disabledBadge": "Désactivé — ignoré lors des examens",
+      "duplicatePosition": "Dupliquer le critère",
       "empty": "Aucun playbook pour le moment",
       "emptyDescription": "Créez un playbook pour examiner les documents au regard de vos référentiels.",
-      "expect": "Attendu",
-      "expectSourceLabel": "Référence",
+      "enablePosition": "Activer le critère",
+      "entryLabelPlaceholder": "Libellé (facultatif)",
+      "entryPlaceholder": "Formulation alternative acceptable",
+      "entryRank": "#{index}",
+      "expandPosition": "Développer le critère",
       "expectation": {
         "restricted": "Interdit"
       },
-      "expectationLabel": "Exigence",
-      "fallbackLabelPlaceholder": "Étiquette (facultatif)",
-      "fallbackTextPlaceholder": "Formulation alternative acceptable",
-      "fallbacksLabel": "Alternatives",
-      "grade": "Évaluation",
-      "gradeRuleLabel": "Règle",
+      "extractOnlyBadge": "Extraction seule",
+      "extractOnlyDescription": "Aucune évaluation — capture la valeur dans le tableau.",
+      "extraction": "Extraction",
+      "extractionAuto": "Automatique",
+      "extractionManual": "Manuel",
+      "fixErrorsBeforeSaving": "Corrigez les champs surlignés avant d'enregistrer.",
+      "gradedNeedsContent": "Ajoutez au moins une règle, une entrée alternative ou un texte idéal.",
       "guidanceLabel": "Conseils",
       "guidancePlaceholder": "Notes pour les relecteurs (facultatif)",
+      "idealFromClause": "Depuis la bibliothèque de clauses",
+      "idealInline": "Texte libre",
+      "idealInlinePlaceholder": "Collez la formulation idéale…",
+      "idealLanguage": "Formulation idéale",
       "issueLabel": "Sujet",
       "issuePlaceholder": "p. ex. Limitation de responsabilité",
       "loadFailed": "Échec du chargement des playbooks",
       "loading": "Chargement des playbooks…",
+      "manageTypes": "Manage types…",
       "namePlaceholder": "p. ex. Revue de NDA",
       "nameRequired": "Ajoutez un nom.",
+      "negotiation": {
+        "addTalkingPoint": "Add talking point",
+        "escalationLabel": "Escalation",
+        "escalationPlaceholder": "When/to whom to escalate (optional)",
+        "rationaleLabel": "Rationale",
+        "rationalePlaceholder": "Why we want this (optional)",
+        "talkingPointPlaceholder": "What to say",
+        "talkingPointsLabel": "Talking points",
+        "title": "Negotiation"
+      },
       "noPositions": "Aucun critère pour le moment. Ajoutez le premier.",
+      "optionPlaceholder": "Valeur de l'option",
       "optionsLabel": "Options",
-      "optionsPlaceholder": "Une option par ligne",
-      "positionIssueRequired": "Chaque critère doit comporter un sujet.",
-      "positionLabel": "Critère {index}",
+      "outline": "Plan",
+      "positionOfTotal": "Critère {index} sur {total}",
       "positions": "Critères",
-      "preferredLabel": "Formulation préférée",
-      "preferredPlaceholder": "Formulation souhaitée",
+      "redLinePlaceholder": "Formulation qui n'est jamais acceptable",
+      "removeCheck": "Supprimer la vérification",
+      "removeIdeal": "Supprimer la formulation idéale",
+      "reorderPosition": "Réorganiser le critère",
       "review": {
         "changePlaybook": "Choisir un autre playbook",
         "extractedLabel": "Trouvé :",
@@ -1581,6 +1630,7 @@
         "insertFailed": "Impossible d'insérer la clause préférée",
         "insertPreferred": "Insérer la clause préférée",
         "launcherDescription": "Vérifiez ce document au regard d'un playbook de l'organisation et obtenez les résultats directement dans le document.",
+        "matchedFallback": "Alternative correspondante :",
         "noFindings": "Aucun problème trouvé",
         "playbookLabel": "Playbook",
         "playbookPlaceholder": "Choisir un playbook",
@@ -1591,14 +1641,23 @@
         "reviewingHint": "Pour les playbooks volumineux, cela peut prendre quelques minutes.",
         "run": "Examiner",
         "scrollToChange": "Aller à la modification",
-        "viewClause": "Voir la clause"
+        "viewClause": "Voir la clause",
+        "violatedRedLine": "Viole la ligne rouge :"
       },
-      "rule": {
-        "extractOnly": "Extraction seule",
-        "positionMatch": "Correspondance de critère",
-        "presence": "Présence",
-        "propertyConstraint": "Contrainte de valeur"
+      "risk": {
+        "flaggedCount": "{flagged} of {total} positions flagged",
+        "riskLevel": {
+          "critical": "Critical",
+          "high": "High",
+          "low": "Low",
+          "medium": "Medium",
+          "none": "No risk"
+        },
+        "summaryTitle": "Risk summary",
+        "topIssuesTitle": "Top issues"
       },
+      "ruleNumber": "Règle {index}",
+      "rulePlaceholder": "Règle en langage clair",
       "saveFailed": "Échec de l'enregistrement du playbook",
       "severity": {
         "blocker": "Bloquant",
@@ -1607,17 +1666,34 @@
         "medium": "Moyenne"
       },
       "severityLabel": "Gravité",
-      "source": {
-        "clause": "Bibliothèque de clauses",
-        "inline": "Texte libre",
-        "none": "Aucune référence"
+      "starters": {
+        "addedToast": "Playbook added",
+        "browseButton": "Browse starter playbooks",
+        "positionCount": "{count, plural, one {# position} other {# positions}}",
+        "subtitle": "Ready-made playbooks you can add and then tailor to your standards.",
+        "title": "Starter playbooks"
       },
+      "switchToAuto": "Revenir à l'automatique",
+      "switchToManual": "Passer en manuel",
+      "tier": {
+        "acceptable": "Acceptable",
+        "fallback": "Alternative",
+        "notAcceptable": "Inacceptable"
+      },
+      "untitledPosition": "Critère sans titre",
       "updated": "Playbook mis à jour",
       "verdict": {
         "compliant": "Conforme",
         "deviation": "Écart",
         "fallback": "Alternative",
         "missing": "Absent"
+      },
+      "versions": {
+        "confirmRestore": "Your current draft will be replaced with this version's content.",
+        "restore": "Restore",
+        "restoreFailed": "Failed to restore version",
+        "restoredToast": "Version restored",
+        "versionHistory": "Version history"
       }
     },
     "sections": {
@@ -2043,6 +2119,14 @@
         "labelPickerPlaceholder": "Type",
         "termAddedToast": "« {value} » a été ajouté à la liste de blocage de l’équipe.",
         "title": "Anonymisation"
+      },
+      "documentTypes": {
+        "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
+        "deleteFailed": "Couldn't delete document type",
+        "description": "Define the document types your organisation reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "labelAria": "Document type name",
+        "reorder": "Reorder document type",
+        "title": "Document types"
       },
       "matterNumbering": "Numérotation des dossiers",
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
