@@ -75,20 +75,20 @@ export const ChatMentionProviders = ({
     getItems: async (categories) => {
       const items: ChatMentionOption[] = [];
 
-      if (categories.includes("workspace")) {
-        if (workspaces) {
-          const viewIdsByWorkspaceId = await loadFirstViewIdsByWorkspaceId({
-            queryClient,
-            workspaces,
-          });
-          items.push(
-            ...buildWorkspaceMentionOptions({
-              firstViewIdsByWorkspaceId: viewIdsByWorkspaceId,
-              workspaces,
-            }),
-          );
-        }
+      if (!categories.includes("workspace") || !workspaces) {
+        return items;
       }
+
+      const viewIdsByWorkspaceId = await loadFirstViewIdsByWorkspaceId({
+        queryClient,
+        workspaces,
+      });
+      items.push(
+        ...buildWorkspaceMentionOptions({
+          firstViewIdsByWorkspaceId: viewIdsByWorkspaceId,
+          workspaces,
+        }),
+      );
 
       return items;
     },
