@@ -210,15 +210,6 @@ jobs:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: bash scripts/check-release-changelog.sh --base "origin/$BASE_REF"
 
-      - name: Lint
-        if: needs.ci-changes.outputs.package_checks_required == 'true'
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-        run: |
-          args=()
-          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
-          bun run lint -- "${args[@]}"
-
       - name: Format
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         # Call turbo directly: the `format:check` script already
@@ -235,15 +226,6 @@ jobs:
       - name: Rust format
         if: needs.ci-changes.outputs.desktop_rust_checks_required == 'true'
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
-
-      - name: Typecheck
-        if: needs.ci-changes.outputs.package_checks_required == 'true'
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-        run: |
-          args=()
-          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
-          bun run typecheck -- "${args[@]}"
 
       - name: React Compiler bailout guard
         if: needs.ci-changes.outputs.package_checks_required == 'true'
@@ -365,8 +347,125 @@ jobs:
         if: github.event_name == 'pull_request'
         run: bash scripts/check-bridge-version.sh
 
+  lint:
+    needs: [trust-check, ci-changes]
+    if: >-
+      needs.ci-changes.outputs.package_checks_required == 'true'
+      && (needs.trust-check.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Turbo remote cache
+        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9 # v2.5.0
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Compute affected flag
+        id: affected
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=--affected" >> "$GITHUB_OUTPUT"
+            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          fi
+
+      - name: Lint
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          args=()
+          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          bun run lint -- "${args[@]}"
+
+  typecheck:
+    needs: [trust-check, ci-changes]
+    if: >-
+      needs.ci-changes.outputs.package_checks_required == 'true'
+      && (needs.trust-check.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Turbo remote cache
+        uses: rharkor/caching-for-turbo@75f8ebf4a43d2c60b23bc2a27082cfea94ffdad9 # v2.5.0
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          mv .env.example .env
+          cd ../web
+          mv .env.example .env
+
+      - name: Compute affected flag
+        id: affected
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=--affected" >> "$GITHUB_OUTPUT"
+            echo "TURBO_SCM_BASE=origin/$BASE_REF" >> "$GITHUB_ENV"
+          fi
+
+      - name: Typecheck
+        env:
+          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
+        run: |
+          args=()
+          [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
+          bun run typecheck -- "${args[@]}"
+
   # Vite web build. Same rationale as landing-build below: the
-  # ci-checks job's lint + typecheck + test don't exercise the
+  # required lint, typecheck, and test checks don't exercise the
   # bundler, so worker bundling / wasm-loader / plugin issues
   # surface only at deploy time. Run `vite build` on every PR
   # that could plausibly affect the web output so this class of
@@ -477,8 +576,8 @@ jobs:
             exit 1
           fi
 
-  # Astro landing build. The existing ci-checks job runs lint,
-  # typecheck, and test, but no `astro build`, so plugin/runtime
+  # Astro landing build. The required checks run lint, typecheck,
+  # and test, but no `astro build`, so plugin/runtime
   # incompatibilities surface only at deploy time. Catch those
   # here on every PR that could plausibly affect the landing
   # output.
@@ -1074,6 +1173,8 @@ jobs:
       [
         trust-check,
         ci-checks,
+        lint,
+        typecheck,
         web-build,
         landing-build,
         e2e,
@@ -1095,8 +1196,10 @@ jobs:
           E2E_RESULT: ${{ needs.e2e.result }}
           EVENT: ${{ github.event_name }}
           LANDING_RESULT: ${{ needs.landing-build.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
           TRUSTED: ${{ needs.trust-check.outputs.trusted }}
           TRUST_RESULT: ${{ needs.trust-check.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
           WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
         run: |
@@ -1110,6 +1213,8 @@ jobs:
 
           if [[ "$EVENT" == "workflow_dispatch" ]]; then
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
+                  || "$LINT_RESULT" == "failure" || "$LINT_RESULT" == "cancelled" \
+                  || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
@@ -1130,12 +1235,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$LINT_RESULT" == "cancelled" || "$TYPECHECK_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$LINT_RESULT" == "failure" || "$TYPECHECK_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
