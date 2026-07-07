@@ -314,6 +314,7 @@ export default defineConfig(({ mode }) => {
         //    (lib/beta-features.ts) reach these only at runtime.
         "@tanstack/history",
         "@tanstack/router-core",
+        "@tanstack/router-core/isServer",
         "@tanstack/router-core/ssr/client",
         "@tanstack/router-core/ssr/server",
         "h3-v2",

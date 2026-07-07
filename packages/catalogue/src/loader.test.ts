@@ -57,7 +57,7 @@ describe("loadCatalogueSkillInstallPayloads", () => {
     );
 
     for (const entry of skillEntries) {
-      if (entry.kind === "skill" && entry.source === "in-tree") {
+      if (entry.source === "in-tree") {
         // In-tree skills bundle their body as a private install payload.
         expect(payloadSlugs.has(entry.slug)).toBe(true);
       } else {
