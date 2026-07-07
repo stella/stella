@@ -6857,10 +6857,16 @@
         ],
         "occurrences": [
           {
-            "location": "packages/cli/src/cli.ts#12"
+            "location": "packages/cli/src/build-cli-tree.ts#9"
           },
           {
-            "location": "packages/cli/src/cli.ts#13"
+            "location": "packages/cli/src/build-cli-tree.ts#15"
+          },
+          {
+            "location": "packages/cli/src/cli.ts#14"
+          },
+          {
+            "location": "packages/cli/src/cli.ts#15"
           },
           {
             "location": "packages/cli/src/commands/auth.ts#3"
@@ -7238,6 +7244,72 @@
       ],
       "type": "framework",
       "version": "0.19.2"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/ai-code-mode@0.3.5",
+      "description": "Secure TypeScript Code Mode for TanStack AI agents to execute sandboxed tool orchestration programs.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-code-mode/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-code-mode/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts#7"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/ai"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-code-mode",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-code-mode/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-code-mode@0.3.5",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "0.3.5"
     },
     {
       "authors": [
@@ -7645,7 +7717,7 @@
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#1"
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#1"
@@ -7655,6 +7727,12 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/org-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/registry-adapter/tool-input-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/registry-write-tools.ts#5"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#1"
@@ -12308,12 +12386,6 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/readonly-manifest.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/readonly-manifest.ts#2"
-          },
-          {
             "location": "apps/api/src/lib/json-schema/json-schema-to-type.ts#1"
           },
           {
@@ -12831,7 +12903,7 @@
             "location": "apps/api/src/handlers/chat/tools/chat-tool-types.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#2"
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-code-mode.ts#12"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#1"
@@ -12840,16 +12912,10 @@
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/org-manifest.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/readonly-manifest.ts#3"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/execute/ref-registry.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/sandbox/code-mode-driver.ts#8"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts#1"
@@ -12858,19 +12924,16 @@
             "location": "apps/api/src/handlers/chat/tools/execute/sandbox/transpile.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/utils.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/workspace-function-registry.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/workspace-manifest.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/registry-adapter/ref-mediation.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/registry-adapter/run-registry-write-tool.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/registry-write-tools.ts#6"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#2"
@@ -13932,6 +13995,9 @@
             "location": "apps/api/src/lib/prompt-safety.ts#20"
           },
           {
+            "location": "apps/api/src/lib/redis-client.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/s3-presign.ts#32"
           },
           {
@@ -14172,10 +14238,34 @@
             "location": "packages/cli/src/auth/token-exchange.ts#4"
           },
           {
-            "location": "packages/cli/src/cli.ts#14"
+            "location": "packages/cli/src/cli.ts#16"
+          },
+          {
+            "location": "packages/cli/src/codegen.ts#11"
           },
           {
             "location": "packages/cli/src/commands/auth.ts#5"
+          },
+          {
+            "location": "packages/cli/src/generate-skill.ts#9"
+          },
+          {
+            "location": "packages/cli/src/mcp-client.ts#9"
+          },
+          {
+            "location": "packages/cli/src/registry-cache.ts#11"
+          },
+          {
+            "location": "packages/cli/src/registry-refresh.ts#18"
+          },
+          {
+            "location": "packages/cli/src/registry-trust.ts#12"
+          },
+          {
+            "location": "packages/cli/src/run-leaf-command.ts#8"
+          },
+          {
+            "location": "packages/cli/src/run-resource-command.ts#7"
           },
           {
             "location": "packages/docx-core/src/validate/docx.ts#1"
@@ -14373,7 +14463,7 @@
             "location": "apps/api/src/lib/file-derivative-queue.ts#2"
           },
           {
-            "location": "apps/api/src/lib/redis-client.ts#1"
+            "location": "apps/api/src/lib/redis-client.ts#2"
           },
           {
             "location": "apps/api/src/lib/scheduler/bullmq.ts#1"
@@ -15419,12 +15509,6 @@
           },
           {
             "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/workspace-function-registry.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
@@ -22803,22 +22887,7 @@
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#3"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/org-manifest.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/pagination.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/readonly-manifest.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/workspace-manifest.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
@@ -23011,6 +23080,12 @@
           },
           {
             "location": "packages/cli/src/auth/token-exchange.ts#5"
+          },
+          {
+            "location": "packages/cli/src/cli-version-nudge.ts#8"
+          },
+          {
+            "location": "packages/cli/src/codegen.ts#13"
           },
           {
             "location": "packages/conditions/src/schema.ts#13"
@@ -23187,22 +23262,7 @@
             "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#3"
-          },
-          {
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/org-manifest.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/pagination.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/readonly-manifest.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/workspace-manifest.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
@@ -23395,6 +23455,12 @@
           },
           {
             "location": "packages/cli/src/auth/token-exchange.ts#5"
+          },
+          {
+            "location": "packages/cli/src/cli-version-nudge.ts#8"
+          },
+          {
+            "location": "packages/cli/src/codegen.ts#13"
           },
           {
             "location": "packages/conditions/src/schema.ts#13"
