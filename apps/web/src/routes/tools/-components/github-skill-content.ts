@@ -117,7 +117,7 @@ const loadRawSkill = async (url: string): Promise<GithubSkillContentResult> => {
  * during SSR and via RPC on client navigation.
  */
 export const fetchGithubSkillContent = createServerFn({ method: "GET" })
-  .inputValidator((input: v.InferInput<typeof inputSchema>) =>
+  .validator((input: v.InferInput<typeof inputSchema>) =>
     v.parse(inputSchema, input),
   )
   .handler(async ({ data }): Promise<GithubSkillContentResult> => {

@@ -51,8 +51,6 @@ type CommonFields = {
 
 export type CatalogueSkill = CommonFields & {
   kind: "skill";
-  entryPath: string;
-  resources: string[];
 };
 
 export type CatalogueMcp = CommonFields & {

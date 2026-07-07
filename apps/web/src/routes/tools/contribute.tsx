@@ -4,7 +4,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { CATALOGUE_LICENSES } from "@stll/catalogue";
-import { Button } from "@stll/ui/components/button";
+import { buttonVariants } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
@@ -39,7 +40,7 @@ function ContributePage() {
           </p>
         </div>
 
-        <Section title={t("publicTools.contribute.skillsTitle")}>
+        <Section title={t("knowledge.sections.prompts.title")}>
           <p>
             <strong className="text-foreground font-medium">
               {t("publicTools.contribute.inTreeTitle")}
@@ -77,20 +78,22 @@ function ContributePage() {
         </Section>
 
         <div className="flex flex-wrap gap-3 pt-2">
-          <Button asChild>
-            <a
-              href={CATALOGUE_CONTRIBUTING_URL}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {t("publicTools.contribute.contributingLink")}
-            </a>
-          </Button>
-          <Button asChild variant="outline">
-            <a href={CATALOGUE_ENTRIES_URL} rel="noreferrer" target="_blank">
-              {t("publicTools.contribute.repoLink")}
-            </a>
-          </Button>
+          <a
+            className={cn(buttonVariants())}
+            href={CATALOGUE_CONTRIBUTING_URL}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {t("publicTools.contribute.contributingLink")}
+          </a>
+          <a
+            className={cn(buttonVariants({ variant: "outline" }))}
+            href={CATALOGUE_ENTRIES_URL}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {t("publicTools.contribute.repoLink")}
+          </a>
         </div>
       </div>
     </main>

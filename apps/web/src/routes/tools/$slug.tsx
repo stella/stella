@@ -11,7 +11,8 @@ import {
   type LoadedEntryByKind,
 } from "@stll/catalogue";
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
-import { Button } from "@stll/ui/components/button";
+import { Button, buttonVariants } from "@stll/ui/components/button";
+import { cn } from "@stll/ui/lib/utils";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { pageTitleLiteral } from "@/lib/page-title";
@@ -84,7 +85,11 @@ export const Route = createFileRoute("/tools/$slug")({
     if (!entry) {
       throw redirect({ to: "/tools", replace: true });
     }
-    return { entry, markdown: await loadSkillMarkdown(entry) };
+    return {
+      displayName: entry.displayName,
+      entry,
+      markdown: await loadSkillMarkdown(entry),
+    };
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
@@ -225,17 +230,23 @@ function DownloadAffordance({ entry }: { entry: LoadedCatalogueEntry }) {
   }
   if (entry.source === "in-tree") {
     return (
-      <Button asChild variant="outline">
-        <a href={toolDownloadPath(entry.slug)}>{t("common.download")}</a>
-      </Button>
+      <a
+        className={cn(buttonVariants({ variant: "outline" }))}
+        href={toolDownloadPath(entry.slug)}
+      >
+        {t("common.download")}
+      </a>
     );
   }
   return (
-    <Button asChild variant="outline">
-      <a href={githubArchiveUrl(entry)} rel="noreferrer" target="_blank">
-        {t("publicTools.downloadUpstream")}
-      </a>
-    </Button>
+    <a
+      className={cn(buttonVariants({ variant: "outline" }))}
+      href={githubArchiveUrl(entry)}
+      rel="noreferrer"
+      target="_blank"
+    >
+      {t("publicTools.downloadUpstream")}
+    </a>
   );
 }
 

@@ -88,12 +88,18 @@ const collectStaticImportSpecifiers = (source: string): readonly string[] => {
   for (const match of source.matchAll(
     /\bfrom\s*["'](?<specifier>[^"']+)["']/gu,
   )) {
-    specifiers.push(match.groups?.specifier as string);
+    const specifier = match.groups?.["specifier"];
+    if (specifier !== undefined) {
+      specifiers.push(specifier);
+    }
   }
   for (const match of source.matchAll(
     /(?:^|[\n;])\s*import\s+["'](?<specifier>[^"']+)["']/gu,
   )) {
-    specifiers.push(match.groups?.specifier as string);
+    const specifier = match.groups?.["specifier"];
+    if (specifier !== undefined) {
+      specifiers.push(specifier);
+    }
   }
   return specifiers;
 };
@@ -114,8 +120,8 @@ const walkSsrGraph = (entries: readonly string[]): WalkResult => {
   const stack = [...entries];
 
   while (stack.length > 0) {
-    const file = stack.pop() as string;
-    if (visited.has(file)) {
+    const file = stack.pop();
+    if (file === undefined || visited.has(file)) {
       continue;
     }
     visited.add(file);

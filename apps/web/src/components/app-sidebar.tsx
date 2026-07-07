@@ -447,6 +447,12 @@ export function AppSidebar(props: AppSidebarProps) {
       },
       contextMenu: {},
     },
+    tools: {
+      action: () => {
+        void navigate({ to: "/tools" });
+      },
+      contextMenu: {},
+    },
     knowledge: {
       action: () => {
         detached(navigate({ to: "/knowledge" }), "action");

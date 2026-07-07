@@ -15,7 +15,8 @@ export const useInstallEntry = (organizationId: string) => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (entry: CatalogueEntry) => installCatalogueEntry(entry),
+    mutationFn: async (entry: CatalogueEntry) =>
+      await installCatalogueEntry(entry),
     onSuccess: () => {
       detached(
         queryClient.invalidateQueries({
