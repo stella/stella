@@ -283,7 +283,7 @@ export const resolveTemplateProperties = async ({
         name: templateProperty.name,
         content: templateProperty.content,
         tool: sanitizeTemplatePropertyTool(templateProperty.tool),
-        role: resolveTemplatePropertyRole(templateProperty) ?? null,
+        role: resolveTemplatePropertyRole(templateProperty),
         status: templateProperty.tool.type === "ai-model" ? "stale" : "fresh",
       })
       .returning({ id: properties.id });
@@ -623,7 +623,7 @@ const validateTemplatePropertyConfig = (
   templateProperty: ViewTemplateProperty,
 ): ResolveTemplatePropertiesResult | null => {
   if (
-    templateProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+    hasTemplatePropertyRole(templateProperty) &&
     !isDocumentTypeClassifierShape(templateProperty)
   ) {
     return {
