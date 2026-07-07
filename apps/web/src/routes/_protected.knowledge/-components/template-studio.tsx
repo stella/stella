@@ -6731,7 +6731,11 @@ const StudioGettingStarted = () => {
  *  The literals live here rather than in i18n to avoid ICU brace escaping. */
 const StudioMarkerSyntaxPopover = () => {
   const t = useTranslations();
-  const markers: { syntax: string; description: TranslationKey }[] = [
+  // `as const satisfies` instead of a `TranslationKey` annotation: widening
+  // to the full union (whose ICU-variable members make t() demand a values
+  // argument) breaks the plain t(key) calls below. The literal keys stay
+  // narrow this way while still being checked against the union.
+  const markers = [
     { syntax: "{{field.path}}", description: "templates.studio.conceptField" },
     {
       syntax: "{{#if …}}…{{/if}}",
@@ -6749,7 +6753,10 @@ const StudioMarkerSyntaxPopover = () => {
     { syntax: "{{@ref:Key}}", description: "templates.studio.markerRef" },
     { syntax: "{{@index}}", description: "templates.studio.markerIndex" },
     { syntax: "{{@count}}", description: "templates.studio.markerCount" },
-  ];
+  ] as const satisfies readonly {
+    syntax: string;
+    description: TranslationKey;
+  }[];
   return (
     <Popover>
       <PopoverTrigger
