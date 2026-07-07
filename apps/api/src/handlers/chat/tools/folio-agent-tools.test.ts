@@ -18,6 +18,12 @@ const hasToolInputJsonSchema = (
 ): schema is ToolInputJsonSchema =>
   typeof schema === "object" && schema !== null;
 
+// `createFolioAgentDocTools()` takes no gating input — it always builds
+// both tools. The `hasActiveDocxFileClient`-gated registration (only the
+// file overlay, never Template Studio) is exercised where the gate
+// actually lives: `getChatTools` in `tool-schema.test.ts` ("registers the
+// folio-agents read_document/find_text tools only when the file-overlay
+// docx client is active").
 describe("createFolioAgentDocTools", () => {
   test("registers exactly read_document and find_text", () => {
     const tools = createFolioAgentDocTools();

@@ -200,6 +200,22 @@ type GetChatToolsProps = {
    */
   hasActiveDocxEditClient: boolean;
   /**
+   * `true` only for the file overlay: `activeFile.supportsDocxEdits`,
+   * with no Template Studio fallback. Narrower than
+   * `hasActiveDocxEditClient` on purpose — only `file-chat-overlay.tsx`
+   * mounts the auto-run watcher
+   * (`isUnresolvedFolioAgentDocToolCallPart` /
+   * `runFolioAgentDocToolCall`) that resolves the folio-agents
+   * `read_document` / `find_text` tools via `addToolResult`.
+   * Template Studio has no such watcher, so registering these tools
+   * there would hang the turn waiting for a client result that never
+   * arrives. Gates `createFolioAgentDocTools()` registration below;
+   * `apply-active-docx-edits` stays on the combined
+   * `hasActiveDocxEditClient` flag since Template Studio does handle
+   * that one.
+   */
+  hasActiveDocxFileClient: boolean;
+  /**
    * Per-thread opt-in for the web_search + fetch_url tools. Combined
    * with FEATURE_WEB_SEARCH (deploy gate), the org's
    * disabledNativeToolSlugs ("web-search" disabled), and the presence
@@ -328,6 +344,7 @@ export const getChatTools = ({
   toolWorkspaceIds,
   refRegistry,
   hasActiveDocxEditClient,
+  hasActiveDocxFileClient,
   webSearchEnabled,
   webSearchProviders,
   externalTools = {},
@@ -400,11 +417,12 @@ export const getChatTools = ({
   const activeDocxEditTools = hasActiveDocxEditClient
     ? createActiveDocxEditTools()
     : {};
-  // Same precondition as `apply-active-docx-edits`: a live editor surface
-  // with a client tool handler mounted. Other surfaces have no
-  // `FolioAgentBridge` to execute these against, so the tools must stay
+  // Narrower than `apply-active-docx-edits` above: only the file
+  // overlay mounts the auto-run watcher that resolves these via
+  // `addToolResult` (see `hasActiveDocxFileClient` doc comment).
+  // Template Studio has no such watcher, so the tools must stay
   // unregistered there rather than hang waiting for a client result.
-  const folioAgentDocTools = hasActiveDocxEditClient
+  const folioAgentDocTools = hasActiveDocxFileClient
     ? createFolioAgentDocTools()
     : {};
   const historyTools = createChatHistoryTools({

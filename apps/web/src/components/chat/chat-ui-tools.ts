@@ -547,6 +547,28 @@ export const isUnresolvedFolioAgentDocToolCallPart = (
   );
 };
 
+/**
+ * Core decision loop for the file overlay's folio-agents doc-tool auto-run
+ * watcher: which parts in the latest assistant message still need a
+ * client-executed result.
+ *
+ * Pure and colocated with {@link isUnresolvedFolioAgentDocToolCallPart} so
+ * the effect in `file-chat-overlay.tsx` stays a thin dispatch loop — it
+ * only needs to call this, mark the returned ids as executed, and fire the
+ * tool call for each. `executedIds` excludes parts the watcher has already
+ * dispatched itself in a prior render (tracked in a ref there; there is no
+ * approval click to gate re-entrancy the way the DOCX-edit approval flow
+ * has).
+ */
+export const selectUnresolvedFolioAgentDocToolCallParts = (
+  messageParts: readonly ChatPart[],
+  executedIds: ReadonlySet<string>,
+): UnresolvedFolioAgentDocToolCallPart[] =>
+  messageParts.filter(
+    (part): part is UnresolvedFolioAgentDocToolCallPart =>
+      isUnresolvedFolioAgentDocToolCallPart(part) && !executedIds.has(part.id),
+  );
+
 // Terminal state a dead running tool-call part is rewritten to at
 // hydration. "error" is the SDK's own terminal state for a failed tool
 // call: it clears `isRunningToolPart` and renders the card as interrupted

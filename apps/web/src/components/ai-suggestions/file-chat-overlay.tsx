@@ -61,8 +61,8 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   getActiveDocxEditApprovalPart,
-  isUnresolvedFolioAgentDocToolCallPart,
   parseCompletedToolCallArguments,
+  selectUnresolvedFolioAgentDocToolCallParts,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
@@ -1297,13 +1297,11 @@ const FileChatOverlayInner = ({
       return;
     }
 
-    for (const part of message.parts) {
-      if (
-        !isUnresolvedFolioAgentDocToolCallPart(part) ||
-        executedFolioAgentDocToolCallIdsRef.current.has(part.id)
-      ) {
-        continue;
-      }
+    const partsToRun = selectUnresolvedFolioAgentDocToolCallParts(
+      message.parts,
+      executedFolioAgentDocToolCallIdsRef.current,
+    );
+    for (const part of partsToRun) {
       executedFolioAgentDocToolCallIdsRef.current.add(part.id);
       void runFolioAgentDocToolCall(part);
     }

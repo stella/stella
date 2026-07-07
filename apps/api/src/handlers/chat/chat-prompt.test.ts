@@ -38,6 +38,7 @@ const WORKSPACE_ID = toSafeId<"workspace">("ws_prompt_test");
 const FULL_TOOL_AVAILABILITY = {
   templateAuthoring: true,
   webResearch: true,
+  folioAgentDocTools: true,
 } as const satisfies ChatToolAvailability;
 const SKILL_METADATA = [
   {
@@ -374,6 +375,41 @@ describe("chat prompt builders", () => {
     expect(prompt).toContain("queued");
     // Internal component names must not leak into user-facing prompt.
     expect(prompt).not.toContain("Folio");
+    // Guidance for the folio-agents doc tools (registered by default via
+    // `hasActiveDocxFileClient`/DEFAULT_CHAT_TOOL_AVAILABILITY here).
+    expect(prompt).toContain("`read_document`");
+    expect(prompt).toContain("`find_text`");
+    expect(prompt).toContain("truncation notice above");
+  });
+
+  test("omits the folio-agents doc-tool guidance when those tools are not registered for this turn", () => {
+    const basePrompt = "Base prompt";
+    const refRegistry = createChatRefRegistry();
+
+    const prompt = appendActiveFilePromptIfEntityExists({
+      activeFile: {
+        docxEditSnapshot: {
+          blocks: [{ id: "b-1", kind: "paragraph", text: "Some clause text" }],
+        },
+        entityId: toSafeId<"entity">("entity_docx"),
+        fileName: "Kupni smlouva.docx",
+        supportsDocxEdits: true,
+      },
+      entityExists: true,
+      prompt: basePrompt,
+      refRegistry,
+      toolAvailability: {
+        ...FULL_TOOL_AVAILABILITY,
+        folioAgentDocTools: false,
+      },
+      workspaceId: WORKSPACE_ID,
+    });
+
+    // `apply-active-docx-edits` guidance is unaffected: it rides on the
+    // combined `hasActiveDocxEditClient` flag, not this narrower one.
+    expect(prompt).toContain("apply-active-docx-edits");
+    expect(prompt).not.toContain("read_document");
+    expect(prompt).not.toContain("find_text");
   });
 
   test("active-template prompt stays read-only until a snapshot exists", () => {
@@ -435,7 +471,7 @@ describe("chat prompt builders", () => {
           ],
         },
       },
-      { templateAuthoring: false, webResearch: true },
+      { templateAuthoring: false, webResearch: true, folioAgentDocTools: true },
     );
 
     // A `template: ["use"]`-only role (e.g. intern) never has
@@ -551,10 +587,10 @@ describe("system prompt tool-reference guard", () => {
   };
 
   const AVAILABILITY_MATRIX: readonly ChatToolAvailability[] = [
-    { templateAuthoring: true, webResearch: true },
-    { templateAuthoring: true, webResearch: false },
-    { templateAuthoring: false, webResearch: true },
-    { templateAuthoring: false, webResearch: false },
+    { templateAuthoring: true, webResearch: true, folioAgentDocTools: true },
+    { templateAuthoring: true, webResearch: false, folioAgentDocTools: true },
+    { templateAuthoring: false, webResearch: true, folioAgentDocTools: true },
+    { templateAuthoring: false, webResearch: false, folioAgentDocTools: true },
   ];
 
   test("every tool named in the prompt is registered for that config", () => {
@@ -593,6 +629,7 @@ describe("system prompt tool-reference guard", () => {
     for (const prompt of buildAssembledPrompts({
       templateAuthoring: true,
       webResearch: false,
+      folioAgentDocTools: true,
     })) {
       expect(prompt).not.toContain(WEB_SEARCH_TOOL_NAME);
       expect(prompt).not.toContain(FETCH_URL_TOOL_NAME);
@@ -613,6 +650,7 @@ describe("system prompt tool-reference guard", () => {
     for (const prompt of buildAssembledPrompts({
       templateAuthoring: false,
       webResearch: true,
+      folioAgentDocTools: true,
     })) {
       expect(prompt).not.toContain(TEMPLATE_AUTHORING_TOOL_NAME);
     }

@@ -162,6 +162,7 @@ const getMessages = createSafeRootHandler(
       toolAvailability: {
         templateAuthoring: false,
         webResearch: webSearchAvailable && thread.webSearchEnabled,
+        folioAgentDocTools: false,
       },
     });
     const { triggerTokens } = resolveChatCompactionBudget({

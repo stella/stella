@@ -11,6 +11,7 @@ import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
 } from "@/api/handlers/chat/skills";
+import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
   EXPAND_CHAT_HISTORY_TOOL_NAME,
@@ -189,6 +190,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     });
@@ -213,7 +215,7 @@ describe("chat tool schemas", () => {
     expect(tools).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
   });
 
-  test("registers the folio-agents read_document/find_text tools only when a docx edit client is active", () => {
+  test("registers the folio-agents read_document/find_text tools only when the file-overlay docx client is active", () => {
     const baseArgs = {
       orgAIConfig: null,
       memberRole: "owner",
@@ -234,13 +236,31 @@ describe("chat tool schemas", () => {
     const withoutClient = getChatTools({
       ...baseArgs,
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
     });
     expect(withoutClient).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
     expect(withoutClient).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
 
+    // Template Studio: `apply-active-docx-edits` is on (the combined
+    // flag), but there is no client watcher that resolves
+    // read_document/find_text there, so the narrower
+    // `hasActiveDocxFileClient` flag must stay false and these tools
+    // must NOT be registered — registering them would hang the turn
+    // waiting for a client result that never arrives (regression guard
+    // for the Template Studio hang).
+    const templateOnly = getChatTools({
+      ...baseArgs,
+      hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: false,
+    });
+    expect(templateOnly).toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
+
     const withClient = getChatTools({
       ...baseArgs,
       hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: true,
     });
     const readDocument = withClient[READ_DOCUMENT_TOOL_NAME];
     const findText = withClient[FIND_TEXT_TOOL_NAME];
@@ -275,6 +295,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: editableActiveSkillContext,
@@ -325,6 +346,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: {
@@ -361,6 +383,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     });
@@ -445,6 +468,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: true,
       webSearchEnabled: true,
       webSearchProviders: { webSearchProvider, urlFetcher },
       activeSkillContext: editableActiveSkillContext,
@@ -465,6 +489,8 @@ describe("chat tool schemas", () => {
       "business_registry_lookup",
       "web_search",
       "create-document",
+      READ_DOCUMENT_TOOL_NAME,
+      FIND_TEXT_TOOL_NAME,
     ]) {
       expect(tools).toHaveProperty(requiredTool);
     }

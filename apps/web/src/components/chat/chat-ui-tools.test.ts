@@ -14,6 +14,7 @@ import {
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
   sanitizeHydratedRunningToolCalls,
+  selectUnresolvedFolioAgentDocToolCallParts,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import type {
@@ -474,6 +475,94 @@ describe("isUnresolvedFolioAgentDocToolCallPart", () => {
     expect(isUnresolvedFolioAgentDocToolCallPart(null)).toBe(false);
     expect(isUnresolvedFolioAgentDocToolCallPart("read_document")).toBe(false);
   });
+});
+
+describe("selectUnresolvedFolioAgentDocToolCallParts", () => {
+  // Core decision loop behind the file overlay's folio-agents doc-tool
+  // auto-run watcher (`file-chat-overlay.tsx`): given the latest
+  // assistant message's parts and the ids the watcher already dispatched
+  // itself, which parts still need a client-executed result.
+  const readDocumentPart = {
+    arguments: "{}",
+    id: "tool-call-read",
+    input: {},
+    state: "input-complete",
+    name: "read_document",
+    type: "tool-call",
+  } satisfies ChatPart;
+
+  const findTextPart = {
+    arguments: JSON.stringify({ query: "termination" }),
+    id: "tool-call-find",
+    input: { query: "termination" },
+    state: "input-complete",
+    name: "find_text",
+    type: "tool-call",
+  } satisfies ChatPart;
+
+  test("selects input-complete folio tool parts once", () => {
+    const result = selectUnresolvedFolioAgentDocToolCallParts(
+      [readDocumentPart, findTextPart],
+      new Set(),
+    );
+
+    expect(result.map((part) => part.id)).toEqual([
+      "tool-call-read",
+      "tool-call-find",
+    ]);
+  });
+
+  test("skips ids already recorded as executed", () => {
+    const result = selectUnresolvedFolioAgentDocToolCallParts(
+      [readDocumentPart, findTextPart],
+      new Set(["tool-call-read"]),
+    );
+
+    expect(result.map((part) => part.id)).toEqual(["tool-call-find"]);
+  });
+
+  test("skips other tools and non-input-complete states", () => {
+    const askUserPart = {
+      arguments: JSON.stringify({ analysis: "", questions: [] }),
+      id: "tool-call-ask",
+      input: { analysis: "", questions: [] },
+      state: "input-complete",
+      name: "ask-user",
+      type: "tool-call",
+    } satisfies ChatPart;
+    const streamingReadDocumentPart = {
+      arguments: "{",
+      id: "tool-call-streaming",
+      state: "input-streaming",
+      name: "read_document",
+      type: "tool-call",
+    } satisfies ChatPart;
+    const resolvedFindTextPart = {
+      arguments: JSON.stringify({ query: "termination" }),
+      id: "tool-call-resolved",
+      input: { query: "termination" },
+      output: { ok: true, matches: [] },
+      state: "complete",
+      name: "find_text",
+      type: "tool-call",
+    } satisfies ChatPart;
+
+    const result = selectUnresolvedFolioAgentDocToolCallParts(
+      [askUserPart, streamingReadDocumentPart, resolvedFindTextPart],
+      new Set(),
+    );
+
+    expect(result).toEqual([]);
+  });
+
+  // The Template Studio hang this watcher guards against never reaches
+  // this pure selector at all: `read_document` / `find_text` tool-call
+  // parts only ever appear in a message when the server registered the
+  // tools (gated by `hasActiveDocxFileClient`, file-overlay-only). That
+  // registration gate is server-side and is covered by
+  // `tool-schema.test.ts`'s "registers the folio-agents read_document/
+  // find_text tools only when the file-overlay docx client is active" —
+  // there is no meaningful client-only regression to exercise here.
 });
 
 describe("isChatTurnInFlight", () => {
