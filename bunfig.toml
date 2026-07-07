@@ -25,6 +25,7 @@ minimumReleaseAgeExcludes = [
   # TanStack AI beta: opted in ahead of stable for the AI SDK migration.
   "@tanstack/ai",
   "@tanstack/ai-anthropic",
+  "@tanstack/ai-code-mode",
   "@tanstack/ai-bedrock",
   "@tanstack/ai-client",
   "@tanstack/ai-event-client",
