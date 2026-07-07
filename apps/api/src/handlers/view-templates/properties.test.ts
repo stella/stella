@@ -597,6 +597,36 @@ describe("resolveTemplateProperties", () => {
     );
   });
 
+  test("rejects structural roles on non-classifier templates", async () => {
+    const { returningMock, tx } = createTemplateReuseTx();
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_notes",
+      name: "Notes",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+      role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: 422,
+      message:
+        "Document type classifier templates must be AI single-select columns",
+    });
+    expect(returningMock).not.toHaveBeenCalled();
+  });
+
   test("reuses structural role matches before shape matches", async () => {
     const templateContent = {
       version: 1,
@@ -644,6 +674,52 @@ describe("resolveTemplateProperties", () => {
       ok: true,
       layout: tableLayout("existing_property"),
       propertyIds: ["existing_property"],
+    });
+    expect(returningMock).not.toHaveBeenCalled();
+  });
+
+  test("rejects malformed structural role matches", async () => {
+    const templateContent = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const { returningMock, tx } = createTemplateReuseTx({
+      id: "existing_property",
+      name: "Document Type",
+      content: { version: 1, type: "text" },
+      tool: { version: 1, type: "manual-input" },
+      role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+    });
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_document_type",
+      name: "Document Type",
+      content: templateContent,
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify the document type.",
+      },
+      role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: 422,
+      message:
+        "Document type classifier role is attached to an incompatible column",
     });
     expect(returningMock).not.toHaveBeenCalled();
   });

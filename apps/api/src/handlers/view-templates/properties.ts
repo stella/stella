@@ -201,6 +201,21 @@ export const resolveTemplateProperties = async ({
       continue;
     }
 
+    if (
+      hasMalformedPropertyByRole(
+        existingProperties,
+        templateProperty,
+        consumedExistingPropertyIds,
+      )
+    ) {
+      return {
+        ok: false,
+        status: 422,
+        message:
+          "Document type classifier role is attached to an incompatible column",
+      };
+    }
+
     const existingByShape = findUniquePropertyByShape(
       existingProperties,
       templateProperty,
@@ -570,9 +585,34 @@ const validateTemplateProperties = (
   return null;
 };
 
+const DOCUMENT_TYPE_CLASSIFIER_ROLE = "document-type-classifier";
+
+type DocumentTypeClassifierShape = {
+  content: typeof properties.$inferSelect.content;
+  tool: typeof properties.$inferSelect.tool;
+};
+
+const isDocumentTypeClassifierShape = ({
+  content,
+  tool,
+}: DocumentTypeClassifierShape): boolean =>
+  content.type === "single-select" && tool.type === "ai-model";
+
 const validateTemplatePropertyConfig = (
   templateProperty: ViewTemplateProperty,
 ): ResolveTemplatePropertiesResult | null => {
+  if (
+    templateProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+    !isDocumentTypeClassifierShape(templateProperty)
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      message:
+        "Document type classifier templates must be AI single-select columns",
+    };
+  }
+
   if (
     templateProperty.content.type === "file" &&
     templateProperty.tool.type !== "manual-input"
@@ -621,27 +661,31 @@ const validateTemplatePropertyConfig = (
 const normalizePropertyName = (name: string): string =>
   name.trim().toLocaleLowerCase();
 
-const DOCUMENT_TYPE_CLASSIFIER_ROLE = "document-type-classifier";
-
 const isLegacyDocumentTypeClassifierTemplate = (
   templateProperty: ViewTemplateProperty,
 ): boolean =>
   templateProperty.role === undefined &&
   normalizePropertyName(templateProperty.name) === "document type" &&
-  templateProperty.content.type === "single-select" &&
-  templateProperty.tool.type === "ai-model";
+  isDocumentTypeClassifierShape(templateProperty);
+
+const resolveTemplatePropertyRole = (
+  templateProperty: ViewTemplateProperty,
+): typeof properties.$inferSelect.role | undefined =>
+  isLegacyDocumentTypeClassifierTemplate(templateProperty)
+    ? DOCUMENT_TYPE_CLASSIFIER_ROLE
+    : templateProperty.role;
 
 const findUniquePropertyByRole = (
   existingProperties: readonly {
     id: string;
+    content: typeof properties.$inferSelect.content;
+    tool: typeof properties.$inferSelect.tool;
     role: typeof properties.$inferSelect.role;
   }[],
   templateProperty: ViewTemplateProperty,
   consumedExistingPropertyIds: ReadonlySet<string>,
 ) => {
-  const role = isLegacyDocumentTypeClassifierTemplate(templateProperty)
-    ? DOCUMENT_TYPE_CLASSIFIER_ROLE
-    : templateProperty.role;
+  const role = resolveTemplatePropertyRole(templateProperty);
 
   if (role === undefined) {
     return undefined;
@@ -649,7 +693,32 @@ const findUniquePropertyByRole = (
 
   return existingProperties.find(
     (property) =>
-      !consumedExistingPropertyIds.has(property.id) && property.role === role,
+      !consumedExistingPropertyIds.has(property.id) &&
+      property.role === role &&
+      isDocumentTypeClassifierShape(property),
+  );
+};
+
+const hasMalformedPropertyByRole = (
+  existingProperties: readonly {
+    id: string;
+    content: typeof properties.$inferSelect.content;
+    tool: typeof properties.$inferSelect.tool;
+    role: typeof properties.$inferSelect.role;
+  }[],
+  templateProperty: ViewTemplateProperty,
+  consumedExistingPropertyIds: ReadonlySet<string>,
+): boolean => {
+  const role = resolveTemplatePropertyRole(templateProperty);
+  if (role === undefined) {
+    return false;
+  }
+
+  return existingProperties.some(
+    (property) =>
+      !consumedExistingPropertyIds.has(property.id) &&
+      property.role === role &&
+      !isDocumentTypeClassifierShape(property),
   );
 };
 
