@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 type ContactsListKey = {
   type?: "person" | "organization" | undefined;
@@ -58,6 +59,7 @@ export const contactOptions = (
 ) =>
   queryOptions({
     queryKey: contactsKeys.byId(activeOrganizationId, contactId),
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ signal }) => {
       const response = await api
         .contacts({ contactId })

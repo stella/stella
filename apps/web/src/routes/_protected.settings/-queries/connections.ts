@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const connectedAppsKeys = {
   all: ["settings", "connections", "connected-apps"] as const,
@@ -35,5 +36,6 @@ const fetchConnectedApps = async ({
 // `sessionsOptions` in `_protected.account/-queries.ts` for the same shape.
 export const connectedAppsOptions = queryOptions({
   queryKey: connectedAppsKeys.all,
+  staleTime: ROUTE_QUERY_STALE_TIME_MS,
   queryFn: fetchConnectedApps,
 });

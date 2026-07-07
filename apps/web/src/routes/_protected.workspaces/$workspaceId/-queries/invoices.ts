@@ -2,6 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 /** Mirrors `INVOICE_STATUSES` in `apps/api/src/db/schema.ts`. */
 type InvoiceStatus = "draft" | "finalized" | "sent" | "paid" | "void";
@@ -83,6 +84,7 @@ export const invoicesInfiniteOptions = (workspaceId: string, limit: number) =>
 export const invoiceByIdOptions = (workspaceId: string, invoiceId: string) =>
   queryOptions({
     queryKey: invoicesKeys.byId(workspaceId, invoiceId),
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
     queryFn: async ({ signal }) => {
       const response = await api.invoices({ workspaceId })({ invoiceId }).get({
         fetch: { signal },
