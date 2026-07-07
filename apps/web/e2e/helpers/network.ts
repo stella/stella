@@ -270,6 +270,150 @@ export type NetworkBaselineDiff = {
   notices: string[];
 };
 
+const pushNewRequestProblems = ({
+  route,
+  entry,
+  metrics,
+  problems,
+}: {
+  route: string;
+  entry: NetworkBaselineEntry;
+  metrics: RouteNetworkMetrics;
+  problems: string[];
+}) => {
+  const baselineKeys = new Set(entry.requests);
+  const added = metrics.requests.filter((key) => !baselineKeys.has(key));
+  if (added.length === 0) {
+    return;
+  }
+  problems.push(
+    `New API request(s) on ${route}:\n${added
+      .map((key) => `    ${key}`)
+      .join(
+        "\n",
+      )}\n  This route now calls an endpoint it did not before. If that is\n` +
+      `  intentional, ${WRITE_HINT}.`,
+  );
+};
+
+const pushWaterfallDepthProblems = ({
+  route,
+  entry,
+  metrics,
+  problems,
+}: {
+  route: string;
+  entry: NetworkBaselineEntry;
+  metrics: RouteNetworkMetrics;
+  problems: string[];
+}) => {
+  if (metrics.depth <= entry.depth) {
+    return;
+  }
+  problems.push(
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth}\n` +
+      `  Each extra level is one more sequential network round the user waits\n` +
+      `  through before the page can finish. Usually the fix is to start the\n` +
+      `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +
+      `  apps/web/src/lib/react-query.ts) or lift it so it fires in parallel\n` +
+      `  instead of after another request resolves. If the extra round is\n` +
+      `  genuinely required, ${WRITE_HINT}.`,
+  );
+};
+
+const pushRequestCountProblems = ({
+  route,
+  entry,
+  metrics,
+  problems,
+}: {
+  route: string;
+  entry: NetworkBaselineEntry;
+  metrics: RouteNetworkMetrics;
+  problems: string[];
+}) => {
+  const baselineRequestCounts = requestCountBudget(entry);
+  for (const [key, observed] of Object.entries(metrics.requestCounts)) {
+    const budget = baselineRequestCounts[key];
+    if (budget === undefined || observed <= budget) {
+      continue;
+    }
+    problems.push(
+      `API request repeated on ${route}: ${key} ran ${budget} -> ${observed} times\n` +
+        `  Duplicate route requests usually come from duplicate mounts,\n` +
+        `  normalized UUID fan-out, or a cache key/refetch policy that lets\n` +
+        `  the same endpoint fire twice. Reuse the in-flight query or, if\n` +
+        `  the duplicate is genuinely required, ${WRITE_HINT}.`,
+    );
+  }
+};
+
+const pushDbQueryProblems = ({
+  route,
+  entry,
+  metrics,
+  problems,
+}: {
+  route: string;
+  entry: NetworkBaselineEntry;
+  metrics: RouteNetworkMetrics;
+  problems: string[];
+}) => {
+  const baselineDb = entry.dbQueries ?? {};
+  for (const key of Object.keys(baselineDb)) {
+    if (metrics.missingDbQueryCounts[key] === undefined) {
+      continue;
+    }
+    problems.push(
+      `DB query count missing on ${route}: ${key}\n` +
+        `  This request has a committed DB-query budget, but the response did\n` +
+        `  not expose the x-db-queries header. Restore the dev/test query\n` +
+        `  counter before trusting this route's N+1 budget.`,
+    );
+  }
+  for (const [key, observed] of Object.entries(metrics.dbQueries)) {
+    const budget = baselineDb[key];
+    if (budget === undefined || observed <= dbQueryAllowance(budget)) {
+      continue;
+    }
+    problems.push(
+      `DB queries per request grew on ${route}: ${key} ran ${budget} -> ${observed} queries\n` +
+        `  The endpoint now issues more SQL for the same page — the classic\n` +
+        `  cause is an N+1 (a per-row query inside a loop or a lazy relation\n` +
+        `  loaded per item). Batch it (joins, IN lists, relation preloading)\n` +
+        `  or, if the extra queries are genuinely required, ${WRITE_HINT}.`,
+    );
+  }
+};
+
+const pushImprovementNotices = ({
+  route,
+  entry,
+  metrics,
+  notices,
+}: {
+  route: string;
+  entry: NetworkBaselineEntry;
+  metrics: RouteNetworkMetrics;
+  notices: string[];
+}) => {
+  const observedKeys = new Set(metrics.requests);
+  const missing = entry.requests.filter((key) => !observedKeys.has(key));
+  if (missing.length > 0) {
+    notices.push(
+      `Baseline request(s) not observed on ${route} (late/conditional, not a failure):\n${missing
+        .map((key) => `    ${key}`)
+        .join("\n")}`,
+    );
+  }
+  if (metrics.depth >= entry.depth) {
+    return;
+  }
+  notices.push(
+    `Waterfall shallower on ${route}: ${entry.depth} -> ${metrics.depth} (improvement; refresh the baseline to tighten the budget).`,
+  );
+};
+
 // A request's SQL count is not perfectly deterministic: better-auth
 // occasionally piggybacks a session-expiry refresh, and caches shift counts by
 // a query or two. An actual N+1 scales with collection size (tens of extra
@@ -318,86 +462,15 @@ export const diffNetworkBaseline = (
       continue;
     }
 
-    const baselineKeys = new Set(entry.requests);
-    const added = metrics.requests.filter((key) => !baselineKeys.has(key));
-    if (added.length > 0) {
-      problems.push(
-        `New API request(s) on ${route}:\n${added
-          .map((key) => `    ${key}`)
-          .join(
-            "\n",
-          )}\n  This route now calls an endpoint it did not before. If that is\n` +
-          `  intentional, ${WRITE_HINT}.`,
-      );
-    }
-
-    if (metrics.depth > entry.depth) {
-      problems.push(
-        `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth}\n` +
-          `  Each extra level is one more sequential network round the user waits\n` +
-          `  through before the page can finish. Usually the fix is to start the\n` +
-          `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +
-          `  apps/web/src/lib/react-query.ts) or lift it so it fires in parallel\n` +
-          `  instead of after another request resolves. If the extra round is\n` +
-          `  genuinely required, ${WRITE_HINT}.`,
-      );
-    }
-
-    const baselineRequestCounts = requestCountBudget(entry);
-    for (const [key, observed] of Object.entries(metrics.requestCounts)) {
-      const budget = baselineRequestCounts[key];
-      if (budget !== undefined && observed > budget) {
-        problems.push(
-          `API request repeated on ${route}: ${key} ran ${budget} -> ${observed} times\n` +
-            `  Duplicate route requests usually come from duplicate mounts,\n` +
-            `  normalized UUID fan-out, or a cache key/refetch policy that lets\n` +
-            `  the same endpoint fire twice. Reuse the in-flight query or, if\n` +
-            `  the duplicate is genuinely required, ${WRITE_HINT}.`,
-        );
-      }
-    }
+    pushNewRequestProblems({ route, entry, metrics, problems });
+    pushWaterfallDepthProblems({ route, entry, metrics, problems });
+    pushRequestCountProblems({ route, entry, metrics, problems });
 
     // DB-count budgets only fail on exceed: a lower count is common (cache
     // hits, timing) and re-noticing it every run would be noise; tightening
     // happens via a deliberate rewrite.
-    const baselineDb = entry.dbQueries ?? {};
-    for (const key of Object.keys(baselineDb)) {
-      if (metrics.missingDbQueryCounts[key] !== undefined) {
-        problems.push(
-          `DB query count missing on ${route}: ${key}\n` +
-            `  This request has a committed DB-query budget, but the response did\n` +
-            `  not expose the x-db-queries header. Restore the dev/test query\n` +
-            `  counter before trusting this route's N+1 budget.`,
-        );
-      }
-    }
-    for (const [key, observed] of Object.entries(metrics.dbQueries)) {
-      const budget = baselineDb[key];
-      if (budget !== undefined && observed > dbQueryAllowance(budget)) {
-        problems.push(
-          `DB queries per request grew on ${route}: ${key} ran ${budget} -> ${observed} queries\n` +
-            `  The endpoint now issues more SQL for the same page — the classic\n` +
-            `  cause is an N+1 (a per-row query inside a loop or a lazy relation\n` +
-            `  loaded per item). Batch it (joins, IN lists, relation preloading)\n` +
-            `  or, if the extra queries are genuinely required, ${WRITE_HINT}.`,
-        );
-      }
-    }
-
-    const observedKeys = new Set(metrics.requests);
-    const missing = entry.requests.filter((key) => !observedKeys.has(key));
-    if (missing.length > 0) {
-      notices.push(
-        `Baseline request(s) not observed on ${route} (late/conditional, not a failure):\n${missing
-          .map((key) => `    ${key}`)
-          .join("\n")}`,
-      );
-    }
-    if (metrics.depth < entry.depth) {
-      notices.push(
-        `Waterfall shallower on ${route}: ${entry.depth} -> ${metrics.depth} (improvement; refresh the baseline to tighten the budget).`,
-      );
-    }
+    pushDbQueryProblems({ route, entry, metrics, problems });
+    pushImprovementNotices({ route, entry, metrics, notices });
   }
 
   for (const route of Object.keys(baseline)) {
