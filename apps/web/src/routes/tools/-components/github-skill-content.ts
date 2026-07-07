@@ -31,15 +31,60 @@ const inputSchema = v.strictObject({
 // cached: a transient network failure must not poison the entry.
 const successCache = new Map<string, GithubSkillContentResult>();
 
-const withinByteCap = (value: string): boolean =>
-  new TextEncoder().encode(value).byteLength <= MAX_GITHUB_SKILL_BYTES;
+/**
+ * Read a response body, aborting the moment accumulated bytes exceed
+ * `maxBytes`. Returns the decoded text, or `null` when the cap is blown
+ * (an over-cap or unbounded chunked body is never buffered in full).
+ * Chunk boundaries can split a multi-byte UTF-8 sequence, so bytes are
+ * concatenated and decoded once at the end rather than per chunk.
+ */
+export const readCappedBody = async (
+  body: ReadableStream<Uint8Array>,
+  maxBytes: number,
+): Promise<string | null> => {
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  let overflowed = false;
+  while (true) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential stream read: cap must be checked before pulling the next chunk
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    total += value.byteLength;
+    if (total > maxBytes) {
+      overflowed = true;
+      break;
+    }
+    chunks.push(value);
+  }
+  if (overflowed) {
+    await reader.cancel();
+    return null;
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(merged);
+};
 
 const loadRawSkill = async (url: string): Promise<GithubSkillContentResult> => {
   // Boundary layer: an external fetch to an untrusted host. Any failure
   // (timeout, non-200, oversize, parse) degrades to metadata-only.
   try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
-    if (!response.ok) {
+    // The URL is pinned to raw.githubusercontent.com at an immutable
+    // SHA: it must never redirect, so a redirect signals tampering or a
+    // moved host and is rejected rather than followed to an arbitrary
+    // origin.
+    const response = await fetch(url, {
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!response.ok || !response.body) {
       return { status: "error" };
     }
     const declaredLength = Number(response.headers.get("content-length"));
@@ -49,8 +94,14 @@ const loadRawSkill = async (url: string): Promise<GithubSkillContentResult> => {
     ) {
       return { status: "error" };
     }
-    const markdown = await response.text();
-    if (!withinByteCap(markdown)) {
+    // Stream and cap: a chunked response omits content-length, so the
+    // pre-check above cannot catch it. Reading incrementally aborts an
+    // oversize body before it is fully buffered.
+    const markdown = await readCappedBody(
+      response.body,
+      MAX_GITHUB_SKILL_BYTES,
+    );
+    if (markdown === null) {
       return { status: "error" };
     }
     return { status: "ok", markdown };
