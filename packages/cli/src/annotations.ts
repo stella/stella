@@ -139,6 +139,14 @@ export const TOOL_ANNOTATIONS: Readonly<Record<string, ToolAnnotation>> = {
     windowedText: true,
   },
 
+  // --- feedback ---
+  // send_feedback carries a two-phase handshake for the email/stella channels;
+  // the CLI keeps it generic (no per-tool special-casing): the phase-1
+  // `approval_required` response renders as a single object showing
+  // `confirmation_token` and `next_step`, and the runtime prints a re-run hint
+  // driven off the response `status` field.
+  send_feedback: { command: ["feedback", "send"], scope: "feedback" },
+
   // --- organization onboarding ---
   set_practice_jurisdictions: {
     command: ["organization", "set-jurisdictions"],

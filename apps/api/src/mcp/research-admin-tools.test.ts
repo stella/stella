@@ -45,6 +45,12 @@ const errorText = (result: McpToolResponse): string => {
   return first !== undefined && "text" in first ? first.text : "";
 };
 
+const runManageOrg = async (args: Record<string, unknown>) =>
+  await RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization({
+    args,
+    context: createContext("owner"),
+  });
+
 describe("list_audit_log", () => {
   test("fails closed on the anonymized surface", () => {
     const def = DEFAULT_MCP_TOOL_DEFINITIONS.find(
@@ -155,21 +161,17 @@ describe("search_legislation feature gating", () => {
 });
 
 describe("manage_organization per-action validation", () => {
-  const run = async (args: Record<string, unknown>) =>
-    await RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization({
-      args,
-      context: createContext("owner"),
-    });
-
   test("requires user_id for a member action", async () => {
     expect(
-      errorText(await run({ action: "add_member", matter_id: "ws_1" })),
+      errorText(
+        await runManageOrg({ action: "add_member", matter_id: "ws_1" }),
+      ),
     ).toBe("user_id is required for add_member and remove_member");
   });
 
   test("rejects org-settings fields on a member action", async () => {
     const message = errorText(
-      await run({
+      await runManageOrg({
         action: "remove_member",
         matter_id: "ws_1",
         user_id: "user_2",
@@ -182,15 +184,15 @@ describe("manage_organization per-action validation", () => {
   });
 
   test("rejects an empty update_org_settings action", async () => {
-    expect(errorText(await run({ action: "update_org_settings" }))).toBe(
-      "Provide at least one setting to change for update_org_settings",
-    );
+    expect(
+      errorText(await runManageOrg({ action: "update_org_settings" })),
+    ).toBe("Provide at least one setting to change for update_org_settings");
   });
 
   test("requires the matter pattern and padding to be sent together", async () => {
     expect(
       errorText(
-        await run({
+        await runManageOrg({
           action: "update_org_settings",
           matter_number_pattern: "{YYYY}-{SEQ}",
         }),
@@ -201,8 +203,57 @@ describe("manage_organization per-action validation", () => {
   });
 
   test("rejects an unknown action shape", async () => {
-    expect(errorText(await run({ action: "promote_admin" }))).toContain(
-      "action",
+    expect(
+      errorText(await runManageOrg({ action: "promote_admin" })),
+    ).toContain("action");
+  });
+});
+
+describe("manage_organization remove_member confirm gate", () => {
+  test("the tool is not marked destructiveHint (so the central gate skips it)", () => {
+    const def = DEFAULT_MCP_TOOL_DEFINITIONS.find(
+      (tool) => tool.name === "manage_organization",
     );
+    expect(def).toBeDefined();
+    // manage_organization also adds members and updates settings, so it must not
+    // trip the whole-tool central confirm gate: it carries no annotations block
+    // at all. The remove_member gate is action-level inside the handler instead.
+    expect("annotations" in (def ?? {})).toBe(false);
+  });
+
+  test("remove_member without confirm is refused with confirmation_required", async () => {
+    const payload = JSON.parse(
+      errorText(
+        await runManageOrg({
+          action: "remove_member",
+          matter_id: "ws_1",
+          user_id: "user_2",
+        }),
+      ),
+    );
+    expect(payload.error.code).toBe("confirmation_required");
+  });
+
+  test("remove_member with confirm clears the gate and proceeds to resolution", async () => {
+    // With confirm the action-level gate passes; the op then fails on workspace
+    // access (this context grants none), proving it advanced past the gate
+    // rather than being blocked by it.
+    const text = errorText(
+      await runManageOrg({
+        action: "remove_member",
+        matter_id: "ws_1",
+        user_id: "user_2",
+        confirm: true,
+      }),
+    );
+    expect(text).not.toContain("confirmation_required");
+    expect(text).toContain("Matter not found or not accessible");
+  });
+
+  test("update_org_settings is unaffected by the confirm gate", async () => {
+    // A non-remove action needs no confirm; its own validation fires first.
+    expect(
+      errorText(await runManageOrg({ action: "update_org_settings" })),
+    ).toBe("Provide at least one setting to change for update_org_settings");
   });
 });

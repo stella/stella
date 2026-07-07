@@ -60,6 +60,7 @@ import {
   isToolErrorResult,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
+  notFoundResult,
   parseOptionalCursor,
   parseOptionalEnum,
   parseOptionalLimit,
@@ -852,7 +853,7 @@ const readMatterOverview: McpToolHandler = async ({ args, context }) => {
     workspaceId: matterId,
   });
   if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   const [workspace, overview, contacts, members] = await Promise.all([
@@ -876,7 +877,7 @@ const readMatterOverview: McpToolHandler = async ({ args, context }) => {
   ]);
 
   if (typeof workspace !== "object" || !("name" in workspace)) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   const matter = {
@@ -1414,7 +1415,7 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     return errorResult(resultMessage);
   }
   if (!isReadCaseLawDecisionSuccess(result)) {
-    return errorResult("Decision not found");
+    return notFoundResult("Decision not found");
   }
 
   // allowsRedistribution gates whether the decision is publicly
@@ -1530,7 +1531,7 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
   );
 
   if (!contact) {
-    return errorResult("Contact not found");
+    return notFoundResult("Contact not found");
   }
 
   // Contacts are organization-scoped (no owning workspace), so the org id is

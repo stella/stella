@@ -19,7 +19,8 @@ export type ToolScope =
   | "templates"
   | "billing_write"
   | "admin_read"
-  | "admin_write";
+  | "admin_write"
+  | "feedback";
 
 /** Wire fields from `tools/list` (build-time: projected from `DEFAULT_MCP_TOOL_DEFINITIONS`). */
 export type RegistryToolListing = {

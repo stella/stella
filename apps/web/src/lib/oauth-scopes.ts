@@ -22,6 +22,7 @@ export const OAUTH_SCOPE_LABELS = {
   "stella:admin_write": "consent.scopeAdminWrite",
   "stella:skills": "consent.scopeSkills",
   "stella:external_mcps": "consent.scopeExternalMcps",
+  "stella:feedback": "consent.scopeFeedback",
   "stella:search_anonymized": "consent.scopeSearchAnonymized",
   "stella:read_anonymized": "consent.scopeReadAnonymized",
   "stella:templates_anonymized": "consent.scopeTemplatesAnonymized",

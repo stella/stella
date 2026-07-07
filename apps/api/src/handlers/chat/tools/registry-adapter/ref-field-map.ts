@@ -752,4 +752,19 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
     outputRefs: [],
     passthroughIdPaths: ["templateId"],
   },
+
+  // --- Feedback -------------------------------------------------------------
+  // `send_feedback` is an agent/MCP tool that reports bugs to the maintainers
+  // and runs its own human-approval handshake (preview -> confirmation token).
+  // It is not a chat surface tool: it takes no entity references, returns no
+  // tenant ids, and would double-gate on approval if projected. It stays off
+  // the chat write projection (`chatProjectable: false`, like `fill_template`),
+  // so it never enters `ProjectedWriteToolName` or the chat tool-policy map. The
+  // entry exists only to satisfy the typecheck-forced completeness guard.
+  send_feedback: {
+    chatProjectable: false,
+    inputRefs: [],
+    outputRefs: [],
+    passthroughIdPaths: [],
+  },
 } as const satisfies Record<RegistryWriteToolName, RegistryRefFieldMapEntry>;

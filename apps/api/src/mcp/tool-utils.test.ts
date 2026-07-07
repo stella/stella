@@ -5,10 +5,13 @@ import { encodePaginationCursor } from "@/api/lib/pagination";
 import {
   buildCaseLawDecisionAppUrl,
   buildCaseLawDecisionUrl,
+  closestToolNames,
   isToolErrorResult,
+  notFoundResult,
   parseOptionalCursor,
   resolveWindowBounds,
   slugifyCaseLawPathSegment,
+  structuredErrorResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
@@ -325,6 +328,98 @@ describe("parseOptionalCursor", () => {
       key: "cursor",
     });
     expect(isToolErrorResult(result)).toBe(true);
+  });
+});
+
+const errorText = (result: ReturnType<typeof structuredErrorResult>) => {
+  const item = result.content.at(0);
+  if (!item || item.type !== "text") {
+    throw new Error("expected a text error content");
+  }
+  return item.text;
+};
+
+describe("structuredErrorResult", () => {
+  test("serializes a minimal envelope and marks isError", () => {
+    const result = structuredErrorResult({
+      code: "validation_error",
+      message: "bad arg",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(errorText(result)).toBe(
+      JSON.stringify({
+        error: { code: "validation_error", message: "bad arg" },
+      }),
+    );
+  });
+
+  test("includes hint and retryable when provided", () => {
+    const result = structuredErrorResult({
+      code: "rate_limited",
+      message: "slow down",
+      hint: "retry after the window",
+      retryable: true,
+    });
+
+    expect(JSON.parse(errorText(result))).toEqual({
+      error: {
+        code: "rate_limited",
+        message: "slow down",
+        hint: "retry after the window",
+        retryable: true,
+      },
+    });
+  });
+
+  test("omits undefined hint and retryable keys entirely", () => {
+    const text = errorText(
+      structuredErrorResult({ code: "internal_error", message: "boom" }),
+    );
+
+    expect(text).not.toContain("hint");
+    expect(text).not.toContain("retryable");
+  });
+});
+
+describe("notFoundResult", () => {
+  test("wraps a not_found code with an optional hint", () => {
+    expect(
+      JSON.parse(errorText(notFoundResult("gone", "check the id"))),
+    ).toEqual({
+      error: { code: "not_found", message: "gone", hint: "check the id" },
+    });
+  });
+
+  test("omits the hint when not supplied", () => {
+    expect(JSON.parse(errorText(notFoundResult("gone")))).toEqual({
+      error: { code: "not_found", message: "gone" },
+    });
+  });
+});
+
+describe("closestToolNames", () => {
+  const candidates = [
+    "list_matters",
+    "save_matter",
+    "delete_matter",
+    "search_case_law",
+  ];
+
+  test("ranks the nearest name first for a typo", () => {
+    expect(closestToolNames("list_mater", candidates).at(0)).toBe(
+      "list_matters",
+    );
+  });
+
+  test("returns nothing for an unrelated miss", () => {
+    expect(closestToolNames("zzzzzzzzzzzz", candidates)).toEqual([]);
+  });
+
+  test("caps the suggestions at the requested limit", () => {
+    expect(
+      closestToolNames("matter", candidates, 2).length,
+    ).toBeLessThanOrEqual(2);
   });
 });
 

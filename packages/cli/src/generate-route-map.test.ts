@@ -60,13 +60,40 @@ const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
 const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
-  test("produces 40 leaf commands and excludes the compat shims", () => {
+  test("produces 41 leaf commands and excludes the compat shims", () => {
     const paths = leafPaths(tree);
-    expect(paths).toHaveLength(40);
+    expect(paths).toHaveLength(41);
     expect(paths).not.toContain("search");
     expect(paths).not.toContain("fetch");
     // The excluded compat tools never surface anywhere in the tree.
     expect(paths.every((p) => !p.endsWith(" fetch"))).toBe(true);
+  });
+
+  test("send_feedback maps to `feedback send` with the feedback scope", () => {
+    const send = findLeaf(tree, ["feedback", "send"]);
+    expect(send?.toolName).toBe("send_feedback");
+    expect(send?.scope).toBe("feedback");
+    expect(send?.destructive).toBe(false);
+    // The two-phase handshake flag is a normal string value flag.
+    expect(flagFor(send ?? errorSpec(), "--confirmation-token")?.kind).toBe(
+      "string",
+    );
+  });
+
+  test("destructive tools hide the boolean `confirm` gate from generated flags", () => {
+    // The reserved --yes flow owns confirmation; the executor injects
+    // `confirm: true`, so no redundant --confirm flag is generated.
+    const del = findLeaf(tree, ["matter", "delete"]);
+    expect(del?.destructive).toBe(true);
+    expect(flagFor(del ?? errorSpec(), "--confirm")).toBeUndefined();
+    // `confirm` still lives in the input schema (reachable via --input, and it
+    // drives the executor's inject-on-confirm guard).
+    const properties = del?.inputSchema["properties"];
+    expect(
+      typeof properties === "object" &&
+        properties !== null &&
+        "confirm" in properties,
+    ).toBe(true);
   });
 
   test("command paths come from the table, not a name string-split", () => {
@@ -124,6 +151,22 @@ describe("generateRouteMap: discriminator split (S2)", () => {
   test("remove-member is destructive; add-member is not", () => {
     expect(remove?.destructive).toBe(true);
     expect(add?.destructive).toBe(false);
+  });
+
+  test("no manage_organization subcommand emits a --confirm flag", () => {
+    // The tool's schema declares a `confirm` gate for remove_member, but the
+    // reserved --yes flow owns it, so it is hidden from EVERY leaf's flags
+    // (destructive or not) and reachable only via --input.
+    for (const leaf of [add, remove, settings]) {
+      expect(flagFor(leaf ?? errorSpec(), "--confirm")).toBeUndefined();
+    }
+    // It still lives in the shared input schema all three subcommands carry.
+    const properties = remove?.inputSchema["properties"];
+    expect(
+      typeof properties === "object" &&
+        properties !== null &&
+        "confirm" in properties,
+    ).toBe(true);
   });
 
   test("a required-enum that is a plain filter does NOT split", () => {

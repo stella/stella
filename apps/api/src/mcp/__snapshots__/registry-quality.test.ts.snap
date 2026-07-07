@@ -926,6 +926,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "version_id": {
           "type": "string",
           "description": "Delete only this version instead of the whole document"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       },
       "required": [
@@ -1077,6 +1081,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id": {
           "type": "string",
           "description": "Matter/workspace ID to delete"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       },
       "required": [
@@ -1157,6 +1165,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "contact_id": {
           "type": "string",
           "description": "Contact ID to delete"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       },
       "required": [
@@ -1552,6 +1564,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "clause_id": {
           "type": "string",
           "description": "Clause id to delete"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       },
       "required": [
@@ -1782,6 +1798,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "time_entry_id": {
           "type": "string",
           "description": "Time entry ID to delete or write off"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion."
         }
       },
       "required": [
@@ -2049,10 +2069,63 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "prompt_caching_enabled": {
           "type": "boolean",
           "description": "Toggle AI prompt caching for the organization (update_org_settings)"
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions."
         }
       },
       "required": [
         "action"
+      ]
+    }
+  },
+  {
+    "name": "send_feedback",
+    "scope": "stella:feedback",
+    "access": "write",
+    "description": "File a bug, feature request, or docs issue with the stella maintainers. Requires explicit human approval; the tool never publishes anything on its own. Prefer channel github (the default): it returns a prefilled new-issue URL and a gh command the human opens and submits under their own GitHub account. If the human has no GitHub account, use email (this server's configured maintainer inbox) or stella (forwards to the hosted stella intake); both need a two-step confirmation-token handshake. All content is sanitized server-side (emails, ids, secrets, URLs, IPs are redacted). Never include tenant data, client or matter names, ids, or secrets; describe the problem, reproduction steps, and expected vs actual result.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "bug",
+            "feature_request",
+            "docs",
+            "other"
+          ],
+          "description": "Feedback category: bug, feature_request, docs, or other"
+        },
+        "title": {
+          "type": "string",
+          "description": "Short one-line summary of the issue; no tenant data, ids, or secrets",
+          "maxLength": 200
+        },
+        "body": {
+          "type": "string",
+          "description": "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side.",
+          "maxLength": 8000
+        },
+        "channel": {
+          "type": "string",
+          "enum": [
+            "github",
+            "email",
+            "stella"
+          ],
+          "description": "Delivery channel. github (default) returns a prefilled issue URL the human submits under their own GitHub account (strongly preferred). email and stella are fallbacks for humans without a GitHub account and each need a confirmation-token handshake: email sends to this server's configured maintainer inbox; stella forwards to the hosted stella intake (use when there is no GitHub account and no local email is configured)."
+        },
+        "confirmation_token": {
+          "type": "string",
+          "description": "email/stella channels only: the confirmation_token from a prior approval_required response. Send it on the second call, with the same kind/title/body, only after the human approved the content."
+        }
+      },
+      "required": [
+        "kind",
+        "title",
+        "body"
       ]
     }
   }

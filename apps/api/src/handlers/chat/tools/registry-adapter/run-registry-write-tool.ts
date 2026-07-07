@@ -7,6 +7,7 @@ import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeMcpEgress } from "@/api/mcp/egress";
+import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import { KNOWLEDGE_TOOL_HANDLERS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_HANDLERS } from "@/api/mcp/matter-tools";
@@ -57,6 +58,11 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   set_practice_jurisdictions: STELLA_TOOL_HANDLERS.set_practice_jurisdictions,
   fill_template: TEMPLATE_TOOL_HANDLERS.fill_template,
   save_template: TEMPLATE_TOOL_HANDLERS.save_template,
+  // Non-projectable (`chatProjectable: false`): the orchestrator refuses it
+  // before reaching a handler, but the map stays exhaustive over every write
+  // tool. `send_feedback` runs its own approval handshake and is served through
+  // MCP/CLI, not the chat write projection.
+  send_feedback: FEEDBACK_TOOL_HANDLERS.send_feedback,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
 
 export type RunRegistryWriteToolProps = {

@@ -77,9 +77,129 @@ The OpenAI-compatible `search`/`fetch` tools keep their bespoke
 `compatSearch`/`compatFetch` plans (workspaceId stripping, anonymization
 metadata).
 
+## Structured error envelope
+
+This server is driven almost entirely by AI agents (and the companion CLI), so
+every tool error carries a machine-readable code, not just prose. A failed tool
+returns a single text content of
+
+```json
+{
+  "error": { "code": "...", "message": "...", "hint": "...", "retryable": true }
+}
+```
+
+with `isError` set. `hint` and `retryable` are omitted when absent. Build these
+with `structuredErrorResult` (or the `notFoundResult` shorthand) in
+`tool-utils.ts`; the arg parsers there already emit `validation_error`. The
+`code` set is closed (`error-codes.ts`): `validation_error`, `missing_scope`,
+`feature_disabled`, `not_found`, `confirmation_required`, `rate_limited`,
+`unknown_tool`, `internal_error`. Agents branch on `code`; `hint` states the
+next step (e.g. `missing_scope` tells the client to re-run OAuth consent). The
+CLI keys its exit codes off `error.code` (e.g. `feature_disabled` -> exit 5), so
+the string values are a stable contract. `internal_error` never leaks internals:
+the real exception is captured for observability and the caller gets a generic
+message plus the feedback-tool hint.
+
+## Destructive-op confirm guardrail
+
+Every tool with `annotations.destructiveHint === true` (the `delete_*` tools)
+advertises a `confirm` boolean (`confirmProp()`) and is refused before dispatch
+unless the call sets `confirm: true`. The gate lives in `handleMcpToolCall`,
+before any DB access, and returns `confirmation_required`. This stops an agent
+from deleting tenant data without an explicit, human-approved confirmation; the
+handlers themselves tolerate and ignore the extra `confirm` arg.
+
+## Feedback channel
+
+`send_feedback` (`feedback-tools.ts`, scope `stella:feedback`) lets an agent
+file a bug, feature request, or docs issue against the public repo — but never
+without explicit human approval and never with private data. It is a write tool
+(excluded from the anonymized surface) with no backing REST endpoint, so it is
+waived in the coverage guard's `TOOLS_WITHOUT_ENUMERABLE_ENDPOINT`.
+
+Title and body are always sanitized server-side by `feedback-sanitize.ts`: a
+deterministic set of regex passes redacts emails, ids/UUIDs, JWT/secret blobs,
+non-allowlisted URLs (only `github.com` and stella's public domains survive),
+and IP literals. Tenant-entity-name anonymization is deliberately not run here:
+it is workspace-bound and heavy, and feedback is org-scoped free text, so regex
+plus human approval is the accepted baseline.
+
+Three channels, all human-gated. Preference order is github, then email, then
+stella:
+
+- **github (preferred, default):** returns a prefilled `issues/new` URL (label
+  `agent-feedback`) and an equivalent `gh issue create` command. Nothing is
+  published until the human opens the URL (or runs the command) and submits
+  under their own GitHub account, so approval is intrinsic and no server-side
+  token is needed. An oversized body is truncated in the URL with a
+  paste-the-rest marker; the full sanitized body is always returned separately.
+  This is the only path that files a public issue.
+- **email (fallback):** a two-call confirmation-token handshake
+  (`feedback-token.ts`, HMAC over the sanitized content + a 15-minute expiry,
+  keyed by `BETTER_AUTH_SECRET`). The first call returns the sanitized content
+  and a token; a second call echoing the same content plus the token sends the
+  email via `sendFeedbackEmail` to `FEEDBACK_EMAIL_TO`. When that env var is
+  unset the channel refuses with `feature_disabled`. The email carries the
+  sanitized title/body plus a private reporter block (userId, organizationId,
+  and, best-effort, the user's email) that is never part of the public issue.
+- **stella (last resort):** for a human with no GitHub account on a server with
+  no maintainer inbox. Same confirmation-token handshake as email (the token
+  hash covers only kind/title/body, so it is channel-agnostic); on phase two the
+  sanitized payload is POSTed to the hosted intake at `FEEDBACK_INTAKE_URL`
+  (default `https://api.stll.app/public/feedback`, overridable for self-hosting).
+  The intake response is mapped back onto the error envelope: success →
+  `{ status: "sent", delivered }`; intake 429 → `rate_limited`; 409 →
+  `validation_error` (duplicate); a network failure → retryable `internal_error`.
+  No user identity leaves the server on this path — only a `source`
+  `{ instance }` descriptor.
+
+The two delivering channels (email and stella phase two) are additionally
+rate-limited per organization: at most five deliveries per hour (reusing the
+intake's `consumeCounter` under a distinct bucket), returning a retryable
+`rate_limited` past the cap. Phase-1 previews and the github channel are never
+counted.
+
+## Public feedback intake
+
+The upstream receiver for the stella channel is a public, unauthenticated
+endpoint, `POST /public/feedback` (`handlers/feedback/`), that runs on Stella's
+hosted API. It exists so feedback can reach the maintainer even when the human
+has no GitHub account and the forwarding server has no email configured. It is
+NOT a backing endpoint for the `send_feedback` tool (the tool calls it over
+plain HTTP like any other client), so it carries no `mcp` disposition and is
+mounted outside the auth macro alongside the other public routes in `index.ts`.
+
+The body is a strict Elysia schema (`kind`, `title` 1..200, `body` 1..8000, an
+optional `source` `{ instance?, version? }`; unknown keys and oversize are
+rejected). Title and body are re-sanitized here — the caller's pass is never
+trusted. Delivery is email-only: the sanitized report is emailed to
+`FEEDBACK_EMAIL_TO` when set (`200 { delivered: "email" }`), otherwise the
+endpoint refuses with `503 feature_disabled`. Public issues are filed
+exclusively through the github channel of `send_feedback`, where the human
+submits under their own GitHub account, so the intake never holds a GitHub
+token. Because it is an unauthenticated public write, it is abuse-bounded in
+`intake-guards.ts` (Redis with an in-memory fallback): a per-IP rate limit
+(5/hour) and 24h content dedup (a duplicate is rejected `409`, and a claim is
+released if delivery fails so a genuine retry is not blocked). All error bodies
+reuse the `{ error: { code, message, hint } }` envelope so the forwarding tool
+can branch on HTTP status.
+
+## Server instructions
+
+`instructions.ts` supplies the MCP `instructions` string handed to clients at
+connect time, per mode. It states the conventions an agent cannot read off the
+tool list: pagination (`limit`/`cursor` in, `nextCursor` out), long-text
+windowing, the error envelope shape, the confirm guardrail, and where static
+resources live. Terse and factual, under hard character budgets asserted in
+`instructions.test.ts` (the anonymized variant drops the write-only feedback
+tool).
+
 ## Code map
 
 - `constants.ts`: resource paths, scopes and discovery URLs.
+- `error-codes.ts`: the closed `McpErrorCode` union for the error envelope.
+- `instructions.ts`: per-mode server `instructions` strings.
 - `tool-types.ts`: `McpToolDefinition`, the `anonymized` policy union, the
   egress-plan and handler types.
 - `static-tool-definitions.ts`: the single registry plus the derived default

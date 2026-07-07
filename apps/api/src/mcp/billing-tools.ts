@@ -40,6 +40,7 @@ import type {
   McpToolHandler,
 } from "@/api/mcp/tool-types";
 import {
+  confirmProp,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -47,6 +48,7 @@ import {
   errorResult,
   intProp,
   MAX_LIST_LIMIT,
+  notFoundResult,
   nullableStringProp,
   stringProp,
   textResult,
@@ -433,6 +435,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         time_entry_id: stringProp("Time entry ID to delete or write off"),
+        confirm: confirmProp(),
       },
       required: ["time_entry_id"],
     },
@@ -720,7 +723,7 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
       timeEntryId,
     });
     if (!workspaceId) {
-      return errorResult("Time entry not found or not accessible");
+      return notFoundResult("Time entry not found or not accessible");
     }
     // A supplied matter_id must name the entry's own matter; otherwise an entry
     // from a different accessible matter would be returned.
@@ -741,7 +744,7 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
     );
     const entryRow = row.at(0);
     if (!entryRow) {
-      return errorResult("Time entry not found or not accessible");
+      return notFoundResult("Time entry not found or not accessible");
     }
     const userNames = await loadUserNames({
       context,
@@ -774,7 +777,7 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
   const matterId = input.matter_id ?? "";
   const workspaceId = ensureWorkspaceAccess({ context, workspaceId: matterId });
   if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   let boundary: { dateWorked: string; id: SafeId<"timeEntry"> } | null = null;
@@ -1036,7 +1039,7 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
   const timeEntryId = brandPersistedTimeEntryId(input.time_entry_id);
   const workspaceId = await resolveTimeEntryWorkspace({ context, timeEntryId });
   if (!workspaceId) {
-    return errorResult("Time entry not found or not accessible");
+    return notFoundResult("Time entry not found or not accessible");
   }
   // Editing an entry in an archived matter is a write, rejected the same way
   // the HTTP time-entry routes behind the active-only workspace group are.
@@ -1092,6 +1095,7 @@ const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
 
 const deleteTimeEntryArgsSchema = v.strictObject({
   time_entry_id: v.pipe(v.string(), v.minLength(1)),
+  confirm: v.optional(v.boolean()),
 });
 
 const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
@@ -1107,7 +1111,7 @@ const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
   const timeEntryId = brandPersistedTimeEntryId(parsed.output.time_entry_id);
   const workspaceId = await resolveTimeEntryWorkspace({ context, timeEntryId });
   if (!workspaceId) {
-    return errorResult("Time entry not found or not accessible");
+    return notFoundResult("Time entry not found or not accessible");
   }
   const active = ensureActiveWorkspace({ context, workspaceId });
   if (typeof active !== "string") {
@@ -1153,7 +1157,7 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
     workspaceId: parsed.output.matter_id,
   });
   if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   const validated = await context.safeDb(
@@ -1298,7 +1302,7 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
     const invoiceId = brandPersistedInvoiceId(input.invoice_id);
     const workspaceId = await resolveInvoiceWorkspace({ context, invoiceId });
     if (!workspaceId) {
-      return errorResult("Invoice not found or not accessible");
+      return notFoundResult("Invoice not found or not accessible");
     }
     if (input.matter_id !== undefined && input.matter_id !== workspaceId) {
       return errorResult("invoice_id does not belong to matter_id");
@@ -1309,7 +1313,7 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
       workspaceId,
     });
     if (!invoiceRow) {
-      return errorResult("Invoice not found or not accessible");
+      return notFoundResult("Invoice not found or not accessible");
     }
 
     const invoice = {
@@ -1378,7 +1382,7 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
   const matterId = input.matter_id ?? "";
   const workspaceId = ensureWorkspaceAccess({ context, workspaceId: matterId });
   if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   let boundary: { createdAt: Date; id: SafeId<"invoice"> } | null = null;

@@ -4,6 +4,8 @@ import { panic } from "better-result";
 import * as BetterAuthOTP from "@stll/transactional/emails/better-auth-otp";
 import * as NewDeviceLogin from "@stll/transactional/emails/new-device-login";
 import * as OrganizationInvitation from "@stll/transactional/emails/organization-invitation";
+import * as ProductFeedback from "@stll/transactional/emails/product-feedback";
+import type { ProductFeedbackKind } from "@stll/transactional/emails/product-feedback";
 
 import { env } from "@/api/env";
 import type { SupportedLang } from "@/api/lib/locale";
@@ -194,6 +196,43 @@ export const sendOrganizationInvitation = async ({
     subject: OrganizationInvitation.subject(lang, {
       organizationName,
     }),
+    html,
+    text,
+  });
+};
+
+type SendFeedbackEmailProps = {
+  to: string;
+  kind: ProductFeedbackKind;
+  title: string;
+  body: string;
+  reporter: ProductFeedback.FeedbackReporter;
+};
+
+export const sendFeedbackEmail = async ({
+  body,
+  kind,
+  reporter,
+  title,
+  to,
+}: SendFeedbackEmailProps) => {
+  const node = (
+    <ProductFeedback.Email
+      body={body}
+      kind={kind}
+      reporter={reporter}
+      title={title}
+    />
+  );
+  const [html, text] = await Promise.all([
+    render(node),
+    render(node, { plainText: true }),
+  ]);
+
+  await getTransport().send({
+    from: getTransactionalEmailFrom(),
+    to,
+    subject: ProductFeedback.subject({ kind, title }),
     html,
     text,
   });

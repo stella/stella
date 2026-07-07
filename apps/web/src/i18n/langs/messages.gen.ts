@@ -925,6 +925,7 @@ type Messages = {
     "scopeBillingWrite": "Create, edit, and delete your time entries";
     "scopeDocumentsWrite": "Create, edit, and delete your documents";
     "scopeExternalMcps": "Use your connected integrations";
+    "scopeFeedback": "Send product feedback to the stella maintainers";
     "scopeKnowledgeWrite": "Create, edit, and delete your clauses, and run playbooks";
     "scopeMattersWrite": "Create and edit your matters, contacts, and tasks";
     "scopeOfflineAccess": "Keep you signed in without repeated approval";

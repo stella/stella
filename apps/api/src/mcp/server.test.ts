@@ -230,12 +230,61 @@ describe("handleMcpHttpRequest", () => {
     expect(body.result).toEqual({
       content: [
         {
-          text: "Insufficient permissions. Required scope: stella:skills",
           type: "text",
+          text: JSON.stringify({
+            error: {
+              code: "missing_scope",
+              message:
+                "Insufficient permissions. Required scope: stella:skills",
+              hint: "Grant the 'stella:skills' scope by re-running OAuth consent (CLI: 'stella auth login'), then retry.",
+            },
+          }),
         },
       ],
       isError: true,
     });
+  });
+
+  test("returns an unknown_tool envelope with closest-name hints", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    // No scope hint and no resolved definition: the tool name is unknown. The
+    // closest visible name (scope-filtered list) is suggested.
+    getMcpToolScopeHintMock.mockReturnValue(undefined);
+    getMcpToolDefinitionMock.mockResolvedValue(undefined);
+    listMcpToolsMock.mockResolvedValue([
+      {
+        description: "List matters",
+        inputSchema: { type: "object", properties: {} },
+        name: "list_matters",
+      },
+    ]);
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { arguments: {}, name: "list_matter" },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    const item = body.result.content.at(0);
+    expect(item?.type).toBe("text");
+    const parsed =
+      item?.type === "text"
+        ? (JSON.parse(item.text) as { error: { code: string; hint: string } })
+        : undefined;
+    expect(parsed?.error.code).toBe("unknown_tool");
+    expect(parsed?.error.hint).toContain("list_matters");
+    expect(body.result.isError).toBe(true);
   });
 
   test("lists static resources for the request mode", async () => {

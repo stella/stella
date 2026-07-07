@@ -14,6 +14,7 @@ import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeMcpEgress } from "@/api/mcp/egress";
+import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getGatewayMcpToolDefinition,
@@ -32,7 +33,10 @@ import type {
   McpToolHandler,
   ToolScope,
 } from "@/api/mcp/tool-types";
-import { errorResult } from "@/api/mcp/tool-utils";
+import {
+  MCP_INTERNAL_ERROR_HINT,
+  structuredErrorResult,
+} from "@/api/mcp/tool-utils";
 
 const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["fetch", COMPAT_TOOL_HANDLERS.fetch],
@@ -81,6 +85,7 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["search_legislation", RESEARCH_ADMIN_TOOL_HANDLERS.search_legislation],
   ["list_audit_log", RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log],
   ["manage_organization", RESEARCH_ADMIN_TOOL_HANDLERS.manage_organization],
+  ["send_feedback", FEEDBACK_TOOL_HANDLERS.send_feedback],
 ]);
 
 export const getMcpToolDefinition = async (
@@ -151,19 +156,46 @@ export const handleMcpToolCall = async ({
 
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (!staticTool) {
-    return errorResult(`Unknown tool: ${toolName}`);
+    return structuredErrorResult({
+      code: "unknown_tool",
+      message: `Unknown tool: ${toolName}`,
+      hint: "Call tools/list for the tools available to this session.",
+    });
   }
 
   // Reject a gated-off tool even when the caller names it directly: the list
   // surface hides it, and this closes the guess-the-name bypass so the gate
   // holds on both the advertisement and the dispatch path.
   if (!isMcpToolFeatureEnabled(staticTool.feature)) {
-    return errorResult("This feature is not enabled on this deployment");
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: "This feature is not enabled on this deployment",
+      hint: "This deployment or organization has this feature turned off; it cannot be enabled from the client.",
+    });
+  }
+
+  // Destructive-op guardrail (agent misuse protection): an irreversible tool
+  // (delete_*) must be called with `confirm: true`, set only after a human user
+  // approved the action. Runs before dispatch so the mutation never starts
+  // without the confirmation.
+  if (
+    staticTool.annotations?.destructiveHint === true &&
+    args["confirm"] !== true
+  ) {
+    return structuredErrorResult({
+      code: "confirmation_required",
+      message: `${toolName} is an irreversible operation and was called without confirmation`,
+      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+    });
   }
 
   const handler = MCP_TOOL_HANDLERS.get(toolName);
   if (!handler) {
-    return errorResult(`Unknown tool: ${toolName}`);
+    return structuredErrorResult({
+      code: "unknown_tool",
+      message: `Unknown tool: ${toolName}`,
+      hint: "Call tools/list for the tools available to this session.",
+    });
   }
 
   try {
@@ -175,6 +207,12 @@ export const handleMcpToolCall = async ({
     return await finalizeMcpEgress({ context, mode, response });
   } catch (error) {
     captureError(error, { source: "mcp", toolName });
-    return errorResult("Tool execution failed");
+    // Generic message: never leak internals to the caller. `captureError` keeps
+    // the real exception for observability.
+    return structuredErrorResult({
+      code: "internal_error",
+      message: "Tool execution failed",
+      hint: MCP_INTERNAL_ERROR_HINT,
+    });
   }
 };

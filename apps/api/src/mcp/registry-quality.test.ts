@@ -32,8 +32,11 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // recovered (40 -> 45) are deliberate headroom below that cap, and this ratchet
 // sits at the tighter measured 40 so unreviewed growth fails first. Any tool
 // added to either surface must bump the matching ceiling deliberately.
+// default bumped 40 -> 41 for the write-only `send_feedback` tool (agent-filed
+// bug/feature/docs reports). It is excluded from the anonymized surface (a
+// write tool), so the anonymized ceiling is unchanged.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 40,
+  default: 41,
   anonymized: 21,
 };
 

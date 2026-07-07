@@ -922,6 +922,7 @@
     "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
     "scopeDocumentsWrite": "Créer, modifier et supprimer vos documents",
     "scopeExternalMcps": "Utiliser vos outils externes connectés",
+    "scopeFeedback": "Envoyer des retours produit aux mainteneurs de stella",
     "scopeKnowledgeWrite": "Créer, modifier et supprimer vos clauses, et exécuter des playbooks",
     "scopeMattersWrite": "Créer et modifier vos dossiers, contacts et tâches",
     "scopeOfflineAccess": "Vous garder connecté sans approbation répétée",
