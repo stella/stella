@@ -101,7 +101,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const parseJsonRecord = (text: string): Record<string, unknown> => {
   const value: unknown = JSON.parse(text);
   if (!isRecord(value)) {
-    throw new Error("Expected a JSON object");
+    throw new TypeError("Expected a JSON object");
   }
   return value;
 };
@@ -120,33 +120,40 @@ const parsePayload = (
   }
   const item = result.content.at(0);
   if (!item || item.type !== "text") {
-    throw new Error("Expected a text MCP response");
+    throw new TypeError("Expected a text MCP response");
   }
   const payload = parseJsonRecord(item.text);
-  const error = isRecord(payload.error) ? payload.error : null;
-  return {
-    channel: optionalString(payload.channel),
-    confirmation_token: optionalString(payload.confirmation_token),
-    delivered: optionalString(payload.delivered),
-    error:
-      error === null
-        ? undefined
-        : {
-            code: optionalString(error.code),
-            retryable:
-              typeof error.retryable === "boolean"
-                ? error.retryable
-                : undefined,
-          },
-    expires_in_minutes: optionalNumber(payload.expires_in_minutes),
-    gh_cli_command: optionalString(payload.gh_cli_command),
-    issue_url: optionalString(payload.issue_url),
-    next_step: optionalString(payload.next_step),
-    redactions: optionalNumber(payload.redactions),
-    sanitized_body: optionalString(payload.sanitized_body),
-    sanitized_title: optionalString(payload.sanitized_title),
-    status: optionalString(payload.status),
+  const payloadError = payload["error"];
+  const parsed: FeedbackPayload = {
+    channel: optionalString(payload["channel"]),
+    confirmation_token: optionalString(payload["confirmation_token"]),
+    delivered: optionalString(payload["delivered"]),
+    expires_in_minutes: optionalNumber(payload["expires_in_minutes"]),
+    gh_cli_command: optionalString(payload["gh_cli_command"]),
+    issue_url: optionalString(payload["issue_url"]),
+    next_step: optionalString(payload["next_step"]),
+    redactions: optionalNumber(payload["redactions"]),
+    sanitized_body: optionalString(payload["sanitized_body"]),
+    sanitized_title: optionalString(payload["sanitized_title"]),
+    status: optionalString(payload["status"]),
   };
+
+  if (isRecord(payloadError)) {
+    const code = optionalString(payloadError["code"]);
+    const retryable =
+      typeof payloadError["retryable"] === "boolean"
+        ? payloadError["retryable"]
+        : undefined;
+    parsed.error = {};
+    if (code !== undefined) {
+      parsed.error.code = code;
+    }
+    if (retryable !== undefined) {
+      parsed.error.retryable = retryable;
+    }
+  }
+
+  return parsed;
 };
 
 // Asserts an error response (`isError`) and returns its parsed payload. The
@@ -241,7 +248,7 @@ const parseFetchBody = (
   init: Parameters<typeof fetch>[1] | undefined,
 ): Record<string, unknown> => {
   if (typeof init?.body !== "string") {
-    throw new Error("Expected fetch body to be JSON text");
+    throw new TypeError("Expected fetch body to be JSON text");
   }
   return parseJsonRecord(init.body);
 };
@@ -407,11 +414,11 @@ describe("MCP send_feedback tool", () => {
       kind: "bug",
       title: "list_matters cursor loops on the last page",
     });
-    const source = forwarded.source;
+    const source = forwarded["source"];
     if (!isRecord(source)) {
-      throw new Error("Expected forwarded source metadata");
+      throw new TypeError("Expected forwarded source metadata");
     }
-    expect(source.instance).toBeDefined();
+    expect(source["instance"]).toBeDefined();
     // The forwarded body carries the sanitized content, never email etc.
     expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
@@ -445,11 +452,12 @@ describe("MCP send_feedback tool", () => {
     expect(phase2.status).toBe("sent");
     const [, init] = expectFirstFetchCall(fetchMock.mock.calls);
     const forwarded = parseFetchBody(init);
-    expect(typeof forwarded.body).toBe("string");
-    if (typeof forwarded.body !== "string") {
-      throw new Error("Expected forwarded body to be text");
+    const forwardedBody = forwarded["body"];
+    expect(typeof forwardedBody).toBe("string");
+    if (typeof forwardedBody !== "string") {
+      throw new TypeError("Expected forwarded body to be text");
     }
-    expect(forwarded.body.length).toBeLessThanOrEqual(MAX_BODY);
+    expect(forwardedBody.length).toBeLessThanOrEqual(MAX_BODY);
   });
 
   test("stella channel: maps intake 429 to rate_limited", async () => {
