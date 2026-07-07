@@ -1,4 +1,8 @@
-import type { AIProvider, ModelRole } from "@stll/ai-catalog";
+import {
+  BYOK_MODEL_OPTIONS,
+  resolveWorkingBYOKModelForRole,
+} from "@stll/ai-catalog";
+import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
 
 import type { UsageServiceTier } from "@/api/db/schema";
 
@@ -148,7 +152,53 @@ export const normalizeOrgAIProviderConfig = (
   }
 };
 
+const isBYOKProviderId = (provider: AIProvider): provider is BYOKProvider =>
+  provider in BYOK_MODEL_OPTIONS;
+
+/**
+ * Auto-heal a per-role model selection so it resolves to a model that
+ * actually works on the SAME provider. A catalog bump can drop a model
+ * id that an org previously pinned; the stored config still decrypts
+ * (the id is any non-empty string), but generation would 400 (PDF
+ * role) or forward a retired id to the provider (other roles). When
+ * the pinned model is no longer offered, fall back to the provider's
+ * per-role default.
+ *
+ * Left unchanged when: the model is still offered; the provider is not
+ * a BYOK provider (nothing to heal to on the same provider); or the
+ * provider has no valid model for the role at all (mistral + pdf,
+ * which has no document-capable model). Those residual cases are
+ * surfaced by generation-time validation rather than silently rerouted
+ * to a different provider.
+ */
+const healOverrideModel = (
+  role: ModelRole,
+  selection: OrgAIModelSelection,
+): OrgAIModelSelection => {
+  if (!isBYOKProviderId(selection.provider)) {
+    return selection;
+  }
+  const working = resolveWorkingBYOKModelForRole({
+    provider: selection.provider,
+    modelId: selection.modelId,
+    role,
+  });
+  if (!working || working === selection.modelId) {
+    return selection;
+  }
+  return { provider: selection.provider, modelId: working };
+};
+
+const healOverrideModels = (
+  overrideModels: Record<ModelRole, OrgAIModelSelection>,
+): Record<ModelRole, OrgAIModelSelection> => ({
+  fast: healOverrideModel("fast", overrideModels.fast),
+  chat: healOverrideModel("chat", overrideModels.chat),
+  reasoning: healOverrideModel("reasoning", overrideModels.reasoning),
+  pdf: healOverrideModel("pdf", overrideModels.pdf),
+});
+
 export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({
   providers: config.providers.map(normalizeOrgAIProviderConfig),
-  overrideModels: config.overrideModels,
+  overrideModels: healOverrideModels(config.overrideModels),
 });

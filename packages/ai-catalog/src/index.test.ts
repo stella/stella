@@ -14,6 +14,7 @@ import {
   DEFAULT_MODELS,
   MODEL_RATES,
   MODEL_ROLES,
+  resolveWorkingBYOKModelForRole,
   TANSTACK_AI_PROVIDERS,
 } from "./index";
 
@@ -123,6 +124,89 @@ describe("anthropic adaptive thinking", () => {
         BYOK_MODEL_OPTIONS.anthropic.some((offered) => offered.includes(model)),
       ).toBe(true);
     }
+  });
+});
+
+describe("resolveWorkingBYOKModelForRole", () => {
+  test("keeps a still-offered model unchanged", () => {
+    const modelId = BYOK_MODEL_OPTIONS.google[0];
+    expect(
+      resolveWorkingBYOKModelForRole({
+        provider: "google",
+        modelId,
+        role: "chat",
+      }),
+    ).toBe(modelId);
+  });
+
+  test("heals a dropped model to the provider's per-role default", () => {
+    // `gemini-3-flash-preview` was a prior-catalog id, no longer offered.
+    expect(
+      resolveWorkingBYOKModelForRole({
+        provider: "google",
+        modelId: "gemini-3-flash-preview",
+        role: "reasoning",
+      }),
+    ).toBe(BYOK_DEFAULT_MODELS.google.reasoning);
+  });
+
+  test("heals a dropped model on the pdf role to a document-capable default", () => {
+    const healed = resolveWorkingBYOKModelForRole({
+      provider: "google",
+      modelId: "gemini-3-flash-preview",
+      role: "pdf",
+    });
+    expect(healed).toBe(BYOK_DEFAULT_MODELS.google.pdf);
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.google).toContain(
+      BYOK_DEFAULT_MODELS.google.pdf,
+    );
+  });
+
+  test("every BYOK default is offered for its role (except mistral+pdf)", () => {
+    // resolveWorkingBYOKModelForRole only returns null when even the
+    // per-role default is not offered. That must stay a one-off
+    // (mistral+pdf, which has no document-capable model): if a future
+    // catalog edit drops a default from BYOK_MODEL_OPTIONS, healing would
+    // silently stop and leave a stale model pinned. Catch that here.
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const role of MODEL_ROLES) {
+        const modelId = BYOK_DEFAULT_MODELS[provider][role];
+        const resolved = resolveWorkingBYOKModelForRole({
+          provider,
+          modelId,
+          role,
+        });
+        if (provider === "mistral" && role === "pdf") {
+          expect(resolved).toBeNull();
+        } else {
+          expect(resolved).toBe(modelId);
+        }
+      }
+    }
+  });
+
+  test("returns null for mistral + pdf: no document-capable model exists", () => {
+    // The TanStack Mistral adapter exposes no `document` input modality,
+    // so not even the default can serve the pdf role. Same-provider
+    // healing is impossible; the caller must leave the selection as-is.
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.mistral).toHaveLength(0);
+    expect(
+      resolveWorkingBYOKModelForRole({
+        provider: "mistral",
+        modelId: "mistral-large-latest",
+        role: "pdf",
+      }),
+    ).toBeNull();
+  });
+
+  test("mistral non-pdf roles still heal on the same provider", () => {
+    expect(
+      resolveWorkingBYOKModelForRole({
+        provider: "mistral",
+        modelId: "some-retired-mistral-id",
+        role: "chat",
+      }),
+    ).toBe(BYOK_DEFAULT_MODELS.mistral.chat);
   });
 });
 

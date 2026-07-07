@@ -304,6 +304,62 @@ export const isBYOKModelRoleSupported = ({
 };
 
 /**
+ * Whether a model id is currently offered for this provider+role: it
+ * must be in the curated catalog for the provider AND satisfy the
+ * role's input-modality constraint (PDF needs a document-capable
+ * model). This is the runtime allowlist, so a model dropped by a
+ * catalog bump stops being valid here even though it is still a
+ * non-empty string in a stored org config.
+ */
+const isOfferedBYOKModelForRole = ({
+  provider,
+  modelId,
+  role,
+}: {
+  provider: BYOKProvider;
+  modelId: string;
+  role: ModelRole;
+}): boolean => {
+  const offered: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+  return (
+    offered.includes(modelId) &&
+    isBYOKModelRoleSupported({ provider, modelId, role })
+  );
+};
+
+/**
+ * Resolve a model id that will actually work for this provider+role,
+ * keeping the SAME provider. Returns the caller's model unchanged when
+ * it is still offered; otherwise falls back to the provider's per-role
+ * default (`BYOK_DEFAULT_MODELS`). Returns `null` only when the
+ * provider has no valid model for the role at all — the sole case
+ * today is `mistral` + `pdf`, because the TanStack Mistral adapter
+ * exposes no `document` input modality, so no Mistral model (not even
+ * the default) can serve the PDF role.
+ *
+ * Used to auto-heal org AI configs whose pinned model was removed by a
+ * catalog bump, so generation resolves to a supported model instead of
+ * 400-ing (or forwarding a retired id to the provider).
+ */
+export const resolveWorkingBYOKModelForRole = ({
+  provider,
+  modelId,
+  role,
+}: {
+  provider: BYOKProvider;
+  modelId: string;
+  role: ModelRole;
+}): string | null => {
+  if (isOfferedBYOKModelForRole({ provider, modelId, role })) {
+    return modelId;
+  }
+  const fallback = BYOK_DEFAULT_MODELS[provider][role];
+  return isOfferedBYOKModelForRole({ provider, modelId: fallback, role })
+    ? fallback
+    : null;
+};
+
+/**
  * Anthropic models that use the adaptive-thinking request shape
  * (`thinking: { type: "adaptive" }`). Newer Claude models reject the
  * legacy budget-based form, so every Opus 4.6+/Sonnet 4.6/Fable entry
