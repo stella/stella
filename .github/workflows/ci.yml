@@ -539,6 +539,12 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/web build
 
+      - name: Bundle size guard
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          bun scripts/bundle-baseline.ts --self-test
+          bun scripts/bundle-baseline.ts --check
+
       - name: Prod-deps web boot smoke
         if: steps.changed.outputs.run == 'true'
         # apps/web/Dockerfile's runner installs --production (deps-prod stage).
