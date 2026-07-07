@@ -62,15 +62,10 @@ const startMockServer = (handler: MockHandler) => {
         });
       }
       const result: {
-        content: {
-          type: "text";
-          text: string;
-        }[];
+        content: { type: "text"; text: string }[];
         isError?: true;
       } = {
-        content: [
-          { type: "text", text: JSON.stringify(response.toolPayload) },
-        ],
+        content: [{ type: "text", text: JSON.stringify(response.toolPayload) }],
       };
       if (response.isError) {
         result.isError = true;
