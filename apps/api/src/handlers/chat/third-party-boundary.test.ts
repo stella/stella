@@ -587,6 +587,63 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
+  test("renumbers sequential anonymization batches before merging", async () => {
+    const anonymizePeople = mock(async ({ fields }: { fields: string[] }) => {
+      const redactionMap = new Map<string, string>();
+      const anonymized = fields.map((field) => {
+        let next = field;
+        for (const original of ["Alice", "Bob"]) {
+          if (next.includes(original)) {
+            next = next.replaceAll(original, "[PERSON_1]");
+            redactionMap.set("[PERSON_1]", original);
+          }
+        }
+        return next;
+      });
+      return {
+        entityCount: redactionMap.size,
+        fields: anonymized,
+        redactionMap,
+      };
+    });
+    const { scopedDb } = createScopedDbMock({});
+    const boundary = createChatThirdPartyBoundary({
+      anonymizeFields: anonymizePeople,
+      anonymizationScopeId: "workspace-A",
+      organizationId: toSafeId<"organization">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+    });
+
+    const first = await prepareTextForThirdParty({
+      boundary,
+      text: "Alice prepared the memo.",
+    });
+    const second = await prepareTextForThirdParty({
+      boundary,
+      text: "Bob approved it.",
+    });
+
+    expect(Result.isOk(first)).toBe(true);
+    expect(Result.isOk(second)).toBe(true);
+    if (Result.isError(first) || Result.isError(second)) {
+      throw new Error("Expected anonymization to succeed");
+    }
+    expect(first.value).toBe("[PERSON_1] prepared the memo.");
+    expect(second.value).toBe("[PERSON_2] approved it.");
+    if (boundary.type !== "anonymized") {
+      throw new Error("Expected anonymized boundary");
+    }
+    expect(boundary.redactionMap).toEqual(
+      new Map([
+        ["[PERSON_1]", "Alice"],
+        ["[PERSON_2]", "Bob"],
+      ]),
+    );
+  });
+
   test("round-trip helpers are no-ops on raw boundaries", async () => {
     const { deanonymizeFromBoundary } =
       await import("@/api/handlers/chat/third-party-boundary");

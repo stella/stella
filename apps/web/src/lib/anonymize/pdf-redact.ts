@@ -24,6 +24,15 @@ const MAX_PLACEHOLDER_SIZE = 10;
  * longer part of the public wasm surface. */
 const DEFAULT_REDACT_STRING = "[REDACTED]";
 
+const parsePlaceholderLabel = (placeholder: string): string | null => {
+  const match = /^\[([A-Z][A-Z0-9_]*)_\d+\]$/u.exec(placeholder);
+  const label = match?.[1];
+  return label?.toLowerCase().replaceAll("_", " ") ?? null;
+};
+
+const redactionLookupKey = (label: string, text: string): string =>
+  `${label.toLowerCase()}\0${text}`;
+
 // ── Types ──────────────────────────────────────────────
 
 /**
@@ -86,16 +95,18 @@ export const redactPdf = async (
   }
 
   // `redaction.redactionMap` only contains reversible ("replace")
-  // entries (placeholder -> original text), so inverting it recovers
-  // the placeholder for every entity that was actually replaced.
-  // Same original text always maps to the same placeholder (stable
-  // redaction), so this inversion is safe. An entity absent from
-  // this map used the irreversible "redact" operator and has no
-  // placeholder — it is drawn with `redactString` instead.
-  const placeholderByOriginal = new Map<string, string>();
+  // entries (placeholder -> original text), so indexing by both
+  // placeholder label and original text recovers the placeholder for
+  // every entity that was actually replaced. The composite key keeps
+  // same-text entities with different labels distinct.
+  const placeholderByOriginalAndLabel = new Map<string, string>();
   for (const [placeholder, original] of redaction.redactionMap) {
-    if (!placeholderByOriginal.has(original)) {
-      placeholderByOriginal.set(original, placeholder);
+    const label = parsePlaceholderLabel(placeholder);
+    if (label !== null) {
+      placeholderByOriginalAndLabel.set(
+        redactionLookupKey(label, original),
+        placeholder,
+      );
     }
   }
 
@@ -124,7 +135,10 @@ export const redactPdf = async (
       continue;
     }
 
-    const overlayText = placeholderByOriginal.get(entity.text) ?? redactString;
+    const overlayText =
+      placeholderByOriginalAndLabel.get(
+        redactionLookupKey(entity.label, entity.text),
+      ) ?? redactString;
 
     // First bbox gets the text overlay; all get white boxes
     for (let i = 0; i < bboxes.length; i++) {

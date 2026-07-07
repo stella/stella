@@ -214,12 +214,20 @@ type NativeRedaction = {
   entityCount: number;
 };
 
+const parsePlaceholderLabel = (placeholder: string): string | null => {
+  const match = /^\[([A-Z][A-Z0-9_]*)_\d+\]$/u.exec(placeholder);
+  return match?.[1] ?? null;
+};
+
+const normalizeEntityLabelForPlaceholder = (label: string): string =>
+  label.trim().toUpperCase().replaceAll(/\s+/gu, "_");
+
 /**
  * Build the public {@link ChatAnonResult} from a (possibly already
  * filtered) entity list and its matching redaction. Pairs are keyed
  * off `redactionMap` (placeholder -> original), which only contains
- * reversible ("replace") entries; `labelByOriginal` recovers the
- * originating entity's label per pair.
+ * reversible ("replace") entries; the placeholder prefix disambiguates
+ * entities that share text but have different labels.
  */
 const toChatAnonResult = (
   resolvedEntities: readonly NativePipelineEntity[],
@@ -228,18 +236,21 @@ const toChatAnonResult = (
     "redactedText" | "redactionMap" | "entityCount"
   >,
 ): ChatAnonResult => {
-  const labelByOriginal = new Map<string, string>();
-  for (const entity of resolvedEntities) {
-    if (!labelByOriginal.has(entity.text)) {
-      labelByOriginal.set(entity.text, entity.label);
-    }
-  }
   const pairs: ChatAnonPair[] = [...redaction.redactionMap.entries()].map(
-    ([placeholder, original]) => ({
-      placeholder,
-      original,
-      label: labelByOriginal.get(original) ?? "misc",
-    }),
+    ([placeholder, original]) => {
+      const placeholderLabel = parsePlaceholderLabel(placeholder);
+      const matchingEntity = resolvedEntities.find(
+        (entity) =>
+          entity.text === original &&
+          normalizeEntityLabelForPlaceholder(entity.label) ===
+            placeholderLabel,
+      );
+      return {
+        placeholder,
+        original,
+        label: matchingEntity?.label ?? "misc",
+      };
+    },
   );
 
   return {

@@ -9,7 +9,7 @@ import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 // needing a Cross-Origin-Resource-Policy header on every cross-origin
 // asset/image/font the app already loads.
 const CROSS_ORIGIN_ISOLATION_HEADERS = {
-  "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+  "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "credentialless",
 } as const;
 

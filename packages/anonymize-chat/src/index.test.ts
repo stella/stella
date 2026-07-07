@@ -216,4 +216,32 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.entityCount).toBe(1);
     expect(result.redactedText).toBe("[ORGANIZATION_1]");
   });
+
+  test("labels same-text pairs from the placeholder prefix", async () => {
+    const entities: NativePipelineEntity[] = [
+      makeEntity("Apple", "organization"),
+      makeEntity("Apple", "location"),
+    ];
+    const runtime = buildRuntime(entities);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: "Apple borders Apple",
+      workspaceId: "ws-1",
+    });
+
+    expect(result.pairs).toEqual([
+      {
+        placeholder: "[ORGANIZATION_1]",
+        original: "Apple",
+        label: "organization",
+      },
+      {
+        placeholder: "[LOCATION_2]",
+        original: "Apple",
+        label: "location",
+      },
+    ]);
+  });
 });
