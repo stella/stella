@@ -2140,7 +2140,7 @@ export const TemplateStudioPage = ({
         // retry. A 404 is NOT a failure — the link (or template) is gone
         // mid-session, so the rename target no longer exists and the step is
         // obsolete: drop it and keep replaying.
-        let resolvedCount = 0;
+        const resolvedSteps: typeof pendingSlotRenames = [];
         for (const step of pendingSlotRenames) {
           // A rejected request (network drop) must land in the same retryable
           // path as an error response: letting it escape to the outer catch
@@ -2169,11 +2169,9 @@ export const TemplateStudioPage = ({
           }
           // Success, or an obsolete (404) step: either way this leading step is
           // resolved and drops out of the log below.
-          resolvedCount += 1;
+          resolvedSteps.push(step);
         }
-        if (resolvedCount > 0) {
-          dropPendingSlotRenames(resolvedCount);
-        }
+        dropPendingSlotRenames(resolvedSteps);
         if (slotRenameErrorMessage !== null) {
           // Re-mark dirty so the Save affordance (gated on isDirty) stays live
           // for the retry; the document itself already saved successfully.

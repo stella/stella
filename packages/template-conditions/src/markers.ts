@@ -132,13 +132,19 @@ export const isSafeFieldPath = (value: string): boolean =>
   isFieldPath(value) &&
   value.split(".").every((segment) => !UNSAFE_FIELD_PATH_SEGMENTS.has(segment));
 
-// A `{{@clause:NAME}}` slot name: the `name` group of `clauseSlotPattern`
-// (`[^:}\s]+`), further disallowing `{` so the rewritten marker stays a valid
-// `{{...}}` span (markerPattern's inner is `[^{}]*`).
-const CLAUSE_SLOT_NAME_RE = /^[^\s:{}]+$/u;
+// A NEW `{{@clause:NAME}}` slot name. Deliberately tighter than the parse
+// grammar (`clauseSlotPattern`'s name group is `[^:}\s]+`): the fill pipeline
+// substitutes marker text through `placeholderPattern`, whose name charset is
+// `[\p{L}\p{N}_.@:-]`, so a name this validator admits but that charset lacks
+// (e.g. `foo/bar`) would pass discovery and the health check yet survive as
+// literal text in the filled document. Restrict authoring to the
+// letters/digits/`_.-` intersection (`@` and `:` are structural in the clause
+// marker itself).
+const CLAUSE_SLOT_NAME_RE = /^[\p{L}\p{N}_.-]+$/u;
 
-/** Whether `value` is a valid `{{@clause:NAME}}` slot name per the marker
- *  grammar (non-empty; no whitespace, colon, or braces). */
+/** Whether `value` is a valid name for authoring a `{{@clause:NAME}}` slot:
+ *  the intersection of the clause-slot parse grammar and the fill pipeline's
+ *  placeholder charset, so every accepted name round-trips through fill. */
 export const isClauseSlotName = (value: string): boolean =>
   CLAUSE_SLOT_NAME_RE.test(value);
 const CLAUSE_INNER_RE = /^@clause:(?<name>[^:}\s]+)(?::(?<version>[^}\s]+))?$/u;

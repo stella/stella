@@ -204,9 +204,9 @@ type TemplateStudioState = {
   ) => void;
   /** Remove every pending step for a link (unlink-side cleanup). */
   clearPendingSlotRename: (linkId: string) => void;
-  /** Drop the first `count` steps once the flush has replayed them, keeping any
-   *  unresolved suffix pending for the next save's retry. */
-  dropPendingSlotRenames: (count: number) => void;
+  /** Drop the given replayed steps (matched by identity), keeping any
+   *  unresolved steps pending for the next save's retry. */
+  dropPendingSlotRenames: (flushed: readonly PendingSlotRename[]) => void;
   /** Document structure tree, rebuilt by the editor on every scan. */
   outline: OutlineNode[];
   setOutline: (outline: OutlineNode[]) => void;
@@ -304,12 +304,22 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       }
       return { pendingSlotRenames: remaining };
     }),
-  dropPendingSlotRenames: (count) =>
-    set((state) =>
-      count <= 0
-        ? state
-        : { pendingSlotRenames: state.pendingSlotRenames.slice(count) },
-    ),
+  dropPendingSlotRenames: (flushed) =>
+    set((state) => {
+      if (flushed.length === 0) {
+        return state;
+      }
+      // Remove by step identity, not by position: if any other path ever
+      // removes a step while a flush is in flight, a positional slice would
+      // drop the wrong entries. Steps are frozen object literals appended
+      // once, so reference equality identifies exactly the replayed ones.
+      const flushedSet = new Set(flushed);
+      return {
+        pendingSlotRenames: state.pendingSlotRenames.filter(
+          (step) => !flushedSet.has(step),
+        ),
+      };
+    }),
   setSelected: (selected) => set({ selected }),
   markDirty: () => set({ isDirty: true }),
   markSaved: () => set({ isDirty: false }),

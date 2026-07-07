@@ -2495,7 +2495,7 @@
       "formulaNonNumberFields": "Não é um número: {fields}",
       "formulaNumbersOnlyHelp": "Os cálculos usam apenas campos numéricos; datas e texto não podem ser usados.",
       "formulaUnknownFields": "Não é um campo: {fields}",
-      "gettingStartedField": "Escreva seu texto, depois selecione uma expressão → clique com o botão direito → Criar campo.",
+      "gettingStartedField": "Escreva seu texto, depois selecione um trecho → clique com o botão direito → Criar campo.",
       "gettingStartedFill": "Teste o resultado na aba Preencher.",
       "gettingStartedSlash": "Digite / no documento para inserir campos, condições e cláusulas.",
       "gettingStartedTitle": "Primeiros passos",

@@ -13,6 +13,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 
 // ── Schemas ─────────────────────────────────────────
 
@@ -577,38 +578,55 @@ export const updateClauseSlotHandler = async ({
     }
   }
 
-  const updated = await scopedDb(async (tx) => {
-    const [row] = await tx
-      .update(templateClauses)
-      .set({ slotName })
-      .where(
-        and(
-          eq(templateClauses.id, linkId),
-          eq(templateClauses.templateId, templateId),
-        ),
-      )
-      .returning({
-        id: templateClauses.id,
-        slotName: templateClauses.slotName,
+  let updated: { id: string; slotName: string | null } | undefined;
+  try {
+    updated = await scopedDb(async (tx) => {
+      const [row] = await tx
+        .update(templateClauses)
+        .set({ slotName })
+        .where(
+          and(
+            eq(templateClauses.id, linkId),
+            eq(templateClauses.templateId, templateId),
+          ),
+        )
+        .returning({
+          id: templateClauses.id,
+          slotName: templateClauses.slotName,
+        });
+
+      // A concurrent unlink between the read and this write leaves zero rows;
+      // do not record an audit UPDATE for a link that no longer exists.
+      if (!row) {
+        return undefined;
+      }
+
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.CLAUSE_TEMPLATE_LINK,
+        resourceId: linkId,
+        changes: {
+          slotName: {
+            old: link.slotName,
+            new: slotName,
+          },
+        },
       });
 
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.CLAUSE_TEMPLATE_LINK,
-      resourceId: linkId,
-      changes: {
-        slotName: {
-          old: link.slotName,
-          new: slotName,
-        },
-      },
+      return row;
     });
-
-    return row;
-  });
+  } catch (error) {
+    // A concurrent rename can slip past the pre-check above and land on the
+    // partial unique index (templateId, slotName); surface it as the same
+    // conflict the pre-check reports instead of a 500.
+    if (getPgErrorCode(error) === PG_ERROR.UNIQUE_VIOLATION) {
+      return status(409, { message: "Slot name already in use" });
+    }
+    throw error;
+  }
 
   if (!updated) {
-    panic("Failed to rename template clause slot");
+    return status(404, { message: "Link not found" });
   }
 
   return updated;
