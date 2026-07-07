@@ -95,6 +95,23 @@ type FeedbackPayload = {
   error?: { code?: string; retryable?: boolean };
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const parseJsonRecord = (text: string): Record<string, unknown> => {
+  const value: unknown = JSON.parse(text);
+  if (!isRecord(value)) {
+    throw new Error("Expected a JSON object");
+  }
+  return value;
+};
+
+const optionalString = (value: unknown): string | undefined =>
+  typeof value === "string" ? value : undefined;
+
+const optionalNumber = (value: unknown): number | undefined =>
+  typeof value === "number" ? value : undefined;
+
 const parsePayload = (
   result: Awaited<ReturnType<(typeof FEEDBACK_TOOL_HANDLERS)["send_feedback"]>>,
 ): FeedbackPayload => {
@@ -105,10 +122,31 @@ const parsePayload = (
   if (!item || item.type !== "text") {
     throw new Error("Expected a text MCP response");
   }
-  // JSON.parse is `any`; assigning it to a typed binding narrows without an
-  // unsafe `as` assertion.
-  const payload: FeedbackPayload = JSON.parse(item.text);
-  return payload;
+  const payload = parseJsonRecord(item.text);
+  const error = isRecord(payload.error) ? payload.error : null;
+  return {
+    channel: optionalString(payload.channel),
+    confirmation_token: optionalString(payload.confirmation_token),
+    delivered: optionalString(payload.delivered),
+    error:
+      error === null
+        ? undefined
+        : {
+            code: optionalString(error.code),
+            retryable:
+              typeof error.retryable === "boolean"
+                ? error.retryable
+                : undefined,
+          },
+    expires_in_minutes: optionalNumber(payload.expires_in_minutes),
+    gh_cli_command: optionalString(payload.gh_cli_command),
+    issue_url: optionalString(payload.issue_url),
+    next_step: optionalString(payload.next_step),
+    redactions: optionalNumber(payload.redactions),
+    sanitized_body: optionalString(payload.sanitized_body),
+    sanitized_title: optionalString(payload.sanitized_title),
+    status: optionalString(payload.status),
+  };
 };
 
 // Asserts an error response (`isError`) and returns its parsed payload. The
@@ -169,9 +207,43 @@ const stubFetch = (
     init?: Parameters<typeof fetch>[1],
   ) => Promise<Response>,
 ) => {
-  // SAFETY: a Bun `mock()` is call-compatible with `fetch` but lacks its
-  // non-standard `preconnect` property, which no code under test invokes.
-  globalThis.fetch = impl as typeof fetch;
+  Object.defineProperty(globalThis, "fetch", {
+    configurable: true,
+    value: impl,
+    writable: true,
+  });
+};
+
+type FetchCall = [
+  input: Parameters<typeof fetch>[0],
+  init?: Parameters<typeof fetch>[1],
+];
+
+const expectFirstFetchCall = (calls: FetchCall[]): FetchCall => {
+  const call = calls.at(0);
+  if (call === undefined) {
+    throw new Error("Expected fetch to be called");
+  }
+  return call;
+};
+
+const fetchInputUrl = (input: Parameters<typeof fetch>[0]): string => {
+  if (typeof input === "string") {
+    return input;
+  }
+  if (input instanceof URL) {
+    return input.toString();
+  }
+  return input.url;
+};
+
+const parseFetchBody = (
+  init: Parameters<typeof fetch>[1] | undefined,
+): Record<string, unknown> => {
+  if (typeof init?.body !== "string") {
+    throw new Error("Expected fetch body to be JSON text");
+  }
+  return parseJsonRecord(init.body);
 };
 
 describe("MCP send_feedback tool", () => {
@@ -328,21 +400,28 @@ describe("MCP send_feedback tool", () => {
     expect(String(phase2.next_step)).toContain("stella maintainers");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls.at(0) ?? [];
-    expect(String(url)).toBe("https://intake.test/public/feedback");
-    const forwarded = JSON.parse(String(init?.body));
+    const [url, init] = expectFirstFetchCall(fetchMock.mock.calls);
+    expect(fetchInputUrl(url)).toBe("https://intake.test/public/feedback");
+    const forwarded = parseFetchBody(init);
     expect(forwarded).toMatchObject({
       kind: "bug",
       title: "list_matters cursor loops on the last page",
     });
-    expect(forwarded.source.instance).toBeDefined();
+    const source = forwarded.source;
+    if (!isRecord(source)) {
+      throw new Error("Expected forwarded source metadata");
+    }
+    expect(source.instance).toBeDefined();
     // The forwarded body carries the sanitized content, never email etc.
     expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
 
   test("stella channel: approval and forwarded body stay under the intake cap", async () => {
     const fetchMock = mock(
-      async () =>
+      async (
+        _input: Parameters<typeof fetch>[0],
+        _init?: Parameters<typeof fetch>[1],
+      ) =>
         new Response(JSON.stringify({ delivered: "email" }), {
           status: 200,
           headers: { "content-type": "application/json" },
@@ -364,9 +443,13 @@ describe("MCP send_feedback tool", () => {
     );
 
     expect(phase2.status).toBe("sent");
-    const [, init] = fetchMock.mock.calls.at(0) ?? [];
-    const forwarded = JSON.parse(String(init?.body));
-    expect(String(forwarded.body).length).toBeLessThanOrEqual(MAX_BODY);
+    const [, init] = expectFirstFetchCall(fetchMock.mock.calls);
+    const forwarded = parseFetchBody(init);
+    expect(typeof forwarded.body).toBe("string");
+    if (typeof forwarded.body !== "string") {
+      throw new Error("Expected forwarded body to be text");
+    }
+    expect(forwarded.body.length).toBeLessThanOrEqual(MAX_BODY);
   });
 
   test("stella channel: maps intake 429 to rate_limited", async () => {

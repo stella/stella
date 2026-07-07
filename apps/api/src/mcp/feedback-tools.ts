@@ -56,6 +56,8 @@ const GITHUB_BODY_TRUNCATION_MARKER =
   "\n\n[body truncated — paste the rest manually]";
 const STELLA_INTAKE_BODY_TRUNCATION_MARKER =
   "\n\n[body truncated to fit stella feedback intake]";
+const HIGH_SURROGATE_START = 55_296;
+const HIGH_SURROGATE_END = 56_319;
 
 export const FEEDBACK_TOOL_DEFINITIONS = [
   {
@@ -177,8 +179,12 @@ export const sliceWithoutDanglingHighSurrogate = (
   end: number,
 ): string => {
   const sliced = value.slice(0, end);
-  const last = sliced.charCodeAt(sliced.length - 1);
-  return last >= 0xd800 && last <= 0xdbff ? sliced.slice(0, -1) : sliced;
+  const last = sliced.codePointAt(sliced.length - 1);
+  return last !== undefined &&
+    last >= HIGH_SURROGATE_START &&
+    last <= HIGH_SURROGATE_END
+    ? sliced.slice(0, -1)
+    : sliced;
 };
 
 /**
@@ -511,6 +517,19 @@ type IntakeSuccessBody = {
   issueUrl?: unknown;
 };
 
+const isIntakeSuccessBody = (value: unknown): value is IntakeSuccessBody => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const delivered: unknown = Reflect.get(value, "delivered");
+  const issueUrl: unknown = Reflect.get(value, "issueUrl");
+  return (
+    (delivered === undefined || typeof delivered === "string") &&
+    (issueUrl === undefined || typeof issueUrl === "string")
+  );
+};
+
 const mapIntakeResponse = async (
   response: Response,
 ): Promise<CallToolResult> => {
@@ -539,17 +558,22 @@ const mapIntakeResponse = async (
   }
 
   const parsed = await Result.tryPromise({
-    try: async () => (await response.json()) as IntakeSuccessBody,
+    try: async (): Promise<unknown> => {
+      const value: unknown = await response.json();
+      return value;
+    },
     catch: (cause) => cause,
   });
+  const parsedBody =
+    Result.isOk(parsed) && isIntakeSuccessBody(parsed.value)
+      ? parsed.value
+      : null;
   const delivered =
-    Result.isOk(parsed) && typeof parsed.value.delivered === "string"
-      ? parsed.value.delivered
+    typeof parsedBody?.delivered === "string"
+      ? parsedBody.delivered
       : "forwarded";
   const issueUrl =
-    Result.isOk(parsed) && typeof parsed.value.issueUrl === "string"
-      ? parsed.value.issueUrl
-      : undefined;
+    typeof parsedBody?.issueUrl === "string" ? parsedBody.issueUrl : undefined;
 
   return textResult({
     channel: "stella",
