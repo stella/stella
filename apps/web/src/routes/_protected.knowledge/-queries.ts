@@ -10,7 +10,6 @@ import { toSafeId } from "@/lib/safe-id";
 
 const SKILLS_PAGE_SIZE = 100;
 const PLAYBOOKS_PAGE_SIZE = 50;
-const MAX_COMMAND_SKILLS = 250;
 
 type SkillsPageKey = {
   limit: number;
@@ -18,15 +17,6 @@ type SkillsPageKey = {
 
 type PlaybooksPageKey = {
   limit: number;
-};
-
-type SkillCommandRow = {
-  body: string;
-  command: string;
-  description: string;
-  id: string;
-  name: string;
-  scope: "private" | "team";
 };
 
 type ClausesListKey = {
@@ -49,14 +39,6 @@ export const knowledgeKeys = {
       ...knowledgeKeys.skills.all(organizationId),
       "list",
       { limit },
-    ],
-    // Skills with a slash command set. Feeds the chat slash menu and
-    // the property prompt editor's slash picker. Separate cache from
-    // the full skill list so the editor's add/edit invalidations
-    // don't reset the slash-menu data.
-    commands: (organizationId: string) => [
-      ...knowledgeKeys.skills.all(organizationId),
-      "commands",
     ],
     detail: (organizationId: string, skillId: string) => [
       ...knowledgeKeys.skills.all(organizationId),
@@ -624,71 +606,6 @@ export const skillsOptions = (organizationId: string) =>
     getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
-
-// Skills with a slash command set. Backs prompt insertion surfaces
-// that do not already have the paged skills catalogue in memory.
-// It reads through the same authenticated `/skills` list as the
-// catalogue, so prompt surfaces do not need a second command-only
-// request during protected-route cold start.
-export const skillCommandsOptions = (organizationId: string) =>
-  queryOptions({
-    queryKey: knowledgeKeys.skills.commands(organizationId),
-    queryFn: async ({ signal }) =>
-      await fetchSkillCommandRows({
-        commandRows: [],
-        offset: 0,
-        signal,
-      }),
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
-
-const fetchSkillCommandRows = async ({
-  commandRows,
-  offset,
-  signal,
-}: {
-  commandRows: SkillCommandRow[];
-  offset: number;
-  signal: AbortSignal;
-}): Promise<SkillCommandRow[]> => {
-  const response = await api.skills.get({
-    query: {
-      limit: SKILLS_PAGE_SIZE,
-      offset,
-    },
-    fetch: { signal },
-  });
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  for (const row of response.data.installed) {
-    if (!row.enabled || !row.command || !row.body) {
-      continue;
-    }
-    commandRows.push({
-      id: row.id,
-      scope: row.scope,
-      name: row.name,
-      description: row.description,
-      command: row.command,
-      body: row.body,
-    });
-    if (commandRows.length >= MAX_COMMAND_SKILLS) {
-      return commandRows;
-    }
-  }
-
-  if (response.data.nextOffset === null) {
-    return commandRows;
-  }
-
-  return fetchSkillCommandRows({
-    commandRows,
-    offset: response.data.nextOffset,
-    signal,
-  });
-};
 
 export const skillDetailOptions = (organizationId: string, skillId: string) =>
   queryOptions({

@@ -29,7 +29,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";
-import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
+import { workspacesRouteOptions } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import type {
   MattersColumnId,
@@ -202,7 +202,7 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
   const activeOrganizationId = routeApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data } = useQuery(workspacesOptions(activeOrganizationId));
+  const { data } = useQuery(workspacesRouteOptions(activeOrganizationId));
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
   if (!data || !canCreate) {
