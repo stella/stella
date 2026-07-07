@@ -157,7 +157,7 @@ const contentDedupKey = ({
   title: string;
 }): string =>
   new Bun.CryptoHasher("sha256")
-    .update(`${kind}\n${title}\n${body}`)
+    .update(JSON.stringify({ body, kind, title }))
     .digest("hex");
 
 const truncateSourceField = (value: string): string =>

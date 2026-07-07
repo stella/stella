@@ -7,7 +7,10 @@ import { member, user } from "@/api/db/auth-schema";
 import { env } from "@/api/env";
 import { feedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { captureError } from "@/api/lib/analytics";
-import { sendFeedbackEmail } from "@/api/lib/email";
+import {
+  isTransactionalEmailConfigured,
+  sendFeedbackEmail,
+} from "@/api/lib/email";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
 import {
@@ -438,6 +441,13 @@ const deliverViaEmail = async ({
       code: "feature_disabled",
       message: "Email feedback is not configured on this server",
       hint: 'Email feedback is not configured on this server; use channel "github" or "stella".',
+    });
+  }
+  if (!isTransactionalEmailConfigured()) {
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: "Email transport is not configured on this server",
+      hint: 'Configure EMAIL_PROVIDER, TRANSACTIONAL_EMAIL_FROM, and provider settings, or use channel "github" or "stella".',
     });
   }
 

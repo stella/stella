@@ -17,6 +17,7 @@ const MAX_BODY = 8000;
 let feedbackEmailTo: string | undefined;
 let feedbackIntakeUrl: string | undefined =
   "https://intake.test/public/feedback";
+let transactionalEmailConfigured = true;
 
 const realEnvModule = await import("@/api/env");
 void mock.module("@/api/env", () => ({
@@ -42,7 +43,7 @@ const sendFeedbackEmailMock = mock(
   async (_args: Record<string, unknown>) => undefined,
 );
 void mock.module("@/api/lib/email", () => ({
-  isTransactionalEmailConfigured: () => true,
+  isTransactionalEmailConfigured: () => transactionalEmailConfigured,
   sendOTPEmail: mock(async () => undefined),
   sendNewDeviceLoginEmail: mock(async () => undefined),
   sendOrganizationInvitation: mock(async () => undefined),
@@ -295,6 +296,7 @@ describe("MCP send_feedback tool", () => {
     releaseCounterMock.mockImplementation(async () => undefined);
     feedbackEmailTo = "maintainer@example.com";
     feedbackIntakeUrl = "https://intake.test/public/feedback";
+    transactionalEmailConfigured = true;
     globalThis.fetch = originalFetch;
   });
 
@@ -666,6 +668,22 @@ describe("MCP send_feedback tool", () => {
 
   test("email channel: refuses with feature_disabled when FEEDBACK_EMAIL_TO is unset", async () => {
     feedbackEmailTo = undefined;
+    const args = {
+      kind: "docs",
+      title: "clarify pagination",
+      body: "The cursor docs are unclear.",
+      channel: "email",
+    };
+    const token = String(parsePayload(await send(args)).confirmation_token);
+
+    const result = await send({ ...args, confirmation_token: token });
+    const payload = parseErrorPayload(result);
+    expect(payload.error?.code).toBe("feature_disabled");
+    expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
+  });
+
+  test("email channel: refuses with feature_disabled when transport is unset", async () => {
+    transactionalEmailConfigured = false;
     const args = {
       kind: "docs",
       title: "clarify pagination",

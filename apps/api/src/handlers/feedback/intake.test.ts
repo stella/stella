@@ -225,6 +225,29 @@ describe("public feedback intake", () => {
     expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(1);
   });
 
+  test("dedup treats title and body as bounded fields", async () => {
+    const guards = memoryGuards();
+    const deps = {
+      guards,
+      emailTo: "maintainer@example.com",
+    };
+
+    const first = await receivePublicFeedback({
+      rawBody: raw({ title: "A", body: "B\nC" }),
+      clientIp: "203.0.113.15",
+      deps,
+    });
+    const second = await receivePublicFeedback({
+      rawBody: raw({ title: "A\nB", body: "C" }),
+      clientIp: "203.0.113.15",
+      deps,
+    });
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(2);
+  });
+
   test("schema rejects an oversized body (422)", async () => {
     const response = await receivePublicFeedback({
       rawBody: raw({ body: "x".repeat(8001) }),
