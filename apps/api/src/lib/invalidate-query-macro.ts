@@ -14,6 +14,16 @@ const invalidateQueryBodySchema = t.Object({
 
 const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 
+// Elysia runs a macro's afterHandle even when an earlier beforeHandle
+// short-circuited the request (e.g. the /v1 rate limiter answering 429),
+// i.e. BEFORE validateAuth's resolve populated `session`. The static types
+// cannot see that, so this runtime check is the honest guard: when auth never
+// resolved, the handler never ran and there is no mutation to broadcast.
+// Without it, dereferencing ctx.session turned every rate-limited mutation
+// into a masked 500 instead of the intended 429.
+const didAuthResolve = (ctx: { session?: unknown }): boolean =>
+  ctx.session !== undefined;
+
 const createInvalidateQueryEvent = (queryKey: string[]) => ({
   type: INVALIDATE_QUERY_EVENT_TYPE,
   data: queryKey,
@@ -39,6 +49,9 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
     validateAuth: true,
     body: invalidateQueryBodySchema,
     afterHandle: (ctx) => {
+      if (!didAuthResolve(ctx)) {
+        return;
+      }
       const workspaceId =
         "workspaceId" in ctx ? String(ctx.workspaceId) : undefined;
       const queryKeys = [ctx.body.queryKey, ...(ctx.body.queryKeys ?? [])];
@@ -57,6 +70,9 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
     validateAuth: true,
     body: invalidateQueryBodySchema,
     afterHandle: (ctx) => {
+      if (!didAuthResolve(ctx)) {
+        return;
+      }
       const queryKeys = [ctx.body.queryKey, ...(ctx.body.queryKeys ?? [])];
       for (const queryKey of queryKeys) {
         broadcastQueryInvalidationToOrganization(
