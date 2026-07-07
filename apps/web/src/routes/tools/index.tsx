@@ -6,12 +6,12 @@ import * as v from "valibot";
 
 import { loadCatalogue, loadRecommended } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
 
 import { getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
+import { ToggleChip } from "@/routes/tools/-components/toggle-chip";
 import { ToolCatalogueCard } from "@/routes/tools/-components/tool-catalogue-card";
 import {
   collectJurisdictions,
@@ -125,21 +125,15 @@ function PublicToolsIndex() {
 
       <nav aria-label={t("common.kind")} className="flex flex-wrap gap-1.5">
         {TOOLS_KIND_FILTERS.map((option) => (
-          <Button
-            className={cn(
-              "h-auto rounded-md px-2.5 py-1 text-xs font-medium",
-              kind === option
-                ? "bg-foreground text-background hover:bg-foreground"
-                : "text-muted-foreground",
-            )}
+          <ToggleChip
+            active={kind === option}
+            className="px-2.5 py-1 font-medium"
             key={option}
             onClick={() => void navigate({ search: { kind: option } })}
-            size="sm"
-            type="button"
             variant="ghost"
           >
             {t(KIND_LABEL_KEY[option])}
-          </Button>
+          </ToggleChip>
         ))}
       </nav>
 
@@ -214,27 +208,16 @@ function FacetChips({
         {label}
       </h2>
       <div className="flex flex-wrap gap-1.5">
-        {options.map((option) => {
-          const active = selected.has(option.value);
-          return (
-            <Button
-              aria-pressed={active}
-              className={cn(
-                "h-auto rounded-md px-2 py-0.5 text-xs font-normal transition-colors",
-                active
-                  ? "border-foreground bg-foreground text-background hover:bg-foreground"
-                  : "text-muted-foreground",
-              )}
-              key={option.value}
-              onClick={() => onToggle(option.value)}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {option.label}
-            </Button>
-          );
-        })}
+        {options.map((option) => (
+          <ToggleChip
+            active={selected.has(option.value)}
+            className="font-normal"
+            key={option.value}
+            onClick={() => onToggle(option.value)}
+          >
+            {option.label}
+          </ToggleChip>
+        ))}
       </div>
     </section>
   );
