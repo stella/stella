@@ -22,7 +22,7 @@ const INVALIDATE_QUERY_EVENT_TYPE = "invalidate-query";
 // Without it, dereferencing ctx.session turned every rate-limited mutation
 // into a masked 500 instead of the intended 429.
 const didAuthResolve = (ctx: { session?: unknown }): boolean =>
-  ctx.session !== undefined;
+  ctx.session !== undefined && ctx.session !== null;
 
 const createInvalidateQueryEvent = (queryKey: string[]) => ({
   type: INVALIDATE_QUERY_EVENT_TYPE,

@@ -46,6 +46,20 @@ const isToleratedResourceNotFound = (message: ConsoleMessage): boolean =>
   RESOURCE_NOT_FOUND_CONSOLE_ERROR.test(message.text()) &&
   !STATIC_ASSET_URL.test(message.location().url);
 
+const redactUrlQuery = (url: string): string => {
+  if (url === "") {
+    return "";
+  }
+
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    const suffixIndex = url.search(/[?#]/u);
+    return suffixIndex === -1 ? url : url.slice(0, suffixIndex);
+  }
+};
+
 type BrowserErrorCollectorOptions = {
   // Only route-smoke opts in: it walks every authenticated route and so hits
   // the unbounded route-content tail of the cold-mount warning. Other specs
@@ -99,7 +113,7 @@ export const createBrowserErrorCollector = (
         // "Failed to load resource" console errors carry the failing URL only
         // in message.location(); without it a 4xx/5xx failure is undebuggable
         // from the assertion output alone.
-        const failedUrl = message.location().url;
+        const failedUrl = redactUrlQuery(message.location().url);
         errors.push(
           failedUrl === ""
             ? `console.error: ${text}`

@@ -40,11 +40,13 @@ describe("db query counter logger", () => {
   });
 
   test("interleaved async contexts count independently", async () => {
-    const countContext = (queries: number): Promise<number> =>
-      runWithQueryCounter(async (counter) => {
+    const countContext = async (queries: number): Promise<number> => {
+      const count = await runWithQueryCounter(async (counter) => {
         await logQueriesInterleaved(queries);
         return counter.count;
       });
+      return count;
+    };
 
     const [first, second] = await Promise.all([
       countContext(3),

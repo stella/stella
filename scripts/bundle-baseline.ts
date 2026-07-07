@@ -22,7 +22,7 @@
 // so it is too slow for the local lint/pre-commit loop. Wired into
 // .github/workflows/ci.yml's web-build job, right after "Build web".
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 const SCRIPTS_DIR = import.meta.dir;
@@ -131,6 +131,14 @@ const gzipSize = (absPath: string): number =>
 type MeasureResult = { ok: true; sizes: Sizes } | { ok: false; error: string };
 
 const measure = (assetsDir: string): MeasureResult => {
+  if (!existsSync(assetsDir)) {
+    return {
+      ok: false,
+      error:
+        `No client JS found in ${ASSETS_REL}. Run \`bun --filter @stll/web build\`\n` +
+        "first, then re-run this guard against the fresh dist/.",
+    };
+  }
   const files = [...new Bun.Glob("*.js").scanSync(assetsDir)];
   if (files.length === 0) {
     return {

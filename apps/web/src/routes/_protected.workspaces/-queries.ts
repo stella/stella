@@ -41,8 +41,7 @@ export const workspacesOptions = (activeOrganizationId: string) =>
   queryOptions({
     queryKey: workspacesKeys.list(activeOrganizationId),
     queryFn: async ({ signal }) => await readWorkspaces(signal),
-    staleTime: 0,
-    refetchOnMount: "always",
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 export const workspacesNavigationOptions = (activeOrganizationId: string) =>

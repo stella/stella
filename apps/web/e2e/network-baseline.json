@@ -286,7 +286,7 @@
     }
   },
   "/knowledge/mcp target": {
-    "depth": 6,
+    "depth": 7,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -739,7 +739,7 @@
     }
   },
   "/settings/organization/members": {
-    "depth": 3,
+    "depth": 4,
     "requests": [
       "GET /api/auth/get-session",
       "GET /api/auth/organization/get-active-member-role",
@@ -972,7 +972,7 @@
       "GET /v1/workspaces/:id/overview": 25,
       "GET /v1/workspaces/:id/workflow": 21,
       "GET /v1/workspaces/navigation": 16,
-      "POST /v1/chat/workspaces/:id/file-thread": 16,
+      "POST /v1/chat/workspaces/:id/file-thread": 22,
       "POST /v1/workspaces/:id/justifications/query": 23
     }
   },
