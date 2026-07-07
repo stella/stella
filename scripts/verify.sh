@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Local mirror of the `ci-checks` job in .github/workflows/ci.yml:
+# Local mirror of the required package checks in .github/workflows/ci.yml:
 # one command that answers "will CI pass?" without reverse-engineering
 # the workflow. Green here means green on the required `ci-result`
 # check (the separate build/e2e jobs are not included; they need the
 # full service stack).
 #
-# Keep the step list in sync with ci.yml when adding or removing
+# Keep the check list in sync with ci.yml when adding or removing
 # checks there.
 #
 # Usage:
@@ -100,7 +100,7 @@ run_rust_format() {
 run_typecheck() {
   # tsgo processes are memory-hungry; serialize typecheck tasks so
   # parallel instances cannot exhaust memory on contributor machines.
-  # CI runs them concurrently on isolated runners; results match.
+  # CI runs lint and typecheck as separate jobs; results match.
   if [[ -n "$affected_flag" ]]; then
     bun run typecheck -- --concurrency=1 "$affected_flag"
   else
