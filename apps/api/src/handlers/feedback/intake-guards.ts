@@ -44,6 +44,14 @@ end
 return current
 `;
 
+const RELEASE_COUNTER_SCRIPT = `
+local current = redis.call("DECR", KEYS[1])
+if current <= 0 then
+  redis.call("DEL", KEYS[1])
+end
+return current
+`;
+
 type FeedbackIntakeGuardsOptions = {
   commandTimeoutMs?: number;
   createRedis?: () => RedisLike;
@@ -63,6 +71,8 @@ export type FeedbackIntakeGuards = {
     windowMs: number;
     max: number;
   }) => Promise<boolean>;
+  /** Best-effort release of a previously consumed counter slot after a failed delivery. */
+  releaseCounter: (input: { bucket: string; key: string }) => Promise<void>;
   /** True when this content is seen for the first time in the window (claimed); false when it duplicates a live claim. */
   claimDedup: (input: { key: string; ttlMs: number }) => Promise<boolean>;
   /** Best-effort release of a prior claim so a failed delivery does not block re-submission. */
@@ -165,7 +175,31 @@ export const createFeedbackIntakeGuards = ({
     }
   };
 
-  return { claimDedup, consumeCounter, releaseDedup };
+  const releaseCounter: FeedbackIntakeGuards["releaseCounter"] = async ({
+    bucket,
+    key,
+  }) => {
+    const scoped = `${bucket}:${key}`;
+    try {
+      await withCommandTimeout(
+        getRedis().send("EVAL", [
+          RELEASE_COUNTER_SCRIPT,
+          "1",
+          `${REDIS_KEY_PREFIX}${scoped}`,
+        ]),
+        commandTimeoutMs,
+      );
+    } catch (error) {
+      onRedisError(error);
+      releaseCounterFallback({
+        fallback: counterFallback,
+        key: scoped,
+        now: now(),
+      });
+    }
+  };
+
+  return { claimDedup, consumeCounter, releaseCounter, releaseDedup };
 };
 
 const evalCounter = async ({
@@ -216,6 +250,27 @@ const consumeCounterFallback = ({
   }
   current.count += 1;
   return true;
+};
+
+const releaseCounterFallback = ({
+  fallback,
+  key,
+  now,
+}: {
+  fallback: Map<string, CounterEntry>;
+  key: string;
+  now: number;
+}): void => {
+  const current = fallback.get(key);
+  if (!current || current.expiresAt <= now) {
+    fallback.delete(key);
+    return;
+  }
+  if (current.count <= 1) {
+    fallback.delete(key);
+    return;
+  }
+  current.count -= 1;
 };
 
 const claimDedupFallback = ({

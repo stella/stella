@@ -54,6 +54,8 @@ const GITHUB_NEW_ISSUE_URL = `https://github.com/${GITHUB_REPO}/issues/new`;
 const MAX_GITHUB_ISSUE_URL_CHARS = 7500;
 const GITHUB_BODY_TRUNCATION_MARKER =
   "\n\n[body truncated — paste the rest manually]";
+const STELLA_INTAKE_BODY_TRUNCATION_MARKER =
+  "\n\n[body truncated to fit stella feedback intake]";
 
 export const FEEDBACK_TOOL_DEFINITIONS = [
   {
@@ -141,6 +143,19 @@ const composeFeedbackBody = ({
   kind: FeedbackKind;
 }): string =>
   `${body}\n\n---\n_Filed via stella send_feedback (agent-assisted, sanitized). Kind: ${kind}._`;
+
+const fitStellaIntakeBody = (body: string): string => {
+  const bodyChars = Array.from(body);
+  if (bodyChars.length <= MAX_FEEDBACK_BODY_CHARS) {
+    return body;
+  }
+
+  const markerChars = Array.from(STELLA_INTAKE_BODY_TRUNCATION_MARKER);
+  return [
+    ...bodyChars.slice(0, MAX_FEEDBACK_BODY_CHARS - markerChars.length),
+    ...markerChars,
+  ].join("");
+};
 
 const buildGithubIssueUrl = ({
   body,
@@ -283,6 +298,8 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
     body: sanitizedBodyPass.text,
     kind,
   });
+  const approvedBody =
+    channel === "stella" ? fitStellaIntakeBody(composedBody) : composedBody;
   const redactions =
     sanitizedTitlePass.redactions + sanitizedBodyPass.redactions;
 
@@ -303,13 +320,13 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
     const token = createFeedbackToken({
       kind,
       sanitizedTitle,
-      sanitizedBody: composedBody,
+      sanitizedBody: approvedBody,
     });
     return textResult({
       channel,
       status: "approval_required",
       sanitized_title: sanitizedTitle,
-      sanitized_body: composedBody,
+      sanitized_body: approvedBody,
       redactions,
       confirmation_token: token,
       expires_in_minutes: FEEDBACK_TOKEN_TTL_MINUTES,
@@ -328,7 +345,7 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
       token: confirmation_token,
       kind,
       sanitizedTitle,
-      sanitizedBody: composedBody,
+      sanitizedBody: approvedBody,
     })
   ) {
     return structuredErrorResult({
@@ -360,11 +377,26 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
     });
   }
 
-  if (channel === "stella") {
-    return await deliverViaStella({ composedBody, kind, sanitizedTitle });
+  const delivered =
+    channel === "stella"
+      ? await deliverViaStella({
+          composedBody: approvedBody,
+          kind,
+          sanitizedTitle,
+        })
+      : await deliverViaEmail({
+          composedBody: approvedBody,
+          context,
+          kind,
+          sanitizedTitle,
+        });
+  if (delivered.isError) {
+    await feedbackIntakeGuards.releaseCounter({
+      bucket: FEEDBACK_DELIVERY_BUCKET,
+      key: context.organizationId,
+    });
   }
-
-  return await deliverViaEmail({ composedBody, context, kind, sanitizedTitle });
+  return delivered;
 };
 
 const deliverViaEmail = async ({

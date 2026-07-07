@@ -58,6 +58,9 @@ type ConsumeCounterInput = {
   max: number;
 };
 const consumeCounterMock = mock(async (_input: ConsumeCounterInput) => true);
+const releaseCounterMock = mock(
+  async (_input: { bucket: string; key: string }) => undefined,
+);
 // Preserve the real module (notably `createFeedbackIntakeGuards`, which the
 // intake handler's own test uses) and override only the singleton the tool
 // imports. This keeps the module-level mock from leaking a stubbed factory into
@@ -68,6 +71,7 @@ void mock.module("@/api/handlers/feedback/intake-guards", () => ({
   ...realIntakeGuardsModule,
   feedbackIntakeGuards: {
     consumeCounter: consumeCounterMock,
+    releaseCounter: releaseCounterMock,
     claimDedup: mock(async () => true),
     releaseDedup: mock(async () => undefined),
   },
@@ -175,6 +179,8 @@ describe("MCP send_feedback tool", () => {
     sendFeedbackEmailMock.mockReset();
     consumeCounterMock.mockReset();
     consumeCounterMock.mockImplementation(async () => true);
+    releaseCounterMock.mockReset();
+    releaseCounterMock.mockImplementation(async () => undefined);
     feedbackEmailTo = "maintainer@example.com";
     feedbackIntakeUrl = "https://intake.test/public/feedback";
     globalThis.fetch = originalFetch;
@@ -334,6 +340,35 @@ describe("MCP send_feedback tool", () => {
     expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
 
+  test("stella channel: approval and forwarded body stay under the intake cap", async () => {
+    const fetchMock = mock(
+      async () =>
+        new Response(JSON.stringify({ delivered: "email" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    stubFetch(fetchMock);
+    const args = {
+      kind: "bug",
+      title: "large forwarded report",
+      body: "x".repeat(MAX_BODY),
+      channel: "stella",
+    };
+
+    const phase1 = parsePayload(await send(args));
+    expect(String(phase1.sanitized_body).length).toBeLessThanOrEqual(MAX_BODY);
+    const token = String(phase1.confirmation_token);
+    const phase2 = parsePayload(
+      await send({ ...args, confirmation_token: token }),
+    );
+
+    expect(phase2.status).toBe("sent");
+    const [, init] = fetchMock.mock.calls.at(0) ?? [];
+    const forwarded = JSON.parse(String(init?.body));
+    expect(String(forwarded.body).length).toBeLessThanOrEqual(MAX_BODY);
+  });
+
   test("stella channel: maps intake 429 to rate_limited", async () => {
     stubFetch(mock(async () => new Response("", { status: 429 })));
     const args = {
@@ -347,6 +382,7 @@ describe("MCP send_feedback tool", () => {
     const payload = parseErrorPayload(result);
     expect(payload.error?.code).toBe("rate_limited");
     expect(payload.error?.retryable).toBe(true);
+    expect(releaseCounterMock).toHaveBeenCalledTimes(1);
   });
 
   test("stella channel: intake network failure maps to retryable internal_error", async () => {
@@ -366,6 +402,7 @@ describe("MCP send_feedback tool", () => {
     const payload = parseErrorPayload(result);
     expect(payload.error?.code).toBe("internal_error");
     expect(payload.error?.retryable).toBe(true);
+    expect(releaseCounterMock).toHaveBeenCalledTimes(1);
   });
 
   test("stella channel: feature_disabled when FEEDBACK_INTAKE_URL is unset", async () => {
@@ -383,6 +420,7 @@ describe("MCP send_feedback tool", () => {
     const payload = parseErrorPayload(result);
     expect(payload.error?.code).toBe("feature_disabled");
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(releaseCounterMock).toHaveBeenCalledTimes(1);
   });
 
   test("email channel: a token minted for different content is rejected", async () => {
@@ -448,6 +486,7 @@ describe("MCP send_feedback tool", () => {
       key: "org_1",
       max: 5,
     });
+    expect(releaseCounterMock).not.toHaveBeenCalled();
   });
 
   test("over the per-org delivery cap, phase 2 returns rate_limited", async () => {
