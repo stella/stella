@@ -57,7 +57,6 @@ import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-la
 import { getMatterOrganizationResetPatch } from "@/routes/_protected.workspaces/-organization-reset";
 import {
   workspacesKeys,
-  workspacesOptions,
   workspacesRouteOptions,
 } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
@@ -105,7 +104,7 @@ function RouteComponent() {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const { data, isFetching } = useSuspenseQuery(
-    workspacesOptions(activeOrganizationId),
+    workspacesRouteOptions(activeOrganizationId),
   );
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
