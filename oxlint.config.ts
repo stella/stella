@@ -331,6 +331,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/require-router-select.ts",
+    "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
@@ -464,6 +465,17 @@ export default defineConfig({
       ],
       rules: {
         "no-shared-suspense-query/no-shared-suspense-query": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-loader-prefetch.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/require-loader-prefetch-loader.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/require-loader-prefetch-nonroute.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/require-loader-prefetch-nosuspense.fixture.tsx",
+      ],
+      rules: {
+        "require-loader-prefetch/require-loader-prefetch": "error",
       },
     },
     {
@@ -1210,6 +1222,7 @@ export default defineConfig({
         "@tanstack/router/create-route-property-order": "error",
         "no-beforeload-redirect/no-beforeload-redirect": "error",
         "no-raw-route-query-client/no-raw-route-query-client": "error",
+        "require-loader-prefetch/require-loader-prefetch": "error",
       },
     },
     {
