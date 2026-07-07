@@ -319,9 +319,13 @@ function AddSkillForm() {
       <div className="grid gap-4 sm:grid-cols-3">
         <FormRow label={t("publicTools.contribute.form.licenseLabel")}>
           <Select
-            onValueChange={(license) =>
-              setForm((prev) => ({ ...prev, license }))
-            }
+            onValueChange={(license) => {
+              // Base UI passes null for a cleared single select; these
+              // selects are never clearable, so keep the previous value.
+              if (license !== null) {
+                setForm((prev) => ({ ...prev, license }));
+              }
+            }}
             value={form.license}
           >
             <SelectTrigger>
@@ -338,7 +342,11 @@ function AddSkillForm() {
         </FormRow>
         <FormRow label={t("publicTools.contribute.form.costLabel")}>
           <Select
-            onValueChange={(cost) => setForm((prev) => ({ ...prev, cost }))}
+            onValueChange={(cost) => {
+              if (cost !== null) {
+                setForm((prev) => ({ ...prev, cost }));
+              }
+            }}
             value={form.cost}
           >
             <SelectTrigger>
@@ -355,7 +363,11 @@ function AddSkillForm() {
         </FormRow>
         <FormRow label={t("publicTools.contribute.form.setupLabel")}>
           <Select
-            onValueChange={(setup) => setForm((prev) => ({ ...prev, setup }))}
+            onValueChange={(setup) => {
+              if (setup !== null) {
+                setForm((prev) => ({ ...prev, setup }));
+              }
+            }}
             value={form.setup}
           >
             <SelectTrigger>
