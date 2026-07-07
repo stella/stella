@@ -28,11 +28,11 @@ union: only the fields listed for the chosen source are allowed.
 
 The skill content lives in this repo, next to the manifest.
 
-| Field       | Required | Notes                                        |
-| ----------- | -------- | -------------------------------------------- |
-| `source`    | yes      | `"in-tree"`                                  |
-| `entryPath` | yes      | skill body path, e.g. `"SKILL.md"`           |
-| `resources` | no       | `entryPath`-relative paths to extra files    |
+| Field       | Required | Notes                                     |
+| ----------- | -------- | ----------------------------------------- |
+| `source`    | yes      | `"in-tree"`                               |
+| `entryPath` | yes      | skill body path, e.g. `"SKILL.md"`        |
+| `resources` | no       | `entryPath`-relative paths to extra files |
 
 Add the body and any resources to the entry folder. The per-entry
 folder size cap (10 MB) applies, so keep large corpora out of the repo.
