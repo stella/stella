@@ -98,10 +98,13 @@ type DocTypeGate = {
 // The workspace's "Document Type" classifier column, identified by property id.
 export type DocTypeClassifier = { id: SafeId<"property"> };
 
-// The workspace's "Document Type" classifier: a single-select column computed by
-// an AI model. The column set is bounded per workspace (LIMITS.propertiesCount),
-// content/tool are JSONB, so the single-select + ai-model checks run in app code
-// rather than the WHERE clause. Null when the workspace has no matching column.
+// The workspace's "Document Type" classifier. Prefer the structural
+// `role` (identity: survives renames and localized column names, and the
+// partial unique index guarantees at most one per workspace). Fall back to the
+// legacy name heuristic — a single-select AI column literally named "document
+// type" — for classifiers not yet tagged with the role. The column set is
+// bounded per workspace (LIMITS.propertiesCount) and content/tool are JSONB, so
+// the shape checks run in app code. Null when the workspace has no classifier.
 export const resolveDocTypeClassifier = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
@@ -111,19 +114,24 @@ export const resolveDocTypeClassifier = async (
       id: properties.id,
       content: properties.content,
       tool: properties.tool,
+      role: properties.role,
+      name: properties.name,
     })
     .from(properties)
-    .where(
-      and(
-        eq(properties.workspaceId, workspaceId),
-        sql`lower(trim(${properties.name})) = 'document type'`,
-      ),
-    );
-  const classifier = candidates.find(
-    (row) =>
-      row.content.type === "single-select" && row.tool.type === "ai-model",
+    .where(eq(properties.workspaceId, workspaceId));
+  const byRole = candidates.find(
+    (row) => row.role === "document-type-classifier",
   );
-  return classifier ? { id: classifier.id } : null;
+  if (byRole) {
+    return { id: byRole.id };
+  }
+  const byName = candidates.find(
+    (row) =>
+      row.content.type === "single-select" &&
+      row.tool.type === "ai-model" &&
+      row.name.trim().toLowerCase() === "document type",
+  );
+  return byName ? { id: byName.id } : null;
 };
 
 // A playbook scoped to a document TYPE gates its materialized columns on the

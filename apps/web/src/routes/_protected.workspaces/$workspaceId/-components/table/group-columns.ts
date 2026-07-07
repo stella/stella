@@ -2,18 +2,20 @@ import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
-// The workspace "Document Type" classifier: a single-select column computed by an
-// AI model whose name (trimmed, lower-cased) is "document type". Mirrors the
-// server-side `resolveDocTypeClassifier` so the grouped table keys per-section
-// columns off the very column a playbook run gates against.
+// The workspace "Document Type" classifier. Mirrors the server-side
+// `resolveDocTypeClassifier`: prefer the structural `role` (identity, survives
+// renames and localized labels), falling back to the legacy name heuristic (a
+// single-select AI column literally named "document type") for classifiers not
+// yet tagged with the role.
 const DOCUMENT_TYPE_CLASSIFIER_NAME = "document type";
 
 export const isDocumentTypeClassifier = (
   property: WorkspaceProperty,
 ): boolean =>
-  property.content.type === "single-select" &&
-  property.tool.type === "ai-model" &&
-  property.name.trim().toLowerCase() === DOCUMENT_TYPE_CLASSIFIER_NAME;
+  property.role === "document-type-classifier" ||
+  (property.content.type === "single-select" &&
+    property.tool.type === "ai-model" &&
+    property.name.trim().toLowerCase() === DOCUMENT_TYPE_CLASSIFIER_NAME);
 
 // A playbook column scoped to a document type carries a dependency on the
 // classifier whose condition is `classifier == <document-type label>` — the exact

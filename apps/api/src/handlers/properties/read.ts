@@ -44,6 +44,7 @@ const readProperties = createSafeHandler(
               ...property.tool,
               dependencies,
             }),
+            role: property.role,
             createdAt: property.createdAt,
           };
         }
@@ -55,6 +56,7 @@ const readProperties = createSafeHandler(
             status: property.status,
             content: property.content,
             tool: { ...property.tool, dependencies },
+            role: property.role,
             createdAt: property.createdAt,
           };
         }
@@ -77,6 +79,7 @@ const readProperties = createSafeHandler(
             askPropertyId: property.tool.askPropertyId,
             dependencies,
           },
+          role: property.role,
           createdAt: property.createdAt,
         };
       }),

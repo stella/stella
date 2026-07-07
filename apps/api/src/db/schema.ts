@@ -279,6 +279,18 @@ const pUuid = <T extends SafeIdType>() =>
 export const PROPERTY_STATUSES = ["stale", "fresh"] as const;
 export type PropertyStatus = (typeof PROPERTY_STATUSES)[number];
 
+/**
+ * Structural role a property plays beyond its content/tool shape.
+ * `document-type-classifier` marks the single AI single-select column a
+ * workspace's document-type routing keys off, so playbook gating and the
+ * grouped table bind to it by identity instead of a magic column name
+ * ("Document Type"): it survives renames and localized labels, and a partial
+ * unique index makes a second classifier per workspace structurally impossible.
+ * Null for ordinary properties.
+ */
+export const PROPERTY_ROLES = ["document-type-classifier"] as const;
+export type PropertyRole = (typeof PROPERTY_ROLES)[number];
+
 export const ENTITY_KINDS = [
   "document",
   "folder",
@@ -795,6 +807,10 @@ export const properties = p.pgTable(
     tool: jsonb().$type<PropertyTool>().notNull(),
     system: p.boolean().notNull().default(false),
     kinds: p.varchar({ length: 64 }).array().$type<EntityKind>(),
+    // Structural role (see PROPERTY_ROLES): identifies the document-type
+    // classifier by identity rather than by the literal name "Document Type".
+    // Null for ordinary properties.
+    role: p.text("role", { enum: PROPERTY_ROLES }),
     // Correlates a property materialized by a playbook back to the bundle
     // column (its `sourceId`) that produced it, so re-applying matches by
     // identity rather than name: survives renames and never collides across
@@ -812,6 +828,12 @@ export const properties = p.pgTable(
       .index("properties_workspace_playbook_definition_idx")
       .on(table.workspaceId, table.playbookDefinitionId),
     p.unique("properties_id_ws_unq").on(table.id, table.workspaceId),
+    // At most one document-type classifier per workspace: makes a second
+    // classifier (which would make routing ambiguous) structurally impossible.
+    p
+      .uniqueIndex("properties_ws_document_type_classifier_unq")
+      .on(table.workspaceId)
+      .where(sql`${table.role} = 'document-type-classifier'`),
     ...wsPolicies(),
   ],
 );
