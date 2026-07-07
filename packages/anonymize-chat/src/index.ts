@@ -244,8 +244,7 @@ const toChatAnonResult = (
       const matchingEntity = resolvedEntities.find(
         (entity) =>
           entity.text === original &&
-          normalizeEntityLabelForPlaceholder(entity.label) ===
-            placeholderLabel,
+          normalizeEntityLabelForPlaceholder(entity.label) === placeholderLabel,
       );
       return {
         placeholder,
