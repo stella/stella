@@ -30,8 +30,17 @@ export const createScopedDbMock = (tx: unknown) => {
     // Tests provide only the transaction members touched by the handler.
     const transaction =
       typeof tx === "object" && tx !== null
-        ? { execute: () => Promise.resolve(undefined), ...tx }
-        : { execute: () => Promise.resolve(undefined) };
+        ? {
+            execute: async () => {
+              await Promise.resolve();
+            },
+            ...tx,
+          }
+        : {
+            execute: async () => {
+              await Promise.resolve();
+            },
+          };
     return await callback(asTestRaw<Transaction>(transaction));
   };
 
