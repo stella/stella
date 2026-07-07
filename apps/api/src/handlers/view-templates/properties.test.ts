@@ -154,12 +154,10 @@ const createTemplateReuseTx = (
     query: {
       properties: {
         findMany: mock(async () => {
-          const rows: Array<
-            ExistingTemplateReuseProperty & {
-              role: typeof properties.$inferSelect.role | null;
-              system: boolean;
-            }
-          > = [];
+          const rows: (ExistingTemplateReuseProperty & {
+            role: typeof properties.$inferSelect.role | null;
+            system: boolean;
+          })[] = [];
           for (const property of existingProperties) {
             rows.push({
               id: property.id,
