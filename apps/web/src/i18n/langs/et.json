@@ -1373,7 +1373,8 @@
       "start": "Alusta",
       "startFailed": "Töövoogu ei õnnestunud käivitada.",
       "started": "Töövoog käivitatud",
-      "stepProgress": "Samm {current} / {total}"
+      "stepProgress": "Samm {current} / {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "Töövoogu ei õnnestunud salvestada.",
     "schedule": {

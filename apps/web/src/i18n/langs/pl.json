@@ -1373,7 +1373,8 @@
       "start": "Rozpocznij",
       "startFailed": "Nie udało się uruchomić przepływu pracy.",
       "started": "Uruchomiono przepływ pracy",
-      "stepProgress": "Krok {current} z {total}"
+      "stepProgress": "Krok {current} z {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "Nie udało się zapisać przepływu pracy.",
     "schedule": {

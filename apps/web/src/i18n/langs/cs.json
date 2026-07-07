@@ -1373,7 +1373,8 @@
       "start": "Spustit",
       "startFailed": "Pracovní postup se nepodařilo spustit.",
       "started": "Pracovní postup spuštěn",
-      "stepProgress": "Krok {current} z {total}"
+      "stepProgress": "Krok {current} z {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "Pracovní postup se nepodařilo uložit.",
     "schedule": {

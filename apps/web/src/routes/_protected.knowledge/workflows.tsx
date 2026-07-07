@@ -12,7 +12,11 @@ import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { FlowEditor } from "@/routes/_protected.knowledge/-components/flow-editor";
 import { FlowList } from "@/routes/_protected.knowledge/-components/flow-list";
-import type { FlowListItem } from "@/routes/_protected.knowledge/-components/flow-types";
+import type {
+  FlowDefinitionBody,
+  FlowDefinitionDetail,
+  FlowListItem,
+} from "@/routes/_protected.knowledge/-components/flow-types";
 import {
   FLOW_PICKER_LIMIT,
   flowDetailOptions,
@@ -29,6 +33,29 @@ export const Route = createFileRoute("/_protected/knowledge/workflows")({
 const protectedRouteApi = getRouteApi("/_protected");
 
 const FLOW_ROW_KEYS = ["a", "b", "c", "d", "e"];
+
+// The GET response carries workspace ids as plain strings; the PUT body
+// expects branded SafeIds, so rebrand before sending a fetched trigger back.
+const toTriggerBody = (
+  trigger: FlowDefinitionDetail["trigger"],
+): FlowDefinitionBody["trigger"] => {
+  if (trigger.type === "schedule") {
+    return {
+      ...trigger,
+      workspaceId: toSafeId<"workspace">(trigger.workspaceId),
+    };
+  }
+  if (trigger.type === "file-upload") {
+    return {
+      ...trigger,
+      workspaceIds:
+        trigger.workspaceIds === null
+          ? null
+          : trigger.workspaceIds.map((id) => toSafeId<"workspace">(id)),
+    };
+  }
+  return trigger;
+};
 
 function WorkflowsPageSkeleton() {
   return (
@@ -96,7 +123,7 @@ function RouteComponent() {
       name: detail.name,
       description: detail.description,
       steps: detail.steps,
-      trigger: detail.trigger,
+      trigger: toTriggerBody(detail.trigger),
       enabled,
     });
     setTogglingId(null);

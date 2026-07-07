@@ -1373,7 +1373,8 @@
       "start": "Indítás",
       "startFailed": "A munkafolyamatot nem sikerült elindítani.",
       "started": "Munkafolyamat elindítva",
-      "stepProgress": "{current}/{total}. lépés"
+      "stepProgress": "{current}/{total}. lépés",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "A munkafolyamatot nem sikerült menteni.",
     "schedule": {

@@ -1373,7 +1373,8 @@
       "start": "Starten",
       "startFailed": "Der Workflow konnte nicht gestartet werden.",
       "started": "Workflow gestartet",
-      "stepProgress": "Schritt {current} von {total}"
+      "stepProgress": "Schritt {current} von {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "Der Workflow konnte nicht gespeichert werden.",
     "schedule": {

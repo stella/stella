@@ -1373,7 +1373,8 @@
       "start": "Sākt",
       "startFailed": "Neizdevās palaist darbplūsmu.",
       "started": "Darbplūsma palaista",
-      "stepProgress": "{current}. solis no {total}"
+      "stepProgress": "{current}. solis no {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "Neizdevās saglabāt darbplūsmu.",
     "schedule": {

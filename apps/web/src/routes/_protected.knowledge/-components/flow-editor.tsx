@@ -210,7 +210,10 @@ const deriveTriggerDraft = (trigger: FlowTrigger): TriggerDraft => {
   return draft;
 };
 
-const buildTrigger = (draft: TriggerDraft): FlowTrigger => {
+// Returns the save-payload trigger shape (branded workspace ids), not the
+// response-derived `FlowTrigger`, so the literal stays assignable to the
+// POST/PUT body without widening the ids back to plain strings.
+const buildTrigger = (draft: TriggerDraft): FlowDefinitionBody["trigger"] => {
   if (draft.type === "schedule") {
     const { frequency, hourUtc, dayOfWeek, dayOfMonth } = draft.schedule;
     return {

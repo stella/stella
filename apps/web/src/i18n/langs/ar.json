@@ -1373,7 +1373,8 @@
       "start": "بدء",
       "startFailed": "تعذّر بدء مسار العمل.",
       "started": "تم بدء مسار العمل",
-      "stepProgress": "الخطوة {current} من {total}"
+      "stepProgress": "الخطوة {current} من {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "تعذّر حفظ مسار العمل.",
     "schedule": {

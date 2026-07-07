@@ -1373,7 +1373,8 @@
       "start": "Pradėti",
       "startFailed": "Nepavyko paleisti darbo eigos.",
       "started": "Darbo eiga paleista",
-      "stepProgress": "{current} žingsnis iš {total}"
+      "stepProgress": "{current} žingsnis iš {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "Nepavyko išsaugoti darbo eigos.",
     "schedule": {

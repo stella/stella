@@ -1373,7 +1373,8 @@
       "start": "Iniciar",
       "startFailed": "No se pudo iniciar el flujo de trabajo.",
       "started": "Flujo de trabajo iniciado",
-      "stepProgress": "Paso {current} de {total}"
+      "stepProgress": "Paso {current} de {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
     },
     "saveFailed": "No se pudo guardar el flujo de trabajo.",
     "schedule": {

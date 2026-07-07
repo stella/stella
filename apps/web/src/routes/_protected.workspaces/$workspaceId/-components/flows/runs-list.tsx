@@ -71,8 +71,10 @@ const RunRow = ({
             </span>
             <span className="tabular-nums">
               {t("flows.runs.stepProgress", {
-                current: Math.min(run.currentStepIndex + 1, run.stepCount),
-                total: run.stepCount,
+                current: format.number(
+                  Math.min(run.currentStepIndex + 1, run.stepCount),
+                ),
+                total: format.number(run.stepCount),
               })}
             </span>
           </div>

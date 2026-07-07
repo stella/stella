@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlayIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -34,12 +34,19 @@ type RunLauncherProps = {
   onStarted: (runId: string) => void;
 };
 
+// Mirrors `flowRunInputEntitiesMax` in apps/api/src/lib/limits.ts. apps/api
+// types are not importable from apps/web, so this is kept as a local
+// constant; the backend rejects a run start past this count regardless of
+// what the client enforces.
+const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
+
 export const RunLauncher = ({
   workspaceId,
   organizationId,
   onStarted,
 }: RunLauncherProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const queryClient = useQueryClient();
   const canRun = usePermissions({ flow: ["run"] });
 
@@ -62,6 +69,9 @@ export const RunLauncher = ({
     entity.name.toLowerCase().includes(entityFilter.toLowerCase()),
   );
 
+  const exceedsInputEntitiesLimit =
+    selectedEntityIds.length > FLOW_RUN_INPUT_ENTITIES_MAX;
+
   const toggleEntity = (id: string, checked: boolean) => {
     setSelectedEntityIds((prev) =>
       checked ? [...prev, id] : prev.filter((existing) => existing !== id),
@@ -69,7 +79,7 @@ export const RunLauncher = ({
   };
 
   const handleStart = async () => {
-    if (!definitionId) {
+    if (!definitionId || exceedsInputEntitiesLimit) {
       return;
     }
     setStarting(true);
@@ -78,6 +88,7 @@ export const RunLauncher = ({
       .flows.runs.post({
         definitionId: toSafeId<"flowDefinition">(definitionId),
         inputEntityIds: selectedEntityIds.map((id) => toSafeId<"entity">(id)),
+        queryKey: flowRunsKeys.all(workspaceId),
       });
     setStarting(false);
 
@@ -166,11 +177,20 @@ export const RunLauncher = ({
             ))
           )}
         </div>
+        {exceedsInputEntitiesLimit && (
+          <p className="text-xs text-[var(--option-red-fg)]">
+            {t("flows.runs.tooManyInputDocuments", {
+              max: format.number(FLOW_RUN_INPUT_ENTITIES_MAX),
+            })}
+          </p>
+        )}
       </div>
 
       <div className="flex justify-end">
         <Button
-          disabled={!canRun || !definitionId || starting}
+          disabled={
+            !canRun || !definitionId || starting || exceedsInputEntitiesLimit
+          }
           loading={starting}
           onClick={() => {
             void handleStart();

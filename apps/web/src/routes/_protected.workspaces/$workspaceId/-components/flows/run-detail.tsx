@@ -50,11 +50,12 @@ type RunDetailProps = {
 
 export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
   const t = useTranslations();
-  const { data, isPending, isError } = useQuery(
-    flowRunDetailOptions(workspaceId, runId),
-  );
+  // Keep the whole query result (rather than destructuring `data` alongside
+  // `isPending`/`isError`) so TypeScript narrows `query.data` through the
+  // same object instead of leaving it at its full pre-narrowed union type.
+  const query = useQuery(flowRunDetailOptions(workspaceId, runId));
 
-  if (isPending) {
+  if (query.isPending) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
@@ -62,7 +63,10 @@ export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
     );
   }
 
-  if (isError) {
+  // The Eden response type for this endpoint can also resolve to a raw
+  // `Response` (see flow-run-types.ts); guard it the same way sibling flow
+  // queries do so `query.data` narrows to `FlowRunDetailData` below.
+  if (query.isError || !query.data || query.data instanceof Response) {
     return (
       <div className="flex flex-1 flex-col gap-3 p-6">
         <BackButton onBack={onBack} />
@@ -74,7 +78,11 @@ export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
   }
 
   return (
-    <RunDetailContent onBack={onBack} run={data} workspaceId={workspaceId} />
+    <RunDetailContent
+      onBack={onBack}
+      run={query.data}
+      workspaceId={workspaceId}
+    />
   );
 };
 
@@ -116,7 +124,7 @@ const RunDetailContent = ({
     const response = await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .flows.runs({ runId: toSafeId<"flowRun">(run.id) })
-      .cancel.post();
+      .cancel.post({ queryKey: flowRunsKeys.all(workspaceId) });
     setCancelling(false);
 
     if (response.error) {
@@ -305,14 +313,18 @@ const StepRunOutput = ({
     );
   }
 
-  return (
-    <p className="text-muted-foreground text-xs">
-      {output.decision === "approved"
-        ? t("flows.runs.review.approved")
-        : t("flows.runs.review.rejected")}
-      {output.note ? ` — ${output.note}` : ""}
-    </p>
-  );
+  if (output.kind === "review-gate") {
+    return (
+      <p className="text-muted-foreground text-xs">
+        {output.decision === "approved"
+          ? t("flows.runs.review.approved")
+          : t("flows.runs.review.rejected")}
+        {output.note ? ` — ${output.note}` : ""}
+      </p>
+    );
+  }
+
+  return null;
 };
 
 const ReviewGateCard = ({
@@ -350,6 +362,7 @@ const ReviewGateCard = ({
       .review.post({
         decision,
         note: trimmedNote === "" ? null : trimmedNote,
+        queryKey: flowRunsKeys.all(workspaceId),
       });
     setSubmitting(false);
 

@@ -1377,6 +1377,7 @@ type Messages = {
       "startFailed": "Couldn't start the workflow.";
       "started": "Workflow started";
       "stepProgress": "Step {current} of {total}";
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow.";
     };
     "saveFailed": "Couldn't save the workflow.";
     "schedule": {
