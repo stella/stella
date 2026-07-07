@@ -58,6 +58,7 @@ import {
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
+import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
@@ -573,6 +574,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       : null;
   const [autosaveStatus, setAutosaveStatus] =
     useState<AutosaveStatus>("synced");
+  // Controlled `DocxEditor` comment state, round-tripped back through
+  // `onCommentsChange`. Feeds the file-chat overlay's folio-agents comment
+  // tools (read/add/reply/resolve) via `FileViewerWithAI`, and lets those
+  // mutations (reply / resolve) flow back into the editor. Reset when the
+  // loaded document changes (see `docxCommentsDocId` below) so a new file
+  // never briefly renders the previous file's comments.
+  const [docxComments, setDocxComments] = useState<DocxComments>([]);
+  const [docxCommentsDocId, setDocxCommentsDocId] = useState<string | null>(
+    null,
+  );
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
     maxAutoZoom: 0.85,
@@ -1466,6 +1477,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const previewIdentity = previewFile.fileId;
   const collaborationIdentity = collaborationSession?.sessionId ?? "local";
 
+  // Reset the controlled comment state when the loaded document changes.
+  // Adjust-state-during-render (not an effect) so the freshly-keyed DocxEditor
+  // never mounts with the previous file's comments; the new editor re-emits its
+  // own parsed comments through `onCommentsChange` on mount.
+  if (docxCommentsDocId !== previewIdentity) {
+    setDocxCommentsDocId(previewIdentity);
+    setDocxComments([]);
+  }
+
   return (
     <div
       ref={composedContainerRef}
@@ -1492,8 +1512,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             fileFieldId: fieldId,
             fileName: previewFile.fileName,
           }}
+          docxComments={docxComments}
           docxEditable={isUnlocked}
           docxEditorRef={editorRef}
+          onDocxCommentsChange={setDocxComments}
           requestDocxEditMode={requestEditMode}
           workspaceId={workspaceId}
         >
@@ -1502,6 +1524,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             ref={editorRef}
             autoOpenReviewSidebar={false}
             className="folio-docx-preview folio-peek h-full"
+            comments={docxComments}
+            onCommentsChange={setDocxComments}
             documentBuffer={editorBuffer}
             documentKey={previewIdentity}
             initialZoom={targetZoom}

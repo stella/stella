@@ -83,12 +83,22 @@ const USER_INPUT_TOOL_NAMES = {
 // `@stll/api` — this file already follows that pattern for other built-in tool names.
 const READ_DOCUMENT_TOOL_NAME = "read_document";
 const FIND_TEXT_TOOL_NAME = "find_text";
+const READ_CHANGES_TOOL_NAME = "read_changes";
+const READ_COMMENTS_TOOL_NAME = "read_comments";
+// Read-only folio-agents tools the file overlay auto-runs against the live
+// editor bridge (no approval). The comment MUTATION tools (`add_comment`,
+// `reply_comment`, `resolve_comment`) are deliberately NOT here: they carry
+// `needsApproval` and are resolved through the approval flow, not this
+// auto-run watcher.
 const FOLIO_AGENT_DOC_TOOL_NAMES = {
   [FIND_TEXT_TOOL_NAME]: true,
+  [READ_CHANGES_TOOL_NAME]: true,
+  [READ_COMMENTS_TOOL_NAME]: true,
   [READ_DOCUMENT_TOOL_NAME]: true,
 } as const satisfies Record<string, true>;
 
 const CHAT_TOOL_TITLE_KEYS = {
+  add_comment: "chat.tool.add_comment",
   "apply-active-docx-edits": "chat.tool.apply-active-docx-edits",
   "ask-user": "chat.tool.ask-user",
   boe_find_related_laws: "chat.tool.boe_find_related_laws",
@@ -98,6 +108,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   boe_search_legislation: "chat.tool.boe_search_legislation",
   borme_get_summary: "chat.tool.borme_get_summary",
   business_registry_lookup: "chat.tool.business_registry_lookup",
+  compare_versions: "chat.tool.compare_versions",
   "create-document": "chat.tool.create-document",
   "create-current-skill-resource": "common.edit",
   delete_clause: "chat.tool.delete_clause",
@@ -131,7 +142,11 @@ const CHAT_TOOL_TITLE_KEYS = {
   set_practice_jurisdictions: "chat.tool.set_practice_jurisdictions",
   suggest_template_fields: "chat.tool.suggest_template_fields",
   "load-skill": "chat.tool.load-skill",
+  read_changes: "chat.tool.read_changes",
+  read_comments: "chat.tool.read_comments",
   read_document: "chat.tool.read_document",
+  reply_comment: "chat.tool.reply_comment",
+  resolve_comment: "chat.tool.resolve_comment",
   "read-skill-resource": "chat.tool.read-skill-resource",
   "search-chat-history": "chat.tool.search-chat-history",
   "update-current-skill-body": "common.edit",

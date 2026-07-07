@@ -24,6 +24,8 @@ export const FileViewerWithAI = ({
   className,
   docxEditable,
   docxEditorRef,
+  docxComments,
+  onDocxCommentsChange,
   requestDocxEditMode,
   children,
 }: FileViewerWithAIProps) => {
@@ -46,9 +48,11 @@ export const FileViewerWithAI = ({
           activeExternal={activeExternal}
           activeFile={activeFile}
           chatThreadId={chatThreadId}
+          docxComments={docxComments}
           docxEditable={docxEditable}
           docxEditorRef={docxEditorRef}
           key={overlayKey}
+          onDocxCommentsChange={onDocxCommentsChange}
           requestDocxEditMode={requestDocxEditMode}
           workspaceId={workspaceId}
         />

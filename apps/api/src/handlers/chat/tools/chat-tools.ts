@@ -30,9 +30,14 @@ import {
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
+  ADD_COMMENT_TOOL_NAME,
   createFolioAgentDocTools,
   FIND_TEXT_TOOL_NAME,
+  READ_CHANGES_TOOL_NAME,
+  READ_COMMENTS_TOOL_NAME,
   READ_DOCUMENT_TOOL_NAME,
+  REPLY_COMMENT_TOOL_NAME,
+  RESOLVE_COMMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
@@ -49,6 +54,10 @@ import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
+import {
+  COMPARE_VERSIONS_TOOL_NAME,
+  createVersionCompareTools,
+} from "@/api/handlers/chat/tools/version-compare-tools";
 import {
   createWebSearchTools,
   FETCH_URL_TOOL_NAME,
@@ -140,6 +149,7 @@ type CurrentSkillEditTools = Partial<
 >;
 type TemplateTools = ReturnType<typeof createTemplateTools>;
 type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
+type VersionCompareTools = ReturnType<typeof createVersionCompareTools>;
 type RegistryWriteTools = ChatRegistryWriteToolMap;
 
 type BuiltInChatTools = OrgTools &
@@ -157,6 +167,7 @@ type BuiltInChatTools = OrgTools &
   ChatHistoryTools &
   TemplateTools &
   TemplateAuthoringTools &
+  VersionCompareTools &
   RegistryWriteTools;
 
 export type ChatTools = BuiltInChatTools;
@@ -272,6 +283,10 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   boe_search_legislation: CHAT_TOOL_POLICY_KIND.publicOfficial,
   borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
   [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  // Server-executed, read-only version diff: resolves version ids to DOCX
+  // buffers under the caller's authorized workspaces and returns text, so it
+  // runs immediately without per-call approval.
+  [COMPARE_VERSIONS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   describe_template: CHAT_TOOL_POLICY_KIND.internal,
@@ -291,6 +306,16 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // once the toggle is on.
   [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   [FIND_TEXT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  // folio-agents live-editor read tools: read-only, auto-run against the file
+  // overlay's editor bridge (same class as read_document / find_text).
+  [READ_CHANGES_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  [READ_COMMENTS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  // folio-agents comment mutations: each writes a tracked comment / reply /
+  // resolution, so each is a per-call mutation behind approval, resolved
+  // client-side through the same flow as apply-active-docx-edits.
+  [ADD_COMMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
+  [REPLY_COMMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
+  [RESOLVE_COMMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
   // A write: served by the hand-written template chat tool (not the registry
   // write projection), but still gated on approval like every other write.
   fill_template: CHAT_TOOL_POLICY_KIND.mutation,
@@ -487,6 +512,18 @@ export const getChatTools = ({
   // anonymous/public surfaces with no accessible workspace never receive write
   // tools. Real per-workspace statuses are threaded through so the handlers'
   // `ensureActiveWorkspace` gate keeps archived matters read-only.
+  // Server-executed version-diff tool. Gated on a non-empty workspace set:
+  // it resolves version ids against `toolWorkspaceIds`, so with no accessible
+  // workspace it could never resolve anything anyway.
+  const versionCompareTools =
+    toolWorkspaceIds.length === 0
+      ? {}
+      : createVersionCompareTools({
+          safeDb,
+          organizationId,
+          toolWorkspaceIds,
+        });
+
   const registryWriteTools =
     toolWorkspaceIds.length === 0
       ? {}
@@ -518,6 +555,7 @@ export const getChatTools = ({
       ...createDocumentTools,
       ...activeDocxEditTools,
       ...folioAgentDocTools,
+      ...versionCompareTools,
       ...webSearchTools,
       ...registryWriteTools,
       ...externalChatTools,

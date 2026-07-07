@@ -20,11 +20,17 @@ import {
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
+  ADD_COMMENT_TOOL_NAME,
   FIND_TEXT_TOOL_NAME,
+  READ_CHANGES_TOOL_NAME,
+  READ_COMMENTS_TOOL_NAME,
   READ_DOCUMENT_TOOL_NAME,
+  REPLY_COMMENT_TOOL_NAME,
+  RESOLVE_COMMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
+import { COMPARE_VERSIONS_TOOL_NAME } from "@/api/handlers/chat/tools/version-compare-tools";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS } from "@/api/lib/provider-safe-json-schema";
@@ -257,6 +263,12 @@ describe("chat tool schemas", () => {
     expect(templateOnly).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
     expect(templateOnly).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
 
+    expect(templateOnly).not.toHaveProperty(READ_CHANGES_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(READ_COMMENTS_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(ADD_COMMENT_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(REPLY_COMMENT_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(RESOLVE_COMMENT_TOOL_NAME);
+
     const withClient = getChatTools({
       ...baseArgs,
       hasActiveDocxEditClient: true,
@@ -278,6 +290,82 @@ describe("chat tool schemas", () => {
       needsApproval: false,
       requiresAnonymization: false,
     });
+
+    // The live-editor comment/changes tools share the same file-client gate.
+    for (const name of [READ_CHANGES_TOOL_NAME, READ_COMMENTS_TOOL_NAME]) {
+      const tool = withClient[name];
+      if (!tool) {
+        throw new Error(`Expected ${name} to be registered`);
+      }
+      expect(tool.needsApproval).toBeUndefined();
+      expect(getChatToolPolicy(tool)).toEqual({
+        kind: "internal",
+        needsApproval: false,
+        requiresAnonymization: false,
+      });
+    }
+    for (const name of [
+      ADD_COMMENT_TOOL_NAME,
+      REPLY_COMMENT_TOOL_NAME,
+      RESOLVE_COMMENT_TOOL_NAME,
+    ]) {
+      const tool = withClient[name];
+      if (!tool) {
+        throw new Error(`Expected ${name} to be registered`);
+      }
+      // Comment mutations are approval-gated, resolved client-side.
+      expect(tool.needsApproval).toBe(true);
+      expect(getChatToolPolicy(tool)).toEqual({
+        kind: "mutation",
+        needsApproval: true,
+        requiresAnonymization: false,
+      });
+    }
+  });
+
+  test("registers the server-executed compare_versions tool when a workspace is accessible", () => {
+    const baseArgs = {
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
+    } as const;
+
+    const withWorkspace = getChatTools({
+      ...baseArgs,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+    });
+    const compareVersions = withWorkspace[COMPARE_VERSIONS_TOOL_NAME];
+    if (!compareVersions) {
+      throw new Error("Expected compare_versions to be registered");
+    }
+    // Server-executed, read-only: no approval gate.
+    expect(compareVersions.needsApproval).toBeUndefined();
+    expect(getChatToolPolicy(compareVersions)).toEqual({
+      kind: "internal",
+      needsApproval: false,
+      requiresAnonymization: false,
+    });
+
+    const withoutWorkspace = getChatTools({
+      ...baseArgs,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [],
+      }),
+    });
+    expect(withoutWorkspace).not.toHaveProperty(COMPARE_VERSIONS_TOOL_NAME);
   });
 
   test("only exposes current skill edit tools for editable active skill chats", () => {
