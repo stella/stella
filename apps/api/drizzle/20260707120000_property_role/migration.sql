@@ -28,6 +28,7 @@ SET statement_timeout = 0;
 -- cannot record the migration without enforcing the invariant.
 DROP INDEX CONCURRENTLY IF EXISTS "properties_ws_document_type_classifier_unq";
 --> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts
 CREATE UNIQUE INDEX CONCURRENTLY "properties_ws_document_type_classifier_unq" ON "properties" USING btree ("workspace_id") WHERE "role" = 'document-type-classifier';
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
