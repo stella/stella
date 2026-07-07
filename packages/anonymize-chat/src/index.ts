@@ -207,6 +207,40 @@ export const buildChatAnonPipelineConfig = ({
 const normalizeForExclusion = (value: string): string =>
   value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
 
+const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
+
+const restoreLiteralPlaceholders = (
+  text: string,
+  restoreMap: ReadonlyMap<string, string>,
+): string => {
+  let result = text;
+  for (const [sentinel, placeholder] of restoreMap) {
+    result = result.replaceAll(sentinel, placeholder);
+  }
+  return result;
+};
+
+const protectLiteralPlaceholders = (
+  text: string,
+): {
+  text: string;
+  restore: (value: string) => string;
+} => {
+  const restoreMap = new Map<string, string>();
+  let index = 0;
+  const protectedText = text.replaceAll(PLACEHOLDER_TOKEN, (placeholder) => {
+    const sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
+    restoreMap.set(sentinel, placeholder);
+    index += 1;
+    return sentinel;
+  });
+
+  return {
+    text: protectedText,
+    restore: (value) => restoreLiteralPlaceholders(value, restoreMap),
+  };
+};
+
 type NativeRedaction = {
   redactedText: string;
   redactionMap: Map<string, string>;
@@ -380,12 +414,19 @@ export const runChatAnonPipeline = async ({
     gazetteerEntries,
     context,
   });
-  const { resolvedEntities, redaction } = pipeline.redactText(text);
+  const protectedInput = protectLiteralPlaceholders(text);
+  const { resolvedEntities, redaction } = pipeline.redactText(
+    protectedInput.text,
+  );
 
-  return applyExcludedCanonicals({
+  const result = applyExcludedCanonicals({
     deanonymiseText: runtime.deanonymise,
     excludedCanonicals,
     resolvedEntities,
     redaction,
   });
+  return {
+    ...result,
+    redactedText: protectedInput.restore(result.redactedText),
+  };
 };

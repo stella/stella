@@ -212,7 +212,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       headers: {
-        "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+        "Cross-Origin-Opener-Policy": "same-origin",
         "Cross-Origin-Embedder-Policy": "credentialless",
       },
       // Vite's fs allowlist covers the workspace root only. When a dependency

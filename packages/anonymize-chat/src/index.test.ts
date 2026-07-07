@@ -199,6 +199,23 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     expect(result.redactedText).toBe(canonical);
   });
 
+  test("preserves literal placeholders while reverting excluded canonicals", async () => {
+    const entities: NativePipelineEntity[] = [makeEntity("Alice", "person")];
+    const runtime = buildRuntime(entities);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: "[PERSON_1] and Alice",
+      workspaceId: "ws-1",
+      excludedCanonicals: ["alice"],
+    });
+
+    expect(result.pairs).toEqual([]);
+    expect(result.entityCount).toBe(0);
+    expect(result.redactedText).toBe("[PERSON_1] and Alice");
+  });
+
   test("passes all entities through when no exclusions are provided", async () => {
     const entities: NativePipelineEntity[] = [
       makeEntity("Acme Corp", "organization"),
