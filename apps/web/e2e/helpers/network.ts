@@ -441,11 +441,11 @@ const isNetworkBaselineEntry = (
     return false;
   }
   return (
-    typeof value.depth === "number" &&
-    isStringArray(value.requests) &&
-    (value.requestCounts === undefined ||
-      isNumberRecord(value.requestCounts)) &&
-    (value.dbQueries === undefined || isNumberRecord(value.dbQueries))
+    typeof value["depth"] === "number" &&
+    isStringArray(value["requests"]) &&
+    (value["requestCounts"] === undefined ||
+      isNumberRecord(value["requestCounts"])) &&
+    (value["dbQueries"] === undefined || isNumberRecord(value["dbQueries"]))
   );
 };
 
