@@ -291,4 +291,97 @@ describe("updateProperty", () => {
     expect(result).toEqual({});
     expect(updatePatch).toMatchObject({ role: null });
   });
+
+  test("allows edits to a tagged classifier when legacy duplicates remain", async () => {
+    let updatePatch: unknown;
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              {
+                id: toSafeId<"property">("property_test"),
+                name: "Type de document",
+                content: {
+                  version: 1,
+                  type: "single-select",
+                  options: [{ value: "NDA", color: "blue" }],
+                  fallback: null,
+                },
+                tool: { version: 1, type: "ai-model", prompt: "classify" },
+                role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+                status: "fresh",
+                playbookDefinitionId: null,
+              },
+            ],
+          }),
+        }),
+      }),
+      query: {
+        propertyDependencies: { findMany: async () => [] },
+        properties: {
+          findMany: async () => [
+            {
+              id: toSafeId<"property">("property_test"),
+              name: "Type de document",
+              content: {
+                version: 1,
+                type: "single-select",
+                options: [{ value: "NDA", color: "blue" }],
+                fallback: null,
+              },
+              tool: { version: 1, type: "ai-model", prompt: "classify" },
+              role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+              dependencies: [],
+            },
+            {
+              id: toSafeId<"property">("property_legacy"),
+              name: "Document Type",
+              content: {
+                version: 1,
+                type: "single-select",
+                options: [{ value: "MSA", color: "green" }],
+                fallback: null,
+              },
+              tool: { version: 1, type: "ai-model", prompt: "classify" },
+              role: null,
+              dependencies: [],
+            },
+          ],
+        },
+      },
+      update: () => ({
+        set: (patch: unknown) => {
+          updatePatch = patch;
+          return { where: async () => undefined };
+        },
+      }),
+      delete: () => ({ where: async () => undefined }),
+    });
+
+    const result = await updateProperty.handler(
+      createContext({
+        safeDb,
+        scopedDb,
+        body: {
+          name: "Type de document",
+          content: {
+            version: 1,
+            type: "single-select",
+            options: [{ value: "NDA", color: "blue" }],
+            fallback: null,
+          },
+          tool: {
+            version: 1,
+            type: "ai-model",
+            prompt: "updated classifier",
+            dependencies: [],
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({});
+    expect(updatePatch).toMatchObject({ role: DOCUMENT_TYPE_CLASSIFIER_ROLE });
+  });
 });

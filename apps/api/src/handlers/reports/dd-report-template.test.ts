@@ -2,7 +2,11 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import type { JustificationContent } from "@/api/db/schema";
-import type { FieldContent, PropertyTool } from "@/api/db/schema-validators";
+import type {
+  FieldContent,
+  PropertyContent,
+  PropertyTool,
+} from "@/api/db/schema-validators";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
@@ -25,6 +29,7 @@ const VERDICT_TERM = "44444444-4444-4444-8444-444444444444";
 const ASK_CAP = "77777777-7777-4777-8777-777777777777";
 
 const aiTool: PropertyTool = { version: 1, type: "ai-model", prompt: "x" };
+const textPropertyContent: PropertyContent = { version: 1, type: "text" };
 const verdictTool = (
   askPropertyId: string,
   severity: "blocker" | "high",
@@ -38,21 +43,41 @@ const verdictTool = (
 });
 
 const properties = [
-  { id: ASK_LAW, name: "Governing law", role: null, tool: aiTool },
+  {
+    id: ASK_LAW,
+    name: "Governing law",
+    content: textPropertyContent,
+    role: null,
+    tool: aiTool,
+  },
   {
     id: VERDICT_LAW,
     name: "Governing law verdict",
+    content: textPropertyContent,
     role: null,
     tool: verdictTool(ASK_LAW, "high"),
   },
-  { id: ASK_TERM, name: "Term", role: null, tool: aiTool },
+  {
+    id: ASK_TERM,
+    name: "Term",
+    content: textPropertyContent,
+    role: null,
+    tool: aiTool,
+  },
   {
     id: VERDICT_TERM,
     name: "Term verdict",
+    content: textPropertyContent,
     role: null,
     tool: verdictTool(ASK_TERM, "blocker"),
   },
-  { id: ASK_CAP, name: "Liability cap", role: null, tool: aiTool },
+  {
+    id: ASK_CAP,
+    name: "Liability cap",
+    content: textPropertyContent,
+    role: null,
+    tool: aiTool,
+  },
 ];
 
 const text = (value: string): FieldContent => ({
@@ -345,9 +370,27 @@ describe("Due Diligence Report built-in template", () => {
   test("plain view (no verdicts, no doc types) renders the no-Verdict table with no dangling labels", async () => {
     // A view with only ASK columns and no playbook: hasVerdicts is false.
     const bareProps = [
-      { id: ASK_LAW, name: "Governing law", role: null, tool: aiTool },
-      { id: ASK_TERM, name: "Term", role: null, tool: aiTool },
-      { id: ASK_CAP, name: "Liability cap", role: null, tool: aiTool },
+      {
+        id: ASK_LAW,
+        name: "Governing law",
+        content: textPropertyContent,
+        role: null,
+        tool: aiTool,
+      },
+      {
+        id: ASK_TERM,
+        name: "Term",
+        content: textPropertyContent,
+        role: null,
+        tool: aiTool,
+      },
+      {
+        id: ASK_CAP,
+        name: "Liability cap",
+        content: textPropertyContent,
+        role: null,
+        tool: aiTool,
+      },
     ];
     const bareLayout: Extract<ViewLayout, { type: "table" }> = {
       type: "table",

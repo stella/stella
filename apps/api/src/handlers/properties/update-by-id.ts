@@ -251,6 +251,9 @@ const updateProperty = createSafeHandler(
         })
           ? DOCUMENT_TYPE_CLASSIFIER_ROLE
           : null;
+        const isAcquiringClassifierRole =
+          oldProperty.role !== DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+          nextRole === DOCUMENT_TYPE_CLASSIFIER_ROLE;
 
         // SAFETY: one property's dependencies; each points to another workspace property, bounded by LIMITS.propertiesCount
         // eslint-disable-next-line require-query-limit/require-query-limit
@@ -304,19 +307,31 @@ const updateProperty = createSafeHandler(
 
         if (
           nextRole !== null &&
-          allProperties.some(
-            (property) =>
-              property.id !== propertyId &&
-              isDocumentTypeClassifierProperty({
+          allProperties.some((property) => {
+            if (property.id === propertyId) {
+              return false;
+            }
+
+            if (property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE) {
+              return isDocumentTypeClassifierProperty({
                 content: property.content,
                 name: property.name,
-                role:
-                  property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE
-                    ? DOCUMENT_TYPE_CLASSIFIER_ROLE
-                    : null,
+                role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
                 tool: property.tool,
-              }),
-          )
+              });
+            }
+
+            if (!isAcquiringClassifierRole) {
+              return false;
+            }
+
+            return isDocumentTypeClassifierProperty({
+              content: property.content,
+              name: property.name,
+              role: null,
+              tool: property.tool,
+            });
+          })
         ) {
           return {
             ok: false as const,

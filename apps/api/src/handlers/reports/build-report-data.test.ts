@@ -352,7 +352,13 @@ describe("assembleReportData", () => {
     const layout = tableLayout({ columnOrder: [ASK_LAW] });
     // Only the ASK property; no verdict property present.
     const bare = [
-      { id: ASK_LAW, name: "Governing law", role: null, tool: aiTool },
+      {
+        id: ASK_LAW,
+        name: "Governing law",
+        content: textPropertyContent,
+        role: null,
+        tool: aiTool,
+      },
     ];
     const columns = buildExportColumns(layout, bare);
     const entity = makeEntity(ENTITY_A, "NDA", [
