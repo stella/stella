@@ -60,9 +60,33 @@ describe("sanitizeFeedbackText", () => {
       redactions: 0,
     },
     {
+      name: "private github URL is redacted",
+      input: "customer repro at https://github.com/customer/private-matter",
+      expected: "customer repro at [redacted-url]",
+      redactions: 1,
+    },
+    {
+      name: "github URL with query data is redacted",
+      input: "repo link https://github.com/stella/stella/issues?customer=acme",
+      expected: "repo link [redacted-url]",
+      redactions: 1,
+    },
+    {
       name: "allowlisted stella URL is preserved",
       input: "docs at https://stella.legal/docs stay",
       expected: "docs at https://stella.legal/docs stay",
+      redactions: 0,
+    },
+    {
+      name: "stella app tenant URL is redacted",
+      input: "workspace at https://app.stll.app/workspaces/acme",
+      expected: "workspace at [redacted-url]",
+      redactions: 1,
+    },
+    {
+      name: "public feedback intake URL is preserved",
+      input: "intake at https://api.stll.app/public/feedback",
+      expected: "intake at https://api.stll.app/public/feedback",
       redactions: 0,
     },
     {

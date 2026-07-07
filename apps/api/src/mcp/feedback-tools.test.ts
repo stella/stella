@@ -675,10 +675,13 @@ describe("MCP send_feedback tool", () => {
       channel: "email",
     };
     const token = String(parsePayload(await send(args)).confirmation_token);
+    expect(consumeCounterMock).not.toHaveBeenCalled();
 
     const result = await send({ ...args, confirmation_token: token });
     const payload = parseErrorPayload(result);
     expect(payload.error?.code).toBe("feature_disabled");
+    expect(consumeCounterMock).toHaveBeenCalledTimes(1);
+    expect(releaseCounterMock).toHaveBeenCalledTimes(1);
     expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
 
@@ -691,10 +694,13 @@ describe("MCP send_feedback tool", () => {
       channel: "email",
     };
     const token = String(parsePayload(await send(args)).confirmation_token);
+    expect(consumeCounterMock).not.toHaveBeenCalled();
 
     const result = await send({ ...args, confirmation_token: token });
     const payload = parseErrorPayload(result);
     expect(payload.error?.code).toBe("feature_disabled");
+    expect(consumeCounterMock).toHaveBeenCalledTimes(1);
+    expect(releaseCounterMock).toHaveBeenCalledTimes(1);
     expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
 

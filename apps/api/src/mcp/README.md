@@ -120,10 +120,11 @@ waived in the coverage guard's `TOOLS_WITHOUT_ENUMERABLE_ENDPOINT`.
 
 Title and body are always sanitized server-side by `feedback-sanitize.ts`: a
 deterministic set of regex passes redacts emails, ids/UUIDs, JWT/secret blobs,
-non-allowlisted URLs (only `github.com` and stella's public domains survive),
-and IP literals. Tenant-entity-name anonymization is deliberately not run here:
-it is workspace-bound and heavy, and feedback is org-scoped free text, so regex
-plus human approval is the accepted baseline.
+non-allowlisted URLs (only queryless, fragmentless `github.com/stella/stella`,
+`stella.legal`, and `api.stll.app/public/feedback` URLs survive), and IP
+literals. Tenant-entity-name anonymization is deliberately not run here: it is
+workspace-bound and heavy, and feedback is org-scoped free text, so regex plus
+human approval is the accepted baseline.
 
 Three channels, all human-gated. Preference order is github, then email, then
 stella:
@@ -145,7 +146,8 @@ stella:
   and, best-effort, the user's email) that is never part of the public issue.
 - **stella (last resort):** for a human with no GitHub account on a server with
   no maintainer inbox. Same confirmation-token handshake as email (the token
-  hash covers only kind/title/body, so it is channel-agnostic); on phase two the
+  hash covers channel/kind/title/body, so a token minted for one channel cannot
+  be replayed against another); on phase two the
   sanitized payload is POSTed to the hosted intake at `FEEDBACK_INTAKE_URL`
   (default `https://api.stll.app/public/feedback`, overridable for self-hosting).
   The intake response is mapped back onto the error envelope: success →

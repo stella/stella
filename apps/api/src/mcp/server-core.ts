@@ -37,7 +37,7 @@ const missingScopeResult = (scope: ToolScope): CallToolResult =>
   structuredErrorResult({
     code: "missing_scope",
     message: `Insufficient permissions. Required scope: ${scope}`,
-    hint: `Grant the '${scope}' scope by re-running OAuth consent (CLI: 'stella auth login'), then retry.`,
+    hint: `Grant the '${scope}' scope by re-running OAuth consent (CLI: 'stella auth login --scopes ${scope}'), then retry.`,
   });
 
 type McpServerDependencies = {

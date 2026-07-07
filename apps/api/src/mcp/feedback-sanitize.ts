@@ -13,7 +13,7 @@
  * org-scoped free text, so regex + human approval is the accepted baseline.
  *
  * Pass order is load-bearing: JWT/secret shapes run before URL so a secret in a
- * query string of an allowlisted URL is still redacted while the URL is kept.
+ * query string of a preserved public URL is still redacted while the URL is kept.
  */
 
 const REDACTED_EMAIL = "[redacted-email]";
@@ -22,19 +22,39 @@ const REDACTED_SECRET = "[redacted-secret]";
 const REDACTED_URL = "[redacted-url]";
 const REDACTED_IP = "[redacted-ip]";
 
-/**
- * URL hosts kept verbatim (all others collapse to `[redacted-url]`). Public,
- * non-tenant destinations only: the code repo (where issues are filed) and
- * Stella's public sites. A host matches when it equals a listed domain or is a
- * subdomain of one.
- */
-const URL_HOST_ALLOWLIST = ["github.com", "stella.legal", "stll.app"] as const;
+const PUBLIC_STELLA_HOSTS = ["stella.legal"] as const;
 
-const isAllowlistedHost = (host: string): boolean => {
+const hasNoPrivateUrlParts = (url: URL): boolean =>
+  url.username === "" &&
+  url.password === "" &&
+  url.search === "" &&
+  url.hash === "";
+
+const isPublicStellaHost = (host: string): boolean => {
   const normalized = host.toLowerCase();
-  return URL_HOST_ALLOWLIST.some(
+  return PUBLIC_STELLA_HOSTS.some(
     (domain) => normalized === domain || normalized.endsWith(`.${domain}`),
   );
+};
+
+const isPreservedPublicUrl = (url: URL): boolean => {
+  if (!hasNoPrivateUrlParts(url)) {
+    return false;
+  }
+
+  const host = url.hostname.toLowerCase();
+  if (host === "github.com") {
+    return (
+      url.pathname === "/stella/stella" ||
+      url.pathname.startsWith("/stella/stella/")
+    );
+  }
+
+  if (host === "api.stll.app") {
+    return url.pathname === "/public/feedback";
+  }
+
+  return isPublicStellaHost(host);
 };
 
 // Three dot-separated base64url segments, each long enough to be a real token
@@ -101,14 +121,14 @@ export const sanitizeFeedbackText = (input: string): SanitizeFeedbackResult => {
   text = text.replace(URL_REGEX, (match) => {
     const trailing = URL_TRAILING_PUNCTUATION_REGEX.exec(match)?.[0] ?? "";
     const core = trailing.length > 0 ? match.slice(0, -trailing.length) : match;
-    let host: string;
+    let url: URL;
     try {
-      host = new URL(core).hostname;
+      url = new URL(core);
     } catch {
       // Not a parseable URL; leave it untouched rather than guess.
       return match;
     }
-    if (isAllowlistedHost(host)) {
+    if (isPreservedPublicUrl(url)) {
       return match;
     }
     bump();
