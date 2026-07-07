@@ -167,7 +167,9 @@ const sanitizeSourceField = (value: string | undefined): string | undefined => {
   if (value === undefined) {
     return undefined;
   }
-  const sanitized = truncateSourceField(sanitizeFeedbackText(value).text.trim());
+  const sanitized = truncateSourceField(
+    sanitizeFeedbackText(value).text.trim(),
+  );
   return sanitized.length === 0 ? undefined : sanitized;
 };
 

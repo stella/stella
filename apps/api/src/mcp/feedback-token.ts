@@ -26,11 +26,7 @@ export type FeedbackTokenContent = {
 };
 
 const serializeContent = (content: FeedbackTokenContent): string =>
-  JSON.stringify([
-    content.kind,
-    content.sanitizedTitle,
-    content.sanitizedBody,
-  ]);
+  JSON.stringify([content.kind, content.sanitizedTitle, content.sanitizedBody]);
 
 /** SHA-256 of the exact content the token authorizes, hex-encoded. */
 const contentHash = ({

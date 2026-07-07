@@ -34,9 +34,8 @@ const {
   hydrateRefs,
 } = await import("./ref-mediation");
 const { WRITE_TOOL_REF_FIELD_MAP } = await import("./ref-field-map");
-const { applyChatApprovalConfirmation, runRegistryWriteTool } = await import(
-  "./run-registry-write-tool"
-);
+const { applyChatApprovalConfirmation, runRegistryWriteTool } =
+  await import("./run-registry-write-tool");
 
 const WS_UUID = "0dc54d0c-10d7-501d-897e-e801dbd0998c";
 const OTHER_WS_UUID = "4e919658-a448-5354-8e3a-e99911214d2c";

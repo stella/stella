@@ -79,7 +79,10 @@ export const applyChatApprovalConfirmation = ({
   toolName: RegistryWriteToolName;
   args: Record<string, unknown>;
 }): Record<string, unknown> => {
-  if (toolName === "manage_organization" && args["action"] === "remove_member") {
+  if (
+    toolName === "manage_organization" &&
+    args["action"] === "remove_member"
+  ) {
     return { ...args, confirm: true };
   }
   return args;
