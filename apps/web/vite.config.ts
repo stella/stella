@@ -9,6 +9,8 @@ import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
 import { defineConfig, type Plugin, type PluginOption } from "vite";
 
+import stllAnonymizeWasm from "@stll/anonymize-wasm/vite";
+
 const APP_ROOT = import.meta.dirname;
 const ANALYZE_MODE = "analyze";
 const APP_VERSION = readFileSync(
@@ -151,6 +153,18 @@ export default defineConfig(({ mode }) => {
       "@tanstack/devtools-vite",
     ),
     versionManifestPlugin(),
+    // Emits @stll/anonymize-wasm's binding + glue as build assets and
+    // rewrites its runtime asset URLs so `vite build` can resolve them
+    // (the package computes them at runtime, which Rollup can't follow
+    // statically). We never call loadPipeline()/loadDefaultPipeline()
+    // (the app only builds packages in-browser from a PipelineConfig via
+    // createNativePipelineFromConfig), so no bundled prepared packages
+    // are needed — "none" skips emitting the ~20MB+ default/per-language
+    // .stlanonpkg assets.
+    ensurePluginOption(
+      stllAnonymizeWasm({ packages: "none" }),
+      "@stll/anonymize-wasm/vite",
+    ),
     ensurePluginOption(tailwindcss(), "@tailwindcss/vite"),
     ensurePluginOption(
       tanstackStart({
@@ -198,7 +212,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000,
       headers: {
-        "Cross-Origin-Opener-Policy": "same-origin-allow-popups",
+        "Cross-Origin-Opener-Policy": "same-origin",
         "Cross-Origin-Embedder-Policy": "credentialless",
       },
       // Vite's fs allowlist covers the workspace root only. When a dependency
@@ -338,9 +352,12 @@ export default defineConfig(({ mode }) => {
       // binary doesn't exist and the dev server falls back to index.html —
       // producing a WASM CompileError. Excluding them keeps the original
       // module paths intact so the relative URL resolves.
+      //
+      // @stll/anonymize-wasm is excluded by its own Vite plugin (registered
+      // above), which does the same thing for its napi-rs wasm32-wasip1-threads
+      // binding + glue.
       exclude: [
         "@stll/text-search-wasm",
-        "@stll/anonymize-wasm",
         "@stll/aho-corasick-wasm",
         "@stll/fuzzy-search-wasm",
         "@stll/regex-set-wasm",

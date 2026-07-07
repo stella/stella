@@ -610,6 +610,7 @@ const createBoundary = (
   excludedCanonicals: Promise.resolve([]),
   organizationId: toSafeId<"organization">("org_test"),
   pipelineContext: createPipelineContext(),
+  placeholderOffsets: new Map<string, number>(),
   redactionMap: new Map(pairs),
   scopedDb,
   type: "anonymized",

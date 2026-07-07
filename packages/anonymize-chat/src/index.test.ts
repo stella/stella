@@ -1,14 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import {
-  createPipelineContext,
-  DEFAULT_ENTITY_LABELS as WASM_DEFAULT_ENTITY_LABELS,
-  DEFAULT_OPERATOR_CONFIG,
-} from "@stll/anonymize-wasm";
+import { DEFAULT_ENTITY_LABELS as WASM_DEFAULT_ENTITY_LABELS } from "@stll/anonymize-wasm";
 import type {
-  Entity,
+  NativeAnonymizeBinding,
+  NativePipelineEntity,
+  NativeStaticRedactionResult,
   PipelineConfig,
-  RedactionResult,
 } from "@stll/anonymize-wasm";
 
 import {
@@ -87,45 +84,70 @@ describe("chat anonymization pipeline contract", () => {
 });
 
 describe("runChatAnonPipeline excludedCanonicals", () => {
-  const buildRuntime = (
-    entities: Entity[],
-  ): {
-    runtime: ChatAnonRuntime;
-    seenEntities: { value: Entity[] };
-  } => {
-    const seenEntities: { value: Entity[] } = { value: [] };
-    const runtime: ChatAnonRuntime = {
-      createPipelineContext,
-      defaultOperatorConfig: DEFAULT_OPERATOR_CONFIG,
-      runPipeline: async () => entities,
-      redactText: (text, accepted) => {
-        seenEntities.value = accepted;
-        const redactionMap = new Map<string, string>();
-        const operatorMap = new Map<string, "replace">();
-        for (let idx = 0; idx < accepted.length; idx += 1) {
-          const entity = accepted[idx];
-          if (!entity) {
-            continue;
-          }
-          const placeholder = `[${entity.label.toUpperCase()}_${idx + 1}]`;
-          redactionMap.set(placeholder, entity.text);
-          operatorMap.set(placeholder, "replace");
-        }
-        const result: RedactionResult = {
-          redactedText: text,
-          redactionMap,
-          operatorMap,
-          entityCount: accepted.length,
-        };
-        return result;
-      },
-    };
-    return { runtime, seenEntities };
+  type FakePipeline = {
+    redactText: (fullText: string) => NativeStaticRedactionResult;
   };
+
+  /**
+   * Build a `ChatAnonRuntime` test double whose `redactText` performs
+   * a naive, entity-order text replacement - good enough to exercise
+   * the post-hoc excluded-canonicals revert without a real wasm
+   * binding.
+   */
+  const buildRuntime = (entities: NativePipelineEntity[]): ChatAnonRuntime => ({
+    // SAFETY: the mock binding value is opaque plumbing - the fake
+    // `createNativePipelineFromConfig` below never inspects it, it
+    // only forwards it to `redactText`'s closure over `entities`.
+    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double stands in for the real wasm binding
+    getBinding: async () => ({}) as NativeAnonymizeBinding,
+    createPipelineContext: () => ({
+      nativePipelinePackage: null,
+      nativePipelinePackageKey: "",
+      nativePipelinePackagePromise: null,
+    }),
+    createNativePipelineFromConfig: async () => {
+      const pipeline: FakePipeline = {
+        redactText: (fullText) => {
+          const redactionMap = new Map<string, string>();
+          const operatorMap = new Map<string, "replace">();
+          let redactedText = fullText;
+          for (const [idx, entity] of entities.entries()) {
+            const placeholder = `[${entity.label.toUpperCase()}_${idx + 1}]`;
+            redactedText = redactedText.replaceAll(entity.text, placeholder);
+            redactionMap.set(placeholder, entity.text);
+            operatorMap.set(placeholder, "replace");
+          }
+          return {
+            resolvedEntities: entities,
+            redaction: {
+              redactedText,
+              redactionMap,
+              operatorMap,
+              entityCount: entities.length,
+            },
+          };
+        },
+      };
+      // SAFETY: only `redactText` is exercised by these tests; the
+      // rest of `PreparedNativePipeline`'s surface is intentionally
+      // left unimplemented on this test double.
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double only implements `redactText`
+      return pipeline as unknown as Awaited<
+        ReturnType<ChatAnonRuntime["createNativePipelineFromConfig"]>
+      >;
+    },
+    deanonymise: (redactedText, redactionMap) => {
+      let result = redactedText;
+      for (const [placeholder, original] of redactionMap) {
+        result = result.replaceAll(placeholder, original);
+      }
+      return result;
+    },
+  });
 
   const dictionaries = {} as NonNullable<PipelineConfig["dictionaries"]>;
 
-  const makeEntity = (text: string, label: string): Entity => ({
+  const makeEntity = (text: string, label: string): NativePipelineEntity => ({
     start: 0,
     end: text.length,
     label,
@@ -134,12 +156,12 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     source: "regex",
   });
 
-  test("drops entities whose normalized text matches an excluded canonical", async () => {
-    const entities: Entity[] = [
+  test("reverts entities whose normalized text matches an excluded canonical", async () => {
+    const entities: NativePipelineEntity[] = [
       makeEntity("Acme Corp", "organization"),
       makeEntity("Jane Doe", "person"),
     ];
-    const { runtime, seenEntities } = buildRuntime(entities);
+    const runtime = buildRuntime(entities);
 
     const result = await runChatAnonPipeline({
       runtime,
@@ -149,39 +171,94 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       excludedCanonicals: ["acme  corp"],
     });
 
-    expect(seenEntities.value.map((e) => e.text)).toEqual(["Jane Doe"]);
     expect(result.pairs.map((p) => p.original)).toEqual(["Jane Doe"]);
     expect(result.entityCount).toBe(1);
+    expect(result.redactedText).toBe("Acme Corp employs [PERSON_2]");
   });
 
   test("normalizes excluded canonicals NFKC + case-insensitive", async () => {
-    const entities: Entity[] = [makeEntity("Café Élysée", "organization")];
-    const { runtime, seenEntities } = buildRuntime(entities);
+    const canonical = "Café Élysée";
+    const entities: NativePipelineEntity[] = [
+      makeEntity(canonical, "organization"),
+    ];
+    const runtime = buildRuntime(entities);
 
-    await runChatAnonPipeline({
+    const result = await runChatAnonPipeline({
       runtime,
       dictionaries,
-      text: "ignored",
+      text: canonical,
       workspaceId: "ws-1",
-      // Compatibility-decomposed form ("Café") with mixed
-      // case should still collide with "Café Élysée" after NFKC.
-      excludedCanonicals: ["café élysée"],
+      // Compatibility-decomposed form ("Cafe" + combining acute)
+      // with mixed case should still collide with the canonical
+      // (precomposed, capitalized) form above after NFKC.
+      excludedCanonicals: ["café élysée"],
     });
 
-    expect(seenEntities.value).toEqual([]);
+    expect(result.pairs).toEqual([]);
+    expect(result.entityCount).toBe(0);
+    expect(result.redactedText).toBe(canonical);
+  });
+
+  test("preserves literal placeholders while reverting excluded canonicals", async () => {
+    const entities: NativePipelineEntity[] = [makeEntity("Alice", "person")];
+    const runtime = buildRuntime(entities);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: "[PERSON_1] and Alice",
+      workspaceId: "ws-1",
+      excludedCanonicals: ["alice"],
+    });
+
+    expect(result.pairs).toEqual([]);
+    expect(result.entityCount).toBe(0);
+    expect(result.redactedText).toBe("[PERSON_1] and Alice");
   });
 
   test("passes all entities through when no exclusions are provided", async () => {
-    const entities: Entity[] = [makeEntity("Acme Corp", "organization")];
-    const { runtime, seenEntities } = buildRuntime(entities);
+    const entities: NativePipelineEntity[] = [
+      makeEntity("Acme Corp", "organization"),
+    ];
+    const runtime = buildRuntime(entities);
 
-    await runChatAnonPipeline({
+    const result = await runChatAnonPipeline({
       runtime,
       dictionaries,
       text: "Acme Corp",
       workspaceId: "ws-1",
     });
 
-    expect(seenEntities.value).toEqual(entities);
+    expect(result.pairs.map((p) => p.original)).toEqual(["Acme Corp"]);
+    expect(result.entityCount).toBe(1);
+    expect(result.redactedText).toBe("[ORGANIZATION_1]");
+  });
+
+  test("labels same-text pairs from the placeholder prefix", async () => {
+    const entities: NativePipelineEntity[] = [
+      makeEntity("Apple", "organization"),
+      makeEntity("Apple", "location"),
+    ];
+    const runtime = buildRuntime(entities);
+
+    const result = await runChatAnonPipeline({
+      runtime,
+      dictionaries,
+      text: "Apple borders Apple",
+      workspaceId: "ws-1",
+    });
+
+    expect(result.pairs).toEqual([
+      {
+        placeholder: "[ORGANIZATION_1]",
+        original: "Apple",
+        label: "organization",
+      },
+      {
+        placeholder: "[LOCATION_2]",
+        original: "Apple",
+        label: "location",
+      },
+    ]);
   });
 });

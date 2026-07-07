@@ -1,15 +1,15 @@
 import * as v from "valibot";
 
 import type {
+  createNativePipelineFromConfig,
   createPipelineContext,
-  DEFAULT_OPERATOR_CONFIG,
-  Entity,
+  deanonymise,
+  getBinding,
   GazetteerEntry,
+  NativePipelineEntity,
+  OperatorType,
   PipelineConfig,
   PipelineContext,
-  redactText,
-  RedactionResult,
-  runPipeline,
 } from "@stll/anonymize-wasm";
 
 /**
@@ -144,20 +144,19 @@ export const isThirdPartyBoundaryRefusalError = (error: Error): boolean =>
     parseChatTransportErrorMessage(error.message),
   );
 
+/**
+ * Runtime seam the wasm entry (main thread or worker) injects into
+ * {@link runChatAnonPipeline}. `createNativePipelineFromConfig`
+ * assembles (or reuses, via `context`) a prepared native pipeline
+ * for a config + gazetteer; `redactText` on the resulting pipeline
+ * runs detection and redaction as ONE combined call — there is no
+ * separate detect-then-redact step anymore.
+ */
 export type ChatAnonRuntime = {
+  getBinding: typeof getBinding;
+  createNativePipelineFromConfig: typeof createNativePipelineFromConfig;
   createPipelineContext: typeof createPipelineContext;
-  defaultOperatorConfig: typeof DEFAULT_OPERATOR_CONFIG;
-  preparePipelineSearch?: (input: {
-    config: PipelineConfig;
-    context: PipelineContext;
-    gazetteerEntries: GazetteerEntry[];
-  }) => Promise<unknown>;
-  redactText: typeof redactText;
-  runPipeline: typeof runPipeline;
-};
-
-type ScopedPipelineConfig = PipelineConfig & {
-  nameCorpusLanguages?: string[];
+  deanonymise: typeof deanonymise;
 };
 
 export const normalizeChatAnonLocaleLanguage = (
@@ -176,9 +175,9 @@ export const buildChatAnonPipelineConfig = ({
   hasGazetteer: boolean;
   locale?: string | undefined;
   workspaceId: string;
-}): ScopedPipelineConfig => {
+}): PipelineConfig => {
   const nameCorpusLanguage = normalizeChatAnonLocaleLanguage(locale);
-  const config: ScopedPipelineConfig = {
+  const config: PipelineConfig = {
     threshold: 0.4,
     enableTriggerPhrases: true,
     enableRegex: true,
@@ -208,6 +207,161 @@ export const buildChatAnonPipelineConfig = ({
 const normalizeForExclusion = (value: string): string =>
   value.normalize("NFKC").toLowerCase().replaceAll(/\s+/gu, " ").trim();
 
+const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
+
+const restoreLiteralPlaceholders = (
+  text: string,
+  restoreMap: ReadonlyMap<string, string>,
+): string => {
+  let result = text;
+  for (const [sentinel, placeholder] of restoreMap) {
+    result = result.replaceAll(sentinel, placeholder);
+  }
+  return result;
+};
+
+const protectLiteralPlaceholders = (
+  text: string,
+): {
+  text: string;
+  restore: (value: string) => string;
+} => {
+  const restoreMap = new Map<string, string>();
+  let index = 0;
+  const protectedText = text.replaceAll(PLACEHOLDER_TOKEN, (placeholder) => {
+    const sentinel = `\uE000CHAT_PLACEHOLDER_${index}\uE001`;
+    restoreMap.set(sentinel, placeholder);
+    index += 1;
+    return sentinel;
+  });
+
+  return {
+    text: protectedText,
+    restore: (value) => restoreLiteralPlaceholders(value, restoreMap),
+  };
+};
+
+type NativeRedaction = {
+  redactedText: string;
+  redactionMap: Map<string, string>;
+  operatorMap: Map<string, OperatorType>;
+  entityCount: number;
+};
+
+const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
+
+const parsePlaceholderLabel = (placeholder: string): string | null => {
+  const match = PLACEHOLDER_LABEL.exec(placeholder);
+  return match?.groups?.["label"] ?? null;
+};
+
+const normalizeEntityLabelForPlaceholder = (label: string): string =>
+  label.trim().toUpperCase().replaceAll(/\s+/gu, "_");
+
+/**
+ * Build the public {@link ChatAnonResult} from a (possibly already
+ * filtered) entity list and its matching redaction. Pairs are keyed
+ * off `redactionMap` (placeholder -> original), which only contains
+ * reversible ("replace") entries; the placeholder prefix disambiguates
+ * entities that share text but have different labels.
+ */
+const toChatAnonResult = (
+  resolvedEntities: readonly NativePipelineEntity[],
+  redaction: Pick<
+    NativeRedaction,
+    "redactedText" | "redactionMap" | "entityCount"
+  >,
+): ChatAnonResult => {
+  const pairs: ChatAnonPair[] = [...redaction.redactionMap.entries()].map(
+    ([placeholder, original]) => {
+      const placeholderLabel = parsePlaceholderLabel(placeholder);
+      const matchingEntity = resolvedEntities.find(
+        (entity) =>
+          entity.text === original &&
+          normalizeEntityLabelForPlaceholder(entity.label) === placeholderLabel,
+      );
+      return {
+        placeholder,
+        original,
+        label: matchingEntity?.label ?? "misc",
+      };
+    },
+  );
+
+  return {
+    redactedText: redaction.redactedText,
+    pairs,
+    redactionMap: redaction.redactionMap,
+    entityCount: redaction.entityCount,
+  };
+};
+
+/**
+ * Post-hoc selective revert for the user's never-anonymize
+ * allowlist. Detection and redaction are now a single combined
+ * native call (`pipeline.redactText`), so excluded entities can no
+ * longer be filtered out *before* redaction the way the old TS
+ * pipeline did: every entity is detected, numbered, and redacted
+ * first. Afterwards, any entity whose normalized text matches an
+ * excluded canonical has its placeholder reverted back to the
+ * original text — the same restore the CLI's `--revert` flag does —
+ * and is dropped from `pairs` / `redactionMap` / `entityCount`. This
+ * keeps the *observable* result identical to the old pre-redaction
+ * filter, though the placeholder numbers assigned to the remaining
+ * (non-excluded) entities may now differ, since the native pipeline
+ * still counts the excluded ones while allocating placeholders.
+ */
+const applyExcludedCanonicals = ({
+  deanonymiseText,
+  excludedCanonicals,
+  resolvedEntities,
+  redaction,
+}: {
+  deanonymiseText: typeof deanonymise;
+  excludedCanonicals: readonly string[] | undefined;
+  resolvedEntities: readonly NativePipelineEntity[];
+  redaction: NativeRedaction;
+}): ChatAnonResult => {
+  if (excludedCanonicals === undefined || excludedCanonicals.length === 0) {
+    return toChatAnonResult(resolvedEntities, redaction);
+  }
+
+  const excludedSet = new Set(excludedCanonicals.map(normalizeForExclusion));
+  const revertMap = new Map<string, string>();
+  for (const [placeholder, original] of redaction.redactionMap) {
+    if (excludedSet.has(normalizeForExclusion(original))) {
+      revertMap.set(placeholder, original);
+    }
+  }
+
+  if (revertMap.size === 0) {
+    return toChatAnonResult(resolvedEntities, redaction);
+  }
+
+  const redactedText = deanonymiseText(redaction.redactedText, revertMap);
+  const redactionMap = new Map(
+    [...redaction.redactionMap].filter(
+      ([placeholder]) => !revertMap.has(placeholder),
+    ),
+  );
+  const remainingEntities = resolvedEntities.filter(
+    (entity) => !excludedSet.has(normalizeForExclusion(entity.text)),
+  );
+  // Occurrence-based approximation: `entityCount` reports redacted
+  // *occurrences*, while `revertMap` is keyed per distinct
+  // placeholder. Subtracting the excluded occurrence count (rather
+  // than the reverted placeholder count) keeps parity with the old
+  // pipeline when the same excluded value appears more than once.
+  const excludedOccurrences =
+    resolvedEntities.length - remainingEntities.length;
+
+  return toChatAnonResult(remainingEntities, {
+    redactedText,
+    redactionMap,
+    entityCount: Math.max(0, redaction.entityCount - excludedOccurrences),
+  });
+};
+
 export const runChatAnonPipeline = async ({
   context: providedContext,
   dictionaries,
@@ -226,12 +380,11 @@ export const runChatAnonPipeline = async ({
   gazetteerEntries?: GazetteerEntry[] | undefined;
   context?: PipelineContext | undefined;
   /**
-   * Surface forms the caller has marked as never-anonymize.
-   * After the pipeline runs, any entity whose normalized text
-   * matches one of these (NFKC + lowercase, collapsed whitespace)
-   * is dropped before the redaction step, so the placeholder
-   * counter stays continuous and the original text passes
-   * through unchanged.
+   * Surface forms the caller has marked as never-anonymize. After
+   * the combined detect+redact call, any entity whose normalized
+   * text matches one of these (NFKC + lowercase, collapsed
+   * whitespace) has its redaction reverted; see
+   * {@link applyExcludedCanonicals}.
    */
   excludedCanonicals?: readonly string[] | undefined;
 }): Promise<ChatAnonResult> => {
@@ -245,7 +398,7 @@ export const runChatAnonPipeline = async ({
   }
 
   const context = providedContext ?? runtime.createPipelineContext();
-  const config = {
+  const config: PipelineConfig = {
     ...buildChatAnonPipelineConfig({
       hasGazetteer: gazetteerEntries.length > 0,
       locale,
@@ -253,56 +406,27 @@ export const runChatAnonPipeline = async ({
     }),
     dictionaries,
   };
-  await runtime.preparePipelineSearch?.({
-    config,
-    context,
-    gazetteerEntries,
-  });
-  const rawEntities: Entity[] = await runtime.runPipeline({
-    fullText: text,
+
+  const binding = await runtime.getBinding();
+  const pipeline = await runtime.createNativePipelineFromConfig({
+    binding,
     config,
     gazetteerEntries,
     context,
   });
-  const excludedSet =
-    excludedCanonicals && excludedCanonicals.length > 0
-      ? new Set(excludedCanonicals.map(normalizeForExclusion))
-      : null;
-  const entities: Entity[] =
-    excludedSet === null
-      ? rawEntities
-      : rawEntities.filter(
-          (entity) => !excludedSet.has(normalizeForExclusion(entity.text)),
-        );
-  const result: RedactionResult = runtime.redactText(
-    text,
-    entities,
-    runtime.defaultOperatorConfig,
-    context,
-  );
-  // Index entities by their surface text so each placeholder
-  // can carry the originating entity's label out to consumers.
-  // Same text + same label maps to the same placeholder by the
-  // wasm operator config, so a Map keyed on the entity text is
-  // enough to recover the label per pair.
-  const labelByOriginal = new Map<string, string>();
-  for (const entity of entities) {
-    if (!labelByOriginal.has(entity.text)) {
-      labelByOriginal.set(entity.text, entity.label);
-    }
-  }
-  const pairs: ChatAnonPair[] = [...result.redactionMap.entries()].map(
-    ([placeholder, original]) => ({
-      placeholder,
-      original,
-      label: labelByOriginal.get(original) ?? "misc",
-    }),
+  const protectedInput = protectLiteralPlaceholders(text);
+  const { resolvedEntities, redaction } = pipeline.redactText(
+    protectedInput.text,
   );
 
+  const result = applyExcludedCanonicals({
+    deanonymiseText: runtime.deanonymise,
+    excludedCanonicals,
+    resolvedEntities,
+    redaction,
+  });
   return {
-    redactedText: result.redactedText,
-    pairs,
-    redactionMap: result.redactionMap,
-    entityCount: result.entityCount,
+    ...result,
+    redactedText: protectedInput.restore(result.redactedText),
   };
 };

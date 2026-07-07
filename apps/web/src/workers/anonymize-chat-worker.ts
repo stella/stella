@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
-import type { ChatAnonResult } from "@stll/anonymize-chat";
+import type { ChatAnonResult, ChatAnonRuntime } from "@stll/anonymize-chat";
 import { loadNameDictionaries } from "@stll/anonymize-data";
 import * as anonymizeRuntime from "@stll/anonymize-wasm";
 import type { GazetteerEntry, PipelineConfig } from "@stll/anonymize-wasm";
@@ -62,12 +62,12 @@ const handle = async (request: AnonRequest): Promise<AnonResponse> => {
     const result = await runWithPipelineContext(async () => {
       const dictionaries = await getDictionaries();
       const context = anonymizeRuntime.createPipelineContext();
-      const runtime = {
+      const runtime: ChatAnonRuntime = {
+        getBinding: anonymizeRuntime.getBinding,
+        createNativePipelineFromConfig:
+          anonymizeRuntime.createNativePipelineFromConfig,
         createPipelineContext: anonymizeRuntime.createPipelineContext,
-        defaultOperatorConfig: anonymizeRuntime.DEFAULT_OPERATOR_CONFIG,
-        preparePipelineSearch: anonymizeRuntime.preparePipelineSearch,
-        redactText: anonymizeRuntime.redactText,
-        runPipeline: anonymizeRuntime.runPipeline,
+        deanonymise: anonymizeRuntime.deanonymise,
       };
       return await runChatAnonPipeline({
         runtime,

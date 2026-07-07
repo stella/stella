@@ -122,23 +122,23 @@ const runPipelineAndCommit = async ({
   ]);
   dictionariesPromise ??= loadNameDictionaries();
   const dictionaries = await dictionariesPromise;
+  // Detection-only: this overlay only needs the entity spans, so the
+  // combined `redaction` half of the single detect+redact call is
+  // discarded.
   const entities = await runWithPipelineContext(async () => {
     const context = wasm.createPipelineContext();
     const config = {
       ...buildPipelineConfig(workspaceId, DEFAULT_ENTITY_LABELS),
       dictionaries,
     };
-    await wasm.preparePipelineSearch({
-      config,
-      context,
-      gazetteerEntries: [],
-    });
-    return await wasm.runPipeline({
-      fullText: text,
+    const binding = await wasm.getBinding();
+    const pipeline = await wasm.createNativePipelineFromConfig({
+      binding,
       config,
       gazetteerEntries: [],
       context,
     });
+    return pipeline.redactText(text).resolvedEntities;
   });
 
   const overlayEntities: EntityOverlay[] = [];

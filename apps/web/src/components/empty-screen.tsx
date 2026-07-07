@@ -89,6 +89,12 @@ type EmptyScreenProps = {
   className?: string;
 };
 
+type CredentiallessIframeProps = ComponentProps<"iframe"> & {
+  credentialless?: boolean;
+  sandbox: string;
+  title: string;
+};
+
 export const EmptyScreen = ({
   title,
   description,
@@ -457,10 +463,11 @@ const EmptyScreenVideoOverlay = ({
         </div>
         <div className="bg-foreground">
           {playableVideo.type === "youtube" ? (
-            <iframe
+            <CredentiallessIframe
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen
               className="aspect-video w-full"
+              credentialless
               loading="lazy"
               referrerPolicy="strict-origin-when-cross-origin"
               sandbox="allow-scripts allow-presentation allow-popups"
@@ -489,6 +496,14 @@ const EmptyScreenVideoOverlay = ({
     </div>
   );
 };
+
+const CredentiallessIframe = ({
+  sandbox,
+  title,
+  ...props
+}: CredentiallessIframeProps) => (
+  <iframe {...props} sandbox={sandbox} title={title} />
+);
 
 const toYouTubeEmbedUrl = (url: string): string | undefined => {
   const safeUrl = sanitizeHref(url);

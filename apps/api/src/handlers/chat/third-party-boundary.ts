@@ -55,13 +55,16 @@ export type ChatThirdPartyBoundary =
       organizationId: SafeId<"organization">;
       /**
        * Shared pipeline context for every anonymization call on
-       * this boundary. The wasm pipeline's placeholder counter
-       * lives on the context — reusing the same instance means a
-       * later batch (tool output, system prompt) keeps numbering
-       * from where the previous batch (user prompt) left off, and
-       * `[PERSON_1]` can never resolve to two different originals.
+       * this boundary. On the native pipeline (2.0+) this is only a
+       * prepared-package assembly cache, not a placeholder-numbering
+       * cache: reusing it across calls avoids re-assembling the same
+       * config, but each `redactText` call numbers placeholders from
+       * `[LABEL_1]` again. `placeholderOffsets` below rewrites each
+       * batch into one continuous boundary-local numbering sequence.
        */
       pipelineContext: PipelineContext;
+      /** Highest placeholder index seen per label after boundary-local rewrites. */
+      placeholderOffsets: Map<string, number>;
       /**
        * Cumulative placeholder → original map across every
        * anonymization call on this boundary. Mutated as the request
@@ -117,10 +120,148 @@ export const createChatThirdPartyBoundary = ({
             }),
         organizationId,
         pipelineContext: createPipelineContext(),
+        placeholderOffsets: new Map<string, number>(),
         redactionMap: new Map<string, string>(),
         scopedDb,
       }
     : { type: "raw" };
+
+type AnonymizedTextFieldsResult = {
+  entityCount: number;
+  fields: string[];
+  redactionMap: Map<string, string>;
+};
+
+const INDEXED_PLACEHOLDER = /^\[(?<label>[A-Z][A-Z0-9_]*)_(?<index>\d+)\]$/u;
+
+const parseIndexedPlaceholder = (
+  placeholder: string,
+): { label: string; index: number } | null => {
+  const match = INDEXED_PLACEHOLDER.exec(placeholder);
+  const label = match?.groups?.["label"];
+  const indexText = match?.groups?.["index"];
+  if (label === undefined || indexText === undefined) {
+    return null;
+  }
+  const index = Number.parseInt(indexText, 10);
+  return Number.isSafeInteger(index) && index > 0 ? { label, index } : null;
+};
+
+const findExistingPlaceholder = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  label: string,
+  original: string,
+): string | null => {
+  for (const [placeholder, mappedOriginal] of boundary.redactionMap) {
+    if (mappedOriginal !== original) {
+      continue;
+    }
+    const parsed = parseIndexedPlaceholder(placeholder);
+    if (parsed?.label === label) {
+      return placeholder;
+    }
+  }
+
+  return null;
+};
+
+const rewritePlaceholders = (
+  text: string,
+  replacements: Map<string, string>,
+): string => {
+  if (replacements.size === 0) {
+    return text;
+  }
+  const pattern = new RegExp(
+    [...replacements.keys()]
+      .sort((a, b) => b.length - a.length)
+      .map(escapeRegex)
+      .join("|"),
+    "gu",
+  );
+  return text.replaceAll(pattern, (placeholder) => {
+    const replacement = replacements.get(placeholder);
+    return replacement ?? placeholder;
+  });
+};
+
+const protectBoundaryPlaceholders = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  fields: string[],
+): {
+  fields: string[];
+  restore: (protectedFields: string[]) => string[];
+} => {
+  if (boundary.redactionMap.size === 0) {
+    return { fields, restore: (protectedFields) => protectedFields };
+  }
+
+  const replacements = new Map<string, string>();
+  const restoreReplacements = new Map<string, string>();
+  let index = 0;
+  for (const placeholder of boundary.redactionMap.keys()) {
+    const sentinel = `\uE000BOUNDARY_PLACEHOLDER_${index}\uE001`;
+    replacements.set(placeholder, sentinel);
+    restoreReplacements.set(sentinel, placeholder);
+    index += 1;
+  }
+
+  return {
+    fields: fields.map((field) => rewritePlaceholders(field, replacements)),
+    restore: (protectedFields) =>
+      protectedFields.map((field) =>
+        rewritePlaceholders(field, restoreReplacements),
+      ),
+  };
+};
+
+const rewriteBoundaryPlaceholders = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  result: AnonymizedTextFieldsResult,
+): AnonymizedTextFieldsResult => {
+  const replacements = new Map<string, string>();
+  const redactionMap = new Map<string, string>();
+  const nextIndexByLabel = new Map<string, number>();
+
+  for (const [placeholder, original] of result.redactionMap) {
+    const parsed = parseIndexedPlaceholder(placeholder);
+    if (parsed === null) {
+      redactionMap.set(placeholder, original);
+      continue;
+    }
+
+    const existingPlaceholder = findExistingPlaceholder(
+      boundary,
+      parsed.label,
+      original,
+    );
+    if (existingPlaceholder !== null) {
+      replacements.set(placeholder, existingPlaceholder);
+      redactionMap.set(existingPlaceholder, original);
+      continue;
+    }
+
+    const nextIndex =
+      nextIndexByLabel.get(parsed.label) ??
+      (boundary.placeholderOffsets.get(parsed.label) ?? 0) + 1;
+    const nextPlaceholder = `[${parsed.label}_${nextIndex}]`;
+    replacements.set(placeholder, nextPlaceholder);
+    redactionMap.set(nextPlaceholder, original);
+    nextIndexByLabel.set(parsed.label, nextIndex + 1);
+  }
+
+  for (const [label, nextIndex] of nextIndexByLabel) {
+    boundary.placeholderOffsets.set(label, nextIndex - 1);
+  }
+
+  return {
+    ...result,
+    fields: result.fields.map((field) =>
+      rewritePlaceholders(field, replacements),
+    ),
+    redactionMap,
+  };
+};
 
 const mergeRedactionMap = (
   target: Map<string, string>,
@@ -130,12 +271,6 @@ const mergeRedactionMap = (
     return;
   }
   for (const [placeholder, original] of source) {
-    // Stable mapping per request: the same placeholder must always
-    // resolve to the same original. If a later call disagrees we
-    // keep the first observation rather than silently rewriting it
-    // — in practice the wasm pipeline gives stable numbers within a
-    // single context, so collisions only arise from independent
-    // anonymization batches.
     if (!target.has(placeholder)) {
       target.set(placeholder, original);
     }
@@ -298,11 +433,12 @@ export const prepareTextForThirdParty = async ({
   }
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  const protectedInput = protectBoundaryPlaceholders(boundary, [text]);
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
         context: boundary.pipelineContext,
-        fields: [text],
+        fields: protectedInput.fields,
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -321,8 +457,9 @@ export const prepareTextForThirdParty = async ({
     return Result.err(anonymized.error);
   }
 
-  mergeRedactionMap(boundary.redactionMap, anonymized.value.redactionMap);
-  return Result.ok(anonymized.value.fields.at(0) ?? "");
+  const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
+  mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
+  return Result.ok(protectedInput.restore(rewritten.fields).at(0) ?? "");
 };
 
 const prepareTextBatchForThirdParty = async ({
@@ -338,11 +475,12 @@ const prepareTextBatchForThirdParty = async ({
   }
 
   const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  const protectedInput = protectBoundaryPlaceholders(boundary, fields);
   const anonymized = await Result.tryPromise({
     try: async () =>
       await anonymizeFields({
         context: boundary.pipelineContext,
-        fields,
+        fields: protectedInput.fields,
         gazetteerEntries: await boundary.gazetteerEntries,
         excludedCanonicals: await boundary.excludedCanonicals,
         organizationId: boundary.organizationId,
@@ -361,7 +499,9 @@ const prepareTextBatchForThirdParty = async ({
     return Result.err(anonymized.error);
   }
 
-  mergeRedactionMap(boundary.redactionMap, anonymized.value.redactionMap);
+  const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
+  mergeRedactionMap(boundary.redactionMap, rewritten.redactionMap);
+  const restoredFields = protectedInput.restore(rewritten.fields);
 
   for (let index = 0; index < replacements.length; index += 1) {
     const replacement = replacements[index];
@@ -369,7 +509,7 @@ const prepareTextBatchForThirdParty = async ({
       continue;
     }
 
-    replacement.apply(anonymized.value.fields.at(index) ?? "");
+    replacement.apply(restoredFields.at(index) ?? "");
   }
 
   return Result.ok(undefined);

@@ -1,9 +1,8 @@
 import { PDF, rgb, Standard14Font, StandardFonts, white } from "@libpdf/core";
 
 import type {
-  Entity,
-  OperatorConfig,
-  RedactionResult,
+  NativePipelineEntity,
+  NativeStaticRedactionResult,
 } from "@stll/anonymize-wasm";
 
 import { getEntityBBoxes } from "@/lib/anonymize/pdf-bbox";
@@ -19,6 +18,22 @@ const MIN_PLACEHOLDER_SIZE = 4;
 
 /** Maximum font size for placeholder text (points). */
 const MAX_PLACEHOLDER_SIZE = 10;
+
+/** Default static replacement for the irreversible "redact" operator.
+ * Mirrors the old `DEFAULT_OPERATOR_CONFIG.redactString`, which is no
+ * longer part of the public wasm surface. */
+const DEFAULT_REDACT_STRING = "[REDACTED]";
+
+const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
+
+const parsePlaceholderLabel = (placeholder: string): string | null => {
+  const match = PLACEHOLDER_LABEL.exec(placeholder);
+  const label = match?.groups?.["label"];
+  return label?.toLowerCase().replaceAll("_", " ") ?? null;
+};
+
+const redactionLookupKey = (label: string, text: string): string =>
+  `${label.toLowerCase()}\0${text}`;
 
 // ── Types ──────────────────────────────────────────────
 
@@ -40,7 +55,7 @@ type PdfRedactionResult = {
   /** The anonymised PDF as bytes, ready for download. */
   pdfBytes: Uint8Array;
   /** The text-level redaction result (map, operators, etc.). */
-  redaction: RedactionResult;
+  redaction: NativeStaticRedactionResult["redaction"];
 };
 
 // ── Main ───────────────────────────────────────────────
@@ -54,39 +69,53 @@ type PdfRedactionResult = {
  * count, same dimensions, same coordinates for all non-
  * redacted content. This makes AI-generated bounding boxes
  * on the anonymised PDF valid for the original too.
+ *
+ * Detection and redaction are a single combined native call now
+ * (`pipeline.redactText`), so this function takes the already
+ * computed `NativeStaticRedactionResult` instead of a raw entity
+ * list + operator config: there is no standalone "redact this
+ * entity list" entrypoint anymore. `redactString` only affects the
+ * *overlay* text drawn for irreversible ("redact") entities — it
+ * must match the string the caller passed to `redactText`'s
+ * `operators` argument (or the native default) for the overlay to
+ * agree with `redaction.redactedText`.
+ *
+ * Note: this module has no current caller in the app (PDF
+ * redaction/export is not wired up yet); the signature is kept
+ * ready for when it is.
  */
 export const redactPdf = async (
   pdfBytes: Uint8Array,
-  pdfText: string,
   spans: CharSpan[],
-  entities: Entity[],
-  operatorConfig?: OperatorConfig,
+  result: NativeStaticRedactionResult,
+  redactString = DEFAULT_REDACT_STRING,
 ): Promise<PdfRedactionResult> => {
-  const {
-    buildPlaceholderMap,
-    DEFAULT_OPERATOR_CONFIG,
-    redactText,
-    resolveOperator,
-  } = await import("@stll/anonymize-wasm");
+  const { resolvedEntities, redaction } = result;
 
-  const config = operatorConfig ?? DEFAULT_OPERATOR_CONFIG;
-
-  if (entities.length === 0) {
-    return {
-      pdfBytes,
-      redaction: redactText(pdfText, [], config),
-    };
+  if (resolvedEntities.length === 0) {
+    return { pdfBytes, redaction };
   }
 
-  const redaction = redactText(pdfText, entities, config);
+  // `redaction.redactionMap` only contains reversible ("replace")
+  // entries (placeholder -> original text), so indexing by both
+  // placeholder label and original text recovers the placeholder for
+  // every entity that was actually replaced. The composite key keeps
+  // same-text entities with different labels distinct.
+  const placeholderByOriginalAndLabel = new Map<string, string>();
+  for (const [placeholder, original] of redaction.redactionMap) {
+    const label = parsePlaceholderLabel(placeholder);
+    if (label !== null) {
+      placeholderByOriginalAndLabel.set(
+        redactionLookupKey(label, original),
+        placeholder,
+      );
+    }
+  }
 
-  // Build the same placeholder map that redactText uses
-  // internally, keyed by "${label}\0${text}"
-  const placeholderMap = buildPlaceholderMap(entities);
-
-  // Sort and de-overlap (same logic as redactText)
-  const sorted = entities.toSorted((a, b) => a.start - b.start);
-  const nonOverlapping: Entity[] = [];
+  // Sort and de-overlap (same first-occurrence-wins logic the
+  // native pipeline uses internally to build `redaction`).
+  const sorted = resolvedEntities.toSorted((a, b) => a.start - b.start);
+  const nonOverlapping: NativePipelineEntity[] = [];
   let lastEnd = 0;
   for (const entity of sorted) {
     if (entity.start >= lastEnd) {
@@ -108,14 +137,10 @@ export const redactPdf = async (
       continue;
     }
 
-    const compositeKey = `${entity.label}\0${entity.text}`;
-    const placeholder =
-      placeholderMap.get(compositeKey) ??
-      `[${entity.label.toUpperCase().replace(/\s+/gu, "_")}]`;
-
-    // Determine what text to overlay based on operator
-    const opType = resolveOperator(config, entity.label);
-    const overlayText = opType === "redact" ? config.redactString : placeholder;
+    const overlayText =
+      placeholderByOriginalAndLabel.get(
+        redactionLookupKey(entity.label, entity.text),
+      ) ?? redactString;
 
     // First bbox gets the text overlay; all get white boxes
     for (let i = 0; i < bboxes.length; i++) {
