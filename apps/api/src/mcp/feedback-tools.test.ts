@@ -559,6 +559,34 @@ describe("MCP send_feedback tool", () => {
     expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
 
+  test("email channel: a token cannot be replayed through stella", async () => {
+    const fetchMock = mock(
+      async (
+        _input: Parameters<typeof fetch>[0],
+        _init?: Parameters<typeof fetch>[1],
+      ) =>
+        new Response(JSON.stringify({ delivered: "email" }), { status: 200 }),
+    );
+    stubFetch(fetchMock);
+    const base = {
+      kind: "bug",
+      title: "approved for local email",
+      body: "The human approved local delivery only.",
+    };
+    const phase1 = parsePayload(await send({ ...base, channel: "email" }));
+    const token = String(phase1.confirmation_token);
+
+    const result = await send({
+      ...base,
+      channel: "stella",
+      confirmation_token: token,
+    });
+    const payload = parseErrorPayload(result);
+    expect(payload.error?.code).toBe("validation_error");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
+  });
+
   test("email channel: refuses with feature_disabled when FEEDBACK_EMAIL_TO is unset", async () => {
     feedbackEmailTo = undefined;
     const args = {

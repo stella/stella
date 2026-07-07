@@ -7,6 +7,7 @@ import {
 } from "@/api/mcp/feedback-token";
 
 const content = {
+  channel: "email",
   kind: "bug",
   sanitizedTitle: "read_document returns empty body",
   sanitizedBody: "Steps: call read_document. Body is empty.",
@@ -59,10 +60,19 @@ describe("feedback confirmation token", () => {
     ).toBe(false);
   });
 
+  test("rejects tampered content (channel)", () => {
+    const now = 1_000_000;
+    const token = createFeedbackToken(content, now);
+    expect(
+      verifyFeedbackToken({ token, nowMs: now, ...content, channel: "stella" }),
+    ).toBe(false);
+  });
+
   test("keeps title and body boundaries distinct", () => {
     const now = 1_000_000;
     const token = createFeedbackToken(
       {
+        channel: "email",
         kind: "bug",
         sanitizedTitle: "A",
         sanitizedBody: "B\nC",
@@ -74,6 +84,7 @@ describe("feedback confirmation token", () => {
       verifyFeedbackToken({
         token,
         nowMs: now,
+        channel: "email",
         kind: "bug",
         sanitizedTitle: "A\nB",
         sanitizedBody: "C",

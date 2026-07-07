@@ -20,22 +20,29 @@ export const FEEDBACK_TOKEN_TTL_MINUTES = 15;
 const FEEDBACK_TOKEN_TTL_MS = FEEDBACK_TOKEN_TTL_MINUTES * 60 * 1000;
 
 export type FeedbackTokenContent = {
+  channel: string;
   kind: string;
   sanitizedTitle: string;
   sanitizedBody: string;
 };
 
 const serializeContent = (content: FeedbackTokenContent): string =>
-  JSON.stringify([content.kind, content.sanitizedTitle, content.sanitizedBody]);
+  JSON.stringify([
+    content.channel,
+    content.kind,
+    content.sanitizedTitle,
+    content.sanitizedBody,
+  ]);
 
 /** SHA-256 of the exact content the token authorizes, hex-encoded. */
 const contentHash = ({
+  channel,
   kind,
   sanitizedBody,
   sanitizedTitle,
 }: FeedbackTokenContent): string =>
   createHash("sha256")
-    .update(serializeContent({ kind, sanitizedTitle, sanitizedBody }))
+    .update(serializeContent({ channel, kind, sanitizedTitle, sanitizedBody }))
     .digest("hex");
 
 const sign = (contentDigest: string, expiresAtMs: number): string =>

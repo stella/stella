@@ -318,10 +318,11 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
   // email and stella both require the two-phase handshake. Phase 1: no token
   // yet. Hand back a token bound to this exact sanitized content and stop.
   // Nothing is delivered until the human approves and the agent calls again
-  // with the token. The token hash covers kind/title/body only, so it is
-  // channel-agnostic and the same handshake gates both channels.
+  // with the token. The token hash covers channel/kind/title/body so approval
+  // for one delivery path cannot be replayed through another.
   if (confirmation_token === undefined) {
     const token = createFeedbackToken({
+      channel,
       kind,
       sanitizedTitle,
       sanitizedBody: approvedBody,
@@ -347,6 +348,7 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
   if (
     !verifyFeedbackToken({
       token: confirmation_token,
+      channel,
       kind,
       sanitizedTitle,
       sanitizedBody: approvedBody,
