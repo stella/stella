@@ -112,9 +112,7 @@ export const AIPromptInput = ({
     fetchNextPage: fetchNextSkillPage,
     hasNextPage: hasNextSkillPage,
     isFetchingNextPage: isFetchingNextSkillPage,
-  } = useInfiniteQuery(
-    skillsOptions(activeOrganizationId),
-  );
+  } = useInfiniteQuery(skillsOptions(activeOrganizationId));
   const slashShortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(skillPages?.pages),
     [skillPages],
