@@ -682,10 +682,14 @@ const validateTemplatePropertyConfig = (
 const normalizePropertyName = (name: string): string =>
   name.trim().toLocaleLowerCase();
 
+const hasTemplatePropertyRole = (
+  templateProperty: ViewTemplateProperty,
+): boolean => Object.hasOwn(templateProperty, "role");
+
 const isLegacyDocumentTypeClassifierTemplate = (
   templateProperty: ViewTemplateProperty,
 ): boolean =>
-  templateProperty.role === undefined &&
+  !hasTemplatePropertyRole(templateProperty) &&
   normalizePropertyName(templateProperty.name) === "document type" &&
   isDocumentTypeClassifierShape(templateProperty);
 
