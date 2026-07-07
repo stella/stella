@@ -101,13 +101,11 @@ export const collectTemplateProperties = ({
           property.tool.type === "playbook-verdict"
             ? { version: 1, type: "manual-input" }
             : property.tool,
+        role: property.role,
         createIfMissing: creatablePropertyIds.has(property.id),
       };
       if (propertyDeps && propertyDeps.length > 0) {
         result.dependencies = propertyDeps;
-      }
-      if (property.role) {
-        result.role = property.role;
       }
       return result;
     });
@@ -193,6 +191,7 @@ export const resolveTemplateProperties = async ({
       canReusePropertyByExactId({
         property: existingById,
         templateProperty,
+        roleResolution,
       })
     ) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingById.id);
@@ -622,8 +621,7 @@ const getTemplateRoleResolution = (
   templateProperties: readonly ViewTemplateProperty[],
 ): TemplateRoleResolution => ({
   inferLegacyDocumentTypeRole: !templateProperties.some(
-    (templateProperty) =>
-      templateProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE,
+    hasTemplatePropertyRole,
   ),
 });
 
@@ -788,22 +786,18 @@ const isMalformedPropertyByRole = (
 const canReusePropertyByExactId = ({
   property,
   templateProperty,
+  roleResolution,
 }: {
   property: PropertyRoleMatchCandidate;
   templateProperty: ViewTemplateProperty;
+  roleResolution: TemplateRoleResolution;
 }): boolean => {
-  if (!hasTemplatePropertyRole(templateProperty)) {
+  const role = resolveTemplatePropertyRole(templateProperty, roleResolution);
+  if (!role) {
     return true;
   }
 
-  const explicitRole = templateProperty.role ?? null;
-  if (!explicitRole) {
-    return true;
-  }
-
-  return (
-    property.role === explicitRole && isDocumentTypeClassifierShape(property)
-  );
+  return property.role === role && isDocumentTypeClassifierShape(property);
 };
 
 const findUniquePropertyByShape = (
