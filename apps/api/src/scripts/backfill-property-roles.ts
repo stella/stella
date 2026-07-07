@@ -98,7 +98,9 @@ const backfillBatch = async (
   };
 };
 
-await rootDb.execute(sql.raw(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`));
+await rootDb.execute(
+  sql.raw(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`),
+);
 
 console.log("=== BACKFILL PROPERTY ROLES ===");
 console.log(
