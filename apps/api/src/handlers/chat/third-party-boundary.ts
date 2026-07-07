@@ -132,8 +132,7 @@ type AnonymizedTextFieldsResult = {
   redactionMap: Map<string, string>;
 };
 
-const INDEXED_PLACEHOLDER =
-  /^\[(?<label>[A-Z][A-Z0-9_]*)_(?<index>\d+)\]$/u;
+const INDEXED_PLACEHOLDER = /^\[(?<label>[A-Z][A-Z0-9_]*)_(?<index>\d+)\]$/u;
 
 const parseIndexedPlaceholder = (
   placeholder: string,
