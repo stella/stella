@@ -185,6 +185,14 @@ export const resolveTemplateProperties = async ({
       (property) => property.id === templateProperty.sourceId,
     );
     if (existingById) {
+      if (isMalformedPropertyByRole(existingById, templateProperty)) {
+        return {
+          ok: false,
+          status: 422,
+          message:
+            "Document type classifier role is attached to an incompatible column",
+        };
+      }
       propertyIdBySourceId.set(templateProperty.sourceId, existingById.id);
       consumedExistingPropertyIds.add(existingById.id);
       continue;
@@ -275,7 +283,7 @@ export const resolveTemplateProperties = async ({
         name: templateProperty.name,
         content: templateProperty.content,
         tool: sanitizeTemplatePropertyTool(templateProperty.tool),
-        role: templateProperty.role ?? null,
+        role: resolveTemplatePropertyRole(templateProperty) ?? null,
         status: templateProperty.tool.type === "ai-model" ? "stale" : "fresh",
       })
       .returning({ id: properties.id });
@@ -565,6 +573,7 @@ const validateTemplateProperties = (
   templateProperties: readonly ViewTemplateProperty[],
 ): ResolveTemplatePropertiesResult | null => {
   const sourceIds = new Set<string>();
+  const roles = new Set<NonNullable<typeof properties.$inferSelect.role>>();
 
   for (const templateProperty of templateProperties) {
     if (sourceIds.has(templateProperty.sourceId)) {
@@ -579,6 +588,18 @@ const validateTemplateProperties = (
     const validationError = validateTemplatePropertyConfig(templateProperty);
     if (validationError) {
       return validationError;
+    }
+
+    const role = resolveTemplatePropertyRole(templateProperty);
+    if (role !== undefined) {
+      if (roles.has(role)) {
+        return {
+          ok: false,
+          status: 422,
+          message: "Duplicate template property role",
+        };
+      }
+      roles.add(role);
     }
   }
 
@@ -720,8 +741,19 @@ const hasMalformedPropertyByRole = ({
   return existingProperties.some(
     (property) =>
       !consumedExistingPropertyIds.has(property.id) &&
-      property.role === role &&
-      !isDocumentTypeClassifierShape(property),
+      isMalformedPropertyByRole(property, templateProperty),
+  );
+};
+
+const isMalformedPropertyByRole = (
+  property: PropertyRoleMatchCandidate,
+  templateProperty: ViewTemplateProperty,
+): boolean => {
+  const role = resolveTemplatePropertyRole(templateProperty);
+  return (
+    role !== undefined &&
+    property.role === role &&
+    !isDocumentTypeClassifierShape(property)
   );
 };
 

@@ -11,6 +11,7 @@ import type { ViewLayout } from "@/api/lib/views-schema";
 
 import {
   assembleReportData,
+  findDocTypePropertyId,
   isReportRowCountOverCap,
 } from "./build-report-data";
 import {
@@ -49,22 +50,25 @@ const verdictTool = (
 });
 
 const properties = [
-  { id: ASK_LAW, name: "Governing law", tool: aiTool },
+  { id: ASK_LAW, name: "Governing law", role: null, tool: aiTool },
   {
     id: VERDICT_LAW,
     name: "Governing law verdict",
+    role: null,
     tool: verdictTool(ASK_LAW, "high"),
   },
-  { id: ASK_TERM, name: "Term", tool: aiTool },
+  { id: ASK_TERM, name: "Term", role: null, tool: aiTool },
   {
     id: VERDICT_TERM,
     name: "Term verdict",
+    role: null,
     tool: verdictTool(ASK_TERM, "blocker"),
   },
-  { id: DOC_TYPE, name: "Document Type", tool: aiTool },
+  { id: DOC_TYPE, name: "Document Type", role: null, tool: aiTool },
   {
     id: NOTES,
     name: "Notes",
+    role: null,
     tool: manualTool,
   },
 ];
@@ -199,6 +203,20 @@ describe("assembleReportData", () => {
     expect(lawField?.value).toBe("Czech law");
     expect(lawField?.verdict).toBe("deviation");
     expect(lawField?.severity).toBe("high");
+  });
+
+  test("resolves the document type classifier by role before name", () => {
+    const localizedProperties = properties.map((property) =>
+      property.id === DOC_TYPE
+        ? {
+            ...property,
+            name: "Type de document",
+            role: "document-type-classifier" as const,
+          }
+        : property,
+    );
+
+    expect(findDocTypePropertyId(localizedProperties)).toBe(DOC_TYPE);
   });
 
   test("derives risks from deviation/missing verdicts with rationale + citation", () => {

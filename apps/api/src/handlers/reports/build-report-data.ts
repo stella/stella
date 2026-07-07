@@ -20,7 +20,7 @@
 import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db";
-import type { JustificationContent } from "@/api/db/schema";
+import type { JustificationContent, PropertyRole } from "@/api/db/schema";
 import type { PropertyTool } from "@/api/db/schema-validators";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { queryEntities } from "@/api/handlers/entities/query-entities";
@@ -52,7 +52,12 @@ const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;
 
 type TableLayout = Extract<ViewLayout, { type: "table" }>;
 
-type ReportProperty = { id: string; name: string; tool: PropertyTool };
+type ReportProperty = {
+  id: string;
+  name: string;
+  role: PropertyRole | null;
+  tool: PropertyTool;
+};
 
 type ExportColumn = ReturnType<typeof buildExportColumns>[number];
 type ReportPropertyColumn = Extract<ExportColumn, { type: "property" }>;
@@ -408,16 +413,24 @@ const formatGeneratedAt = (now: Date): string =>
     timeZone: "UTC",
   }).format(now);
 
-/** The workspace "Document Type" classifier property id (single-select AI
- *  column named "document type"), or null when the workspace has none. Matched
- *  by name to mirror `resolveDocTypeClassifier`. */
-const findDocTypePropertyId = (properties: ReportProperty[]): string | null => {
-  const match = properties.find(
+/** The workspace "Document Type" classifier property id, or null when absent. */
+export const findDocTypePropertyId = (
+  properties: ReportProperty[],
+): string | null => {
+  const roleMatch = properties.find(
+    (property) =>
+      property.role === "document-type-classifier" &&
+      property.tool.type === "ai-model",
+  );
+  if (roleMatch) {
+    return roleMatch.id;
+  }
+  const nameMatch = properties.find(
     (property) =>
       property.name.trim().toLowerCase() === "document type" &&
       property.tool.type === "ai-model",
   );
-  return match?.id ?? null;
+  return nameMatch?.id ?? null;
 };
 
 type BuildReportDataArgs = {
@@ -453,7 +466,7 @@ export const buildReportData = async ({
       safeDb((tx) =>
         tx.query.properties.findMany({
           where: { workspaceId: { eq: workspaceId } },
-          columns: { id: true, name: true, tool: true },
+          columns: { id: true, name: true, role: true, tool: true },
           orderBy: { createdAt: "asc" },
           limit: LIMITS.propertiesCount,
         }),

@@ -5,6 +5,7 @@ import { properties, propertyDependencies } from "@/api/db/schema";
 import {
   buildPropertyParts,
   createPropertyBodySchema,
+  isDocumentTypeClassifierProperty,
 } from "@/api/handlers/properties/create-schema";
 import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -28,13 +29,19 @@ const createProperty = createSafeHandler(
         new HandlerError({ status: built.status, message: built.message }),
       );
     }
-    const { content, tool, dependencies } = built;
+    const { content, tool, dependencies, role } = built;
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         await lockWorkspacePropertyWrites(tx, workspaceId);
         const existingRows = await tx
-          .select({ id: properties.id })
+          .select({
+            id: properties.id,
+            name: properties.name,
+            content: properties.content,
+            tool: properties.tool,
+            role: properties.role,
+          })
           .from(properties)
           .where(eq(properties.workspaceId, workspaceId));
 
@@ -43,6 +50,24 @@ const createProperty = createSafeHandler(
             ok: false as const,
             status: 400 as const,
             message: "Properties limit reached",
+          };
+        }
+
+        if (
+          role !== null &&
+          existingRows.some((row) =>
+            isDocumentTypeClassifierProperty({
+              content: row.content,
+              name: row.name,
+              role: row.role,
+              tool: row.tool,
+            }),
+          )
+        ) {
+          return {
+            ok: false as const,
+            status: 422 as const,
+            message: "Document type classifier already exists",
           };
         }
 
@@ -82,6 +107,7 @@ const createProperty = createSafeHandler(
             name: body.name,
             content,
             tool,
+            role,
             status: initialStatus,
           })
           .returning({ id: properties.id });

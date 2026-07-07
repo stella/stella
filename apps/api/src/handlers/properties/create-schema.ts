@@ -15,6 +15,9 @@ type SelectOption = {
   value: string;
 };
 
+export const DOCUMENT_TYPE_CLASSIFIER_ROLE = "document-type-classifier";
+export type InferredPropertyRole = typeof DOCUMENT_TYPE_CLASSIFIER_ROLE | null;
+
 const selectOptionSchema = t.Object({
   color: t.String({ minLength: 1, maxLength: 64 }),
   value: t.String({ minLength: 1, maxLength: 1000 }),
@@ -83,12 +86,51 @@ export type BuiltPropertyParts = {
   content: PropertyContent;
   tool: PropertyTool;
   dependencies: NonNullable<CreatePropertyBody["dependencies"]>;
+  role: InferredPropertyRole;
 };
 
 export type BuildValidationError = {
   status: 400 | 422;
   message: string;
 };
+
+const normalizePropertyName = (name: string): string =>
+  name.trim().toLocaleLowerCase();
+
+export const isDocumentTypeClassifierProperty = ({
+  content,
+  name,
+  role,
+  tool,
+}: {
+  content: PropertyContent;
+  name: string;
+  role: InferredPropertyRole;
+  tool: PropertyTool;
+}): boolean =>
+  role === DOCUMENT_TYPE_CLASSIFIER_ROLE ||
+  (role === null &&
+    normalizePropertyName(name) === "document type" &&
+    content.type === "single-select" &&
+    tool.type === "ai-model");
+
+const inferPropertyRole = ({
+  content,
+  name,
+  tool,
+}: {
+  content: PropertyContent;
+  name: string;
+  tool: PropertyTool;
+}): InferredPropertyRole =>
+  isDocumentTypeClassifierProperty({
+    content,
+    name,
+    role: null,
+    tool,
+  })
+    ? DOCUMENT_TYPE_CLASSIFIER_ROLE
+    : null;
 
 export const buildPropertyParts = (
   body: CreatePropertyBody,
@@ -147,5 +189,6 @@ export const buildPropertyParts = (
     content,
     tool,
     dependencies: tool.type === "ai-model" ? (body.dependencies ?? []) : [],
+    role: inferPropertyRole({ content, name: body.name, tool }),
   };
 };

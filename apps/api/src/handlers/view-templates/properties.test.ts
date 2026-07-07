@@ -627,6 +627,55 @@ describe("resolveTemplateProperties", () => {
     expect(returningMock).not.toHaveBeenCalled();
   });
 
+  test("rejects duplicate classifier roles in one template payload", async () => {
+    const { insertMock, tx } = createTemplatePropertyValidationTx();
+    const content = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const tool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "Classify the document type.",
+    } satisfies ViewTemplateProperty["tool"];
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout("source_document_type_a"),
+      templateProperties: [
+        {
+          version: 1,
+          sourceId: "source_document_type_a",
+          name: "Document Type",
+          content,
+          tool,
+          role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+          createIfMissing: true,
+        },
+        {
+          version: 1,
+          sourceId: "source_document_type_b",
+          name: "Type de document",
+          content,
+          tool,
+          role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+          createIfMissing: true,
+        },
+      ],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      status: 422,
+      message: "Duplicate template property role",
+    });
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
   test("reuses structural role matches before shape matches", async () => {
     const templateContent = {
       version: 1,
@@ -643,7 +692,11 @@ describe("resolveTemplateProperties", () => {
         options: [{ color: "green", value: "Invoice" }],
         fallback: null,
       },
-      tool: { version: 1, type: "manual-input" },
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify localized document types.",
+      },
       role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
     });
     const templateProperty = {
@@ -694,7 +747,7 @@ describe("resolveTemplateProperties", () => {
     });
     const templateProperty = {
       version: 1,
-      sourceId: "source_document_type",
+      sourceId: "existing_property",
       name: "Document Type",
       content: templateContent,
       tool: {
@@ -770,6 +823,45 @@ describe("resolveTemplateProperties", () => {
       propertyIds: ["existing_property"],
     });
     expect(returningMock).not.toHaveBeenCalled();
+  });
+
+  test("tags legacy roleless classifier templates when creating", async () => {
+    const templateContent = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const { propertyValuesMock, returningMock, tx } = createTemplateReuseTx();
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_document_type",
+      name: "Document Type",
+      content: templateContent,
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify the document type.",
+      },
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(returningMock).toHaveBeenCalledTimes(1);
+    expect(propertyValuesMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+      }),
+    );
   });
 
   test("does not reuse shape matches with different config", async () => {
