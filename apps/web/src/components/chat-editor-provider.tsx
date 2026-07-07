@@ -126,7 +126,7 @@ export type ChatInputDraft = {
 
 export type ChatInputMentionSource = {
   id: string;
-  getItems: () => ChatMentionOption[];
+  getItems: () => ChatMentionOption[] | Promise<ChatMentionOption[]>;
   searchItems?: ((query: string) => Promise<ChatMentionOption[]>) | undefined;
 };
 
@@ -195,7 +195,7 @@ type ChatEditorManagerContextValue = {
   activeThreadKey: string | null;
   extensionVersion: number;
   focusThread: (threadRef: ChatThreadRef) => void;
-  getMentionItems: () => ChatMentionOption[];
+  getMentionItems: () => Promise<ChatMentionOption[]>;
   getPluginRegistrations: () => ChatInputPluginRegistration[];
   searchMentionItems: (query: string) => Promise<ChatMentionOption[]>;
   insertMentionIntoThread: (
@@ -244,17 +244,24 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const [extensionVersion, setExtensionVersion] = useState(0);
   const [activeThreadKey, setActiveThreadKey] = useState<string | null>(null);
 
-  const getMentionItems = useCallback(() => {
+  const getMentionItems = useCallback(async () => {
     const items: ChatMentionOption[] = [];
+    const sources = Array.from(registrationsRef.current.values()).flatMap(
+      ({ registration }) => registration.mentionSources ?? [],
+    );
+    const results = await Promise.all(
+      sources.map(
+        async (source) =>
+          await Result.tryPromise(async () => await source.getItems()),
+      ),
+    );
 
-    for (const { registration } of registrationsRef.current.values()) {
-      if (!registration.mentionSources) {
+    for (const result of results) {
+      if (Result.isError(result)) {
+        getAnalytics().captureError(result.error);
         continue;
       }
-
-      for (const source of registration.mentionSources) {
-        items.push(...source.getItems());
-      }
+      items.push(...result.value);
     }
 
     return items;

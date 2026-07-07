@@ -9,6 +9,33 @@ import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity } from "@/lib/types";
 
 describe("buildWorkspaceMentionOptions", () => {
+  test("returns workspaces while first view ids are still loading", () => {
+    expect(
+      buildWorkspaceMentionOptions({
+        firstViewIdsByWorkspaceId: undefined,
+        workspaces: [
+          { id: "ws_alpha", name: "Alpha Matter" },
+          { id: "ws_beta", name: "Beta Matter" },
+        ],
+      }),
+    ).toEqual([
+      {
+        id: "ws_alpha",
+        label: "Alpha Matter",
+        category: "workspace",
+        kind: "workspace",
+        mimeType: null,
+      },
+      {
+        id: "ws_beta",
+        label: "Beta Matter",
+        category: "workspace",
+        kind: "workspace",
+        mimeType: null,
+      },
+    ]);
+  });
+
   test("includes only workspaces that have an openable view and preserves workspace ids", () => {
     expect(
       buildWorkspaceMentionOptions({

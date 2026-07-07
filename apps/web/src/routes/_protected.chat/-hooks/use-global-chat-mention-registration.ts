@@ -56,8 +56,8 @@ export const useGlobalChatMentionRegistration = () => {
       mentionSources: [
         {
           id: GLOBAL_CHAT_MENTION_EXTENSION_ID,
-          getItems: () =>
-            mentionProviders.getItems(GLOBAL_CHAT_MENTION_CATEGORIES),
+          getItems: async () =>
+            await mentionProviders.getItems(GLOBAL_CHAT_MENTION_CATEGORIES),
           searchItems: publicLawPreviewEnabled
             ? searchCaseLawMentions
             : undefined,

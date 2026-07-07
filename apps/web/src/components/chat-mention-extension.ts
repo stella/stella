@@ -118,7 +118,7 @@ export const selectChatSuggestionItems = ({
 };
 
 export const createChatSuggestion = (
-  getItems: () => ChatMentionOption[],
+  getItems: () => ChatMentionOption[] | Promise<ChatMentionOption[]>,
   searchItems: (query: string) => Promise<ChatMentionOption[]>,
   loadWorkspaceEntities: (
     workspace: ChatMentionOption,
@@ -126,12 +126,18 @@ export const createChatSuggestion = (
   ) => Promise<ChatMentionOption[]>,
 ): Omit<SuggestionOptions<ChatMentionOption, MentionNodeAttrs>, "editor"> => ({
   allowSpaces: true,
-  items: async ({ query }) =>
-    selectChatSuggestionItems({
-      localItems: getItems(),
+  items: async ({ query }) => {
+    const [localItems, searchedItems] = await Promise.all([
+      getItems(),
+      searchItems(query),
+    ]);
+
+    return selectChatSuggestionItems({
+      localItems,
       query,
-      searchedItems: await searchItems(query),
-    }),
+      searchedItems,
+    });
+  },
 
   render: () => {
     let component: ReactRenderer<
