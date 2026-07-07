@@ -14,7 +14,7 @@ import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/ca
 type ToolCatalogueCardProps = {
   entry: LoadedCatalogueEntry;
   /** Jurisdiction codes recommending this entry, if any. */
-  recommendedIn?: readonly string[];
+  recommendedIn?: readonly string[] | undefined;
 };
 
 export const ToolCatalogueCard = ({

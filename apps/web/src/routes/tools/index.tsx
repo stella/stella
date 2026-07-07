@@ -113,8 +113,13 @@ function PublicToolsIndex() {
             {t("publicTools.metaDescription")}
           </p>
         </div>
-        <Button asChild className="shrink-0" size="sm" variant="outline">
-          <Link to="/tools/contribute">{t("publicTools.contribute.cta")}</Link>
+        <Button
+          className="shrink-0"
+          render={<Link to="/tools/contribute" />}
+          size="sm"
+          variant="outline"
+        >
+          {t("publicTools.contribute.cta")}
         </Button>
       </div>
 

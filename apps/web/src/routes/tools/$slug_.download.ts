@@ -34,7 +34,7 @@ export const Route = createFileRoute("/tools/$slug_/download")({
         for (const resource of payload.resourceFiles) {
           zip.file(resource.path, resource.content);
         }
-        const bytes = await zip.generateAsync({ type: "uint8array" });
+        const bytes = await zip.generateAsync({ type: "arraybuffer" });
 
         return new Response(bytes, {
           headers: {

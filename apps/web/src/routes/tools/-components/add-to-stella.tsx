@@ -44,7 +44,7 @@ export function AddToStella({
   const [authRedirectTo, setAuthRedirectTo] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: () => installCatalogueEntry(entry),
+    mutationFn: async () => await installCatalogueEntry(entry),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["mcp"] });
       void queryClient.invalidateQueries({ queryKey: ["skills"] });

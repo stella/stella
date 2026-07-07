@@ -421,6 +421,12 @@ export function AppSidebar(props: AppSidebarProps) {
       },
       contextMenu: {},
     },
+    tools: {
+      action: () => {
+        void navigate({ to: "/tools" });
+      },
+      contextMenu: {},
+    },
     knowledge: {
       action: () => {
         void navigate({ to: "/knowledge" });
