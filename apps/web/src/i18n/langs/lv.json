@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "Laukam nav ievades tipa; tiks izmantots vienkāršs teksta lauks",
     "checkFindingFieldMissingLabel": "Laukam nav etiķetes; aizpildot veidni, tiks rādīts neapstrādāts viettura nosaukums",
     "checkFindingFormulaUnknownPath": "Formula atsaucas uz nezināmu lauku: {reference}",
+    "checkFindingInvalidMarker": "Tas izskatās pēc lauka marķiera, taču šādi tas nedarbosies. Marķieru nosaukumos nedrīkst būt atstarpes vai pieturzīmes, tāpēc tas tiks izdrukāts tāds, kāds ir.",
     "checkFindingLinkWithoutSlot": "Ar šo slota nosaukumu ir saistīta klauzula, bet dokumentā šāda slota nav",
     "checkFindingMarkerWithoutField": "Vietturis dokumentā ir, bet tam nav lauka definīcijas",
     "checkFindingSelectWithoutOptions": "Izvēles laukam nav ne opciju, ne opciju avota",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Saglabāt un iziet",
     "saveFailed": "Neizdevās saglabāt veidni",
     "searchTemplates": "Meklēt veidnes…",
+    "structureWarningParagraph": "Rindkopa {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# struktūras brīdinājumu} one {# struktūras brīdinājums} other {# struktūras brīdinājumi}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Neobligāti: kā MI jāpielāgo formulējums (piem., atbilstoši apkārtējai gramatikai)",

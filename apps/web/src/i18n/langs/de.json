@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "Das Feld hat keinen Eingabetyp; es wird ein einfaches Textfeld verwendet",
     "checkFindingFieldMissingLabel": "Das Feld hat keine Bezeichnung; beim Ausfüllen der Vorlage wird der rohe Platzhaltername angezeigt",
     "checkFindingFormulaUnknownPath": "Die Formel verweist auf ein unbekanntes Feld: {reference}",
+    "checkFindingInvalidMarker": "Das sieht aus wie eine Feldmarkierung, funktioniert so aber nicht. Markierungsnamen dürfen keine Leerzeichen oder Satzzeichen enthalten, daher wird sie unverändert ausgegeben.",
     "checkFindingLinkWithoutSlot": "Unter diesem Slot-Namen ist eine Klausel verknüpft, aber das Dokument enthält keinen solchen Slot",
     "checkFindingMarkerWithoutField": "Der Platzhalter kommt im Dokument vor, hat aber keine Felddefinition",
     "checkFindingSelectWithoutOptions": "Das Auswahlfeld hat weder Optionen noch eine Optionsquelle",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Speichern und verlassen",
     "saveFailed": "Vorlage konnte nicht gespeichert werden",
     "searchTemplates": "Vorlagen durchsuchen…",
+    "structureWarningParagraph": "Absatz {paragraph, number}",
     "structureWarnings": "{count, plural, one {# Strukturwarnung} other {# Strukturwarnungen}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Optional: wie die KI die Formulierung anpassen soll (z. B. an die umgebende Grammatik)",

@@ -75,6 +75,7 @@ const checkDocument = async ({
     manifest,
     clauseSlots,
     clauseLinks,
+    paragraphs,
   });
 };
 
@@ -111,6 +112,36 @@ describe("template check: structure errors", () => {
     });
 
     expect(codesOf(findings)).not.toContain("structureError");
+  });
+});
+
+// ── Invalid (near-miss) markers ──────────────────────────
+
+describe("template check: invalid markers", () => {
+  test("flags a near-miss marker that no recognizer sees", async () => {
+    const findings = await checkDocument({
+      paragraphs: ["Signed by {{my name}} on {{date}}"],
+      manifest: { ...emptyManifest, fields: [field("date")] },
+    });
+
+    const invalid = findings.filter((f) => f.code === "invalidMarker");
+    expect(invalid).toHaveLength(1);
+    expect(invalid[0]).toMatchObject({
+      code: "invalidMarker",
+      severity: "error",
+      marker: "{{my name}}",
+      paragraphIndex: 0,
+      context: "Signed by {{my name}} on {{date}}",
+    });
+  });
+
+  test("recognized markers produce no invalidMarker finding", async () => {
+    const findings = await checkDocument({
+      paragraphs: ["{{@clause:NDA}} {{date}} {{#if x}}{{/if}}"],
+      manifest: { ...emptyManifest, fields: [field("date")] },
+    });
+
+    expect(codesOf(findings)).not.toContain("invalidMarker");
   });
 });
 
@@ -482,6 +513,7 @@ describe("template check: bounds", () => {
       manifest,
       clauseSlots,
       clauseLinks: [],
+      paragraphs: ["Client: {{clientName}}"],
     });
 
     expect(findings).toEqual([

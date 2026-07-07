@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "ليس للحقل نوع إدخال؛ سيُستخدَم إدخال نص عادي",
     "checkFindingFieldMissingLabel": "ليس للحقل تسمية؛ سيرى مَن يعبّئون القالب اسم العنصر النائب الخام",
     "checkFindingFormulaUnknownPath": "تشير الصيغة الحسابية إلى حقل غير معروف: {reference}",
+    "checkFindingInvalidMarker": "يبدو هذا كعلامة حقل لكنه لن يعمل بهذا الشكل. لا يمكن أن تحتوي أسماء العلامات على مسافات أو علامات ترقيم، لذا ستُطبع كما هي.",
     "checkFindingLinkWithoutSlot": "يوجد بند مرتبط تحت اسم هذه الخانة، لكن المستند لا يحتوي على مثل هذه الخانة",
     "checkFindingMarkerWithoutField": "يظهر العنصر النائب في المستند لكن لا يوجد له تعريف حقل",
     "checkFindingSelectWithoutOptions": "حقل الاختيار ليس له خيارات ولا مصدر للخيارات",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "الحفظ والمغادرة",
     "saveFailed": "تعذّر حفظ القالب",
     "searchTemplates": "البحث في القوالب…",
+    "structureWarningParagraph": "الفقرة {paragraph, number}",
     "structureWarnings": "{count, plural, zero {# تحذير بنيوي} one {تحذير بنيوي واحد} two {تحذيران بنيويان} few {# تحذيرات بنيوية} many {# تحذيراً بنيوياً} other {# تحذير بنيوي}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "اختياري: كيف ينبغي للذكاء الاصطناعي تكييف الصياغة (مثل مطابقة القواعد النحوية المحيطة)",

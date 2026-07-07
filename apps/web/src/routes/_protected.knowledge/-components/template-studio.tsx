@@ -19,6 +19,7 @@ import {
   BookmarkIcon,
   BookmarkPlusIcon,
   BracesIcon,
+  CheckCircle2Icon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
@@ -157,6 +158,7 @@ import {
   toRuleFields,
 } from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
+import { TemplateCheckDialog } from "@/routes/_protected.knowledge/-components/template-check-dialog";
 import {
   OutdatedChanges,
   UnlinkButton,
@@ -193,6 +195,7 @@ import {
 import {
   clausesOptions as clauseLibraryOptions,
   knowledgeKeys,
+  templateCheckOptions,
   templateClausesOptions,
   templateClausePreviewOptions,
   templateDetailOptions,
@@ -4111,7 +4114,12 @@ function TemplateStudioInspectorView({
   return (
     <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
       <InspectorTabHeader
-        actions={<StudioSaveAction />}
+        actions={
+          <>
+            <StudioHealthBadge templateId={templateId} />
+            <StudioSaveAction />
+          </>
+        }
         label={tab.label}
         matter={
           languages.length > 0 ? (
@@ -4192,6 +4200,57 @@ function TemplateStudioInspectorView({
     </div>
   );
 }
+
+/**
+ * Ambient template-health indicator in the tab title row. Runs the pre-flight
+ * check as calm chrome (`useQuery`, never suspending): a subtle check when the
+ * template is clean, a tinted issue count when it is not. Clicking opens the
+ * full check dialog. The check query lives under the templates subtree, so the
+ * save handler's `templates.all` invalidation refetches it after every save.
+ */
+const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
+  const t = useTranslations();
+  const organizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data } = useQuery(templateCheckOptions(organizationId, templateId));
+
+  // Nothing to show until the first result lands; keeps the row from flashing
+  // a placeholder state on cold mount.
+  if (!data) {
+    return null;
+  }
+
+  const issueCount = data.findings.length;
+  const hasErrors = data.findings.some(
+    (finding) => finding.severity === "error",
+  );
+
+  const badge = (
+    <Button
+      aria-label={t("templates.checkTemplate")}
+      className={cn(
+        issueCount === 0 && "text-success",
+        issueCount > 0 && !hasErrors && "text-warning-foreground",
+        hasErrors && "text-destructive",
+      )}
+      size="xs"
+      title={t("templates.checkTemplate")}
+      variant="ghost"
+    >
+      {issueCount === 0 ? (
+        <CheckCircle2Icon className="size-3.5" />
+      ) : (
+        <>
+          <AlertTriangleIcon className="size-3.5" />
+          {issueCount}
+        </>
+      )}
+    </Button>
+  );
+
+  return <TemplateCheckDialog templateId={templateId} trigger={badge} />;
+};
 
 /** Save lives in the tab's title row; enabled only with unsaved edits. */
 const StudioSaveAction = () => {

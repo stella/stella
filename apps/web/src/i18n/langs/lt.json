@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "Laukas neturi įvesties tipo; bus naudojamas paprastas teksto laukas",
     "checkFindingFieldMissingLabel": "Laukas neturi etiketės; pildant šabloną bus rodomas neapdorotas vietaženklio pavadinimas",
     "checkFindingFormulaUnknownPath": "Formulė nurodo nežinomą lauką: {reference}",
+    "checkFindingInvalidMarker": "Tai atrodo kaip lauko žymuo, bet taip neveiks. Žymenų pavadinimuose negali būti tarpų ar skyrybos ženklų, todėl jis bus išspausdintas toks, koks yra.",
     "checkFindingLinkWithoutSlot": "Šiuo nišos pavadinimu susieta sąlyga, bet dokumente tokios nišos nėra",
     "checkFindingMarkerWithoutField": "Vietaženklis dokumente yra, bet neturi lauko apibrėžimo",
     "checkFindingSelectWithoutOptions": "Pasirinkimo laukas neturi nei parinkčių, nei parinkčių šaltinio",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Išsaugoti ir išeiti",
     "saveFailed": "Nepavyko išsaugoti šablono",
     "searchTemplates": "Ieškoti šablonų…",
+    "structureWarningParagraph": "Pastraipa {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktūros įspėjimas} few {# struktūros įspėjimai} many {# struktūros įspėjimo} other {# struktūros įspėjimų}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Neprivaloma: kaip DI turėtų pritaikyti formuluotę (pvz., derinti prie aplinkinės gramatikos)",

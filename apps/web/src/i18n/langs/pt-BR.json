@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "O campo não tem tipo de entrada; um campo de texto simples será usado",
     "checkFindingFieldMissingLabel": "O campo não tem rótulo; ao preencher o modelo, o nome bruto do espaço reservado será exibido",
     "checkFindingFormulaUnknownPath": "A fórmula faz referência a um campo desconhecido: {reference}",
+    "checkFindingInvalidMarker": "Isto parece um marcador de campo, mas não vai funcionar assim. Os nomes dos marcadores não podem conter espaços nem pontuação, então ele será impresso como está.",
     "checkFindingLinkWithoutSlot": "Há uma cláusula vinculada com este nome de slot, mas o documento não contém tal slot",
     "checkFindingMarkerWithoutField": "O espaço reservado aparece no documento, mas não tem definição de campo",
     "checkFindingSelectWithoutOptions": "O campo de seleção não tem opções nem fonte de opções",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Salvar e sair",
     "saveFailed": "Falha ao salvar o modelo",
     "searchTemplates": "Pesquisar modelos…",
+    "structureWarningParagraph": "Parágrafo {paragraph, number}",
     "structureWarnings": "{count, plural, one {# aviso de estrutura} many {# avisos de estrutura} other {# avisos de estrutura}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Opcional: como a IA deve adaptar a redação (ex.: combinar com a gramática ao redor)",

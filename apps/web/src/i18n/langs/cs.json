@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "Pole nemá typ vstupu; použije se obyčejné textové pole",
     "checkFindingFieldMissingLabel": "Pole nemá popisek; při vyplňování vzoru se zobrazí surový název zástupného textu",
     "checkFindingFormulaUnknownPath": "Vzorec odkazuje na neznámé pole: {reference}",
+    "checkFindingInvalidMarker": "Vypadá to jako pole k vyplnění, ale takto fungovat nebude. Názvy značek nesmí obsahovat mezery ani interpunkci, takže se vytiskne tak, jak je.",
     "checkFindingLinkWithoutSlot": "Vzorové ustanovení je připojeno pod tímto názvem slotu, ale dokument žádný takový slot neobsahuje",
     "checkFindingMarkerWithoutField": "Zástupný text se v dokumentu vyskytuje, ale nemá definici pole",
     "checkFindingSelectWithoutOptions": "Pole s výběrem nemá žádné možnosti ani zdroj možností",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Uložit a odejít",
     "saveFailed": "Nepodařilo se uložit vzor",
     "searchTemplates": "Hledat vzory…",
+    "structureWarningParagraph": "Odstavec {paragraph, number}",
     "structureWarnings": "{count, plural, one {# varování struktury} few {# varování struktury} other {# varování struktury}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Volitelné: jak má AI upravit znění (např. přizpůsobit okolní gramatice)",

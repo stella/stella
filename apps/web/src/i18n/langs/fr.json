@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "Le champ n'a pas de type de saisie ; un champ de texte simple sera utilisé",
     "checkFindingFieldMissingLabel": "Le champ n'a pas de libellé ; lors du remplissage du modèle, le nom brut de l'espace réservé sera affiché",
     "checkFindingFormulaUnknownPath": "La formule fait référence à un champ inconnu : {reference}",
+    "checkFindingInvalidMarker": "Cela ressemble à un marqueur de champ, mais ne fonctionnera pas ainsi. Les noms de marqueurs ne peuvent pas contenir d'espaces ni de ponctuation ; il sera donc affiché tel quel.",
     "checkFindingLinkWithoutSlot": "Une clause est liée sous ce nom d'emplacement, mais le document ne contient aucun emplacement de ce nom",
     "checkFindingMarkerWithoutField": "L'espace réservé apparaît dans le document mais n'a pas de définition de champ",
     "checkFindingSelectWithoutOptions": "Le champ de sélection n'a ni options ni source d'options",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Enregistrer et quitter",
     "saveFailed": "Impossible d'enregistrer le modèle",
     "searchTemplates": "Rechercher des modèles…",
+    "structureWarningParagraph": "Paragraphe {paragraph, number}",
     "structureWarnings": "{count, plural, one {# avertissement de structure} many {# avertissements de structure} other {# avertissements de structure}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Facultatif : comment l'IA doit adapter la formulation (par ex. s'accorder à la grammaire environnante)",

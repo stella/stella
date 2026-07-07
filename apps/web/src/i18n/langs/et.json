@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "Väljal puudub sisendi tüüp; kasutatakse tavalist tekstivälja",
     "checkFindingFieldMissingLabel": "Väljal puudub silt; malli täitmisel kuvatakse kohatäite toornimi",
     "checkFindingFormulaUnknownPath": "Valem viitab tundmatule väljale: {reference}",
+    "checkFindingInvalidMarker": "See näeb välja nagu välja märgend, kuid nii see ei tööta. Märgendite nimed ei tohi sisaldada tühikuid ega kirjavahemärke, seega prinditakse see muutmata kujul.",
     "checkFindingLinkWithoutSlot": "Selle pesa nime all on seotud klausel, kuid dokumendis sellist pesa pole",
     "checkFindingMarkerWithoutField": "Kohatäide esineb dokumendis, kuid sellel puudub välja määratlus",
     "checkFindingSelectWithoutOptions": "Valikuväljal pole valikuid ega valikute allikat",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Salvesta ja lahku",
     "saveFailed": "Malli salvestamine ebaõnnestus",
     "searchTemplates": "Otsi malle…",
+    "structureWarningParagraph": "Lõik {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktuurihoiatus} other {# struktuurihoiatust}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Valikuline: kuidas TI peaks sõnastust kohandama (nt vastama ümbritsevale grammatikale)",

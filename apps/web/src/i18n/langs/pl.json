@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "Pole nie ma określonego typu; zostanie użyte zwykłe pole tekstowe",
     "checkFindingFieldMissingLabel": "Pole nie ma etykiety; podczas wypełniania szablonu wyświetli się surowa nazwa symbolu zastępczego",
     "checkFindingFormulaUnknownPath": "Formuła odwołuje się do nieznanego pola: {reference}",
+    "checkFindingInvalidMarker": "To wygląda jak znacznik pola, ale w tej postaci nie zadziała. Nazwy znaczników nie mogą zawierać spacji ani znaków interpunkcyjnych, więc zostanie wydrukowany bez zmian.",
     "checkFindingLinkWithoutSlot": "Pod tą nazwą slotu powiązano klauzulę, ale w dokumencie nie ma takiego slotu",
     "checkFindingMarkerWithoutField": "Symbol zastępczy występuje w dokumencie, ale nie ma definicji pola",
     "checkFindingSelectWithoutOptions": "Pole wyboru nie ma ani opcji, ani źródła opcji",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Zapisz i wyjdź",
     "saveFailed": "Nie udało się zapisać szablonu",
     "searchTemplates": "Szukaj szablonów…",
+    "structureWarningParagraph": "Akapit {paragraph, number}",
     "structureWarnings": "{count, plural, one {# ostrzeżenie struktury} few {# ostrzeżenia struktury} many {# ostrzeżeń struktury} other {# ostrzeżeń struktury}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Opcjonalnie: jak AI ma dostosować sformułowanie (np. do otaczającej gramatyki)",

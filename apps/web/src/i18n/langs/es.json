@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "El campo no tiene tipo de entrada; se usará un campo de texto simple",
     "checkFindingFieldMissingLabel": "El campo no tiene etiqueta; al rellenar la plantilla se mostrará el nombre bruto del marcador de posición",
     "checkFindingFormulaUnknownPath": "La fórmula hace referencia a un campo desconocido: {reference}",
+    "checkFindingInvalidMarker": "Esto parece un marcador de campo, pero no funcionará así. Los nombres de los marcadores no pueden contener espacios ni signos de puntuación, por lo que se imprimirá tal cual.",
     "checkFindingLinkWithoutSlot": "Hay una cláusula vinculada con este nombre de espacio, pero el documento no contiene tal espacio",
     "checkFindingMarkerWithoutField": "El marcador de posición aparece en el documento, pero no tiene definición de campo",
     "checkFindingSelectWithoutOptions": "El campo de selección no tiene opciones ni una fuente de opciones",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Guardar y salir",
     "saveFailed": "No se pudo guardar la plantilla",
     "searchTemplates": "Buscar plantillas…",
+    "structureWarningParagraph": "Párrafo {paragraph, number}",
     "structureWarnings": "{count, plural, one {# advertencia de estructura} other {# advertencias de estructura}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Opcional: cómo debe la IA adaptar la redacción (p. ej., ajustarse a la gramática del entorno)",

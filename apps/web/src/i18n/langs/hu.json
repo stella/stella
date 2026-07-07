@@ -2287,6 +2287,7 @@
     "checkFindingFieldMissingInputType": "A mezőnek nincs beviteli típusa; egyszerű szövegmező lesz használva",
     "checkFindingFieldMissingLabel": "A mezőnek nincs címkéje; a sablon kitöltésekor a helykitöltő nyers neve jelenik meg",
     "checkFindingFormulaUnknownPath": "A képlet ismeretlen mezőre hivatkozik: {reference}",
+    "checkFindingInvalidMarker": "Ez mezőjelölőnek tűnik, de így nem fog működni. A jelölők neve nem tartalmazhat szóközt vagy írásjelet, ezért változatlan formában jelenik meg.",
     "checkFindingLinkWithoutSlot": "Ezen a foglalatnéven záradék van csatolva, de a dokumentumban nincs ilyen foglalat",
     "checkFindingMarkerWithoutField": "A helykitöltő szerepel a dokumentumban, de nincs mezőmeghatározása",
     "checkFindingSelectWithoutOptions": "A választómezőnek nincsenek lehetőségei és lehetőségforrása sem",
@@ -2436,6 +2437,7 @@
     "saveAndLeave": "Mentés és kilépés",
     "saveFailed": "Nem sikerült menteni a sablont",
     "searchTemplates": "Sablonok keresése…",
+    "structureWarningParagraph": "Bekezdés {paragraph, number}",
     "structureWarnings": "{count, plural, one {# struktúra figyelmeztetés} other {# struktúra figyelmeztetés}}",
     "studio": {
       "aiAdaptInstructionPlaceholder": "Választható: hogyan igazítsa az MI a megfogalmazást (pl. a környező nyelvtanhoz)",

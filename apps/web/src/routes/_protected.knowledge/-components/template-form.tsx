@@ -2234,14 +2234,37 @@ export const TemplateForm = ({
           )}
 
           {structureErrors.length > 0 && (
-            <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
-              <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
-              <span className="text-warning-foreground text-sm">
-                {t("templates.structureWarnings", {
-                  count: structureErrors.length,
-                })}
-              </span>
-            </div>
+            <details className="border-warning/30 bg-warning/10 dark:bg-warning/10 group mb-6 rounded-lg border p-3">
+              <summary className="text-warning-foreground flex cursor-pointer list-none items-start gap-2 text-sm [&::-webkit-details-marker]:hidden">
+                <AlertTriangleIcon className="mt-0.5 size-4 shrink-0" />
+                <span className="flex-1">
+                  {t("templates.structureWarnings", {
+                    count: structureErrors.length,
+                  })}
+                </span>
+                <ChevronDownIcon className="mt-0.5 size-4 shrink-0 transition-transform group-open:rotate-180" />
+              </summary>
+              <ul className="mt-3 grid gap-2 ps-6">
+                {structureErrors.map((error, index) => (
+                  <li
+                    className="text-warning-foreground text-sm"
+                    key={`${error.paragraphIndex}-${error.directive}-${index}`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <code className="bg-muted rounded px-1 py-0.5 font-mono text-xs">
+                        {error.directive}
+                      </code>
+                      <span className="text-muted-foreground text-xs">
+                        {t("templates.structureWarningParagraph", {
+                          paragraph: error.paragraphIndex + 1,
+                        })}
+                      </span>
+                    </div>
+                    <p className="mt-0.5">{error.message}</p>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
 
           <div className="flex flex-col gap-5">

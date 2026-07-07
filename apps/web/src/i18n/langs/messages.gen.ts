@@ -2290,6 +2290,7 @@ type Messages = {
     "checkFindingFieldMissingInputType": "The field has no input type; a plain text input will be used";
     "checkFindingFieldMissingLabel": "The field has no label; people filling in the template will see the raw placeholder name";
     "checkFindingFormulaUnknownPath": "The formula references an unknown field: {reference}";
+    "checkFindingInvalidMarker": "This looks like a field marker but won't work. Marker names can't contain spaces or punctuation, so it will be printed as-is.";
     "checkFindingLinkWithoutSlot": "A clause is linked under this slot name, but the document has no such slot";
     "checkFindingMarkerWithoutField": "The placeholder appears in the document but has no field definition";
     "checkFindingSelectWithoutOptions": "The select field has no options and no source of options";
@@ -2439,6 +2440,7 @@ type Messages = {
     "saveAndLeave": "Save and leave";
     "saveFailed": "Failed to save template";
     "searchTemplates": "Search templates…";
+    "structureWarningParagraph": "Paragraph {paragraph, number}";
     "structureWarnings": "{count, plural, one {# structure warning} other {# structure warnings}}";
     "studio": {
       "aiAdaptInstructionPlaceholder": "Optional: how AI should adapt the wording (e.g. match the surrounding grammar)";
