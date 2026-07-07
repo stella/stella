@@ -2109,35 +2109,46 @@ export const TemplateStudioPage = ({
       // Flush deferred link-row slot renames now that the document (with its
       // already-rewritten {{@clause:...}} markers) is persisted, so the row
       // rename can never outlive an unsaved document edit.
-      const { pendingSlotRenames, clearPendingSlotRename } =
+      const { pendingSlotRenames, dropPendingSlotRenames } =
         useTemplateStudioStore.getState();
-      const pendingEntries = Object.entries(pendingSlotRenames);
       let slotRenameErrorMessage: string | null = null;
-      if (pendingEntries.length > 0) {
-        // Flush SEQUENTIALLY in recorded order (insertion order of the record):
-        // a chained reuse of a freed slot name (link1 A→C, then link2 B→A) must
-        // patch link1 before link2, or link2 collides with the still-present old
-        // slotName under the per-template unique-slot constraint. The document
-        // side already enforced the same ordering in renameClauseSlot, so the
-        // recorded order is exactly the order that avoids collisions. Continue
-        // past a failure so later independent renames can still land; each
-        // failed entry stays pending for the next save's retry.
-        for (const [linkId, slotName] of pendingEntries) {
-          // eslint-disable-next-line no-await-in-loop -- sequencing is the point: patches must land in recorded order to respect the unique-slot constraint.
+      if (pendingSlotRenames.length > 0) {
+        // Flush SEQUENTIALLY by replaying the ordered step log in recorded (edit)
+        // order. A chained or cyclic reuse of a freed slot name — e.g. a swap
+        // (link1 A→C, link2 B→A, link1 C→B) — is only resolvable one step at a
+        // time: the collapsed final state can be an unresolvable single-pass
+        // order under the per-template unique-slot constraint, so we never
+        // collapse. Each step was already validated against the live document
+        // when recorded, so the log order is always replayable.
+        //
+        // On a hard failure STOP (do not skip ahead): a later step may depend on
+        // this one freeing its old slot name, so running it out of order would
+        // collide. The unresolved suffix stays pending for the next save's
+        // retry. A 404 is NOT a failure — the link (or template) is gone
+        // mid-session, so the rename target no longer exists and the step is
+        // obsolete: drop it and keep replaying.
+        let resolvedCount = 0;
+        for (const step of pendingSlotRenames) {
+          // eslint-disable-next-line no-await-in-loop -- sequencing is the point: steps must replay in recorded order so each rename lands against the state the prior steps produced, respecting the unique-slot constraint.
           const patched = await api
             .templates({ templateId: toSafeId<"template">(templateId) })
-            .clauses({ linkId: toSafeId<"templateClause">(linkId) })
-            .patch({ slotName });
-          if (patched.error) {
-            // Keep the failed entry pending; the next save retries it. Capture
-            // the first failure for a single toast rather than one per link.
-            slotRenameErrorMessage ??= userErrorMessage(
+            .clauses({ linkId: toSafeId<"templateClause">(step.linkId) })
+            .patch({ slotName: step.slotName });
+          if (patched.error && patched.error.status !== 404) {
+            // Capture the first hard failure for a single toast, then stop: this
+            // step and everything after it stay pending for the next save.
+            slotRenameErrorMessage = userErrorMessage(
               patched.error,
               t("common.unexpectedError"),
             );
-            continue;
+            break;
           }
-          clearPendingSlotRename(linkId);
+          // Success, or an obsolete (404) step: either way this leading step is
+          // resolved and drops out of the log below.
+          resolvedCount += 1;
+        }
+        if (resolvedCount > 0) {
+          dropPendingSlotRenames(resolvedCount);
         }
         if (slotRenameErrorMessage !== null) {
           // Re-mark dirty so the Save affordance (gated on isDirty) stays live
@@ -2156,9 +2167,10 @@ export const TemplateStudioPage = ({
           ),
         });
       }
-      // Report overall failure when any slot PATCH failed: the document itself
-      // saved, but "Save and leave" must stay in the Studio so the still-pending
-      // rename (and its retry) is not discarded by the unmount's store reset.
+      // Report overall failure when a slot PATCH hard-failed: the document
+      // itself saved, but "Save and leave" must stay in the Studio so the
+      // still-pending steps (and their retry) are not discarded by the
+      // unmount's store reset.
       return slotRenameErrorMessage === null;
     } catch {
       stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
@@ -4895,6 +4907,19 @@ const StudioPrimaryInsertButton = ({
   );
 };
 
+/** The effective (document-visible) slot name per link: the LAST recorded step
+ *  for each link in the pending-rename replay log wins, superseding the stale
+ *  server record. Derive once per render, then look up by link id. */
+const effectiveSlotByLink = (
+  pending: readonly { linkId: string; slotName: string }[],
+): Map<string, string> => {
+  const byLink = new Map<string, string>();
+  for (const step of pending) {
+    byLink.set(step.linkId, step.slotName);
+  }
+  return byLink;
+};
+
 /** Document actions row — rendered in the inspector tab's top area; the page
  *  registers the handlers + UI state in the session store. */
 const StudioInsertRow = () => {
@@ -4906,6 +4931,7 @@ const StudioInsertRow = () => {
   const pendingSlotRenames = useTemplateStudioStore(
     (s) => s.pendingSlotRenames,
   );
+  const effectiveSlots = effectiveSlotByLink(pendingSlotRenames);
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -4943,7 +4969,7 @@ const StudioInsertRow = () => {
                     id: link.id,
                     // A pending (unsaved) rename supersedes the server slot
                     // name, so the menu inserts the marker the document uses.
-                    slotName: pendingSlotRenames[link.id] ?? link.slotName,
+                    slotName: effectiveSlots.get(link.id) ?? link.slotName,
                     title: link.clause.title,
                   },
                 ]
@@ -6395,13 +6421,15 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
   const setPendingSlotRename = useTemplateStudioStore(
     (s) => s.setPendingSlotRename,
   );
-  // Match by the link's effective slot name: a link with a pending (not-yet-
-  // flushed) rename matches its NEW name, not the stale one still on the server
-  // record, so the face stays resolved to the same clause across a rename.
+  const effectiveSlots = effectiveSlotByLink(pendingSlotRenames);
+  // Match by the link's effective slot name (the LAST pending step for the
+  // link, else the server record): a link with a pending (not-yet-flushed)
+  // rename matches its NEW name, not the stale one still on the server, so the
+  // face stays resolved to the same clause across a rename.
   const link =
     linksData && "links" in linksData
       ? linksData.links.find(
-          (l) => (pendingSlotRenames[l.id] ?? l.slotName) === selected.expr,
+          (l) => (effectiveSlots.get(l.id) ?? l.slotName) === selected.expr,
         )
       : undefined;
 

@@ -37,6 +37,10 @@ type TemplateStudioSession = {
   fields: StudioField[];
 };
 
+/** One deferred link-row slot rename in the replay log
+ *  (see {@link TemplateStudioState.pendingSlotRenames}). */
+type PendingSlotRename = { linkId: string; slotName: string };
+
 /** Document actions the page owns; the inspector tab renders the buttons. */
 export type StudioActions = {
   toggleDirectives: () => void;
@@ -175,17 +179,27 @@ type TemplateStudioState = {
   upsertField: (path: string, patch: Partial<StudioField>) => void;
   removeField: (path: string) => void;
   renameField: (oldPath: string, newPath: string) => void;
-  /** Deferred link-row slot renames, keyed by templateClause link id → the new
-   *  slot name. Recorded when a LINKED clause slot is renamed in the document:
-   *  the `{{@clause:...}}` markers rewrite immediately (marking the session
-   *  dirty via `renameClauseSlot`), while the stored link row's slotName is only
-   *  flushed to the API in the save flow. Leaving without saving discards the
-   *  document edit and this map together (cleared on init/reset), so the link
-   *  row never ends up pointing at a slot name the stored document lacks. A
-   *  chained rename of the same link overwrites its entry. */
-  pendingSlotRenames: Record<string, string>;
+  /** Deferred link-row slot renames as an ordered replay log: each recorded
+   *  rename APPENDS a step, preserving edit order; the log is never collapsed.
+   *  Recorded when a LINKED clause slot is renamed in the document: the
+   *  `{{@clause:...}}` markers rewrite immediately (marking the session dirty
+   *  via `renameClauseSlot`), while the stored link rows' slotNames are only
+   *  flushed to the API in the save flow, replayed step by step in this order.
+   *  Replaying the full log (not a collapsed final state) is what makes chained
+   *  or cyclic renames — e.g. a slot-name swap where every single-pass order
+   *  collides on the per-template unique-slot constraint — resolvable: each step
+   *  was validated against the live document when recorded, so the log order is
+   *  always replayable. Leaving without saving discards the document edit and
+   *  this log together (cleared on init/reset), so a link row never ends up
+   *  pointing at a slot name the stored document lacks. */
+  pendingSlotRenames: PendingSlotRename[];
+  /** Append a replay step for a linked clause's slot rename. */
   setPendingSlotRename: (linkId: string, slotName: string) => void;
+  /** Remove every pending step for a link (unlink-side cleanup). */
   clearPendingSlotRename: (linkId: string) => void;
+  /** Drop the first `count` steps once the flush has replayed them, keeping any
+   *  unresolved suffix pending for the next save's retry. */
+  dropPendingSlotRenames: (count: number) => void;
   /** Document structure tree, rebuilt by the editor on every scan. */
   outline: OutlineNode[];
   setOutline: (outline: OutlineNode[]) => void;
@@ -219,7 +233,7 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       isDirty: false,
       fillValues: null,
       pendingMirrorRequests: [],
-      pendingSlotRenames: {},
+      pendingSlotRenames: [],
     }),
   reset: (templateId) =>
     set((state) =>
@@ -236,7 +250,7 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
             actions: null,
             ui: DEFAULT_UI,
             pendingMirrorRequests: [],
-            pendingSlotRenames: {},
+            pendingSlotRenames: [],
           }
         : state,
     ),
@@ -265,24 +279,27 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       ),
       isDirty: true,
     })),
-  pendingSlotRenames: {},
+  pendingSlotRenames: [],
   setPendingSlotRename: (linkId, slotName) =>
     set((state) => ({
-      pendingSlotRenames: { ...state.pendingSlotRenames, [linkId]: slotName },
+      pendingSlotRenames: [...state.pendingSlotRenames, { linkId, slotName }],
     })),
   clearPendingSlotRename: (linkId) =>
     set((state) => {
-      if (!(linkId in state.pendingSlotRenames)) {
+      const remaining = state.pendingSlotRenames.filter(
+        (step) => step.linkId !== linkId,
+      );
+      if (remaining.length === state.pendingSlotRenames.length) {
         return state;
       }
-      return {
-        pendingSlotRenames: Object.fromEntries(
-          Object.entries(state.pendingSlotRenames).filter(
-            ([id]) => id !== linkId,
-          ),
-        ),
-      };
+      return { pendingSlotRenames: remaining };
     }),
+  dropPendingSlotRenames: (count) =>
+    set((state) =>
+      count <= 0
+        ? state
+        : { pendingSlotRenames: state.pendingSlotRenames.slice(count) },
+    ),
   setSelected: (selected) => set({ selected }),
   markDirty: () => set({ isDirty: true }),
   markSaved: () => set({ isDirty: false }),
