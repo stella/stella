@@ -106,7 +106,7 @@ export const collectTemplateProperties = ({
       if (propertyDeps && propertyDeps.length > 0) {
         result.dependencies = propertyDeps;
       }
-      if (property.role !== null && property.role !== undefined) {
+      if (property.role !== null) {
         result.role = property.role;
       }
       return result;
@@ -649,8 +649,7 @@ const findUniquePropertyByRole = (
 
   return existingProperties.find(
     (property) =>
-      !consumedExistingPropertyIds.has(property.id) &&
-      property.role === role,
+      !consumedExistingPropertyIds.has(property.id) && property.role === role,
   );
 };
 
