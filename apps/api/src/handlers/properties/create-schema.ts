@@ -108,7 +108,7 @@ export const isDocumentTypeClassifierProperty = ({
   role: InferredPropertyRole;
   tool: PropertyTool;
 }): boolean => {
-  if (role !== null) {
+  if (role) {
     return true;
   }
 

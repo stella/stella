@@ -106,7 +106,7 @@ export const collectTemplateProperties = ({
       if (propertyDeps && propertyDeps.length > 0) {
         result.dependencies = propertyDeps;
       }
-      if (property.role !== null) {
+      if (property.role) {
         result.role = property.role;
       }
       return result;
@@ -591,7 +591,7 @@ const validateTemplateProperties = (
     }
 
     const role = resolveTemplatePropertyRole(templateProperty);
-    if (role !== null) {
+    if (role) {
       if (roles.has(role)) {
         return {
           ok: false,
@@ -720,7 +720,7 @@ const findUniquePropertyByRole = ({
 }: PropertyRoleMatchArgs) => {
   const role = resolveTemplatePropertyRole(templateProperty);
 
-  if (role === null) {
+  if (!role) {
     return undefined;
   }
 
@@ -738,7 +738,7 @@ const hasMalformedPropertyByRole = ({
   consumedExistingPropertyIds,
 }: PropertyRoleMatchArgs): boolean => {
   const role = resolveTemplatePropertyRole(templateProperty);
-  if (role === null) {
+  if (!role) {
     return false;
   }
 
@@ -755,9 +755,7 @@ const isMalformedPropertyByRole = (
 ): boolean => {
   const role = resolveTemplatePropertyRole(templateProperty);
   return (
-    role !== null &&
-    property.role === role &&
-    !isDocumentTypeClassifierShape(property)
+    role && property.role === role && !isDocumentTypeClassifierShape(property)
   );
 };
 
@@ -786,7 +784,7 @@ const findUniquePropertyByShape = (
         normalizePropertyName(templateProperty.name) &&
       property.content.type === templateProperty.content.type &&
       property.tool.type === templateProperty.tool.type &&
-      property.role === (templateProperty.role ?? null) &&
+      property.role === resolveTemplatePropertyRole(templateProperty) &&
       hasSamePropertyConfig(property, templateProperty) &&
       !(
         templateHasDependencies || propertyIdsWithDependencies.has(property.id)
