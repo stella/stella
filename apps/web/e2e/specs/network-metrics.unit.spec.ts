@@ -263,6 +263,25 @@ test.describe("diffNetworkBaseline", () => {
     expect(problems).toEqual([]);
   });
 
+  test("an observed request with a missing db-query count is a problem", () => {
+    const { problems } = diffNetworkBaseline(
+      dbBaseline,
+      new Map([["/contacts", metrics(["GET /v1/contacts"], 2)]]),
+    );
+    expect(problems.some((p) => p.includes("DB query count missing"))).toBe(
+      true,
+    );
+  });
+
+  test("an unobserved request with a db-query budget is only a notice", () => {
+    const { problems, notices } = diffNetworkBaseline(
+      dbBaseline,
+      new Map([["/contacts", metrics([], 1)]]),
+    );
+    expect(problems).toEqual([]);
+    expect(notices.some((n) => n.includes("GET /v1/contacts"))).toBe(true);
+  });
+
   test("a db count for a key without a budget is not a problem", () => {
     const { problems } = diffNetworkBaseline(
       dbBaseline,

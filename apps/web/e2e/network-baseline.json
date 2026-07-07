@@ -47,7 +47,8 @@
       "GET /v1/workspaces/navigation"
     ],
     "requestCounts": {
-      "GET /v1/skills": 2
+      "GET /v1/skills": 2,
+      "GET /v1/chat/threads/:id/title": 2
     },
     "dbQueries": {
       "GET /api/auth/get-session": 3,

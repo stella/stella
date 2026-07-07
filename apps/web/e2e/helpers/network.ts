@@ -337,6 +337,19 @@ export const diffNetworkBaseline = (
     // hits, timing) and re-noticing it every run would be noise; tightening
     // happens via a deliberate rewrite.
     const baselineDb = entry.dbQueries ?? {};
+    for (const key of Object.keys(baselineDb)) {
+      if (
+        metrics.requestCounts[key] !== undefined &&
+        metrics.dbQueries[key] === undefined
+      ) {
+        problems.push(
+          `DB query count missing on ${route}: ${key}\n` +
+            `  This request has a committed DB-query budget, but the response did\n` +
+            `  not expose the x-db-queries header. Restore the dev/test query\n` +
+            `  counter before trusting this route's N+1 budget.`,
+        );
+      }
+    }
     for (const [key, observed] of Object.entries(metrics.dbQueries)) {
       const budget = baselineDb[key];
       if (budget !== undefined && observed > dbQueryAllowance(budget)) {
