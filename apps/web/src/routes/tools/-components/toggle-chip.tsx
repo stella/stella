@@ -34,7 +34,10 @@ export function ToggleChip({
   children,
   className,
   onClick,
-  variant = "outline",
+  // No `= "outline"` default in the pattern: react-compiler 1.0.0 bails
+  // on AssignmentPattern property values (BuildHIR::lowerAssignment Todo),
+  // so the default is applied at the use site instead.
+  variant,
 }: ToggleChipProps) {
   return (
     <Button
@@ -47,7 +50,7 @@ export function ToggleChip({
       onClick={onClick}
       size="sm"
       type="button"
-      variant={variant}
+      variant={variant ?? "outline"}
     >
       {children}
     </Button>
