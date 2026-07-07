@@ -87,6 +87,42 @@ type PropertyMappingRow = {
   content: { type: string };
   system: boolean;
   role: string | null;
+  tool?: { type: string } | undefined;
+};
+
+const normalizePropertyName = (name: string): string =>
+  name.trim().toLowerCase();
+
+const isClassifierShape = (property: PropertyMappingRow): boolean =>
+  property.content.type === "single-select" &&
+  property.tool?.type === "ai-model";
+
+const isSourceClassifier = (property: PropertyMappingRow): boolean => {
+  if (property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE) {
+    return true;
+  }
+
+  return (
+    property.role === null &&
+    normalizePropertyName(property.name) === "document type" &&
+    isClassifierShape(property)
+  );
+};
+
+const findTargetClassifierId = (
+  targetProperties: readonly PropertyMappingRow[],
+): SafeId<"property"> | undefined => {
+  const tagged = targetProperties.find(
+    (property) => property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE,
+  );
+  if (tagged) {
+    return tagged.id;
+  }
+
+  const legacyCandidates = targetProperties.filter(
+    (property) => property.role === null && isClassifierShape(property),
+  );
+  return legacyCandidates.length === 1 ? legacyCandidates[0]?.id : undefined;
 };
 
 /**
@@ -104,13 +140,10 @@ const buildPropertyIdMap = (
   const propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
   const targetByKey = new Map<string, SafeId<"property">>();
   let targetSystemFileId: SafeId<"property"> | undefined;
-  let targetClassifierId: SafeId<"property"> | undefined;
+  const targetClassifierId = findTargetClassifierId(targetProperties);
   for (const prop of targetProperties) {
     if (prop.system && prop.content.type === "file") {
       targetSystemFileId = prop.id;
-    }
-    if (prop.role === DOCUMENT_TYPE_CLASSIFIER_ROLE) {
-      targetClassifierId = prop.id;
     }
     targetByKey.set(`${prop.name}:${prop.content.type}`, prop.id);
   }
@@ -125,10 +158,7 @@ const buildPropertyIdMap = (
       propertyIdMap.set(sourceProp.id, targetSystemFileId);
       continue;
     }
-    if (
-      sourceProp.role === DOCUMENT_TYPE_CLASSIFIER_ROLE &&
-      targetClassifierId !== undefined
-    ) {
+    if (isSourceClassifier(sourceProp) && targetClassifierId !== undefined) {
       propertyIdMap.set(sourceProp.id, targetClassifierId);
       continue;
     }
@@ -360,6 +390,7 @@ const copyToWorkspaceHandler = async function* ({
               content: true,
               system: true,
               role: true,
+              tool: true,
             },
             limit: LIMITS.propertiesCount,
           }),
@@ -371,6 +402,7 @@ const copyToWorkspaceHandler = async function* ({
               content: true,
               system: true,
               role: true,
+              tool: true,
             },
             limit: LIMITS.propertiesCount,
           }),
