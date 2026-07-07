@@ -52,6 +52,35 @@ const createMcpRequest = (body: unknown) =>
     method: "POST",
   });
 
+type UnknownToolErrorEnvelope = {
+  error: {
+    code: string;
+    hint: string;
+  };
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const parseUnknownToolErrorEnvelope = (
+  text: string,
+): UnknownToolErrorEnvelope | undefined => {
+  const payload: unknown = JSON.parse(text);
+  if (!isRecord(payload)) {
+    return undefined;
+  }
+  const error = payload["error"];
+  if (!isRecord(error)) {
+    return undefined;
+  }
+  const code = error["code"];
+  const hint = error["hint"];
+  if (typeof code !== "string" || typeof hint !== "string") {
+    return undefined;
+  }
+  return { error: { code, hint } };
+};
+
 type McpJsonResponse<TResult> = {
   id: number;
   jsonrpc: "2.0";
@@ -280,7 +309,7 @@ describe("handleMcpHttpRequest", () => {
     expect(item?.type).toBe("text");
     const parsed =
       item?.type === "text"
-        ? (JSON.parse(item.text) as { error: { code: string; hint: string } })
+        ? parseUnknownToolErrorEnvelope(item.text)
         : undefined;
     expect(parsed?.error.code).toBe("unknown_tool");
     expect(parsed?.error.hint).toContain("list_matters");

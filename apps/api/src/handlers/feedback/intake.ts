@@ -117,7 +117,7 @@ const parseFeedbackBody = (
   | { ok: true; body: PublicFeedbackBody }
   | { ok: false; response: Response } => {
   const decoded = Result.try({
-    try: () => JSON.parse(rawBody) as unknown,
+    try: (): unknown => JSON.parse(rawBody),
     catch: (cause) => cause,
   });
   if (Result.isError(decoded)) {

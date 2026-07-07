@@ -48,10 +48,30 @@ const raw = (overrides?: Record<string, unknown>): string =>
     ...overrides,
   });
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const getErrorCode = (payload: unknown): string | undefined => {
+  if (!isRecord(payload)) {
+    return undefined;
+  }
+  const error = payload["error"];
+  if (!isRecord(error)) {
+    return undefined;
+  }
+  const code = error["code"];
+  return typeof code === "string" ? code : undefined;
+};
+
 const readError = async (
   response: Response,
-): Promise<{ code?: string } | undefined> =>
-  ((await response.json()) as { error?: { code?: string } }).error;
+): Promise<{ code: string } | undefined> => {
+  const code = getErrorCode(await response.json());
+  if (!code) {
+    return undefined;
+  }
+  return { code };
+};
 
 describe("public feedback intake", () => {
   beforeEach(() => {
