@@ -51,6 +51,7 @@ Project: root
 - @tanstack/ai-anthropic 0.16.0 — MIT
 - @tanstack/ai-bedrock 0.1.1 — MIT
 - @tanstack/ai-client 0.19.2 — MIT
+- @tanstack/ai-code-mode 0.3.5 — MIT
 - @tanstack/ai-gemini 0.19.0 — MIT
 - @tanstack/ai-mcp 0.2.2 — MIT
 - @tanstack/ai-mistral 0.2.0 — MIT
