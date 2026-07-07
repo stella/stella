@@ -54,6 +54,7 @@ const GITHUB_NEW_ISSUE_URL = `https://github.com/${GITHUB_REPO}/issues/new`;
 const MAX_GITHUB_ISSUE_URL_CHARS = 7500;
 const GITHUB_BODY_TRUNCATION_MARKER =
   "\n\n[body truncated — paste the rest manually]";
+const STELLA_INTAKE_TITLE_TRUNCATION_MARKER = " [truncated]";
 const STELLA_INTAKE_BODY_TRUNCATION_MARKER =
   "\n\n[body truncated to fit stella feedback intake]";
 const HIGH_SURROGATE_START = 55_296;
@@ -155,6 +156,17 @@ const fitStellaIntakeBody = (body: string): string => {
     body,
     MAX_FEEDBACK_BODY_CHARS - STELLA_INTAKE_BODY_TRUNCATION_MARKER.length,
   )}${STELLA_INTAKE_BODY_TRUNCATION_MARKER}`;
+};
+
+const fitStellaIntakeTitle = (title: string): string => {
+  if (title.length <= MAX_FEEDBACK_TITLE_CHARS) {
+    return title;
+  }
+
+  return `${sliceWithoutDanglingHighSurrogate(
+    title,
+    MAX_FEEDBACK_TITLE_CHARS - STELLA_INTAKE_TITLE_TRUNCATION_MARKER.length,
+  )}${STELLA_INTAKE_TITLE_TRUNCATION_MARKER}`;
 };
 
 const buildGithubIssueUrl = ({
@@ -304,6 +316,10 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
   });
   const approvedBody =
     channel === "stella" ? fitStellaIntakeBody(composedBody) : composedBody;
+  const approvedTitle =
+    channel === "stella"
+      ? fitStellaIntakeTitle(sanitizedTitle)
+      : sanitizedTitle;
   const redactions =
     sanitizedTitlePass.redactions + sanitizedBodyPass.redactions;
 
@@ -324,13 +340,13 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
     const token = createFeedbackToken({
       channel,
       kind,
-      sanitizedTitle,
+      sanitizedTitle: approvedTitle,
       sanitizedBody: approvedBody,
     });
     return textResult({
       channel,
       status: "approval_required",
-      sanitized_title: sanitizedTitle,
+      sanitized_title: approvedTitle,
       sanitized_body: approvedBody,
       redactions,
       confirmation_token: token,
@@ -350,7 +366,7 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
       token: confirmation_token,
       channel,
       kind,
-      sanitizedTitle,
+      sanitizedTitle: approvedTitle,
       sanitizedBody: approvedBody,
     })
   ) {
@@ -388,13 +404,13 @@ const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
       ? await deliverViaStella({
           composedBody: approvedBody,
           kind,
-          sanitizedTitle,
+          sanitizedTitle: approvedTitle,
         })
       : await deliverViaEmail({
           composedBody: approvedBody,
           context,
           kind,
-          sanitizedTitle,
+          sanitizedTitle: approvedTitle,
         });
   if (delivered.isError) {
     await feedbackIntakeGuards.releaseCounter({

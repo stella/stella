@@ -9,6 +9,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 // Mirrors MAX_FEEDBACK_BODY_CHARS in feedback-tools.ts (not exported to keep the
 // tool's public surface minimal).
+const MAX_TITLE = 200;
 const MAX_BODY = 8000;
 
 // Mutable so a test can toggle delivery config; read through a Proxy so every
@@ -124,19 +125,51 @@ const parsePayload = (
   }
   const payload = parseJsonRecord(item.text);
   const payloadError = payload["error"];
-  const parsed: FeedbackPayload = {
-    channel: optionalString(payload["channel"]),
-    confirmation_token: optionalString(payload["confirmation_token"]),
-    delivered: optionalString(payload["delivered"]),
-    expires_in_minutes: optionalNumber(payload["expires_in_minutes"]),
-    gh_cli_command: optionalString(payload["gh_cli_command"]),
-    issue_url: optionalString(payload["issue_url"]),
-    next_step: optionalString(payload["next_step"]),
-    redactions: optionalNumber(payload["redactions"]),
-    sanitized_body: optionalString(payload["sanitized_body"]),
-    sanitized_title: optionalString(payload["sanitized_title"]),
-    status: optionalString(payload["status"]),
-  };
+  const parsed: FeedbackPayload = {};
+  const channel = optionalString(payload["channel"]);
+  if (channel !== undefined) {
+    parsed.channel = channel;
+  }
+  const confirmationToken = optionalString(payload["confirmation_token"]);
+  if (confirmationToken !== undefined) {
+    parsed.confirmation_token = confirmationToken;
+  }
+  const delivered = optionalString(payload["delivered"]);
+  if (delivered !== undefined) {
+    parsed.delivered = delivered;
+  }
+  const expiresInMinutes = optionalNumber(payload["expires_in_minutes"]);
+  if (expiresInMinutes !== undefined) {
+    parsed.expires_in_minutes = expiresInMinutes;
+  }
+  const ghCliCommand = optionalString(payload["gh_cli_command"]);
+  if (ghCliCommand !== undefined) {
+    parsed.gh_cli_command = ghCliCommand;
+  }
+  const issueUrl = optionalString(payload["issue_url"]);
+  if (issueUrl !== undefined) {
+    parsed.issue_url = issueUrl;
+  }
+  const nextStep = optionalString(payload["next_step"]);
+  if (nextStep !== undefined) {
+    parsed.next_step = nextStep;
+  }
+  const redactions = optionalNumber(payload["redactions"]);
+  if (redactions !== undefined) {
+    parsed.redactions = redactions;
+  }
+  const sanitizedBody = optionalString(payload["sanitized_body"]);
+  if (sanitizedBody !== undefined) {
+    parsed.sanitized_body = sanitizedBody;
+  }
+  const sanitizedTitle = optionalString(payload["sanitized_title"]);
+  if (sanitizedTitle !== undefined) {
+    parsed.sanitized_title = sanitizedTitle;
+  }
+  const status = optionalString(payload["status"]);
+  if (status !== undefined) {
+    parsed.status = status;
+  }
 
   if (isRecord(payloadError)) {
     const code = optionalString(payloadError["code"]);
@@ -458,6 +491,42 @@ describe("MCP send_feedback tool", () => {
       throw new TypeError("Expected forwarded body to be text");
     }
     expect(forwardedBody.length).toBeLessThanOrEqual(MAX_BODY);
+  });
+
+  test("stella channel: expanded sanitized title stays under the intake cap", async () => {
+    const fetchMock = mock(
+      async (
+        _input: Parameters<typeof fetch>[0],
+        _init?: Parameters<typeof fetch>[1],
+      ) =>
+        new Response(JSON.stringify({ delivered: "email" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    stubFetch(fetchMock);
+    const args = {
+      kind: "bug",
+      title: "a@b.co ".repeat(28).trim(),
+      body: "The title expands during sanitization.",
+      channel: "stella",
+    };
+
+    const phase1 = parsePayload(await send(args));
+    const approvedTitle = String(phase1.sanitized_title);
+    expect(approvedTitle.length).toBeLessThanOrEqual(MAX_TITLE);
+    expect(approvedTitle).toContain("[truncated]");
+
+    const token = String(phase1.confirmation_token);
+    const phase2 = parsePayload(
+      await send({ ...args, confirmation_token: token }),
+    );
+
+    expect(phase2.status).toBe("sent");
+    const [, init] = expectFirstFetchCall(fetchMock.mock.calls);
+    const forwarded = parseFetchBody(init);
+    expect(forwarded["title"]).toBe(approvedTitle);
+    expect(String(forwarded["title"]).length).toBeLessThanOrEqual(MAX_TITLE);
   });
 
   test("stella channel: maps intake 429 to rate_limited", async () => {
