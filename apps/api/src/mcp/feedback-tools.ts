@@ -147,16 +147,14 @@ const composeFeedbackBody = ({
   `${body}\n\n---\n_Filed via stella send_feedback (agent-assisted, sanitized). Kind: ${kind}._`;
 
 const fitStellaIntakeBody = (body: string): string => {
-  const bodyChars = Array.from(body);
-  if (bodyChars.length <= MAX_FEEDBACK_BODY_CHARS) {
+  if (body.length <= MAX_FEEDBACK_BODY_CHARS) {
     return body;
   }
 
-  const markerChars = Array.from(STELLA_INTAKE_BODY_TRUNCATION_MARKER);
-  return [
-    ...bodyChars.slice(0, MAX_FEEDBACK_BODY_CHARS - markerChars.length),
-    ...markerChars,
-  ].join("");
+  return `${sliceWithoutDanglingHighSurrogate(
+    body,
+    MAX_FEEDBACK_BODY_CHARS - STELLA_INTAKE_BODY_TRUNCATION_MARKER.length,
+  )}${STELLA_INTAKE_BODY_TRUNCATION_MARKER}`;
 };
 
 const buildGithubIssueUrl = ({
@@ -517,6 +515,14 @@ type IntakeSuccessBody = {
   issueUrl?: unknown;
 };
 
+type IntakeErrorBody = {
+  error?: {
+    code?: unknown;
+    hint?: unknown;
+    message?: unknown;
+  };
+};
+
 const isIntakeSuccessBody = (value: unknown): value is IntakeSuccessBody => {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -528,6 +534,37 @@ const isIntakeSuccessBody = (value: unknown): value is IntakeSuccessBody => {
     (delivered === undefined || typeof delivered === "string") &&
     (issueUrl === undefined || typeof issueUrl === "string")
   );
+};
+
+const isIntakeErrorBody = (value: unknown): value is IntakeErrorBody => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  const error: unknown = Reflect.get(value, "error");
+  if (typeof error !== "object" || error === null) {
+    return false;
+  }
+
+  const code: unknown = Reflect.get(error, "code");
+  const hint: unknown = Reflect.get(error, "hint");
+  const message: unknown = Reflect.get(error, "message");
+  return (
+    (code === undefined || typeof code === "string") &&
+    (hint === undefined || typeof hint === "string") &&
+    (message === undefined || typeof message === "string")
+  );
+};
+
+const readIntakeJson = async (response: Response): Promise<unknown> => {
+  const parsed = await Result.tryPromise({
+    try: async (): Promise<unknown> => {
+      const value: unknown = await response.json();
+      return value;
+    },
+    catch: (cause) => cause,
+  });
+  return Result.isOk(parsed) ? parsed.value : null;
 };
 
 const mapIntakeResponse = async (
@@ -549,6 +586,25 @@ const mapIntakeResponse = async (
     });
   }
   if (!response.ok) {
+    const body = await readIntakeJson(response);
+    if (
+      response.status === 503 &&
+      isIntakeErrorBody(body) &&
+      body.error?.code === "feature_disabled"
+    ) {
+      return structuredErrorResult({
+        code: "feature_disabled",
+        message:
+          typeof body.error.message === "string"
+            ? body.error.message
+            : "The stella feedback intake has no delivery channel configured",
+        hint:
+          typeof body.error.hint === "string"
+            ? body.error.hint
+            : "Ask the operator to configure feedback delivery, or file on GitHub instead.",
+      });
+    }
+
     return structuredErrorResult({
       code: "internal_error",
       message: "The stella feedback intake rejected the submission",
@@ -557,17 +613,8 @@ const mapIntakeResponse = async (
     });
   }
 
-  const parsed = await Result.tryPromise({
-    try: async (): Promise<unknown> => {
-      const value: unknown = await response.json();
-      return value;
-    },
-    catch: (cause) => cause,
-  });
-  const parsedBody =
-    Result.isOk(parsed) && isIntakeSuccessBody(parsed.value)
-      ? parsed.value
-      : null;
+  const parsed = await readIntakeJson(response);
+  const parsedBody = isIntakeSuccessBody(parsed) ? parsed : null;
   const delivered =
     typeof parsedBody?.delivered === "string"
       ? parsedBody.delivered

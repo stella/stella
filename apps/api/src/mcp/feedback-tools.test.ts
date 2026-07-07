@@ -431,7 +431,7 @@ describe("MCP send_feedback tool", () => {
     const args = {
       kind: "bug",
       title: "large forwarded report",
-      body: "x".repeat(MAX_BODY),
+      body: "😀".repeat(MAX_BODY / 2),
       channel: "stella",
     };
 
@@ -485,6 +485,39 @@ describe("MCP send_feedback tool", () => {
     const payload = parseErrorPayload(result);
     expect(payload.error?.code).toBe("internal_error");
     expect(payload.error?.retryable).toBe(true);
+    expect(releaseCounterMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("stella channel: preserves intake feature_disabled responses", async () => {
+    stubFetch(
+      mock(
+        async () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "feature_disabled",
+                message: "Feedback delivery is not configured",
+                hint: "Configure FEEDBACK_EMAIL_TO.",
+              },
+            }),
+            {
+              status: 503,
+              headers: { "content-type": "application/json" },
+            },
+          ),
+      ),
+    );
+    const args = {
+      kind: "bug",
+      title: "intake delivery disabled",
+      body: "The intake is reachable but not configured.",
+      channel: "stella",
+    };
+    const token = String(parsePayload(await send(args)).confirmation_token);
+    const result = await send({ ...args, confirmation_token: token });
+    const payload = parseErrorPayload(result);
+    expect(payload.error?.code).toBe("feature_disabled");
+    expect(payload.error?.retryable).toBeUndefined();
     expect(releaseCounterMock).toHaveBeenCalledTimes(1);
   });
 
