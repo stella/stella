@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { member, user } from "@/api/db/auth-schema";
 import { env } from "@/api/env";
+import { receivePublicFeedback } from "@/api/handlers/feedback/intake";
 import { feedbackIntakeGuards } from "@/api/handlers/feedback/intake-guards";
 import { captureError } from "@/api/lib/analytics";
 import {
@@ -47,6 +48,7 @@ const FEEDBACK_DELIVERY_BUCKET = "mcp-delivery-org";
 // stella channel. No user identity exists on that path, so this is the only
 // provenance the maintainer receives.
 const FEEDBACK_INTAKE_TIMEOUT_MS = 10_000;
+const HOSTED_FEEDBACK_INTAKE_URL = "https://api.stll.app/public/feedback";
 
 const GITHUB_REPO = "stella/stella";
 const GITHUB_ISSUE_LABEL = "agent-feedback";
@@ -510,17 +512,29 @@ const deliverViaStella = async ({
     });
   }
 
+  const rawBody = JSON.stringify({
+    kind,
+    title: sanitizedTitle,
+    body: composedBody,
+    source: { instance: env.isDev ? "dev" : "self-hosted" },
+  });
+
+  if (isHostedFeedbackIntakeUrl(intakeUrl)) {
+    return await mapIntakeResponse(
+      await receivePublicFeedback({
+        rawBody,
+        clientIp: null,
+        deps: { skipRateLimit: true },
+      }),
+    );
+  }
+
   const response = await Result.tryPromise({
     try: async () =>
       await fetch(intakeUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          kind,
-          title: sanitizedTitle,
-          body: composedBody,
-          source: { instance: env.isDev ? "dev" : "self-hosted" },
-        }),
+        body: rawBody,
         signal: AbortSignal.timeout(FEEDBACK_INTAKE_TIMEOUT_MS),
       }),
     catch: (cause) => cause,
@@ -536,6 +550,14 @@ const deliverViaStella = async ({
   }
 
   return await mapIntakeResponse(response.value);
+};
+
+const isHostedFeedbackIntakeUrl = (value: string): boolean => {
+  try {
+    return new URL(value).toString() === HOSTED_FEEDBACK_INTAKE_URL;
+  } catch {
+    return false;
+  }
 };
 
 type IntakeSuccessBody = {

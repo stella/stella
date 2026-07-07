@@ -72,9 +72,10 @@ const HEX_SECRET_REGEX = /\b[0-9a-fA-F]{32,}\b/gu;
 // by HEX_SECRET_REGEX above.
 const BASE64_SECRET_REGEX = /\b[A-Za-z0-9_-]{40,}={0,2}/gu;
 
-// Absolute http(s) URL. Trailing sentence punctuation is trimmed in the
-// replacer so a URL at the end of a sentence keeps the period.
-const URL_REGEX = /\bhttps?:\/\/[^\s<>()[\]"'`]+/giu;
+// Absolute http(s) URL. Parentheses/brackets are valid path characters and are
+// intentionally included; unmatched closing wrappers and sentence punctuation
+// are trimmed in the replacer.
+const URL_REGEX = /\bhttps?:\/\/[^\s<>"'`]+/giu;
 const URL_TRAILING_PUNCTUATION_REGEX = /[.,;:!?]+$/u;
 
 const EMAIL_REGEX = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/gu;
@@ -91,6 +92,45 @@ const IPV6_REGEX =
   /\b(?:[0-9a-fA-F]{1,4}:){2,7}[0-9a-fA-F]{1,4}\b|\b(?:[0-9a-fA-F]{1,4}:){1,6}:(?:[0-9a-fA-F]{1,4}:){0,5}[0-9a-fA-F]{1,4}\b/gu;
 
 export type SanitizeFeedbackResult = { text: string; redactions: number };
+
+const trimTrailingUrlPunctuation = (
+  match: string,
+): { core: string; trailing: string } => {
+  let core = match;
+  let trailing = "";
+
+  const sentencePunctuation =
+    URL_TRAILING_PUNCTUATION_REGEX.exec(core)?.[0] ?? "";
+  if (sentencePunctuation.length > 0) {
+    core = core.slice(0, -sentencePunctuation.length);
+    trailing = sentencePunctuation;
+  }
+
+  const pairs = [
+    { open: "(", close: ")" },
+    { open: "[", close: "]" },
+    { open: "{", close: "}" },
+  ] as const;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const { close, open } of pairs) {
+      if (!core.endsWith(close)) {
+        continue;
+      }
+      const opens = Array.from(core).filter((char) => char === open).length;
+      const closes = Array.from(core).filter((char) => char === close).length;
+      if (closes <= opens) {
+        continue;
+      }
+      core = core.slice(0, -close.length);
+      trailing = `${close}${trailing}`;
+      changed = true;
+    }
+  }
+
+  return { core, trailing };
+};
 
 /**
  * Redact the well-known sensitive shapes from one feedback field. Returns the
@@ -119,8 +159,7 @@ export const sanitizeFeedbackText = (input: string): SanitizeFeedbackResult => {
     return REDACTED_SECRET;
   });
   text = text.replace(URL_REGEX, (match) => {
-    const trailing = URL_TRAILING_PUNCTUATION_REGEX.exec(match)?.[0] ?? "";
-    const core = trailing.length > 0 ? match.slice(0, -trailing.length) : match;
+    const { core, trailing } = trimTrailingUrlPunctuation(match);
     let url: URL;
     try {
       url = new URL(core);

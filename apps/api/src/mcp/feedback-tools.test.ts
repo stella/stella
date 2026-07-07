@@ -458,6 +458,31 @@ describe("MCP send_feedback tool", () => {
     expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
 
+  test("stella channel: hosted intake uses the internal delivery path", async () => {
+    feedbackIntakeUrl = "https://api.stll.app/public/feedback";
+    const fetchMock = mock(async () => new Response("", { status: 500 }));
+    stubFetch(fetchMock);
+    const args = {
+      kind: "bug",
+      title: "hosted feedback",
+      body: "The hosted instance should not spend the public IP quota.",
+      channel: "stella",
+    };
+    const token = String(parsePayload(await send(args)).confirmation_token);
+    expect(consumeCounterMock).not.toHaveBeenCalled();
+
+    const phase2 = parsePayload(
+      await send({ ...args, confirmation_token: token }),
+    );
+
+    expect(phase2.status).toBe("sent");
+    expect(phase2.delivered).toBe("email");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(consumeCounterMock).toHaveBeenCalledTimes(1);
+    expect(releaseCounterMock).not.toHaveBeenCalled();
+    expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(1);
+  });
+
   test("stella channel: approval and forwarded body stay under the intake cap", async () => {
     const fetchMock = mock(
       async (

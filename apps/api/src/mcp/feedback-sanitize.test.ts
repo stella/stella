@@ -54,6 +54,18 @@ describe("sanitizeFeedbackText", () => {
       redactions: 1,
     },
     {
+      name: "non-allowlisted URL redacts parenthesized path text",
+      input: "open https://internal.example/matter(Acme-Secret)/token",
+      expected: "open [redacted-url]",
+      redactions: 1,
+    },
+    {
+      name: "wrapped URL keeps its closing wrapper",
+      input: "see (https://internal.example/path)",
+      expected: "see ([redacted-url])",
+      redactions: 1,
+    },
+    {
       name: "allowlisted github URL is preserved",
       input: "repo at https://github.com/stella/stella works",
       expected: "repo at https://github.com/stella/stella works",

@@ -96,6 +96,7 @@ type IntakeDeps = {
   guards?: FeedbackIntakeGuards;
   /** Delivery config; defaults to env. Present-but-undefined means "not configured". */
   emailTo?: string | undefined;
+  skipRateLimit?: boolean | undefined;
 };
 
 type DeliveryOutcome = { ok: boolean; response: Response };
@@ -323,19 +324,21 @@ export const receivePublicFeedback = async ({
   const sanitizedBody = sanitizeFeedbackText(body.body).text;
   const sanitizedSource = sanitizeSource(body.source);
 
-  const withinRate = await guards.consumeCounter({
-    bucket: "ip",
-    key: clientIp ?? UNKNOWN_IP_KEY,
-    windowMs: RATE_LIMIT_WINDOW_MS,
-    max: RATE_LIMIT_MAX_PER_IP,
-  });
-  if (!withinRate) {
-    return errorResponse(
-      429,
-      "rate_limited",
-      "Too many feedback submissions from this address",
-      `Up to ${RATE_LIMIT_MAX_PER_IP} submissions per hour are accepted; try again later.`,
-    );
+  if (deps?.skipRateLimit !== true) {
+    const withinRate = await guards.consumeCounter({
+      bucket: "ip",
+      key: clientIp ?? UNKNOWN_IP_KEY,
+      windowMs: RATE_LIMIT_WINDOW_MS,
+      max: RATE_LIMIT_MAX_PER_IP,
+    });
+    if (!withinRate) {
+      return errorResponse(
+        429,
+        "rate_limited",
+        "Too many feedback submissions from this address",
+        `Up to ${RATE_LIMIT_MAX_PER_IP} submissions per hour are accepted; try again later.`,
+      );
+    }
   }
 
   const dedupKey = contentDedupKey({
