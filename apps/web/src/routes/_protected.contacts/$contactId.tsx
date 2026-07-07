@@ -20,6 +20,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { MatterIcon } from "@/components/matter-icon";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
@@ -38,6 +39,14 @@ import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/crea
 export const Route = createFileRoute("/_protected/contacts/$contactId")({
   component: ContactDetailPage,
   pendingComponent: ContactDetailPending,
+  loader: async ({ context, params }) => {
+    // Prime the contact query the page suspends on so the fetch starts during
+    // navigation instead of after the component mounts and suspends.
+    await ensureRouteQueryData(
+      context.queryClient,
+      contactOptions(context.user.activeOrganizationId, params.contactId),
+    );
+  },
 });
 
 const SECTION_ROW_KEYS = ["a", "b", "c", "d", "e", "f"];

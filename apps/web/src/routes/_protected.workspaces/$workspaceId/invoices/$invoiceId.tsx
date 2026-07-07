@@ -48,6 +48,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
   requiredTrimmedStringSchema,
@@ -67,6 +68,14 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/invoices/$invoiceId",
 )({
   component: InvoiceDetailPage,
+  loader: async ({ context, params }) => {
+    // Prime the invoice query the detail view suspends on so the fetch starts
+    // during navigation instead of after the component mounts and suspends.
+    await ensureRouteQueryData(
+      context.queryClient,
+      invoiceByIdOptions(params.workspaceId, params.invoiceId),
+    );
+  },
 });
 
 function InvoiceDetailPage() {

@@ -57,6 +57,7 @@ import {
   getPDFPageIdByNumber,
   usePDFStore,
 } from "@/lib/pdf/pdf-context";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { composeRefs } from "@/lib/slot";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
@@ -112,6 +113,23 @@ export const Route = createFileRoute(
   }),
   search: {
     middlewares: [stripSearchParams({ pdfPage: 1 })],
+  },
+  // The entity query is keyed on the `entity` search param, so the loader must
+  // re-run when it changes; `field` gates whether the detail view mounts at all.
+  loaderDeps: ({ search }) => ({ entity: search.entity, field: search.field }),
+  loader: async ({ context, params, deps }) => {
+    // Mirror the component guard: the entity query only runs when both `entity`
+    // and `field` are present (otherwise the route redirects without mounting
+    // the detail view). Prime it so the fetch starts during navigation instead
+    // of after the component mounts and suspends.
+    if (!deps.entity || !deps.field) {
+      return;
+    }
+
+    await ensureRouteQueryData(
+      context.queryClient,
+      entityOptions(params.workspaceId, deps.entity),
+    );
   },
   pendingComponent: () => <DocxLoadingShell />,
 });

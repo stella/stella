@@ -52,6 +52,7 @@ import {
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
@@ -63,6 +64,11 @@ import { SettingsPageHeader } from "@/routes/_protected.settings/-components/set
 export const Route = createFileRoute("/_protected/settings/account/profile")({
   component: ProfilePage,
   pendingComponent: ProfilePagePending,
+  loader: async ({ context }) => {
+    // Prime the session query the page suspends on so the fetch starts during
+    // navigation instead of after the component mounts and suspends.
+    await ensureRouteQueryData(context.queryClient, sessionOptions);
+  },
 });
 
 const SESSION_ROW_KEYS = ["a", "b", "c"];

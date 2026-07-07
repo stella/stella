@@ -54,6 +54,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
 import {
   getRoles,
@@ -141,6 +142,17 @@ export const Route = createFileRoute(
 )({
   component: Members,
   pendingComponent: MembersPendingComponent,
+  loader: async ({ context }) => {
+    // Prime the org + role queries the page suspends on so the fetch starts
+    // during navigation instead of after the component mounts and suspends.
+    await Promise.all([
+      ensureRouteQueryData(
+        context.queryClient,
+        organizationOptions(context.user.activeOrganizationId),
+      ),
+      ensureRouteQueryData(context.queryClient, roleOptions),
+    ]);
+  },
 });
 
 function Members() {
