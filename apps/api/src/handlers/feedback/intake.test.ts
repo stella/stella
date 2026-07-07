@@ -25,7 +25,7 @@ void mock.module("@/api/lib/email", () => ({
 
 const { createFeedbackIntakeGuards } =
   await import("@/api/handlers/feedback/intake-guards");
-const { receivePublicFeedback } =
+const { MAX_RAW_FEEDBACK_BODY_CHARS, receivePublicFeedback } =
   await import("@/api/handlers/feedback/intake");
 const { feedbackPublicRoute } = await import("@/api/handlers/feedback/routes");
 
@@ -322,5 +322,28 @@ describe("public feedback intake", () => {
       }),
     );
     expect(unknownKey.status).toBe(422);
+  });
+
+  test("route accepts valid max-length fields after JSON escaping", async () => {
+    const app = new Elysia().use(feedbackPublicRoute);
+    const escapedRaw = raw({
+      title: '"'.repeat(200),
+      body: "\u0000".repeat(8000),
+      source: {
+        instance: "\u0000".repeat(40),
+        version: "\u0000".repeat(40),
+      },
+    });
+
+    expect(escapedRaw.length).toBeLessThanOrEqual(MAX_RAW_FEEDBACK_BODY_CHARS);
+    const response = await app.handle(
+      new Request("http://api.test/public/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: escapedRaw,
+      }),
+    );
+
+    expect(response.status).not.toBe(422);
   });
 });

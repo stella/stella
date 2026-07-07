@@ -49,6 +49,7 @@ const FEEDBACK_DELIVERY_BUCKET = "mcp-delivery-org";
 // provenance the maintainer receives.
 const FEEDBACK_INTAKE_TIMEOUT_MS = 10_000;
 const HOSTED_FEEDBACK_INTAKE_URL = "https://api.stll.app/public/feedback";
+const HOSTED_FEEDBACK_API_ORIGIN = new URL(HOSTED_FEEDBACK_INTAKE_URL).origin;
 
 const GITHUB_REPO = "stella/stella";
 const GITHUB_ISSUE_LABEL = "agent-feedback";
@@ -519,7 +520,7 @@ const deliverViaStella = async ({
     source: { instance: env.isDev ? "dev" : "self-hosted" },
   });
 
-  if (isHostedFeedbackIntakeUrl(intakeUrl)) {
+  if (isHostedFeedbackSelfCall(intakeUrl)) {
     return await mapIntakeResponse(
       await receivePublicFeedback({
         rawBody,
@@ -558,6 +559,15 @@ const isHostedFeedbackIntakeUrl = (value: string): boolean => {
   } catch {
     return false;
   }
+};
+
+const isHostedFeedbackSelfCall = (intakeUrl: string): boolean => {
+  if (!isHostedFeedbackIntakeUrl(intakeUrl)) {
+    return false;
+  }
+
+  const publicUrl = env.PUBLIC_URL ?? env.BETTER_AUTH_URL;
+  return new URL(publicUrl).origin === HOSTED_FEEDBACK_API_ORIGIN;
 };
 
 type IntakeSuccessBody = {

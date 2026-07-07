@@ -52,8 +52,8 @@ const MAX_SOURCE_FIELD_CHARS = 40;
 
 // Coarse raw-body string cap enforced at the route before JSON parsing: bounds
 // an unauthenticated write independently of the per-field caps below. Sized for
-// an 8000-char body plus title, source, and JSON overhead.
-export const MAX_RAW_FEEDBACK_BODY_CHARS = 16_384;
+// valid max-length fields after JSON escaping.
+export const MAX_RAW_FEEDBACK_BODY_CHARS = 64_000;
 
 // Per-IP submission budget. Deliberately small: a human filing feedback sends a
 // handful at most; anything above this is a bot.

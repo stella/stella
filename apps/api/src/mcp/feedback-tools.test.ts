@@ -17,6 +17,7 @@ const MAX_BODY = 8000;
 let feedbackEmailTo: string | undefined;
 let feedbackIntakeUrl: string | undefined =
   "https://intake.test/public/feedback";
+let publicUrl: string | undefined;
 let transactionalEmailConfigured = true;
 
 const realEnvModule = await import("@/api/env");
@@ -29,6 +30,9 @@ void mock.module("@/api/env", () => ({
       }
       if (prop === "FEEDBACK_INTAKE_URL") {
         return feedbackIntakeUrl;
+      }
+      if (prop === "PUBLIC_URL") {
+        return publicUrl;
       }
       return Reflect.get(target, prop) as unknown;
     },
@@ -296,6 +300,7 @@ describe("MCP send_feedback tool", () => {
     releaseCounterMock.mockImplementation(async () => undefined);
     feedbackEmailTo = "maintainer@example.com";
     feedbackIntakeUrl = "https://intake.test/public/feedback";
+    publicUrl = undefined;
     transactionalEmailConfigured = true;
     globalThis.fetch = originalFetch;
   });
@@ -460,6 +465,7 @@ describe("MCP send_feedback tool", () => {
 
   test("stella channel: hosted intake uses the internal delivery path", async () => {
     feedbackIntakeUrl = "https://api.stll.app/public/feedback";
+    publicUrl = "https://api.stll.app";
     const fetchMock = mock(async () => new Response("", { status: 500 }));
     stubFetch(fetchMock);
     const args = {
@@ -481,6 +487,40 @@ describe("MCP send_feedback tool", () => {
     expect(consumeCounterMock).toHaveBeenCalledTimes(1);
     expect(releaseCounterMock).not.toHaveBeenCalled();
     expect(sendFeedbackEmailMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("stella channel: self-hosted default intake still uses HTTP", async () => {
+    feedbackIntakeUrl = "https://api.stll.app/public/feedback";
+    publicUrl = "https://self-hosted.example.com";
+    const fetchMock = mock(
+      async (
+        _input: Parameters<typeof fetch>[0],
+        _init?: Parameters<typeof fetch>[1],
+      ) =>
+        new Response(JSON.stringify({ delivered: "email" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    );
+    stubFetch(fetchMock);
+    const args = {
+      kind: "bug",
+      title: "self-hosted feedback",
+      body: "Self-hosted deployments should reach the hosted intake.",
+      channel: "stella",
+    };
+    const token = String(parsePayload(await send(args)).confirmation_token);
+
+    const phase2 = parsePayload(
+      await send({ ...args, confirmation_token: token }),
+    );
+
+    expect(phase2.status).toBe("sent");
+    expect(phase2.delivered).toBe("email");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = expectFirstFetchCall(fetchMock.mock.calls);
+    expect(fetchInputUrl(url)).toBe("https://api.stll.app/public/feedback");
+    expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
 
   test("stella channel: approval and forwarded body stay under the intake cap", async () => {
