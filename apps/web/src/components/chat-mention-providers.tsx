@@ -1,7 +1,8 @@
-import { createContext, use, useState } from "react";
+import { createContext, use } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
 
 import type {
   ChatMentionOption,
@@ -9,6 +10,7 @@ import type {
 } from "@/components/chat-mention-extension";
 import { buildWorkspaceMentionOptions } from "@/components/chat-mention-helpers";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
@@ -30,32 +32,31 @@ type MentionWorkspace = {
   name: string;
 };
 
-const firstViewIdsByWorkspaceIdOptions = ({
+const loadFirstViewIdsByWorkspaceId = async ({
   queryClient,
   workspaces,
 }: {
   queryClient: QueryClient;
   workspaces: MentionWorkspace[];
-}) => ({
-  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- the query client is an app-scope dependency, not part of this query's cache identity.
-  queryKey: [
-    "chat-mention-workspace-views",
-    workspaces.map((workspace) => workspace.id),
-  ],
-  queryFn: async () => {
-    const viewEntries = await Promise.all(
-      workspaces.map(async (workspace) => {
-        const views = await queryClient.ensureQueryData(
-          viewsOptions(workspace.id),
-        );
+}) => {
+  const viewEntries = await Promise.all(
+    workspaces.map(async (workspace) => {
+      const viewsResult = await Result.tryPromise(
+        async () =>
+          await queryClient.ensureQueryData(viewsOptions(workspace.id)),
+      );
 
-        return [workspace.id, views.at(0)?.id ?? null] as const;
-      }),
-    );
+      if (Result.isError(viewsResult)) {
+        getAnalytics().captureError(viewsResult.error);
+        return [workspace.id, null] as const;
+      }
 
-    return Object.fromEntries(viewEntries);
-  },
-});
+      return [workspace.id, viewsResult.value.at(0)?.id ?? null] as const;
+    }),
+  );
+
+  return Object.fromEntries(viewEntries);
+};
 
 /** Provides org-level mention sources to any ChatEditor below. */
 export const ChatMentionProviders = ({
@@ -65,40 +66,21 @@ export const ChatMentionProviders = ({
 }) => {
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  // Defer the per-workspace first-view-id prefetch (one GET /views per
-  // workspace) until a workspace @-mention is actually requested, so it
-  // doesn't storm the network on initial page load.
-  const [workspaceMentionsRequested, setWorkspaceMentionsRequested] =
-    useState(false);
   const { data: workspacesData } = useChromeQuery(
     workspacesNavigationOptions(activeOrganizationId),
   );
   const workspaces = workspacesData?.workspaces;
-  const { data: firstViewIdsByWorkspaceId } = useChromeQuery({
-    ...firstViewIdsByWorkspaceIdOptions({
-      queryClient,
-      workspaces: workspaces ?? [],
-    }),
-    enabled:
-      workspaceMentionsRequested &&
-      workspaces !== undefined &&
-      workspaces.length > 0,
-  });
 
   const value: MentionProviders = {
     getItems: async (categories) => {
       const items: ChatMentionOption[] = [];
 
       if (categories.includes("workspace")) {
-        if (!workspaceMentionsRequested) {
-          setWorkspaceMentionsRequested(true);
-        }
         if (workspaces) {
-          const viewIdsByWorkspaceId =
-            firstViewIdsByWorkspaceId ??
-            (await queryClient.ensureQueryData(
-              firstViewIdsByWorkspaceIdOptions({ queryClient, workspaces }),
-            ));
+          const viewIdsByWorkspaceId = await loadFirstViewIdsByWorkspaceId({
+            queryClient,
+            workspaces,
+          });
           items.push(
             ...buildWorkspaceMentionOptions({
               firstViewIdsByWorkspaceId: viewIdsByWorkspaceId,
