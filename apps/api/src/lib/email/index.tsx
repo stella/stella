@@ -196,7 +196,7 @@ export const sendOrganizationInvitation = async ({
   });
 };
 
-type SendFeedbackEmailProps = {
+type SendFeedbackEmailOptions = {
   to: string;
   kind: ProductFeedbackKind;
   title: string;
@@ -210,7 +210,7 @@ export const sendFeedbackEmail = async ({
   reporter,
   title,
   to,
-}: SendFeedbackEmailProps) => {
+}: SendFeedbackEmailOptions) => {
   const node = (
     <ProductFeedback.Email
       body={body}
