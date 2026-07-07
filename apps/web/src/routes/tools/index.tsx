@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -14,6 +15,7 @@ import { createPublicToolsHead } from "@/lib/public-tools-seo";
 import { ToggleChip } from "@/routes/tools/-components/toggle-chip";
 import { ToolCatalogueCard } from "@/routes/tools/-components/tool-catalogue-card";
 import {
+  catalogueStats,
   collectJurisdictions,
   collectPracticeAreas,
   filterToolEntries,
@@ -34,6 +36,7 @@ const RECOMMENDED_SLUGS: ReadonlySet<string> = new Set(
 );
 const PRACTICE_AREAS = collectPracticeAreas(CATALOGUE_ENTRIES);
 const JURISDICTIONS = collectJurisdictions(CATALOGUE_ENTRIES);
+const CATALOGUE_STATS = catalogueStats(CATALOGUE_ENTRIES);
 
 const KIND_LABEL_KEY = {
   all: "common.all",
@@ -105,12 +108,18 @@ function PublicToolsIndex() {
   return (
     <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="flex flex-col gap-1">
           <h1 className="text-lg font-semibold">
             {t("knowledge.sections.tools.title")}
           </h1>
           <p className="text-muted-foreground text-sm">
             {t("publicTools.metaDescription")}
+          </p>
+          <p className="text-muted-foreground text-xs">
+            {t("publicTools.stats", {
+              toolCount: CATALOGUE_STATS.toolCount,
+              contributorCount: CATALOGUE_STATS.contributorCount,
+            })}
           </p>
         </div>
         <Button
@@ -119,7 +128,8 @@ function PublicToolsIndex() {
           size="sm"
           variant="outline"
         >
-          {t("publicTools.contribute.cta")}
+          <PlusIcon />
+          {t("publicTools.addSkill")}
         </Button>
       </div>
 
