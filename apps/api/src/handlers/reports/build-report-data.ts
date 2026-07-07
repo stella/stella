@@ -21,10 +21,11 @@ import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db";
 import type { JustificationContent, PropertyRole } from "@/api/db/schema";
-import type { PropertyTool } from "@/api/db/schema-validators";
+import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { queryEntities } from "@/api/handlers/entities/query-entities";
 import type { PositionSeverity } from "@/api/handlers/playbooks/position-facets";
+import { isDocumentTypeClassifierShape } from "@/api/handlers/properties/create-schema";
 import {
   buildExportColumns,
   formatFieldContent,
@@ -55,6 +56,7 @@ type TableLayout = Extract<ViewLayout, { type: "table" }>;
 type ReportProperty = {
   id: string;
   name: string;
+  content: PropertyContent;
   role: PropertyRole | null;
   tool: PropertyTool;
 };
@@ -420,7 +422,10 @@ export const findDocTypePropertyId = (
   const roleMatch = properties.find(
     (property) =>
       property.role === "document-type-classifier" &&
-      property.tool.type === "ai-model",
+      isDocumentTypeClassifierShape({
+        content: property.content,
+        tool: property.tool,
+      }),
   );
   if (roleMatch) {
     return roleMatch.id;
@@ -428,7 +433,10 @@ export const findDocTypePropertyId = (
   const nameMatch = properties.find(
     (property) =>
       property.name.trim().toLowerCase() === "document type" &&
-      property.tool.type === "ai-model",
+      isDocumentTypeClassifierShape({
+        content: property.content,
+        tool: property.tool,
+      }),
   );
   return nameMatch?.id ?? null;
 };
@@ -466,7 +474,13 @@ export const buildReportData = async ({
       safeDb((tx) =>
         tx.query.properties.findMany({
           where: { workspaceId: { eq: workspaceId } },
-          columns: { id: true, name: true, role: true, tool: true },
+          columns: {
+            id: true,
+            name: true,
+            content: true,
+            role: true,
+            tool: true,
+          },
           orderBy: { createdAt: "asc" },
           limit: LIMITS.propertiesCount,
         }),

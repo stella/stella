@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { JustificationContent } from "@/api/db/schema";
-import type { FieldContent, PropertyTool } from "@/api/db/schema-validators";
+import type {
+  FieldContent,
+  PropertyContent,
+  PropertyTool,
+} from "@/api/db/schema-validators";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { buildExportColumns } from "@/api/handlers/views/table-export";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -36,6 +40,13 @@ const aiTool: PropertyTool = {
 };
 
 const manualTool: PropertyTool = { version: 1, type: "manual-input" };
+const textPropertyContent: PropertyContent = { version: 1, type: "text" };
+const docTypePropertyContent: PropertyContent = {
+  version: 1,
+  type: "single-select",
+  options: [{ value: "NDA", color: "blue" }],
+  fallback: null,
+};
 
 const verdictTool = (
   askPropertyId: string,
@@ -50,24 +61,45 @@ const verdictTool = (
 });
 
 const properties = [
-  { id: ASK_LAW, name: "Governing law", role: null, tool: aiTool },
+  {
+    id: ASK_LAW,
+    name: "Governing law",
+    content: textPropertyContent,
+    role: null,
+    tool: aiTool,
+  },
   {
     id: VERDICT_LAW,
     name: "Governing law verdict",
+    content: docTypePropertyContent,
     role: null,
     tool: verdictTool(ASK_LAW, "high"),
   },
-  { id: ASK_TERM, name: "Term", role: null, tool: aiTool },
+  {
+    id: ASK_TERM,
+    name: "Term",
+    content: textPropertyContent,
+    role: null,
+    tool: aiTool,
+  },
   {
     id: VERDICT_TERM,
     name: "Term verdict",
+    content: docTypePropertyContent,
     role: null,
     tool: verdictTool(ASK_TERM, "blocker"),
   },
-  { id: DOC_TYPE, name: "Document Type", role: null, tool: aiTool },
+  {
+    id: DOC_TYPE,
+    name: "Document Type",
+    content: docTypePropertyContent,
+    role: null,
+    tool: aiTool,
+  },
   {
     id: NOTES,
     name: "Notes",
+    content: textPropertyContent,
     role: null,
     tool: manualTool,
   },
@@ -217,6 +249,25 @@ describe("assembleReportData", () => {
     );
 
     expect(findDocTypePropertyId(localizedProperties)).toBe(DOC_TYPE);
+  });
+
+  test("ignores role-tagged classifiers with the wrong content shape", () => {
+    const malformed = {
+      id: DOC_TYPE,
+      name: "Type de document",
+      content: textPropertyContent,
+      role: "document-type-classifier" as const,
+      tool: aiTool,
+    };
+    const fallback = {
+      id: NOTES,
+      name: "Document Type",
+      content: docTypePropertyContent,
+      role: null,
+      tool: aiTool,
+    };
+
+    expect(findDocTypePropertyId([malformed, fallback])).toBe(NOTES);
   });
 
   test("derives risks from deviation/missing verdicts with rationale + citation", () => {

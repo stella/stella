@@ -97,6 +97,14 @@ export type BuildValidationError = {
 const normalizePropertyName = (name: string): string =>
   name.trim().toLocaleLowerCase();
 
+export const isDocumentTypeClassifierShape = ({
+  content,
+  tool,
+}: {
+  content: PropertyContent;
+  tool: PropertyTool;
+}): boolean => content.type === "single-select" && tool.type === "ai-model";
+
 export const isDocumentTypeClassifierProperty = ({
   content,
   name,
@@ -108,15 +116,15 @@ export const isDocumentTypeClassifierProperty = ({
   role: InferredPropertyRole;
   tool: PropertyTool;
 }): boolean => {
+  if (!isDocumentTypeClassifierShape({ content, tool })) {
+    return false;
+  }
+
   if (role) {
     return true;
   }
 
-  return (
-    normalizePropertyName(name) === "document type" &&
-    content.type === "single-select" &&
-    tool.type === "ai-model"
-  );
+  return normalizePropertyName(name) === "document type";
 };
 
 const inferPropertyRole = ({

@@ -3,12 +3,17 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { properties, propertyDependencies } from "@/api/db/schema";
+import type { PropertyRole } from "@/api/db/schema";
 import {
   aiModelToolSchema,
   manualInputToolSchema,
   propertyContentSchema,
 } from "@/api/db/schema-validators";
-import type { PropertyTool } from "@/api/db/schema-validators";
+import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
+import {
+  DOCUMENT_TYPE_CLASSIFIER_ROLE,
+  isDocumentTypeClassifierProperty,
+} from "@/api/handlers/properties/create-schema";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -26,6 +31,10 @@ import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
 type PropertyWithDeps = {
   id: SafeId<"property">;
+  name: string;
+  content: PropertyContent;
+  tool: PropertyTool;
+  role: PropertyRole | null;
   dependencies: { dependsOnPropertyId: SafeId<"property"> }[];
 };
 
@@ -209,6 +218,7 @@ const updateProperty = createSafeHandler(
             name: properties.name,
             content: properties.content,
             tool: properties.tool,
+            role: properties.role,
             status: properties.status,
             playbookDefinitionId: properties.playbookDefinitionId,
           })
@@ -229,6 +239,18 @@ const updateProperty = createSafeHandler(
             message: "Property not found",
           };
         }
+
+        const nextRole = isDocumentTypeClassifierProperty({
+          content,
+          name,
+          role:
+            oldProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE
+              ? DOCUMENT_TYPE_CLASSIFIER_ROLE
+              : null,
+          tool: dbTool,
+        })
+          ? DOCUMENT_TYPE_CLASSIFIER_ROLE
+          : null;
 
         // SAFETY: one property's dependencies; each points to another workspace property, bounded by LIMITS.propertiesCount
         // eslint-disable-next-line require-query-limit/require-query-limit
@@ -264,7 +286,13 @@ const updateProperty = createSafeHandler(
           body.tool.type === "ai-model" || isStale
             ? await tx.query.properties.findMany({
                 where: { workspaceId: { eq: workspaceId } },
-                columns: { id: true },
+                columns: {
+                  id: true,
+                  name: true,
+                  content: true,
+                  tool: true,
+                  role: true,
+                },
                 limit: LIMITS.propertiesCount,
                 with: {
                   dependencies: {
@@ -273,6 +301,29 @@ const updateProperty = createSafeHandler(
                 },
               })
             : [];
+
+        if (
+          nextRole !== null &&
+          allProperties.some(
+            (property) =>
+              property.id !== propertyId &&
+              isDocumentTypeClassifierProperty({
+                content: property.content,
+                name: property.name,
+                role:
+                  property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE
+                    ? DOCUMENT_TYPE_CLASSIFIER_ROLE
+                    : null,
+                tool: property.tool,
+              }),
+          )
+        ) {
+          return {
+            ok: false as const,
+            status: 422 as const,
+            message: "Document type classifier already exists",
+          };
+        }
 
         if (
           body.tool.type === "ai-model" &&
@@ -297,6 +348,7 @@ const updateProperty = createSafeHandler(
             name,
             content,
             tool: dbTool,
+            role: nextRole,
             status: isStale ? "stale" : "fresh",
           })
           .where(eq(properties.id, propertyId));
@@ -354,6 +406,7 @@ const updateProperty = createSafeHandler(
             name: { old: oldProperty.name, new: name },
             content: { old: oldProperty.content, new: content },
             tool: { old: oldProperty.tool, new: dbTool },
+            role: { old: oldProperty.role, new: nextRole },
             dependencies: {
               old: oldDependencies,
               new: preserveDependencies ? oldDependencies : dependencies,
