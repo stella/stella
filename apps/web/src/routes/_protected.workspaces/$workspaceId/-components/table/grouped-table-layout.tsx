@@ -99,6 +99,23 @@ const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
 const groupKeyFor = (value: string | null): string =>
   value === null ? "uncategorized" : `value:${value}`;
 
+const getEagerGroupValues = (
+  groups: EntityGroup[],
+  countByValue: Map<string | null, number>,
+) => {
+  const values = new Set<string | null>();
+  for (const group of groups) {
+    if ((countByValue.get(group.value) ?? 0) === 0) {
+      continue;
+    }
+    values.add(group.value);
+    if (values.size === GROUP_EAGER_LOAD_COUNT) {
+      break;
+    }
+  }
+  return values;
+};
+
 // Stable empty gate map for groupings other than the "Document Type" classifier,
 // where every section shares the full column set (no per-section filtering).
 const EMPTY_DOC_TYPE_GATE = new Map<string, Set<string>>();
@@ -291,6 +308,9 @@ export const GroupedTableLayout = ({
   // group server-side (the row/count queries treat "no current-option value" as
   // uncategorized), so the sections are just the option groups plus uncategorized.
   const groups = getEntityGroups(options, t("common.uncategorized"));
+  const eagerGroupValues = countsLoaded
+    ? getEagerGroupValues(groups, countByValue)
+    : null;
 
   return (
     // Flex column so empty categories can sink below populated ones via
@@ -309,7 +329,10 @@ export const GroupedTableLayout = ({
             count={
               countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
             }
-            eager={index < GROUP_EAGER_LOAD_COUNT}
+            eager={
+              eagerGroupValues?.has(group.value) ??
+              index < GROUP_EAGER_LOAD_COUNT
+            }
             fieldIds={fieldIds}
             gateLabelsByColumnId={gateLabelsByColumnId}
             group={group}

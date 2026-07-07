@@ -37,18 +37,21 @@ export const buildWorkspaceMentionOptions = ({
   const items: ChatMentionOption[] = [];
   for (const workspace of workspaces) {
     const viewId = firstViewIdsByWorkspaceId?.[workspace.id];
-    if (!viewId) {
+    if (firstViewIdsByWorkspaceId !== undefined && !viewId) {
       continue;
     }
 
-    items.push({
+    const item: ChatMentionOption = {
       id: workspace.id,
       label: workspace.name,
       category: "workspace",
       kind: "workspace",
       mimeType: null,
-      sourceViewId: viewId,
-    });
+    };
+    if (viewId) {
+      item.sourceViewId = viewId;
+    }
+    items.push(item);
   }
 
   return items;
