@@ -32,6 +32,7 @@ type Messages = {
     "preview": "Use this code to verify your identity";
     "signIn": "Use this code to sign in to your stella account.";
     "subject": "Your stella verification code";
+    "twoFactorDisable": "Use this code to verify disabling two-factor authentication.";
   };
   "reportExportStatus": {
     "action": "Open stella";

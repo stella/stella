@@ -99,7 +99,8 @@ type SendOTPEmailProps = {
     | "email-verification"
     | "forget-password"
     | "change-email"
-    | "delete-account";
+    | "delete-account"
+    | "two-factor-disable";
   lang: SupportedLang;
 };
 

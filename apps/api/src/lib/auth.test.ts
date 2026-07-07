@@ -8,9 +8,11 @@ import {
 } from "bun:test";
 import type { HookEndpointContext } from "better-auth";
 
+<<<<<<< HEAD
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
+  isSixDigitOtpBody,
   resolveMemberAuthorization,
   withEmailOtpSignInGate,
 } from "@/api/lib/auth";
@@ -240,9 +242,7 @@ describe("resolveMemberAuthorization", () => {
   });
 });
 
-// SAFETY: the matcher under test only reads `ctx.path`; the other
-// HookEndpointContext members (context, headers, ...) are irrelevant here
-// and a full instance is heavy to construct for a pure-function unit test.
+// eslint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
 const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
 
 describe("withEmailOtpSignInGate", () => {
@@ -313,5 +313,30 @@ describe("withEmailOtpSignInGate", () => {
     const [wrappedHook] = withEmailOtpSignInGate(plugin).hooks.after;
 
     expect(wrappedHook?.matcher(fakeCtx("/two-factor/enable"))).toBe(false);
+  });
+});
+
+describe("isSixDigitOtpBody", () => {
+  test("accepts a body with a 6-digit string otp", () => {
+    expect(isSixDigitOtpBody({ otp: "123456" })).toBe(true);
+  });
+
+  test("rejects a missing body", () => {
+    expect(isSixDigitOtpBody(undefined)).toBe(false);
+    expect(isSixDigitOtpBody(null)).toBe(false);
+  });
+
+  test("rejects a body without an otp field", () => {
+    expect(isSixDigitOtpBody({})).toBe(false);
+  });
+
+  test("rejects a non-string otp", () => {
+    expect(isSixDigitOtpBody({ otp: 123_456 })).toBe(false);
+  });
+
+  test("rejects an otp that is not exactly 6 digits", () => {
+    expect(isSixDigitOtpBody({ otp: "12345" })).toBe(false);
+    expect(isSixDigitOtpBody({ otp: "1234567" })).toBe(false);
+    expect(isSixDigitOtpBody({ otp: "12a456" })).toBe(false);
   });
 });

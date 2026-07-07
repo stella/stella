@@ -34,8 +34,9 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { authClient, isTwoFactorEnabledUser } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAPIError, toAuthClientError } from "@/lib/errors";
 import { sessionOptions } from "@/routes/-queries";
 
 const TOTP_LENGTH = 6;
@@ -382,6 +383,8 @@ const EnableTwoFactorDialog = ({
   );
 };
 
+type DisableStep = "confirm" | "code";
+
 const DisableTwoFactorDialog = ({
   onOpenChange,
   open,
@@ -392,10 +395,50 @@ const DisableTwoFactorDialog = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const [step, setStep] = useState<DisableStep>("confirm");
+  const [code, setCode] = useState("");
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    onOpenChange(nextOpen);
+    if (!nextOpen) {
+      setStep("confirm");
+      setCode("");
+    }
+  };
+
+  const sendDisableOtpMutation = useMutation({
+    mutationFn: async () => {
+      const res = await api.me["two-factor"]["send-disable-otp"].post();
+      if (res.error) {
+        throw toAPIError(res.error);
+      }
+    },
+    onSuccess: () => {
+      setStep("code");
+      stellaToast.add({
+        title: t("settings.account.otpSentSuccess"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      stellaToast.add({
+        title: error.message || t("errors.actionFailed"),
+        type: "error",
+      });
+      analytics.captureError(error);
+    },
+  });
 
   const disableMutation = useMutation({
     mutationFn: async () => {
-      const { error } = await authClient.twoFactor.disable({});
+      // `authClient.twoFactor.disable`'s typed body has no `otp` field (the
+      // server's `before` hook validates it separately from the plugin's own
+      // schema — see `requireTwoFactorDisableOtp` in apps/api/src/lib/auth.ts),
+      // so this calls the underlying `$fetch` directly with the raw path.
+      const { error } = await authClient.$fetch("/two-factor/disable", {
+        method: "POST",
+        body: { otp: code },
+      });
 
       if (error) {
         stellaToast.add({
@@ -406,7 +449,7 @@ const DisableTwoFactorDialog = ({
       }
     },
     onSuccess: async () => {
-      onOpenChange(false);
+      handleOpenChange(false);
       await queryClient.invalidateQueries({
         queryKey: sessionOptions.queryKey,
       });
@@ -416,32 +459,72 @@ const DisableTwoFactorDialog = ({
       });
     },
     onError: (error) => {
+      setCode("");
       analytics.captureError(error);
     },
   });
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.disableConfirmTitle")}
           </DialogTitle>
           <DialogDescription>
-            {t("settings.account.twoFactor.disableConfirmDescription")}
+            {step === "confirm"
+              ? t("settings.account.twoFactor.disableConfirmDescription")
+              : t("settings.account.twoFactor.disableOtpDescription")}
           </DialogDescription>
         </DialogHeader>
+        {step === "code" && (
+          <div className="mx-auto flex w-fit flex-col items-stretch gap-2 px-6 pb-2">
+            <InputOTP
+              autoFocus
+              maxLength={TOTP_LENGTH}
+              onChange={setCode}
+              onComplete={(nextCode: string) => {
+                setCode(nextCode);
+                disableMutation.mutate();
+              }}
+              value={code}
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+          </div>
+        )}
         <DialogFooter>
           <DialogClose render={<Button variant="ghost" />}>
             {t("common.cancel")}
           </DialogClose>
-          <Button
-            loading={disableMutation.isPending}
-            onClick={() => disableMutation.mutate()}
-            variant="destructive"
-          >
-            {t("settings.account.twoFactor.disable")}
-          </Button>
+          {step === "confirm" && (
+            <Button
+              loading={sendDisableOtpMutation.isPending}
+              onClick={() => sendDisableOtpMutation.mutate()}
+              variant="destructive"
+            >
+              {t("settings.account.twoFactor.disable")}
+            </Button>
+          )}
+          {step === "code" && (
+            <Button
+              disabled={
+                code.length !== TOTP_LENGTH || disableMutation.isPending
+              }
+              loading={disableMutation.isPending}
+              onClick={() => disableMutation.mutate()}
+              variant="destructive"
+            >
+              {t("common.verify")}
+            </Button>
+          )}
         </DialogFooter>
       </DialogPopup>
     </Dialog>

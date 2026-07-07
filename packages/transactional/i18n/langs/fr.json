@@ -28,7 +28,8 @@
     "ignore": "Si vous n'avez pas demandé ce code, vous pouvez ignorer cet e-mail.",
     "preview": "Utilisez ce code pour vérifier votre identité",
     "signIn": "Utilisez ce code pour vous connecter à votre compte stella.",
-    "subject": "Votre code de vérification stella"
+    "subject": "Votre code de vérification stella",
+    "twoFactorDisable": "Utilisez ce code pour vérifier la désactivation de l'authentification à deux facteurs."
   },
   "reportExportStatus": {
     "action": "Ouvrir stella",

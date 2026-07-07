@@ -2211,6 +2211,7 @@
         "disable": "Disable two-factor authentication",
         "disableConfirmDescription": "You will no longer be asked for a verification code when signing in.",
         "disableConfirmTitle": "Disable two-factor authentication?",
+        "disableOtpDescription": "We sent a verification code to your email. Enter it below to confirm disabling two-factor authentication.",
         "disabledStatus": "Not enabled",
         "disabledSuccess": "Two-factor authentication disabled",
         "downloadCodes": "Download as text file",

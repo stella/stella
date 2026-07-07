@@ -28,7 +28,8 @@
     "ignore": "Kui te ei taotlenud seda koodi, võite selle e-kirja eirata.",
     "preview": "Kasutage seda koodi oma identiteedi kinnitamiseks",
     "signIn": "Kasutage seda koodi oma stella kontole sisselogimiseks.",
-    "subject": "Teie stella kinnituskood"
+    "subject": "Teie stella kinnituskood",
+    "twoFactorDisable": "Kasutage seda koodi kahefaktorilise autentimise keelamise kinnitamiseks."
   },
   "reportExportStatus": {
     "action": "Ava stella",

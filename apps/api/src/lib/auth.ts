@@ -2,7 +2,11 @@ import { oauthProvider } from "@better-auth/oauth-provider";
 import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError, createAuthMiddleware } from "better-auth/api";
+import {
+  APIError,
+  createAuthMiddleware,
+  getSessionFromCtx,
+} from "better-auth/api";
 import {
   bearer,
   emailOTP,
@@ -33,6 +37,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { isUuid, tUuid } from "@/api/lib/custom-schema";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
@@ -87,6 +92,86 @@ const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
 
 /** Passwordless email-OTP sign-in path (not a better-auth credential path). */
 const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+
+/**
+ * The two-factor plugin's own disable endpoint only requires an active
+ * (fresh) session — see node_modules/better-auth/dist/plugins/two-factor/index.mjs.
+ * A hijacked session could otherwise silently strip 2FA, so this path is
+ * additionally gated on a fresh email verification code (see
+ * `requireTwoFactorDisableOtp`), mirroring the delete-account flow.
+ */
+const TWO_FACTOR_DISABLE_PATH = "/two-factor/disable";
+const SIX_DIGIT_OTP_PATTERN = /^\d{6}$/u;
+
+export const isSixDigitOtpBody = (body: unknown): body is { otp: string } =>
+  typeof body === "object" &&
+  body !== null &&
+  "otp" in body &&
+  typeof body.otp === "string" &&
+  SIX_DIGIT_OTP_PATTERN.test(body.otp);
+
+/**
+ * Structural shape `requireTwoFactorDisableOtp` needs off the hook context.
+ * Not `HookEndpointContext`: `createAuthMiddleware`'s single-argument
+ * overload — used for this app's top-level `hooks.before` — infers its own
+ * middleware context type, which is a structurally different (and
+ * stricter-in-places) shape than the per-plugin `HookEndpointContext`. This
+ * narrower type lets the function stay unit-testable with a minimal stub
+ * instead of a fully constructed better-auth context of either shape.
+ */
+type TwoFactorDisableHookCtx = { path: string; body: unknown };
+
+/**
+ * Requires a fresh, single-use email verification code before letting
+ * `/two-factor/disable` proceed, so a hijacked session cannot silently
+ * disable 2FA with nothing but the session cookie.
+ *
+ * Resolves the session itself (this runs as a global `before` hook, ahead of
+ * the endpoint's own `sensitiveSessionMiddleware`) and no-ops when there is
+ * no session (the endpoint's own middleware will reject the request) or the
+ * user does not currently have 2FA enabled (disable is then a no-op left to
+ * the plugin).
+ */
+const requireTwoFactorDisableOtp = async (
+  ctx: TwoFactorDisableHookCtx,
+): Promise<void> => {
+  // `getSessionFromCtx` wants a `GenericEndpointContext`, which requires
+  // `request` to always be present. better-auth's own middleware context
+  // types `request` as optional to also cover programmatic `auth.api.*`
+  // calls made without an HTTP request, but this hook only ever runs from
+  // HTTP dispatch (see dispatch.mjs), where `request` is always set.
+  // `getSessionFromCtx` only reads headers/cookies off `ctx`, so the
+  // narrower structural shape here is sound at runtime.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see comment above; ctx always carries a real Request when this hook fires
+  const genericCtx = ctx as unknown as Parameters<typeof getSessionFromCtx>[0];
+  const session = await getSessionFromCtx(genericCtx);
+  if (!session) {
+    return;
+  }
+
+  if (session.user["twoFactorEnabled"] !== true) {
+    return;
+  }
+
+  if (!isSixDigitOtpBody(ctx.body)) {
+    throw new APIError("BAD_REQUEST", {
+      message:
+        "Verification code required to disable two-factor authentication",
+    });
+  }
+
+  const verifyResult = await verifyConfirmationOtp({
+    purpose: "two-factor-disable",
+    email: session.user.email,
+    code: ctx.body.otp,
+  });
+
+  if (Result.isError(verifyResult)) {
+    throw new APIError("BAD_REQUEST", {
+      message: "Invalid verification code",
+    });
+  }
+};
 
 /** TOTP issuer label shown in authenticator apps (e.g. "Stella (user@example.com)"). */
 const TWO_FACTOR_ISSUER = "Stella";
@@ -568,6 +653,12 @@ const createAuth = () => {
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
         await assertSelfhostEmailOtpAllowed(ctx.path);
+
+        if (ctx.path === TWO_FACTOR_DISABLE_PATH) {
+          await requireTwoFactorDisableOtp(ctx);
+          return;
+        }
+
         if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
           return;
         }

@@ -28,7 +28,8 @@
     "ignore": "Ja neesat pieprasījis šo kodu, varat ignorēt šo e-pastu.",
     "preview": "Izmantojiet šo kodu savas identitātes apstiprināšanai",
     "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam stella kontam.",
-    "subject": "Jūsu stella verifikācijas kods"
+    "subject": "Jūsu stella verifikācijas kods",
+    "twoFactorDisable": "Izmantojiet šo kodu, lai apstiprinātu divfaktoru autentifikācijas atspējošanu."
   },
   "reportExportStatus": {
     "action": "Atvērt stella",

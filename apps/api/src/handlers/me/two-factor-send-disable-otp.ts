@@ -4,55 +4,50 @@ import { env } from "@/api/env";
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
-import {
-  checkUserOrganizationOwnership,
-  getUserEmail,
-} from "@/api/lib/delete-account";
-import { sendOTPEmail } from "@/api/lib/email/email";
+import { stashDevOtp } from "@/api/lib/dev-otp-store";
+import { sendOTPEmail } from "@/api/lib/email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
+import { getUserEmailAndTwoFactorEnabled } from "@/api/lib/two-factor";
 
 const config = {
   mcp: { type: "internal", reason: "account_lifecycle" },
 } satisfies SessionHandlerConfig;
 
-const deleteAccountSendOtp = createSafeSessionHandler(
+const twoFactorSendDisableOtp = createSafeSessionHandler(
   config,
   async function* (ctx) {
     const currentUserId = ctx.user.id;
     const request = ctx.request;
 
-    // 1. Fetch user details to get email
-    const emailStr = yield* Result.await(getUserEmail(currentUserId));
-
-    // 2. Check if the user is the sole owner of any organization
-    const ownershipCheck = yield* Result.await(
-      checkUserOrganizationOwnership(currentUserId),
+    // 1. Fetch user details; refuse if 2FA is not currently enabled — there
+    // is nothing to gate a disable-confirmation code for.
+    const { email: emailStr, twoFactorEnabled } = yield* Result.await(
+      getUserEmailAndTwoFactorEnabled(currentUserId),
     );
 
-    if (ownershipCheck.isSoleOwner) {
+    if (!twoFactorEnabled) {
       return Result.err(
         new HandlerError({
-          code: "account_deletion_sole_owner",
           status: 400,
-          message: `Cannot delete account because you are the sole owner of organization "${ownershipCheck.orgName}". Please transfer ownership or delete the organization first.`,
+          message: "Two-factor authentication is not enabled",
         }),
       );
     }
 
-    // 3. Generate and store a cryptographically secure 6-digit OTP
+    // 2. Generate and store a cryptographically secure 6-digit OTP
     const otp = yield* Result.await(
-      createConfirmationOtp({ purpose: "delete-account", email: emailStr }),
+      createConfirmationOtp({ purpose: "two-factor-disable", email: emailStr }),
     );
 
-    // 4. Send email (log to console and fallback in development)
+    // 3. Send email (log + stash to the dev OTP store in development)
     const lang = extractLangFromRequest(request);
     const emailResult = await Result.tryPromise({
       try: async () =>
         await sendOTPEmail({
           email: emailStr,
           otp,
-          type: "delete-account",
+          type: "two-factor-disable",
           lang,
         }),
       catch: (err) => err,
@@ -61,8 +56,9 @@ const deleteAccountSendOtp = createSafeSessionHandler(
     if (env.isDev) {
       // eslint-disable-next-line no-console -- Local dev fallback prints OTPs when SMTP is unavailable.
       console.log(
-        `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: delete-account)\x1b[0m\n`,
+        `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: two-factor-disable)\x1b[0m\n`,
       );
+      stashDevOtp(emailStr, otp);
       if (emailResult.isErr()) {
         const message =
           emailResult.error instanceof Error
@@ -85,4 +81,4 @@ const deleteAccountSendOtp = createSafeSessionHandler(
   },
 );
 
-export default deleteAccountSendOtp;
+export default twoFactorSendDisableOtp;
