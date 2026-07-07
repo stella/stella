@@ -14,8 +14,9 @@ const sendFeedbackEmailMock = mock(
     reporter: { via: string; instance?: string; version?: string };
   }): Promise<undefined> => undefined,
 );
+let transactionalEmailConfigured = true;
 void mock.module("@/api/lib/email", () => ({
-  isTransactionalEmailConfigured: () => true,
+  isTransactionalEmailConfigured: () => transactionalEmailConfigured,
   sendOTPEmail: mock(async () => undefined),
   sendNewDeviceLoginEmail: mock(async () => undefined),
   sendOrganizationInvitation: mock(async () => undefined),
@@ -76,6 +77,7 @@ const readError = async (
 describe("public feedback intake", () => {
   beforeEach(() => {
     sendFeedbackEmailMock.mockReset();
+    transactionalEmailConfigured = true;
   });
 
   afterAll(() => {
@@ -170,6 +172,23 @@ describe("public feedback intake", () => {
     });
     expect(response.status).toBe(503);
     expect((await readError(response))?.code).toBe("feature_disabled");
+  });
+
+  test("refuses with feature_disabled when email transport is not configured", async () => {
+    transactionalEmailConfigured = false;
+
+    const response = await receivePublicFeedback({
+      rawBody: raw(),
+      clientIp: "203.0.113.17",
+      deps: {
+        guards: memoryGuards(),
+        emailTo: "maintainer@example.com",
+      },
+    });
+
+    expect(response.status).toBe(503);
+    expect((await readError(response))?.code).toBe("feature_disabled");
+    expect(sendFeedbackEmailMock).not.toHaveBeenCalled();
   });
 
   test("rate-limits after 5 submissions from one IP", async () => {

@@ -37,7 +37,10 @@ import {
   feedbackIntakeGuards,
 } from "@/api/handlers/feedback/intake-guards";
 import { captureError } from "@/api/lib/analytics";
-import { sendFeedbackEmail } from "@/api/lib/email";
+import {
+  isTransactionalEmailConfigured,
+  sendFeedbackEmail,
+} from "@/api/lib/email";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
 
@@ -264,6 +267,18 @@ const deliver = async ({
   title: string;
 }): Promise<DeliveryOutcome> => {
   if (emailTo) {
+    if (!isTransactionalEmailConfigured()) {
+      return {
+        ok: false,
+        response: errorResponse(
+          503,
+          "feature_disabled",
+          "Feedback email transport is not configured on this server",
+          "Configure EMAIL_PROVIDER, TRANSACTIONAL_EMAIL_FROM, and provider settings.",
+        ),
+      };
+    }
+
     return await deliverViaEmail({
       composedBody,
       kind,
