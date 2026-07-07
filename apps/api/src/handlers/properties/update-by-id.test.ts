@@ -80,7 +80,11 @@ describe("updateProperty", () => {
     let deleteCalled = false;
     let auditedDependencies: unknown;
 
+    let lockCallCount = 0;
     const { safeDb, scopedDb } = createScopedDbMock({
+      execute: async () => {
+        lockCallCount++;
+      },
       select: () => ({
         from: () => ({
           where: () => ({
@@ -127,6 +131,7 @@ describe("updateProperty", () => {
     );
 
     expect(result).toEqual({});
+    expect(lockCallCount).toBe(1);
     expect(deleteCalled).toBe(false);
     expect(auditedDependencies).toEqual({
       old: oldDependencies,

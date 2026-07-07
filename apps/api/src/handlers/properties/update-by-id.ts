@@ -14,6 +14,7 @@ import {
   DOCUMENT_TYPE_CLASSIFIER_ROLE,
   isDocumentTypeClassifierProperty,
 } from "@/api/handlers/properties/create-schema";
+import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -212,6 +213,7 @@ const updateProperty = createSafeHandler(
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        await lockWorkspacePropertyWrites(tx, workspaceId);
         const propertyRows = await tx
           .select({
             id: properties.id,
