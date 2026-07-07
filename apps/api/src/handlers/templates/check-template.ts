@@ -141,6 +141,12 @@ const structureFindings = (
     paragraphIndex: err.paragraphIndex,
   }));
 
+// `markerPattern()` accepts any non-brace run until the closing `}}`, so a
+// pasted pathological span can be arbitrarily long; echo at most this much of
+// it back in the finding (enough for the author to recognize the culprit) so
+// the check payload stays bounded even at MAX_CHECK_FINDINGS.
+const INVALID_MARKER_EXCERPT_LENGTH = 80;
+
 // Near-miss markers: `{{...}}` spans an author clearly meant as markers but
 // that no recognizer sees (a space in the name, an empty directive), so they
 // print literally at fill time. Scanned over paragraph text since discovery
@@ -151,10 +157,14 @@ const invalidMarkerFindings = (
   const findings: TemplateCheckFinding[] = [];
   for (const [paragraphIndex, text] of paragraphs.entries()) {
     for (const invalid of scanInvalidMarkers(text)) {
+      const marker =
+        invalid.raw.length > INVALID_MARKER_EXCERPT_LENGTH
+          ? `${invalid.raw.slice(0, INVALID_MARKER_EXCERPT_LENGTH - 1)}…`
+          : invalid.raw;
       findings.push({
         code: "invalidMarker",
         severity: "error",
-        marker: invalid.raw,
+        marker,
         paragraphIndex,
       });
     }

@@ -142,6 +142,21 @@ describe("template check: invalid markers", () => {
 
     expect(codesOf(findings)).not.toContain("invalidMarker");
   });
+
+  test("truncates a pathological marker span to a bounded excerpt", async () => {
+    const findings = await checkDocument({
+      paragraphs: [`{{${"pasted text ".repeat(500)}}}`],
+    });
+
+    const invalid = findings.filter((f) => f.code === "invalidMarker");
+    expect(invalid).toHaveLength(1);
+    const finding = invalid[0];
+    if (finding?.code !== "invalidMarker") {
+      throw new Error("expected an invalidMarker finding");
+    }
+    expect(finding.marker.length).toBe(80);
+    expect(finding.marker.endsWith("…")).toBe(true);
+  });
 });
 
 // ── Markers vs. manifest fields ──────────────────────────
