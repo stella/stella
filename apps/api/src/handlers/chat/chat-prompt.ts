@@ -85,11 +85,19 @@ export type ChatToolAvailability = {
   templateAuthoring: boolean;
   /** `web_search` + `fetch_url` are registered for this turn. */
   webResearch: boolean;
+  /**
+   * The folio-agents `read_document` / `find_text` tools are
+   * registered for this turn (see `hasActiveDocxFileClient` in
+   * chat-tools.ts / send-message.ts). File-overlay-only: Template
+   * Studio never sets this, so its prompt never mentions these tools.
+   */
+  folioAgentDocTools: boolean;
 };
 
 const DEFAULT_CHAT_TOOL_AVAILABILITY = {
   templateAuthoring: true,
   webResearch: true,
+  folioAgentDocTools: true,
 } as const satisfies ChatToolAvailability;
 
 // EXTERNAL-FACT SOURCING has two shapes: with web research the model
@@ -382,6 +390,7 @@ export const buildChatSystemPromptParts = async ({
         activeFile,
         entityExists: Boolean(entity),
         refRegistry,
+        toolAvailability,
         workspaceId,
       });
     }
@@ -751,12 +760,14 @@ export const buildWorkspacePromptParts = ({
 type BuildActiveFilePromptProps = {
   activeFile: IncomingActiveFile;
   refRegistry: ChatRefRegistry;
+  toolAvailability: ChatToolAvailability;
   workspaceId: SafeId<"workspace">;
 };
 
 const buildActiveFilePrompt = ({
   activeFile,
   refRegistry,
+  toolAvailability,
   workspaceId,
 }: BuildActiveFilePromptProps) => {
   const safeName = sanitizePromptValue({
@@ -777,7 +788,9 @@ const buildActiveFilePrompt = ({
     activeFile.supportsDocxEdits
       ? "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. If live DOCX editing is available below, use `apply-active-docx-edits`; otherwise explain that the document must be opened for editing first. Never create a substitute document."
       : "`create-document` creates a separate new DOCX from legal-source directives. Do NOT use it to edit, rewrite, replace, save, or make a new version of the active file. Never create a substitute document.",
-    activeFile.supportsDocxEdits ? buildActiveDocxEditPrompt(activeFile) : "",
+    activeFile.supportsDocxEdits
+      ? buildActiveDocxEditPrompt(activeFile, toolAvailability)
+      : "",
     `Do NOT call matter-wide retrieval (\`read.searchMatterDocuments\`, \`read.listMatterEntities\`, or \`read.getMatterEntities\`) for these open-ended questions — the user does not want answers synthesised from other files in the matter. The chat history is always available; reference earlier turns directly without re-fetching.`,
     `Widen the scope to the rest of the matter ONLY when the user explicitly asks (e.g., "compare with the other contracts", "search across the matter", or names another document). When that happens, the matter-wide retrieval functions above are allowed again; scope them to \`matterRefs: ["${matterRef}"]\` as usual.`,
   ]
@@ -900,7 +913,10 @@ const buildActiveTemplateEditSections = ({
   ].filter((line): line is string => line !== null);
 };
 
-const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
+const buildActiveDocxEditPrompt = (
+  activeFile: IncomingActiveFile,
+  toolAvailability: ChatToolAvailability,
+) => {
   const snapshot = activeFile.docxEditSnapshot;
   if (!snapshot) {
     // Editor snapshot isn't ready yet, so we can't expose
@@ -928,6 +944,9 @@ const buildActiveDocxEditPrompt = (activeFile: IncomingActiveFile) => {
     'After the tool returns, reply with ONE short sentence (in the user\'s language) covering the count and the high-level goal — e.g. "13 spelling and typo fixes are ready to review in the panel." Do NOT enumerate the operations, do NOT list block ids or before/after pairs in your reply — the panel already shows every suggestion with its full context. Repeating them is noise. NEVER claim the document was changed; only ids that appear in `applied` represent actual document changes (rare with this tool). Never paraphrase a `queued` result as a completed change.',
     "CITATIONS IN PLAIN ANSWERS: When you summarise, quote, or refer to specific content from the open document in a normal text reply (i.e. NOT inside `apply-active-docx-edits`), wrap the supporting paragraph snippet in a Markdown link whose href is `#folio:<blockId>` (note the leading `#` — it is required, the link will be stripped without it). Example: `the contract is governed by [Delaware law](#folio:1A2B3C4D)`. Copy block ids verbatim from the block list — do NOT shorten, pad, prefix, or otherwise mangle them. The link TEXT must be a short, human-meaningful phrase quoted or paraphrased from the cited block — typically 1–6 words in the user's language (e.g. `[Delaware law]`, `[July 20, 2021]`, `[$1,500,000]`). NEVER use the href itself as the link text (NOT `[#folio:1A2B3C4D](#folio:1A2B3C4D)`), NEVER leave the text empty (`[](#folio:1A2B3C4D)`), NEVER use Markdown autolinks like `<#folio:1A2B3C4D>` — those render as broken citations. Cite at most a few blocks per reply (only the ones a user would want to verify); never invent a blockId that's not in the list.",
     truncationNotice,
+    toolAvailability.folioAgentDocTools
+      ? "LIVE DOCUMENT LOOKUPS: The block list below is current as of this turn only — it will not reflect edits you queue in this same turn. Reach for `read_document` (a fresh read of the current document) or `find_text` (locate an exact string match) only when the truncation notice above applies (blocks past the cutoff) or you need to confirm a verbatim match before referencing a `blockId`; for ordinary edits the block list below is already sufficient, so do not call either tool by default."
+      : null,
     ["Editable DOCX blocks:", "```json", JSON.stringify(blocks), "```"].join(
       "\n",
     ),
@@ -1192,6 +1211,7 @@ type AppendActiveFilePromptIfEntityExistsProps = {
   entityExists: boolean;
   prompt: string;
   refRegistry: ChatRefRegistry;
+  toolAvailability?: ChatToolAvailability | undefined;
   workspaceId: SafeId<"workspace">;
 };
 
@@ -1199,15 +1219,22 @@ const buildActiveFileSection = ({
   activeFile,
   entityExists,
   refRegistry,
+  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   workspaceId,
 }: {
   activeFile: IncomingActiveFile;
   entityExists: boolean;
   refRegistry: ChatRefRegistry;
+  toolAvailability?: ChatToolAvailability | undefined;
   workspaceId: SafeId<"workspace">;
 }): string =>
   entityExists
-    ? buildActiveFilePrompt({ activeFile, refRegistry, workspaceId })
+    ? buildActiveFilePrompt({
+        activeFile,
+        refRegistry,
+        toolAvailability,
+        workspaceId,
+      })
     : "";
 
 /**
@@ -1221,12 +1248,14 @@ export const appendActiveFilePromptIfEntityExists = ({
   entityExists,
   prompt,
   refRegistry,
+  toolAvailability,
   workspaceId,
 }: AppendActiveFilePromptIfEntityExistsProps): string => {
   const section = buildActiveFileSection({
     activeFile,
     entityExists,
     refRegistry,
+    toolAvailability,
     workspaceId,
   });
   return section.length > 0 ? `${prompt}\n\n${section}` : prompt;

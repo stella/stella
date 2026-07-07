@@ -552,6 +552,7 @@ type Messages = {
       "expand-chat-history": "Reading chat history";
       "fetch_url": "Reading page";
       "fill_template": "Filling template";
+      "find_text": "Searching document text";
       "infosoud_lookup_case": "InfoSoud case lookup";
       "link_matter_contact": "Link contact to matter";
       "list_templates": "Listing templates";
@@ -560,6 +561,7 @@ type Messages = {
       "read-contact": "Reading contact";
       "read-content-across-matters": "Reading content across matters";
       "read-skill-resource": "Reading guidance";
+      "read_document": "Reading document";
       "run-stella-query": "Reading workspace data";
       "run_playbook": "Run playbook";
       "save_clause": "Save clause";

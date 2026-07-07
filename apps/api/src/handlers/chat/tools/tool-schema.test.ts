@@ -11,6 +11,7 @@ import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
 } from "@/api/handlers/chat/skills";
+import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
   EXPAND_CHAT_HISTORY_TOOL_NAME,
@@ -18,6 +19,10 @@ import {
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import {
+  FIND_TEXT_TOOL_NAME,
+  READ_DOCUMENT_TOOL_NAME,
+} from "@/api/handlers/chat/tools/folio-agent-tools";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -185,6 +190,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     });
@@ -202,6 +208,76 @@ describe("chat tool schemas", () => {
     expect(tools).not.toHaveProperty("search-across-matters");
     expect(tools).not.toHaveProperty("read-content-across-matters");
     expect(tools).not.toHaveProperty("read-contact");
+    // No live editor surface on this turn (`hasActiveDocxEditClient: false`):
+    // the folio-agents doc tools must stay unregistered, same precondition
+    // as `apply-active-docx-edits`.
+    expect(tools).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
+    expect(tools).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
+  });
+
+  test("registers the folio-agents read_document/find_text tools only when the file-overlay docx client is active", () => {
+    const baseArgs = {
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+    } as const;
+
+    const withoutClient = getChatTools({
+      ...baseArgs,
+      hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
+    });
+    expect(withoutClient).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
+    expect(withoutClient).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
+
+    // Template Studio: `apply-active-docx-edits` is on (the combined
+    // flag), but there is no client watcher that resolves
+    // read_document/find_text there, so the narrower
+    // `hasActiveDocxFileClient` flag must stay false and these tools
+    // must NOT be registered — registering them would hang the turn
+    // waiting for a client result that never arrives (regression guard
+    // for the Template Studio hang).
+    const templateOnly = getChatTools({
+      ...baseArgs,
+      hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: false,
+    });
+    expect(templateOnly).toHaveProperty(APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(READ_DOCUMENT_TOOL_NAME);
+    expect(templateOnly).not.toHaveProperty(FIND_TEXT_TOOL_NAME);
+
+    const withClient = getChatTools({
+      ...baseArgs,
+      hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: true,
+    });
+    const readDocument = withClient[READ_DOCUMENT_TOOL_NAME];
+    const findText = withClient[FIND_TEXT_TOOL_NAME];
+    expect(readDocument).toBeDefined();
+    expect(findText).toBeDefined();
+    if (!readDocument || !findText) {
+      throw new Error("Expected folio-agents doc tools to be registered");
+    }
+
+    // Client-executed, read-only: no approval gate.
+    expect(readDocument.needsApproval).toBeUndefined();
+    expect(findText.needsApproval).toBeUndefined();
+    expect(getChatToolPolicy(readDocument)).toEqual({
+      kind: "internal",
+      needsApproval: false,
+      requiresAnonymization: false,
+    });
   });
 
   test("only exposes current skill edit tools for editable active skill chats", () => {
@@ -219,6 +295,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: editableActiveSkillContext,
@@ -269,6 +346,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: {
@@ -305,6 +383,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     });
@@ -389,6 +468,7 @@ describe("chat tool schemas", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: true,
       webSearchEnabled: true,
       webSearchProviders: { webSearchProvider, urlFetcher },
       activeSkillContext: editableActiveSkillContext,
@@ -409,6 +489,8 @@ describe("chat tool schemas", () => {
       "business_registry_lookup",
       "web_search",
       "create-document",
+      READ_DOCUMENT_TOOL_NAME,
+      FIND_TEXT_TOOL_NAME,
     ]) {
       expect(tools).toHaveProperty(requiredTool);
     }
@@ -522,6 +604,7 @@ describe("registry write tool approval policy", () => {
         accessibleWorkspaceIds: [workspaceId],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
@@ -556,6 +639,7 @@ describe("registry write tool approval policy", () => {
         accessibleWorkspaceIds: [],
       }),
       hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,

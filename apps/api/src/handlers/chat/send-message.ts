@@ -236,6 +236,14 @@ const sendMessage = createSafeRootHandler(
     }
 
     const refRegistry = createChatRefRegistry();
+    // Narrower than the combined `apply-active-docx-edits` gate below:
+    // only the file overlay (`file-chat-overlay.tsx`) mounts the
+    // auto-run watcher that resolves the folio-agents `read_document` /
+    // `find_text` tools via `addToolResult`. Template Studio has no such
+    // watcher, so a tool call there would hang the session until reload.
+    // Computed once and reused for tool registration (validation +
+    // streaming) and for the matching prompt guidance below.
+    const hasActiveDocxFileClient = body.activeFile?.supportsDocxEdits === true;
     const validationThreadState = yield* Result.await(
       readThreadValidationState({
         safeDb,
@@ -296,6 +304,7 @@ const sendMessage = createSafeRootHandler(
         accessibleWorkspaceIds,
       }),
       hasActiveDocxEditClient: true,
+      hasActiveDocxFileClient: true,
       webSearchEnabled: validationThreadState.webSearchEnabled,
       webSearchProviders,
       externalTools: validationExternalMcpTools?.tools,
@@ -572,6 +581,7 @@ const sendMessage = createSafeRootHandler(
           webSearchProviders,
           disabledNativeToolSlugs,
         }),
+        folioAgentDocTools: hasActiveDocxFileClient,
       },
       userContext: body.userContext,
       userId: user.id,
@@ -659,7 +669,10 @@ const sendMessage = createSafeRootHandler(
     // sends the output back via TanStack ChatClient.addToolResult).
     // PDF/file overlays
     // still send active-file context, but they must not expose the
-    // DOCX edit tool or the model can chase an impossible path.
+    // DOCX edit tool or the model can chase an impossible path. The
+    // folio-agents `read_document`/`find_text` tools are narrower
+    // still — `hasActiveDocxFileClient` only, since Template Studio
+    // mounts no watcher to resolve them.
     const chatTools = getChatTools({
       organizationId: session.activeOrganizationId,
       memberRole: memberRole.role,
@@ -675,8 +688,8 @@ const sendMessage = createSafeRootHandler(
         accessibleWorkspaceIds,
       }),
       hasActiveDocxEditClient:
-        body.activeFile?.supportsDocxEdits === true ||
-        body.activeTemplate !== undefined,
+        hasActiveDocxFileClient || body.activeTemplate !== undefined,
+      hasActiveDocxFileClient,
       webSearchEnabled: thread.data.webSearchEnabled,
       webSearchProviders,
       externalTools: externalMcpTools.tools,
