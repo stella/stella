@@ -42,6 +42,7 @@ const AUTH_TABLES_SQL = [
   "oauth_refresh_token",
   "oauth_access_token",
   "oauth_consent",
+  "two_factor",
 ]
   .map(quoteSqlIdentifier)
   .join(", ");

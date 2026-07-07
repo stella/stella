@@ -424,6 +424,7 @@ describe("policy coverage", () => {
       "oauth_consent",
       "oauth_refresh_token",
       "session",
+      "two_factor",
       "verification",
     ]) {
       const denyPolicy = policies.find(

@@ -1,4 +1,5 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
+import type { BetterAuthPlugin, HookEndpointContext } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
@@ -8,6 +9,7 @@ import {
   jwt,
   lastLoginMethod,
   organization,
+  twoFactor,
 } from "better-auth/plugins";
 import { Result } from "better-result";
 import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
@@ -82,6 +84,12 @@ const NEW_SESSION_SECURITY_PATHS = new Set([
 ]);
 const PREFERRED_NAME_MAX_LENGTH = 120;
 const WORD_EDIT_SHORTCUT_MAX_LENGTH = 16;
+
+/** Passwordless email-OTP sign-in path (not a better-auth credential path). */
+const SIGN_IN_EMAIL_OTP_PATH = "/sign-in/email-otp";
+
+/** TOTP issuer label shown in authenticator apps (e.g. "Stella (user@example.com)"). */
+const TWO_FACTOR_ISSUER = "Stella";
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -247,11 +255,59 @@ const getNewDeviceLoginDateTimeFormat = (lang: string): Intl.DateTimeFormat => {
   return formatter;
 };
 
+/**
+ * Extends every `hooks.after` matcher on a plugin so it also fires for
+ * Stella's passwordless email-OTP sign-in path, in addition to whatever
+ * paths the plugin already matches.
+ *
+ * better-auth's two-factor plugin only gates the credential sign-in paths
+ * (`/sign-in/email`, `/sign-in/username`, `/sign-in/phone-number` — see
+ * node_modules/better-auth/dist/plugins/two-factor/index.mjs). Stella signs
+ * in via passwordless email-OTP (`/sign-in/email-otp`), which the plugin's
+ * matcher never sees, so its after-hook would never challenge for a second
+ * factor. The handler itself is path-agnostic — it reads
+ * `ctx.context.newSession`, honors the trust-device cookie, deletes the
+ * pending session, and sets the two-factor challenge cookie — so extending
+ * the matcher is sufficient; no handler changes are needed.
+ *
+ * Generic over `T` (rather than hardcoded to the two-factor plugin's
+ * concrete return type) so it stays independently unit-testable with a
+ * minimal stub instead of a fully constructed better-auth plugin.
+ */
+export const withEmailOtpSignInGate = <
+  T extends {
+    hooks: { after: { matcher: (ctx: HookEndpointContext) => boolean }[] };
+  },
+>(
+  plugin: T,
+): T => ({
+  ...plugin,
+  hooks: {
+    ...plugin.hooks,
+    after: plugin.hooks.after.map((hook) => ({
+      ...hook,
+      matcher: (ctx: HookEndpointContext) =>
+        hook.matcher(ctx) || ctx.path === SIGN_IN_EMAIL_OTP_PATH,
+    })),
+  },
+});
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
 const createAuth = () => {
+  const twoFactorPlugin = twoFactor({
+    // Stella is passwordless (email OTP is the first factor), so 2FA
+    // enable/disable/verify never require a password fallback.
+    allowPasswordless: true,
+    issuer: TWO_FACTOR_ISSUER,
+  });
+
+  const twoFactorWithEmailOtpGate = withEmailOtpSignInGate(
+    twoFactorPlugin,
+  ) satisfies BetterAuthPlugin;
+
   const auth = betterAuth({
     trustedOrigins: [
       ...frontendOrigins({
@@ -304,6 +360,17 @@ const createAuth = () => {
         "/email-otp/verify-email": AUTH_RATE_LIMITS.verifyOtp,
         "/forget-password": AUTH_RATE_LIMITS.forgetPassword,
         "/reset-password": AUTH_RATE_LIMITS.resetPassword,
+        // The two-factor plugin's own built-in rate limit is a single
+        // shared bucket across every `/two-factor/*` path (10s window,
+        // max 3 — see node_modules/better-auth/dist/plugins/two-factor/index.mjs).
+        // Sustained over a minute that is weaker than this app's other
+        // brute-force-sensitive endpoints, so verify-totp/verify-backup-code
+        // (guessable 6-digit / short codes) and enable/disable (session-gated
+        // but still sensitive) get the same posture as sign-in/verifyOtp.
+        "/two-factor/verify-totp": AUTH_RATE_LIMITS.verifyOtp,
+        "/two-factor/verify-backup-code": AUTH_RATE_LIMITS.verifyOtp,
+        "/two-factor/enable": AUTH_RATE_LIMITS.signIn,
+        "/two-factor/disable": AUTH_RATE_LIMITS.signIn,
       },
     },
     emailAndPassword: isSelfhostLocalPasswordAuthEnabled()
@@ -394,6 +461,7 @@ const createAuth = () => {
           await sendOTPEmail({ email, otp, type, lang });
         },
       }),
+      twoFactorWithEmailOtpGate,
       organization({
         ac,
         roles,

@@ -5,6 +5,7 @@ import {
   AUTH_USER_STELLA_SELECT_COLUMN_NAMES,
   AUTH_USER_STELLA_SELECT_COLUMNS,
   jwks,
+  twoFactor,
   user,
 } from "@/api/db/auth-schema";
 
@@ -18,6 +19,19 @@ describe("auth schema", () => {
       "id",
       "privateKey",
       "publicKey",
+    ]);
+  });
+
+  // Locks the table in sync with node_modules/better-auth/dist/plugins/
+  // two-factor/schema.mjs: 1.6.20 has no `failedVerificationCount` or
+  // `lockedUntil` columns, unlike some documented/newer shapes.
+  test("twoFactor includes the columns Better Auth's two-factor plugin writes", () => {
+    expect(Object.keys(getColumns(twoFactor)).toSorted()).toEqual([
+      "backupCodes",
+      "id",
+      "secret",
+      "userId",
+      "verified",
     ]);
   });
 

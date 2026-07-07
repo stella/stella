@@ -6,10 +6,14 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
+import type { HookEndpointContext } from "better-auth";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import {
+  resolveMemberAuthorization,
+  withEmailOtpSignInGate,
+} from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -233,5 +237,81 @@ describe("resolveMemberAuthorization", () => {
     );
 
     expect(result).toBeNull();
+  });
+});
+
+// SAFETY: the matcher under test only reads `ctx.path`; the other
+// HookEndpointContext members (context, headers, ...) are irrelevant here
+// and a full instance is heavy to construct for a pure-function unit test.
+const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
+
+describe("withEmailOtpSignInGate", () => {
+  test("keeps the after-hook (and its original handler) instead of dropping it", () => {
+    const handler = () => undefined;
+    const plugin = {
+      hooks: {
+        after: [{ matcher: (_ctx: HookEndpointContext) => false, handler }],
+      },
+    };
+
+    const wrapped = withEmailOtpSignInGate(plugin);
+
+    // Guards against a future better-auth upgrade restructuring `hooks`
+    // (e.g. renaming/removing `after`) without this call site noticing.
+    expect(wrapped.hooks.after).toHaveLength(1);
+    expect(wrapped.hooks.after[0]?.handler).toBe(handler);
+  });
+
+  test("matches /sign-in/email-otp even when the original matcher does not", () => {
+    const plugin = {
+      hooks: {
+        after: [
+          {
+            matcher: (_ctx: HookEndpointContext) => false,
+            handler: () => undefined,
+          },
+        ],
+      },
+    };
+
+    const [wrappedHook] = withEmailOtpSignInGate(plugin).hooks.after;
+
+    expect(wrappedHook?.matcher(fakeCtx("/sign-in/email-otp"))).toBe(true);
+  });
+
+  test("still matches whatever the original matcher already matched", () => {
+    const plugin = {
+      hooks: {
+        after: [
+          {
+            matcher: (ctx: HookEndpointContext) =>
+              ctx.path === "/sign-in/email",
+            handler: () => undefined,
+          },
+        ],
+      },
+    };
+
+    const [wrappedHook] = withEmailOtpSignInGate(plugin).hooks.after;
+
+    expect(wrappedHook?.matcher(fakeCtx("/sign-in/email"))).toBe(true);
+  });
+
+  test("does not match an unrelated path", () => {
+    const plugin = {
+      hooks: {
+        after: [
+          {
+            matcher: (ctx: HookEndpointContext) =>
+              ctx.path === "/sign-in/email",
+            handler: () => undefined,
+          },
+        ],
+      },
+    };
+
+    const [wrappedHook] = withEmailOtpSignInGate(plugin).hooks.after;
+
+    expect(wrappedHook?.matcher(fakeCtx("/two-factor/enable"))).toBe(false);
   });
 });

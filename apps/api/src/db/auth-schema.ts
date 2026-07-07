@@ -28,6 +28,7 @@ export const user = pgTable(
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
     wordEditShortcut: text("word_edit_shortcut"),
+    twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
     deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
@@ -58,6 +59,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
   wordEditShortcut: "word_edit_shortcut",
+  twoFactorEnabled: "two_factor_enabled",
   deletedAt: "deleted_at",
   createdAt: "created_at",
   updatedAt: "updated_at",
@@ -138,6 +140,28 @@ export const verification = pgTable(
   },
   (table) => [
     index("verification_identifier_idx").on(table.identifier),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+// TOTP secret + backup codes are encrypted by Better Auth before storage
+// (secret always; backupCodes per the plugin's default `storeBackupCodes:
+// "encrypted"`), but the columns are still treated as auth secrets: deny
+// the scoped `stella` role entirely, mirroring `session` / `account`.
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").default(true).notNull(),
+  },
+  (table) => [
+    index("two_factor_secret_idx").on(table.secret),
+    index("two_factor_user_id_idx").on(table.userId),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -365,6 +389,7 @@ export const authSchema = {
   session,
   account,
   verification,
+  twoFactor,
   organization,
   member,
   invitation,
@@ -400,6 +425,7 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
       from: r.user.id,
       to: r.oauthConsent.userId,
     }),
+    twoFactors: r.many.twoFactor({ from: r.user.id, to: r.twoFactor.userId }),
   },
   session: {
     user: r.one.user({ from: r.session.userId, to: r.user.id }),
@@ -414,6 +440,9 @@ export const authRelationsPart = defineRelationsPart(authSchema, (r) => ({
   },
   account: {
     user: r.one.user({ from: r.account.userId, to: r.user.id }),
+  },
+  twoFactor: {
+    user: r.one.user({ from: r.twoFactor.userId, to: r.user.id }),
   },
   organization: {
     members: r.many.member({
