@@ -649,6 +649,9 @@ type Messages = {
     "noResults": "No clauses yet";
     "noVariants": "No variants";
     "outdatedVersion": "Update available";
+    "renameSlot": "Rename slot";
+    "renameSlotInvalid": "Slot names must be unique and can't contain spaces, colons, or braces.";
+    "renameSlotLinkedHint": "Remove the linked clause to rename this slot.";
     "restoreVersion": "Restore this version";
     "saveAsVersion": "Save as new version";
     "saveFailed": "Failed to save";
@@ -658,6 +661,7 @@ type Messages = {
     "selectFile": "Select JSON file";
     "selectVersionToCompare": "Select a version to compare with current";
     "slotCustom": "Custom slot name…";
+    "slotHelp": "A slot is a named position in the document ('{{'@clause:name'}}') where the linked clause is inserted when the template is filled.";
     "slotName": "Slot name";
     "slotNamePlaceholder": "e.g. NonCompete";
     "slotNone": "No slot";
@@ -2290,7 +2294,7 @@ type Messages = {
     "checkFindingFieldMissingInputType": "The field has no input type; a plain text input will be used";
     "checkFindingFieldMissingLabel": "The field has no label; people filling in the template will see the raw placeholder name";
     "checkFindingFormulaUnknownPath": "The formula references an unknown field: {reference}";
-    "checkFindingInvalidMarker": "This looks like a field marker but won't work. Marker names can't contain spaces or punctuation, so it will be printed as-is.";
+    "checkFindingInvalidMarker": "This looks like a field marker but won't work. Marker names can only use letters, numbers, dots, dashes, and underscores, so it will be printed as-is.";
     "checkFindingLinkWithoutSlot": "A clause is linked under this slot name, but the document has no such slot";
     "checkFindingMarkerWithoutField": "The placeholder appears in the document but has no field definition";
     "checkFindingSelectWithoutOptions": "The select field has no options and no source of options";
@@ -2455,7 +2459,7 @@ type Messages = {
       "aiScopeSelectionPrompt": "Only suggest fields within this selected part of the document:";
       "aiSeesDocument": "Let the AI read the document";
       "aiSuggest": "Suggest fields";
-      "clauseSlotHelp": "A clause from the library is inserted here at fill time. Manage linked clauses in the Clauses tab.";
+      "clauseSlotHelp": "The linked clause is inserted here when the template is filled. Link or change it in this panel, or from the insert menu.";
       "conceptClause": "Inserts a reusable clause from your library.";
       "conceptCondition": "Shows this text only when a condition holds.";
       "conceptField": "A value you fill in at use time.";

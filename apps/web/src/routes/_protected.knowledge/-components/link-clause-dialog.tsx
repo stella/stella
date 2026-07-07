@@ -394,6 +394,9 @@ export const LinkClauseDialog = ({
 
           <div className="grid gap-1">
             <span className="text-sm font-medium">{t("clauses.slotName")}</span>
+            <p className="text-muted-foreground text-xs">
+              {t("clauses.slotHelp")}
+            </p>
             <Select
               onValueChange={(value: string | null) =>
                 setSlotValue(value ?? SLOT_VALUE_NONE)

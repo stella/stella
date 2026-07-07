@@ -210,6 +210,7 @@ export {
   hasNumberingPattern,
   indexPattern,
   isBlockDirectiveKind,
+  isClauseSlotName,
   isFieldPath,
   isSafeFieldPath,
   markerPattern,

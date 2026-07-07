@@ -59,6 +59,11 @@ export type StudioActions = {
   /** Rewrite {{oldPath}} markers in the document and rename the field.
    *  Returns false when the new path is invalid or already taken. */
   renameFieldPath: (oldPath: string, newPath: string) => boolean;
+  /** Rewrite the document's `{{@clause:oldSlot}}` markers (preserving any
+   *  version modifier) to a new slot name. Returns false when the new name is
+   *  invalid, unchanged, or already used by another clause slot. Document-only:
+   *  callers must keep any linked clause row's slotName in sync themselves. */
+  renameClauseSlot: (oldSlot: string, newSlot: string) => boolean;
   /** Rewrite the selected `{{#if …}}` / `{{#elseif …}}` opener with a new
    *  expression. Returns false when nothing suitable is selected or the
    *  expression is invalid. */

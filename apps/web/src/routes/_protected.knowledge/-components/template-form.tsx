@@ -1894,20 +1894,19 @@ export const TemplateForm = ({
     [fields, conditions, resolveError],
   );
 
-  // Soft empty-fields gate: the warning shown in the action row after the
-  // first attempt of an action while optional fields are still empty.
+  // Soft empty-fields gate: the warning shown in the action row when an action
+  // is attempted while optional fields are still empty. The warning carries its
+  // own explicit confirm button; the primary action button never relabels and
+  // clicking it again just re-arms the same warning.
   const [emptyWarning, setEmptyWarning] = useState<{
     action: SubmitAction;
     count: number;
     names: string;
   } | null>(null);
-  const emptyWarningRef = useRef(emptyWarning);
-  // eslint-disable-next-line react/react-compiler -- latest-value ref mirror read only from the submit gate callback, never during render
-  emptyWarningRef.current = emptyWarning;
 
-  /** Gate every submit path: with optional fields still empty, the first
-   *  attempt arms the warning and aborts; repeating the same action (its
-   *  button now reads "… anyway") proceeds. Returns true to proceed. */
+  /** Gate every submit path: with optional fields still empty, arm the warning
+   *  and abort. Only an empty-field-free form (or the warning's own confirm
+   *  button, which bypasses this gate) proceeds. Returns true to proceed. */
   const confirmEmptyFields = useCallback(
     (action: SubmitAction, currentValues: FormValues): boolean => {
       const empty = collectEmptyOptionalFields(
@@ -1915,7 +1914,7 @@ export const TemplateForm = ({
         currentValues,
         conditions,
       );
-      if (empty.length === 0 || emptyWarningRef.current?.action === action) {
+      if (empty.length === 0) {
         setEmptyWarning(null);
         return true;
       }
@@ -1953,7 +1952,7 @@ export const TemplateForm = ({
   });
 
   const handleDownload = useCallback(
-    async (format: FillFormat) => {
+    async (format: FillFormat, { skipEmptyGate = false } = {}) => {
       if (!validateAll(values)) {
         // Scroll to the first errored field
         const all = collectValidatableFields(fields, values, conditions);
@@ -1980,7 +1979,7 @@ export const TemplateForm = ({
 
       const action: SubmitAction =
         format === "pdf" ? "downloadPdf" : "downloadDocx";
-      if (!confirmEmptyFields(action, values)) {
+      if (!skipEmptyGate && !confirmEmptyFields(action, values)) {
         return;
       }
 
@@ -2176,6 +2175,43 @@ export const TemplateForm = ({
     handleDownload("docx").catch(() => undefined);
   };
 
+  /** The empty-fields warning's explicit confirm: run the armed action while
+   *  bypassing the gate. This is the only way to proceed once the warning is
+   *  shown; the primary action button just re-arms it. */
+  const confirmEmptyWarning = () => {
+    if (emptyWarning === null) {
+      return;
+    }
+    const { action } = emptyWarning;
+    setEmptyWarning(null);
+    if (action === "downloadDocx") {
+      handleDownload("docx", { skipEmptyGate: true }).catch(() => undefined);
+      return;
+    }
+    if (action === "downloadPdf") {
+      handleDownload("pdf", { skipEmptyGate: true }).catch(() => undefined);
+      return;
+    }
+    if (action === "moveToMatter") {
+      setMatterTarget(null);
+      setMatterDialogOpen(true);
+      return;
+    }
+    if (saveTarget?.kind === "matter") {
+      void fillToMatter(saveTarget.workspaceId, saveTarget.parentId ?? null);
+    }
+  };
+
+  const emptyWarningConfirmLabel = (action: SubmitAction): string => {
+    if (action === "createDocument") {
+      return t("templates.createDocumentAnyway");
+    }
+    if (action === "moveToMatter") {
+      return t("templates.moveToMatterAnyway");
+    }
+    return t("templates.downloadAnyway");
+  };
+
   // Filter visible non-array fields, then group
   const visibleScalarFields = fields.filter(
     (f) => f.kind !== "array" && isFieldVisible(f, values, conditions),
@@ -2188,20 +2224,12 @@ export const TemplateForm = ({
   const submitAction: SubmitAction =
     saveTarget?.kind === "matter" ? "createDocument" : "downloadDocx";
 
-  /** Action-row label: the busy label while generating, the "… anyway"
-   *  confirm variant while the empty-fields warning targets this action. */
+  /** Action-row label: the busy label while generating, otherwise the action's
+   *  normal label. The empty-fields warning carries its own confirm button, so
+   *  this button never relabels to a "… anyway" variant. */
   const actionButtonLabel = (action: SubmitAction): string => {
     if (loading && action !== "moveToMatter") {
       return t("templates.generating");
-    }
-    if (emptyWarning?.action === action) {
-      if (action === "createDocument") {
-        return t("templates.createDocumentAnyway");
-      }
-      if (action === "moveToMatter") {
-        return t("templates.moveToMatterAnyway");
-      }
-      return t("templates.downloadAnyway");
     }
     if (action === "downloadPdf") {
       return t("templates.downloadPdf");
@@ -2342,12 +2370,30 @@ export const TemplateForm = ({
       {emptyWarning !== null && (
         <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 flex shrink-0 items-start gap-2 border-t px-3 py-2">
           <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
-          <span className="text-warning-foreground text-sm">
+          <span className="text-warning-foreground flex-1 text-sm">
             {t("templates.emptyFieldsWarning", {
               count: emptyWarning.count,
               names: emptyWarning.names,
             })}
           </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              onClick={() => setEmptyWarning(null)}
+              size="xs"
+              type="button"
+              variant="ghost"
+            >
+              {t("common.goBack")}
+            </Button>
+            <Button
+              disabled={loading}
+              onClick={confirmEmptyWarning}
+              size="xs"
+              type="button"
+            >
+              {emptyWarningConfirmLabel(emptyWarning.action)}
+            </Button>
+          </div>
         </div>
       )}
 

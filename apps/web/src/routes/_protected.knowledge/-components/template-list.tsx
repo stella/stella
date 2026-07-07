@@ -585,6 +585,7 @@ const TemplateRow = ({
     null;
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
+  const canUseTemplate = usePermissions({ template: ["use"] });
   const canUpdateTemplate = usePermissions({ template: ["update"] });
   const canDeleteTemplate = usePermissions({ template: ["delete"] });
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -632,18 +633,20 @@ const TemplateRow = ({
       icon: <SquarePenIcon />,
       onClick: onSelect,
     },
-    {
+  ];
+  if (canUseTemplate) {
+    rowActions.push({
       label: t("templates.useTemplate"),
       icon: <WandSparklesIcon />,
       onClick: () => setUseOpen(true),
-    },
-    {
-      label: t("common.download"),
-      icon: <DownloadIcon />,
-      onClick: () =>
-        void downloadTemplateSource(template.id, t("common.unexpectedError")),
-    },
-  ];
+    });
+  }
+  rowActions.push({
+    label: t("common.download"),
+    icon: <DownloadIcon />,
+    onClick: () =>
+      void downloadTemplateSource(template.id, t("common.unexpectedError")),
+  });
   if (canUpdateTemplate) {
     const categorySubmenu: ContextMenuAction[] = [
       categoryAction(
@@ -705,14 +708,16 @@ const TemplateRow = ({
   // mirroring the clause list; Use (fill) stays an explicit CTA.
   const actions = (
     <div className="relative z-10 flex shrink-0 items-center gap-2">
-      <Button
-        className="max-sm:hidden"
-        onClick={() => setUseOpen(true)}
-        size="xs"
-        variant="outline"
-      >
-        {t("templates.useTemplate")}
-      </Button>
+      {canUseTemplate && (
+        <Button
+          className="max-sm:hidden"
+          onClick={() => setUseOpen(true)}
+          size="xs"
+          variant="outline"
+        >
+          {t("templates.useTemplate")}
+        </Button>
+      )}
       <span className="hidden sm:inline-flex">
         <Tooltip
           content={template.authorName}
@@ -846,12 +851,14 @@ const TemplateRow = ({
         open={guidanceOpen}
         template={template}
       />
-      <UseTemplateDialog
-        onOpenChange={setUseOpen}
-        open={useOpen}
-        templateId={template.id}
-        templateName={template.name}
-      />
+      {canUseTemplate && (
+        <UseTemplateDialog
+          onOpenChange={setUseOpen}
+          open={useOpen}
+          templateId={template.id}
+          templateName={template.name}
+        />
+      )}
       <CategoryFormDialog
         onCreated={(category) =>
           void onAssignCategory(template.id, category.id)

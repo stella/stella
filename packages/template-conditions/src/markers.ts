@@ -131,6 +131,16 @@ export const isFieldPath = (value: string): boolean =>
 export const isSafeFieldPath = (value: string): boolean =>
   isFieldPath(value) &&
   value.split(".").every((segment) => !UNSAFE_FIELD_PATH_SEGMENTS.has(segment));
+
+// A `{{@clause:NAME}}` slot name: the `name` group of `clauseSlotPattern`
+// (`[^:}\s]+`), further disallowing `{` so the rewritten marker stays a valid
+// `{{...}}` span (markerPattern's inner is `[^{}]*`).
+const CLAUSE_SLOT_NAME_RE = /^[^\s:{}]+$/u;
+
+/** Whether `value` is a valid `{{@clause:NAME}}` slot name per the marker
+ *  grammar (non-empty; no whitespace, colon, or braces). */
+export const isClauseSlotName = (value: string): boolean =>
+  CLAUSE_SLOT_NAME_RE.test(value);
 const CLAUSE_INNER_RE = /^@clause:(?<name>[^:}\s]+)(?::(?<version>[^}\s]+))?$/u;
 const NUM_INNER_RE = /^@num:(?<key>[\p{L}\p{N}_.-]+)$/u;
 const REF_INNER_RE = /^@ref:(?<key>[\p{L}\p{N}_.-]+)$/u;

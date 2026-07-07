@@ -82,6 +82,7 @@ import type {
 } from "@stll/folio-react";
 import { displayLanguageName } from "@stll/locales";
 import {
+  isClauseSlotName,
   isFieldPath,
   isSafeFieldPath,
   renderDeterministicFieldValue,
@@ -658,6 +659,8 @@ export const TemplateStudioPage = ({
       save: async () => (await actionsRef.current?.save()) ?? false,
       renameFieldPath: (oldPath, newPath) =>
         actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
+      renameClauseSlot: (oldSlot, newSlot) =>
+        actionsRef.current?.renameClauseSlot(oldSlot, newSlot) ?? false,
       rewriteConditionExpr: (next) =>
         actionsRef.current?.rewriteConditionExpr(next) ?? false,
       wrapFieldInCondition: (path) =>
@@ -2583,6 +2586,47 @@ export const TemplateStudioPage = ({
         view.dispatch(tr);
       }
       useTemplateStudioStore.getState().renameField(oldPath, trimmed);
+      markDirty();
+      return true;
+    },
+    renameClauseSlot: (oldSlot, newSlot) => {
+      const view = editorViewRef.current;
+      const trimmed = newSlot.trim();
+      if (!view || trimmed === oldSlot || !isClauseSlotName(trimmed)) {
+        return false;
+      }
+      const clauseDirectives = getTemplateDirectives(view.state).filter(
+        (d) => d.kind === "clause",
+      );
+      // Reject a collision with a different slot already in the document.
+      if (
+        clauseDirectives.some((d) => d.expr !== oldSlot && d.expr === trimmed)
+      ) {
+        return false;
+      }
+      const targets = clauseDirectives.filter((d) => d.expr === oldSlot);
+      if (targets.length === 0) {
+        return false;
+      }
+      const tr = view.state.tr;
+      // Rewrite highest position first so earlier ranges stay valid as the
+      // transaction accumulates. Preserve each marker's version modifier.
+      for (const d of targets.toSorted((a, b) => b.from - a.from)) {
+        const marker =
+          d.clauseVersion === undefined
+            ? `{{@clause:${trimmed}}}`
+            : `{{@clause:${trimmed}:${d.clauseVersion}}}`;
+        tr.insertText(marker, d.from, d.to);
+      }
+      // Park the caret inside the first (lowest-position) rewritten marker so
+      // selection sync re-derives the clause face with the new slot name.
+      const first = targets.reduce((a, b) => (a.from < b.from ? a : b));
+      tr.setSelection(
+        TextSelection.near(
+          tr.doc.resolve(Math.min(first.from + 2, tr.doc.content.size)),
+        ),
+      );
+      view.dispatch(tr);
       markDirty();
       return true;
     },
@@ -6291,6 +6335,29 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
         title={t("templates.studio.scopeClause")}
       />
       <div className="flex flex-col gap-3 px-4 py-4">
+        <div className="flex flex-col gap-1">
+          <span className="text-muted-foreground text-xs font-medium">
+            {t("clauses.slotName")}
+          </span>
+          {link === undefined ? (
+            <ClauseSlotEditor
+              key={selected.expr}
+              onRename={(next) =>
+                actions?.renameClauseSlot(selected.expr, next) ?? false
+              }
+              slotName={selected.expr}
+            />
+          ) : (
+            <>
+              <code className="text-xs" dir="auto">
+                {selected.expr}
+              </code>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("clauses.renameSlotLinkedHint")}
+              </p>
+            </>
+          )}
+        </div>
         <p className="text-muted-foreground text-xs leading-relaxed">
           {t("templates.studio.clauseSlotHelp")}
         </p>
@@ -7678,6 +7745,70 @@ const SaveRecipeDialog = ({
         </DialogFooter>
       </DialogPopup>
     </Dialog>
+  );
+};
+
+/** Click-to-edit clause slot name: rewrites the `{{@clause:name}}` markers in
+ *  the document. Only offered for slots with no linked clause; renaming a linked
+ *  slot here would orphan its stored `slotName` link (no endpoint updates it). */
+const ClauseSlotEditor = ({
+  slotName,
+  onRename,
+}: {
+  slotName: string;
+  onRename: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(slotName);
+
+  const commit = () => {
+    if (value.trim() === slotName) {
+      setEditing(false);
+      return;
+    }
+    if (onRename(value)) {
+      setEditing(false);
+      return;
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("clauses.renameSlotInvalid"),
+    });
+  };
+
+  if (!editing) {
+    return (
+      <button
+        className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+        onClick={() => setEditing(true)}
+        title={t("clauses.renameSlot")}
+        type="button"
+      >
+        <code className="truncate text-xs" dir="auto" title={slotName}>
+          {slotName}
+        </code>
+        <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  }
+  return (
+    <Input
+      autoFocus
+      className="h-7 font-mono text-xs"
+      onBlur={commit}
+      onChange={(e) => setValue(e.currentTarget.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          commit();
+        }
+        if (e.key === "Escape") {
+          setValue(slotName);
+          setEditing(false);
+        }
+      }}
+      value={value}
+    />
   );
 };
 
