@@ -163,7 +163,7 @@ describe("chat third-party anonymization boundary", () => {
 
     expect(Result.isError(prepared)).toBe(true);
     if (Result.isOk(prepared)) {
-      throw new Error("Expected attachment refusal");
+      throw new TypeError("Expected attachment refusal");
     }
 
     expect(prepared.error.status).toBe(422);
@@ -207,7 +207,7 @@ describe("chat third-party anonymization boundary", () => {
       source: { mimeType: TEXT_PLAIN_MIME_TYPE },
     });
     if (!part || !isChatAttachmentPart(part)) {
-      throw new Error("Expected prepared attachment part");
+      throw new TypeError("Expected prepared attachment part");
     }
     expect(getChatAttachmentUrl(part)).toContain(
       Buffer.from("[CUSTOM_1] notes for [PERSON_1]", "utf-8").toString(
@@ -352,7 +352,7 @@ describe("chat third-party anonymization boundary", () => {
       state: "complete",
     });
     if (!resultPart || resultPart.type !== "tool-result") {
-      throw new Error("Expected prepared tool-result part");
+      throw new TypeError("Expected prepared tool-result part");
     }
     if (typeof resultPart.content !== "string") {
       throw new TypeError("Expected JSON tool-result content");
@@ -486,7 +486,7 @@ describe("chat third-party anonymization boundary", () => {
     );
 
     if (!executable?.execute) {
-      throw new Error("Expected external tool execute function");
+      throw new TypeError("Expected external tool execute function");
     }
 
     const output = await executable.execute(undefined);
@@ -542,7 +542,7 @@ describe("chat third-party anonymization boundary", () => {
     );
 
     if (!executable?.execute) {
-      throw new Error("Expected unofficial lookup execute function");
+      throw new TypeError("Expected unofficial lookup execute function");
     }
 
     const output = await executable.execute({ query: "Jan Novák" });
@@ -564,7 +564,7 @@ describe("chat third-party anonymization boundary", () => {
     expect(Result.isOk(inbound)).toBe(true);
 
     if (boundary.type !== "anonymized") {
-      throw new Error("Expected anonymized boundary");
+      throw new TypeError("Expected anonymized boundary");
     }
     expect(boundary.redactionMap.get("[PERSON_1]")).toBe("Jan Novák");
     expect(boundary.redactionMap.get("[CUSTOM_1]")).toBe("Secret");
@@ -632,12 +632,12 @@ describe("chat third-party anonymization boundary", () => {
     expect(Result.isOk(first)).toBe(true);
     expect(Result.isOk(second)).toBe(true);
     if (Result.isError(first) || Result.isError(second)) {
-      throw new Error("Expected anonymization to succeed");
+      throw new TypeError("Expected anonymization to succeed");
     }
     expect(first.value).toBe("[PERSON_1] prepared the memo.");
     expect(second.value).toBe("[PERSON_1] briefed [PERSON_2].");
     if (boundary.type !== "anonymized") {
-      throw new Error("Expected anonymized boundary");
+      throw new TypeError("Expected anonymized boundary");
     }
     expect(boundary.redactionMap).toEqual(
       new Map([
