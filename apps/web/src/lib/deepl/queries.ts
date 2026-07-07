@@ -4,6 +4,8 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
+const DEEPL_AVAILABILITY_STALE_MS = 5 * 60 * 1000;
+
 type DeepLAvailabilityKey = {
   organizationId: string;
 };
@@ -29,6 +31,7 @@ export const deepLAvailabilityOptions = ({
 }: DeepLAvailabilityOptionsInput) =>
   queryOptions({
     queryKey: deepLKeys.availability({ organizationId }),
+    staleTime: DEEPL_AVAILABILITY_STALE_MS,
     queryFn: async ({ signal }) => {
       const response = await api["organization-settings"].deepl.get({
         fetch: { signal },

@@ -100,11 +100,13 @@ const metrics = (
   requestCounts: Record<string, number> = Object.fromEntries(
     requests.map((request) => [request, 1]),
   ),
+  missingDbQueryCounts: Record<string, number> = {},
 ): RouteNetworkMetrics => ({
   requests: [...requests].sort(),
   requestCounts,
   depth,
   dbQueries,
+  missingDbQueryCounts,
 });
 
 test.describe("diffNetworkBaseline", () => {
@@ -266,11 +268,30 @@ test.describe("diffNetworkBaseline", () => {
   test("an observed request with a missing db-query count is a problem", () => {
     const { problems } = diffNetworkBaseline(
       dbBaseline,
-      new Map([["/contacts", metrics(["GET /v1/contacts"], 2)]]),
+      new Map([
+        [
+          "/contacts",
+          metrics(
+            ["GET /v1/contacts"],
+            2,
+            {},
+            { "GET /v1/contacts": 1 },
+            { "GET /v1/contacts": 1 },
+          ),
+        ],
+      ]),
     );
     expect(problems.some((p) => p.includes("DB query count missing"))).toBe(
       true,
     );
+  });
+
+  test("a request without a response is not a missing db-query count", () => {
+    const { problems } = diffNetworkBaseline(
+      dbBaseline,
+      new Map([["/contacts", metrics(["GET /v1/contacts"], 2)]]),
+    );
+    expect(problems).toEqual([]);
   });
 
   test("an unobserved request with a db-query budget is only a notice", () => {

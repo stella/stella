@@ -31,7 +31,12 @@ const WRITE_HINT =
 // --- collector -------------------------------------------------------------
 
 export type NetworkCapture = {
-  requests: { method: string; pathname: string; dbQueries: number | null }[];
+  requests: {
+    method: string;
+    pathname: string;
+    dbQueries: number | null;
+    dbQueryHeaderMissing: boolean;
+  }[];
   intervals: { start: number; end: number }[];
 };
 
@@ -50,9 +55,11 @@ type NetworkRecord = {
   start: number;
   end: number | null;
   // From the API's dev/test-only `x-db-queries` response header (the
-  // per-request Drizzle query counter); null when the response never arrived
-  // or the endpoint bypasses the Elysia lifecycle (mounted better-auth app).
+  // per-request Drizzle query counter); null when no response arrived.
   dbQueries: number | null;
+  // True only when Playwright saw a response and that response did not expose
+  // the dev/test query-count header.
+  dbQueryHeaderMissing: boolean;
 };
 
 const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
@@ -81,6 +88,7 @@ export const createNetworkCollector = (
           start: Date.now(),
           end: null,
           dbQueries: null,
+          dbQueryHeaderMissing: false,
         };
         records.push(record);
         byRequest.set(request, record);
@@ -101,7 +109,9 @@ export const createNetworkCollector = (
         const header = response.headers()[DB_QUERIES_HEADER];
         if (header !== undefined) {
           record.dbQueries = Number(header);
+          return;
         }
+        record.dbQueryHeaderMissing = true;
       };
 
       page.on("request", onRequest);
@@ -122,11 +132,14 @@ export const createNetworkCollector = (
       // on its response yet), so closing it at "now" never inflates the depth.
       const now = Date.now();
       return {
-        requests: records.map(({ method, pathname, dbQueries }) => ({
-          method,
-          pathname,
-          dbQueries,
-        })),
+        requests: records.map(
+          ({ method, pathname, dbQueries, dbQueryHeaderMissing }) => ({
+            method,
+            pathname,
+            dbQueries,
+            dbQueryHeaderMissing,
+          }),
+        ),
         intervals: records.map(({ start, end }) => ({
           start,
           end: end ?? now,
@@ -205,6 +218,8 @@ export type RouteNetworkMetrics = {
   // responses carried no header (auth-mounted endpoints, dropped responses)
   // are absent.
   dbQueries: Record<string, number>;
+  // Per request key, how many completed responses omitted `x-db-queries`.
+  missingDbQueryCounts: Record<string, number>;
 };
 
 export type NetworkBaselineEntry = {
@@ -222,10 +237,14 @@ export const summarizeCapture = (
   capture: NetworkCapture,
 ): RouteNetworkMetrics => {
   const dbQueries: Record<string, number> = {};
+  const missingDbQueryCounts: Record<string, number> = {};
   const requestCounts: Record<string, number> = {};
   for (const request of capture.requests) {
     const key = requestKey(request);
     requestCounts[key] = (requestCounts[key] ?? 0) + 1;
+    if (request.dbQueryHeaderMissing) {
+      missingDbQueryCounts[key] = (missingDbQueryCounts[key] ?? 0) + 1;
+    }
     if (request.dbQueries === null || Number.isNaN(request.dbQueries)) {
       continue;
     }
@@ -238,6 +257,11 @@ export const summarizeCapture = (
     ),
     depth: waterfallDepth(capture.intervals),
     dbQueries,
+    missingDbQueryCounts: Object.fromEntries(
+      Object.entries(missingDbQueryCounts).sort(([a], [b]) =>
+        a.localeCompare(b),
+      ),
+    ),
   };
 };
 
@@ -338,10 +362,7 @@ export const diffNetworkBaseline = (
     // happens via a deliberate rewrite.
     const baselineDb = entry.dbQueries ?? {};
     for (const key of Object.keys(baselineDb)) {
-      if (
-        metrics.requestCounts[key] !== undefined &&
-        metrics.dbQueries[key] === undefined
-      ) {
+      if (metrics.missingDbQueryCounts[key] !== undefined) {
         problems.push(
           `DB query count missing on ${route}: ${key}\n` +
             `  This request has a committed DB-query budget, but the response did\n` +
