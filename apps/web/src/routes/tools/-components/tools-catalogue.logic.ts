@@ -26,8 +26,10 @@ export type ToolFilters = {
   jurisdictions: ReadonlySet<string>;
 };
 
+const TOOLS_KIND_FILTER_SET: ReadonlySet<string> = new Set(TOOLS_KIND_FILTERS);
+
 export const isToolsKindFilter = (value: string): value is ToolsKindFilter =>
-  (TOOLS_KIND_FILTERS as readonly string[]).includes(value);
+  TOOLS_KIND_FILTER_SET.has(value);
 
 const hasIntersection = (
   values: readonly string[],

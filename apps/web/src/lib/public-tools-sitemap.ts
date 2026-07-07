@@ -29,7 +29,7 @@ const xmlEscape = (value: string): string =>
 const collectToolPaths = (): readonly `/${string}`[] => [
   "/tools",
   "/tools/contribute",
-  ...loadCatalogue().map((entry) => `/tools/${entry.slug}` as `/${string}`),
+  ...loadCatalogue().map((entry): `/${string}` => `/tools/${entry.slug}`),
 ];
 
 export const createPublicToolsSitemapXml = ({
