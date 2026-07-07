@@ -480,8 +480,11 @@ describe("public law sitemap", () => {
     expect(robots).toBe("User-agent: *\nDisallow: /\n");
   });
 
-  test("robots allows public tools only when indexing is explicitly enabled", () => {
-    const robots = createRobotsTxt({ publicToolsIndexingEnabled: true });
+  test("robots allows public tools only when indexable and crawling is permitted", () => {
+    const robots = createRobotsTxt({
+      publicToolsCrawlAllowed: true,
+      seoIndexable: true,
+    });
 
     expect(robots).toContain("Allow: /tools/");
     expect(robots).not.toContain("Disallow: /tools/");

@@ -282,14 +282,20 @@ const toArrayBuffer = (value: string): ArrayBuffer => {
 
 describe("github catalogue skill fetch", () => {
   test("appends SKILL.md to the pinned base url and caps the byte size", async () => {
-    let requestedUrl: URL | null = null;
-    let requestedMaxBytes = 0;
+    // Captured via an object rather than closure-assigned `let`s: the
+    // typechecker keeps a mutated object property at its declared type,
+    // whereas a `let` reassigned only inside the fetch callback is flow-typed
+    // back to its `null` initializer at the assertion below.
+    const captured: { url: URL | null; maxBytes: number } = {
+      url: null,
+      maxBytes: 0,
+    };
 
     const result = await fetchGithubCatalogueSkillPackage(
       PINNED_BASE_URL,
       async (url, maxBytes) => {
-        requestedUrl = url;
-        requestedMaxBytes = maxBytes;
+        captured.url = url;
+        captured.maxBytes = maxBytes;
         return {
           body: toArrayBuffer(
             `---
@@ -308,8 +314,8 @@ Draft in German.`,
     if (Result.isError(result)) {
       throw result.error;
     }
-    expect(requestedUrl?.toString()).toBe(`${PINNED_BASE_URL}SKILL.md`);
-    expect(requestedMaxBytes).toBe(GITHUB_SKILL_FILE_MAX_BYTES);
+    expect(captured.url?.toString()).toBe(`${PINNED_BASE_URL}SKILL.md`);
+    expect(captured.maxBytes).toBe(GITHUB_SKILL_FILE_MAX_BYTES);
     expect(result.value.name).toBe("german-law");
     expect(result.value.license).toBe("MIT");
     expect(result.value.resources).toEqual([]);
