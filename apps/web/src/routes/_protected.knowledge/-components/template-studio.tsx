@@ -33,11 +33,13 @@ import {
   Loader2Icon,
   MessageCircleQuestionIcon,
   PencilIcon,
+  PlayIcon,
   PlusIcon,
   RefreshCwIcon,
   RepeatIcon,
   SaveIcon,
   SigmaIcon,
+  SlashIcon,
   SplitIcon,
   Trash2Icon,
   UserIcon,
@@ -4136,7 +4138,7 @@ function TemplateStudioInspectorView({
     fields: t("templates.fields"),
     guidance: t("templates.whenToUse"),
     history: t("common.history"),
-    fill: t("templates.testFill"),
+    fill: t("templates.fill"),
   };
 
   // Leaving the field-settings face returns to wherever the edit was launched
@@ -5015,6 +5017,9 @@ const StudioInsertRow = () => {
           </MenuSub>
         </MenuPopup>
       </Menu>
+      <div className="ms-auto">
+        <StudioMarkerSyntaxPopover />
+      </div>
       {sessionTemplateId !== null && (
         <LinkClauseDialog
           onLinked={() => {
@@ -6586,6 +6591,13 @@ const FieldNavigator = ({
       f.inputType !== "boolean" &&
       !fieldHasLoopBounds(f),
   );
+  // A blank template (no fields, conditions, or clause slots) has an empty
+  // outline and no fields, so show getting-started guidance instead of a bare
+  // empty list. Conditions are boolean fields, so `fields.length` covers them;
+  // clause slots and loops surface as outline nodes.
+  if (fields.length === 0 && outline.length === 0) {
+    return <StudioGettingStarted />;
+  }
   return (
     <div className="px-4 py-3">
       <ul className="flex flex-col">
@@ -6627,6 +6639,105 @@ const FieldNavigator = ({
         </div>
       )}
     </div>
+  );
+};
+
+/** Shown in the overview when the template has no fields, conditions, or clause
+ *  slots yet: three plain-language steps pointing at the selection popover, the
+ *  `/` menu, and the Fill tab. Disappears as soon as the first marker exists. */
+const StudioGettingStarted = () => {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-col gap-3 px-4 py-4">
+      <p className="text-muted-foreground text-xs font-medium">
+        {t("templates.studio.gettingStartedTitle")}
+      </p>
+      <ol className="flex flex-col gap-2.5">
+        <li className="flex items-start gap-2">
+          <WandSparklesIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+          <span className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.studio.gettingStartedField")}
+          </span>
+        </li>
+        <li className="flex items-start gap-2">
+          <SlashIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+          <span className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.studio.gettingStartedSlash")}
+          </span>
+        </li>
+        <li className="flex items-start gap-2">
+          <PlayIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
+          <span className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.studio.gettingStartedFill")}
+          </span>
+        </li>
+      </ol>
+    </div>
+  );
+};
+
+/** Marker syntax reference popover: each marker kind's literal grammar (kept in
+ *  code, never translated) beside a one-line translated description. Reuses the
+ *  concept captions for the four primary kinds and adds numbering/loop tokens.
+ *  The literals live here rather than in i18n to avoid ICU brace escaping. */
+const StudioMarkerSyntaxPopover = () => {
+  const t = useTranslations();
+  const markers: { syntax: string; description: TranslationKey }[] = [
+    { syntax: "{{field.path}}", description: "templates.studio.conceptField" },
+    {
+      syntax: "{{#if …}}…{{/if}}",
+      description: "templates.studio.conceptCondition",
+    },
+    {
+      syntax: "{{#each …}}…{{/each}}",
+      description: "templates.studio.conceptLoop",
+    },
+    {
+      syntax: "{{@clause:Name}}",
+      description: "templates.studio.conceptClause",
+    },
+    { syntax: "{{@num:Key}}", description: "templates.studio.markerNum" },
+    { syntax: "{{@ref:Key}}", description: "templates.studio.markerRef" },
+    { syntax: "{{@index}}", description: "templates.studio.markerIndex" },
+    { syntax: "{{@count}}", description: "templates.studio.markerCount" },
+  ];
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            aria-label={t("templates.studio.markerSyntaxTitle")}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <CircleHelpIcon />
+          </Button>
+        }
+      />
+      <PopoverPopup className="w-80 p-3">
+        <p className="mb-2 text-xs font-medium">
+          {t("templates.studio.markerSyntaxTitle")}
+        </p>
+        <ul className="flex flex-col gap-1.5">
+          {markers.map((marker) => (
+            <li className="flex flex-col gap-0.5" key={marker.syntax}>
+              <code
+                className="bg-muted text-foreground w-fit rounded px-1 py-0.5 text-xs"
+                dir="ltr"
+              >
+                {marker.syntax}
+              </code>
+              <span className="text-muted-foreground text-xs leading-relaxed">
+                {t(marker.description)}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-muted-foreground mt-2 border-t pt-2 text-xs leading-relaxed">
+          {t("templates.studio.markerSyntaxNote")}
+        </p>
+      </PopoverPopup>
+    </Popover>
   );
 };
 

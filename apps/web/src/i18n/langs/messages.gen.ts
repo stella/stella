@@ -2390,6 +2390,7 @@ type Messages = {
     "fieldUpdateFailed": "Failed to update fields";
     "fields": "Fields";
     "fieldsUpdated": "Fields updated";
+    "fill": "Fill";
     "fillFailed": "Failed to generate document";
     "fillForm": "Fill template";
     "generate": "Generate document";
@@ -2497,6 +2498,10 @@ type Messages = {
       "formulaNonNumberFields": "Not a number: {fields}";
       "formulaNumbersOnlyHelp": "Calculations use number fields only — dates and text can't be used.";
       "formulaUnknownFields": "Not a field: {fields}";
+      "gettingStartedField": "Write your text, then select a phrase → right-click → Make field.";
+      "gettingStartedFill": "Try the result in the Fill tab.";
+      "gettingStartedSlash": "Type / in the document to insert fields, conditions, and clauses.";
+      "gettingStartedTitle": "Get started";
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
       "insertConditionIntoTemplate": "Insert condition";
@@ -2509,6 +2514,12 @@ type Messages = {
       "loop": "Loop";
       "loopBoundsHint": "Set how many times this block may repeat when the template is filled.";
       "makeField": "Make field";
+      "markerCount": "The total number of items.";
+      "markerIndex": "The current item's number.";
+      "markerNum": "Auto-numbers items that share this key.";
+      "markerRef": "Cross-references a numbered item.";
+      "markerSyntaxNote": "You can type markers by hand, but the selection popover and the / menu insert them correctly for you.";
+      "markerSyntaxTitle": "Marker syntax";
       "maxRepeats": "Maximum repeats";
       "minRepeats": "Minimum repeats";
       "mirrorBlockAction": "Mirror";
@@ -2560,7 +2571,6 @@ type Messages = {
     "templateNamePlaceholder": "e.g. Employment Agreement";
     "templateRenamed": "Template renamed";
     "templateSaved": "Template saved";
-    "testFill": "Fill";
     "unmatchedPlaceholders": "Some placeholders were not filled: {list}";
     "unsavedLeaveConfirm": "You have unsaved changes. Leave without saving?";
     "untitledTemplate": "Untitled template";
