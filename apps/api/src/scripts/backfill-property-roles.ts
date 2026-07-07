@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 
 const WORKSPACE_BATCH_SIZE = Number(
-  process.env.PROPERTY_ROLE_BACKFILL_BATCH_SIZE ?? 100,
+  process.env["PROPERTY_ROLE_BACKFILL_BATCH_SIZE"] ?? 100,
 );
 const STATEMENT_TIMEOUT_MS = 60_000;
 

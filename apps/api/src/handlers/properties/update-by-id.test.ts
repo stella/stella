@@ -82,8 +82,9 @@ describe("updateProperty", () => {
 
     let lockCallCount = 0;
     const { safeDb, scopedDb } = createScopedDbMock({
-      execute: async () => {
+      execute: () => {
         lockCallCount++;
+        return Promise.resolve(undefined);
       },
       select: () => ({
         from: () => ({
