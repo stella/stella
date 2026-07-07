@@ -5,6 +5,12 @@ import path from "node:path";
 
 import { apiDelete, apiGet, apiPut, apiUploadDocx } from "../helpers/api";
 import {
+  type RouteNetworkMetrics,
+  assertNetworkBaseline,
+  createNetworkCollector,
+  summarizeCapture,
+} from "../helpers/network";
+import {
   type BrowserErrorCollector,
   createBrowserErrorCollector,
   expect,
@@ -15,6 +21,12 @@ import {
   createTestWorkspace,
   deleteTestWorkspace,
 } from "../helpers/workspace";
+
+// Long enough that idle warmup requests (tool connectors, skills, usage
+// entitlement on chat routes) land inside the window deterministically; the
+// network baseline records them as part of the route's manifest instead of
+// racing them. Costs ~30s across the walk.
+const DEFAULT_SETTLE_MS = 1000;
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -181,12 +193,15 @@ test("authenticated routes render without browser errors", async ({
 
     await expectAuthenticatedRouteCoverage(routes);
 
+    const networkResults = new Map<string, RouteNetworkMetrics>();
     for (const route of routes) {
       // eslint-disable-next-line no-await-in-loop -- each route gets an isolated page so browser errors can be attributed to its direct render without concurrent route state leaking across pages
       await test.step(route.template, async () => {
-        await smokeRoute({ context, route });
+        await smokeRoute({ context, results: networkResults, route });
       });
     }
+
+    assertNetworkBaseline(networkResults);
   } finally {
     await Promise.all(cleanupTasks.map(async (cleanup) => await cleanup()));
   }
@@ -289,20 +304,24 @@ const createDocumentRoute = async (
 
 const smokeRoute = async ({
   context,
+  results,
   route,
 }: {
   context: BrowserContext;
+  results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
 }) => {
   const expectation = route.expectation;
 
   if (expectation?.kind === "redirectsTo") {
     // Redirect aliases do not own UI. Assert the alias lands correctly, then
-    // smoke the declared target directly so browser-error collection belongs to
-    // the page that actually renders.
+    // smoke the declared target directly so browser-error and network
+    // collection belong to the page that actually renders. The alias page
+    // itself is not recorded.
     await assertRedirectRoute({ context, route, expectation });
     await smokeRouteTarget({
       context,
+      results,
       route: {
         template: `${route.template} target`,
         path: expectation.to,
@@ -313,14 +332,16 @@ const smokeRoute = async ({
     return;
   }
 
-  await smokeRouteTarget({ context, route });
+  await smokeRouteTarget({ context, results, route });
 };
 
 const smokeRouteTarget = async ({
   context,
+  results,
   route,
 }: {
   context: BrowserContext;
+  results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
 }) => {
   const page = await context.newPage();
@@ -328,10 +349,18 @@ const smokeRouteTarget = async ({
     tolerateColdMountWarning: true,
   });
   const detachPage = browserErrors.trackPage(page);
+  const network = createNetworkCollector();
+  const detachNetwork = network.trackPage(page);
 
   try {
     await renderSmokeRoute({ browserErrors, page, route });
+    // Captured right after the settle + assertions in renderSmokeRoute (its
+    // last step is browserErrors.assertEmpty), so the manifest reflects the
+    // fully-rendered route. Stored under the template it received; redirect
+    // targets already arrive as "<template> target".
+    results.set(route.template, summarizeCapture(network.capture()));
   } finally {
+    detachNetwork();
     detachPage();
     await page.close();
   }
@@ -378,7 +407,7 @@ const renderSmokeRoute = async ({
     timeout: 30_000,
   });
 
-  await page.waitForTimeout(route.settleMs ?? 250);
+  await page.waitForTimeout(route.settleMs ?? DEFAULT_SETTLE_MS);
 
   await assertNoRouteBoundary(page, route.template);
   assertFinalDestination(page, route);

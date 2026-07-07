@@ -1281,6 +1281,10 @@ export default defineConfig({
               // import time, matching the two call sites it replaces.
               "apps/api/src/lib/version.ts",
               "apps/web/e2e/helpers/api.ts",
+              // Reads E2E_API_URL (same contract as helpers/api.ts) and the
+              // E2E_NETWORK_BASELINE write/rewrite mode switch; e2e infra has
+              // no app env module to route through.
+              "apps/web/e2e/helpers/network.ts",
               "apps/web/e2e/staging/global-setup.ts",
               // Test-only helper: reads PROPERTY_TEST_NUM_RUNS_FACTOR and CI
               // to tune fast-check at assert time. Never imported by runtime
