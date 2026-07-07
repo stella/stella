@@ -564,7 +564,7 @@ export const updateClauseSlotHandler = async ({
       tx.query.templateClauses.findFirst({
         where: {
           templateId: { eq: templateId },
-          slotName,
+          slotName: { eq: slotName },
           organizationId: { eq: organizationId },
           id: { ne: linkId },
         },

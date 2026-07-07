@@ -175,6 +175,17 @@ type TemplateStudioState = {
   upsertField: (path: string, patch: Partial<StudioField>) => void;
   removeField: (path: string) => void;
   renameField: (oldPath: string, newPath: string) => void;
+  /** Deferred link-row slot renames, keyed by templateClause link id → the new
+   *  slot name. Recorded when a LINKED clause slot is renamed in the document:
+   *  the `{{@clause:...}}` markers rewrite immediately (marking the session
+   *  dirty via `renameClauseSlot`), while the stored link row's slotName is only
+   *  flushed to the API in the save flow. Leaving without saving discards the
+   *  document edit and this map together (cleared on init/reset), so the link
+   *  row never ends up pointing at a slot name the stored document lacks. A
+   *  chained rename of the same link overwrites its entry. */
+  pendingSlotRenames: Record<string, string>;
+  setPendingSlotRename: (linkId: string, slotName: string) => void;
+  clearPendingSlotRename: (linkId: string) => void;
   /** Document structure tree, rebuilt by the editor on every scan. */
   outline: OutlineNode[];
   setOutline: (outline: OutlineNode[]) => void;
@@ -208,6 +219,7 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       isDirty: false,
       fillValues: null,
       pendingMirrorRequests: [],
+      pendingSlotRenames: {},
     }),
   reset: (templateId) =>
     set((state) =>
@@ -224,6 +236,7 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
             actions: null,
             ui: DEFAULT_UI,
             pendingMirrorRequests: [],
+            pendingSlotRenames: {},
           }
         : state,
     ),
@@ -252,6 +265,24 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       ),
       isDirty: true,
     })),
+  pendingSlotRenames: {},
+  setPendingSlotRename: (linkId, slotName) =>
+    set((state) => ({
+      pendingSlotRenames: { ...state.pendingSlotRenames, [linkId]: slotName },
+    })),
+  clearPendingSlotRename: (linkId) =>
+    set((state) => {
+      if (!(linkId in state.pendingSlotRenames)) {
+        return state;
+      }
+      return {
+        pendingSlotRenames: Object.fromEntries(
+          Object.entries(state.pendingSlotRenames).filter(
+            ([id]) => id !== linkId,
+          ),
+        ),
+      };
+    }),
   setSelected: (selected) => set({ selected }),
   markDirty: () => set({ isDirty: true }),
   markSaved: () => set({ isDirty: false }),

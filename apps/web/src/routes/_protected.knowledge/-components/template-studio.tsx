@@ -2105,6 +2105,54 @@ export const TemplateStudioPage = ({
       void queryClient.invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
       });
+
+      // Flush deferred link-row slot renames now that the document (with its
+      // already-rewritten {{@clause:...}} markers) is persisted, so the row
+      // rename can never outlive an unsaved document edit.
+      const { pendingSlotRenames, clearPendingSlotRename } =
+        useTemplateStudioStore.getState();
+      const pendingEntries = Object.entries(pendingSlotRenames);
+      if (pendingEntries.length > 0) {
+        // Links are independent, so patch them in parallel and reconcile after.
+        const results = await Promise.all(
+          pendingEntries.map(async ([linkId, slotName]) => {
+            const patched = await api
+              .templates({ templateId: toSafeId<"template">(templateId) })
+              .clauses({ linkId: toSafeId<"templateClause">(linkId) })
+              .patch({ slotName });
+            return { error: patched.error, linkId };
+          }),
+        );
+        let slotRenameErrorMessage: string | null = null;
+        for (const { error, linkId } of results) {
+          if (error) {
+            // Keep the failed entry pending; the next save retries it. Capture
+            // the first failure for a single toast rather than one per link.
+            slotRenameErrorMessage ??= userErrorMessage(
+              error,
+              t("common.unexpectedError"),
+            );
+            continue;
+          }
+          clearPendingSlotRename(linkId);
+        }
+        if (slotRenameErrorMessage !== null) {
+          // Re-mark dirty so the Save affordance (gated on isDirty) stays live
+          // for the retry; the document itself already saved successfully.
+          markDirty();
+          stellaToast.add({
+            type: "error",
+            title: t("common.error"),
+            description: slotRenameErrorMessage,
+          });
+        }
+        void queryClient.invalidateQueries({
+          queryKey: knowledgeKeys.templates.clauses(
+            activeOrganizationId,
+            templateId,
+          ),
+        });
+      }
       return true;
     } catch {
       stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
@@ -2622,10 +2670,13 @@ export const TemplateStudioPage = ({
       }
       // Park the caret inside the first (lowest-position) rewritten marker so
       // selection sync re-derives the clause face with the new slot name.
-      const first = targets.reduce((a, b) => (a.from < b.from ? a : b));
+      let firstFrom = Number.POSITIVE_INFINITY;
+      for (const target of targets) {
+        firstFrom = Math.min(firstFrom, target.from);
+      }
       tr.setSelection(
         TextSelection.near(
-          tr.doc.resolve(Math.min(first.from + 2, tr.doc.content.size)),
+          tr.doc.resolve(Math.min(firstFrom + 2, tr.doc.content.size)),
         ),
       );
       view.dispatch(tr);
@@ -4256,6 +4307,7 @@ function TemplateStudioInspectorView({
  */
 const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const organizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -4289,7 +4341,7 @@ const StudioHealthBadge = ({ templateId }: { templateId: string }) => {
       ) : (
         <>
           <AlertTriangleIcon className="size-3.5" />
-          {issueCount}
+          {format.number(issueCount)}
         </>
       )}
     </Button>
@@ -4845,6 +4897,9 @@ const StudioInsertRow = () => {
   const fields = useTemplateStudioStore((s) => s.fields);
   const selected = useTemplateStudioStore((s) => s.selected);
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
+  const pendingSlotRenames = useTemplateStudioStore(
+    (s) => s.pendingSlotRenames,
+  );
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -4880,7 +4935,9 @@ const StudioInsertRow = () => {
               ? [
                   {
                     id: link.id,
-                    slotName: link.slotName,
+                    // A pending (unsaved) rename supersedes the server slot
+                    // name, so the menu inserts the marker the document uses.
+                    slotName: pendingSlotRenames[link.id] ?? link.slotName,
                     title: link.clause.title,
                   },
                 ]
@@ -6321,9 +6378,20 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     ...clausesOptions,
     enabled: templateId !== null,
   });
+  const pendingSlotRenames = useTemplateStudioStore(
+    (s) => s.pendingSlotRenames,
+  );
+  const setPendingSlotRename = useTemplateStudioStore(
+    (s) => s.setPendingSlotRename,
+  );
+  // Match by the link's effective slot name: a link with a pending (not-yet-
+  // flushed) rename matches its NEW name, not the stale one still on the server
+  // record, so the face stays resolved to the same clause across a rename.
   const link =
     linksData && "links" in linksData
-      ? linksData.links.find((l) => l.slotName === selected.expr)
+      ? linksData.links.find(
+          (l) => (pendingSlotRenames[l.id] ?? l.slotName) === selected.expr,
+        )
       : undefined;
 
   const invalidateLinks = () => {
@@ -6332,11 +6400,13 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     });
   };
 
-  // Rename a clause slot. When a clause is linked, the link row carries the
-  // slot name too, so rename the row first (API-first) and only rewrite the
-  // document markers on success: a failed call then never leaves the document
-  // renamed against a stale link.
-  const handleRename = async (next: string): Promise<boolean> => {
+  // Rename a clause slot. Rewrite the `{{@clause:...}}` document markers now
+  // (this marks the session dirty). When a clause is linked, the link row
+  // carries the slot name too, but that row rename is deferred to the save flow
+  // (see handleSave): recording it as a pending rename keeps the document edit
+  // and the row rename discardable together, so leaving without saving can never
+  // orphan the link against the stored document's old slot name.
+  const handleRename = (next: string): boolean => {
     const trimmed = next.trim();
     if (trimmed === selected.expr) {
       return true;
@@ -6344,32 +6414,11 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
     if (!isClauseSlotName(trimmed)) {
       return false;
     }
-    if (link === undefined) {
-      return actions?.renameClauseSlot(selected.expr, trimmed) ?? false;
+    const renamed = actions?.renameClauseSlot(selected.expr, trimmed) ?? false;
+    if (renamed && link !== undefined) {
+      setPendingSlotRename(link.id, trimmed);
     }
-    if (templateId === null) {
-      return false;
-    }
-    const response = await api
-      .templates({ templateId: toSafeId<"template">(templateId) })
-      .clauses({ linkId: toSafeId<"templateClause">(link.id) })
-      .patch({ slotName: trimmed });
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("common.error"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      // Handled: the row is unchanged, so keep the document untouched and
-      // suppress the generic invalid-name toast.
-      return true;
-    }
-    actions?.renameClauseSlot(selected.expr, trimmed);
-    invalidateLinks();
-    return true;
+    return renamed;
   };
 
   return (
@@ -7887,9 +7936,10 @@ const SaveRecipeDialog = ({
 };
 
 /** Click-to-edit clause slot name: rewrites the `{{@clause:name}}` markers in
- *  the document. When a clause is linked, `onRename` also renames the stored
- *  `slotName` link row (see {@link ClauseFace}); it may run asynchronously and
- *  resolves `false` only when the new name is rejected as invalid. */
+ *  the document. When a clause is linked, `onRename` also records a deferred
+ *  rename of the stored `slotName` link row, flushed on the next template save
+ *  (see {@link ClauseFace}); it returns `false` only when the new name is
+ *  rejected as invalid. */
 const ClauseSlotEditor = ({
   slotName,
   onRename,
