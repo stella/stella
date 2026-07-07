@@ -155,7 +155,11 @@ export const resolveTemplateProperties = async ({
     };
   }
 
-  const validationError = validateTemplateProperties(templateProperties);
+  const roleResolution = getTemplateRoleResolution(templateProperties);
+  const validationError = validateTemplateProperties(
+    templateProperties,
+    roleResolution,
+  );
   if (validationError) {
     return validationError;
   }
@@ -185,23 +189,23 @@ export const resolveTemplateProperties = async ({
       (property) => property.id === templateProperty.sourceId,
     );
     if (existingById) {
-      if (isMalformedPropertyByRole(existingById, templateProperty)) {
-        return {
-          ok: false,
-          status: 422,
-          message:
-            "Document type classifier role is attached to an incompatible column",
-        };
+      if (
+        canReusePropertyByExactId({
+          property: existingById,
+          templateProperty,
+        })
+      ) {
+        propertyIdBySourceId.set(templateProperty.sourceId, existingById.id);
+        consumedExistingPropertyIds.add(existingById.id);
+        continue;
       }
-      propertyIdBySourceId.set(templateProperty.sourceId, existingById.id);
-      consumedExistingPropertyIds.add(existingById.id);
-      continue;
     }
 
     const existingByRole = findUniquePropertyByRole({
       existingProperties,
       templateProperty,
       consumedExistingPropertyIds,
+      roleResolution,
     });
     if (existingByRole) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByRole.id);
@@ -214,6 +218,7 @@ export const resolveTemplateProperties = async ({
         existingProperties,
         templateProperty,
         consumedExistingPropertyIds,
+        roleResolution,
       })
     ) {
       return {
@@ -229,6 +234,7 @@ export const resolveTemplateProperties = async ({
       templateProperty,
       consumedExistingPropertyIds,
       propertyIdsWithDependencies,
+      roleResolution,
     );
     if (existingByShape) {
       propertyIdBySourceId.set(templateProperty.sourceId, existingByShape.id);
@@ -283,7 +289,7 @@ export const resolveTemplateProperties = async ({
         name: templateProperty.name,
         content: templateProperty.content,
         tool: sanitizeTemplatePropertyTool(templateProperty.tool),
-        role: resolveTemplatePropertyRole(templateProperty),
+        role: resolveTemplatePropertyRole(templateProperty, roleResolution),
         status: templateProperty.tool.type === "ai-model" ? "stale" : "fresh",
       })
       .returning({ id: properties.id });
@@ -571,6 +577,7 @@ const hasTemplateDependencyCycle = ({
 
 const validateTemplateProperties = (
   templateProperties: readonly ViewTemplateProperty[],
+  roleResolution: TemplateRoleResolution,
 ): ResolveTemplatePropertiesResult | null => {
   const sourceIds = new Set<string>();
   const roles = new Set<NonNullable<typeof properties.$inferSelect.role>>();
@@ -590,7 +597,7 @@ const validateTemplateProperties = (
       return validationError;
     }
 
-    const role = resolveTemplatePropertyRole(templateProperty);
+    const role = resolveTemplatePropertyRole(templateProperty, roleResolution);
     if (role) {
       if (roles.has(role)) {
         return {
@@ -607,6 +614,19 @@ const validateTemplateProperties = (
 };
 
 const DOCUMENT_TYPE_CLASSIFIER_ROLE = "document-type-classifier";
+
+type TemplateRoleResolution = {
+  inferLegacyDocumentTypeRole: boolean;
+};
+
+const getTemplateRoleResolution = (
+  templateProperties: readonly ViewTemplateProperty[],
+): TemplateRoleResolution => ({
+  inferLegacyDocumentTypeRole: !templateProperties.some(
+    (templateProperty) =>
+      templateProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE,
+  ),
+});
 
 type DocumentTypeClassifierShape = {
   content: typeof properties.$inferSelect.content;
@@ -688,15 +708,18 @@ const hasTemplatePropertyRole = (
 
 const isLegacyDocumentTypeClassifierTemplate = (
   templateProperty: ViewTemplateProperty,
+  { inferLegacyDocumentTypeRole }: TemplateRoleResolution,
 ): boolean =>
+  inferLegacyDocumentTypeRole &&
   !hasTemplatePropertyRole(templateProperty) &&
   normalizePropertyName(templateProperty.name) === "document type" &&
   isDocumentTypeClassifierShape(templateProperty);
 
 const resolveTemplatePropertyRole = (
   templateProperty: ViewTemplateProperty,
+  roleResolution: TemplateRoleResolution,
 ): typeof properties.$inferSelect.role =>
-  isLegacyDocumentTypeClassifierTemplate(templateProperty)
+  isLegacyDocumentTypeClassifierTemplate(templateProperty, roleResolution)
     ? DOCUMENT_TYPE_CLASSIFIER_ROLE
     : (templateProperty.role ?? null);
 
@@ -711,14 +734,16 @@ type PropertyRoleMatchArgs = {
   existingProperties: readonly PropertyRoleMatchCandidate[];
   templateProperty: ViewTemplateProperty;
   consumedExistingPropertyIds: ReadonlySet<string>;
+  roleResolution: TemplateRoleResolution;
 };
 
 const findUniquePropertyByRole = ({
   existingProperties,
   templateProperty,
   consumedExistingPropertyIds,
+  roleResolution,
 }: PropertyRoleMatchArgs) => {
-  const role = resolveTemplatePropertyRole(templateProperty);
+  const role = resolveTemplatePropertyRole(templateProperty, roleResolution);
 
   if (!role) {
     return undefined;
@@ -736,8 +761,9 @@ const hasMalformedPropertyByRole = ({
   existingProperties,
   templateProperty,
   consumedExistingPropertyIds,
+  roleResolution,
 }: PropertyRoleMatchArgs): boolean => {
-  const role = resolveTemplatePropertyRole(templateProperty);
+  const role = resolveTemplatePropertyRole(templateProperty, roleResolution);
   if (!role) {
     return false;
   }
@@ -745,20 +771,40 @@ const hasMalformedPropertyByRole = ({
   return existingProperties.some(
     (property) =>
       !consumedExistingPropertyIds.has(property.id) &&
-      isMalformedPropertyByRole(property, templateProperty),
+      isMalformedPropertyByRole(property, role),
   );
 };
 
 const isMalformedPropertyByRole = (
   property: PropertyRoleMatchCandidate,
-  templateProperty: ViewTemplateProperty,
+  role: typeof properties.$inferSelect.role,
 ): boolean => {
-  const role = resolveTemplatePropertyRole(templateProperty);
   if (!role) {
     return false;
   }
 
   return property.role === role && !isDocumentTypeClassifierShape(property);
+};
+
+const canReusePropertyByExactId = ({
+  property,
+  templateProperty,
+}: {
+  property: PropertyRoleMatchCandidate;
+  templateProperty: ViewTemplateProperty;
+}): boolean => {
+  if (!hasTemplatePropertyRole(templateProperty)) {
+    return true;
+  }
+
+  const explicitRole = templateProperty.role ?? null;
+  if (!explicitRole) {
+    return true;
+  }
+
+  return (
+    property.role === explicitRole && isDocumentTypeClassifierShape(property)
+  );
 };
 
 const findUniquePropertyByShape = (
@@ -772,6 +818,7 @@ const findUniquePropertyByShape = (
   templateProperty: ViewTemplateProperty,
   consumedExistingPropertyIds: ReadonlySet<string>,
   propertyIdsWithDependencies: ReadonlySet<string>,
+  roleResolution: TemplateRoleResolution,
 ) => {
   // Reusing an AI column would silently inherit its existing dependency
   // graph, so only fall back when neither side carries dependencies.
@@ -786,7 +833,8 @@ const findUniquePropertyByShape = (
         normalizePropertyName(templateProperty.name) &&
       property.content.type === templateProperty.content.type &&
       property.tool.type === templateProperty.tool.type &&
-      property.role === resolveTemplatePropertyRole(templateProperty) &&
+      property.role ===
+        resolveTemplatePropertyRole(templateProperty, roleResolution) &&
       hasSamePropertyConfig(property, templateProperty) &&
       !(
         templateHasDependencies || propertyIdsWithDependencies.has(property.id)
