@@ -592,10 +592,13 @@ describe("chat third-party anonymization boundary", () => {
       const redactionMap = new Map<string, string>();
       const anonymized = fields.map((field) => {
         let next = field;
+        let nextIndex = 1;
         for (const original of ["Alice", "Bob"]) {
           if (next.includes(original)) {
-            next = next.replaceAll(original, "[PERSON_1]");
-            redactionMap.set("[PERSON_1]", original);
+            const placeholder = `[PERSON_${nextIndex}]`;
+            next = next.replaceAll(original, placeholder);
+            redactionMap.set(placeholder, original);
+            nextIndex += 1;
           }
         }
         return next;
@@ -623,7 +626,7 @@ describe("chat third-party anonymization boundary", () => {
     });
     const second = await prepareTextForThirdParty({
       boundary,
-      text: "Bob approved it.",
+      text: "Alice briefed Bob.",
     });
 
     expect(Result.isOk(first)).toBe(true);
@@ -632,7 +635,7 @@ describe("chat third-party anonymization boundary", () => {
       throw new Error("Expected anonymization to succeed");
     }
     expect(first.value).toBe("[PERSON_1] prepared the memo.");
-    expect(second.value).toBe("[PERSON_2] approved it.");
+    expect(second.value).toBe("[PERSON_1] briefed [PERSON_2].");
     if (boundary.type !== "anonymized") {
       throw new Error("Expected anonymized boundary");
     }

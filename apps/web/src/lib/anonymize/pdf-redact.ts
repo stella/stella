@@ -24,9 +24,11 @@ const MAX_PLACEHOLDER_SIZE = 10;
  * longer part of the public wasm surface. */
 const DEFAULT_REDACT_STRING = "[REDACTED]";
 
+const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
+
 const parsePlaceholderLabel = (placeholder: string): string | null => {
-  const match = /^\[([A-Z][A-Z0-9_]*)_\d+\]$/u.exec(placeholder);
-  const label = match?.[1];
+  const match = PLACEHOLDER_LABEL.exec(placeholder);
+  const label = match?.groups?.["label"];
   return label?.toLowerCase().replaceAll("_", " ") ?? null;
 };
 

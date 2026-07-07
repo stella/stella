@@ -214,9 +214,11 @@ type NativeRedaction = {
   entityCount: number;
 };
 
+const PLACEHOLDER_LABEL = /^\[(?<label>[A-Z][A-Z0-9_]*)_\d+\]$/u;
+
 const parsePlaceholderLabel = (placeholder: string): string | null => {
-  const match = /^\[([A-Z][A-Z0-9_]*)_\d+\]$/u.exec(placeholder);
-  return match?.[1] ?? null;
+  const match = PLACEHOLDER_LABEL.exec(placeholder);
+  return match?.groups?.["label"] ?? null;
 };
 
 const normalizeEntityLabelForPlaceholder = (label: string): string =>

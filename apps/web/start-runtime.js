@@ -4,6 +4,10 @@ const DEFAULT_PORT = 3002;
 const DEFAULT_HOST = "0.0.0.0";
 const CLIENT_DIST_URL = new URL("dist/client/", import.meta.url);
 const IMMUTABLE_ASSET_PREFIX = "/assets/";
+const CROSS_ORIGIN_ISOLATION_HEADERS = {
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Cross-Origin-Embedder-Policy": "credentialless",
+};
 
 const port = Number.parseInt(Bun.env.PORT ?? String(DEFAULT_PORT), 10);
 const hostname = Bun.env.HOST ?? DEFAULT_HOST;
@@ -35,6 +39,23 @@ const createStartHandler = (candidate) => {
 };
 
 const startHandler = createStartHandler(handler);
+
+/**
+ * @param {Response} response Response to make compatible with wasm worker isolation.
+ * @returns {Response} Response with cross-origin isolation headers.
+ */
+const withCrossOriginIsolationHeaders = (response) => {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(CROSS_ORIGIN_ISOLATION_HEADERS)) {
+    headers.set(name, value);
+  }
+
+  return new Response(response.body, {
+    headers,
+    status: response.status,
+    statusText: response.statusText,
+  });
+};
 
 /** @param {URL} requestUrl Parsed incoming request URL. */
 const toClientAssetUrl = (requestUrl) => {
@@ -118,9 +139,9 @@ Bun.serve({
 
     const assetResponse = await serveClientAsset(request);
     if (assetResponse) {
-      return assetResponse;
+      return withCrossOriginIsolationHeaders(assetResponse);
     }
 
-    return await startHandler.fetch(request);
+    return withCrossOriginIsolationHeaders(await startHandler.fetch(request));
   },
 });
