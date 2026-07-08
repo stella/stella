@@ -20,8 +20,6 @@ export const LIMITS = {
   /** Worst-case file fields scanned across one entity's versions
    *  (versionsPerEntity * propertiesCount). */
   versionFieldsScanLimit: 20_000,
-  /** Cap for the deprecated/frozen prompt-shortcuts listing (team + own). */
-  promptShortcutsListMax: 500,
   calendarTasksMax: 200,
   /** Max tasks returned by the "my tasks" listing. */
   myTasksMax: 200,

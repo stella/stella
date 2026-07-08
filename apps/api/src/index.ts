@@ -49,7 +49,6 @@ import { ratesRoute } from "@/api/handlers/rates/routes";
 import { initReportExportWorker } from "@/api/handlers/reports/report-export-queue";
 import { reportsRoute } from "@/api/handlers/reports/routes";
 import { searchRoute } from "@/api/handlers/search/routes";
-import { shortcutsRoute } from "@/api/handlers/shortcuts/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
@@ -451,7 +450,6 @@ const api = new Elysia()
       .use(userFilesRoute)
       .use(skillsRoute)
       .use(usageRoute)
-      .use(shortcutsRoute)
       .use(viewTemplatesRoute)
       .use(viewsRoute)
       .use(tasksRoute)

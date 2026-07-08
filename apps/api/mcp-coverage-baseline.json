@@ -92,7 +92,6 @@
   "apps/api/src/handlers/reports/export-view.ts",
   "apps/api/src/handlers/reports/list-templates.ts",
   "apps/api/src/handlers/reports/read-export.ts",
-  "apps/api/src/handlers/shortcuts/list.ts",
   "apps/api/src/handlers/skills/create.ts",
   "apps/api/src/handlers/skills/delete.ts",
   "apps/api/src/handlers/skills/from-blueprint.ts",

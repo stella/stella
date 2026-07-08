@@ -63,7 +63,6 @@ export type SafeIdType =
   | "playbookDefinition"
   | "playbookDefinitionVersion"
   | "property"
-  | "promptShortcut"
   | "propertyDependency"
   | "rateEntry"
   | "rateTable"

@@ -38,7 +38,6 @@ import {
   mcpOAuthState,
   mcpUserConnections,
   pendingUploads,
-  promptShortcuts,
   rateEntries,
   taskAssignees,
   userFiles,
@@ -880,13 +879,10 @@ export const verifyAndDeleteUser = async (
           .delete(chatThreads)
           .where(eq(chatThreads.userId, currentUserId));
 
-        // 11. Personal workspace view templates, prompt shortcuts, agent skills
+        // 11. Personal workspace view templates and agent skills
         await tx
           .delete(workspaceViewTemplates)
           .where(eq(workspaceViewTemplates.userId, currentUserId));
-        await tx
-          .delete(promptShortcuts)
-          .where(eq(promptShortcuts.userId, currentUserId));
         await tx
           .delete(agentSkills)
           .where(eq(agentSkills.userId, currentUserId));
