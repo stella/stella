@@ -64,7 +64,6 @@ import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$work
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- fileOptions gets its fieldId from a Zustand store, not route params; a loader-time guess risks a cache-key mismatch
 import PdfViewer, {
   PDFSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
@@ -127,10 +126,28 @@ export const Route = createFileRoute(
       return;
     }
 
-    await ensureRouteQueryData(
+    const entity = await ensureRouteQueryData(
       context.queryClient,
       entityOptions(params.workspaceId, deps.entity),
     );
+
+    // `field` is the fieldId FullscreenPdfViewer eventually reads via
+    // usePDFStore, but on a cold navigation that store is only just created
+    // (PDFProvider seeds it from this same search param, see `key={fieldId}`
+    // below), so the value is already known here. Only PDF-family fields
+    // render through PdfViewer/fileOptions; docx fields take an entirely
+    // different display path (DocxBrowserEditor/fieldFileOptions) that never
+    // reads fileOptions, so gate the prefetch on the resolved mimeType to
+    // avoid downloading a file buffer the component will never use.
+    const field = entity.fields.find((f) => f.id === deps.field);
+    const rendersInPdfViewer =
+      field?.content.type === "file" && field.content.mimeType !== DOCX_MIME;
+    if (rendersInPdfViewer) {
+      await ensureRouteQueryData(
+        context.queryClient,
+        fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
+      );
+    }
   },
   pendingComponent: () => <DocxLoadingShell />,
 });

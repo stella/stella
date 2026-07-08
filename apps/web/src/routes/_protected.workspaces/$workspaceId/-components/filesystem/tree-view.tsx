@@ -1,6 +1,7 @@
 import {
   Fragment,
   useCallback,
+  useDeferredValue,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -89,7 +90,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import {
-  useFilesystemEntitiesOptions,
+  filesystemEntitiesOptions,
   visibleEntityFieldIds,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
@@ -352,14 +353,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     });
   };
 
+  // Defers the key so useSuspenseQuery keeps showing stale data instead of
+  // triggering the suspense boundary when filters or sorts change.
   const { data: entityData } = useSuspenseQuery(
-    useFilesystemEntitiesOptions({
-      workspaceId,
-      filters,
-      sorts,
-      fieldMode: "visible",
-      fieldIds,
-    }),
+    filesystemEntitiesOptions(
+      useDeferredValue({
+        workspaceId,
+        filters,
+        sorts,
+        fieldMode: "visible",
+        fieldIds,
+      }),
+    ),
   );
   const data = entityData.entities;
   // Parent links of ancestor folders the API backfills when a filter/search
