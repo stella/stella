@@ -1326,12 +1326,31 @@ const FileChatOverlayInner = ({
       if (!part) {
         return;
       }
-      const bridge = createFolioAgentBridge();
-      const args = parseCompletedToolCallArguments(part) ?? {};
-      const output = bridge
-        ? executeFolioToolCall(toolName, args, bridge)
-        : { ok: false, error: "No document is open." };
-      await addToolResult({ output, tool: toolName, toolCallId: part.id });
+      try {
+        const bridge = createFolioAgentBridge();
+        const args = parseCompletedToolCallArguments(part) ?? {};
+        const output = bridge
+          ? await Promise.resolve(executeFolioToolCall(toolName, args, bridge))
+          : { ok: false, error: "No document is open." };
+        await addToolResult({ output, tool: toolName, toolCallId: part.id });
+      } catch (toolCallError) {
+        getAnalytics().captureError(toolCallError);
+        try {
+          await addToolResult({
+            output: {
+              ok: false,
+              error:
+                toolCallError instanceof Error
+                  ? toolCallError.message
+                  : String(toolCallError),
+            },
+            tool: toolName,
+            toolCallId: part.id,
+          });
+        } catch (reportError) {
+          getAnalytics().captureError(reportError);
+        }
+      }
       return;
     }
 
