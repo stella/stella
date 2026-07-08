@@ -1064,13 +1064,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     setAutosaveStatus,
   ]);
 
-  const handleAiDocxCommentsChange = useCallback(
-    (comments: DocxComments) => {
-      setDocxComments(comments);
-      handleChange();
-    },
-    [handleChange],
-  );
+  const handleAiDocxCommentsChange = (comments: DocxComments) => {
+    setDocxComments(comments);
+    handleChange();
+  };
 
   const handleFinalize = useCallback(async () => {
     // Save the final version before finalizing

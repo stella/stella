@@ -1373,7 +1373,7 @@ const FileChatOverlayInner = ({
     if (FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.has(toolName)) {
       await approveAndRunFolioAgentCommentMutation({
         approvalId,
-        approve: () => handleApprove(approvalId, toolName),
+        approve: async () => await handleApprove(approvalId, toolName),
         toolName,
       });
       return;
@@ -1388,7 +1388,8 @@ const FileChatOverlayInner = ({
   ) => {
     await approveAndRunFolioAgentCommentMutation({
       approvalId,
-      approve: () => handleAllowInConversation(approvalId, toolName),
+      approve: async () =>
+        await handleAllowInConversation(approvalId, toolName),
       toolName,
     });
   };
@@ -1399,7 +1400,7 @@ const FileChatOverlayInner = ({
   ) => {
     await approveAndRunFolioAgentCommentMutation({
       approvalId,
-      approve: () => handleAlwaysAllow(approvalId, toolName),
+      approve: async () => await handleAlwaysAllow(approvalId, toolName),
       toolName,
     });
   };
