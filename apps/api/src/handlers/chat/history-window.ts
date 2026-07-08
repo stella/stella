@@ -1,14 +1,16 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError, SafeDbOrTx, Transaction } from "@/api/db";
+import { withScopedTx } from "@/api/db";
 import { chatMessages } from "@/api/db/schema";
 import {
   chatMessageContentFromMessage,
   chatMessageFromPersisted,
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
-import { readLatestChatCompaction } from "@/api/handlers/chat/persistent-compaction";
+import type { ChatThreadCompactionCheckpoint } from "@/api/handlers/chat/persistent-compaction";
+import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
 import type {
   ChatMessage,
   ChatMessageContent,
@@ -38,8 +40,8 @@ const toWindowedMessage = (row: {
   content: chatMessageContentFromMessage(chatMessageFromPersisted(row)),
 });
 
-type LoadWindowedThreadMessagesArgs = {
-  safeDb: SafeDb;
+type LoadWindowedThreadMessagesOnTxArgs = {
+  tx: Transaction;
   threadId: SafeId<"chatThread">;
   /** Anonymized sends never form a checkpoint, so their no-checkpoint read is
    *  hard-capped; a non-anonymized send loads the full pre-checkpoint history so
@@ -47,7 +49,12 @@ type LoadWindowedThreadMessagesArgs = {
   isAnonymized: boolean;
   /** Upper bound on rows read in the capped (anonymized) case; defaults to the
    *  per-send history window. */
-  limit?: number;
+  limit?: number | undefined;
+  /** The active checkpoint, when the caller already fetched one (e.g.
+   *  alongside this call, in the same transaction) — skips this
+   *  function's own `readLatestChatCompactionOnTx` read. Omit to have it
+   *  self-fetch, as every existing caller does. */
+  checkpoint?: ChatThreadCompactionCheckpoint | null | undefined;
 };
 
 /**
@@ -77,94 +84,105 @@ type LoadWindowedThreadMessagesArgs = {
  *    read stays bounded. Older rows are dropped — an accepted limit of the
  *    anonymized path, which cannot build a durable summary.
  */
-export const loadWindowedThreadMessages = async ({
-  safeDb,
+const loadWindowedThreadMessagesOnTx = async ({
+  tx,
   threadId,
   isAnonymized,
   limit = LIMITS.chatSendHistoryWindowMax,
+  checkpoint,
+}: LoadWindowedThreadMessagesOnTxArgs): Promise<WindowedThreadMessage[]> => {
+  const resolvedCheckpoint =
+    checkpoint === undefined
+      ? await readLatestChatCompactionOnTx({ threadId, tx })
+      : checkpoint;
+  const firstKeptMessageId = resolvedCheckpoint?.firstKeptMessageId ?? null;
+
+  if (firstKeptMessageId) {
+    const rows = await tx
+      .select({
+        id: chatMessages.id,
+        role: chatMessages.role,
+        content: chatMessages.content,
+      })
+      .from(chatMessages)
+      .where(
+        and(
+          eq(chatMessages.threadId, threadId),
+          sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (select b.created_at, b.id from chat_messages b where b.id = ${firstKeptMessageId})`,
+        ),
+      )
+      // SAFETY: token-bounded by the compaction preserve window; a new
+      // checkpoint forms once [firstKept..now] crosses the trigger, so it
+      // cannot grow unbounded. Intentionally NOT row-capped: firstKept
+      // must remain in the result for the stored summary to anchor.
+      // eslint-disable-next-line require-query-limit/require-query-limit -- token-bounded preserve window; see SAFETY above
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+    return rows.map(toWindowedMessage);
+  }
+
+  if (!isAnonymized) {
+    // No checkpoint yet, but a non-anonymized thread forms one once its
+    // history crosses the compaction trigger, so read the full pre-checkpoint
+    // history and let compactChatMessagesForModel summarize the older prefix
+    // into the prompt. Capping here would drop that prefix from the prompt on
+    // the send that first exceeds the window (the checkpoint is written only
+    // afterwards, off the hot path).
+    const fullRows = await tx
+      .select({
+        id: chatMessages.id,
+        role: chatMessages.role,
+        content: chatMessages.content,
+      })
+      .from(chatMessages)
+      .where(eq(chatMessages.threadId, threadId))
+      // SAFETY: token-bounded by the compaction trigger — a checkpoint
+      // forms once the history crosses it, after which the preserve-window
+      // branch above bounds the read. Only un-checkpointed non-anonymized
+      // threads (always under the trigger) read in full here.
+      // eslint-disable-next-line require-query-limit/require-query-limit -- token-bounded pre-checkpoint history; see SAFETY above
+      .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+    return fullRows.map(toWindowedMessage);
+  }
+
+  // Anonymized thread: it never forms a checkpoint, so hard-cap the read at
+  // the most recent `limit` rows (reversed to ascending below).
+  const rows = await tx
+    .select({
+      id: chatMessages.id,
+      role: chatMessages.role,
+      content: chatMessages.content,
+    })
+    .from(chatMessages)
+    .where(eq(chatMessages.threadId, threadId))
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(limit);
+
+  return rows.toReversed().map(toWindowedMessage);
+};
+
+type LoadWindowedThreadMessagesArgs = SafeDbOrTx &
+  Omit<LoadWindowedThreadMessagesOnTxArgs, "tx">;
+
+export const loadWindowedThreadMessages = async ({
+  threadId,
+  isAnonymized,
+  limit,
+  checkpoint,
+  ...handle
 }: LoadWindowedThreadMessagesArgs): Promise<
   Result<WindowedThreadMessage[], SafeDbError>
 > =>
-  await Result.gen(async function* () {
-    const checkpoint = yield* Result.await(
-      readLatestChatCompaction({ safeDb, threadId }),
-    );
-    const firstKeptMessageId = checkpoint?.firstKeptMessageId ?? null;
-
-    if (firstKeptMessageId) {
-      const rows = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({
-              id: chatMessages.id,
-              role: chatMessages.role,
-              content: chatMessages.content,
-            })
-            .from(chatMessages)
-            .where(
-              and(
-                eq(chatMessages.threadId, threadId),
-                sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (select b.created_at, b.id from chat_messages b where b.id = ${firstKeptMessageId})`,
-              ),
-            )
-            // SAFETY: token-bounded by the compaction preserve window; a new
-            // checkpoint forms once [firstKept..now] crosses the trigger, so it
-            // cannot grow unbounded. Intentionally NOT row-capped: firstKept
-            // must remain in the result for the stored summary to anchor.
-            // eslint-disable-next-line require-query-limit/require-query-limit -- token-bounded preserve window; see SAFETY above
-            .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
-        ),
-      );
-      return Result.ok(rows.map(toWindowedMessage));
-    }
-
-    if (!isAnonymized) {
-      // No checkpoint yet, but a non-anonymized thread forms one once its
-      // history crosses the compaction trigger, so read the full pre-checkpoint
-      // history and let compactChatMessagesForModel summarize the older prefix
-      // into the prompt. Capping here would drop that prefix from the prompt on
-      // the send that first exceeds the window (the checkpoint is written only
-      // afterwards, off the hot path).
-      const fullRows = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({
-              id: chatMessages.id,
-              role: chatMessages.role,
-              content: chatMessages.content,
-            })
-            .from(chatMessages)
-            .where(eq(chatMessages.threadId, threadId))
-            // SAFETY: token-bounded by the compaction trigger — a checkpoint
-            // forms once the history crosses it, after which the preserve-window
-            // branch above bounds the read. Only un-checkpointed non-anonymized
-            // threads (always under the trigger) read in full here.
-            // eslint-disable-next-line require-query-limit/require-query-limit -- token-bounded pre-checkpoint history; see SAFETY above
-            .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
-        ),
-      );
-      return Result.ok(fullRows.map(toWindowedMessage));
-    }
-
-    // Anonymized thread: it never forms a checkpoint, so hard-cap the read at
-    // the most recent `limit` rows (reversed to ascending below).
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: chatMessages.id,
-            role: chatMessages.role,
-            content: chatMessages.content,
-          })
-          .from(chatMessages)
-          .where(eq(chatMessages.threadId, threadId))
-          .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
-          .limit(limit),
-      ),
-    );
-
-    return Result.ok(rows.toReversed().map(toWindowedMessage));
-  });
+  await withScopedTx(
+    handle,
+    async (tx) =>
+      await loadWindowedThreadMessagesOnTx({
+        tx,
+        threadId,
+        isAnonymized,
+        limit,
+        checkpoint,
+      }),
+  );
 
 type LoadFullThreadHistoryArgs = {
   safeDb: SafeDb;

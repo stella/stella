@@ -1,7 +1,8 @@
-import { Result } from "better-result";
+import type { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDbError, SafeDbOrTx, Transaction } from "@/api/db";
+import { withScopedTx } from "@/api/db";
 import { chatMessages } from "@/api/db/schema";
 import {
   chatMessageFromPersisted,
@@ -77,13 +78,16 @@ export const decodeMessagePageCursor = (
   return brandPersistedChatMessageId(rawId);
 };
 
-type LoadChatMessagePageArgs = {
-  safeDb: SafeDb;
+type LoadChatMessagePageOnTxArgs = {
+  tx: Transaction;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   /** Boundary message id; the page returns rows strictly older than it. */
   before?: SafeId<"chatMessage"> | undefined;
 };
+
+type LoadChatMessagePageArgs = SafeDbOrTx &
+  Omit<LoadChatMessagePageOnTxArgs, "tx">;
 
 export type ChatMessagePage = {
   messages: ClientMessage[];
@@ -95,69 +99,82 @@ export type ChatMessagePage = {
 };
 
 /**
+ * Core query, callable directly against an already-open transaction so
+ * callers sharing one scoped tx (e.g. get-messages.ts) can run it without
+ * paying for a second `set_config`.
+ */
+const loadChatMessagePageOnTx = async ({
+  tx,
+  threadId,
+  userId,
+  before,
+}: LoadChatMessagePageOnTxArgs): Promise<ChatMessagePage> => {
+  const pageSize = LIMITS.chatMessagesPageSizeDefault;
+
+  const rows = await tx
+    .select({
+      id: chatMessages.id,
+      role: chatMessages.role,
+      content: chatMessages.content,
+      createdAt: chatMessages.createdAt,
+    })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.threadId, threadId),
+        // Compare the full-precision (createdAt, id) tuple in-DB against
+        // the boundary row (looked up by id), so the comparison stays at
+        // the column's microsecond precision instead of the cursor's
+        // millisecond JS Date.
+        before
+          ? sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select b.created_at, b.id from chat_messages b where b.id = ${before})`
+          : undefined,
+      ),
+    )
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(pageSize + 1);
+
+  const hasOlder = rows.length > pageSize;
+  const pageAscending = rows.slice(0, pageSize).toReversed();
+
+  const oldest = pageAscending.at(0);
+  const olderCursor =
+    hasOlder && oldest ? encodeMessagePageCursor(oldest.id) : null;
+
+  const placeholderById = await loadPlaceholdersOnTx({
+    tx,
+    userId,
+    rows: pageAscending,
+  });
+
+  const lastActivityAt = pageAscending.at(-1)?.createdAt.toISOString() ?? null;
+
+  return {
+    messages: pageAscending.map((row) =>
+      clientMessageFromPageRow(row, placeholderById),
+    ),
+    olderCursor,
+    lastActivityAt,
+  };
+};
+
+/**
  * Load one descending page of a thread's messages, returned ascending
  * (oldest-first), plus a cursor to fetch the page strictly older than the
  * oldest row. `before` walks backwards through history; omit it for the most
  * recent page.
  */
 export const loadChatMessagePage = async ({
-  safeDb,
   threadId,
   userId,
   before,
+  ...handle
 }: LoadChatMessagePageArgs): Promise<Result<ChatMessagePage, SafeDbError>> =>
-  await Result.gen(async function* () {
-    const pageSize = LIMITS.chatMessagesPageSizeDefault;
-
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: chatMessages.id,
-            role: chatMessages.role,
-            content: chatMessages.content,
-            createdAt: chatMessages.createdAt,
-          })
-          .from(chatMessages)
-          .where(
-            and(
-              eq(chatMessages.threadId, threadId),
-              // Compare the full-precision (createdAt, id) tuple in-DB against
-              // the boundary row (looked up by id), so the comparison stays at
-              // the column's microsecond precision instead of the cursor's
-              // millisecond JS Date.
-              before
-                ? sql`(${chatMessages.createdAt}, ${chatMessages.id}) < (select b.created_at, b.id from chat_messages b where b.id = ${before})`
-                : undefined,
-            ),
-          )
-          .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
-          .limit(pageSize + 1),
-      ),
-    );
-
-    const hasOlder = rows.length > pageSize;
-    const pageAscending = rows.slice(0, pageSize).toReversed();
-
-    const oldest = pageAscending.at(0);
-    const olderCursor =
-      hasOlder && oldest ? encodeMessagePageCursor(oldest.id) : null;
-
-    const placeholderById = yield* Result.await(
-      loadPlaceholders({ safeDb, userId, rows: pageAscending }),
-    );
-
-    const lastActivityAt =
-      pageAscending.at(-1)?.createdAt.toISOString() ?? null;
-
-    return Result.ok({
-      messages: pageAscending.map((row) =>
-        clientMessageFromPageRow(row, placeholderById),
-      ),
-      olderCursor,
-      lastActivityAt,
-    });
-  });
+  await withScopedTx(
+    handle,
+    async (tx) =>
+      await loadChatMessagePageOnTx({ tx, threadId, userId, before }),
+  );
 
 type ChatMessagePageRow = {
   content: PersistedChatMessageContent;
@@ -178,55 +195,51 @@ export const clientMessageFromPageRow = (
   };
 };
 
-type LoadPlaceholdersArgs = {
-  safeDb: SafeDb;
+type LoadPlaceholdersOnTxArgs = {
+  tx: Transaction;
   userId: SafeId<"user">;
   rows: { content: PersistedChatMessageContent }[];
 };
 
-const loadPlaceholders = async ({
-  safeDb,
+const loadPlaceholdersOnTx = async ({
+  tx,
   userId,
   rows,
-}: LoadPlaceholdersArgs): Promise<Result<Map<string, string>, SafeDbError>> =>
-  await Result.gen(async function* () {
-    const referencedFileIds = new Set<SafeId<"userFile">>();
-    for (const row of rows) {
-      for (const part of normalizePersistedChatMessageContent(row.content)
-        .parts) {
-        if (!isChatAttachmentPart(part)) {
-          continue;
-        }
-        const fileId = parseUserFileId(getChatAttachmentUrl(part));
-        if (fileId) {
-          referencedFileIds.add(fileId);
-        }
+}: LoadPlaceholdersOnTxArgs): Promise<Map<string, string>> => {
+  const referencedFileIds = new Set<SafeId<"userFile">>();
+  for (const row of rows) {
+    for (const part of normalizePersistedChatMessageContent(row.content)
+      .parts) {
+      if (!isChatAttachmentPart(part)) {
+        continue;
+      }
+      const fileId = parseUserFileId(getChatAttachmentUrl(part));
+      if (fileId) {
+        referencedFileIds.add(fileId);
       }
     }
+  }
 
-    const placeholderById = new Map<string, string>();
-    if (referencedFileIds.size === 0) {
-      return Result.ok(placeholderById);
+  const placeholderById = new Map<string, string>();
+  if (referencedFileIds.size === 0) {
+    return placeholderById;
+  }
+
+  const fileRows =
+    // SAFETY: bounded by the `id IN (...)` set of file ids referenced by this page's messages (userFiles.id is the PK).
+    // eslint-disable-next-line require-query-limit/require-query-limit
+    await tx.query.userFiles.findMany({
+      where: {
+        id: { in: [...referencedFileIds] },
+        userId: { eq: userId },
+      },
+      columns: { id: true, placeholder: true },
+    });
+  for (const fileRow of fileRows) {
+    if (fileRow.placeholder !== null) {
+      placeholderById.set(fileRow.id, fileRow.placeholder);
     }
+  }
 
-    const fileRows = yield* Result.await(
-      safeDb((tx) =>
-        // SAFETY: bounded by the `id IN (...)` set of file ids referenced by this page's messages (userFiles.id is the PK).
-        // eslint-disable-next-line require-query-limit/require-query-limit
-        tx.query.userFiles.findMany({
-          where: {
-            id: { in: [...referencedFileIds] },
-            userId: { eq: userId },
-          },
-          columns: { id: true, placeholder: true },
-        }),
-      ),
-    );
-    for (const fileRow of fileRows) {
-      if (fileRow.placeholder !== null) {
-        placeholderById.set(fileRow.id, fileRow.placeholder);
-      }
-    }
-
-    return Result.ok(placeholderById);
-  });
+  return placeholderById;
+};

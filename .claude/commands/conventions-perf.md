@@ -150,24 +150,24 @@ stale.
 
 Worst DB-query budgets per endpoint:
 
-| Endpoint                                   | Route (first seen)                        | DB query budget |
-| ------------------------------------------- | ------------------------------------------ | ---------------- |
-| `GET /v1/chat/threads/:id/messages`         | `/workspaces/$workspaceId/$viewId/document` | 27                |
-| `GET /v1/workspaces/:id/overview`           | `/workspaces/$workspaceId target`           | 25                |
-| `GET /v1/contacts/:id`                      | `/contacts/$contactId`                      | 24                |
-| `GET /v1/entities/:id/entity/:id/versions`  | `/workspaces/$workspaceId/$viewId/document` | 24                |
-| `GET /v1/workspaces/:id`                    | `/workspaces/$workspaceId target`           | 23                |
+| Endpoint                                   | Route (first seen)                          | DB query budget |
+| ------------------------------------------- | -------------------------------------------- | ---------------- |
+| `GET /v1/contacts/:id`                      | `/contacts/$contactId`                       | 16                |
+| `GET /v1/entities/:id/entity/:id/versions`  | `/workspaces/$workspaceId/$viewId/document`  | 16                |
+| `POST /v1/chat/workspaces/:id/file-thread`  | `/workspaces/$workspaceId/entities/$entityId` | 14                |
+| `GET /v1/catalogue`                         | `/knowledge/mcp target`                      | 13                |
+| `GET /v1/workspaces`                        | `/todos`                                     | 12                |
+
+(The previous top offenders were fixed in 2026-07: the validateAuth
+resolve used to run 2-3 times per request, a 14-21 query floor on every
+authenticated endpoint, now ~6; chat thread messages went 27 to 9-12 and
+workspace overview 25 to 9 after batching. The remaining budgets above
+mostly sit near the floor plus a handful of handler reads; the next
+meaningful lever is the per-`safeDb`-call `set_config` round trip.)
 
 Deepest waterfalls: `/workspaces/$workspaceId/entities/$entityId` at depth 11
-is the clear outlier (everything else tops out at 8); `/workspaces/$workspaceId/expenses`
-is next at 8, followed by a cluster at 7 (`/knowledge/mcp target`,
-`/workspaces/$workspaceId target`, `/workspaces/$workspaceId/$viewId`,
-`/workspaces/$workspaceId/invoices`, `/workspaces/$workspaceId/timesheets target`).
-
-Highest request-count routes: `/workspaces/$workspaceId/$viewId/document` and
-`/workspaces/$workspaceId/entities/$entityId` each fire 24 distinct API
-requests to render; both are entity/document detail routes pulling in chat,
-files, properties, workflow, and justification data in one page.
+remains the clear outlier; `/workspaces/$workspaceId/$viewId/document` is next
+at 9, then `/workspaces/$workspaceId/expenses` at 7.
 
 ## Cross-Links
 

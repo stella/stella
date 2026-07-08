@@ -171,6 +171,15 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
   .use(permissionMacro)
+  // Kept deliberately: this guard is the type-level carrier of
+  // `validateAuth` for Elysia's context composition. `permissions` is a
+  // function-form macro (see "Known Elysia Gotchas" in AGENTS.md) that
+  // applies `validateAuth` at runtime but not in type composition, so a
+  // per-route `validateAuth: true` literal instead of this guard breaks
+  // sibling macros' schema merging (e.g. `invalidateQuery`'s body
+  // extension). The per-request memoization in `resolveValidateAuth`
+  // (lib/auth.ts) neutralizes the extra resolve this guard stacks on top
+  // of `permissions`. See tests/security/route-auth-invariants.test.ts.
   .guard({
     validateAuth: true,
   })
