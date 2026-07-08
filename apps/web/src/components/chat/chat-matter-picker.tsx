@@ -47,7 +47,17 @@ const NO_CLIENT_KEY = "__no_client__";
 // — long matter/client names then overflow the capped popup width and force a
 // horizontal scrollbar. Switching the label cell to `minmax(0,1fr)` lets it
 // shrink so the inner `truncate` takes effect and only vertical scroll remains.
-const TRUNCATING_ITEM_CLASS = "grid-cols-[1rem_minmax(0,1fr)]";
+//
+// The checkbox item's own `ps-2` start padding, plus its `1rem`-wide leading
+// indicator column (reserved for the checkmark even while unchecked) and
+// `gap-2`, together push row content ~32px right of the popup edge — far
+// past the search input above, which sits ~19px in (its own container
+// padding plus the search box's border and inset). `packages/ui`'s
+// `MenuCheckboxItem` isn't ours to change, so trim the padding/gap here down
+// to the minimum that still leaves room for the checkmark glyph without
+// clipping it against the label that follows.
+const TRUNCATING_ITEM_CLASS =
+  "grid-cols-[0.75rem_minmax(0,1fr)] gap-1.5 ps-1.5";
 type Matter = {
   id: string;
   name: string;
