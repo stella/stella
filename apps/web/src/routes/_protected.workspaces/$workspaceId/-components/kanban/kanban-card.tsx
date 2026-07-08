@@ -521,6 +521,7 @@ const KanbanCardFieldValue = ({
       fieldId={fieldId}
       property={property}
       propertyId={property.id}
+      readonly={entity.readOnly}
       workspaceId={workspaceId}
       {...manualSaveProps}
     />
