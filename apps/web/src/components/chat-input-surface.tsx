@@ -14,7 +14,10 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
-import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
+import {
+  ComposerPlusMenu,
+  type ComposerModelsMenuProps,
+} from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -55,15 +58,21 @@ type ChatInputSurfaceProps = {
    */
   dock?: ReactNode;
   /**
-   * When provided, the (+) menu gains a "Models" item. Omit on surfaces
-   * without a model selector.
+   * When provided, the (+) menu gains a Models submenu. Omit on surfaces
+   * without a model picker.
    */
-  onOpenModelSelector?: (() => void) | undefined;
+  models?: ComposerModelsMenuProps | undefined;
   /**
-   * When provided, the (+) menu gains an "MCP servers" item. Omit on
+   * When provided, the (+) menu gains a Skills submenu, wired to this
+   * surface's own editor. Omit on surfaces without skill insertion
+   * (e.g. `activeOrganizationId` is unavailable).
+   */
+  skillsOrganizationId?: string | undefined;
+  /**
+   * When provided, the (+) menu gains an MCP Servers submenu. Omit on
    * surfaces that don't navigate to the tools catalogue.
    */
-  onOpenMcpServers?: (() => void) | undefined;
+  mcpOrganizationId?: string | undefined;
 };
 
 export const ChatInputSurface = ({
@@ -78,8 +87,9 @@ export const ChatInputSurface = ({
   onStop,
   anonymized = false,
   dock,
-  onOpenModelSelector,
-  onOpenMcpServers,
+  models,
+  skillsOrganizationId,
+  mcpOrganizationId,
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -206,9 +216,18 @@ export const ChatInputSurface = ({
         <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
           <ComposerPlusMenu
             disabled={inputDisabled}
+            mcp={
+              mcpOrganizationId
+                ? { activeOrganizationId: mcpOrganizationId }
+                : undefined
+            }
+            models={models}
             onOpenFilePicker={openFilePicker}
-            onOpenMcpServers={onOpenMcpServers}
-            onOpenModelSelector={onOpenModelSelector}
+            skills={
+              skillsOrganizationId
+                ? { activeOrganizationId: skillsOrganizationId, editor }
+                : undefined
+            }
             triggerClassName="me-auto"
           />
           <input

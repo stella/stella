@@ -383,7 +383,13 @@ type Messages = {
     "composerMenu": {
       "mcpServers": "MCP servers";
       "models": "Models";
+      "noMcpServers": "No MCP servers available";
+      "noSkills": "No skills available";
       "open": "Open attachments and tools menu";
+      "openMcpSettings": "Open MCP Settings";
+      "openSkills": "Open Skills";
+      "searchMcpServers": "Search MCP servers...";
+      "searchSkills": "Search skills";
     };
     "contextMeter": {
       "attachments": "Attached documents";

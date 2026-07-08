@@ -207,6 +207,11 @@ export const chatKeys = {
     "threads",
     "grouped",
   ],
+  modelOptions: (activeOrganizationId: string) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "modelOptions",
+  ],
   threadTitle: (activeOrganizationId: string, key: ChatThreadTitleKey) => [
     ...chatKeys.all,
     activeOrganizationId,
@@ -306,6 +311,9 @@ type ThreadFetch = {
   lastActivityAt: string | null;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
+  /** Per-thread model override ("provider::modelId"); null uses the org
+   *  default (see `chatModelSelection.ts` on the API side). */
+  model: string | null;
   /** Model-context estimate for the next send; null for a missing or empty
    *  thread (nothing to meter yet). */
   context: ChatContextUsage | null;
@@ -424,6 +432,7 @@ const fetchThreadMessages = async (
         lastActivityAt: null,
         webSearchAvailable: false,
         webSearchEnabled: false,
+        model: null,
         context: null,
       };
     }
@@ -438,6 +447,7 @@ const fetchThreadMessages = async (
     lastActivityAt: response.data.lastActivityAt,
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
+    model: response.data.model,
     context: response.data.context,
   };
 };
@@ -1252,6 +1262,10 @@ export type ChatThreadFetched = {
    * fetch_url tools to the model.
    */
   webSearchEnabled: boolean;
+  /** Per-thread model override ("provider::modelId"); null uses the org
+   *  default. Mutated via PATCH /chat/threads/:id/model, same shape as
+   *  `webSearchEnabled` above. */
+  model: string | null;
   /**
    * Model-context estimate for the next send, driving the composer
    * meter. Null for a missing or empty thread (nothing to meter yet).
@@ -1955,6 +1969,26 @@ export const chatThreadSuggestedPromptsOptions = ({
       lastMessageId,
     ),
     queryFn: async () => await fetchThreadSuggestedPrompts(threadRef),
+  });
+
+const fetchChatModelOptions = async () => {
+  const response = await api.chat["model-options"].get();
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return response.data;
+};
+
+// The composer (+) menu's Models submenu fetches this lazily (only once the
+// menu opens) rather than eagerly on composer mount, so opening the chat
+// surface never fires the request for users who never touch the picker.
+export const modelOptionsOptions = (activeOrganizationId: string) =>
+  queryOptions({
+    queryKey: chatKeys.modelOptions(activeOrganizationId),
+    staleTime: STALE_TIME.FIVE.MINUTES,
+    queryFn: async () => await fetchChatModelOptions(),
   });
 
 export const groupedChatThreadsOptions = (activeOrganizationId: string) =>

@@ -2,6 +2,7 @@ import { useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import {
+  queryOptions,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -123,14 +124,14 @@ function ChatIndex() {
   // We deliberately don't reuse `chatThreadOptions` here because that
   // helper instantiates a stateful `Chat<>` inside its queryFn on
   // every miss; doing so on the chat-home render path froze the
-  // tab. We only need `webSearchAvailable` + `webSearchEnabled`,
-  // so a plain GET against the messages endpoint is enough.
+  // tab. We only need `webSearchAvailable` + `webSearchEnabled` +
+  // `model`, so a plain GET against the messages endpoint is enough.
   // Key shape mirrors `chatKeys.thread` up to position 4 so
   // `invalidateChatThread({ queryClient, threadRef })` (fired by
   // <ChatWebSearchToggle> on every PATCH) refetches us. Without
   // that match the toggle would flip server-side but the local
   // `webSearchEnabled` shown by this query would stay stale.
-  const { data: chatDraftMeta } = useQuery({
+  const draftMetaOptions = queryOptions({
     queryKey: [
       "chat",
       activeOrganizationId,
@@ -150,9 +151,11 @@ function ChatIndex() {
       return {
         webSearchAvailable: response.data.webSearchAvailable,
         webSearchEnabled: response.data.webSearchEnabled,
+        model: response.data.model,
       };
     },
   });
+  const { data: chatDraftMeta } = useQuery(draftMetaOptions);
 
   // Mirror the per-thread seeding from ChatThreadPage: if the user
   // previously enabled web search and the draft thread doesn't have
@@ -350,15 +353,18 @@ function ChatIndex() {
               autoFocus
               controller={controller}
               variant="large"
-              onOpenMcpServers={() => {
-                void navigate({
-                  to: "/knowledge/tools",
-                  search: { kind: "mcp" },
-                });
+              mcpOrganizationId={activeOrganizationId}
+              models={{
+                activeOrganizationId,
+                threadRef,
+                selectedModel: chatDraftMeta?.model ?? null,
+                onModelChange: (model) => {
+                  queryClient.setQueryData(draftMetaOptions.queryKey, (prev) =>
+                    prev ? { ...prev, model } : prev,
+                  );
+                },
               }}
-              onOpenModelSelector={() => {
-                useModelSelectorStore.getState().open();
-              }}
+              skillsOrganizationId={activeOrganizationId}
               dock={
                 <ChatComposerDock
                   data={{

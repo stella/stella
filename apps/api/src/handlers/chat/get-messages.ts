@@ -17,6 +17,7 @@ import {
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
@@ -80,6 +81,7 @@ const getMessages = createSafeRootHandler(
             contextMatterIds: true,
             webSearchEnabled: true,
             usedAnonymization: true,
+            chatModel: true,
           },
         });
 
@@ -181,6 +183,7 @@ const getMessages = createSafeRootHandler(
           lastActivityAt: null,
           webSearchAvailable: reads.webSearchAvailable,
           webSearchEnabled: false,
+          model: null,
           context: null,
         });
       }
@@ -223,7 +226,15 @@ const getMessages = createSafeRootHandler(
         subagents: areSubagentToolsRegistered({ delegationDepth: 0 }),
       },
     });
+    // Mirrors the send path's override resolution (send-message.ts) so the
+    // meter's denominator matches the model the next send would actually use.
+    const chatModelOverride = resolveEffectiveChatModelId({
+      devModelId: undefined,
+      threadChatModel: thread.chatModel,
+      orgAIConfig,
+    });
     const { triggerTokens } = resolveChatCompactionBudget({
+      chatModelOverride,
       orgAIConfig,
       organizationId: session.activeOrganizationId,
     });
@@ -253,6 +264,7 @@ const getMessages = createSafeRootHandler(
       lastActivityAt: page.lastActivityAt,
       webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,
+      model: thread.chatModel,
       context,
     });
   },

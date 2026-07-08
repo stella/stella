@@ -380,7 +380,13 @@
     "composerMenu": {
       "mcpServers": "Servidores MCP",
       "models": "Modelos",
-      "open": "Abrir el menú de archivos adjuntos y herramientas"
+      "noMcpServers": "No hay servidores MCP disponibles",
+      "noSkills": "No hay habilidades disponibles",
+      "open": "Abrir el menú de archivos adjuntos y herramientas",
+      "openMcpSettings": "Abrir configuración de MCP",
+      "openSkills": "Abrir habilidades",
+      "searchMcpServers": "Buscar servidores MCP...",
+      "searchSkills": "Buscar habilidades"
     },
     "contextMeter": {
       "attachments": "Documentos adjuntos",

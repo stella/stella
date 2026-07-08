@@ -380,7 +380,13 @@
     "composerMenu": {
       "mcpServers": "Serveurs MCP",
       "models": "Modèles",
-      "open": "Ouvrir le menu des pièces jointes et des outils"
+      "noMcpServers": "Aucun serveur MCP disponible",
+      "noSkills": "Aucune compétence disponible",
+      "open": "Ouvrir le menu des pièces jointes et des outils",
+      "openMcpSettings": "Ouvrir les paramètres MCP",
+      "openSkills": "Ouvrir les compétences",
+      "searchMcpServers": "Rechercher des serveurs MCP...",
+      "searchSkills": "Rechercher des compétences"
     },
     "contextMeter": {
       "attachments": "Documents joints",

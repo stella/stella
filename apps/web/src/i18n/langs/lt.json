@@ -380,7 +380,13 @@
     "composerMenu": {
       "mcpServers": "MCP serveriai",
       "models": "Modeliai",
-      "open": "Atverti priedų ir įrankių meniu"
+      "noMcpServers": "Nėra prieinamų MCP serverių",
+      "noSkills": "Nėra prieinamų įgūdžių",
+      "open": "Atverti priedų ir įrankių meniu",
+      "openMcpSettings": "Atverti MCP nustatymus",
+      "openSkills": "Atverti įgūdžius",
+      "searchMcpServers": "Ieškoti MCP serverių...",
+      "searchSkills": "Ieškoti įgūdžių"
     },
     "contextMeter": {
       "attachments": "Pridėti dokumentai",

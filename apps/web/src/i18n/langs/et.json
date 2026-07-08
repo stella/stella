@@ -380,7 +380,13 @@
     "composerMenu": {
       "mcpServers": "MCP-serverid",
       "models": "Mudelid",
-      "open": "Ava manuste ja tööriistade menüü"
+      "noMcpServers": "MCP-servereid pole saadaval",
+      "noSkills": "Oskusi pole saadaval",
+      "open": "Ava manuste ja tööriistade menüü",
+      "openMcpSettings": "Ava MCP seaded",
+      "openSkills": "Ava oskused",
+      "searchMcpServers": "Otsi MCP-servereid...",
+      "searchSkills": "Otsi oskusi"
     },
     "contextMeter": {
       "attachments": "Manustatud dokumendid",

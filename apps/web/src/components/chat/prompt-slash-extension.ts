@@ -5,6 +5,7 @@ import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
+import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import { PromptSlashList } from "@/components/chat/prompt-slash-list";
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
 import type { ReservedChatCommand } from "@/lib/reserved-chat-commands";
@@ -25,46 +26,44 @@ export type SlashItem =
   | { kind: "skill"; skill: SlashSkill }
   | { kind: "command"; command: ReservedChatCommand };
 
+/**
+ * Build the pasted-text chip attrs a slash item inserts. Shared by the
+ * `/`-triggered suggestion (which replaces the typed trigger range) and the
+ * composer (+) menu's Skills submenu (which inserts at the cursor with no
+ * range to replace) so both surfaces produce the identical chip.
+ */
+export const slashItemChipAttrs = (item: SlashItem): PastedTextAttrs => {
+  if (item.kind === "command") {
+    return {
+      label: item.command.name,
+      source: "command",
+      text: item.command.command,
+    };
+  }
+
+  if (item.kind === "prompt") {
+    return {
+      label: item.prompt.name,
+      source: "prompt",
+      text: item.prompt.body,
+    };
+  }
+
+  return {
+    label: item.skill.name,
+    source: "skill",
+    text: item.skill.slug,
+  };
+};
+
 const insertSlashItem = (
   editor: Editor,
   range: { from: number; to: number },
   item: SlashItem,
 ) => {
-  if (item.kind === "command") {
-    insertPastedTextChip(
-      editor,
-      {
-        label: item.command.name,
-        source: "command",
-        text: item.command.command,
-      },
-      { replaceRange: range },
-    );
-    return;
-  }
-
-  if (item.kind === "prompt") {
-    insertPastedTextChip(
-      editor,
-      {
-        label: item.prompt.name,
-        source: "prompt",
-        text: item.prompt.body,
-      },
-      { replaceRange: range },
-    );
-    return;
-  }
-
-  insertPastedTextChip(
-    editor,
-    {
-      label: item.skill.name,
-      source: "skill",
-      text: item.skill.slug,
-    },
-    { replaceRange: range },
-  );
+  insertPastedTextChip(editor, slashItemChipAttrs(item), {
+    replaceRange: range,
+  });
 };
 
 const PLUGIN_NAME = "promptSlash";

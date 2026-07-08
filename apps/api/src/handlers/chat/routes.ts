@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import deleteThread from "@/api/handlers/chat/delete-thread";
 import getMessages from "@/api/handlers/chat/get-messages";
+import getModelOptions from "@/api/handlers/chat/get-model-options";
 import getOlderMessages from "@/api/handlers/chat/get-older-messages";
 import getSuggestedPrompts from "@/api/handlers/chat/get-suggested-prompts";
 import getThreadRecap from "@/api/handlers/chat/get-thread-recap";
@@ -13,6 +14,7 @@ import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
 import sendMessage from "@/api/handlers/chat/send-message";
 import updateThread from "@/api/handlers/chat/update-thread";
+import updateThreadModel from "@/api/handlers/chat/update-thread-model";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
 export const chatRoute = new Elysia({ prefix: "/chat" })
@@ -49,6 +51,9 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     permissions: getThreads.config.permissions,
     query: getThreads.config.query,
   })
+  .get("/model-options", getModelOptions.handler, {
+    permissions: getModelOptions.config.permissions,
+  })
   .delete("/threads/:threadId", deleteThread.handler, {
     params: deleteThread.config.params,
     permissions: deleteThread.config.permissions,
@@ -59,6 +64,12 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
     params: updateThread.config.params,
     permissions: updateThread.config.permissions,
     query: updateThread.config.query,
+  })
+  .patch("/threads/:threadId/model", updateThreadModel.handler, {
+    body: updateThreadModel.config.body,
+    params: updateThreadModel.config.params,
+    permissions: updateThreadModel.config.permissions,
+    query: updateThreadModel.config.query,
   })
   .patch("/threads/:threadId/title", renameThread.handler, {
     body: renameThread.config.body,

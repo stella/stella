@@ -131,13 +131,12 @@ export const ChatThreadPage = ({
     getContextMatterIds,
     getSendMode,
   };
-  const { data } = useSuspenseQuery(
-    chatThreadOptions({
-      activeOrganizationId,
-      key: threadRef,
-      context: chatThreadContext,
-    }),
-  );
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: chatThreadContext,
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -594,15 +593,19 @@ export const ChatThreadPage = ({
                   autoFocus
                   controller={controller}
                   isGenerating={isGenerating}
-                  onOpenMcpServers={() => {
-                    void navigate({
-                      to: "/knowledge/tools",
-                      search: { kind: "mcp" },
-                    });
+                  mcpOrganizationId={activeOrganizationId}
+                  models={{
+                    activeOrganizationId,
+                    threadRef,
+                    selectedModel: data.model,
+                    onModelChange: (model) => {
+                      queryClient.setQueryData(
+                        threadQueryOptions.queryKey,
+                        (prev) => (prev ? { ...prev, model } : prev),
+                      );
+                    },
                   }}
-                  onOpenModelSelector={() => {
-                    useModelSelectorStore.getState().open();
-                  }}
+                  skillsOrganizationId={activeOrganizationId}
                   dock={
                     <ChatComposerDock
                       data={data}

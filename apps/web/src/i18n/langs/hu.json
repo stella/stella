@@ -380,7 +380,13 @@
     "composerMenu": {
       "mcpServers": "MCP-kiszolgálók",
       "models": "Modellek",
-      "open": "Mellékletek és eszközök menüjének megnyitása"
+      "noMcpServers": "Nincs elérhető MCP-kiszolgáló",
+      "noSkills": "Nincs elérhető skill",
+      "open": "Mellékletek és eszközök menüjének megnyitása",
+      "openMcpSettings": "MCP-beállítások megnyitása",
+      "openSkills": "Skillek megnyitása",
+      "searchMcpServers": "MCP-kiszolgálók keresése...",
+      "searchSkills": "Skillek keresése"
     },
     "contextMeter": {
       "attachments": "Csatolt dokumentumok",

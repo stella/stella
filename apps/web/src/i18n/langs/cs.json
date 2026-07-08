@@ -380,7 +380,13 @@
     "composerMenu": {
       "mcpServers": "MCP servery",
       "models": "Modely",
-      "open": "Otevřít nabídku příloh a nástrojů"
+      "noMcpServers": "Nejsou k dispozici žádné servery MCP",
+      "noSkills": "Nejsou k dispozici žádné dovednosti",
+      "open": "Otevřít nabídku příloh a nástrojů",
+      "openMcpSettings": "Otevřít nastavení MCP",
+      "openSkills": "Otevřít dovednosti",
+      "searchMcpServers": "Hledat MCP servery...",
+      "searchSkills": "Hledat dovednosti"
     },
     "contextMeter": {
       "attachments": "Připojené dokumenty",

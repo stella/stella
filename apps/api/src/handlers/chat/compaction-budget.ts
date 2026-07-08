@@ -24,8 +24,13 @@ export type ChatCompactionBudget = {
 };
 
 type ResolveChatCompactionBudgetOptions = {
-  /** Dev-only model override (`body.devModelId`); absent on the read path. */
-  devModelId?: string | undefined;
+  /**
+   * Effective chat model override for this turn/read — the dev override
+   * (`body.devModelId`) or a validated thread-level selection, already
+   * resolved by `resolveEffectiveChatModelId`. Absent when neither applies
+   * (org/instance chat-role default).
+   */
+  chatModelOverride?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
 };
@@ -55,12 +60,12 @@ const resolveChatContextWindowTokens = (
 };
 
 const resolveChatModelId = ({
-  devModelId,
+  chatModelOverride,
   orgAIConfig,
   organizationId,
 }: ResolveChatCompactionBudgetOptions): string | undefined => {
-  if (devModelId) {
-    return devModelId;
+  if (chatModelOverride) {
+    return chatModelOverride;
   }
 
   try {
