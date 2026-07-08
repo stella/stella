@@ -1248,74 +1248,64 @@ export const useChatEditor = ({
     [updateAttachments],
   );
 
-  const removeFile = useCallback(
-    (id: string) => {
-      updateAttachments(
-        attachmentsRef.current.filter((attachment) => attachment.id !== id),
-      );
-    },
-    [updateAttachments],
-  );
+  const removeFile = (id: string) => {
+    updateAttachments(
+      attachmentsRef.current.filter((attachment) => attachment.id !== id),
+    );
+  };
 
-  const handleDrop = useCallback(
-    (event: React.DragEvent) => {
-      event.preventDefault();
-      if (event.dataTransfer.files.length === 0) {
-        return;
-      }
-
-      addFiles(event.dataTransfer.files);
-    },
-    [addFiles],
-  );
-
-  const handleDragOver = useCallback((event: React.DragEvent) => {
+  const handleDrop = (event: React.DragEvent) => {
     event.preventDefault();
-  }, []);
+    if (event.dataTransfer.files.length === 0) {
+      return;
+    }
 
-  const handlePaste = useCallback(
-    (event: React.ClipboardEvent) => {
-      const files: File[] = [];
+    addFiles(event.dataTransfer.files);
+  };
 
-      for (const item of event.clipboardData.items) {
-        if (item.kind !== "file") {
-          continue;
-        }
+  const handleDragOver = (event: React.DragEvent) => {
+    event.preventDefault();
+  };
 
-        const file = item.getAsFile();
-        if (file !== null) {
-          files.push(file);
-        }
+  const handlePaste = (event: React.ClipboardEvent) => {
+    const files: File[] = [];
+
+    for (const item of event.clipboardData.items) {
+      if (item.kind !== "file") {
+        continue;
       }
 
-      if (files.length === 0) {
-        // Plain-text paste collapsing happens earlier inside
-        // ProseMirror via `editorProps.handlePaste`; nothing to do
-        // at the React layer here.
-        return;
+      const file = item.getAsFile();
+      if (file !== null) {
+        files.push(file);
       }
+    }
 
-      event.preventDefault();
+    if (files.length === 0) {
+      // Plain-text paste collapsing happens earlier inside
+      // ProseMirror via `editorProps.handlePaste`; nothing to do
+      // at the React layer here.
+      return;
+    }
+
+    event.preventDefault();
+    addFiles(files);
+  };
+
+  const handleFileInputChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const { files } = event.target;
+    if (files !== null && files.length > 0) {
       addFiles(files);
-    },
-    [addFiles],
-  );
+    }
 
-  const handleFileInputChange = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const { files } = event.target;
-      if (files !== null && files.length > 0) {
-        addFiles(files);
-      }
+    event.target.value = "";
+  };
 
-      event.target.value = "";
-    },
-    [addFiles],
-  );
-
-  const openFilePicker = useCallback(() => {
+  const openFilePicker = () => {
     fileInputRef.current?.click();
-  }, []);
+  };
 
   const submit = useCallback(
     async (send: (draft: ChatInputDraft) => Promise<void> | void) => {

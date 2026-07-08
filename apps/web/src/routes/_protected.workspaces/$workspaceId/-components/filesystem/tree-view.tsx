@@ -337,25 +337,20 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     [hiddenProperties, properties],
   );
 
-  const handleSortColumn = useCallback(
-    (propertyId: string) => {
-      const desc =
-        primarySort?.propertyId === propertyId ? !primarySort.desc : false;
-      updateView.mutate({
-        viewId: view.id,
-        layout: {
-          ...view.layout,
-          sorts: [
-            { propertyId, desc },
-            ...view.layout.sorts.filter(
-              (sort) => sort.propertyId !== propertyId,
-            ),
-          ],
-        },
-      });
-    },
-    [primarySort, updateView, view.id, view.layout],
-  );
+  const handleSortColumn = (propertyId: string) => {
+    const desc =
+      primarySort?.propertyId === propertyId ? !primarySort.desc : false;
+    updateView.mutate({
+      viewId: view.id,
+      layout: {
+        ...view.layout,
+        sorts: [
+          { propertyId, desc },
+          ...view.layout.sorts.filter((sort) => sort.propertyId !== propertyId),
+        ],
+      },
+    });
+  };
 
   const { data: entityData } = useSuspenseQuery(
     useFilesystemEntitiesOptions({
@@ -504,16 +499,13 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     return trail;
   }, [currentFolderId, data]);
 
-  const navigateToFolder = useCallback(
-    async (folderId?: string) => {
-      await navigate({
-        from: "/workspaces/$workspaceId/$viewId",
-        search: (prev) => ({ ...prev, folder: folderId }),
-        replace: true,
-      });
-    },
-    [navigate],
-  );
+  const navigateToFolder = async (folderId?: string) => {
+    await navigate({
+      from: "/workspaces/$workspaceId/$viewId",
+      search: (prev) => ({ ...prev, folder: folderId }),
+      replace: true,
+    });
+  };
 
   // Expanded folders state: starts with all folders expanded.
   const allFolderIds = useMemo(() => collectFolderIds(data), [data]);
@@ -522,7 +514,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     allFolderIds.size > 0 &&
     [...allFolderIds].every((id) => expandedIds.has(id));
 
-  const toggleFolder = useCallback((folderId: string) => {
+  const toggleFolder = (folderId: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(folderId)) {
@@ -532,15 +524,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       }
       return next;
     });
-  }, []);
+  };
 
-  const toggleAll = useCallback(() => {
+  const toggleAll = () => {
     if (allExpanded) {
       setExpandedIds(new Set());
     } else {
       setExpandedIds(new Set(allFolderIds));
     }
-  }, [allExpanded, allFolderIds]);
+  };
 
   const setFolderState = useWorkspaceStore((s) => s.setFolderState);
   const toggleVersion = useWorkspaceStore((s) => s.folderState.toggleVersion);
@@ -588,45 +580,39 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     [columnWidths, extraColumns],
   );
 
-  const handleHideColumn = useCallback(
-    (propertyId: string) => {
-      // Generic helper preserves the union discriminant. A bare spread of
-      // `view.layout` plus an object literal would collapse the union.
-      const mergeLayout = <L extends ViewLayout>(
-        layout: L,
-        changes: Partial<L>,
-      ): L => ({ ...layout, ...changes });
-      updateView.mutate({
-        viewId: view.id,
-        layout: mergeLayout(view.layout, {
-          hiddenProperties: [...new Set([...hiddenProperties, propertyId])],
-        }),
-      });
-    },
-    [hiddenProperties, updateView, view.id, view.layout],
-  );
+  const handleHideColumn = (propertyId: string) => {
+    // Generic helper preserves the union discriminant. A bare spread of
+    // `view.layout` plus an object literal would collapse the union.
+    const mergeLayout = <L extends ViewLayout>(
+      layout: L,
+      changes: Partial<L>,
+    ): L => ({ ...layout, ...changes });
+    updateView.mutate({
+      viewId: view.id,
+      layout: mergeLayout(view.layout, {
+        hiddenProperties: [...new Set([...hiddenProperties, propertyId])],
+      }),
+    });
+  };
 
-  const handleBgContextMenu = useCallback((e: React.MouseEvent) => {
+  const handleBgContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     const x = e.clientX;
     const y = e.clientY;
     setBgContextAnchor({
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
     });
-  }, []);
+  };
 
-  const handleFolderCreated = useCallback((entityId: string) => {
+  const handleFolderCreated = (entityId: string) => {
     setEditingEntityId(entityId);
     setExpandedIds((prev) => new Set(prev).add(entityId));
-  }, []);
+  };
 
-  const handleSubfolderCreated = useCallback(
-    (entityId: string, parentId: string) => {
-      setEditingEntityId(entityId);
-      setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
-    },
-    [],
-  );
+  const handleSubfolderCreated = (entityId: string, parentId: string) => {
+    setEditingEntityId(entityId);
+    setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
+  };
 
   const flattenedRows = useMemo(
     () => flattenFilesystemRows(visibleNodes, expandedIds),
@@ -640,40 +626,40 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   // meta = cmd/ctrl (toggle a single row); shift = extend a contiguous range
   // from the anchor to the clicked row, inclusive, over the visible order.
-  const handleSelect = useCallback(
-    (entityId: string, mods: { meta: boolean; shift: boolean }) => {
-      const selectedEntityId = toSafeId<"entity">(entityId);
-      setSelectedIds((prev) => {
-        if (mods.shift && anchorIdRef.current !== null) {
-          const from = orderedEntityIds.indexOf(
-            toSafeId<"entity">(anchorIdRef.current),
-          );
-          const to = orderedEntityIds.indexOf(selectedEntityId);
-          if (from !== -1 && to !== -1) {
-            const [lo, hi] = from <= to ? [from, to] : [to, from];
-            return new Set(orderedEntityIds.slice(lo, hi + 1));
-          }
+  const handleSelect = (
+    entityId: string,
+    mods: { meta: boolean; shift: boolean },
+  ) => {
+    const selectedEntityId = toSafeId<"entity">(entityId);
+    setSelectedIds((prev) => {
+      if (mods.shift && anchorIdRef.current !== null) {
+        const from = orderedEntityIds.indexOf(
+          toSafeId<"entity">(anchorIdRef.current),
+        );
+        const to = orderedEntityIds.indexOf(selectedEntityId);
+        if (from !== -1 && to !== -1) {
+          const [lo, hi] = from <= to ? [from, to] : [to, from];
+          return new Set(orderedEntityIds.slice(lo, hi + 1));
         }
-        // A plain or cmd/ctrl click makes this row the new range anchor.
-        anchorIdRef.current = selectedEntityId;
-        if (mods.meta) {
-          const next = new Set(prev);
-          if (next.has(selectedEntityId)) {
-            next.delete(selectedEntityId);
-          } else {
-            next.add(selectedEntityId);
-          }
-          return next;
+      }
+      // A plain or cmd/ctrl click makes this row the new range anchor.
+      anchorIdRef.current = selectedEntityId;
+      if (mods.meta) {
+        const next = new Set(prev);
+        if (next.has(selectedEntityId)) {
+          next.delete(selectedEntityId);
+        } else {
+          next.add(selectedEntityId);
         }
-        // Plain click: sole selection (clicking the only selected row clears it).
-        if (prev.size === 1 && prev.has(selectedEntityId)) {
-          return new Set();
-        }
-        return new Set([selectedEntityId]);
-      });
-    },
-    [orderedEntityIds],
-  );
+        return next;
+      }
+      // Plain click: sole selection (clicking the only selected row clears it).
+      if (prev.size === 1 && prev.has(selectedEntityId)) {
+        return new Set();
+      }
+      return new Set([selectedEntityId]);
+    });
+  };
 
   const rowsViewportRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
@@ -1028,47 +1014,40 @@ const ColumnHeaderCell = ({
   const isActive = activeSort?.propertyId === propertyId;
   const SortIcon = activeSort?.desc ? ArrowDownIcon : ArrowUpIcon;
 
-  const handleResizePointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const startX = event.clientX;
-      const startWidth =
-        currentWidth ??
-        containerRef.current?.getBoundingClientRect().width ??
-        0;
-      const handleMove = (moveEvent: PointerEvent) => {
-        moveEvent.preventDefault();
-        const delta = moveEvent.clientX - startX;
-        onResize(startWidth + delta);
-      };
-      const handleUp = () => {
-        window.removeEventListener("pointermove", handleMove);
-        // eslint-disable-next-line react/react-compiler -- self-referential local listener (handleUp removes itself); it is not an outer memo dependency of the useCallback
-        window.removeEventListener("pointerup", handleUp);
-        document.body.style.cursor = "";
-      };
-      document.body.style.cursor = "col-resize";
-      window.addEventListener("pointermove", handleMove);
-      window.addEventListener("pointerup", handleUp);
-    },
-    [currentWidth, onResize],
-  );
+  const handleResizePointerDown = (
+    event: React.PointerEvent<HTMLDivElement>,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth =
+      currentWidth ?? containerRef.current?.getBoundingClientRect().width ?? 0;
+    const handleMove = (moveEvent: PointerEvent) => {
+      moveEvent.preventDefault();
+      const delta = moveEvent.clientX - startX;
+      onResize(startWidth + delta);
+    };
+    const handleUp = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+      document.body.style.cursor = "";
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+  };
 
-  const handleContextMenu = useCallback(
-    (event: React.MouseEvent) => {
-      if (!onHide) {
-        return;
-      }
-      event.preventDefault();
-      const x = event.clientX;
-      const y = event.clientY;
-      setContextAnchor({
-        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-      });
-    },
-    [onHide],
-  );
+  const handleContextMenu = (event: React.MouseEvent) => {
+    if (!onHide) {
+      return;
+    }
+    event.preventDefault();
+    const x = event.clientX;
+    const y = event.clientY;
+    setContextAnchor({
+      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+    });
+  };
 
   return (
     <div
