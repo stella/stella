@@ -497,11 +497,25 @@ const fetchGroupedChatThreads = async ({
   return response.data;
 };
 
+type FileChatThreadFetchResult = {
+  threadId: ChatThreadId;
+  /** The rest mirror `ChatThreadFetched` (minus `webSearchAvailable`, which
+   *  the POST does not compute — see `fileChatThreadOptions`) so the initial
+   *  message page it resolved can seed `chatThreadOptions`' cache directly,
+   *  collapsing the POST -> GET /messages waterfall into one round trip. */
+  messages: PersistedChatMessage[];
+  olderCursor: string | null;
+  contextMatterIds: string[];
+  lastActivityAt: string | null;
+  webSearchEnabled: boolean;
+  context: ChatContextUsage | null;
+};
+
 const fetchFileChatThread = async ({
   entityId,
   fieldId,
   workspaceId,
-}: FileChatThreadKey): Promise<ChatThreadId> => {
+}: FileChatThreadKey): Promise<FileChatThreadFetchResult> => {
   const response = await api.chat
     .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
     ["file-thread"].post({
@@ -513,7 +527,15 @@ const fetchFileChatThread = async ({
     throw toAPIError(response.error);
   }
 
-  return toChatThreadId(response.data.threadId);
+  return {
+    threadId: toChatThreadId(response.data.threadId),
+    messages: response.data.messages,
+    olderCursor: response.data.olderCursor,
+    contextMatterIds: response.data.contextMatterIds,
+    lastActivityAt: response.data.lastActivityAt,
+    webSearchEnabled: response.data.webSearchEnabled,
+    context: response.data.context,
+  };
 };
 
 const fetchTemplateChatThread = async ({
@@ -1222,17 +1244,85 @@ export type ChatThreadFetched = {
 type FileChatThreadOptionsArgs = {
   activeOrganizationId: string;
   key: FileChatThreadKey;
+  /**
+   * Whether the overlay wires a live Folio editor ref for this file (the
+   * DOCX browser-edit surface). This is the same condition
+   * `FileChatOverlayInner` uses to decide whether its own
+   * `chatThreadContext` carries `handleActiveDocxEditToolCall` or
+   * `getActiveFile` — which in turn decides the `contextKind` baked into
+   * `chatThreadOptions`' cache key (see `getChatRuntimeContextKind`).
+   * Passed through so the seed below lands under the exact key that
+   * overlay's `useSuspenseQuery(chatThreadOptions(...))` will look up.
+   */
+  hasDocxEditSurface: boolean;
 };
+
+/** Never actually invoked: exists only so its presence steers
+ *  `getChatRuntimeContextKind` to "active-docx-edit", matching the real
+ *  `chatThreadContext` the docx-editing overlay builds once mounted. */
+const stubHandleActiveDocxEditToolCall = (
+  _input: ApplyActiveDocxEditsInput,
+): ApplyActiveDocxEditsOutput => ({ applied: [], queued: [], skipped: [] });
+
+/** Never actually invoked: mirrors `getActiveFile`'s presence for the
+ *  non-docx (PDF) overlay, steering `getChatRuntimeContextKind` to
+ *  "active-file" the same way the real overlay's context does. */
+const stubGetActiveFile = (): undefined => undefined;
 
 export const fileChatThreadOptions = ({
   activeOrganizationId,
   key,
+  hasDocxEditSurface,
 }: FileChatThreadOptionsArgs) =>
+  // eslint-disable-next-line @tanstack/query/exhaustive-deps -- `hasDocxEditSurface` deliberately excluded from this query's key: the file-thread identity it resolves is the same regardless of docx-vs-pdf, it only steers which sibling `chatThreadOptions` cache key the queryFn seeds below.
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.fileThread(activeOrganizationId, key),
-    queryFn: async () => await fetchFileChatThread(key),
+    queryFn: async ({ client }) => {
+      const fetched = await fetchFileChatThread(key);
+
+      // Seed chatThreadOptions' pure-data cache with the message page this
+      // POST already loaded server-side (see resolve-file-thread.ts), so the
+      // overlay's own useSuspenseQuery(chatThreadOptions(...)) right after
+      // this resolves from cache instead of firing a second GET /messages —
+      // collapsing the POST -> GET waterfall into one round trip.
+      const threadRef: ChatThreadRef = {
+        scope: "workspace",
+        threadId: fetched.threadId,
+        workspaceId: key.workspaceId,
+      };
+      const stubContext: ChatThreadOptionsContext = hasDocxEditSurface
+        ? {
+            allowMissingThread: true,
+            handleActiveDocxEditToolCall: stubHandleActiveDocxEditToolCall,
+          }
+        : { allowMissingThread: true, getActiveFile: stubGetActiveFile };
+
+      client.setQueryData(
+        chatThreadOptions({
+          activeOrganizationId,
+          key: threadRef,
+          context: stubContext,
+        }).queryKey,
+        {
+          messages: sanitizeHydratedRunningToolCalls(fetched.messages),
+          olderCursor: fetched.olderCursor,
+          contextMatterIds: fetched.contextMatterIds,
+          lastActivityAt: fetched.lastActivityAt,
+          // Not returned by the POST — computing it would cost this
+          // handler an extra organizationSettings read for an org-wide
+          // (not thread-specific) value. Conservative default; corrected by
+          // the thread's own next natural chatThreadOptions fetch (15 min
+          // staleTime) or its first message send.
+          webSearchAvailable: false,
+          webSearchEnabled: fetched.webSearchEnabled,
+          context: fetched.context,
+        },
+      );
+
+      return fetched.threadId;
+    },
   });
 
 type TemplateChatThreadOptionsArgs = {
