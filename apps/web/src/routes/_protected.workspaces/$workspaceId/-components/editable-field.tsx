@@ -644,6 +644,7 @@ const ContainedFieldControl = ({ children }: ContainedFieldControlProps) => (
     className="inline-flex min-w-0"
     onClick={(event) => event.stopPropagation()}
     onKeyDown={(event) => event.stopPropagation()}
+    role="presentation"
   >
     {children}
   </span>

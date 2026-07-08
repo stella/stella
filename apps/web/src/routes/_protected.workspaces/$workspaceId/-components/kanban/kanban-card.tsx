@@ -507,6 +507,10 @@ const KanbanCardFieldValue = ({
     propertyId: property.id,
     metadata: entity.cellMetadata[property.id],
   });
+  const manualSaveProps =
+    property.tool.type === "ai-model"
+      ? { onManualSave: () => setLocked(true) }
+      : {};
 
   return (
     <EditableField
@@ -515,12 +519,10 @@ const KanbanCardFieldValue = ({
       entityId={entity.entityId}
       entityKind={entity.kind}
       fieldId={fieldId}
-      onManualSave={
-        property.tool.type === "ai-model" ? () => setLocked(true) : undefined
-      }
       property={property}
       propertyId={property.id}
       workspaceId={workspaceId}
+      {...manualSaveProps}
     />
   );
 };
@@ -543,7 +545,7 @@ const KanbanCardFooter = ({
   }
 
   const authorInitials = entity.createdBy
-    ?.split(" ")
+    .split(" ")
     .map((part) => part.at(0))
     .join("")
     .slice(0, 2)
