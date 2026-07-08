@@ -24,6 +24,7 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
+import { useCellMetadataFlags } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
@@ -499,18 +500,30 @@ const KanbanCardFieldValue = ({
   fieldId,
   property,
   workspaceId,
-}: KanbanCardFieldValueProps) => (
-  <EditableField
-    content={content}
-    displayVariant="kanban"
-    entityId={entity.entityId}
-    entityKind={entity.kind}
-    fieldId={fieldId}
-    property={property}
-    propertyId={property.id}
-    workspaceId={workspaceId}
-  />
-);
+}: KanbanCardFieldValueProps) => {
+  const { setLocked } = useCellMetadataFlags({
+    workspaceId,
+    entityId: entity.entityId,
+    propertyId: property.id,
+    metadata: entity.cellMetadata[property.id],
+  });
+
+  return (
+    <EditableField
+      content={content}
+      displayVariant="kanban"
+      entityId={entity.entityId}
+      entityKind={entity.kind}
+      fieldId={fieldId}
+      onManualSave={
+        property.tool.type === "ai-model" ? () => setLocked(true) : undefined
+      }
+      property={property}
+      propertyId={property.id}
+      workspaceId={workspaceId}
+    />
+  );
+};
 
 type KanbanCardFooterProps = {
   entity: WorkspaceEntity;
