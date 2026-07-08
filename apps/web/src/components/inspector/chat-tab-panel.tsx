@@ -77,6 +77,7 @@ import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
+import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
@@ -189,21 +190,27 @@ export const ChatTabPanel = ({
   // doesn't exist server-side until the first message lands. Allow
   // the missing-thread response so the GET doesn't 404 on a fresh
   // tab; the thread will be created idempotently on the first send.
+  const chatThreadContext = {
+    allowMissingThread: true,
+    getUserContext,
+    getActiveDecision,
+    ...(tabActiveSkill ? { getActiveSkill } : {}),
+    getContextMatterIds,
+    getSendMode,
+  };
   const { data } = useSuspenseQuery(
     chatThreadOptions({
       activeOrganizationId,
       key: threadRef,
-      context: {
-        allowMissingThread: true,
-        getUserContext,
-        getActiveDecision,
-        ...(tabActiveSkill ? { getActiveSkill } : {}),
-        getContextMatterIds,
-        getSendMode,
-      },
+      context: chatThreadContext,
     }),
   );
-  const { chat } = data;
+  const chat = useChatThreadRuntime({
+    activeOrganizationId,
+    context: chatThreadContext,
+    data,
+    key: threadRef,
+  });
 
   const {
     error,

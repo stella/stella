@@ -11,6 +11,7 @@ import {
 import { createAnalyticsValue } from "@/lib/analytics/provider";
 import { STALE_TIME } from "@/lib/consts";
 import { installPDFDocumentCleanup } from "@/lib/pdf/hooks/use-pdf-document";
+import { installChatRuntimeCleanup } from "@/routes/_protected.chat/-queries";
 import { routeTree } from "@/routeTree.gen";
 
 enableMapSet();
@@ -25,6 +26,7 @@ export function getRouter() {
     },
   });
   installPDFDocumentCleanup(queryClient);
+  installChatRuntimeCleanup(queryClient);
 
   const router = createRouter({
     routeTree,

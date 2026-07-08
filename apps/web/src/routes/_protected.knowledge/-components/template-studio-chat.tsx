@@ -80,6 +80,7 @@ import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
+import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
@@ -586,19 +587,25 @@ const TemplateStudioChatInner = ({
   // No `handleActiveDocxEditToolCall` in the context: the transport
   // never invokes it (the approve path below client-executes the tool),
   // and `getActiveTemplate` already keys the cache as "active-template".
+  const chatThreadContext = {
+    allowMissingThread: true,
+    getUserContext,
+    getSendMode,
+    getActiveTemplate: () => getActiveTemplate(),
+  };
   const { data } = useSuspenseQuery(
     chatThreadOptions({
       activeOrganizationId,
       key: threadRef,
-      context: {
-        allowMissingThread: true,
-        getUserContext,
-        getSendMode,
-        getActiveTemplate: () => getActiveTemplate(),
-      },
+      context: chatThreadContext,
     }),
   );
-  const { chat } = data;
+  const chat = useChatThreadRuntime({
+    activeOrganizationId,
+    context: chatThreadContext,
+    data,
+    key: threadRef,
+  });
 
   const {
     error,
