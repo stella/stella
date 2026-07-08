@@ -1069,6 +1069,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     handleChange();
   };
 
+  const handleEditorDocxCommentsChange = (comments: DocxComments) => {
+    const commentsChanged =
+      JSON.stringify(docxComments) !== JSON.stringify(comments);
+    setDocxComments(comments);
+    if (commentsChanged) {
+      handleChange();
+    }
+  };
+
   const handleFinalize = useCallback(async () => {
     // Save the final version before finalizing
     clearQueuedChangeCheckpoint();
@@ -1530,7 +1539,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             autoOpenReviewSidebar={false}
             className="folio-docx-preview folio-peek h-full"
             comments={docxComments}
-            onCommentsChange={setDocxComments}
+            onCommentsChange={handleEditorDocxCommentsChange}
             documentBuffer={editorBuffer}
             documentKey={previewIdentity}
             initialZoom={targetZoom}

@@ -20,6 +20,7 @@ import { load } from "cheerio";
 
 import { FolioDocxReviewer } from "@stll/folio-core/server";
 
+import { extractText as extractDocxText } from "@/api/handlers/docx/extract-text";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -179,15 +180,15 @@ const extract = async (
   if (normalizedMimeType === PDF_MIME_TYPE) {
     text = await extractPdfPlaintext(fileBytes);
   } else if (normalizedMimeType === DOCX_MIME_TYPE) {
-    const reviewer = await FolioDocxReviewer.fromBuffer(
-      toArrayBuffer(fileBytes),
-    );
-    const body = reviewer
-      .getContent()
-      .map((block) => block.text)
+    const [documentText, reviewer] = await Promise.all([
+      extractDocxText(fileBytes),
+      FolioDocxReviewer.fromBuffer(toArrayBuffer(fileBytes)),
+    ]);
+    const content = documentText.paragraphs
+      .map((paragraph) => paragraph.text)
       .join("\n");
     const notes = reviewer.getNotesAsText();
-    text = [body, notes].filter((s) => s.trim().length > 0).join("\n");
+    text = [content, notes].filter((s) => s.trim().length > 0).join("\n");
   } else if (isDirectTextMimeType(normalizedMimeType)) {
     text = extractDirectText(fileBytes, normalizedMimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
