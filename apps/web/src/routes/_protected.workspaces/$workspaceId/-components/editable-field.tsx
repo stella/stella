@@ -330,6 +330,11 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
           }
           setEditing(true);
         }}
+        onKeyDown={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
+        }}
         type="button"
       >
         {isEmpty ? (
@@ -417,6 +422,11 @@ const InlineDateEditor = ({
           }
           setEditing(true);
         }}
+        onKeyDown={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
+        }}
         type="button"
       >
         <FieldValue
@@ -489,6 +499,11 @@ const InlineTextEditor = ({
           // textarea mounts.
           setDraft(value);
           setEditing(true);
+        }}
+        onKeyDown={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
         }}
         type="button"
       >
@@ -569,6 +584,11 @@ const InlineIntEditor = ({
           }
           setDraft(String(value));
           setEditing(true);
+        }}
+        onKeyDown={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
         }}
         type="button"
       >
