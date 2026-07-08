@@ -202,7 +202,7 @@ export const sanitizeWorksheetName = (value: string): string => {
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "workspace_schema" },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   query: t.Object({
     format: t.Union([t.Literal("csv"), t.Literal("xlsx")]),

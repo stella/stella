@@ -28,7 +28,7 @@ const splitEntryBodySchema = t.Object({
 const splitEntry = createSafeHandler(
   {
     permissions: { timeEntry: ["update"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "billing_admin" },
     body: splitEntryBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

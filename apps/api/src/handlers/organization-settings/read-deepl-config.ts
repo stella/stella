@@ -17,7 +17,7 @@ type DeepLConfig =
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "anonymization_admin" },
 } satisfies HandlerConfig;
 
 /**

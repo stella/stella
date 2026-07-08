@@ -23,7 +23,7 @@ const updateSkillResourceBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "agent_tool_authoring" },
   params: updateSkillResourceParamsSchema,
   body: updateSkillResourceBodySchema,
 } satisfies HandlerConfig;

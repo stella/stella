@@ -23,7 +23,7 @@ import {
 
 const config = {
   permissions: { view: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "workspace_schema" },
   body: tCreateViewInputSchema,
 } satisfies HandlerConfig;
 

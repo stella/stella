@@ -13,7 +13,7 @@ const deleteVariantParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "knowledge_library_admin" },
   params: deleteVariantParamsSchema,
 } satisfies HandlerConfig;
 

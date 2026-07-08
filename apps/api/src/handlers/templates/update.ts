@@ -327,7 +327,7 @@ const updateTemplateHandler = async function* ({
 
 const config = {
   permissions: { template: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "template_authoring_ui" },
   params: updateTemplateParamsSchema,
   body: updateTemplateBodySchema,
 } satisfies HandlerConfig;

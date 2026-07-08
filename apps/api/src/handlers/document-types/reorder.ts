@@ -8,7 +8,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "workspace_schema" },
   body: reorderDocumentTypesBodySchema,
 } satisfies HandlerConfig;
 

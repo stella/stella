@@ -24,7 +24,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 
 const listDecisions = createSafePublicHandler(
   {
-    mcp: { type: "pending" },
+    mcp: { type: "covered", by: "search_case_law" },
     query: listDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -39,7 +39,7 @@ const listDecisions = createSafePublicHandler(
 );
 
 const listDecisionFacets = createSafePublicHandler(
-  { mcp: { type: "pending" } },
+  { mcp: { type: "covered", by: "search_case_law" } },
   async function* () {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -105,7 +105,7 @@ const searchDecisions = createSafePublicHandler(
 
 const listSitemapShardDecisions = createSafePublicHandler(
   {
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "public_indexing" },
     query: sitemapShardDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -121,7 +121,7 @@ const listSitemapShardDecisions = createSafePublicHandler(
 );
 
 const listSitemapShards = createSafePublicHandler(
-  { mcp: { type: "pending" } },
+  { mcp: { type: "internal", reason: "public_indexing" } },
   async function* () {
     const response = yield* Result.await(
       Result.tryPromise(

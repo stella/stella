@@ -16,7 +16,7 @@ const restorePlaybookVersionParamsSchema = t.Object({
 
 const config = {
   permissions: { playbook: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "knowledge_library_admin" },
   params: restorePlaybookVersionParamsSchema,
 } satisfies HandlerConfig;
 

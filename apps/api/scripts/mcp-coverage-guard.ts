@@ -12,9 +12,8 @@
 //      `type: "tool"` endpoint, a `type: "covered"` endpoint, or a documented
 //      entry in TOOLS_WITHOUT_ENUMERABLE_ENDPOINT (inline-in-routes or static
 //      tools the module glob cannot reach);
-//   4. a ratcheted baseline of `pending` endpoints that can only shrink: any
-//      new `pending` fails, and any baseline entry that is no longer `pending`
-//      (or no longer exists) is stale and must be removed.
+//   4. a ratcheted baseline of `pending` endpoints that can only shrink. The
+//      baseline is now empty, so any `pending` endpoint fails as a new gap.
 //   5. a hidden-endpoint invariant: per file, the number of `createSafe*Handler`
 //      factory call sites must equal the number of `{ config, handler }` exports
 //      the guard could enumerate (plus a pinned inline count for allowlisted
@@ -302,7 +301,9 @@ export type BaselineDiff = {
  * Ratchet diff: `newPending` are `pending` endpoints missing from the baseline
  * (adding a new gap — fails); `stalePending` are baseline entries that are no
  * longer `pending` or no longer exist (the gap closed — the entry must be
- * removed so the baseline can only shrink).
+ * removed so the baseline can only shrink). The checked-in baseline is empty,
+ * which turns this into a zero-pending gate while keeping useful diagnostics if
+ * an old or malformed endpoint config still says `pending`.
  */
 export const computeBaselineDiff = ({
   currentPending,

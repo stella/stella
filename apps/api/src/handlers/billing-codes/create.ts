@@ -20,7 +20,7 @@ const createBillingCodeBodySchema = t.Object({
 
 const config = {
   permissions: { billingCode: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "billing_admin" },
   body: createBillingCodeBodySchema,
 } satisfies HandlerConfig;
 

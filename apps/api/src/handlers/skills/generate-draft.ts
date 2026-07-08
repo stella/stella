@@ -41,7 +41,7 @@ const generateDraftBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "agent_tool_authoring" },
   body: generateDraftBodySchema,
   // Queued / "flex" tier — the draft generator is asynchronous from
   // the user's perspective and tolerates higher latency, so we

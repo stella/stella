@@ -12,7 +12,7 @@ import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
   permissions: { playbook: ["apply"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "knowledge_library_admin" },
   params: workspaceParams({}),
 } satisfies HandlerConfig;
 

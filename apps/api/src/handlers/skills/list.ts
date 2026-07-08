@@ -21,7 +21,7 @@ const listSkillsQuerySchema = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "agent_tool_authoring" },
   query: listSkillsQuerySchema,
 } satisfies HandlerConfig;
 

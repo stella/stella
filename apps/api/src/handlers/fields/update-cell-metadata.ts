@@ -20,7 +20,7 @@ const config = {
   permissions: {
     entity: ["update"],
   },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "workspace_schema" },
   body: t.Object({
     propertyId: tSafeId("property"),
     entityId: tSafeId("entity"),

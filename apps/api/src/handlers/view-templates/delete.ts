@@ -10,7 +10,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 
 const config = {
   permissions: { view: ["delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "workspace_schema" },
   params: t.Object({
     templateId: tSafeId("workspaceViewTemplate"),
   }),

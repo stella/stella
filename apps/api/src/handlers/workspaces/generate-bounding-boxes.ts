@@ -16,7 +16,7 @@ import type { BoundingBox } from "@/api/types";
 
 const config = {
   permissions: { workspace: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "document_processing" },
   body: t.Object({
     justificationId: tSafeId("justification"),
   }),

@@ -13,7 +13,7 @@ import { mapInfoSoudResult } from "./infosoud-result";
 const config = {
   body: infosoudLookupBodySchema,
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "native_tool_ui" },
 } satisfies HandlerConfig;
 
 const infosoudLookup = createSafeHandler(

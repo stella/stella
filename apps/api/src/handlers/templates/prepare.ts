@@ -19,7 +19,7 @@ const config = {
   // docx), so it needs `template: ["create"]` like `/create`, not bare workspace
   // read; this also keeps a read-only role from spending org AI here.
   permissions: { template: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "template_authoring_ui" },
   body: prepareBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

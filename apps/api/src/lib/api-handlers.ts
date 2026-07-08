@@ -86,6 +86,32 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   recaps, suggested prompts). An MCP client drives its own agent, so it never
  *   reaches into stella's own chat threads.
  * - `url_preview`: server-side external-URL unfurl/preview mechanics.
+ * - `public_indexing`: public listing, facet, and sitemap endpoints used for
+ *   SEO/UI discovery; agents use the curated public search/read tools instead.
+ * - `legal_corpus_admin`: corpus ingestion, linking, and analysis support
+ *   surfaces that are not part of the public legal-search tool contract.
+ * - `search_ui`: search refinement/facet/summary affordances for the web UI and
+ *   in-app chat; MCP clients use `search` / `search_across_matters`.
+ * - `billing_admin`: billing configuration and invoice/expense workflows beyond
+ *   the curated time-entry, invoice-read, and rate-resolution tools.
+ * - `workspace_schema`: table/view/property/document-type configuration and
+ *   metadata endpoints that shape the interactive workspace UI.
+ * - `document_processing`: upload/download, translation, extraction, versioning,
+ *   and bulk document-processing jobs outside the curated document CRUD tools.
+ * - `template_authoring_ui`: Template Studio auxiliary endpoints beyond the
+ *   curated list/fill/save template tools.
+ * - `knowledge_library_admin`: clause/playbook authoring, version, import/export,
+ *   and review support endpoints beyond the curated knowledge tools.
+ * - `agent_tool_authoring`: skill/catalogue CRUD used to author tools; enabled
+ *   skills are exposed through the dynamic MCP gateway instead.
+ * - `workflow_orchestration`: workflow queue/run/progress support for the
+ *   browser workspace experience.
+ * - `anonymization_admin`: anonymization term/allowlist configuration surfaces.
+ * - `native_tool_ui`: native-tool helper endpoints whose agent surface is a
+ *   chat/native integration rather than the static MCP registry.
+ * - `reporting_export`: report and table export generation/readback endpoints.
+ * - `contact_directory`: organization contact directory list/search endpoints;
+ *   MCP currently exposes contact detail/lookup and matter contact context.
  */
 export type McpInternalReason =
   | "auth_plumbing"
@@ -103,7 +129,21 @@ export type McpInternalReason =
   | "deploy_mechanics"
   | "ui_navigation_state"
   | "assistant_chat"
-  | "url_preview";
+  | "url_preview"
+  | "public_indexing"
+  | "legal_corpus_admin"
+  | "search_ui"
+  | "billing_admin"
+  | "workspace_schema"
+  | "document_processing"
+  | "template_authoring_ui"
+  | "knowledge_library_admin"
+  | "agent_tool_authoring"
+  | "workflow_orchestration"
+  | "anonymization_admin"
+  | "native_tool_ui"
+  | "reporting_export"
+  | "contact_directory";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -115,14 +155,11 @@ export type McpInternalReason =
  *   code path (e.g. a shared handler the tool re-uses).
  * - `internal`: intentionally never an MCP tool; `reason` is an approved,
  *   closed-union waiver category.
- * - `pending`: no MCP decision yet. The coverage guard pins the existing set
- *   of `pending` endpoints in a baseline that can only shrink.
  */
 export type McpExposure =
   | { type: "tool"; name: McpToolName }
   | { type: "covered"; by: McpToolName }
-  | { type: "internal"; reason: McpInternalReason }
-  | { type: "pending" };
+  | { type: "internal"; reason: McpInternalReason };
 
 /**
  * Per-handler usage metering opt-in. When set, the framework:
