@@ -10,7 +10,7 @@ import {
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "anonymization_admin" },
 } satisfies HandlerConfig;
 
 type OrganizationSettingsRow = {

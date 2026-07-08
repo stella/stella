@@ -27,7 +27,7 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
 const generateDecisionAnalysis = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "legal_corpus_admin" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
   } satisfies HandlerConfig,
   async function* ({
@@ -62,7 +62,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
 const listMatterLinks = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "legal_corpus_admin" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
@@ -82,7 +82,7 @@ const listMatterLinks = createSafeHandler(
 const createMatterLink = createSafeHandler(
   {
     permissions: { entity: ["create"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "legal_corpus_admin" },
     body: createMatterLinkBodySchema,
   } satisfies HandlerConfig,
   async function* ({ body, recordAuditEvent, scopedDb, user, workspaceId }) {
@@ -106,7 +106,7 @@ const createMatterLink = createSafeHandler(
 const deleteMatterLink = createSafeHandler(
   {
     permissions: { entity: ["delete"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "legal_corpus_admin" },
     params: t.Object({
       workspaceId: tSafeId("workspace"),
       linkId: tSafeId("caseLawMatterLink"),
@@ -137,7 +137,7 @@ const deleteMatterLink = createSafeHandler(
 const getCaseLawIngestionStatus = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "legal_corpus_admin" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb }) {
     const response = yield* Result.await(

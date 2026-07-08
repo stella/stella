@@ -15,7 +15,7 @@ const deleteRateTableBodySchema = t.Object({
 const deleteRateTable = createSafeHandler(
   {
     permissions: { rate: ["delete"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "billing_admin" },
     body: deleteRateTableBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

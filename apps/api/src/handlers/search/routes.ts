@@ -45,7 +45,7 @@ const searchEndpoint = createSafeRootHandler(
 const searchFacetsEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "search_ui" },
     body: searchFacetsBodySchema,
   } satisfies HandlerConfig,
   async function* ({ activeWorkspaceIds, body, scopedDb, session }) {
@@ -68,7 +68,7 @@ const searchFacetsEndpoint = createSafeRootHandler(
 const refineSearchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "search_ui" },
     body: refineSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },
   } satisfies HandlerConfig,
@@ -103,7 +103,7 @@ const refineSearchEndpoint = createSafeRootHandler(
 const summarizeSearchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "search_ui" },
     body: summarizeSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },
   } satisfies HandlerConfig,
@@ -140,7 +140,7 @@ const summarizeSearchEndpoint = createSafeRootHandler(
 const searchSummaryChatEndpoint = createSafeRootHandler(
   {
     permissions: { chat: ["create"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "search_ui" },
     body: searchSummaryChatBodySchema,
   } satisfies HandlerConfig,
   async function* ({

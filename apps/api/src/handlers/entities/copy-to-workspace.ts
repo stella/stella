@@ -581,7 +581,7 @@ const copyToWorkspaceHandler = async function* ({
 
 const config = {
   permissions: { entity: ["create", "delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "document_processing" },
   body: copyToWorkspaceBodySchema,
 } satisfies HandlerConfig;
 

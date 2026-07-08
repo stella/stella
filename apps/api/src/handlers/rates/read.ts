@@ -47,7 +47,7 @@ const decodeRateTableCursor = (cursor: string): RateTableCursor | null => {
 const readRateTables = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "billing_admin" },
     query: readRateTablesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {

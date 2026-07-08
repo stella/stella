@@ -15,7 +15,7 @@ const getTemplateVersionParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "template_authoring_ui" },
   params: getTemplateVersionParamsSchema,
 } satisfies HandlerConfig;
 

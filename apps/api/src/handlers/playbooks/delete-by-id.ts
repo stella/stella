@@ -10,7 +10,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { playbook: ["delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "knowledge_library_admin" },
   params: playbookDefinitionParamsSchema,
 } satisfies HandlerConfig;
 

@@ -69,7 +69,7 @@ const readWorkspace = createSafeHandler(
 const readWorkflow = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "workflow_orchestration" },
   } satisfies HandlerConfig,
   async function* ({ workspaceId }) {
     const response = yield* Result.await(
@@ -83,7 +83,7 @@ const readWorkflow = createSafeHandler(
 const readJustifications = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "workflow_orchestration" },
     body: t.Object({
       entityIds: t.Array(tSafeId("entity"), {
         minItems: 1,
@@ -150,7 +150,7 @@ const readWorkspaceContacts = createSafeHandler(
 const readWorkspaceMembers = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "covered", by: "list_matters" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(

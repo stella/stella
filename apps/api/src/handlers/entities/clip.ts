@@ -27,7 +27,7 @@ export default createSafeHandler(
   {
     body: clipBodySchema,
     permissions: { entity: ["create"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "document_processing" },
   },
   async function* (ctx) {
     const {

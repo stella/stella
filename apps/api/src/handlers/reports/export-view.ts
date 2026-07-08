@@ -41,7 +41,7 @@ const templateRefSchema = t.Union([
 
 const config = {
   permissions: { workspace: ["read"], entity: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "reporting_export" },
   params: workspaceParams({}),
   body: t.Object({
     templateRef: templateRefSchema,

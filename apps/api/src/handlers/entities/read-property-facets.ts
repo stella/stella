@@ -17,7 +17,7 @@ const FACET_VALUE_LIMIT = 50;
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "document_processing" },
   body: t.Object({
     propertyId: tSafeId("property"),
     filters: t.Optional(

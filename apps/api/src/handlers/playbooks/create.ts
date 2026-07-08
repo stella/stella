@@ -5,7 +5,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   permissions: { playbook: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "knowledge_library_admin" },
   body: playbookDefinitionBodySchema,
 } satisfies HandlerConfig;
 

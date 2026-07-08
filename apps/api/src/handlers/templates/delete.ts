@@ -99,7 +99,7 @@ const deleteTemplateHandler = async function* ({
 
 const config = {
   permissions: { template: ["delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "template_authoring_ui" },
   params: deleteTemplateParamsSchema,
 } satisfies HandlerConfig;
 

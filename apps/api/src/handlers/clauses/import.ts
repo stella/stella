@@ -277,7 +277,7 @@ const importHandler = async function* ({
 
 const config = {
   permissions: { clause: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "knowledge_library_admin" },
   body: importBodySchema,
 } satisfies HandlerConfig;
 

@@ -15,7 +15,7 @@ const deleteExpenseBodySchema = t.Object({
 
 const config = {
   permissions: { expense: ["delete"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "billing_admin" },
   body: deleteExpenseBodySchema,
 } satisfies HandlerConfig;
 

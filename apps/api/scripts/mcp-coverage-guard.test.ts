@@ -83,6 +83,15 @@ describe("computeBaselineDiff (ratchet)", () => {
     expect(diff.stalePending).toEqual([]);
   });
 
+  test("flags every pending endpoint once the baseline is empty", () => {
+    const diff = computeBaselineDiff({
+      currentPending: ["new-gap"],
+      baseline: [],
+    });
+    expect(diff.newPending).toEqual(["new-gap"]);
+    expect(diff.stalePending).toEqual([]);
+  });
+
   test("flags a stale baseline entry that is no longer pending", () => {
     const diff = computeBaselineDiff({
       currentPending: ["a"],

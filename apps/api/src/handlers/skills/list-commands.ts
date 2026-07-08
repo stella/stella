@@ -17,7 +17,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 //      away unrelated catalogue/inspector reads
 const config = {
   permissions: { chat: ["create"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "agent_tool_authoring" },
 } satisfies HandlerConfig;
 
 const MAX_COMMAND_SKILLS = 250;

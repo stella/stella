@@ -215,7 +215,7 @@ const updatePropertyBodySchema = t.Object({
 
 const config = {
   permissions: { property: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "workspace_schema" },
   params: workspaceParams({ propertyId: tSafeId("property") }),
   body: updatePropertyBodySchema,
 } satisfies HandlerConfig;

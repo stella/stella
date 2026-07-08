@@ -133,7 +133,7 @@ const lookupByVerificationCode = async (
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "document_processing" },
   body: checkStampBodySchema,
 } satisfies HandlerConfig;
 

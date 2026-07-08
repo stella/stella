@@ -19,7 +19,7 @@ const rateEntryParamsSchema = workspaceParams({
 const deleteRateEntry = createSafeHandler(
   {
     permissions: { rate: ["delete"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "billing_admin" },
     params: rateEntryParamsSchema,
     body: deleteRateEntryBodySchema,
   },

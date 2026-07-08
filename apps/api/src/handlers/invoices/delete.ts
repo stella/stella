@@ -18,7 +18,7 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 const deleteInvoice = createSafeHandler(
   {
     permissions: { invoice: ["delete"] },
-    mcp: { type: "pending" },
+    mcp: { type: "internal", reason: "billing_admin" },
     params: invoiceParamsSchema,
   },
   async function* ({ safeDb, workspaceId, params, recordAuditEvent }) {

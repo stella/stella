@@ -21,7 +21,7 @@ const restoreClauseVersionParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "knowledge_library_admin" },
   params: restoreClauseVersionParamsSchema,
 } satisfies HandlerConfig;
 

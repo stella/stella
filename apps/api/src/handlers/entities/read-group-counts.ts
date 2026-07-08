@@ -50,7 +50,7 @@ const readGroupCountsBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "internal", reason: "document_processing" },
   body: readGroupCountsBodySchema,
 } satisfies HandlerConfig;
 
