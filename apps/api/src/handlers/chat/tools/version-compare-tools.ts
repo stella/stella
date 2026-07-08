@@ -15,6 +15,7 @@ import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
+import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 export const COMPARE_VERSIONS_TOOL_NAME = "compare_versions";
@@ -177,13 +178,8 @@ export const createVersionCompareTools = ({
     inputSchema: toTanStackToolSchema(compareVersionsInputSchema),
     outputSchema: toTanStackToolSchema(compareVersionsOutputSchema),
   }).server(async ({ baseVersionId, revisedVersionId }) => {
-    // SAFETY: the input schema constrains both to uuid strings; branding
-    // them as entityVersion ids only asserts the referenced entity type,
-    // which the workspace-scoped lookup below verifies before any read.
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- uuid inputs branded for the scoped lookup that validates them
-    const baseId = baseVersionId as SafeId<"entityVersion">;
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- uuid inputs branded for the scoped lookup that validates them
-    const revisedId = revisedVersionId as SafeId<"entityVersion">;
+    const baseId = brandPersistedEntityVersionId(baseVersionId);
+    const revisedId = brandPersistedEntityVersionId(revisedVersionId);
 
     const [base, revised] = await Promise.all([
       resolveVersionDocx(safeDb, toolWorkspaceIds, baseId, "base"),
