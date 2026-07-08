@@ -13,6 +13,7 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:onboarding",
   "stella:skills",
   "stella:external_mcps",
+  "stella:feedback",
 ] as const;
 
 export const MCP_ANONYMIZED_RESOURCE_SCOPES = [

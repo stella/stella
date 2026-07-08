@@ -28,6 +28,7 @@ import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
 import { expensesRoute } from "@/api/handlers/expenses/routes";
 import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
+import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
 import { isFolioCollabRateLimitedPath } from "@/api/handlers/folio-collab/rate-limit";
@@ -359,6 +360,7 @@ const api = new Elysia()
   .use(hostedUsageWebhookRoute)
   .use(mcpRoute)
   .use(aiAutocompleteRoute)
+  .use(feedbackPublicRoute)
   .use(devPublicRoute)
   .use(smokeRoute)
   .mount(getAuth().handler)

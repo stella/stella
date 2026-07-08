@@ -191,6 +191,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Matter/workspace ID to delete",
                 },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
+                },
               },
               required: ["matter_id"],
             },
@@ -710,6 +715,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Contact ID to delete",
                 },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
+                },
               },
               required: ["contact_id"],
             },
@@ -1146,6 +1156,11 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
                 },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions.",
+                },
               },
               required: ["action"],
             },
@@ -1215,6 +1230,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "boolean",
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions.",
                 },
               },
               required: ["action"],
@@ -1294,6 +1314,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "boolean",
                   description:
                     "Toggle AI prompt caching for the organization (update_org_settings)",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions.",
                 },
               },
               required: ["action"],
@@ -1888,6 +1913,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description:
                     "Delete only this version instead of the whole document",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
                 },
               },
               required: ["entity_id"],
@@ -2565,6 +2595,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Clause id to delete",
                 },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
+                },
               },
               required: ["clause_id"],
             },
@@ -3017,6 +3052,11 @@ export const generatedRouteMap: RouteNode = {
                   type: "string",
                   description: "Time entry ID to delete or write off",
                 },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run this irreversible operation. Set it only after a human user has explicitly approved the deletion.",
+                },
               },
               required: ["time_entry_id"],
             },
@@ -3466,6 +3506,97 @@ export const generatedRouteMap: RouteNode = {
                   maxLength: 512,
                 },
               },
+            },
+          },
+        },
+      },
+    },
+    feedback: {
+      kind: "route",
+      children: {
+        send: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["feedback", "send"],
+            toolName: "send_feedback",
+            flags: [
+              {
+                flag: "--kind",
+                prop: "kind",
+                kind: "enum",
+                enum: ["bug", "feature_request", "docs", "other"],
+                repeatable: false,
+                required: true,
+              },
+              {
+                flag: "--title",
+                prop: "title",
+                kind: "string",
+                repeatable: false,
+                required: true,
+              },
+              {
+                flag: "--body",
+                prop: "body",
+                kind: "string",
+                repeatable: false,
+                required: true,
+              },
+              {
+                flag: "--channel",
+                prop: "channel",
+                kind: "enum",
+                enum: ["github", "email", "stella"],
+                repeatable: false,
+                required: false,
+              },
+              {
+                flag: "--confirmation-token",
+                prop: "confirmation_token",
+                kind: "string",
+                repeatable: false,
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: false,
+            scope: "feedback",
+            inputSchema: {
+              type: "object",
+              properties: {
+                kind: {
+                  type: "string",
+                  enum: ["bug", "feature_request", "docs", "other"],
+                  description:
+                    "Feedback category: bug, feature_request, docs, or other",
+                },
+                title: {
+                  type: "string",
+                  description:
+                    "Short one-line summary of the issue; no tenant data, ids, or secrets",
+                  maxLength: 200,
+                },
+                body: {
+                  type: "string",
+                  description:
+                    "Markdown details: reproduction steps, expected vs actual behavior, environment. Never include tenant data, client or matter names, ids, or secrets; they are redacted server-side.",
+                  maxLength: 8000,
+                },
+                channel: {
+                  type: "string",
+                  enum: ["github", "email", "stella"],
+                  description:
+                    "Delivery channel. github (default) returns a prefilled issue URL the human submits under their own GitHub account (strongly preferred). email and stella are fallbacks for humans without a GitHub account and each need a confirmation-token handshake: email sends to this server's configured maintainer inbox; stella forwards to the hosted stella intake (use when there is no GitHub account and no local email is configured).",
+                },
+                confirmation_token: {
+                  type: "string",
+                  description:
+                    "email/stella channels only: the confirmation_token from a prior approval_required response. Send it on the second call, with the same kind/title/body, only after the human approved the content.",
+                },
+              },
+              required: ["kind", "title", "body"],
             },
           },
         },

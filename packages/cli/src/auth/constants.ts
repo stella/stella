@@ -78,6 +78,7 @@ export const CLI_KNOWN_SCOPES = [
   "stella:onboarding",
   "stella:skills",
   "stella:external_mcps",
+  "stella:feedback",
 ] as const;
 
 export const CLIENT_NAME = "stella-cli";

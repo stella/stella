@@ -21,6 +21,19 @@ import type {
 const CURSOR_ARG = "cursor";
 const LIMIT_ARG = "limit";
 
+/**
+ * The destructive-confirm gate arg. A tool that gates a destructive action
+ * advertises a boolean `confirm` prop, but the CLI never emits a redundant
+ * `--confirm` flag: the reserved `--yes` flow owns the confirmation, and the
+ * executor injects `confirm: true` after the human confirms. It is dropped from
+ * the generated per-tool flags of EVERY leaf of any tool that declares it
+ * (including non-destructive sibling subcommands of a discriminated tool such
+ * as `manage_organization`, where only `remove-member` is destructive but all
+ * three subcommands share the one schema). It stays reachable through `--input`
+ * for scripts that want it.
+ */
+const CONFIRM_ARG = "confirm";
+
 /** Prefixes that split an unknown tool name into `verb domain` (spec S1 rule 5). */
 const VERB_PREFIXES: ReadonlySet<string> = new Set([
   "list",
@@ -438,6 +451,13 @@ const leafSpecsForTool = ({
     paginationSkip.add(LIMIT_ARG);
   } else if (mode === "cursor-only") {
     paginationSkip.add(CURSOR_ARG);
+  }
+  // A tool that declares a boolean `confirm` gate (either the whole tool is
+  // destructive, or one discriminated subcommand is) hides it from the generated
+  // flags on every leaf: the reserved --yes flow owns it, and the executor
+  // injects `confirm: true` only after confirming an actually-destructive op.
+  if (destructiveHint || properties[CONFIRM_ARG] !== undefined) {
+    paginationSkip.add(CONFIRM_ARG);
   }
 
   // Discriminator split (spec S2). An ANNOTATED tool splits only when its

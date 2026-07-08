@@ -15,7 +15,10 @@ import {
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { consumeMcpGatewayRateLimit } from "@/api/mcp/gateway/rate-limit";
-import { errorResult } from "@/api/mcp/tool-utils";
+import {
+  MCP_INTERNAL_ERROR_HINT,
+  structuredErrorResult,
+} from "@/api/mcp/tool-utils";
 
 type GatewayConnectionToolRow = {
   cachedTools: CachedMcpToolDefinition[] | null;
@@ -102,7 +105,11 @@ export const callGatewayExternalMcpTool = async ({
 }) => {
   const resolved = await resolveGatewayExternalMcpTool({ context, toolName });
   if (!resolved) {
-    return errorResult(`Unknown tool: ${toolName}`);
+    return structuredErrorResult({
+      code: "unknown_tool",
+      message: `Unknown tool: ${toolName}`,
+      hint: "Call tools/list for the tools available to this session.",
+    });
   }
 
   const allowed = await consumeMcpGatewayRateLimit({
@@ -117,7 +124,12 @@ export const callGatewayExternalMcpTool = async ({
       resolved,
       toolKind: "external_mcp",
     });
-    return errorResult("External MCP tool rate limit exceeded");
+    return structuredErrorResult({
+      code: "rate_limited",
+      message: "External MCP tool rate limit exceeded",
+      retryable: true,
+      hint: `Too many calls to this connector. Retry after up to ${LIMITS.mcpGatewayRateLimitWindowMs} ms.`,
+    });
   }
 
   const startedAt = Date.now();
@@ -151,7 +163,11 @@ export const callGatewayExternalMcpTool = async ({
       resolved,
       toolKind: "external_mcp",
     });
-    return errorResult("External MCP tool execution failed");
+    return structuredErrorResult({
+      code: "internal_error",
+      message: "External MCP tool execution failed",
+      hint: MCP_INTERNAL_ERROR_HINT,
+    });
   }
 };
 

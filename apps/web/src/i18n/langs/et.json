@@ -922,6 +922,7 @@
     "scopeBillingWrite": "Luua, muuta ja kustutada teie ajakirjeid",
     "scopeDocumentsWrite": "Luua, muuta ja kustutada teie dokumente",
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
+    "scopeFeedback": "Tootetagasiside saatmine stella hooldajatele",
     "scopeKnowledgeWrite": "Luua, muuta ja kustutada teie klausleid ja käivitada playbooke",
     "scopeMattersWrite": "Luua ja muuta teie toimikuid, kontakte ja ülesandeid",
     "scopeOfflineAccess": "Hoida teid sisse logituna ilma korduva nõusolekuta",

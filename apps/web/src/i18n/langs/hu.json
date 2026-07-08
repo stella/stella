@@ -922,6 +922,7 @@
     "scopeBillingWrite": "Időbejegyzések létrehozása, szerkesztése és törlése",
     "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
     "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
+    "scopeFeedback": "Termékvisszajelzés küldése a stella karbantartóinak",
     "scopeKnowledgeWrite": "Záradékok létrehozása, szerkesztése és törlése, valamint playbookok futtatása",
     "scopeMattersWrite": "Ügyek, kapcsolatok és feladatok létrehozása és szerkesztése",
     "scopeOfflineAccess": "A bejelentkezés fenntartása ismételt jóváhagyás nélkül",

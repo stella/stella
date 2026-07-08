@@ -56,6 +56,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  confirmProp,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -64,6 +65,7 @@ import {
   getWorkspaceStatus,
   intProp,
   MAX_LIST_LIMIT,
+  notFoundResult,
   nullableStringProp,
   stringProp,
   textResult,
@@ -250,6 +252,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         matter_id: stringProp("Matter/workspace ID to delete"),
+        confirm: confirmProp(),
       },
       required: ["matter_id"],
     },
@@ -301,6 +304,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         contact_id: stringProp("Contact ID to delete"),
+        confirm: confirmProp(),
       },
       required: ["contact_id"],
     },
@@ -558,7 +562,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
         }),
       );
       if (!client) {
-        return errorResult("client_id contact not found");
+        return notFoundResult("client_id contact not found");
       }
     }
     const workspaceId = createSafeId<"workspace">();
@@ -593,7 +597,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
     workspaceId: input.matter_id,
   });
   if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   // Archived matters are read-only except for an unarchive. The only save_matter
@@ -675,6 +679,7 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
 
 const deleteMatterArgsSchema = v.strictObject({
   matter_id: v.pipe(v.string(), v.minLength(1)),
+  confirm: v.optional(v.boolean()),
 });
 
 const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
@@ -858,6 +863,7 @@ const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
 
 const deleteContactArgsSchema = v.strictObject({
   contact_id: v.pipe(v.string(), v.minLength(1)),
+  confirm: v.optional(v.boolean()),
 });
 
 const handleDeleteContactTool: McpToolHandler = async ({ args, context }) => {
@@ -1106,7 +1112,7 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
       return errorResult("Not a task entity");
     }
     if (owner.status !== "ok") {
-      return errorResult("Task not found or not accessible");
+      return notFoundResult("Task not found or not accessible");
     }
     // When matter_id is also supplied it must name the task's own matter;
     // otherwise a task from a different accessible matter would be returned.
@@ -1123,7 +1129,7 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
       workspaceId: owner.workspaceId,
     });
     if (!taskRow) {
-      return errorResult("Task not found or not accessible");
+      return notFoundResult("Task not found or not accessible");
     }
     const workspaceId = owner.workspaceId;
 
@@ -1175,7 +1181,7 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
   const matterId = input.matter_id ?? "";
   const workspaceId = ensureWorkspaceAccess({ context, workspaceId: matterId });
   if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   let boundary: { createdAt: string; id: SafeId<"entity"> } | null = null;
@@ -1343,7 +1349,7 @@ const validateLinkTarget = async ({
     }),
   );
   if (!target) {
-    return errorResult("Link target entity not found in this matter");
+    return notFoundResult("Link target entity not found in this matter");
   }
   if (!includes(LINKABLE_ENTITY_KINDS, target.kind)) {
     return errorResult("Link target must be a document, folder, or task");
@@ -1406,7 +1412,7 @@ const validateUnlinkTarget = async ({
     }),
   );
   if (!link) {
-    return errorResult("Entity-link not found in this matter");
+    return notFoundResult("Entity-link not found in this matter");
   }
   if (link.sourceEntityId !== taskId && link.targetEntityId !== taskId) {
     return errorResult("unlink_link_id does not belong to this task");
@@ -1566,7 +1572,7 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Not a task entity");
   }
   if (owner.status !== "ok") {
-    return errorResult("Task not found or not accessible");
+    return notFoundResult("Task not found or not accessible");
   }
   const workspaceId = owner.workspaceId;
   // A task in an archived matter is read-only, matching the HTTP task routes

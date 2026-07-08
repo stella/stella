@@ -195,6 +195,24 @@ const parseToolPayload = (
   return JSON.parse(item.text) as unknown;
 };
 
+// The structured error envelope is a JSON `{"error":{code,message,hint?,...}}`
+// text content with isError set. Assert both the flag and the parsed shape.
+const expectErrorEnvelope = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+  expected: {
+    code: string;
+    message: string;
+    hint?: string;
+    retryable?: boolean;
+  },
+) => {
+  expect(result.isError).toBe(true);
+  expect(parseToolPayload(result)).toEqual({ error: expected });
+};
+
+const FEATURE_DISABLED_HINT =
+  "This deployment or organization has this feature turned off; it cannot be enabled from the client.";
+
 const createReadDecisionResult = () => ({
   analysis: null,
   caseNumber: "29 Cdo 123/2024",
@@ -954,14 +972,10 @@ describe("OpenAI-compatible MCP tools", () => {
         toolName: "search_case_law",
       });
 
-      expect(result).toEqual({
-        content: [
-          {
-            type: "text",
-            text: "This feature is not enabled on this deployment",
-          },
-        ],
-        isError: true,
+      expectErrorEnvelope(result, {
+        code: "feature_disabled",
+        message: "This feature is not enabled on this deployment",
+        hint: FEATURE_DISABLED_HINT,
       });
       // The gate short-circuits before the backing handler runs, so guessing
       // the tool name cannot reach the corpus.
@@ -1241,13 +1255,10 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "fetch",
     });
 
-    expect(result.isError).toBe(true);
-    expect(result.content).toEqual([
-      {
-        type: "text",
-        text: "Matter not found or not accessible",
-      },
-    ]);
+    expectErrorEnvelope(result, {
+      code: "not_found",
+      message: "Matter not found or not accessible",
+    });
   });
 
   test("search_across_matters passes the MCP workspace allowlist to search", async () => {
@@ -1628,14 +1639,10 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "search",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Tool execution failed",
-        },
-      ],
-      isError: true,
+    expectErrorEnvelope(result, {
+      code: "internal_error",
+      message: "Tool execution failed",
+      hint: "If this looks like a stella bug, report it with the send_feedback tool.",
     });
     expect(captureErrorMock).toHaveBeenCalledWith(
       expect.objectContaining({ message: "database timeout" }),
@@ -2516,14 +2523,10 @@ describe("OpenAI-compatible MCP tools", () => {
           toolName: "save_time_entry",
         });
 
-        expect(result).toEqual({
-          content: [
-            {
-              type: "text",
-              text: "This feature is not enabled on this deployment",
-            },
-          ],
-          isError: true,
+        expectErrorEnvelope(result, {
+          code: "feature_disabled",
+          message: "This feature is not enabled on this deployment",
+          hint: FEATURE_DISABLED_HINT,
         });
         // The gate short-circuits before the backing handler runs, so no audit
         // row is written by guessing the tool name.
@@ -2550,14 +2553,10 @@ describe("OpenAI-compatible MCP tools", () => {
           context: createContext(),
           toolName: "get_usage",
         });
-        expect(result).toEqual({
-          content: [
-            {
-              type: "text",
-              text: "This feature is not enabled on this deployment",
-            },
-          ],
-          isError: true,
+        expectErrorEnvelope(result, {
+          code: "feature_disabled",
+          message: "This feature is not enabled on this deployment",
+          hint: FEATURE_DISABLED_HINT,
         });
       },
     );
@@ -2571,5 +2570,57 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(toolNames).toContain("get_usage");
       },
     );
+  });
+
+  // --- Destructive-op confirm guardrail --------------------------------
+
+  // A destructiveHint tool (delete_*) is refused before dispatch unless the
+  // caller passes confirm: true, so an agent cannot delete without an explicit
+  // human-approved confirmation. The gate runs before any DB access.
+  test("delete_document refuses to run without confirm: true", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext(),
+      toolName: "delete_document",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "confirmation_required",
+      message:
+        "delete_document is an irreversible operation and was called without confirmation",
+      hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
+    });
+  });
+
+  test("delete_document clears the confirm gate when confirm is true", async () => {
+    // confirm: true clears the guardrail; the call proceeds to the handler,
+    // which 404s the unknown entity — proving the gate no longer short-circuits
+    // and that the handler tolerates the extra confirm arg.
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_missing", confirm: true },
+      context: createContext(),
+      toolName: "delete_document",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "not_found",
+      message: "Document not found or not accessible",
+    });
+  });
+
+  // A guessed tool name reports unknown_tool rather than a bare string, so an
+  // agent can branch on the code.
+  test("dispatching an unknown tool returns the unknown_tool envelope", async () => {
+    const result = await handleMcpToolCall({
+      args: {},
+      context: createContext(),
+      toolName: "not_a_real_tool",
+    });
+
+    expectErrorEnvelope(result, {
+      code: "unknown_tool",
+      message: "Unknown tool: not_a_real_tool",
+      hint: "Call tools/list for the tools available to this session.",
+    });
   });
 });

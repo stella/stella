@@ -1,5 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import { TaggedError } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import { env } from "@/api/env";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
+import type { McpErrorCode } from "@/api/mcp/error-codes";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -96,14 +97,134 @@ export const intProp = (
 export const enumProp = (description: string, values: readonly string[]) =>
   ({ type: "string", enum: values, description }) as const;
 
+/**
+ * Boolean `confirm` gate for a destructive tool. The guardrail in
+ * `handleMcpToolCall` rejects a `destructiveHint` call unless `confirm === true`,
+ * so every destructive tool advertises this property with the same contract:
+ * set it only after a human has approved the irreversible operation. Pass a
+ * custom `description` for a tool whose gate is action-scoped (e.g.
+ * `manage_organization`, where only the `remove_member` action requires it).
+ */
+export const confirmProp = (
+  description = "Must be true to run this irreversible operation. Set it only after a " +
+    "human user has explicitly approved the deletion.",
+) =>
+  ({
+    type: "boolean",
+    description,
+  }) as const;
+
 export const textResult = (data: unknown): CallToolResult => ({
   content: [{ type: "text", text: JSON.stringify(data) }],
 });
 
+/**
+ * Legacy plain-text tool error. Kept for the handful of bespoke messages that
+ * have no sensible machine-readable code (e.g. cross-field validation hints
+ * surfaced verbatim). New code paths should prefer `structuredErrorResult`,
+ * `notFoundResult`, or the `validation_error`-tagged arg parsers below so agents
+ * and the CLI can branch on a stable `error.code`.
+ */
 export const errorResult = (message: string): CallToolResult => ({
   content: [{ type: "text", text: message }],
   isError: true,
 });
+
+/**
+ * Hint pointing an agent at the feedback tool after an unexpected server-side
+ * failure. Kept as a shared constant so the internal-error envelope reads the
+ * same wherever it is produced. `send_feedback` lands in a follow-up commit on
+ * this branch; the hint is stable regardless.
+ */
+export const MCP_INTERNAL_ERROR_HINT =
+  "If this looks like a stella bug, report it with the send_feedback tool.";
+
+/**
+ * Structured tool-error envelope. The single text content is
+ * `{"error":{"code","message","hint?","retryable?"}}`; `isError` is set so MCP
+ * clients still treat it as a failure. Undefined `hint`/`retryable` are omitted
+ * so the serialized shape stays minimal. Agents branch on `code`; `hint` tells
+ * them the next step. The companion CLI keys its exit codes off `error.code`.
+ */
+export const structuredErrorResult = ({
+  code,
+  hint,
+  message,
+  retryable,
+}: {
+  code: McpErrorCode;
+  hint?: string | undefined;
+  message: string;
+  retryable?: boolean | undefined;
+}): CallToolResult => {
+  const error: {
+    code: McpErrorCode;
+    message: string;
+    hint?: string;
+    retryable?: boolean;
+  } = { code, message };
+  if (hint !== undefined) {
+    error.hint = hint;
+  }
+  if (retryable !== undefined) {
+    error.retryable = retryable;
+  }
+
+  return {
+    content: [{ type: "text", text: JSON.stringify({ error }) }],
+    isError: true,
+  };
+};
+
+/** `not_found` envelope for a resource that does not exist or is inaccessible. */
+export const notFoundResult = (
+  message: string,
+  hint?: string,
+): CallToolResult =>
+  structuredErrorResult({ code: "not_found", hint, message });
+
+/**
+ * Up to `limit` known tool names closest to `target` by Levenshtein distance,
+ * used to hint an agent that fat-fingered a tool name. Only candidates within a
+ * lenient edit budget (roughly half the longer name) are kept, so an unrelated
+ * miss returns nothing rather than a confusing suggestion. No dependency: a tiny
+ * DP implementation is enough for the short, small candidate set.
+ */
+export const closestToolNames = (
+  target: string,
+  candidates: readonly string[],
+  limit = 3,
+): string[] =>
+  candidates
+    .map((name) => ({ name, distance: levenshtein(target, name) }))
+    .filter(({ distance, name }) => distance <= Math.ceil(name.length / 2))
+    .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name))
+    .slice(0, limit)
+    .map(({ name }) => name);
+
+const levenshtein = (a: string, b: string): number => {
+  // Rolling single-row DP. `previous` always holds `b.length + 1` entries and
+  // every read below is in range by construction; `panic` documents that as a
+  // hard invariant instead of masking an out-of-range read with a default.
+  const cell = (row: readonly number[], index: number): number =>
+    row[index] ?? panic("levenshtein: DP cell index out of range");
+
+  const previous = Array.from({ length: b.length + 1 }, (_unused, i) => i);
+  for (let i = 1; i <= a.length; i += 1) {
+    let diagonal = cell(previous, 0);
+    previous[0] = i;
+    for (let j = 1; j <= b.length; j += 1) {
+      const candidate = Math.min(
+        cell(previous, j) + 1,
+        cell(previous, j - 1) + 1,
+        diagonal + (a[i - 1] === b[j - 1] ? 0 : 1),
+      );
+      diagonal = cell(previous, j);
+      previous[j] = candidate;
+    }
+  }
+  return cell(previous, b.length);
+};
 
 export const hasErrorMessage = (value: unknown): value is { error: string } => {
   if (typeof value !== "object" || value === null) {
@@ -117,15 +238,30 @@ export const hasErrorMessage = (value: unknown): value is { error: string } => {
   return typeof value.error === "string" && value.error.length > 0;
 };
 
-/** Map errors thrown from chat tool `execute` into MCP tool results. */
+/**
+ * Map errors thrown from chat tool `execute` into MCP tool results. Only the
+ * dynamic-gateway `invokeAiTool` path funnels through here today, and no tagged
+ * error it can raise carries a not-found semantic, so every tagged error maps
+ * conservatively to `internal_error`. Tagged errors are curated, surfaceable
+ * messages (not raw internals), so the message is preserved; a not-found branch
+ * can be added here if a not-found-tagged error is ever routed through this path.
+ */
 export const toolThrownErrorToMcpResult = (
   err: unknown,
 ): CallToolResult | null => {
   if (TaggedError.is(err)) {
-    return errorResult(err.message);
+    return structuredErrorResult({
+      code: "internal_error",
+      message: err.message,
+      hint: MCP_INTERNAL_ERROR_HINT,
+    });
   }
   return null;
 };
+
+/** `validation_error` envelope for a bad argument, hinting at the fix. */
+const argValidationError = (message: string, hint: string): CallToolResult =>
+  structuredErrorResult({ code: "validation_error", hint, message });
 
 export const parseRequiredString = (
   args: Record<string, unknown>,
@@ -134,11 +270,15 @@ export const parseRequiredString = (
 ): string | CallToolResult => {
   const value = args[key];
   if (typeof value !== "string" || value.length === 0) {
-    return errorResult(`Missing required parameter: ${key}`);
+    return argValidationError(
+      `Missing required parameter: ${key}`,
+      `Provide '${key}' as a non-empty string.`,
+    );
   }
   if (opts?.maxLength !== undefined && value.length > opts.maxLength) {
-    return errorResult(
+    return argValidationError(
       `Parameter ${key} exceeds maximum length of ${opts.maxLength}`,
+      `Shorten '${key}' to at most ${opts.maxLength} characters.`,
     );
   }
   return value;
@@ -160,8 +300,9 @@ export const parseOptionalEnum = <TValues extends readonly string[]>({
     return defaultValue;
   }
   if (typeof value !== "string" || !values.includes(value)) {
-    return errorResult(
+    return argValidationError(
       `Invalid parameter: ${key}. Expected one of ${values.join(", ")}`,
+      `Set '${key}' to one of: ${values.join(", ")}.`,
     );
   }
   return value;
@@ -188,8 +329,9 @@ export const parseOptionalLimit = ({
     value < 1 ||
     value > max
   ) {
-    return errorResult(
+    return argValidationError(
       `Invalid parameter: ${key}. Expected an integer between 1 and ${max}`,
+      `Set '${key}' to an integer between 1 and ${max}.`,
     );
   }
   return value;
@@ -215,13 +357,15 @@ export const parseOptionalCursor = ({
     return undefined;
   }
   if (typeof value !== "string" || value.length === 0) {
-    return errorResult(
+    return argValidationError(
       `Invalid parameter: ${key}. Expected an opaque cursor string`,
+      `Pass the '${key}' as the opaque cursor returned by a previous call, or omit it for the first page.`,
     );
   }
   if (value.length > MAX_CURSOR_LENGTH) {
-    return errorResult(
+    return argValidationError(
       `Parameter ${key} exceeds maximum length of ${MAX_CURSOR_LENGTH}`,
+      `Pass the '${key}' verbatim as returned; a valid cursor never exceeds ${MAX_CURSOR_LENGTH} characters.`,
     );
   }
   return value;
@@ -270,7 +414,10 @@ const decodeTextWindowOffset = (
     !Number.isInteger(candidate) ||
     candidate < 0
   ) {
-    return errorResult("Invalid cursor");
+    return argValidationError(
+      "Invalid cursor",
+      "Pass the 'cursor' verbatim as returned by a previous call, or omit it to read from the start.",
+    );
   }
   return candidate;
 };
@@ -353,7 +500,7 @@ export const ensureActiveWorkspace = ({
     workspaceId,
   });
   if (!resolved) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
   if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
     return errorResult("Matter is archived; unarchive it first");

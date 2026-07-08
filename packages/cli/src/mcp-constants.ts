@@ -33,3 +33,20 @@ export const EXIT_CODES = {
 } as const;
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
+
+/**
+ * Full map from a structured tool-error envelope `error.code` (the closed set in
+ * `apps/api/src/mcp/error-codes.ts`) to the CLI exit class. Keyed by string (not
+ * an imported server type) so `@stll/cli` stays free of any `apps/api` import;
+ * an unknown/absent code falls through to the caller's server-error default.
+ */
+export const MCP_ERROR_CODE_EXIT_MAP: Readonly<Record<string, ExitCode>> = {
+  validation_error: EXIT_CODES.validation,
+  missing_scope: EXIT_CODES.auth,
+  feature_disabled: EXIT_CODES.featureDisabled,
+  not_found: EXIT_CODES.notFound,
+  confirmation_required: EXIT_CODES.aborted,
+  rate_limited: EXIT_CODES.server,
+  unknown_tool: EXIT_CODES.server,
+  internal_error: EXIT_CODES.server,
+};

@@ -43,6 +43,7 @@ import type {
   McpToolHandler,
 } from "@/api/mcp/tool-types";
 import {
+  confirmProp,
   ensureActiveWorkspace,
   enumProp,
   errorResult,
@@ -632,6 +633,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       type: "object",
       properties: {
         clause_id: stringProp("Clause id to delete"),
+        confirm: confirmProp(),
       },
       required: ["clause_id"],
     },
@@ -1176,6 +1178,7 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
 
 const deleteClauseArgsSchema = v.strictObject({
   clause_id: v.pipe(v.string(), v.minLength(1)),
+  confirm: v.optional(v.boolean()),
 });
 
 const handleDeleteClauseTool: McpToolHandler = async ({ args, context }) => {

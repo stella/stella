@@ -11,7 +11,7 @@ import {
   recordSkillGatewayToolAudit,
 } from "@/api/mcp/gateway/external-tools";
 import { resolveSkillTool } from "@/api/mcp/gateway/skills";
-import { errorResult, textResult } from "@/api/mcp/tool-utils";
+import { structuredErrorResult, textResult } from "@/api/mcp/tool-utils";
 
 export const dispatchGatewayToolCall = async ({
   args,
@@ -39,7 +39,11 @@ export const dispatchGatewayToolCall = async ({
   const startedAt = Date.now();
   const skill = await resolveSkillTool({ context, toolName });
   if (!skill) {
-    return errorResult(`Unknown tool: ${toolName}`);
+    return structuredErrorResult({
+      code: "unknown_tool",
+      message: `Unknown tool: ${toolName}`,
+      hint: "Call tools/list for the tools available to this session.",
+    });
   }
 
   await recordSkillGatewayToolAudit({

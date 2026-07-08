@@ -24,6 +24,7 @@ import {
   MAX_ALL_BYTES,
   MAX_ALL_ITEMS,
   MAX_ALL_PAGES,
+  MCP_ERROR_CODE_EXIT_MAP,
   type ExitCode,
 } from "./mcp-constants.js";
 import {
@@ -413,13 +414,54 @@ const parsePayload = (result: CallToolResult): unknown => {
   return Result.isOk(parsed) ? parsed.value : undefined;
 };
 
+/** The structured tool-error envelope: `{ error: { code, message, hint? } }`. */
+type ErrorEnvelope = {
+  code: string;
+  message: string;
+  hint: string | undefined;
+};
+
 /**
- * Map a tool `isError` result to an exit class (spec 051 S4). A feature-disabled
- * failure is exit 5 only when the server tags the error payload with a known
- * machine code; a plain-text error (today's server) has no code and falls to
- * exit 4. Text is never pattern-matched (it is locale-dependent server output).
+ * Parse the structured tool-error envelope
+ * (`{"error":{"code","message","hint?","retryable?"}}`) a modern server tags
+ * every tool failure with. Returns `null` for a legacy plain-text or
+ * bare-`{code}` error so the caller falls back to today's behavior.
  */
-const classifyToolError = (payload: unknown): ExitCode => {
+const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
+  if (!isRecord(payload)) {
+    return null;
+  }
+  const error = payload["error"];
+  if (!isRecord(error)) {
+    return null;
+  }
+  const code = error["code"];
+  const message = error["message"];
+  if (typeof code !== "string" || typeof message !== "string") {
+    return null;
+  }
+  const hint = error["hint"];
+  return { code, message, hint: typeof hint === "string" ? hint : undefined };
+};
+
+/**
+ * Map a tool `isError` result to an exit class (spec 051 S4). A structured
+ * envelope's `error.code` selects the exit class directly from the full
+ * code->exit map (validation_error->2, missing_scope->3, feature_disabled->5,
+ * not_found->6, confirmation_required->7, rate_limited/unknown_tool/
+ * internal_error->4). A legacy server that tags only a bare `code` (or
+ * `error.code`) without the full envelope still upgrades a feature-disabled
+ * failure from 4 to 5; everything else falls to exit 4. Text is never
+ * pattern-matched (it is locale-dependent server output).
+ */
+export const classifyToolError = (payload: unknown): ExitCode => {
+  const envelope = errorEnvelope(payload);
+  if (envelope !== null) {
+    const mapped = MCP_ERROR_CODE_EXIT_MAP[envelope.code];
+    if (mapped !== undefined) {
+      return mapped;
+    }
+  }
   if (!isRecord(payload)) {
     return EXIT_CODES.server;
   }
@@ -429,6 +471,49 @@ const classifyToolError = (payload: unknown): ExitCode => {
     return EXIT_CODES.featureDisabled;
   }
   return EXIT_CODES.server;
+};
+
+/**
+ * True when the tool declares a boolean `confirm` gate in its input schema (the
+ * destructive delete_* tools, and `manage_organization` which gates its
+ * remove_member action). The generated per-tool flags hide `confirm` (the
+ * reserved --yes flow owns it), so after a confirmed destructive op the executor
+ * injects `confirm: true` to satisfy the server gate. Injection only runs on a
+ * leaf marked `destructive`, so a non-destructive sibling subcommand (e.g.
+ * `organization update-settings`, sharing the one schema) never has `confirm`
+ * injected even though this returns true for the shared schema.
+ */
+const specHasConfirmGate = (spec: LeafCommandSpec): boolean => {
+  const properties = spec.inputSchema["properties"];
+  return isRecord(properties) && "confirm" in properties;
+};
+
+/**
+ * The re-run hint for a phase-1 two-phase-handshake response, or `null` when it
+ * does not apply. Generic over the response fields (no tool-name special case):
+ * a hint is produced only for an `approval_required` status carrying a
+ * `confirmation_token`, and only on a TTY (off a pipe the token is already on
+ * stdout for the caller to thread back). Exported for unit testing the gate.
+ */
+export const approvalReRunHint = ({
+  isTTY,
+  payload,
+}: {
+  isTTY: boolean;
+  payload: unknown;
+}): string | null => {
+  if (
+    !isTTY ||
+    !isRecord(payload) ||
+    payload["status"] !== "approval_required"
+  ) {
+    return null;
+  }
+  const token = stringField(payload, "confirmation_token");
+  if (token === null) {
+    return null;
+  }
+  return `To approve after human review: re-run with --confirmation-token ${token}`;
 };
 
 /** Resolve the effective `OutputFormat` from the reserved output flags + TTY. */
@@ -540,8 +625,21 @@ const renderCallResult = ({
   writers: Writers;
 }): void => {
   if (result.isError) {
-    writers.stderr(`${result.content.at(0)?.text ?? "Tool error"}\n`);
-    setExit(context, classifyToolError(parsePayload(result)));
+    const errorPayload = parsePayload(result);
+    // A structured envelope renders as plain, agent-readable stderr lines
+    // (`error: <message>`, then `hint: <hint>` when present) rather than a raw
+    // JSON dump. stderr always stays human/agent text: even with --output json
+    // the error never goes to stdout, so a scripted stdout stays clean.
+    const envelope = errorEnvelope(errorPayload);
+    if (envelope !== null) {
+      writers.stderr(`error: ${envelope.message}\n`);
+      if (envelope.hint !== undefined) {
+        writers.stderr(`hint: ${envelope.hint}\n`);
+      }
+    } else {
+      writers.stderr(`${result.content.at(0)?.text ?? "Tool error"}\n`);
+    }
+    setExit(context, classifyToolError(errorPayload));
     return;
   }
   const payload = parsePayload(result);
@@ -557,6 +655,17 @@ const renderCallResult = ({
     columns: undefined,
   });
   renderResult({ plan, format, writers, allActive: false });
+
+  // Generic two-phase handshake affordance (driven by the response fields, not
+  // any tool name): a phase-1 `approval_required` response carries a
+  // `confirmation_token` the human approves before a phase-2 re-run.
+  const hint = approvalReRunHint({
+    isTTY: context.process.stdout.isTTY,
+    payload,
+  });
+  if (hint !== null) {
+    writers.stderr(`${hint}\n`);
+  }
 };
 
 /** Run one leaf command end to end. Sets `process.exitCode` per spec S4. */
@@ -628,6 +737,12 @@ export const runLeafCommand = async ({
     if (outcome === "aborted") {
       setExit(context, EXIT_CODES.aborted);
       return;
+    }
+    // The human confirmed (or passed --yes): satisfy the server's `confirm`
+    // gate so the destructive tool proceeds. Only tools that actually declare
+    // the boolean gate get the flag (see `specHasConfirmGate`).
+    if (specHasConfirmGate(spec)) {
+      args = { ...args, confirm: true };
     }
   }
 

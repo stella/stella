@@ -150,6 +150,25 @@ const envApi = createEnv({
     SMTP_USERNAME: v.optional(v.string()),
     SMTP_PASSWORD: v.optional(v.string()),
     TRANSACTIONAL_EMAIL_FROM: v.optional(v.string()),
+    /**
+     * Destination address for the MCP `send_feedback` email channel. Optional:
+     * when unset the tool falls back to the github channel and refuses the
+     * email channel with a `feature_disabled` envelope. Requires a configured
+     * EMAIL_PROVIDER to actually deliver.
+     */
+    FEEDBACK_EMAIL_TO: v.optional(v.pipe(v.string(), v.email())),
+    /**
+     * Where the MCP `send_feedback` "stella" channel forwards approved,
+     * sanitized feedback: the hosted intake receiver. Defaults to Stella's
+     * hosted API (`https://api.stll.app/public/feedback`); a self-hosted
+     * deployment can point it at its own intake or a proxy. When the tool runs
+     * on the hosted instance this points back at itself, which is a normal
+     * round trip.
+     */
+    FEEDBACK_INTAKE_URL: v.optional(
+      v.pipe(v.string(), v.url()),
+      "https://api.stll.app/public/feedback",
+    ),
     FRONTEND_URL: v.pipe(v.string(), v.url()),
     PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
     GOTENBERG_URL: v.pipe(v.string(), v.url()),

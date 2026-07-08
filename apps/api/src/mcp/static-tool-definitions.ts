@@ -3,6 +3,7 @@ import { BILLING_TOOL_DEFINITIONS } from "@/api/mcp/billing-tools";
 import { COMPAT_TOOL_DEFINITIONS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
+import { FEEDBACK_TOOL_DEFINITIONS } from "@/api/mcp/feedback-tools";
 import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
 import { MATTER_TOOL_DEFINITIONS } from "@/api/mcp/matter-tools";
 import { RESEARCH_ADMIN_TOOL_DEFINITIONS } from "@/api/mcp/research-admin-tools";
@@ -25,6 +26,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...KNOWLEDGE_TOOL_DEFINITIONS,
   ...BILLING_TOOL_DEFINITIONS,
   ...RESEARCH_ADMIN_TOOL_DEFINITIONS,
+  ...FEEDBACK_TOOL_DEFINITIONS,
 ] as const satisfies readonly McpToolDefinition[];
 
 /**

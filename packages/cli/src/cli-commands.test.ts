@@ -61,15 +61,19 @@ const startMockServer = (handler: MockHandler) => {
           result: response.rpcResult,
         });
       }
+      const result: {
+        content: { type: "text"; text: string }[];
+        isError?: true;
+      } = {
+        content: [{ type: "text", text: JSON.stringify(response.toolPayload) }],
+      };
+      if (response.isError) {
+        result.isError = true;
+      }
       return Response.json({
         jsonrpc: "2.0",
         id: 1,
-        result: {
-          content: [
-            { type: "text", text: JSON.stringify(response.toolPayload) },
-          ],
-          ...(response.isError === true ? { isError: true } : {}),
-        },
+        result,
       });
     },
   });
@@ -710,6 +714,216 @@ describe("feature-disabled exit class (S4/Phase 4)", () => {
     });
     server.stop();
     expect(result.exitCode).toBe(5);
+  });
+});
+
+describe("structured error envelope -> exit codes (S4)", () => {
+  const envelopeError = (code: string, hint?: string): MockResponse => ({
+    toolPayload: {
+      error: {
+        code,
+        message: `Something went wrong: ${code}`,
+        ...(hint === undefined ? {} : { hint }),
+      },
+    },
+    isError: true,
+  });
+
+  test("feature_disabled envelope prints error:/hint: on stderr and exits 5", async () => {
+    const server = startMockServer(() =>
+      envelopeError("feature_disabled", "Enable billing for this org"),
+    );
+    const result = await runCli({
+      args: ["time-entry", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(5);
+    expect(result.stderr).toContain(
+      "error: Something went wrong: feature_disabled",
+    );
+    expect(result.stderr).toContain("hint: Enable billing for this org");
+    // The raw JSON envelope must never leak to stdout.
+    expect(result.stdout).toBe("");
+  });
+
+  test("not_found envelope exits 6", async () => {
+    const server = startMockServer(() => envelopeError("not_found"));
+    const result = await runCli({
+      args: ["matter", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(6);
+    expect(result.stderr).toContain("error: Something went wrong: not_found");
+  });
+
+  test("missing_scope envelope (server-side) exits 3", async () => {
+    const server = startMockServer(() => envelopeError("missing_scope"));
+    const result = await runCli({
+      args: ["matter", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(3);
+  });
+
+  test("confirmation_required envelope exits 7", async () => {
+    const server = startMockServer(() =>
+      envelopeError("confirmation_required"),
+    );
+    const result = await runCli({
+      args: ["matter", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(7);
+  });
+
+  test("validation_error envelope exits 2, even with --output json", async () => {
+    const server = startMockServer(() => envelopeError("validation_error"));
+    const result = await runCli({
+      args: ["matter", "list", "--output", "json"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(2);
+    // stderr stays human-readable; the error is never dumped to stdout.
+    expect(result.stderr).toContain(
+      "error: Something went wrong: validation_error",
+    );
+    expect(result.stdout).toBe("");
+  });
+});
+
+describe("destructive confirm injection (S4)", () => {
+  test("a confirmed delete injects confirm: true into the tool args", async () => {
+    const server = startMockServer(() => ({ toolPayload: { deleted: true } }));
+    const result = await runCli({
+      args: ["matter", "delete", "--matter-id", "m1", "--yes"],
+      url: server.url,
+      token: WRITE,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.name).toBe("delete_matter");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      matter_id: "m1",
+      confirm: true,
+    });
+  });
+
+  test("a confirmed remove-member injects confirm: true alongside the action", async () => {
+    // remove_member is destructive via the CLI annotation AND the tool schema
+    // now declares the `confirm` gate, so --yes both skips the prompt and
+    // injects confirm: true to satisfy the server's action-level gate.
+    const server = startMockServer(() => ({ toolPayload: { removed: true } }));
+    const result = await runCli({
+      args: [
+        "organization",
+        "remove-member",
+        "--matter-id",
+        "m1",
+        "--user-id",
+        "u1",
+        "--yes",
+      ],
+      url: server.url,
+      token: makeToken(["admin_write"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.name).toBe("manage_organization");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      action: "remove_member",
+      matter_id: "m1",
+      user_id: "u1",
+      confirm: true,
+    });
+  });
+});
+
+describe("feedback two-phase handshake (S4)", () => {
+  test("phase-1 approval_required renders the confirmation_token", async () => {
+    // Off a TTY (piped stdout) the phase-1 single object renders as JSON on
+    // stdout with the token; the TTY-only re-run affordance is covered by the
+    // approvalReRunHint unit test.
+    const server = startMockServer(() => ({
+      toolPayload: {
+        channel: "email",
+        status: "approval_required",
+        sanitized_title: "Bug: crash",
+        sanitized_body: "Steps ...",
+        redactions: 0,
+        confirmation_token: "tok-abc",
+        expires_in_minutes: 15,
+        next_step: "Show the human and re-run with the token.",
+      },
+    }));
+    const result = await runCli({
+      args: [
+        "feedback",
+        "send",
+        "--kind",
+        "bug",
+        "--title",
+        "Bug: crash",
+        "--body",
+        "Steps ...",
+        "--channel",
+        "email",
+      ],
+      url: server.url,
+      token: makeToken(["feedback"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.name).toBe("send_feedback");
+    const payload = JSON.parse(result.stdout);
+    expect(payload.status).toBe("approval_required");
+    expect(payload.confirmation_token).toBe("tok-abc");
+  });
+
+  test("phase-2 with --confirmation-token forwards the token to the server", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        channel: "email",
+        status: "sent",
+        next_step: "Tell the human it was emailed.",
+      },
+    }));
+    const result = await runCli({
+      args: [
+        "feedback",
+        "send",
+        "--kind",
+        "bug",
+        "--title",
+        "Bug: crash",
+        "--body",
+        "Steps ...",
+        "--channel",
+        "email",
+        "--confirmation-token",
+        "tok-abc",
+      ],
+      url: server.url,
+      token: makeToken(["feedback"]),
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      kind: "bug",
+      title: "Bug: crash",
+      body: "Steps ...",
+      channel: "email",
+      confirmation_token: "tok-abc",
+    });
   });
 });
 

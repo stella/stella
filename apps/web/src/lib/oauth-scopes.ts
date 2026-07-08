@@ -1,5 +1,3 @@
-import type { useTranslations } from "use-intl";
-
 import type { McpOAuthScope } from "@stll/api/types";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -22,6 +20,7 @@ export const OAUTH_SCOPE_LABELS = {
   "stella:admin_write": "consent.scopeAdminWrite",
   "stella:skills": "consent.scopeSkills",
   "stella:external_mcps": "consent.scopeExternalMcps",
+  "stella:feedback": "consent.scopeFeedback",
   "stella:search_anonymized": "consent.scopeSearchAnonymized",
   "stella:read_anonymized": "consent.scopeReadAnonymized",
   "stella:templates_anonymized": "consent.scopeTemplatesAnonymized",
@@ -33,12 +32,14 @@ export const OAUTH_SCOPE_LABELS = {
 } as const satisfies Record<McpOAuthScope, TranslationKey>;
 
 export type OAuthScopeKey = keyof typeof OAUTH_SCOPE_LABELS;
+type OAuthScopeLabel = (typeof OAUTH_SCOPE_LABELS)[OAuthScopeKey];
+type OAuthScopeTranslator = (key: OAuthScopeLabel) => string;
 
 export const isOAuthScopeKey = (scope: string): scope is OAuthScopeKey =>
   scope in OAUTH_SCOPE_LABELS;
 
 export type OAuthScopeDisplayEntry =
-  | { label: TranslationKey; type: "known" }
+  | { label: OAuthScopeLabel; type: "known" }
   | { scope: string; type: "unknown" };
 
 /**
@@ -51,7 +52,7 @@ export const toOAuthScopeDisplayEntries = (
   scopes: readonly string[],
 ): OAuthScopeDisplayEntry[] => {
   const entries: OAuthScopeDisplayEntry[] = [];
-  const seenLabels = new Set<TranslationKey>();
+  const seenLabels = new Set<OAuthScopeLabel>();
   const seenUnknownScopes = new Set<string>();
 
   for (const scope of scopes) {
@@ -74,24 +75,16 @@ export const toOAuthScopeDisplayEntries = (
 };
 
 /**
- * Translates a display entry. Lives here so the one unavoidable cast is
- * shared by every surface that renders scopes (consent screen, connected
- * apps): use-intl's `t()` overloads bind tighter for literal keys, so a
- * non-literal `TranslationKey` is rejected by the no-args overload even
- * though `OAUTH_SCOPE_LABELS` guarantees the key is valid.
+ * Translates a display entry. Lives here so consent and settings render the
+ * same labels for the same scopes.
  */
 export const translateOAuthScopeEntry = (
-  t: ReturnType<typeof useTranslations>,
+  t: OAuthScopeTranslator,
   entry: OAuthScopeDisplayEntry,
 ): string => {
   if (entry.type === "unknown") {
     return entry.scope;
   }
 
-  // SAFETY: OAUTH_SCOPE_LABELS `satisfies Record<McpOAuthScope,
-  // TranslationKey>` enforces at compile time that every value is a valid
-  // key; `as never` only works around use-intl's stricter no-args overload
-  // for literal keys.
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
-  return t(entry.label as never);
+  return t(entry.label);
 };

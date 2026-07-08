@@ -21,6 +21,7 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   isToolErrorResult,
+  notFoundResult,
   parseOptionalCursor,
   parseRequiredString,
   stringProp,
@@ -409,7 +410,7 @@ const handleCompatFetchTool: McpToolHandler = async ({ args, context }) => {
     workspaceId: fetchPayload.workspaceId,
   });
   if (!workspaceAccess) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   const entityResult = await Result.gen(() =>

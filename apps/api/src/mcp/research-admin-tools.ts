@@ -29,11 +29,13 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  confirmProp,
   ensureActiveWorkspace,
   enumProp,
   errorResult,
   intProp,
   stringProp,
+  structuredErrorResult,
   textResult,
 } from "@/api/mcp/tool-utils";
 
@@ -217,6 +219,11 @@ export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
           description:
             "Toggle AI prompt caching for the organization (update_org_settings)",
         },
+        confirm: confirmProp(
+          "Required for the remove_member action: must be true to remove a " +
+            "member (an irreversible action). Set it only after a human user " +
+            "has approved the removal; ignored by the other actions.",
+        ),
       },
       required: ["action"],
     },
@@ -557,6 +564,10 @@ const manageOrganizationArgsSchema = v.pipe(
       v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(6)),
     ),
     prompt_caching_enabled: v.optional(v.boolean()),
+    // The CLI's --yes flow injects `confirm: true` for the destructive
+    // remove_member subcommand; the strictObject would otherwise reject it.
+    // Other actions accept but ignore it.
+    confirm: v.optional(v.boolean()),
   }),
   // Member actions need a matter and a user.
   v.forward(
@@ -711,6 +722,20 @@ const handleManageOrganizationTool: McpToolHandler = async ({
   }
 
   if (input.action === "remove_member") {
+    // Action-level confirm gate: manage_organization is not `destructiveHint`
+    // as a whole (it also adds members and updates settings), so the central
+    // gate in tools.ts cannot cover this. Removing a member is irreversible,
+    // so refuse until the human-approved `confirm: true` arrives (the CLI's
+    // --yes flow injects it). Mirrors the central gate's wording.
+    if (input.confirm !== true) {
+      return structuredErrorResult({
+        code: "confirmation_required",
+        message:
+          "remove_member is an irreversible operation and was called without confirmation",
+        hint: "Removing a member is irreversible. Confirm with the human user, then retry with confirm: true.",
+      });
+    }
+    // matter_id and user_id are guaranteed present by the schema.
     return await handleRemoveMember({
       context,
       matterId: input.matter_id ?? "",

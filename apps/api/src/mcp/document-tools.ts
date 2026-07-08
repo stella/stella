@@ -52,6 +52,7 @@ import type {
 } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
+  confirmProp,
   DEFAULT_LIST_LIMIT,
   ensureActiveWorkspace,
   ensureWorkspaceAccess,
@@ -60,6 +61,7 @@ import {
   intProp,
   isToolErrorResult,
   MAX_LIST_LIMIT,
+  notFoundResult,
   nullableStringProp,
   stringProp,
   textResult,
@@ -573,6 +575,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         version_id: stringProp(
           "Delete only this version instead of the whole document",
         ),
+        confirm: confirmProp(),
       },
       required: ["entity_id"],
     },
@@ -726,7 +729,7 @@ const documentEntityNotAvailable = (
 ) =>
   resolution.status === "wrong-kind"
     ? errorResult("Not a document or folder entity")
-    : errorResult("Document not found or not accessible");
+    : notFoundResult("Document not found or not accessible");
 
 // The list cursor is [createdAt, entityId]; the query resolves the (createdAt,
 // id) boundary via the keyset condition. A malformed cursor is rejected here so
@@ -829,7 +832,7 @@ const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
     workspaceId: parsed.output.matter_id,
   });
   if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   const parentId =
@@ -1126,7 +1129,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
       }),
     );
     if (!versionRow) {
-      return errorResult("Version not found");
+      return notFoundResult("Version not found");
     }
     const versionFields = await context.scopedDb((tx) =>
       // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via the
@@ -1406,7 +1409,7 @@ const validateUpdateDocumentTargets = async ({
       }),
     );
     if (!parent) {
-      return errorResult("Target folder not found or not accessible");
+      return notFoundResult("Target folder not found or not accessible");
     }
     if (parent.kind !== "folder") {
       return errorResult("parent_id must be a folder entity");
@@ -1424,7 +1427,7 @@ const validateUpdateDocumentTargets = async ({
       }),
     );
     if (!version) {
-      return errorResult("Version not found");
+      return notFoundResult("Version not found");
     }
   }
   return null;
@@ -1604,6 +1607,7 @@ const handleSaveDocumentTool: McpToolHandler = async ({ args, context }) => {
 const deleteDocumentArgsSchema = v.strictObject({
   entity_id: v.pipe(v.string(), v.minLength(1)),
   version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+  confirm: v.optional(v.boolean()),
 });
 
 const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
@@ -1715,7 +1719,7 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
     workspaceId: parsed.output.matter_id,
   });
   if (!workspaceId) {
-    return errorResult("Matter not found or not accessible");
+    return notFoundResult("Matter not found or not accessible");
   }
 
   let boundary: { createdAt: string; id: string } | null = null;
