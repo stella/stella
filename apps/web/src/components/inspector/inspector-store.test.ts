@@ -31,10 +31,24 @@ afterEach(() => {
     tabs: [],
     activeId: null,
     activationSeq: 0,
+    flashTabId: null,
+    flashSeq: 0,
     pendingRenameTabId: null,
     minimized: false,
     pendingBlockScroll: null,
+    pendingDocxEditTabId: null,
     reviveSuggestion: null,
+    anonymizationActiveMountCount: 0,
+    documentTextSelectionByFieldId: {},
+    anonymizationMatchesByFieldId: {},
+    anonymizationPipelineStartedFieldIds: new Set(),
+    anonymizationSelection: {
+      canonical: null,
+      label: null,
+      source: null,
+      fieldId: null,
+      seq: 0,
+    },
   });
 });
 

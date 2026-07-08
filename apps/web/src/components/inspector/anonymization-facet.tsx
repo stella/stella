@@ -46,14 +46,13 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useAnonymizationActiveStore } from "@/components/inspector/anonymization-active-store";
 import { AnonymizationContextMenu } from "@/components/inspector/anonymization-context-menu";
 import {
   useAnonymizationMatches,
   useAnonymizationMatchesReady,
-} from "@/components/inspector/anonymization-matches-store";
-import { useAnonymizationSelectionStore } from "@/components/inspector/anonymization-selection-store";
-import { useDocumentTextSelection } from "@/components/inspector/document-text-selection-store";
+  useDocumentTextSelection,
+  useInspectorStore,
+} from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -274,9 +273,10 @@ export const AnonymizationFacet = ({
     if (!isVisible) {
       return undefined;
     }
-    const { acquire, release } = useAnonymizationActiveStore.getState();
-    acquire();
-    return release;
+    const { acquireAnonymizationActive, releaseAnonymizationActive } =
+      useInspectorStore.getState();
+    acquireAnonymizationActive();
+    return releaseAnonymizationActive;
   }, [isVisible]);
 
   // Selection bridge — when the user highlights text inside the
@@ -303,8 +303,8 @@ export const AnonymizationFacet = ({
     // paged editor doesn't — it sets PM selections
     // programmatically on an off-screen hidden PM and renders
     // visible selection via a custom overlay. Folio
-    // selections come in via the document-text-selection
-    // store (subscribed below); the listener here only
+    // selections come in via the inspector store
+    // (subscribed below); the listener here only
     // handles the PDF case.
     const PREVIEW_SURFACES = ".textLayer";
     const isInsidePreview = (node: Node | null): boolean => {
@@ -572,14 +572,23 @@ export const AnonymizationFacet = ({
   // object literal would re-render on every store change and risk
   // an infinite getSnapshot loop. Each primitive selector is
   // stable across unrelated updates.
-  const docSelectionCanonical = useAnonymizationSelectionStore((s) =>
-    s.source === "doc" && s.fieldId === activeFieldId ? s.canonical : null,
+  const docSelectionCanonical = useInspectorStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.canonical
+      : null,
   );
-  const docSelectionLabel = useAnonymizationSelectionStore((s) =>
-    s.source === "doc" && s.fieldId === activeFieldId ? s.label : null,
+  const docSelectionLabel = useInspectorStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.label
+      : null,
   );
-  const docSelectionSeq = useAnonymizationSelectionStore((s) =>
-    s.source === "doc" && s.fieldId === activeFieldId ? s.seq : 0,
+  const docSelectionSeq = useInspectorStore((s) =>
+    s.anonymizationSelection.source === "doc" &&
+    s.anonymizationSelection.fieldId === activeFieldId
+      ? s.anonymizationSelection.seq
+      : 0,
   );
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- two-pass reaction to a doc-selection store bump: first commit expands the target group (setExpandedGroups, shared with toggleGroup), the re-run then scrolls + flashes the row via DOM imperatives; the expand-then-measure dependency on expandedGroups can't move into render, so kept
   useEffect(() => {
@@ -636,9 +645,9 @@ export const AnonymizationFacet = ({
     if (activeFieldId === null) {
       return;
     }
-    useAnonymizationSelectionStore
+    useInspectorStore
       .getState()
-      .select(canonical, label, "sidebar", activeFieldId);
+      .selectAnonymizationTerm(canonical, label, "sidebar", activeFieldId);
   };
 
   return (

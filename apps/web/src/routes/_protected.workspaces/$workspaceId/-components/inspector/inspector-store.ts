@@ -7,10 +7,17 @@ export {
   getInspectorTabsBroadcastChannelName,
   initializeInspectorTabBroadcast,
   isGenericInspectorTab,
+  useAnonymizationMatches,
+  useAnonymizationMatchesReady,
+  useDocumentTextSelection,
   useInspectorStore,
+  useIsAnonymizationActive,
 } from "@/components/inspector/inspector-store";
 export type {
+  AnonymizationMatchSnapshot,
+  AnonymizationSelectionSource,
   ChatTab,
+  DocumentTextSelection,
   ExternalTab,
   ExternalTabId,
   FileTab,
