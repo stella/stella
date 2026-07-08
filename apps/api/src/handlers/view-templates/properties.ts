@@ -788,10 +788,6 @@ const findUniquePropertyByRole = ({
     return tagged;
   }
 
-  if (role !== DOCUMENT_TYPE_CLASSIFIER_ROLE) {
-    return undefined;
-  }
-
   const legacyMatches = existingProperties.filter(
     (property) =>
       !consumedExistingPropertyIds.has(property.id) &&
