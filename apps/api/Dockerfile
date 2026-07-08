@@ -98,16 +98,16 @@ COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/dr
 RUN mkdir -p '/$bunfs/root'
 COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
 COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/file-scan/yara /\$bunfs/root/yara
+# @stll/anonymize-wasm resolves its native glue, WASM, and prepared pipeline
+# packages relative to `dist/wasm.mjs`; Bun's compiled binary resolves those
+# bundled asset URLs under `$bunfs/root/native`.
 COPY --chown=stella:stella --from=deps \
-    /app/node_modules/@stll/aho-corasick-wasm/dist/*.wasm \
-    /app/node_modules/@stll/fuzzy-search-wasm/dist/*.wasm \
-    /app/node_modules/@stll/regex-set-wasm/dist/*.wasm \
-    /\$bunfs/root/
+    /app/node_modules/@stll/anonymize-wasm/dist/native/ \
+    /\$bunfs/root/native/
 # quickjs-emscripten loads this WASM file at runtime from the
 # compiled Bun binary's `$bunfs/root` asset directory.
 COPY --chown=stella:stella --from=deps \
     /app/node_modules/@jitl/quickjs-wasmfile-release-asyncify/dist/emscripten-module.wasm \
-    /app/node_modules/@stll/aho-corasick-wasm/dist/wasi-worker-browser.mjs \
     /\$bunfs/root/
 WORKDIR /app/apps/api
 
