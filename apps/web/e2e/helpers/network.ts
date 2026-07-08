@@ -296,6 +296,13 @@ const pushNewRequestProblems = ({
   );
 };
 
+// Under load, independent PARALLEL requests can serialize just enough to land
+// inside CHAIN_GAP_MS and bump the measured depth by one with no change to
+// the request manifest (a quiet CI runner rarely reproduces this; a busy dev
+// machine does). Mirrors dbQueryAllowance's role: tolerate one level of
+// measurement jitter before treating a depth increase as a real regression.
+const DEPTH_JITTER_ALLOWANCE = 1;
+
 const pushWaterfallDepthProblems = ({
   route,
   entry,
@@ -307,11 +314,11 @@ const pushWaterfallDepthProblems = ({
   metrics: RouteNetworkMetrics;
   problems: string[];
 }) => {
-  if (metrics.depth <= entry.depth) {
+  if (metrics.depth <= entry.depth + DEPTH_JITTER_ALLOWANCE) {
     return;
   }
   problems.push(
-    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth}\n` +
+    `Request waterfall got deeper on ${route}: ${entry.depth} -> ${metrics.depth} (already tolerating +${DEPTH_JITTER_ALLOWANCE} for parallel-request jitter)\n` +
       `  Each extra level is one more sequential network round the user waits\n` +
       `  through before the page can finish. Usually the fix is to start the\n` +
       `  query in the route loader (ensureRouteQueryData / prefetchRouteQuery in\n` +
