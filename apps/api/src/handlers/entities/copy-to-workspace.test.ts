@@ -91,6 +91,9 @@ const sourceCustomPropertyId = toSafeId<"property">("source_custom_prop");
 const sourceClassifierPropertyId = toSafeId<"property">(
   "source_classifier_prop",
 );
+const sourceDuplicateClassifierPropertyId = toSafeId<"property">(
+  "source_duplicate_classifier_prop",
+);
 
 // Matching property in target workspace (same name+type as sourceFilePropertyId)
 const targetFilePropertyId = toSafeId<"property">("target_file_prop");
@@ -682,6 +685,136 @@ describe("copy-to-workspace", () => {
         content: classifierPropertyContent,
         system: false,
         role: null,
+        tool: classifierTool,
+      },
+    ];
+    const tx = {
+      query: {
+        entities: {
+          findFirst: async () => sourceEntity,
+          findMany: async () => [sourceEntity],
+        },
+        properties: {
+          findMany: async (opts: {
+            where: { workspaceId: { eq: string } };
+          }) => {
+            if (opts.where.workspaceId.eq === sourceWorkspaceId) {
+              return sourceProperties;
+            }
+            if (opts.where.workspaceId.eq === targetWorkspaceId) {
+              return targetProperties;
+            }
+            return [];
+          },
+        },
+        workspaces: {
+          findFirst: async () => ({ reference: null }),
+        },
+      },
+      $count: async () => 0,
+      select: () => ({
+        from: () => ({
+          where: async () => [],
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === documentCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => {
+                  nextDocumentSequence += 1;
+                  return [{ lastValue: nextDocumentSequence }];
+                },
+              }),
+            };
+          }
+          if (table === fields && Array.isArray(value)) {
+            for (const row of value) {
+              if (isInsertedField(row)) {
+                insertedFields.push(row);
+              }
+            }
+          }
+          return undefined;
+        },
+      }),
+      update: () => ({
+        set: () => ({
+          where: async () => {},
+        }),
+      }),
+    };
+
+    const { safeDb } = createScopedDbMock(tx);
+    const result = await copyToWorkspace.handler(
+      createContext({ safeDb, entityId: documentId }),
+    );
+
+    expect(result).toEqual({
+      entityId: expect.any(String),
+      entityIds: expect.any(Array),
+    });
+    expect(insertedFields).toHaveLength(0);
+  });
+
+  test("does not remap roleless source classifier duplicates", async () => {
+    const insertedFields: InsertedField[] = [];
+    let nextDocumentSequence = 0;
+    const classifierTool = {
+      version: 1,
+      type: "ai-model",
+      prompt: "Classify the document type.",
+    } as const;
+    const sourceEntity = {
+      id: documentId,
+      kind: "document" as const,
+      name: "Legacy duplicate.pdf",
+      parentId: null,
+      readOnly: false,
+      currentVersion: {
+        id: toSafeId<"entityVersion">("version_1"),
+        fields: [
+          {
+            propertyId: sourceDuplicateClassifierPropertyId,
+            content: classifierFieldContent,
+          },
+        ],
+      },
+    };
+    const sourceProperties = [
+      {
+        id: sourceClassifierPropertyId,
+        name: "Type de document",
+        content: classifierPropertyContent,
+        system: false,
+        role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+        tool: classifierTool,
+      },
+      {
+        id: sourceDuplicateClassifierPropertyId,
+        name: "Document Type",
+        content: classifierPropertyContent,
+        system: false,
+        role: null,
+        tool: classifierTool,
+      },
+    ];
+    const targetProperties = [
+      {
+        id: targetFilePropertyId,
+        name: "Documents",
+        content: filePropertyContent,
+        system: true,
+        role: null,
+        tool: { version: 1, type: "manual-input" } as const,
+      },
+      {
+        id: targetClassifierPropertyId,
+        name: "Type de document",
+        content: classifierPropertyContent,
+        system: false,
+        role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
         tool: classifierTool,
       },
     ];

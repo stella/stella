@@ -44,21 +44,24 @@ const resolveUpdatedClassifierRole = ({
   content,
   name,
   oldProperty,
+  otherTaggedClassifierExists,
   tool,
 }: {
   content: PropertyContent;
   name: string;
   oldProperty: Pick<PropertyWithDeps, "content" | "name" | "role" | "tool">;
+  otherTaggedClassifierExists: boolean;
   tool: PropertyTool;
 }): PropertyRole | null => {
   const hadClassifierIdentity =
     oldProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE ||
-    isDocumentTypeClassifierProperty({
-      content: oldProperty.content,
-      name: oldProperty.name,
-      role: null,
-      tool: oldProperty.tool,
-    });
+    (!otherTaggedClassifierExists &&
+      isDocumentTypeClassifierProperty({
+        content: oldProperty.content,
+        name: oldProperty.name,
+        role: null,
+        tool: oldProperty.tool,
+      }));
 
   if (hadClassifierIdentity) {
     return isDocumentTypeClassifierShape({ content, tool })
@@ -72,6 +75,17 @@ const resolveUpdatedClassifierRole = ({
 
   return null;
 };
+
+const isTaggedDocumentTypeClassifier = (
+  property: Pick<PropertyWithDeps, "content" | "name" | "role" | "tool">,
+): boolean =>
+  property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+  isDocumentTypeClassifierProperty({
+    content: property.content,
+    name: property.name,
+    role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+    tool: property.tool,
+  });
 
 /**
  * Collect all transitive dependents of `rootId` via BFS.
@@ -276,16 +290,6 @@ const updateProperty = createSafeHandler(
           };
         }
 
-        const nextRole = resolveUpdatedClassifierRole({
-          content,
-          name,
-          oldProperty,
-          tool: dbTool,
-        });
-        const isAcquiringClassifierRole =
-          oldProperty.role !== DOCUMENT_TYPE_CLASSIFIER_ROLE &&
-          nextRole === DOCUMENT_TYPE_CLASSIFIER_ROLE;
-
         // SAFETY: one property's dependencies; each points to another workspace property, bounded by LIMITS.propertiesCount
         // eslint-disable-next-line require-query-limit/require-query-limit
         const oldDependencies = await tx.query.propertyDependencies.findMany({
@@ -336,6 +340,22 @@ const updateProperty = createSafeHandler(
               })
             : [];
 
+        const otherTaggedClassifierExists = allProperties.some(
+          (property) =>
+            property.id !== propertyId &&
+            isTaggedDocumentTypeClassifier(property),
+        );
+        const nextRole = resolveUpdatedClassifierRole({
+          content,
+          name,
+          oldProperty,
+          otherTaggedClassifierExists,
+          tool: dbTool,
+        });
+        const isAcquiringClassifierRole =
+          oldProperty.role !== DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+          nextRole === DOCUMENT_TYPE_CLASSIFIER_ROLE;
+
         if (
           nextRole !== null &&
           allProperties.some((property) => {
@@ -343,13 +363,8 @@ const updateProperty = createSafeHandler(
               return false;
             }
 
-            if (property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE) {
-              return isDocumentTypeClassifierProperty({
-                content: property.content,
-                name: property.name,
-                role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
-                tool: property.tool,
-              });
+            if (isTaggedDocumentTypeClassifier(property)) {
+              return true;
             }
 
             if (!isAcquiringClassifierRole) {

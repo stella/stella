@@ -102,25 +102,17 @@ const isLegacyClassifier = (property: PropertyMappingRow): boolean =>
   normalizePropertyName(property.name) === "document type" &&
   isClassifierShape(property);
 
-const isSourceClassifier = (property: PropertyMappingRow): boolean => {
-  if (property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE) {
-    return true;
-  }
-
-  return isLegacyClassifier(property);
-};
-
-const findTargetClassifierId = (
-  targetProperties: readonly PropertyMappingRow[],
+const findClassifierId = (
+  properties: readonly PropertyMappingRow[],
 ): SafeId<"property"> | undefined => {
-  const tagged = targetProperties.find(
+  const tagged = properties.find(
     (property) => property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE,
   );
   if (tagged) {
     return tagged.id;
   }
 
-  const legacyCandidates = targetProperties.filter(isLegacyClassifier);
+  const legacyCandidates = properties.filter(isLegacyClassifier);
   return legacyCandidates.length === 1 ? legacyCandidates[0]?.id : undefined;
 };
 
@@ -139,7 +131,8 @@ const buildPropertyIdMap = (
   const propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
   const targetByKey = new Map<string, SafeId<"property">>();
   let targetSystemFileId: SafeId<"property"> | undefined;
-  const targetClassifierId = findTargetClassifierId(targetProperties);
+  const sourceClassifierId = findClassifierId(sourceProperties);
+  const targetClassifierId = findClassifierId(targetProperties);
   for (const prop of targetProperties) {
     if (prop.system && prop.content.type === "file") {
       targetSystemFileId = prop.id;
@@ -157,8 +150,14 @@ const buildPropertyIdMap = (
       propertyIdMap.set(sourceProp.id, targetSystemFileId);
       continue;
     }
-    if (isSourceClassifier(sourceProp) && targetClassifierId !== undefined) {
+    if (
+      sourceProp.id === sourceClassifierId &&
+      targetClassifierId !== undefined
+    ) {
       propertyIdMap.set(sourceProp.id, targetClassifierId);
+      continue;
+    }
+    if (isLegacyClassifier(sourceProp)) {
       continue;
     }
     const targetId = targetByKey.get(
@@ -379,10 +378,7 @@ const copyToWorkspaceHandler = async function* ({
       safeDb(async (tx) => {
         const [sourceProperties, targetProperties] = await Promise.all([
           tx.query.properties.findMany({
-            where: {
-              workspaceId: { eq: sourceWorkspaceId },
-              id: { in: [...requiredPropertyIds] },
-            },
+            where: { workspaceId: { eq: sourceWorkspaceId } },
             columns: {
               id: true,
               name: true,

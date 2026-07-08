@@ -387,6 +387,10 @@ describe("collectTemplateProperties", () => {
         sourceId: first.id,
         role: null,
       }),
+      expect.objectContaining({
+        sourceId: second.id,
+        role: null,
+      }),
     ]);
   });
 
