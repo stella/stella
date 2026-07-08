@@ -43,31 +43,6 @@ const readVersionsHandler = async function* ({
     );
   }
 
-  // Validate entity exists in workspace and get entity-level author
-  const entity = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entities.findFirst({
-        where: {
-          id: { eq: entityId },
-          workspaceId: { eq: workspaceId },
-        },
-        columns: {
-          id: true,
-          name: true,
-          kind: true,
-          createdBy: true,
-          currentVersionId: true,
-        },
-      }),
-    ),
-  );
-
-  if (!entity) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Entity not found" }),
-    );
-  }
-
   const pageSize = LIMITS.versionsPageSizeDefault;
 
   const keyset = cursor
@@ -80,9 +55,36 @@ const readVersionsHandler = async function* ({
       )
     : undefined;
 
-  const rows = yield* Result.await(
-    safeDb((tx) =>
-      tx
+  // One shared scoped transaction for the whole read-only sequence, in the
+  // same dependency order as before: entity (also the entity-level author
+  // fallback), the version page, finalized edit sessions for that page
+  // (version → author for v2+), the author users those two sources collect
+  // (skipped when neither produced an id), and the page's file fields. All
+  // reads are scoped by workspaceId/entityId directly, so one transaction is
+  // semantically identical to the independent transactions this replaced,
+  // while paying for a single `set_config`. The missing-entity 404 is
+  // threaded out via `kind` instead of returning early from inside the tx.
+  const reads = yield* Result.await(
+    safeDb(async (tx) => {
+      const entity = await tx.query.entities.findFirst({
+        where: {
+          id: { eq: entityId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: {
+          id: true,
+          name: true,
+          kind: true,
+          createdBy: true,
+          currentVersionId: true,
+        },
+      });
+
+      if (!entity) {
+        return { kind: "not-found" as const };
+      }
+
+      const rows = await tx
         .select({
           id: entityVersions.id,
           versionNumber: entityVersions.versionNumber,
@@ -103,12 +105,121 @@ const readVersionsHandler = async function* ({
           ),
         )
         .orderBy(desc(entityVersions.versionNumber), desc(entityVersions.id))
-        .limit(pageSize + 1),
-    ),
+        .limit(pageSize + 1);
+
+      const hasOlder = rows.length > pageSize;
+      const versions = rows.slice(0, pageSize);
+
+      if (versions.length === 0) {
+        return {
+          kind: "ok" as const,
+          entity,
+          versions,
+          hasOlder,
+          sessionAuthorMap: new Map<string, string>(),
+          userMap: new Map<
+            string,
+            { id: string; name: string; image: string | null }
+          >(),
+          versionFields: [],
+        };
+      }
+
+      const pageVersionIds = versions.map((v) => v.id);
+
+      // Get finalized sessions for this page to map version → author (for v2+).
+      const sessions = await tx
+        .select({
+          finalizedVersionId: desktopEditSessions.finalizedVersionId,
+          createdBy: desktopEditSessions.createdBy,
+        })
+        .from(desktopEditSessions)
+        .where(
+          and(
+            eq(desktopEditSessions.entityId, entityId),
+            eq(desktopEditSessions.workspaceId, workspaceId),
+            eq(desktopEditSessions.status, "finalized"),
+            inArray(desktopEditSessions.finalizedVersionId, pageVersionIds),
+          ),
+        );
+
+      // Build session author lookup: versionId → userId
+      const sessionAuthorMap = new Map<string, string>();
+      for (const s of sessions) {
+        if (s.finalizedVersionId) {
+          sessionAuthorMap.set(s.finalizedVersionId, s.createdBy);
+        }
+      }
+
+      // Collect all unique author user IDs.
+      // Priority: version.createdBy > session author > entity.createdBy
+      const authorUserIds = new Set<string>();
+      for (const v of versions) {
+        if (v.createdBy) {
+          authorUserIds.add(v.createdBy);
+        } else {
+          const sessionAuthor = sessionAuthorMap.get(v.id);
+          if (sessionAuthor) {
+            authorUserIds.add(sessionAuthor);
+          }
+        }
+      }
+      if (entity.createdBy) {
+        authorUserIds.add(entity.createdBy);
+      }
+
+      // Fetch all author user details in one query
+      const authorUsers =
+        authorUserIds.size > 0
+          ? // SAFETY: distinct version authors of one entity page, an IN-list of user IDs bounded by LIMITS.workspaceMembersCount
+            // eslint-disable-next-line require-query-limit/require-query-limit
+            await tx.query.user.findMany({
+              where: { id: { in: [...authorUserIds] } },
+              columns: { id: true, name: true, image: true },
+            })
+          : [];
+
+      const userMap = new Map(authorUsers.map((u) => [u.id, u]));
+
+      // Fetch file fields for this page's versions
+      const versionFields = await tx.query.fields.findMany({
+        where: { entityVersionId: { in: pageVersionIds } },
+        limit: LIMITS.versionFieldsScanLimit,
+        columns: {
+          id: true,
+          entityVersionId: true,
+          propertyId: true,
+          content: true,
+        },
+      });
+
+      return {
+        kind: "ok" as const,
+        entity,
+        versions,
+        hasOlder,
+        sessionAuthorMap,
+        userMap,
+        versionFields,
+      };
+    }),
   );
 
-  const hasOlder = rows.length > pageSize;
-  const versions = rows.slice(0, pageSize);
+  if (reads.kind === "not-found") {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Entity not found" }),
+    );
+  }
+
+  const {
+    entity,
+    versions,
+    hasOlder,
+    sessionAuthorMap,
+    userMap,
+    versionFields,
+  } = reads;
+
   const oldest = versions.at(-1);
   const olderCursor =
     hasOlder && oldest
@@ -128,86 +239,6 @@ const readVersionsHandler = async function* ({
       olderCursor,
     });
   }
-
-  const pageVersionIds = versions.map((v) => v.id);
-
-  // Get finalized sessions for this page to map version → author (for v2+).
-  const sessions = yield* Result.await(
-    safeDb((tx) =>
-      tx
-        .select({
-          finalizedVersionId: desktopEditSessions.finalizedVersionId,
-          createdBy: desktopEditSessions.createdBy,
-        })
-        .from(desktopEditSessions)
-        .where(
-          and(
-            eq(desktopEditSessions.entityId, entityId),
-            eq(desktopEditSessions.workspaceId, workspaceId),
-            eq(desktopEditSessions.status, "finalized"),
-            inArray(desktopEditSessions.finalizedVersionId, pageVersionIds),
-          ),
-        ),
-    ),
-  );
-
-  // Build session author lookup: versionId → userId
-  const sessionAuthorMap = new Map<string, string>();
-  for (const s of sessions) {
-    if (s.finalizedVersionId) {
-      sessionAuthorMap.set(s.finalizedVersionId, s.createdBy);
-    }
-  }
-
-  // Collect all unique author user IDs.
-  // Priority: version.createdBy > session author > entity.createdBy
-  const authorUserIds = new Set<string>();
-  for (const v of versions) {
-    if (v.createdBy) {
-      authorUserIds.add(v.createdBy);
-    } else {
-      const sessionAuthor = sessionAuthorMap.get(v.id);
-      if (sessionAuthor) {
-        authorUserIds.add(sessionAuthor);
-      }
-    }
-  }
-  if (entity.createdBy) {
-    authorUserIds.add(entity.createdBy);
-  }
-
-  // Fetch all author user details in one query
-  const authorUsers =
-    authorUserIds.size > 0
-      ? yield* Result.await(
-          safeDb((tx) =>
-            // SAFETY: distinct version authors of one entity page, an IN-list of user IDs bounded by LIMITS.workspaceMembersCount
-            // eslint-disable-next-line require-query-limit/require-query-limit
-            tx.query.user.findMany({
-              where: { id: { in: [...authorUserIds] } },
-              columns: { id: true, name: true, image: true },
-            }),
-          ),
-        )
-      : [];
-
-  const userMap = new Map(authorUsers.map((u) => [u.id, u]));
-
-  // Fetch file fields for this page's versions
-  const versionFields = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.fields.findMany({
-        where: { entityVersionId: { in: pageVersionIds } },
-        limit: LIMITS.versionFieldsScanLimit,
-        columns: {
-          id: true,
-          entityVersionId: true,
-          propertyId: true,
-          content: true,
-        },
-      }),
-    ),
-  );
 
   // Build version → file field map (pick the first file-type field)
   const versionFileMap = new Map<

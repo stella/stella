@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, countDistinct, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { workspaceContacts, workspaces } from "@/api/db/schema";
@@ -19,9 +19,15 @@ const readContactById = createSafeRootHandler(
     params: readContactByIdParamsSchema,
   },
   async function* ({ safeDb, session, params }) {
-    const contact = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.contacts.findFirst({
+    // One shared scoped transaction for the whole read-only sequence: the
+    // contact row, the two client-matter reads (count across all statuses,
+    // rows scoped to active), and the party-matters page. All reads are
+    // scoped by organizationId/contactId directly, so one transaction is
+    // semantically identical to the independent transactions this replaced,
+    // while paying for a single `set_config`.
+    const reads = yield* Result.await(
+      safeDb(async (tx) => {
+        const contact = await tx.query.contacts.findFirst({
           where: {
             id: { eq: params.contactId },
             organizationId: { eq: session.activeOrganizationId },
@@ -34,31 +40,19 @@ const readContactById = createSafeRootHandler(
               columns: { id: true, name: true, image: true },
             },
           },
-        }),
-      ),
-    );
+        });
 
-    if (!contact) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Contact not found" }),
-      );
-    }
-
-    const clientMatterCount = yield* Result.await(
-      safeDb((tx) =>
-        tx.$count(
+        // Not merged with clientMatters below: this counts matters across
+        // all statuses, while clientMatters is scoped to active only.
+        const clientMatterCount = await tx.$count(
           workspaces,
           and(
             eq(workspaces.clientId, params.contactId),
             eq(workspaces.organizationId, session.activeOrganizationId),
           ),
-        ),
-      ),
-    );
+        );
 
-    const clientMatters = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.workspaces.findMany({
+        const clientMatters = await tx.query.workspaces.findMany({
           where: {
             clientId: { eq: params.contactId },
             organizationId: { eq: session.activeOrganizationId },
@@ -71,13 +65,13 @@ const readContactById = createSafeRootHandler(
             createdAt: true,
           },
           limit: LIMITS.workspacesCount,
-        }),
-      ),
-    );
+        });
 
-    const partyMatterRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+        // `count(*) OVER()` computes the total matching-group count after
+        // GROUP BY and before LIMIT/ORDER BY apply, so the page's
+        // LIMIT.workspaceContactsCount cap does not affect it. This replaces
+        // a separate countDistinct query that reran the same join/predicate.
+        const partyMatterRows = await tx
           .select({
             color: workspaces.color,
             createdAt: workspaces.createdAt,
@@ -86,6 +80,7 @@ const readContactById = createSafeRootHandler(
             roles: sql<(typeof workspaceContacts.$inferSelect.role)[]>`
               array_agg(${workspaceContacts.role})
             `,
+            total: sql<number>`(count(*) OVER())::int`,
           })
           .from(workspaceContacts)
           .innerJoin(
@@ -112,41 +107,27 @@ const readContactById = createSafeRootHandler(
             workspaces.createdAt,
           )
           .orderBy(desc(workspaces.createdAt), workspaces.id)
-          .limit(LIMITS.workspaceContactsCount),
-      ),
+          .limit(LIMITS.workspaceContactsCount);
+
+        return { contact, clientMatterCount, clientMatters, partyMatterRows };
+      }),
     );
 
-    const [partyCountRow] = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({ total: countDistinct(workspaceContacts.workspaceId) })
-          .from(workspaceContacts)
-          .innerJoin(
-            workspaces,
-            and(
-              eq(workspaceContacts.workspaceId, workspaces.id),
-              eq(workspaces.organizationId, session.activeOrganizationId),
-            ),
-          )
-          .where(
-            and(
-              eq(workspaceContacts.contactId, params.contactId),
-              eq(
-                workspaceContacts.organizationId,
-                session.activeOrganizationId,
-              ),
-              eq(workspaces.status, "active"),
-            ),
-          ),
-      ),
-    );
+    const { contact, clientMatterCount, clientMatters, partyMatterRows } =
+      reads;
+
+    if (!contact) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Contact not found" }),
+      );
+    }
 
     return Result.ok({
       ...contact,
       clientMatterCount,
       clientMatters,
-      partyMatters: partyMatterRows,
-      partyCount: partyCountRow?.total ?? 0,
+      partyMatters: partyMatterRows.map(({ total: _total, ...row }) => row),
+      partyCount: partyMatterRows.at(0)?.total ?? 0,
     });
   },
 );
