@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -10,7 +10,7 @@ import type {
   FileTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { DOCX_MIME } from "@/lib/consts";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
@@ -94,8 +94,7 @@ export const useDocxTabEditSession = ({
 
   const pendingDocxEditTabId = useInspectorStore((s) => s.pendingDocxEditTabId);
   const clearDocxEditRequest = useInspectorStore((s) => s.clearDocxEditRequest);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (pendingDocxEditTabId store flag fires handleStartDocxEdit); move into the action that sets the flag
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (pendingDocxEditTabId === null) {
       return;
     }
@@ -119,7 +118,6 @@ export const useDocxTabEditSession = ({
     if (!compatibility) {
       return;
     }
-    // eslint-disable-next-line react/react-compiler -- store-flag relay: handleStartDocxEdit's setState reacts to the pendingDocxEditTabId store flag AND must wait for the tab's async compatibility probe to land, so it cannot fold into the distant requestDocxEdit() call-site or a store-subscription callback
     void handleStartDocxEdit(target.id);
     clearDocxEditRequest();
   }, [

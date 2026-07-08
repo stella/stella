@@ -15,7 +15,6 @@
 
 import {
   Suspense,
-  useEffect,
   useEffectEvent,
   useLayoutEffect,
   useMemo,
@@ -408,14 +407,12 @@ const prepareOperations = (
 // requiring `severity`/`area`, so old stored approvals can still
 // reach this code with the fields missing. Type narrowing says
 // they're always present; the runtime check is for legacy data.
-/* oxlint-disable typescript/no-unnecessary-condition -- legacy stored approvals predate the severity/area schema; runtime fallback for old data */
-const inputOperationSeverity = (
-  operation: ToolInputOperation,
-): FolioAIEditSeverity | "unspecified" => operation.severity ?? "unspecified";
+const inputOperationSeverity = (operation: {
+  severity?: FolioAIEditSeverity | undefined;
+}): FolioAIEditSeverity | "unspecified" => operation.severity ?? "unspecified";
 
-const inputOperationArea = (operation: ToolInputOperation): string =>
+const inputOperationArea = (operation: { area?: string | undefined }): string =>
   operation.area ?? REVIEW_UNSPECIFIED_AREA;
-/* oxlint-enable typescript/no-unnecessary-condition */
 
 type SnapshotBlock = {
   id: string;
@@ -1102,8 +1099,7 @@ const FileChatOverlayInner = ({
     },
   );
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (open AI-key gate on mount/dep change), move into handler
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
 

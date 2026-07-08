@@ -14,7 +14,6 @@
 
 import {
   Suspense,
-  useEffect,
   useEffectEvent,
   useLayoutEffect,
   useMemo,
@@ -634,8 +633,7 @@ const TemplateStudioChatInner = ({
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (open AI-key gate on mount/dep change), move into handler
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
 

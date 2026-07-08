@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -136,7 +136,6 @@ export const ExistingFileOrganizerDialog = ({
   const [rows, setRows] = useState<ExistingOrganizerRow[]>([]);
   const [suggestionStatus, setSuggestionStatus] =
     useState<SuggestionStatus>("idle");
-  const [retryNonce, setRetryNonce] = useState(0);
   const [deleteFolders, setDeleteFolders] = useState<
     FolderDeletionSuggestion[]
   >([]);
@@ -203,136 +202,56 @@ export const ExistingFileOrganizerDialog = ({
       }),
     [existingFolders, files],
   );
+  const suggestionRequestFolders = useMemo(
+    () =>
+      existingFolders.map((folder) => ({
+        entityId: toSafeId<"entity">(folder.entityId),
+        name: folder.name,
+        path: folder.path,
+      })),
+    [existingFolders],
+  );
+  const suggestionRequestFiles = useMemo(
+    () =>
+      files.map((file) => ({
+        entityId: toSafeId<"entity">(file.entityId),
+        originalName: file.originalName,
+      })),
+    [files],
+  );
 
   // The toolbar keeps this dialog mounted and only toggles `open`, so reset the
-  // explicit-AI trigger on close. Reopening then starts from the local-first
-  // state instead of silently re-firing a prior AI request; cached AI results
-  // for the same files stay keyed by requestKey and are reshown without a call.
+  // editable rows on each open. Cached AI results for the same files are reshown
+  // without another call.
   useExternalSyncEffect(() => {
-    if (!open) {
-      setRetryNonce(0);
-    }
-  }, [open]);
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- data fetch + setState; migrate to TanStack Query
-  useEffect(() => {
     if (!open || files.length === 0) {
-      return undefined;
+      return;
     }
 
     if (cachedSuggestions?.key === requestKey) {
-      // eslint-disable-next-line react/react-compiler -- data-fetch effect seeding local rows from the AI-suggestion cache keyed by requestKey; a TanStack Query migration is the tracked follow-up
       setRows(cachedSuggestions.rows);
       setDeleteFolders(cachedSuggestions.deleteFolders);
       setSuggestionStatus("ready");
-      return undefined;
+      return;
+    }
+
+    if (suggestionStatus === "generating") {
+      return;
     }
 
     // Show the cheap, deterministic local suggestions immediately and
-    // stay actionable. The expensive AI call only runs once the user
-    // explicitly asks for it (retryNonce bumps past 0).
-    if (retryNonce === 0) {
-      setRows(initialRows);
-      setDeleteFolders([]);
-      setSuggestionStatus("ready");
-      return undefined;
-    }
-
+    // stay actionable. The expensive AI call only runs from the explicit
+    // Generate/Regenerate button handler below.
     setRows(initialRows);
     setDeleteFolders([]);
-    let cancelled = false;
-    const fetchSuggestions = async () => {
-      setSuggestionStatus("generating");
-      const { locale: requestLocale, userInstructions: trimmedInstructions } =
-        getSuggestionRequestContext();
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        ["organize-suggestions"].post({
-          existingFolders: existingFolders.map((folder) => ({
-            entityId: toSafeId<"entity">(folder.entityId),
-            name: folder.name,
-            path: folder.path,
-          })),
-          files: files.map((file) => ({
-            entityId: toSafeId<"entity">(file.entityId),
-            originalName: file.originalName,
-          })),
-          locale: requestLocale,
-          ...(trimmedInstructions.length > 0
-            ? { userInstructions: trimmedInstructions }
-            : {}),
-        });
-
-      if (response.error) {
-        analytics.captureError(toAPIError(response.error));
-        if (!cancelled) {
-          setSuggestionStatus("failed");
-        }
-        return;
-      }
-
-      if (cancelled) {
-        return;
-      }
-
-      const aiSuggestions = new Map(
-        response.data.suggestions.map((suggestion) => [
-          suggestion.entityId,
-          suggestion,
-        ]),
-      );
-
-      const nextRows = initialRows.map((row) => {
-        const suggestion = aiSuggestions.get(row.entityId);
-        if (!suggestion) {
-          return row;
-        }
-        return {
-          ...row,
-          detectedDate: suggestion.detectedDate,
-          documentType: suggestion.documentType,
-          folderPath: suggestion.folderPath,
-          suggestedName: suggestion.suggestedName,
-        };
-      });
-
-      setRows(nextRows);
-      const nextDeleteFolders = response.data.deleteFolders.map((folder) => ({
-        entityId: folder.entityId,
-        folderPath: folder.folderPath,
-        reason: folder.reason,
-        selected: true,
-      }));
-      setDeleteFolders(nextDeleteFolders);
-      setCachedSuggestions({
-        key: requestKey,
-        rows: nextRows,
-        deleteFolders: nextDeleteFolders,
-      });
-      setRetryNonce(0);
-      setSuggestionStatus("ready");
-    };
-
-    fetchSuggestions().catch((error: unknown) => {
-      analytics.captureError(error);
-      if (!cancelled) {
-        setSuggestionStatus("failed");
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
+    setSuggestionStatus("ready");
   }, [
-    analytics,
     cachedSuggestions,
-    existingFolders,
     files,
     initialRows,
     open,
     requestKey,
-    retryNonce,
-    workspaceId,
+    suggestionStatus,
   ]);
 
   const updateRow = (
@@ -592,9 +511,87 @@ export const ExistingFileOrganizerDialog = ({
       });
   };
 
-  const requestAiSuggestions = () => {
+  const requestAiSuggestions = async () => {
     setCachedSuggestions(null);
-    setRetryNonce((current) => current + 1);
+    setRows(initialRows);
+    setDeleteFolders([]);
+    setSuggestionStatus("generating");
+
+    try {
+      const { locale: requestLocale, userInstructions: trimmedInstructions } =
+        getSuggestionRequestContext();
+      const data = await queryClient.fetchQuery({
+        queryKey: [
+          ...entitiesKeys.all(workspaceId),
+          "organize-suggestions",
+          requestKey,
+          suggestionRequestFolders,
+          suggestionRequestFiles,
+          requestLocale,
+          trimmedInstructions,
+        ],
+        queryFn: async ({ signal }) => {
+          const response = await api
+            .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            ["organize-suggestions"].post(
+              {
+                existingFolders: suggestionRequestFolders,
+                files: suggestionRequestFiles,
+                locale: requestLocale,
+                ...(trimmedInstructions.length > 0
+                  ? { userInstructions: trimmedInstructions }
+                  : {}),
+              },
+              { fetch: { signal } },
+            );
+
+          if (response.error) {
+            throw toAPIError(response.error);
+          }
+
+          return response.data;
+        },
+      });
+
+      const aiSuggestions = new Map(
+        data.suggestions.map((suggestion) => [suggestion.entityId, suggestion]),
+      );
+      const nextRows = initialRows.map((row) => {
+        const suggestion = aiSuggestions.get(row.entityId);
+        if (!suggestion) {
+          return row;
+        }
+        return {
+          detectedDate: suggestion.detectedDate,
+          documentType: suggestion.documentType,
+          entityId: row.entityId,
+          folderPath: suggestion.folderPath,
+          id: row.id,
+          mimeType: row.mimeType,
+          originalName: row.originalName,
+          parentId: row.parentId,
+          suggestedName: suggestion.suggestedName,
+        };
+      });
+      const nextDeleteFolders = data.deleteFolders.map((folder) => ({
+        entityId: folder.entityId,
+        folderPath: folder.folderPath,
+        reason: folder.reason,
+        selected: true,
+      }));
+
+      setRows(nextRows);
+      setDeleteFolders(nextDeleteFolders);
+      setCachedSuggestions({
+        key: requestKey,
+        rows: nextRows,
+        deleteFolders: nextDeleteFolders,
+      });
+      setSuggestionStatus("ready");
+    } catch (error) {
+      analytics.captureError(error);
+      setSuggestionStatus("failed");
+    }
   };
   const hasAiSuggestions = cachedSuggestions?.key === requestKey;
   const interactionsDisabled = isGeneratingSuggestions;
@@ -624,12 +621,19 @@ export const ExistingFileOrganizerDialog = ({
                 window.localStorage.setItem(userInstructionsKey, value);
               }
             }}
-            onRegenerate={requestAiSuggestions}
+            onRegenerate={() => {
+              void requestAiSuggestions();
+            }}
             onToggle={() => setShowInstructions((current) => !current)}
             value={userInstructions}
           />
           {suggestionStatus === "failed" && (
-            <FailureBanner disabled={false} onRetry={requestAiSuggestions} />
+            <FailureBanner
+              disabled={false}
+              onRetry={() => {
+                void requestAiSuggestions();
+              }}
+            />
           )}
           {isGeneratingSuggestions ? (
             <OrganizerSkeleton />
@@ -665,7 +669,9 @@ export const ExistingFileOrganizerDialog = ({
             <Button
               className="me-auto"
               disabled={isGeneratingSuggestions || rows.length === 0}
-              onClick={requestAiSuggestions}
+              onClick={() => {
+                void requestAiSuggestions();
+              }}
               type="button"
               variant="outline"
             >

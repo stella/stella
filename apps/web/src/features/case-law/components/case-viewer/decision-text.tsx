@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from "react";
+import { Fragment, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -729,8 +729,7 @@ export const DecisionText = ({
     query: searchQuery,
   });
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reports derived match count to a parent callback prop; lift the count to the parent
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     onMatchCountChange?.(searchResults.matchCount);
   }, [onMatchCountChange, searchResults.matchCount]);
 

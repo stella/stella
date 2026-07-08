@@ -47,7 +47,6 @@ const readKanbanGroupBodySchema = t.Object({
   // uncategorized bucket folds in cells whose value is no longer an option;
   // omitted (kanban board) keeps "no non-empty value".
   optionValues: t.Optional(t.Array(t.String({ maxLength: 1000 }))),
-  includeTotalCount: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -74,7 +73,6 @@ const readKanbanGroup = createSafeHandler(
     }
 
     const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
-    const includeTotalCount = body.includeTotalCount ?? false;
     const result = yield* Result.await(
       queryEntities({
         safeDb,
@@ -89,7 +87,6 @@ const readKanbanGroup = createSafeHandler(
         fieldIds: body.fieldIds ?? [],
         excludedKinds: body.excludedKinds ?? [],
         extraConditions: [conditionResult.value],
-        includeTotalCount,
       }),
     );
 
@@ -103,9 +100,7 @@ const readKanbanGroup = createSafeHandler(
         ),
     });
 
-    // `totalCount` is the per-group rollup that drives the table group
-    // header count; one bounded count per group, only when requested.
-    return Result.ok({ ...page, totalCount: result.totalCount });
+    return Result.ok(page);
   },
 );
 

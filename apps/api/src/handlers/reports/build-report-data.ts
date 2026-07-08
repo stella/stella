@@ -520,7 +520,6 @@ export const buildReportData = async ({
         fieldMode: "visible",
         fieldIds,
         excludedKinds: ["folder", "task"],
-        includeTotalCount: false,
       }),
     );
 

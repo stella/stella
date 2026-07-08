@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -22,6 +22,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { MatterNumberHint } from "@/components/matter-number-hint";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { APIError } from "@/lib/errors";
@@ -73,8 +74,7 @@ export const MatterMetadataPanel = ({
   const canDeleteWorkspace = usePermissions({ workspace: ["delete"] });
   const updateWorkspace = useUpdateWorkspace();
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state from query, seeds/resyncs form fields from workspace data gated on dirty flags + workspaceId; candidate for query-data initialization with a key prop for the reset-on-id seed
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!workspace) {
       return;
     }
@@ -90,7 +90,6 @@ export const MatterMetadataPanel = ({
     }
 
     if (!nameDirty) {
-      // eslint-disable-next-line react/react-compiler -- resyncs the form field from server data, gated on the dirty flag; not pure-derivable since nameValue is also user-edited
       setNameValue(workspace.name);
     }
     if (!referenceDirty) {

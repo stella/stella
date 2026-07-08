@@ -430,8 +430,7 @@ function RouteComponentInner({
         )
       : undefined;
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-advances activeFieldId + navigate when a newer version appears via background query refetch; this reacts to async server-state changing (no user version-switch event to relay into) and runs setState/navigate post-commit
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (
       latestFileFieldForProperty === undefined ||
       latestFileFieldForProperty.id === fieldId

@@ -69,7 +69,6 @@ const readEntitiesWindow = createSafeHandler(
         fieldIds: body.fieldIds ?? [],
         excludedKinds: body.excludedKinds ?? [],
         previewableForAi: body.previewableForAi ?? false,
-        includeTotalCount: false,
       }),
     );
 

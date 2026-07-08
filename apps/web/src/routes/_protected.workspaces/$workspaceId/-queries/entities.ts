@@ -117,16 +117,15 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
 
 export const entitiesOptions = (key: EntitiesOptionsInput) =>
   queryOptions({
-    queryKey: entitiesKeys.page(key),
+    queryKey: entitiesKeys.sample(key),
     queryFn: async ({ signal }) => {
       const fieldMode = key.fieldMode ?? "full";
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
-        .query.post(
+        ["query-window"].post(
           {
             filters: key.filters,
             sorts: key.sorts,
-            page: key.page,
             ...(key.search?.trim() && { search: key.search.trim() }),
             excludedKinds: key.excludedKinds ?? [],
             fieldMode,
@@ -137,7 +136,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
                   )
                 : [],
             previewableForAi: key.previewableForAi ?? false,
-            pageSize: key.pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
+            limit: key.pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
           },
           { fetch: { signal } },
         );
@@ -146,7 +145,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
         throw toAPIError(response.error);
       }
 
-      const { entities: rawEntities, ...rest } = response.data;
+      const { items: rawEntities, ...rest } = response.data;
       const entities: WorkspaceEntity[] = rawEntities.map(toWorkspaceEntity);
 
       return { ...rest, entities };
@@ -265,7 +264,6 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
             ...(key.optionValues !== undefined && {
               optionValues: key.optionValues,
             }),
-            includeTotalCount: key.includeTotalCount ?? false,
             ...(pageParam !== undefined && { cursor: pageParam }),
           },
           { fetch: { signal } },
@@ -358,15 +356,31 @@ export const entitySummariesOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: entitiesKeys.summaries(workspaceId),
     queryFn: async ({ signal }) => {
-      const response = await api
-        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .summaries.get({ fetch: { signal } });
+      const summaries: { id: string; name: string | null }[] = [];
+      let cursor: string | undefined;
+      do {
+        // oxlint-disable-next-line no-await-in-loop -- cursor pagination: each page depends on the previous response's nextCursor, so requests are strictly sequential
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .summaries.get({
+            fetch: { signal },
+            query: {
+              limit: DEFAULT_ENTITY_WINDOW_SIZE,
+              ...(cursor !== undefined && { cursor }),
+            },
+          });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
 
-      return response.data.summaries;
+        summaries.push(
+          ...response.data.items.map(({ id, name }) => ({ id, name })),
+        );
+        cursor = response.data.nextCursor ?? undefined;
+      } while (cursor !== undefined);
+
+      return summaries;
     },
   });
 
@@ -376,7 +390,7 @@ export const entitySummariesCountOptions = (workspaceId: string) =>
     queryFn: async ({ signal }) => {
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .summaries.get({ fetch: { signal } });
+        .summaries.count.get({ fetch: { signal }, query: {} });
 
       if (response.error) {
         throw toAPIError(response.error);

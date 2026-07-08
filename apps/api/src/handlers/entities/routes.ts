@@ -27,7 +27,9 @@ import readFilesystemTree from "@/api/handlers/entities/read-filesystem-tree";
 import readGroupCounts from "@/api/handlers/entities/read-group-counts";
 import readKanbanGroup from "@/api/handlers/entities/read-kanban-group";
 import readPropertyFacets from "@/api/handlers/entities/read-property-facets";
-import readEntitySummaries from "@/api/handlers/entities/read-summaries";
+import readEntitySummaries, {
+  readEntitySummariesCount,
+} from "@/api/handlers/entities/read-summaries";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
 import readEntitiesWindow from "@/api/handlers/entities/read-window";
@@ -199,6 +201,10 @@ export const entitiesRoute = new Elysia({
   .post("/check-stamp", checkStamp.handler, {
     body: checkStamp.config.body,
     permissions: checkStamp.config.permissions,
+  })
+  .get("/summaries/count", readEntitySummariesCount.handler, {
+    permissions: readEntitySummariesCount.config.permissions,
+    query: readEntitySummariesCount.config.query,
   })
   .get("/summaries", readEntitySummaries.handler, {
     permissions: readEntitySummaries.config.permissions,

@@ -636,7 +636,6 @@ export const useChatEditor = ({
         filters,
         sorts,
         ...(search && { search }),
-        page: 1,
         pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
       });
       if (pendingWorkspaceEntitySearchRef.current) {
@@ -719,7 +718,6 @@ export const useChatEditor = ({
         filters,
         sorts,
         ...(search && { search }),
-        page: 1,
         pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
       });
       const cachedData = queryClient.getQueryData<EntityMentionPage>(

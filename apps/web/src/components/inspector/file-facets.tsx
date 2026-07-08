@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
 import type { FileTab } from "@/components/inspector/inspector-store";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { DOCX_MIME } from "@/lib/consts";
 import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
@@ -58,8 +59,7 @@ export const FullViewPreviewGuard = ({
   flashMinimize,
 }: FullViewPreviewGuardProps) => {
   const t = useTranslations();
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (stale "preview" facet -> swap facet + toast + flash); move into the full-view entry handler
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (facet !== "preview") {
       return;
     }

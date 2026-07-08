@@ -86,17 +86,14 @@ const createContext = ({
     route: "/v1/entities/:workspaceId/query-window",
   });
 
-const createSafeDb = ({
-  includeCount,
-}: {
-  includeCount: boolean;
-}): Parameters<typeof readEntitiesWindow.handler>[0]["safeDb"] => {
-  // queryEntities starts the optional count query before the id query,
-  // then starts the phase-2 entity/version/field/session queries together.
+const createSafeDb = (): Parameters<
+  typeof readEntitiesWindow.handler
+>[0]["safeDb"] => {
+  // queryEntities starts the id query, then starts the phase-2
+  // entity/version/field/session queries together.
   // Keep this queue in that call order so the handler tests fail loudly
   // if the query pipeline changes.
   const results: unknown[] = [
-    ...(includeCount ? [[{ total: idRows.length }]] : []),
     idRows,
     entityRows,
     versionCounts,
@@ -122,7 +119,7 @@ describe("entity read handlers", () => {
           fieldIds: [],
           excludedKinds: ["folder", "task"],
         },
-        safeDb: createSafeDb({ includeCount: false }),
+        safeDb: createSafeDb(),
       }),
     );
 
@@ -144,30 +141,29 @@ describe("entity read handlers", () => {
     expect(result.nextCursor).toEqual(expect.any(String));
   });
 
-  test("page query unwraps the shared entity query result before building pagination", async () => {
+  test("query handler returns a cursor page", async () => {
     const result = await readEntities.handler(
       asTestRaw<Parameters<typeof readEntities.handler>[0]>(
         createContext({
           body: {
-            page: 1,
-            pageSize: 2,
+            limit: 2,
             filters: [],
             sorts: [],
             fieldMode: "visible",
             fieldIds: [],
           },
-          safeDb: createSafeDb({ includeCount: true }),
+          safeDb: createSafeDb(),
         }),
       ),
     );
 
-    expect("entities" in result).toBe(true);
-    if (!("entities" in result)) {
+    expect("items" in result).toBe(true);
+    if (!("items" in result)) {
       return;
     }
 
-    expect(result.entities).toHaveLength(2);
-    expect(result.totalCount).toBe(3);
+    expect(result.items).toHaveLength(2);
+    expect(result.limit).toBe(2);
     expect(result.nextCursor).toEqual(expect.any(String));
   });
 
@@ -184,7 +180,7 @@ describe("entity read handlers", () => {
             groupByPropertyId: "_status",
             groupValue: "open",
           },
-          safeDb: createSafeDb({ includeCount: false }),
+          safeDb: createSafeDb(),
         }),
       ),
     );

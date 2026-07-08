@@ -13,7 +13,7 @@
  */
 
 import "@/components/chat-editor.css";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type {
   ComponentProps,
   KeyboardEvent as ReactKeyboardEvent,
@@ -61,6 +61,7 @@ import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachmen
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
 import type { TranslationKey } from "@/i18n/types";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
@@ -637,8 +638,7 @@ export function PromptBar(props: PromptBarProps) {
   // 1.4s ring; restart when the seq advances.
   const { isPulsing: attention, pulse: triggerAttention } = usePulse(1400);
   const lastAttentionSeq = useRef(attentionPulseSeq);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (attention-pulse seq advance → fire one-shot glow); move into the pulse trigger source
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (
       attentionPulseSeq === undefined ||
       attentionPulseSeq === lastAttentionSeq.current
