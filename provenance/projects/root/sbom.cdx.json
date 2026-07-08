@@ -758,6 +758,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
           },
           {
@@ -765,6 +768,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#1"
@@ -821,6 +827,9 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
           },
           {
@@ -831,6 +840,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -1218,6 +1230,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/creating-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
@@ -1713,6 +1728,12 @@
             "location": "apps/web/src/components/app-sidebar.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#11"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#3"
           },
           {
@@ -1768,6 +1789,12 @@
         "occurrences": [
           {
             "location": "apps/web/src/components/app-sidebar.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#3"
@@ -1860,6 +1887,45 @@
       "version": ""
     },
     {
+      "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#16"
+          }
+        ]
+      },
+      "group": "@atlaskit",
+      "name": "pragmatic-drag-and-drop/element/preserve-offset-on-source",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40atlaskit/pragmatic-drag-and-drop%2Felement%2Fpreserve-offset-on-source",
+      "scope": "required",
+      "type": "library",
+      "version": ""
+    },
+    {
       "bom-ref": "pkg:npm/@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview",
       "evidence": {
         "identity": [
@@ -1877,6 +1943,12 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#17"
+          },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#5"
           },
@@ -2028,6 +2100,12 @@
             "location": "apps/web/src/components/app-sidebar.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#11"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#3"
           },
           {
@@ -2050,6 +2128,12 @@
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#7"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#3"
@@ -2088,10 +2172,16 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#4"
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#16"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#5"
@@ -2107,6 +2197,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#4"
           }
         ]
       },
@@ -3394,6 +3490,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
           },
           {
@@ -3401,6 +3500,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#1"
@@ -3457,6 +3559,9 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
           },
           {
@@ -3467,6 +3572,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -3854,6 +3962,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/creating-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
@@ -4758,6 +4869,9 @@
             "location": "apps/api/src/mcp/egress.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/feedback-tools.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/gateway/dispatch-call.ts#1"
           },
           {
@@ -5639,6 +5753,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
           },
           {
@@ -5646,6 +5763,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#1"
@@ -5702,6 +5822,9 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
           },
           {
@@ -5712,6 +5835,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -6101,6 +6227,9 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/creating-step.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
           },
           {
@@ -6337,6 +6466,9 @@
           },
           {
             "location": "packages/transactional/emails/organization-invitation.tsx#13"
+          },
+          {
+            "location": "packages/transactional/emails/product-feedback.tsx#11"
           }
         ]
       },
@@ -7723,6 +7855,9 @@
             "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#1"
           },
           {
@@ -8293,6 +8428,9 @@
             "location": "apps/web/src/routes/_protected.settings/-queries/anonymization-blacklist.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-queries/connections.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-queries/usage.ts#1"
           },
           {
@@ -8491,6 +8629,9 @@
             "location": "apps/web/src/components/chat-mention-providers.tsx#3"
           },
           {
+            "location": "apps/web/src/components/chat-mention-providers.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/contact-picker.tsx#4"
           },
           {
@@ -8620,13 +8761,19 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#3"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#3"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#3"
@@ -8671,6 +8818,9 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#7"
           },
           {
@@ -8681,6 +8831,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#3"
@@ -9292,10 +9445,13 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#4"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#4"
@@ -9355,6 +9511,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#12"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#19"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#3"
           },
           {
@@ -9362,6 +9521,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#3"
@@ -9380,6 +9542,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.catalogue.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization.document-types.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization.index.tsx#1"
@@ -9631,7 +9796,7 @@
             "location": "apps/web/src/lib/beta-features.ts#1"
           },
           {
-            "location": "apps/web/src/routeTree.gen.ts#1579"
+            "location": "apps/web/src/routeTree.gen.ts#1625"
           },
           {
             "location": "apps/web/src/lib/beta-features.ts#2"
@@ -11680,6 +11845,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
           },
           {
@@ -11687,6 +11855,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#1"
@@ -11743,6 +11914,9 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
           },
           {
@@ -11753,6 +11927,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -12140,6 +12317,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/creating-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
@@ -12924,6 +13104,9 @@
             "location": "apps/api/src/handlers/chat/tools/execute/sandbox/transpile.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/chat/tools/folio-agent-tools.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/chat/tools/registry-adapter/ref-mediation.ts#1"
           },
           {
@@ -13014,7 +13197,22 @@
             "location": "apps/api/src/handlers/contacts/update-by-id.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/document-types/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/delete-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/keys.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/document-types/read-list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/reorder.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/update-by-id.ts#1"
           },
           {
             "location": "apps/api/src/handlers/docx/edit-with-tracking.ts#9"
@@ -13182,6 +13380,12 @@
             "location": "apps/api/src/handlers/external-preview/preview.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/feedback/intake.ts#31"
+          },
+          {
+            "location": "apps/api/src/handlers/feedback/routes.ts#16"
+          },
+          {
             "location": "apps/api/src/handlers/fields/mark-column-flag.ts#1"
           },
           {
@@ -13341,6 +13545,12 @@
             "location": "apps/api/src/handlers/mcp-connectors/url-normalization.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/me/disconnect-oauth-connection.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/me/list-oauth-connections.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/me/pending-tasks.ts#1"
           },
           {
@@ -13386,13 +13596,28 @@
             "location": "apps/api/src/handlers/organization-settings/update.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/approve.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/auto-run.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/create.ts#1"
+            "location": "apps/api/src/handlers/playbooks/create-shared.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/delete-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/derive-ask.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/from-starter.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/list-starters.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/list-versions.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/materialize-run.ts#1"
@@ -13402,6 +13627,9 @@
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/restore-version.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/review-extract.ts#1"
@@ -13630,6 +13858,9 @@
           },
           {
             "location": "apps/api/src/handlers/templates/clauses-list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/clauses-slot-update.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/clauses-sync-all.ts#1"
@@ -13992,6 +14223,9 @@
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#8"
           },
           {
+            "location": "apps/api/src/lib/oauth-connections.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/prompt-safety.ts#20"
           },
           {
@@ -14095,6 +14329,9 @@
           },
           {
             "location": "apps/api/src/mcp/errors.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/feedback-tools.ts#2"
           },
           {
             "location": "apps/api/src/mcp/field-markers.ts#1"
@@ -14208,7 +14445,7 @@
             "location": "packages/cli/src/auth/credential-store.ts#15"
           },
           {
-            "location": "packages/cli/src/auth/ensure-fresh-credential.ts#14"
+            "location": "packages/cli/src/auth/ensure-fresh-credential.ts#12"
           },
           {
             "location": "packages/cli/src/auth/jwt.ts#11"
@@ -14326,6 +14563,9 @@
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#23"
+          },
+          {
+            "location": "apps/web/src/components/chat-mention-providers.tsx#5"
           },
           {
             "location": "apps/web/src/components/conditions/formula-editor.tsx#3"
@@ -15577,7 +15817,19 @@
             "location": "apps/api/src/handlers/dev/routes.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/document-types/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/delete-by-id.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/document-types/read-list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/reorder.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/update-by-id.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/check-stamp.ts#2"
@@ -15844,13 +16096,16 @@
             "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/auto-run.ts#2"
+            "location": "apps/api/src/handlers/playbooks/approve.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/create.ts#2"
+            "location": "apps/api/src/handlers/playbooks/create-shared.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/delete-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/list-versions.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/materialize-run.ts#2"
@@ -15863,6 +16118,12 @@
           },
           {
             "location": "apps/api/src/handlers/playbooks/resolve-standards.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/restore-version.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/route-playbooks.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/update-by-id.ts#2"
@@ -16195,6 +16456,9 @@
             "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
           },
           {
+            "location": "apps/api/src/lib/db-query-counter.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/delete-account.ts#12"
           },
           {
@@ -16256,6 +16520,9 @@
           },
           {
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/oauth-connections.ts#2"
           },
           {
             "location": "apps/api/src/lib/pg-error.ts#1"
@@ -16333,6 +16600,9 @@
             "location": "apps/api/src/mcp/document-tools.ts#2"
           },
           {
+            "location": "apps/api/src/mcp/feedback-tools.ts#3"
+          },
+          {
             "location": "apps/api/src/mcp/gateway/external-tools.ts#2"
           },
           {
@@ -16358,6 +16628,9 @@
           },
           {
             "location": "apps/api/src/scripts/backfill-fulltext.ts#12"
+          },
+          {
+            "location": "apps/api/src/scripts/backfill-property-roles.ts#10"
           },
           {
             "location": "apps/api/src/scripts/repair-case-law-jsonb.ts#35"
@@ -16478,7 +16751,7 @@
             "location": "apps/api/src/handlers/uploads/routes.ts#2"
           },
           {
-            "location": "apps/api/src/index.ts#3"
+            "location": "apps/api/src/index.ts#4"
           },
           {
             "location": "apps/api/src/lib/rate-limit/index.ts#1"
@@ -16807,6 +17080,9 @@
             "location": "apps/api/src/handlers/document-types/routes.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/document-types/schema.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/check-stamp.ts#3"
           },
           {
@@ -16987,6 +17263,9 @@
             "location": "apps/api/src/handlers/external-preview/routes.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/feedback/routes.ts#17"
+          },
+          {
             "location": "apps/api/src/handlers/fields/mark-column-flag.ts#13"
           },
           {
@@ -17128,6 +17407,9 @@
             "location": "apps/api/src/handlers/mcp-connectors/update-native-tool.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/me/disconnect-oauth-connection.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/me/routes.ts#1"
           },
           {
@@ -17164,6 +17446,12 @@
             "location": "apps/api/src/handlers/organization-settings/update.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/from-starter.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/list-versions.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/position-facets.ts#1"
           },
           {
@@ -17177,6 +17465,9 @@
           },
           {
             "location": "apps/api/src/handlers/playbooks/read.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/restore-version.ts#3"
           },
           {
             "location": "apps/api/src/handlers/playbooks/review.ts#2"
@@ -17402,6 +17693,9 @@
           },
           {
             "location": "apps/api/src/handlers/templates/clauses-list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/clauses-slot-update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/clauses-sync-all.ts#2"
@@ -17666,6 +17960,9 @@
           },
           {
             "location": "apps/api/src/index.ts#2"
+          },
+          {
+            "location": "apps/api/src/index.ts#3"
           },
           {
             "location": "apps/api/src/lib/api-handlers.ts#8"
@@ -18339,6 +18636,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#5"
           },
           {
+            "location": "apps/web/src/components/copy-field.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/dev-sidebar-group.tsx#10"
           },
           {
@@ -18540,19 +18840,25 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#4"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#1"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#10"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#26"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#10"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#15"
@@ -18573,10 +18879,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#29"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#44"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#47"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#45"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#48"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-upload.tsx#4"
@@ -18603,6 +18909,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#13"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#20"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#4"
           },
           {
@@ -18615,10 +18924,10 @@
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#12"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#13"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#17"
@@ -18922,6 +19231,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#3"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#3"
@@ -19493,7 +19805,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-suggestions.ts#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#46"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#49"
           },
           {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#6"
@@ -19550,10 +19862,10 @@
             "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#47"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#50"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#48"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#51"
           },
           {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#7"
@@ -19619,7 +19931,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#49"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#52"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#25"
@@ -20627,6 +20939,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
           },
           {
@@ -20634,6 +20949,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#1"
@@ -20690,6 +21008,9 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
           },
           {
@@ -20700,6 +21021,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
@@ -21087,6 +21411,9 @@
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/creating-step.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#1"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
@@ -21663,10 +21990,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#11"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#50"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#53"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#5"
@@ -21915,6 +22242,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#7"
           },
           {
+            "location": "apps/web/src/components/copy-field.tsx#2"
+          },
+          {
             "location": "apps/web/src/components/date-picker-popover.tsx#1"
           },
           {
@@ -22146,13 +22476,19 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/paragraph-rendering.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#5"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#2"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#12"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-starter-gallery-sheet.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-version-history-sheet.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#28"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#18"
@@ -22161,7 +22497,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-category-sidebar.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#11"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#16"
@@ -22182,7 +22518,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#31"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#51"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#54"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-upload.tsx#5"
@@ -22215,6 +22551,15 @@
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#9"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/cli-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx#8"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/account/mcp-server-card.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#8"
           },
           {
@@ -22225,6 +22570,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#4"
@@ -22248,6 +22596,9 @@
             "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.connections.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#5"
           },
           {
@@ -22260,6 +22611,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization.anonymization.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization.document-types.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization.matter-numbering.tsx#2"
           },
           {
@@ -22269,7 +22623,7 @@
             "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/route.tsx#14"
+            "location": "apps/web/src/routes/_protected.settings/route.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#18"
@@ -22650,7 +23004,7 @@
             "location": "apps/web/src/routes/onboarding/-components/steps/creating-step.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#1"
+            "location": "apps/web/src/routes/onboarding/-components/steps/download-step.tsx#4"
           },
           {
             "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#4"
@@ -22837,14 +23191,14 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "node_modules/@stll/folio-core/node_modules/valibot/package.json",
+            "concludedValue": "node_modules/@stll/folio-agents/node_modules/@stll/folio-core/node_modules/valibot/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "node_modules/@stll/folio-core/node_modules/valibot/package.json"
+                "value": "node_modules/@stll/folio-agents/node_modules/@stll/folio-core/node_modules/valibot/package.json"
               }
             ]
           }
@@ -22923,6 +23277,9 @@
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
           },
           {
+            "location": "apps/api/src/handlers/feedback/intake.ts#32"
+          },
+          {
             "location": "apps/api/src/handlers/hosted-usage-webhook/event-schemas.ts#14"
           },
           {
@@ -22930,6 +23287,9 @@
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/derive-ask.ts#2"
           },
           {
             "location": "apps/api/src/handlers/search/ai.ts#5"
@@ -22996,6 +23356,9 @@
           },
           {
             "location": "apps/api/src/mcp/document-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/mcp/feedback-tools.ts#4"
           },
           {
             "location": "apps/api/src/mcp/knowledge-tools.ts#2"
@@ -23109,7 +23472,7 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#52"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#55"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#6"
@@ -23194,6 +23557,10 @@
         {
           "name": "SrcFile",
           "value": "node_modules/@stll/folio-core/node_modules/valibot/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@stll/folio-agents/node_modules/@stll/folio-core/node_modules/valibot/package.json"
         }
       ],
       "purl": "pkg:npm/valibot@1.4.1",
@@ -23298,6 +23665,9 @@
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
           },
           {
+            "location": "apps/api/src/handlers/feedback/intake.ts#32"
+          },
+          {
             "location": "apps/api/src/handlers/hosted-usage-webhook/event-schemas.ts#14"
           },
           {
@@ -23305,6 +23675,9 @@
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/derive-ask.ts#2"
           },
           {
             "location": "apps/api/src/handlers/search/ai.ts#5"
@@ -23371,6 +23744,9 @@
           },
           {
             "location": "apps/api/src/mcp/document-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/mcp/feedback-tools.ts#4"
           },
           {
             "location": "apps/api/src/mcp/knowledge-tools.ts#2"
@@ -23484,7 +23860,7 @@
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#52"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#55"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#6"
