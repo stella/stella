@@ -510,7 +510,7 @@ export const ChatTabPanel = ({
                     onChange={(next) => setChatContext(tab.id, next)}
                   />
                 }
-                onNewThread={startNewThread}
+                onNewThread={messages.length > 0 ? startNewThread : null}
                 threadRef={threadRef}
               />
             }

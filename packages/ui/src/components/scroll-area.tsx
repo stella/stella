@@ -10,11 +10,20 @@ function ScrollArea({
   className,
   children,
   scrollFade = false,
+  scrollbarClassName,
   scrollbarGutter = false,
   viewportRef,
   ...props
 }: ScrollAreaPrimitive.Root.Props & {
   scrollFade?: boolean;
+  /**
+   * Extra classes applied to both scrollbars, on top of their default
+   * styling — the escape hatch for a consumer whose scrollbar must win a
+   * stacking fight against a sibling with its own z-index (e.g. a floating
+   * composer veil docked over the scroll area). Omit for the default
+   * (unelevated) overlay-thumb treatment.
+   */
+  scrollbarClassName?: string;
   scrollbarGutter?: boolean;
   viewportRef?: Ref<HTMLDivElement>;
 }) {
@@ -36,8 +45,8 @@ function ScrollArea({
       >
         {children}
       </ScrollAreaPrimitive.Viewport>
-      <ScrollBar orientation="vertical" />
-      <ScrollBar orientation="horizontal" />
+      <ScrollBar className={scrollbarClassName} orientation="vertical" />
+      <ScrollBar className={scrollbarClassName} orientation="horizontal" />
       <ScrollAreaPrimitive.Corner data-slot="scroll-area-corner" />
     </ScrollAreaPrimitive.Root>
   );

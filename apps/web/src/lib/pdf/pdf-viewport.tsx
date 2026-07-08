@@ -187,7 +187,14 @@ const PDFViewerContent = ({
     // parent's lighter background bleed through past it — a two-tone
     // surround. Painting on the root fills the whole visible area
     // uniformly at every scroll position and page size.
-    <ScrollArea className={className}>
+    //
+    // `scrollbarClassName` elevates the scrollbar above the docked AI
+    // chat composer: every mount of this viewport is wrapped in
+    // `FileViewerWithAI` (peek and full view alike), whose composer
+    // stack floats at z-50 over the bottom of the viewer. Without this
+    // the scrollbar's bottom section painted underneath that glass veil
+    // instead of on top of it.
+    <ScrollArea className={className} scrollbarClassName="z-[60]">
       <div
         ref={pdfContentRef}
         className={contentClassName}
