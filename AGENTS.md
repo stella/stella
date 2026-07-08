@@ -51,6 +51,10 @@ details unless they are already public in the repository.
 - If TypeScript can make a class of bug structurally impossible (branded types,
   discriminated unions, exhaustive checks), prefer that over runtime validation or
   manual discipline
+- Avoid boolean fields for states that may grow. Use a named discriminator or
+  domain type for values that answer "which kind/status/mode/type?" rather than
+  a permanent yes/no question; a two-value union, enum, or equivalent domain type
+  now is usually cheaper than migrating an `isX` flag later.
 - Conventional Commits: `feat:`, `chore:`, `fix:`, `docs:`
 - Rebase feature branches onto main (linear history)
 - Enable `git rerere` (`git config --global rerere.enabled true`, plus
@@ -92,6 +96,28 @@ List endpoints should use cursor pagination and return the standard `Page<T>` en
 from `apps/api/src/lib/pagination.ts`:
 `{ items, nextCursor, limit }`. Offset pagination, `totalCount`, and unbounded lists
 require explicit justification.
+
+## Performance
+
+Performance regressions are guarded by committed baselines: a regression surfaces as
+a CI failure or a reviewable diff, never silently. The guards:
+
+- Per-route network baseline (`apps/web/e2e/network-baseline.json`): API request
+  manifest, waterfall depth, and per-endpoint DB query budgets, checked by the
+  route-smoke e2e suite.
+- Bundle-size budgets (`scripts/bundle-baseline.json`), enforced after the web build.
+- `require-loader-prefetch` oxlint rule: route suspense queries must start in the
+  route loader, not on component mount.
+- `x-db-queries` response header (dev/CI only): per-request DB query counter that
+  feeds the network baseline's query budgets.
+
+Fix the regression first. Reseeding a baseline (the route-smoke e2e suite run with
+`E2E_NETWORK_BASELINE=write` set, or `bun scripts/bundle-baseline.ts
+--write-baseline`) is a product decision that must
+be justified in the PR description; it is not a mechanical way to make CI green.
+Start route data in loaders (`ensureRouteQueryData`), batch DB work instead of
+growing a query budget, and tighten baselines after a perf fix. Full guidelines,
+failure playbook, and the current hotspot burn-down list in `/conventions-perf`.
 
 ## UX & Brand
 

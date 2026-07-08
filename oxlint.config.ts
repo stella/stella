@@ -473,6 +473,9 @@ export default defineConfig({
         ".oxlint-plugins/__fixtures__/require-loader-prefetch-loader.fixture.tsx",
         ".oxlint-plugins/__fixtures__/require-loader-prefetch-nonroute.fixture.tsx",
         ".oxlint-plugins/__fixtures__/require-loader-prefetch-nosuspense.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/routes/-components/require-loader-prefetch-child.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/routes/require-loader-prefetch-child-missing.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/routes/require-loader-prefetch-child-ok.fixture.tsx",
       ],
       rules: {
         "require-loader-prefetch/require-loader-prefetch": "error",

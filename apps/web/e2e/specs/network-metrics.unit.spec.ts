@@ -154,12 +154,25 @@ test.describe("diffNetworkBaseline", () => {
     expect(problems.some((p) => p.includes("GET /v1/contacts/:id"))).toBe(true);
   });
 
-  test("a deeper waterfall is a problem", () => {
+  test("a waterfall within the jitter allowance passes", () => {
+    // baseline depth 2 + DEPTH_JITTER_ALLOWANCE (1) = 3: parallel-request
+    // serialization jitter under load, not a real regression.
     const { problems } = diffNetworkBaseline(
       baseline,
       new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
     );
-    expect(problems.some((p) => p.includes("2 -> 3"))).toBe(true);
+    expect(problems).toEqual([]);
+  });
+
+  test("a waterfall beyond the jitter allowance is a problem", () => {
+    const { problems } = diffNetworkBaseline(
+      baseline,
+      new Map([["/contacts", metrics(["GET /v1/contacts"], 4)]]),
+    );
+    expect(problems.some((p) => p.includes("2 -> 4"))).toBe(true);
+    expect(problems.some((p) => p.includes("already tolerating +1"))).toBe(
+      true,
+    );
   });
 
   test("a repeated API request is a problem", () => {
@@ -400,6 +413,19 @@ test.describe("mergeNetworkBaseline", () => {
       "GET /health": 0,
       "GET /v1/contacts": 5,
     });
+  });
+
+  test("merge records the raw observed depth, no jitter allowance baked in", () => {
+    // The diff check tolerates +1 as jitter, but the committed baseline must
+    // stay exact so the allowance is re-evaluated against a true value next run.
+    const existing: NetworkBaseline = {
+      "/contacts": { depth: 2, requests: ["GET /v1/contacts"] },
+    };
+    const merged = mergeNetworkBaseline(
+      existing,
+      new Map([["/contacts", metrics(["GET /v1/contacts"], 3)]]),
+    );
+    expect(merged["/contacts"]?.depth).toBe(3);
   });
 
   test("routes absent from the run are dropped", () => {

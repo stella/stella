@@ -49,6 +49,7 @@ import {
 } from "@/components/docx-preview-zoom";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { APIError, ClientOperationError, toAPIError } from "@/lib/errors";
@@ -57,7 +58,7 @@ import {
   getPDFPageIdByNumber,
   usePDFStore,
 } from "@/lib/pdf/pdf-context";
-import { ensureRouteQueryData } from "@/lib/react-query";
+import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { composeRefs } from "@/lib/slot";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
@@ -126,10 +127,34 @@ export const Route = createFileRoute(
       return;
     }
 
-    await ensureRouteQueryData(
+    const entity = await ensureRouteQueryData(
       context.queryClient,
       entityOptions(params.workspaceId, deps.entity),
     );
+
+    // `field` is the fieldId FullscreenPdfViewer eventually reads via
+    // usePDFStore, but on a cold navigation that store is only just created
+    // (PDFProvider seeds it from this same search param, see `key={fieldId}`
+    // below), so the value is already known here. Only PDF-family fields
+    // render through PdfViewer/fileOptions; docx fields take an entirely
+    // different display path (DocxBrowserEditor/fieldFileOptions) that never
+    // reads fileOptions, so gate the prefetch on the resolved mimeType to
+    // avoid downloading a file buffer the component will never use.
+    const field = entity.fields.find((f) => f.id === deps.field);
+    const rendersInPdfViewer =
+      field?.content.type === "file" && field.content.mimeType !== DOCX_MIME;
+    if (rendersInPdfViewer) {
+      // Warm the file query without blocking route commit: a large PDF
+      // download shouldn't hold the user on the pendingComponent. The
+      // component's useSuspenseQuery scopes the wait to the PDF area.
+      void prefetchRouteQuery(
+        context.queryClient,
+        fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      );
+    }
   },
   pendingComponent: () => <DocxLoadingShell />,
 });

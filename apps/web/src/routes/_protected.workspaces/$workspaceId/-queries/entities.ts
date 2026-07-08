@@ -321,10 +321,6 @@ export const groupCountsOptions = (key: GroupCountsOptionsInput) =>
 export const useEntitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
   entitiesWindowOptions(useDeferredValue(key));
 
-export const useFilesystemEntitiesOptions = (
-  key: FilesystemEntitiesOptionsInput,
-) => filesystemEntitiesOptions(useDeferredValue(key));
-
 export const useKanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
   kanbanGroupOptions(useDeferredValue(key));
 

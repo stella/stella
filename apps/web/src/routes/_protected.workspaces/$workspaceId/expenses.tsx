@@ -9,8 +9,15 @@ import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
-import { startOfWeek } from "@/i18n/week";
+import { getFormattingLocale } from "@/i18n/i18n-store";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
+import {
+  addDays,
+  expensesOptions,
+  getExpensesWeekRange,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/expenses";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/expenses",
@@ -22,6 +29,24 @@ export const Route = createFileRoute(
         params: { workspaceId: params.workspaceId },
       });
     }
+  },
+  loader: ({ context, params }) => {
+    // Prefetch the current week's expenses using the exact same range
+    // derivation (`getExpensesWeekRange`) the page component uses on mount,
+    // so both compute an identical `expensesOptions` cache key and the fetch
+    // starts during navigation instead of after the component mounts and
+    // suspends.
+    const { dateFrom, dateTo } = getExpensesWeekRange(
+      new Date(),
+      getFormattingLocale(),
+    );
+    void prefetchRouteQuery(
+      context.queryClient,
+      expensesOptions(params.workspaceId, { dateFrom, dateTo }),
+      (error: unknown) => {
+        getAnalytics().captureError(error);
+      },
+    );
   },
   component: ExpensesPage,
 });
@@ -60,19 +85,6 @@ const ExpenseListSkeleton = () => (
   </div>
 );
 
-const formatDateISO = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
-
-const addDays = (d: Date, n: number): Date => {
-  const result = new Date(d);
-  result.setDate(result.getDate() + n);
-  return result;
-};
-
 function ExpensesPage() {
   const t = useTranslations();
   const locale = useLocale();
@@ -82,11 +94,13 @@ function ExpensesPage() {
 
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
-  // Show expenses for the current week
-  const monday = startOfWeek(currentDate, locale);
-  const sunday = addDays(monday, 6);
-  const dateFrom = formatDateISO(monday);
-  const dateTo = formatDateISO(sunday);
+  // Show expenses for the current week. Shared with the route `loader`'s
+  // prefetch (see `getExpensesWeekRange`) so a cold navigation's initial
+  // render derives the identical `expensesOptions` cache key.
+  const { monday, sunday, dateFrom, dateTo } = getExpensesWeekRange(
+    currentDate,
+    locale,
+  );
 
   const navigateWeek = (delta: number) => {
     setCurrentDate((d) => addDays(d, delta * 7));
