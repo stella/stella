@@ -3,9 +3,13 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
+// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- four view components (tree/kanban/overview/table) each suspend on their own factory but only one renders, chosen by server-returned view-type data; prefetching all four would be wasteful
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
+// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- four view components (tree/kanban/overview/table) each suspend on their own factory but only one renders, chosen by server-returned view-type data; prefetching all four would be wasteful
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
+// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- four view components (tree/kanban/overview/table) each suspend on their own factory but only one renders, chosen by server-returned view-type data; prefetching all four would be wasteful
 import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
+// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- four view components (tree/kanban/overview/table) each suspend on their own factory but only one renders, chosen by server-returned view-type data; prefetching all four would be wasteful
 import { TableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-layout";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 

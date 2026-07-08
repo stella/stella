@@ -64,6 +64,7 @@ import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$work
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- fileOptions gets its fieldId from a Zustand store, not route params; a loader-time guess risks a cache-key mismatch
 import PdfViewer, {
   PDFSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";

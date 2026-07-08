@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- chat thread query is deliberately not loader-prefetched; the thread's streaming lifecycle keeps the in-flight Chat alive and prefetching needs its own design
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
 

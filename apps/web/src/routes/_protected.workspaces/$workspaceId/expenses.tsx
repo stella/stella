@@ -10,6 +10,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { startOfWeek } from "@/i18n/week";
+// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- expenses query key derives from client-only state (current date + locale), unavailable at loader time
 import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
 
 export const Route = createFileRoute(
