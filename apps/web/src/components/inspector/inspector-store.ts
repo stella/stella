@@ -1814,30 +1814,20 @@ export const useInspectorStore = create<State & Actions>()(
     publishDocumentTextSelection: (fieldId, text) =>
       set((state) => {
         const prev = state.documentTextSelectionByFieldId[fieldId];
-        state.documentTextSelectionByFieldId = {
-          ...state.documentTextSelectionByFieldId,
-          [fieldId]: { text, seq: (prev?.seq ?? 0) + 1 },
+        state.documentTextSelectionByFieldId[fieldId] = {
+          text,
+          seq: (prev?.seq ?? 0) + 1,
         };
       }),
 
     clearDocumentTextSelection: (fieldId) =>
       set((state) => {
-        if (!(fieldId in state.documentTextSelectionByFieldId)) {
-          return;
-        }
-        state.documentTextSelectionByFieldId = Object.fromEntries(
-          Object.entries(state.documentTextSelectionByFieldId).filter(
-            ([id]) => id !== fieldId,
-          ),
-        );
+        delete state.documentTextSelectionByFieldId[fieldId];
       }),
 
     publishAnonymizationMatches: (fieldId, snapshot) =>
       set((state) => {
-        state.anonymizationMatchesByFieldId = {
-          ...state.anonymizationMatchesByFieldId,
-          [fieldId]: snapshot,
-        };
+        state.anonymizationMatchesByFieldId[fieldId] = snapshot;
       }),
 
     markAnonymizationPipelineStarted: (fieldId) =>
@@ -1869,13 +1859,9 @@ export const useInspectorStore = create<State & Actions>()(
         ) {
           return;
         }
-        state.anonymizationMatchesByFieldId = hadMatches
-          ? Object.fromEntries(
-              Object.entries(state.anonymizationMatchesByFieldId).filter(
-                ([id]) => id !== fieldId,
-              ),
-            )
-          : state.anonymizationMatchesByFieldId;
+        if (hadMatches) {
+          delete state.anonymizationMatchesByFieldId[fieldId];
+        }
         state.anonymizationPipelineStartedFieldIds = nextStarted;
       }),
 
