@@ -24,7 +24,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 
 const listDecisions = createSafePublicHandler(
   {
-    mcp: { type: "covered", by: "search_case_law" },
+    mcp: { type: "internal", reason: "public_indexing" },
     query: listDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -39,7 +39,7 @@ const listDecisions = createSafePublicHandler(
 );
 
 const listDecisionFacets = createSafePublicHandler(
-  { mcp: { type: "covered", by: "search_case_law" } },
+  { mcp: { type: "internal", reason: "public_indexing" } },
   async function* () {
     const response = yield* Result.await(
       Result.tryPromise(
