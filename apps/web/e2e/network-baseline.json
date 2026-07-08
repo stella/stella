@@ -972,6 +972,7 @@
     ],
     "requestCounts": {
       "GET /v1/files/:id/url/:id": 2,
+      "GET /v1/organization-settings/deepl": 2,
       "GET /v1/workspaces/:id/events": 2
     },
     "dbQueries": {
