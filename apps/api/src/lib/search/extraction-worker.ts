@@ -182,7 +182,10 @@ const extract = async (
     const reviewer = await FolioDocxReviewer.fromBuffer(
       toArrayBuffer(fileBytes),
     );
-    const body = reviewer.getContentAsText({ annotated: true });
+    const body = reviewer
+      .getContent()
+      .map((block) => block.text)
+      .join("\n");
     const notes = reviewer.getNotesAsText();
     text = [body, notes].filter((s) => s.trim().length > 0).join("\n");
   } else if (isDirectTextMimeType(normalizedMimeType)) {

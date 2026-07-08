@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import type { SafeDb, Transaction } from "@/api/db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -25,9 +26,21 @@ const toolWorkspaceIds = resolveToolWorkspaceIds({
   accessibleWorkspaceIds: [workspaceId],
 });
 
+const mockDocxFieldContent = {
+  version: 1,
+  type: "file",
+  id: "55555555-5555-4555-8555-555555555555",
+  fileName: "document.docx",
+  mimeType: DOCX_MIME_TYPE,
+  sizeBytes: 1,
+  encrypted: true,
+  sha256Hex: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  pdfFileId: null,
+} as const;
+
 // A `tx.query.*` seam that answers `entityVersions.findFirst` from a fixed
-// map (undefined = the workspace-scoped lookup found nothing) and never has
-// to answer a `fields` query, since access is rejected before that.
+// map (undefined = the workspace-scoped lookup found nothing) and provides a
+// DOCX file field when a version does resolve.
 const createSafeDb = (
   versionsById: Record<string, { workspaceId: typeof workspaceId } | undefined>,
 ): SafeDb => {
@@ -38,7 +51,7 @@ const createSafeDb = (
           versionsById[where.id.eq],
       },
       fields: {
-        findMany: async () => [],
+        findMany: async () => [{ content: mockDocxFieldContent }],
       },
     },
   };
