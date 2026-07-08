@@ -24,96 +24,74 @@ export const organizationSettingsRoute = new Elysia({
 })
   .use(authMacro)
   .use(permissionMacro)
-  // Deliberately no top-level auth guard: every route below already
-  // declares `permissions`, which implies `validateAuth: true` (see
-  // permissionMacro in lib/auth.ts). A redundant bare guard here would
-  // register a second, independent `validateAuth` resolve hook per
-  // request (Elysia doesn't dedupe macro expansions across separate
-  // guard / route-level call sites). See
-  // tests/security/redundant-validate-auth-guard.test.ts.
-  //
-  // Each route below also repeats `validateAuth: true` alongside
-  // `permissions`. This is a type-only workaround, not a behavioral
-  // duplicate: `permissions` is a function-form macro (see "Known Elysia
-  // Gotchas" in AGENTS.md), so the `validateAuth: true` it returns
-  // internally isn't picked up by Elysia's type-level context composition
-  // — only a literal `validateAuth`/`validateWorkspaceAccess` key at the
-  // same call site is. Runtime dedup (same call's hook object) and the
-  // per-request memoization in `resolveValidateAuth` mean this does not
-  // add a second resolve.
+  // Kept deliberately: this guard is the type-level carrier of
+  // `validateAuth` for Elysia's context composition. `permissions` is a
+  // function-form macro (see "Known Elysia Gotchas" in AGENTS.md) that
+  // applies `validateAuth` at runtime but not in type composition, so a
+  // per-route `validateAuth: true` literal instead of this guard breaks
+  // sibling macros' schema merging (e.g. `invalidateQuery`'s body
+  // extension). The per-request memoization in `resolveValidateAuth`
+  // (lib/auth.ts) neutralizes the extra resolve this guard stacks on top
+  // of `permissions`. See tests/security/route-auth-invariants.test.ts.
+  .guard({
+    validateAuth: true,
+  })
   .get("/", readOrganizationSettings.handler, {
     permissions: readOrganizationSettings.config.permissions,
-    validateAuth: true,
   })
   .post("/", updateOrganizationSettings.handler, {
     body: updateOrganizationSettings.config.body,
     permissions: updateOrganizationSettings.config.permissions,
-    validateAuth: true,
   })
   .post("/practice-jurisdictions", updatePracticeJurisdictions.handler, {
     body: updatePracticeJurisdictions.config.body,
     permissions: updatePracticeJurisdictions.config.permissions,
-    validateAuth: true,
   })
   .post("/preview", previewOrganizationSettings.handler, {
     body: previewOrganizationSettings.config.body,
     permissions: previewOrganizationSettings.config.permissions,
-    validateAuth: true,
   })
   .get("/ai-availability", readAIAvailability.handler, {
     permissions: readAIAvailability.config.permissions,
-    validateAuth: true,
   })
   .get("/ai-config", readAIConfig.handler, {
     permissions: readAIConfig.config.permissions,
-    validateAuth: true,
   })
   .post("/ai-config", updateAIConfig.handler, {
     body: updateAIConfig.config.body,
     permissions: updateAIConfig.config.permissions,
-    validateAuth: true,
   })
   .delete("/ai-config", deleteAIConfig.handler, {
     permissions: deleteAIConfig.config.permissions,
-    validateAuth: true,
   })
   .get("/deepl", readDeepLAvailability.handler, {
     permissions: readDeepLAvailability.config.permissions,
-    validateAuth: true,
   })
   .get("/deepl-config", readDeepLConfig.handler, {
     permissions: readDeepLConfig.config.permissions,
-    validateAuth: true,
   })
   .post("/deepl", updateDeepLKey.handler, {
     body: updateDeepLKey.config.body,
     permissions: updateDeepLKey.config.permissions,
-    validateAuth: true,
   })
   .delete("/deepl", deleteDeepLKey.handler, {
     permissions: deleteDeepLKey.config.permissions,
-    validateAuth: true,
   })
   .get("/web-search-config", readWebSearchConfig.handler, {
     permissions: readWebSearchConfig.config.permissions,
-    validateAuth: true,
   })
   .post("/web-search-key", updateWebSearchKey.handler, {
     body: updateWebSearchKey.config.body,
     permissions: updateWebSearchKey.config.permissions,
-    validateAuth: true,
   })
   .delete("/web-search-key", deleteWebSearchKey.handler, {
     body: deleteWebSearchKey.config.body,
     permissions: deleteWebSearchKey.config.permissions,
-    validateAuth: true,
   })
   .get("/anonymization-blacklist", readAnonymizationBlacklist.handler, {
     permissions: readAnonymizationBlacklist.config.permissions,
-    validateAuth: true,
   })
   .put("/anonymization-blacklist", updateAnonymizationBlacklist.handler, {
     body: updateAnonymizationBlacklist.config.body,
     permissions: updateAnonymizationBlacklist.config.permissions,
-    validateAuth: true,
   });

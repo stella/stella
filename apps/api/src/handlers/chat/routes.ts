@@ -18,27 +18,19 @@ import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 export const chatRoute = new Elysia({ prefix: "/chat" })
   .use(workspaceAccessMacro)
   .use(permissionMacro)
-  // Deliberately no top-level auth guard: every route below already
-  // declares `permissions`, which implies `validateAuth: true` (see
-  // permissionMacro in lib/auth.ts). A redundant bare guard here would
-  // register a second, independent `validateAuth` resolve hook per
-  // request (Elysia doesn't dedupe macro expansions across separate
-  // guard / route-level call sites). See
-  // tests/security/redundant-validate-auth-guard.test.ts.
-  //
-  // Each route below also repeats `validateAuth: true` alongside
-  // `permissions`. This is a type-only workaround, not a behavioral
-  // duplicate: `permissions` is a function-form macro (see "Known Elysia
-  // Gotchas" in AGENTS.md), so the `validateAuth: true` it returns
-  // internally isn't picked up by Elysia's type-level context composition
-  // — only a literal `validateAuth`/`validateWorkspaceAccess` key at the
-  // same call site is. Runtime dedup (same call's hook object) and the
-  // per-request memoization in `resolveValidateAuth` mean this does not
-  // add a second resolve.
+  // Kept deliberately: this guard is the type-level carrier of
+  // `validateAuth` for Elysia's context composition. `permissions` is a
+  // function-form macro (see "Known Elysia Gotchas" in AGENTS.md) that
+  // applies `validateAuth` at runtime but not in type composition, so a
+  // per-route `validateAuth: true` literal instead of this guard breaks
+  // sibling macros' schema merging (e.g. `invalidateQuery`'s body
+  // extension). The per-request memoization in `resolveValidateAuth`
+  // (lib/auth.ts) neutralizes the extra resolve this guard stacks on top
+  // of `permissions`. See tests/security/route-auth-invariants.test.ts.
+  .guard({ validateAuth: true })
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
     permissions: sendMessage.config.permissions,
-    validateAuth: true,
   })
   .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
     body: resolveFileThread.config.body,
@@ -48,65 +40,54 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .post("/template-thread", resolveTemplateThread.handler, {
     body: resolveTemplateThread.config.body,
     permissions: resolveTemplateThread.config.permissions,
-    validateAuth: true,
   })
   .post("/template-thread/rotate", rotateTemplateThread.handler, {
     body: rotateTemplateThread.config.body,
     permissions: rotateTemplateThread.config.permissions,
-    validateAuth: true,
   })
   .get("/threads", getThreads.handler, {
     permissions: getThreads.config.permissions,
     query: getThreads.config.query,
-    validateAuth: true,
   })
   .delete("/threads/:threadId", deleteThread.handler, {
     params: deleteThread.config.params,
     permissions: deleteThread.config.permissions,
     query: deleteThread.config.query,
-    validateAuth: true,
   })
   .patch("/threads/:threadId", updateThread.handler, {
     body: updateThread.config.body,
     params: updateThread.config.params,
     permissions: updateThread.config.permissions,
     query: updateThread.config.query,
-    validateAuth: true,
   })
   .patch("/threads/:threadId/title", renameThread.handler, {
     body: renameThread.config.body,
     params: renameThread.config.params,
     permissions: renameThread.config.permissions,
     query: renameThread.config.query,
-    validateAuth: true,
   })
   .get("/threads/:threadId/title", getThreadTitle.handler, {
     params: getThreadTitle.config.params,
     permissions: getThreadTitle.config.permissions,
     query: getThreadTitle.config.query,
-    validateAuth: true,
   })
   .get("/threads/:threadId/messages", getMessages.handler, {
     params: getMessages.config.params,
     permissions: getMessages.config.permissions,
     query: getMessages.config.query,
-    validateAuth: true,
   })
   .get("/threads/:threadId/messages/older", getOlderMessages.handler, {
     params: getOlderMessages.config.params,
     permissions: getOlderMessages.config.permissions,
     query: getOlderMessages.config.query,
-    validateAuth: true,
   })
   .post("/threads/:threadId/recap", getThreadRecap.handler, {
     params: getThreadRecap.config.params,
     permissions: getThreadRecap.config.permissions,
     query: getThreadRecap.config.query,
-    validateAuth: true,
   })
   .post("/threads/:threadId/suggested-prompts", getSuggestedPrompts.handler, {
     params: getSuggestedPrompts.config.params,
     permissions: getSuggestedPrompts.config.permissions,
     query: getSuggestedPrompts.config.query,
-    validateAuth: true,
   });

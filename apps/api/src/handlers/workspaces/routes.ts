@@ -171,43 +171,31 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
   .use(permissionMacro)
-  // Deliberately no top-level auth guard here: every route below already
-  // declares `permissions`, which the `permissions` macro expands to
-  // `validateAuth: true` (see permissionMacro in lib/auth.ts). Elysia
-  // expands each macro call site into its own resolve hook (dedup is only
-  // within a single call's hook object, not across guard / group /
-  // route-level sites), so a redundant bare guard here would add a
-  // second, fully independent `validateAuth` resolve to every request.
-  // See tests/security/redundant-validate-auth-guard.test.ts.
-  //
-  // The 3 routes below (outside the `/:workspaceId` group) also repeat
-  // `validateAuth: true` alongside `permissions`. This is a type-only
-  // workaround, not a behavioral duplicate: `permissions` is a
-  // function-form macro (see "Known Elysia Gotchas" in AGENTS.md), so the
-  // `validateAuth: true` it returns internally isn't picked up by
-  // Elysia's type-level context composition — only a literal
-  // `validateAuth`/`validateWorkspaceAccess` key at the same call site is.
-  // Runtime dedup (same call's hook object) and the per-request
-  // memoization in `resolveValidateAuth` mean this does not add a second
-  // resolve. Routes inside the group below don't need this: the group's
-  // own `validateWorkspaceAccess: true` already supplies the literal key.
+  // Kept deliberately: this guard is the type-level carrier of
+  // `validateAuth` for Elysia's context composition. `permissions` is a
+  // function-form macro (see "Known Elysia Gotchas" in AGENTS.md) that
+  // applies `validateAuth` at runtime but not in type composition, so a
+  // per-route `validateAuth: true` literal instead of this guard breaks
+  // sibling macros' schema merging (e.g. `invalidateQuery`'s body
+  // extension). The per-request memoization in `resolveValidateAuth`
+  // (lib/auth.ts) neutralizes the extra resolve this guard stacks on top
+  // of `permissions`. See tests/security/route-auth-invariants.test.ts.
+  .guard({
+    validateAuth: true,
+  })
   .get("/", readWorkspaces.handler, {
     permissions: readWorkspaces.config.permissions,
-    validateAuth: true,
   })
   .get("/navigation", readWorkspaceNavigation.handler, {
     permissions: readWorkspaceNavigation.config.permissions,
-    validateAuth: true,
   })
   .put("/", createWorkspaces.handler, {
     body: createWorkspaces.config.body,
     invalidateQuery: true,
     permissions: createWorkspaces.config.permissions,
-    validateAuth: true,
   })
   .get("/active", readActiveWorkspace.handler, {
     permissions: readActiveWorkspace.config.permissions,
-    validateAuth: true,
   })
   .group(
     "/:workspaceId",
