@@ -181,18 +181,20 @@ export const GroupedTableLayout = ({
     () => resolveDocumentTypeClassifier(properties),
     [properties],
   );
-  const isDocTypeGrouping =
+  const classifierPropertyId =
     groupByPropertyId !== null &&
-    documentTypeClassifier?.id === groupByPropertyId;
+    documentTypeClassifier?.id === groupByPropertyId
+      ? groupByPropertyId
+      : null;
   const gateLabelsByColumnId = useMemo(
     () =>
-      isDocTypeGrouping && documentTypeClassifier !== undefined
+      classifierPropertyId !== null
         ? buildDocTypeGateLabels({
             properties,
-            classifierPropertyId: documentTypeClassifier.id,
+            classifierPropertyId,
           })
         : EMPTY_DOC_TYPE_GATE,
-    [isDocTypeGrouping, properties, documentTypeClassifier],
+    [classifierPropertyId, properties],
   );
   // The whole-view "+ new document" row carries the common (ungated) columns: a
   // freshly created, unclassified document has no document type, so no playbook
