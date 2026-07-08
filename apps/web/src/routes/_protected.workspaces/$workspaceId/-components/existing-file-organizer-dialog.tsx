@@ -142,6 +142,7 @@ export const ExistingFileOrganizerDialog = ({
   const [cachedSuggestions, setCachedSuggestions] =
     useState<OrganizerCache | null>(null);
   const [showDeleteSection, setShowDeleteSection] = useState(true);
+  const suggestionRequestTokenRef = useRef(0);
 
   const isGeneratingSuggestions = suggestionStatus === "generating";
   const selectedDeleteFolders = deleteFolders.filter(
@@ -202,6 +203,10 @@ export const ExistingFileOrganizerDialog = ({
       }),
     [existingFolders, files],
   );
+  const getSuggestionRequestState = useEffectEvent(() => ({
+    open,
+    requestKey,
+  }));
   const suggestionRequestFolders = useMemo(
     () =>
       existingFolders.map((folder) => ({
@@ -512,6 +517,8 @@ export const ExistingFileOrganizerDialog = ({
   };
 
   const requestAiSuggestions = async () => {
+    const requestToken = suggestionRequestTokenRef.current + 1;
+    suggestionRequestTokenRef.current = requestToken;
     setCachedSuggestions(null);
     setRows(initialRows);
     setDeleteFolders([]);
@@ -579,6 +586,14 @@ export const ExistingFileOrganizerDialog = ({
         reason: folder.reason,
         selected: true,
       }));
+      const latestRequestState = getSuggestionRequestState();
+      if (
+        suggestionRequestTokenRef.current !== requestToken ||
+        !latestRequestState.open ||
+        latestRequestState.requestKey !== requestKey
+      ) {
+        return;
+      }
 
       setRows(nextRows);
       setDeleteFolders(nextDeleteFolders);
@@ -589,6 +604,14 @@ export const ExistingFileOrganizerDialog = ({
       });
       setSuggestionStatus("ready");
     } catch (error) {
+      const latestRequestState = getSuggestionRequestState();
+      if (
+        suggestionRequestTokenRef.current !== requestToken ||
+        !latestRequestState.open ||
+        latestRequestState.requestKey !== requestKey
+      ) {
+        return;
+      }
       analytics.captureError(error);
       setSuggestionStatus("failed");
     }

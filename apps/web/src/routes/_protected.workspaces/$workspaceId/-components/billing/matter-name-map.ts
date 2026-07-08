@@ -14,7 +14,7 @@ export const useMatterNameMap = (workspaceId: string) => {
 
   const map = new Map<string, string>();
   for (const summary of summaries) {
-    map.set(summary.id, summary.name ?? "");
+    map.set(summary.id, summary.name ?? summary.id);
   }
   return map;
 };
