@@ -167,6 +167,7 @@ type DatePickerPopoverProps = {
   placeholderLabel?: string;
   clearLabel?: string;
   defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
   /** Label for the "go to today" button. Auto-localized from the locale when omitted. */
   todayLabel?: string;
   overdueLabel?: string;
@@ -184,6 +185,7 @@ function DatePickerPopover({
   placeholderLabel,
   clearLabel = "Clear date",
   defaultOpen = false,
+  onOpenChange,
   todayLabel: todayLabelProp,
   overdueLabel,
   minDate,
@@ -425,6 +427,7 @@ function DatePickerPopover({
 
   // Reset view state when the popover closes so reopening always shows the day grid
   const handleOpenChange = (open: boolean) => {
+    onOpenChange?.(open);
     if (!open) {
       setView("days");
       setDecadeBase(decadeStart(viewYear));

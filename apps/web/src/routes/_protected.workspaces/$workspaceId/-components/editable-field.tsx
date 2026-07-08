@@ -431,6 +431,11 @@ const InlineDateEditor = ({
   const picker = (
     <DatePickerPopover
       defaultOpen
+      onOpenChange={(open) => {
+        if (!open) {
+          setEditing(false);
+        }
+      }}
       onChange={(newValue) => {
         // Skip no-op saves to avoid unnecessary API calls and AI workflow re-runs
         if (newValue !== value) {
@@ -692,7 +697,7 @@ const TableFileField = ({
   const isDisplayable = isFileDisplayable({
     mimeType: content.mimeType,
     fileName: content.fileName,
-    pdfFileId: content.pdfFileId,
+    pdfFileId: content.pdfFileId ?? null,
     encrypted: content.encrypted,
   });
   const openFile = useInspectorStore((s) => s.openFile);
