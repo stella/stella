@@ -186,7 +186,7 @@ export const GroupedTableLayout = ({
     documentTypeClassifier?.id === groupByPropertyId;
   const gateLabelsByColumnId = useMemo(
     () =>
-      isDocTypeGrouping && documentTypeClassifier !== null
+      isDocTypeGrouping && documentTypeClassifier !== undefined
         ? buildDocTypeGateLabels({
             properties,
             classifierPropertyId: documentTypeClassifier.id,
