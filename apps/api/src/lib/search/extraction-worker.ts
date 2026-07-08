@@ -18,6 +18,9 @@
 import { PDF } from "@libpdf/core";
 import { load } from "cheerio";
 
+import { FolioDocxReviewer } from "@stll/folio-core/server";
+
+import { extractText as extractDocxText } from "@/api/handlers/docx/extract-text";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -27,7 +30,6 @@ import {
   type EmailAttachment,
 } from "@/api/handlers/files/email-to-html";
 import { LIMITS } from "@/api/lib/limits";
-import { extractFolioBlockTextFromDocxBuffer } from "@/api/lib/workflow/docx-blocks";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const EMAIL_ATTACHMENT_MAX_COUNT = 25;
@@ -90,6 +92,35 @@ const extractDirectText = (fileBytes: Uint8Array, mimeType: string): string => {
   $("br").replaceWith("\n");
   $("p, div, tr, li, blockquote, h1, h2, h3, h4, h5, h6").append("\n");
   return normalizeExtractedText($.root().text());
+};
+
+const joinDocxContentWithReservedNotes = ({
+  content,
+  maxChars,
+  notes,
+}: {
+  content: string;
+  maxChars: number;
+  notes: string;
+}): string => {
+  if (content.trim().length === 0) {
+    return notes;
+  }
+  if (notes.trim().length === 0) {
+    return content;
+  }
+
+  const separator = "\n";
+  if (notes.length >= maxChars) {
+    return notes.slice(0, maxChars);
+  }
+
+  const contentMaxChars = maxChars - notes.length - separator.length;
+  if (contentMaxChars <= 0) {
+    return notes.slice(0, maxChars);
+  }
+
+  return `${content.slice(0, contentMaxChars)}${separator}${notes}`;
 };
 
 const extractEmailPlaintext = async ({
@@ -178,7 +209,15 @@ const extract = async (
   if (normalizedMimeType === PDF_MIME_TYPE) {
     text = await extractPdfPlaintext(fileBytes);
   } else if (normalizedMimeType === DOCX_MIME_TYPE) {
-    text = await extractFolioBlockTextFromDocxBuffer(fileBytes);
+    const [documentText, reviewer] = await Promise.all([
+      extractDocxText(fileBytes),
+      FolioDocxReviewer.fromBuffer(toArrayBuffer(fileBytes)),
+    ]);
+    const content = documentText.paragraphs
+      .map((paragraph) => paragraph.text)
+      .join("\n");
+    const notes = reviewer.getNotesAsText();
+    text = joinDocxContentWithReservedNotes({ content, maxChars, notes });
   } else if (isDirectTextMimeType(normalizedMimeType)) {
     text = extractDirectText(fileBytes, normalizedMimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {

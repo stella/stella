@@ -2,9 +2,14 @@ import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import {
+  ADD_COMMENT_TOOL_NAME,
   createFolioAgentDocTools,
   FIND_TEXT_TOOL_NAME,
+  READ_CHANGES_TOOL_NAME,
+  READ_COMMENTS_TOOL_NAME,
   READ_DOCUMENT_TOOL_NAME,
+  REPLY_COMMENT_TOOL_NAME,
+  RESOLVE_COMMENT_TOOL_NAME,
 } from "./folio-agent-tools.js";
 
 type ToolInputJsonSchema = {
@@ -18,36 +23,67 @@ const hasToolInputJsonSchema = (
 ): schema is ToolInputJsonSchema =>
   typeof schema === "object" && schema !== null;
 
-// `createFolioAgentDocTools()` takes no gating input — it always builds
-// both tools. The `hasActiveDocxFileClient`-gated registration (only the
-// file overlay, never Template Studio) is exercised where the gate
-// actually lives: `getChatTools` in `tool-schema.test.ts` ("registers the
-// folio-agents read_document/find_text tools only when the file-overlay
-// docx client is active").
+const READ_TOOL_NAMES = [
+  READ_DOCUMENT_TOOL_NAME,
+  FIND_TEXT_TOOL_NAME,
+  READ_CHANGES_TOOL_NAME,
+  READ_COMMENTS_TOOL_NAME,
+];
+const MUTATION_TOOL_NAMES = [
+  ADD_COMMENT_TOOL_NAME,
+  REPLY_COMMENT_TOOL_NAME,
+  RESOLVE_COMMENT_TOOL_NAME,
+];
+
+// `createFolioAgentDocTools()` takes no gating input — it always builds the
+// full live-editor tool set. The `hasActiveDocxFileClient`-gated registration
+// (only the file overlay, never Template Studio) is exercised where the gate
+// actually lives: `getChatTools` in `tool-schema.test.ts`.
 describe("createFolioAgentDocTools", () => {
-  test("registers exactly read_document and find_text", () => {
+  test("registers the read tools and the comment-mutation tools", () => {
     const tools = createFolioAgentDocTools();
     expect(Object.keys(tools).sort()).toEqual(
-      [FIND_TEXT_TOOL_NAME, READ_DOCUMENT_TOOL_NAME].sort(),
+      [...READ_TOOL_NAMES, ...MUTATION_TOOL_NAMES].sort(),
     );
   });
 
   test("exposes the exact tool names @stll/folio-agents defines", () => {
     expect(READ_DOCUMENT_TOOL_NAME).toBe("read_document");
     expect(FIND_TEXT_TOOL_NAME).toBe("find_text");
+    expect(READ_CHANGES_TOOL_NAME).toBe("read_changes");
+    expect(READ_COMMENTS_TOOL_NAME).toBe("read_comments");
+    expect(ADD_COMMENT_TOOL_NAME).toBe("add_comment");
+    expect(REPLY_COMMENT_TOOL_NAME).toBe("reply_comment");
+    expect(RESOLVE_COMMENT_TOOL_NAME).toBe("resolve_comment");
   });
 
-  test("does not register any other folio-agents tool (comments/changes/mutations/live-editor)", () => {
+  test("does not register suggest_changes or the navigation-only tools", () => {
     const tools = createFolioAgentDocTools();
-    expect("read_comments" in tools).toBe(false);
-    expect("read_changes" in tools).toBe(false);
-    expect("add_comment" in tools).toBe(false);
     expect("suggest_changes" in tools).toBe(false);
-    expect("reply_comment" in tools).toBe(false);
-    expect("resolve_comment" in tools).toBe(false);
     expect("read_page" in tools).toBe(false);
     expect("read_selection" in tools).toBe(false);
     expect("scroll_to_block" in tools).toBe(false);
+  });
+
+  test("read tools carry no needsApproval (auto-run, read-only)", () => {
+    const tools = createFolioAgentDocTools();
+    for (const name of READ_TOOL_NAMES) {
+      expect(tools[name].needsApproval).toBeUndefined();
+    }
+  });
+
+  test("comment-mutation tools carry needsApproval: true", () => {
+    const tools = createFolioAgentDocTools();
+    for (const name of MUTATION_TOOL_NAMES) {
+      expect(tools[name].needsApproval).toBe(true);
+    }
+  });
+
+  test("no `.server()` is applied — every tool is client-executed", () => {
+    const tools = createFolioAgentDocTools();
+    for (const tool of Object.values(tools)) {
+      expect(tool.execute).toBeUndefined();
+    }
   });
 
   test("survives JSON-Schema conversion for read_document (empty object schema)", () => {
@@ -78,17 +114,15 @@ describe("createFolioAgentDocTools", () => {
     expect(jsonSchema.additionalProperties).toBe(false);
   });
 
-  test("no `.server()` is applied — tools are client-executed with no execute fn", () => {
+  test("survives JSON-Schema conversion for add_comment (has a schema)", () => {
     const tools = createFolioAgentDocTools();
-    for (const tool of Object.values(tools)) {
-      expect(tool.execute).toBeUndefined();
+    const jsonSchema = convertSchemaToJsonSchema(
+      tools[ADD_COMMENT_TOOL_NAME].inputSchema,
+    );
+    if (!hasToolInputJsonSchema(jsonSchema)) {
+      throw new Error("Expected add_comment JSON schema");
     }
-  });
-
-  test("no needsApproval is set on either tool (read-only, no-approval)", () => {
-    const tools = createFolioAgentDocTools();
-    for (const tool of Object.values(tools)) {
-      expect(tool.needsApproval).toBeUndefined();
-    }
+    expect(jsonSchema.type).toBe("object");
+    expect(jsonSchema.properties).toBeDefined();
   });
 });

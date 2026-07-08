@@ -48,6 +48,23 @@ describe("chat tool titles", () => {
     expect(getChatToolTitleKey("read-contact")).toBe("chat.tool.read-contact");
   });
 
+  test("maps the folio-agents comment/changes and version-compare tools", () => {
+    expect(getChatToolTitleKey("read_changes")).toBe("chat.tool.read_changes");
+    expect(getChatToolTitleKey("read_comments")).toBe(
+      "chat.tool.read_comments",
+    );
+    expect(getChatToolTitleKey("add_comment")).toBe("chat.tool.add_comment");
+    expect(getChatToolTitleKey("reply_comment")).toBe(
+      "chat.tool.reply_comment",
+    );
+    expect(getChatToolTitleKey("resolve_comment")).toBe(
+      "chat.tool.resolve_comment",
+    );
+    expect(getChatToolTitleKey("compare_versions")).toBe(
+      "chat.tool.compare_versions",
+    );
+  });
+
   test("uses the translated unknown fallback for unknown tools", () => {
     expect(getChatToolTitleKey("searchCaseLaw")).toBe("chat.tool.unknown");
   });
@@ -424,6 +441,34 @@ describe("isUnresolvedFolioAgentDocToolCallPart", () => {
     };
 
     expect(isUnresolvedFolioAgentDocToolCallPart(part)).toBe(true);
+  });
+
+  test("matches completed read_changes and read_comments calls (auto-run)", () => {
+    for (const name of ["read_changes", "read_comments"]) {
+      const part = {
+        arguments: "{}",
+        id: `tool-call-${name}`,
+        input: {},
+        state: "input-complete",
+        name,
+        type: "tool-call",
+      };
+      expect(isUnresolvedFolioAgentDocToolCallPart(part)).toBe(true);
+    }
+  });
+
+  test("ignores the comment-mutation tools (approval-gated, not auto-run)", () => {
+    for (const name of ["add_comment", "reply_comment", "resolve_comment"]) {
+      const part = {
+        arguments: "{}",
+        id: `tool-call-${name}`,
+        input: {},
+        state: "input-complete",
+        name,
+        type: "tool-call",
+      };
+      expect(isUnresolvedFolioAgentDocToolCallPart(part)).toBe(false);
+    }
   });
 
   test("ignores a read_document call still streaming its input", () => {

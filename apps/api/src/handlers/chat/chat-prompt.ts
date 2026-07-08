@@ -947,6 +947,9 @@ const buildActiveDocxEditPrompt = (
     toolAvailability.folioAgentDocTools
       ? "LIVE DOCUMENT LOOKUPS: The block list below is current as of this turn only — it will not reflect edits you queue in this same turn. Reach for `read_document` (a fresh read of the current document) or `find_text` (locate an exact string match) only when the truncation notice above applies (blocks past the cutoff) or you need to confirm a verbatim match before referencing a `blockId`; for ordinary edits the block list below is already sufficient, so do not call either tool by default."
       : null,
+    toolAvailability.folioAgentDocTools
+      ? "COMMENTS & TRACKED CHANGES: Use `read_comments` to list the document's comment threads and `read_changes` to list its pending tracked insertions/deletions when the user asks about review state or existing feedback. To act on comments, use `add_comment` (attach a new comment to a block), `reply_comment` (respond in an existing thread), or `resolve_comment` (mark a thread resolved / reopen it) — each needs the user to approve before it applies, so state plainly what you will do and wait. Prefer `apply-active-docx-edits` for editing the document text itself; use the comment tools only for commentary and review actions."
+      : null,
     ["Editable DOCX blocks:", "```json", JSON.stringify(blocks), "```"].join(
       "\n",
     ),

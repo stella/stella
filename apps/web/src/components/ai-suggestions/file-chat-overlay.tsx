@@ -60,13 +60,16 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   getActiveDocxEditApprovalPart,
+  isApprovalPart,
   parseCompletedToolCallArguments,
   selectUnresolvedFolioAgentDocToolCallParts,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
+  ApprovalToolPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
+import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -639,6 +642,18 @@ const queueReviewSuggestions = ({
 // the legitimate "create a new document from this chat" flow.
 const ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS = new Set<ApprovalToolName>();
 
+// The folio-agents comment MUTATION tools: client-executed against the live
+// editor bridge, but behind approval (unlike the auto-run read tools). After
+// the user approves, the overlay executes them via `executeFolioToolCall`, the
+// same shape as `apply-active-docx-edits`. Names mirror the server-side
+// registration in `folio-agent-tools.ts`; kept as local literals like the
+// other tool names this surface matches on.
+const FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES = new Set<string>([
+  "add_comment",
+  "reply_comment",
+  "resolve_comment",
+]);
+
 // Stable empty context returned by `getContextMatterIds` before the picker
 // has seeded (its state is `string[] | null`). A named constant, not a `?? []`
 // literal: an unseeded thread has no selected matters, which is a real state,
@@ -662,6 +677,16 @@ type FileChatOverlayProps = {
   docxEditable?: boolean | undefined;
   requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
   /**
+   * The host's controlled `DocxEditor` `comments` state. The folio-agents
+   * comment tools (`read_comments`, `add_comment`, `reply_comment`,
+   * `resolve_comment`) drive the editor bridge, whose `getComments` reads this
+   * and whose `setComments` calls {@link onDocxCommentsChange}. Undefined on
+   * surfaces that do not wire the round-trip (the comment tools then read/write
+   * an empty list, matching a document with no host comment state).
+   */
+  docxComments?: DocxComments | undefined;
+  onDocxCommentsChange?: ((comments: DocxComments) => void) | undefined;
+  /**
    * Invoked when the user explicitly starts a new thread from the
    * overlay UI. Owners should swap the `chatThreadId` they pass in
    * for a fresh value.
@@ -678,6 +703,8 @@ export const FileChatOverlay = ({
   activeExternal,
   docxEditable,
   docxEditorRef,
+  docxComments,
+  onDocxCommentsChange,
   onNewThread,
   requestDocxEditMode,
 }: FileChatOverlayProps) => {
@@ -704,8 +731,10 @@ export const FileChatOverlay = ({
       <Suspense fallback={fallback}>
         <ResolvedFileChatOverlay
           activeFile={{ ...activeFile, fileFieldId }}
+          docxComments={docxComments}
           docxEditable={docxEditable}
           docxEditorRef={docxEditorRef}
+          onDocxCommentsChange={onDocxCommentsChange}
           onNewThread={onNewThread}
           requestDocxEditMode={requestDocxEditMode}
           workspaceId={workspaceId}
@@ -720,8 +749,10 @@ export const FileChatOverlay = ({
         activeExternal={activeExternal}
         activeFile={activeFile}
         chatThreadId={chatThreadId}
+        docxComments={docxComments}
         docxEditable={docxEditable}
         docxEditorRef={docxEditorRef}
+        onDocxCommentsChange={onDocxCommentsChange}
         onNewThread={onNewThread}
         requestDocxEditMode={requestDocxEditMode}
         workspaceId={workspaceId}
@@ -740,8 +771,10 @@ type ResolvedFileChatOverlayProps = Omit<
 
 const ResolvedFileChatOverlay = ({
   activeFile,
+  docxComments,
   docxEditable,
   docxEditorRef,
+  onDocxCommentsChange,
   onNewThread,
   requestDocxEditMode,
   workspaceId,
@@ -764,8 +797,10 @@ const ResolvedFileChatOverlay = ({
     <FileChatOverlayInner
       activeFile={activeFile}
       chatThreadId={chatThreadId}
+      docxComments={docxComments}
       docxEditable={docxEditable}
       docxEditorRef={docxEditorRef}
+      onDocxCommentsChange={onDocxCommentsChange}
       onNewThread={onNewThread}
       requestDocxEditMode={requestDocxEditMode}
       workspaceId={workspaceId}
@@ -784,6 +819,8 @@ const FileChatOverlayInner = ({
   activeExternal,
   docxEditable,
   docxEditorRef,
+  docxComments,
+  onDocxCommentsChange,
   onNewThread,
 }: FileChatOverlayInnerProps) => {
   const t = useTranslations();
@@ -829,6 +866,10 @@ const FileChatOverlayInner = ({
     () => contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
   );
   const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
+  const latestDocxCommentsRef = useRef<DocxComments>(docxComments ?? []);
+  useLayoutEffect(() => {
+    latestDocxCommentsRef.current = docxComments ?? [];
+  }, [docxComments]);
   const hasDocxEditSurface =
     activeFile !== undefined && docxEditorRef !== undefined;
   // Folio's PM view exists almost immediately after DocxBrowserEditor
@@ -1208,6 +1249,104 @@ const FileChatOverlayInner = ({
     return false;
   });
 
+  // Build a folio-agents bridge over the live editor ref plus the host's
+  // controlled `comments` state. Both the read-tool auto-run watcher and the
+  // comment-mutation approval handler drive the same bridge, so `read_comments`
+  // sees the same threads `add_comment` / `reply_comment` / `resolve_comment`
+  // write. Returns null before the editor view mounts. The comments ref is
+  // updated synchronously on writes so back-to-back approved mutations compose
+  // before React commits the parent controlled-state update.
+  const createFolioAgentBridge = useEffectEvent(() => {
+    const ref = docxEditorRef?.current;
+    if (!ref) {
+      return null;
+    }
+    return createEditorRefBridge({
+      ref,
+      author: userContext.wordEditAuthorName,
+      getComments: () => latestDocxCommentsRef.current,
+      setComments: (comments) => {
+        latestDocxCommentsRef.current = comments;
+        onDocxCommentsChange?.(comments);
+      },
+    });
+  });
+
+  // Latest approval-requested/responded tool-call part matching the given
+  // approval id and tool name (newest message first). Used to recover the
+  // streamed input of a client-executed approval tool once the user approves.
+  const findFolioAgentApprovalPart = (
+    approvalId: string,
+    toolName: string,
+  ): ApprovalToolPart | null => {
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages.at(index);
+      if (!message || message.role !== "assistant") {
+        continue;
+      }
+      for (const part of message.parts) {
+        if (
+          isApprovalPart(part) &&
+          part.name === toolName &&
+          part.approval.id === approvalId
+        ) {
+          return part;
+        }
+      }
+    }
+    return null;
+  };
+
+  const runFolioAgentCommentMutationTool = async (part: ApprovalToolPart) => {
+    try {
+      const bridge = createFolioAgentBridge();
+      const args = parseCompletedToolCallArguments(part) ?? {};
+      const output = bridge
+        ? await Promise.resolve(executeFolioToolCall(part.name, args, bridge))
+        : { ok: false, error: "No document is open." };
+      await addToolResult({ output, tool: part.name, toolCallId: part.id });
+    } catch (toolCallError) {
+      getAnalytics().captureError(toolCallError);
+      try {
+        await addToolResult({
+          output: {
+            ok: false,
+            error:
+              toolCallError instanceof Error
+                ? toolCallError.message
+                : String(toolCallError),
+          },
+          tool: part.name,
+          toolCallId: part.id,
+        });
+      } catch (reportError) {
+        getAnalytics().captureError(reportError);
+      }
+    }
+  };
+
+  const approveAndRunFolioAgentCommentMutation = async ({
+    approvalId,
+    approve,
+    toolName,
+  }: {
+    approvalId: string;
+    approve: () => Promise<void>;
+    toolName: ApprovalToolName;
+  }) => {
+    if (!FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.has(toolName)) {
+      await approve();
+      return;
+    }
+
+    const part = findFolioAgentApprovalPart(approvalId, toolName);
+    await approve();
+    if (!part) {
+      return;
+    }
+    await runFolioAgentCommentMutationTool(part);
+  };
+
   const handleApproveWithDocxUnlock = async (
     approvalId: string,
     toolName: ApprovalToolName,
@@ -1235,14 +1374,52 @@ const FileChatOverlayInner = ({
       return;
     }
 
+    // folio-agents comment mutations are client-executed behind approval: once
+    // the user approves, run the operation against the live editor bridge and
+    // answer the tool call with its result (same shape as apply-active-docx-
+    // edits). The read tools never reach here — they are auto-run, no approval.
+    if (FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.has(toolName)) {
+      await approveAndRunFolioAgentCommentMutation({
+        approvalId,
+        approve: async () => await handleApprove(approvalId, toolName),
+        toolName,
+      });
+      return;
+    }
+
     await handleApprove(approvalId, toolName);
   };
 
-  // Auto-run watcher for the client-executed, no-approval folio-agents doc
-  // tools (`read_document` / `find_text`). Nothing else in the runtime
-  // resolves these — there is no approval click to gate re-entrancy the way
-  // `handleApproveWithDocxUnlock` is, so this effect tracks which
-  // `toolCallId`s it has already dispatched itself.
+  const handleAllowInConversationWithFolioAgentCommentExecution = async (
+    approvalId: string,
+    toolName: ApprovalToolName,
+  ) => {
+    await approveAndRunFolioAgentCommentMutation({
+      approvalId,
+      approve: async () =>
+        await handleAllowInConversation(approvalId, toolName),
+      toolName,
+    });
+  };
+
+  const handleAlwaysAllowWithFolioAgentCommentExecution = async (
+    approvalId: string,
+    toolName: ApprovalToolName,
+  ) => {
+    await approveAndRunFolioAgentCommentMutation({
+      approvalId,
+      approve: async () => await handleAlwaysAllow(approvalId, toolName),
+      toolName,
+    });
+  };
+
+  // Auto-run watcher for the client-executed, no-approval folio-agents read
+  // tools (`read_document` / `find_text` / `read_changes` / `read_comments`).
+  // Nothing else in the runtime resolves these — there is no approval click to
+  // gate re-entrancy the way `handleApproveWithDocxUnlock` is, so this effect
+  // tracks which `toolCallId`s it has already dispatched itself. The comment
+  // MUTATION tools are approval-gated and never flow through here (they are
+  // excluded from `selectUnresolvedFolioAgentDocToolCallParts`).
   const executedFolioAgentDocToolCallIdsRef = useRef<Set<string>>(new Set());
   const runFolioAgentDocToolCall = useEffectEvent(
     async (part: UnresolvedFolioAgentDocToolCallPart) => {
@@ -1250,9 +1427,10 @@ const FileChatOverlayInner = ({
         // Read the ref fresh on every call rather than capturing it in a
         // memo: `docxEditorRef.current` can change identity (remount,
         // editor swap) between when this effect schedules the call and
-        // when it actually runs.
-        const ref = docxEditorRef?.current;
-        if (!ref) {
+        // when it actually runs. `read_comments` reads the host's controlled
+        // comment state through the same bridge the mutation tools write.
+        const bridge = createFolioAgentBridge();
+        if (!bridge) {
           await addToolResult({
             tool: part.name,
             toolCallId: part.id,
@@ -1261,17 +1439,6 @@ const FileChatOverlayInner = ({
           return;
         }
 
-        // Comment tools (`read_comments`, `add_comment`, …) are never
-        // registered server-side (see `folio-agent-tools.ts`), so the model
-        // can never call them — these no-op accessors only satisfy the
-        // bridge's required shape.
-        const bridge = createEditorRefBridge({
-          ref,
-          author: userContext.wordEditAuthorName,
-          getComments: () => [],
-          // oxlint-disable-next-line no-empty-function -- intentional no-op: read_document/find_text never mutate comments, so this setter is never invoked
-          setComments: () => {},
-        });
         const args = parseCompletedToolCallArguments(part) ?? {};
         const result = await Promise.resolve(
           executeFolioToolCall(part.name, args, bridge),
@@ -1388,8 +1555,9 @@ const FileChatOverlayInner = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
-          handleAllowInConversation,
-          handleAlwaysAllow,
+          handleAllowInConversation:
+            handleAllowInConversationWithFolioAgentCommentExecution,
+          handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
           handleApprove: handleApproveWithDocxUnlock,
           handleDeny,
           blockedApprovalTools,

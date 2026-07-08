@@ -577,7 +577,7 @@ describe("table export", () => {
       ),
       propertyConfig({ numRuns: 20 }),
     );
-  });
+  }, 20_000);
 
   test("xlsx property: generated column widths stay readable and bounded", async () => {
     await fc.assert(

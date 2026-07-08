@@ -18,6 +18,7 @@ import { startTransition, useState } from "react";
 
 import type { DocxEditorRef } from "@stll/folio-react";
 
+import type { DocxComments } from "@/components/docx/app-docx-editor";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -65,6 +66,13 @@ export type FileViewerWithAIProps = {
   className?: string;
   /** Live Folio editor ref used by the overlay's DOCX edit tool. */
   docxEditorRef?: RefObject<DocxEditorRef | null> | undefined;
+  /**
+   * The host's controlled `DocxEditor` `comments` state and its setter,
+   * forwarded to the overlay's folio-agents comment tools (read/add/reply/
+   * resolve). Omit on viewers that do not wire the comment round-trip.
+   */
+  docxComments?: DocxComments | undefined;
+  onDocxCommentsChange?: ((comments: DocxComments) => void) | undefined;
   /** Whether the current DOCX session may accept AI edit operations. */
   docxEditable?: boolean | undefined;
   /** Request editable DOCX mode before applying a confirmed AI edit. */
@@ -85,6 +93,8 @@ export const FileChatOverlayHost = ({
   activeExternal,
   docxEditable,
   docxEditorRef,
+  docxComments,
+  onDocxCommentsChange,
   requestDocxEditMode,
 }: FileChatOverlayHostProps) => {
   const [currentChatThreadId, setCurrentChatThreadId] =
@@ -113,8 +123,10 @@ export const FileChatOverlayHost = ({
       activeExternal={activeExternal}
       activeFile={activeFile}
       chatThreadId={currentChatThreadId}
+      docxComments={docxComments}
       docxEditable={docxEditable}
       docxEditorRef={docxEditorRef}
+      onDocxCommentsChange={onDocxCommentsChange}
       onNewThread={handleNewThread}
       requestDocxEditMode={requestDocxEditMode}
       workspaceId={workspaceId}
