@@ -97,16 +97,17 @@ const isClassifierShape = (property: PropertyMappingRow): boolean =>
   property.content.type === "single-select" &&
   property.tool?.type === "ai-model";
 
+const isLegacyClassifier = (property: PropertyMappingRow): boolean =>
+  property.role === null &&
+  normalizePropertyName(property.name) === "document type" &&
+  isClassifierShape(property);
+
 const isSourceClassifier = (property: PropertyMappingRow): boolean => {
   if (property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE) {
     return true;
   }
 
-  return (
-    property.role === null &&
-    normalizePropertyName(property.name) === "document type" &&
-    isClassifierShape(property)
-  );
+  return isLegacyClassifier(property);
 };
 
 const findTargetClassifierId = (
@@ -119,9 +120,7 @@ const findTargetClassifierId = (
     return tagged.id;
   }
 
-  const legacyCandidates = targetProperties.filter(
-    (property) => property.role === null && isClassifierShape(property),
-  );
+  const legacyCandidates = targetProperties.filter(isLegacyClassifier);
   return legacyCandidates.length === 1 ? legacyCandidates[0]?.id : undefined;
 };
 
