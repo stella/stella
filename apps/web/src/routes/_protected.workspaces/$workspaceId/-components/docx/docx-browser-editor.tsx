@@ -1064,6 +1064,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     setAutosaveStatus,
   ]);
 
+  const handleAiDocxCommentsChange = useCallback(
+    (comments: DocxComments) => {
+      setDocxComments(comments);
+      handleChange();
+    },
+    [handleChange],
+  );
+
   const handleFinalize = useCallback(async () => {
     // Save the final version before finalizing
     clearQueuedChangeCheckpoint();
@@ -1515,7 +1523,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
           docxComments={docxComments}
           docxEditable={isUnlocked}
           docxEditorRef={editorRef}
-          onDocxCommentsChange={setDocxComments}
+          onDocxCommentsChange={handleAiDocxCommentsChange}
           requestDocxEditMode={requestEditMode}
           workspaceId={workspaceId}
         >

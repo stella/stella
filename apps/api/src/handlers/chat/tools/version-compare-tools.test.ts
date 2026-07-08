@@ -18,6 +18,10 @@ const organizationId = toSafeId<"organization">(
 const workspaceId = toSafeId<"workspace">(
   "22222222-2222-4222-8222-222222222222",
 );
+const entityId = toSafeId<"entity">("55555555-5555-4555-8555-555555555555");
+const otherEntityId = toSafeId<"entity">(
+  "66666666-6666-4666-8666-666666666666",
+);
 const baseVersionId = "33333333-3333-4333-8333-333333333333";
 const revisedVersionId = "44444444-4444-4444-8444-444444444444";
 
@@ -29,7 +33,7 @@ const toolWorkspaceIds = resolveToolWorkspaceIds({
 const mockDocxFieldContent = {
   version: 1,
   type: "file",
-  id: "55555555-5555-4555-8555-555555555555",
+  id: "77777777-7777-4777-8777-777777777777",
   fileName: "document.docx",
   mimeType: DOCX_MIME_TYPE,
   sizeBytes: 1,
@@ -42,7 +46,10 @@ const mockDocxFieldContent = {
 // map (undefined = the workspace-scoped lookup found nothing) and provides a
 // DOCX file field when a version does resolve.
 const createSafeDb = (
-  versionsById: Record<string, { workspaceId: typeof workspaceId } | undefined>,
+  versionsById: Record<
+    string,
+    { entityId: typeof entityId; workspaceId: typeof workspaceId } | undefined
+  >,
 ): SafeDb => {
   const tx = {
     query: {
@@ -107,7 +114,7 @@ describe("createVersionCompareTools", () => {
       getExecute(
         createSafeDb({
           [baseVersionId]: undefined,
-          [revisedVersionId]: { workspaceId },
+          [revisedVersionId]: { entityId, workspaceId },
         }),
       ),
     );
@@ -118,7 +125,7 @@ describe("createVersionCompareTools", () => {
     const message = await runAndCaptureMessage(
       getExecute(
         createSafeDb({
-          [baseVersionId]: { workspaceId },
+          [baseVersionId]: { entityId, workspaceId },
           [revisedVersionId]: undefined,
         }),
       ),
@@ -126,5 +133,17 @@ describe("createVersionCompareTools", () => {
     expect(message).toMatch(
       /revised version was not found in your workspaces/iu,
     );
+  });
+
+  test("rejects versions from different documents", async () => {
+    const message = await runAndCaptureMessage(
+      getExecute(
+        createSafeDb({
+          [baseVersionId]: { entityId, workspaceId },
+          [revisedVersionId]: { entityId: otherEntityId, workspaceId },
+        }),
+      ),
+    );
+    expect(message).toMatch(/different documents/iu);
   });
 });

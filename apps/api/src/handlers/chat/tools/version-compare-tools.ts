@@ -59,6 +59,7 @@ type CreateVersionCompareToolsProps = {
 };
 
 type ResolvedVersionDocx = {
+  entityId: SafeId<"entity">;
   workspaceId: SafeId<"workspace">;
   fileId: string;
 };
@@ -96,7 +97,7 @@ const resolveVersionDocx = async (
         id: { eq: versionId },
         workspaceId: { in: toolWorkspaceIds },
       },
-      columns: { workspaceId: true },
+      columns: { entityId: true, workspaceId: true },
     }),
   );
 
@@ -135,7 +136,11 @@ const resolveVersionDocx = async (
     });
   }
 
-  return { workspaceId: version.value.workspaceId, fileId: file.id };
+  return {
+    entityId: version.value.entityId,
+    workspaceId: version.value.workspaceId,
+    fileId: file.id,
+  };
 };
 
 const loadVersionDocxBuffer = async (
@@ -185,6 +190,13 @@ export const createVersionCompareTools = ({
       resolveVersionDocx(safeDb, toolWorkspaceIds, baseId, "base"),
       resolveVersionDocx(safeDb, toolWorkspaceIds, revisedId, "revised"),
     ]);
+
+    if (base.entityId !== revised.entityId) {
+      throw new ChatToolError({
+        message:
+          "The base and revised versions belong to different documents.",
+      });
+    }
 
     const [baseBuffer, revisedBuffer] = await Promise.all([
       loadVersionDocxBuffer(organizationId, base),

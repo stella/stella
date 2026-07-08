@@ -1289,6 +1289,56 @@ const FileChatOverlayInner = ({
     return null;
   };
 
+  const runFolioAgentCommentMutationTool = async (part: ApprovalToolPart) => {
+    try {
+      const bridge = createFolioAgentBridge();
+      const args = parseCompletedToolCallArguments(part) ?? {};
+      const output = bridge
+        ? await Promise.resolve(executeFolioToolCall(part.name, args, bridge))
+        : { ok: false, error: "No document is open." };
+      await addToolResult({ output, tool: part.name, toolCallId: part.id });
+    } catch (toolCallError) {
+      getAnalytics().captureError(toolCallError);
+      try {
+        await addToolResult({
+          output: {
+            ok: false,
+            error:
+              toolCallError instanceof Error
+                ? toolCallError.message
+                : String(toolCallError),
+          },
+          tool: part.name,
+          toolCallId: part.id,
+        });
+      } catch (reportError) {
+        getAnalytics().captureError(reportError);
+      }
+    }
+  };
+
+  const approveAndRunFolioAgentCommentMutation = async ({
+    approvalId,
+    approve,
+    toolName,
+  }: {
+    approvalId: string;
+    approve: () => Promise<void>;
+    toolName: ApprovalToolName;
+  }) => {
+    if (!FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.has(toolName)) {
+      await approve();
+      return;
+    }
+
+    const part = findFolioAgentApprovalPart(approvalId, toolName);
+    await approve();
+    if (!part) {
+      return;
+    }
+    await runFolioAgentCommentMutationTool(part);
+  };
+
   const handleApproveWithDocxUnlock = async (
     approvalId: string,
     toolName: ApprovalToolName,
@@ -1321,40 +1371,37 @@ const FileChatOverlayInner = ({
     // answer the tool call with its result (same shape as apply-active-docx-
     // edits). The read tools never reach here — they are auto-run, no approval.
     if (FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.has(toolName)) {
-      const part = findFolioAgentApprovalPart(approvalId, toolName);
-      await handleApprove(approvalId, toolName);
-      if (!part) {
-        return;
-      }
-      try {
-        const bridge = createFolioAgentBridge();
-        const args = parseCompletedToolCallArguments(part) ?? {};
-        const output = bridge
-          ? await Promise.resolve(executeFolioToolCall(toolName, args, bridge))
-          : { ok: false, error: "No document is open." };
-        await addToolResult({ output, tool: toolName, toolCallId: part.id });
-      } catch (toolCallError) {
-        getAnalytics().captureError(toolCallError);
-        try {
-          await addToolResult({
-            output: {
-              ok: false,
-              error:
-                toolCallError instanceof Error
-                  ? toolCallError.message
-                  : String(toolCallError),
-            },
-            tool: toolName,
-            toolCallId: part.id,
-          });
-        } catch (reportError) {
-          getAnalytics().captureError(reportError);
-        }
-      }
+      await approveAndRunFolioAgentCommentMutation({
+        approvalId,
+        approve: () => handleApprove(approvalId, toolName),
+        toolName,
+      });
       return;
     }
 
     await handleApprove(approvalId, toolName);
+  };
+
+  const handleAllowInConversationWithFolioAgentCommentExecution = async (
+    approvalId: string,
+    toolName: ApprovalToolName,
+  ) => {
+    await approveAndRunFolioAgentCommentMutation({
+      approvalId,
+      approve: () => handleAllowInConversation(approvalId, toolName),
+      toolName,
+    });
+  };
+
+  const handleAlwaysAllowWithFolioAgentCommentExecution = async (
+    approvalId: string,
+    toolName: ApprovalToolName,
+  ) => {
+    await approveAndRunFolioAgentCommentMutation({
+      approvalId,
+      approve: () => handleAlwaysAllow(approvalId, toolName),
+      toolName,
+    });
   };
 
   // Auto-run watcher for the client-executed, no-approval folio-agents read
@@ -1499,8 +1546,9 @@ const FileChatOverlayInner = ({
           activeOrganizationId,
           alwaysApprovedTools,
           conversationApprovedTools,
-          handleAllowInConversation,
-          handleAlwaysAllow,
+          handleAllowInConversation:
+            handleAllowInConversationWithFolioAgentCommentExecution,
+          handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
           handleApprove: handleApproveWithDocxUnlock,
           handleDeny,
           blockedApprovalTools,
