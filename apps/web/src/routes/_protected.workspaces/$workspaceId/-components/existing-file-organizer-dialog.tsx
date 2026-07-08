@@ -235,13 +235,24 @@ export const ExistingFileOrganizerDialog = ({
       return;
     }
 
+    if (suggestionStatus === "generating") {
+      return;
+    }
+
     // Show the cheap, deterministic local suggestions immediately and
     // stay actionable. The expensive AI call only runs from the explicit
     // Generate/Regenerate button handler below.
     setRows(initialRows);
     setDeleteFolders([]);
     setSuggestionStatus("ready");
-  }, [cachedSuggestions, files, initialRows, open, requestKey]);
+  }, [
+    cachedSuggestions,
+    files,
+    initialRows,
+    open,
+    requestKey,
+    suggestionStatus,
+  ]);
 
   const updateRow = (
     id: string,

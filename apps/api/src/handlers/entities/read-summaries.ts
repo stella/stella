@@ -131,7 +131,7 @@ const config = {
 
 const countConfig = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "covered", by: "list_documents" },
   query: readEntitySummariesCountQuerySchema,
 } satisfies HandlerConfig;
 
