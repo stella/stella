@@ -6,35 +6,40 @@
  * default and switches to edit mode on click. Changes are committed
  * on blur/Enter and cancelled on Escape.
  *
- * Used in: PDF right panel, table cells (follow-up), inspector,
- * kanban cards.
+ * Used in: PDF right panel, table cells, inspector, kanban cards.
  */
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { isFileDisplayable } from "@/lib/types";
 import type {
   EntityKind,
   WorkspaceFieldContent,
   WorkspaceProperty,
   WorkspacePropertyOption,
 } from "@/lib/types";
+import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import {
   FieldValue,
+  type FieldValueVariant,
   IntFieldValue,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value";
 import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
+import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -42,9 +47,12 @@ type EditableFieldProps = {
   workspaceId: string;
   entityId: string;
   entityKind: EntityKind;
+  fieldId?: string | undefined;
   propertyId: string;
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
+  displayVariant?: FieldValueVariant | undefined;
+  pendingPreview?: string | null | undefined;
   readonly?: boolean;
   showDateIcon?: boolean;
   /** Fires after a successful manual save — used to lock AI cells. */
@@ -55,39 +63,71 @@ export const EditableField = ({
   workspaceId,
   entityId,
   entityKind,
+  fieldId,
   propertyId,
   property,
   content,
+  displayVariant,
+  pendingPreview,
   readonly = false,
   showDateIcon = true,
   onManualSave,
 }: EditableFieldProps) => {
   const type = property.content.type;
+  const resolvedDisplayVariant = displayVariant ?? "default";
 
   // Non-editable types
   if (
-    type === "file" ||
     content?.type === "error" ||
     content?.type === "pending" ||
     content?.type === "unsupported" ||
     content?.type === "clip"
   ) {
-    return <FieldValue content={content} property={property} />;
+    return (
+      <FieldValue
+        content={content}
+        pendingPreview={pendingPreview}
+        property={property}
+        variant={resolvedDisplayVariant}
+      />
+    );
+  }
+
+  if (type === "file" || content?.type === "file") {
+    return (
+      <FileFieldDisplay
+        content={content}
+        displayVariant={resolvedDisplayVariant}
+        entityId={entityId}
+        fieldId={fieldId}
+        property={property}
+        propertyId={propertyId}
+        workspaceId={workspaceId}
+      />
+    );
   }
 
   if (readonly) {
-    return <FieldValue content={content} property={property} />;
+    return (
+      <FieldValue
+        content={content}
+        property={property}
+        variant={resolvedDisplayVariant}
+      />
+    );
   }
 
   return (
     <InlineEditor
       content={content}
+      displayVariant={resolvedDisplayVariant}
       entityId={entityId}
       entityKind={entityKind}
       onManualSave={onManualSave}
       property={property}
       propertyId={propertyId}
       showDateIcon={showDateIcon}
+      stopPropagation={resolvedDisplayVariant === "kanban"}
       type={type}
       workspaceId={workspaceId}
     />
@@ -106,7 +146,9 @@ type InlineEditorProps = {
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
   type: "text" | "date" | "single-select" | "multi-select" | "int";
+  displayVariant: FieldValueVariant;
   showDateIcon: boolean;
+  stopPropagation: boolean;
   onManualSave: InlineEditorOnManualSave;
 };
 
@@ -118,7 +160,9 @@ const InlineEditor = ({
   property,
   content,
   type,
+  displayVariant,
   showDateIcon,
+  stopPropagation,
   onManualSave,
 }: InlineEditorProps) => {
   const t = useTranslations();
@@ -172,24 +216,24 @@ const InlineEditor = ({
   if (type === "text") {
     return (
       <InlineTextEditor
+        displayVariant={displayVariant}
         onSave={(value) => save({ type: "text", version: 1, value })}
+        property={property}
+        stopPropagation={stopPropagation}
         value={content?.type === "text" ? content.value : ""}
       />
     );
   }
 
   if (type === "date") {
-    const currentDate = content?.type === "date" ? content.value : null;
     return (
-      <DatePickerPopover
-        onChange={(value) => {
-          // Skip no-op saves to avoid unnecessary API calls and AI workflow re-runs
-          if (value !== currentDate) {
-            save({ type: "date", version: 1, value });
-          }
-        }}
-        showIcon={showDateIcon}
-        value={currentDate}
+      <InlineDateEditor
+        displayVariant={displayVariant}
+        onSave={(value) => save({ type: "date", version: 1, value })}
+        property={property}
+        showDateIcon={showDateIcon}
+        stopPropagation={stopPropagation}
+        value={content?.type === "date" ? content.value : null}
       />
     );
   }
@@ -198,9 +242,11 @@ const InlineEditor = ({
     return (
       <InlineIntEditor
         currency={content?.type === "int" ? content.currency : null}
+        displayVariant={displayVariant}
         onSave={(value, currency) =>
           save({ type: "int", version: 1, value, currency })
         }
+        stopPropagation={stopPropagation}
         value={content?.type === "int" ? content.value : 0}
       />
     );
@@ -215,9 +261,11 @@ const InlineEditor = ({
     return (
       <InlineSelectEditor
         content={content}
+        displayVariant={displayVariant}
         onChange={(value) => save({ type: "single-select", version: 1, value })}
         options={options}
         property={property}
+        stopPropagation={stopPropagation}
         type="single-select"
         value={content?.type === "single-select" ? content.value : null}
       />
@@ -227,9 +275,11 @@ const InlineEditor = ({
   return (
     <InlineSelectEditor
       content={content}
+      displayVariant={displayVariant}
       onChange={(value) => save({ type: "multi-select", version: 1, value })}
       options={options}
       property={property}
+      stopPropagation={stopPropagation}
       type="multi-select"
       value={content?.type === "multi-select" ? content.value : []}
     />
@@ -257,10 +307,12 @@ type InlineSelectEditorProps = (
   options: WorkspacePropertyOption[];
   property: WorkspaceProperty;
   content: WorkspaceFieldContent | undefined;
+  displayVariant: FieldValueVariant;
+  stopPropagation: boolean;
 };
 
 const InlineSelectEditor = (props: InlineSelectEditorProps) => {
-  const { property, content } = props;
+  const { property, content, displayVariant, stopPropagation } = props;
   const [editing, setEditing] = useState(false);
 
   if (!editing) {
@@ -272,13 +324,22 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
     return (
       <button
         className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
-        onClick={() => setEditing(true)}
+        onClick={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
+          setEditing(true);
+        }}
         type="button"
       >
         {isEmpty ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          <FieldValue content={content} property={property} />
+          <FieldValue
+            content={content}
+            property={property}
+            variant={displayVariant}
+          />
         )}
       </button>
     );
@@ -291,7 +352,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
   };
 
   if (props.type === "single-select") {
-    return (
+    const select = (
       <FieldValueSelect
         defaultOpen
         onChange={props.onChange}
@@ -301,9 +362,15 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
         value={props.value}
       />
     );
+
+    if (!stopPropagation) {
+      return select;
+    }
+
+    return <ContainedFieldControl>{select}</ContainedFieldControl>;
   }
 
-  return (
+  const select = (
     <FieldValueSelect
       defaultOpen
       onChange={props.onChange}
@@ -313,16 +380,90 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
       value={props.value}
     />
   );
+
+  if (!stopPropagation) {
+    return select;
+  }
+
+  return <ContainedFieldControl>{select}</ContainedFieldControl>;
+};
+
+// -- Date inline editor --
+
+const InlineDateEditor = ({
+  value,
+  displayVariant,
+  onSave,
+  property,
+  showDateIcon,
+  stopPropagation,
+}: {
+  value: string | null;
+  displayVariant: FieldValueVariant;
+  onSave: (value: string | null) => void;
+  property: WorkspaceProperty;
+  showDateIcon: boolean;
+  stopPropagation: boolean;
+}) => {
+  const [editing, setEditing] = useState(false);
+
+  if (!editing) {
+    return (
+      <button
+        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
+        onClick={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
+          setEditing(true);
+        }}
+        type="button"
+      >
+        <FieldValue
+          content={{ type: "date", version: 1, value }}
+          property={property}
+          variant={displayVariant}
+        />
+      </button>
+    );
+  }
+
+  const picker = (
+    <DatePickerPopover
+      defaultOpen
+      onChange={(newValue) => {
+        // Skip no-op saves to avoid unnecessary API calls and AI workflow re-runs
+        if (newValue !== value) {
+          onSave(newValue);
+        }
+        setEditing(false);
+      }}
+      showIcon={showDateIcon}
+      value={value}
+    />
+  );
+
+  if (!stopPropagation) {
+    return picker;
+  }
+
+  return <ContainedFieldControl>{picker}</ContainedFieldControl>;
 };
 
 // -- Text inline editor --
 
 const InlineTextEditor = ({
   value,
+  displayVariant,
   onSave,
+  property,
+  stopPropagation,
 }: {
   value: string;
+  displayVariant: FieldValueVariant;
   onSave: (value: string) => void;
+  property: WorkspaceProperty;
+  stopPropagation: boolean;
 }) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -332,7 +473,10 @@ const InlineTextEditor = ({
       <button
         className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
         data-open-expanded-cell
-        onClick={() => {
+        onClick={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
           // Drop straight into edit mode on first click. The
           // row-expansion side effect still fires via the
           // data-open-expanded-cell attribute the table grid reads,
@@ -343,7 +487,15 @@ const InlineTextEditor = ({
         }}
         type="button"
       >
-        {value || <span className="text-muted-foreground">—</span>}
+        {value ? (
+          <FieldValue
+            content={{ type: "text", version: 1, value }}
+            property={property}
+            variant={displayVariant}
+          />
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        )}
       </button>
     );
   }
@@ -361,7 +513,15 @@ const InlineTextEditor = ({
         setEditing(false);
       }}
       onChange={(e) => setDraft(e.target.value)}
+      onClick={(event) => {
+        if (stopPropagation) {
+          event.stopPropagation();
+        }
+      }}
       onKeyDown={(e) => {
+        if (stopPropagation) {
+          e.stopPropagation();
+        }
         if (e.key === "Escape") {
           setEditing(false);
         }
@@ -381,11 +541,15 @@ const InlineTextEditor = ({
 const InlineIntEditor = ({
   value,
   currency,
+  displayVariant,
   onSave,
+  stopPropagation,
 }: {
   value: number;
   currency: string | null;
+  displayVariant: FieldValueVariant;
   onSave: (value: number, currency: string | null) => void;
+  stopPropagation: boolean;
 }) => {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(value));
@@ -394,13 +558,19 @@ const InlineIntEditor = ({
     return (
       <button
         className="hover:bg-muted block w-full min-w-0 rounded px-2 py-1 text-start text-sm transition-colors"
-        onClick={() => {
+        onClick={(event) => {
+          if (stopPropagation) {
+            event.stopPropagation();
+          }
           setDraft(String(value));
           setEditing(true);
         }}
         type="button"
       >
-        <IntFieldValue content={{ type: "int", version: 1, value, currency }} />
+        <IntFieldValue
+          content={{ type: "int", version: 1, value, currency }}
+          variant={displayVariant}
+        />
       </button>
     );
   }
@@ -419,7 +589,15 @@ const InlineIntEditor = ({
         setEditing(false);
       }}
       onChange={(e) => setDraft(e.target.value)}
+      onClick={(event) => {
+        if (stopPropagation) {
+          event.stopPropagation();
+        }
+      }}
       onKeyDown={(e) => {
+        if (stopPropagation) {
+          e.stopPropagation();
+        }
         if (e.key === "Escape") {
           setEditing(false);
         }
@@ -429,5 +607,146 @@ const InlineIntEditor = ({
       }}
       value={draft}
     />
+  );
+};
+
+type ContainedFieldControlProps = {
+  children: ReactNode;
+};
+
+const ContainedFieldControl = ({ children }: ContainedFieldControlProps) => (
+  <span
+    className="inline-flex min-w-0"
+    onClick={(event) => event.stopPropagation()}
+    onKeyDown={(event) => event.stopPropagation()}
+  >
+    {children}
+  </span>
+);
+
+type FileFieldDisplayProps = {
+  content: WorkspaceFieldContent | undefined;
+  displayVariant: FieldValueVariant;
+  entityId: string;
+  fieldId: string | undefined;
+  property: WorkspaceProperty;
+  propertyId: string;
+  workspaceId: string;
+};
+
+const FileFieldDisplay = ({
+  content,
+  displayVariant,
+  entityId,
+  fieldId,
+  property,
+  propertyId,
+  workspaceId,
+}: FileFieldDisplayProps) => {
+  if (content?.type !== "file" || fieldId === undefined) {
+    return (
+      <FieldValue
+        content={content}
+        property={property}
+        variant={displayVariant}
+      />
+    );
+  }
+
+  if (displayVariant !== "table") {
+    return (
+      <FieldValue
+        content={content}
+        property={property}
+        variant={displayVariant}
+      />
+    );
+  }
+
+  return (
+    <TableFileField
+      content={content}
+      entityId={entityId}
+      fieldId={fieldId}
+      propertyId={propertyId}
+      workspaceId={workspaceId}
+    />
+  );
+};
+
+type TableFileFieldProps = {
+  content: Extract<WorkspaceFieldContent, { type: "file" }>;
+  entityId: string;
+  fieldId: string;
+  propertyId: string;
+  workspaceId: string;
+};
+
+const TableFileField = ({
+  content,
+  entityId,
+  fieldId,
+  workspaceId,
+  propertyId,
+}: TableFileFieldProps) => {
+  const isDisplayable = isFileDisplayable({
+    mimeType: content.mimeType,
+    fileName: content.fileName,
+    pdfFileId: content.pdfFileId,
+    encrypted: content.encrypted,
+  });
+  const openFile = useInspectorStore((s) => s.openFile);
+
+  if (isDisplayable) {
+    return (
+      <Tooltip
+        content={content.fileName}
+        render={
+          <button
+            className="bg-muted grid max-w-full min-w-0 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start"
+            onClick={() =>
+              openFile({
+                id: fieldId,
+                entityId,
+                label: content.fileName,
+                fileName: content.fileName,
+                workspaceId,
+                mimeType: content.mimeType,
+                pdfFileId: content.pdfFileId,
+                propertyId,
+              })
+            }
+            type="button"
+          />
+        }
+      >
+        <DocumentIcon
+          className="size-3.5 shrink-0"
+          fileName={content.fileName}
+          mimeType={content.mimeType}
+        />
+        <BidiText as="span" className="min-w-0 truncate text-start">
+          {content.fileName}
+        </BidiText>
+      </Tooltip>
+    );
+  }
+
+  return (
+    <Tooltip
+      content={content.fileName}
+      render={
+        <span className="bg-muted grid max-w-full min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-center gap-1 rounded px-1 py-0.5 text-start opacity-60" />
+      }
+    >
+      <DocumentIcon
+        className="size-3.5 shrink-0"
+        fileName={content.fileName}
+        mimeType={content.mimeType}
+      />
+      <BidiText as="span" className="min-w-0 truncate text-start">
+        {content.fileName}
+      </BidiText>
+    </Tooltip>
   );
 };

@@ -26,7 +26,7 @@ import type {
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
-import { FieldValue } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value";
+import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
@@ -234,8 +234,11 @@ export const KanbanCard = ({
             return (
               <KanbanCardFieldValue
                 content={field.content}
+                entity={entity}
+                fieldId={field.id}
                 key={fieldId}
                 property={property}
+                workspaceId={workspaceId}
               />
             );
           })}
@@ -484,14 +487,29 @@ const KanbanEntityMetadataBadges = ({
 
 type KanbanCardFieldValueProps = {
   content: WorkspaceFieldContent;
+  entity: WorkspaceEntity;
+  fieldId: string;
   property: WorkspaceProperty;
+  workspaceId: string;
 };
 
 const KanbanCardFieldValue = ({
   content,
+  entity,
+  fieldId,
   property,
+  workspaceId,
 }: KanbanCardFieldValueProps) => (
-  <FieldValue content={content} property={property} variant="kanban" />
+  <EditableField
+    content={content}
+    displayVariant="kanban"
+    entityId={entity.entityId}
+    entityKind={entity.kind}
+    fieldId={fieldId}
+    property={property}
+    propertyId={property.id}
+    workspaceId={workspaceId}
+  />
 );
 
 type KanbanCardFooterProps = {

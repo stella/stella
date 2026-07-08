@@ -27,7 +27,6 @@ import {
   CellMetadataFlags,
   useCellMetadataFlags,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
-import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-result";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
@@ -126,10 +125,17 @@ const PropertyCell = ({
 
   if (fieldContent?.type === "pending") {
     return (
-      <CellResult
-        extractionPreview={extractionPreview}
-        field={field}
+      <EditableField
+        content={fieldContent}
+        displayVariant="table"
+        entityId={entity.entityId}
+        entityKind={entity.kind}
+        fieldId={field?.id}
+        pendingPreview={extractionPreview}
         property={property}
+        propertyId={property.id}
+        readonly
+        workspaceId={property.workspaceId}
       />
     );
   }
@@ -143,7 +149,17 @@ const PropertyCell = ({
           propertyId={property.id}
           workspaceId={property.workspaceId}
         />
-        <CellResult field={field} property={property} />
+        <EditableField
+          content={fieldContent}
+          displayVariant="table"
+          entityId={entity.entityId}
+          entityKind={entity.kind}
+          fieldId={field?.id}
+          property={property}
+          propertyId={property.id}
+          readonly
+          workspaceId={property.workspaceId}
+        />
         {entity.activeEditBy && (
           <ActiveEditBadge
             className="shrink-0"
@@ -168,6 +184,8 @@ const PropertyCell = ({
           content={fieldContent}
           entityId={entity.entityId}
           entityKind={entity.kind}
+          fieldId={field?.id}
+          displayVariant="table"
           property={property}
           propertyId={property.id}
           showDateIcon={false}
@@ -179,8 +197,8 @@ const PropertyCell = ({
 
   // Playbook verdict: a system-computed single-select tier (compliant /
   // fallback / deviation / missing). Read-only — render the colored chip via
-  // CellResult rather than the editable field, and surface the grading
-  // rationale through the provenance card when a justification exists.
+  // EditableField display mode, and surface the grading rationale through the
+  // provenance card when a justification exists.
   if (property.tool.type === "playbook-verdict") {
     const verdictCell = (
       <span className="flex min-w-0 items-center gap-1.5">
@@ -190,7 +208,17 @@ const PropertyCell = ({
           propertyId={property.id}
           workspaceId={property.workspaceId}
         />
-        <CellResult field={field} property={property} />
+        <EditableField
+          content={fieldContent}
+          displayVariant="table"
+          entityId={entity.entityId}
+          entityKind={entity.kind}
+          fieldId={field?.id}
+          property={property}
+          propertyId={property.id}
+          readonly
+          workspaceId={property.workspaceId}
+        />
       </span>
     );
 
@@ -232,8 +260,10 @@ const PropertyCell = ({
           />
           <EditableField
             content={fieldContent}
+            displayVariant="table"
             entityId={entity.entityId}
             entityKind={entity.kind}
+            fieldId={field?.id}
             onManualSave={() => setLocked(true)}
             property={property}
             propertyId={property.id}
@@ -281,8 +311,10 @@ const PropertyCell = ({
       />
       <EditableField
         content={fieldContent}
+        displayVariant="table"
         entityId={entity.entityId}
         entityKind={entity.kind}
+        fieldId={field?.id}
         property={property}
         propertyId={property.id}
         showDateIcon={false}
