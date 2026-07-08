@@ -51,3 +51,40 @@ export const loadPromptCachingPreference = async (
     .limit(1);
   return resolvePromptCachingPreference(rows.at(0));
 };
+
+export type OrgSettingsForAuth = {
+  orgAIConfig: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
+};
+
+/**
+ * Combined form of {@link loadOrgAIConfig} + {@link loadPromptCachingPreference}
+ * for callers (the validateAuth resolve) that need both on every request.
+ * A single `organization_settings` select instead of two halves the
+ * per-request query floor for that hot path.
+ */
+export const loadOrgSettingsForAuth = async (
+  organizationId: SafeId<"organization">,
+): Promise<OrgSettingsForAuth> => {
+  const rows = await rootDb
+    .select({
+      aiConfigEncrypted: sql<
+        string | null
+      >`${organizationSettings.aiConfigEncrypted}::text`,
+      aiConfigIv: sql<string | null>`${organizationSettings.aiConfigIv}::text`,
+      promptCachingEnabled: organizationSettings.promptCachingEnabled,
+    })
+    .from(organizationSettings)
+    .where(eq(organizationSettings.organizationId, organizationId))
+    .limit(1);
+  const row = rows.at(0);
+
+  const orgAIConfig = await decryptOrgAIConfigRow({
+    decrypt: decryptAIConfig,
+    organizationId,
+    row,
+  });
+  const promptCachingEnabled = resolvePromptCachingPreference(row);
+
+  return { orgAIConfig, promptCachingEnabled };
+};

@@ -23,10 +23,8 @@ import { authSchema } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
-import {
-  loadOrgAIConfig,
-  loadPromptCachingPreference,
-} from "@/api/lib/ai-config-loader";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
@@ -56,6 +54,7 @@ import {
   readAuthorizedMemberRole,
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
+import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
   assertSelfhostBootstrapSignUp,
   isSelfhostLocalPasswordAuthEnabled,
@@ -724,126 +723,189 @@ export const resolveAccessibleWorkspaces = async (
   }));
 };
 
+type ValidateAuthValue = {
+  user: { id: SafeId<"user"> };
+  session: { activeOrganizationId: SafeId<"organization"> };
+  /**
+   * Excludes workspaces being deleted. Includes active and
+   * archived workspaces. Use for search, chat, MCP, and any
+   * query that should not surface content from sealed workspaces.
+   */
+  activeWorkspaceIds: SafeId<"workspace">[];
+  /**
+   * All accessible workspaces with status. Only use in
+   * workspaceAccessMacro (which needs the status to return
+   * appropriate HTTP codes) — never pass these IDs as a
+   * search/query allowlist.
+   */
+  accessibleWorkspaces: AccessibleWorkspace[];
+  scopedDb: ReturnType<typeof createScopedDb>;
+  safeDb: ReturnType<typeof createSafeDb>;
+  memberRole: { role: MemberRole };
+  orgAIConfig: OrgAIConfig | null;
+  promptCachingEnabled: boolean;
+  /**
+   * Records audit rows in the supplied tx. Identity fields
+   * (org/user/IP/UA) are bound from the request context;
+   * workspaceId defaults to null for root handlers and is
+   * overridden by workspaceAccessMacro to the validated
+   * workspaceId for workspace handlers. Individual events
+   * can still override workspaceId for cross-workspace ops.
+   */
+  recordAuditEvent: ReturnType<typeof createAuditRecorder>;
+  /**
+   * Builds a recorder with an overridden default workspaceId.
+   * Use when threading audit recording through helpers that
+   * don't receive the handler ctx (cross-workspace operations,
+   * shared copy/move utilities).
+   */
+  createAuditRecorder: (opts?: {
+    workspaceId?: SafeId<"workspace"> | null;
+  }) => ReturnType<typeof createAuditRecorder>;
+};
+
+type ValidateAuthResolution =
+  | { ok: true; value: ValidateAuthValue }
+  | { ok: false; statusCode: 401 | 500 };
+
+/**
+ * Per-request memoization of validateAuth's resolution.
+ *
+ * Elysia expands a macro property (here `validateAuth`, directly or
+ * transitively through `permissions` / `validateWorkspaceAccess`) into an
+ * independent `resolve` hook every time it appears at a distinct
+ * `.guard()` / `.group()` / route-level call site — see `applyMacro` in
+ * elysia's compose step, which only dedupes repeats *within* a single
+ * call's hook object, not across separate call sites. A route that
+ * stacks e.g. a top-level `.guard({ validateAuth: true })` with a
+ * per-route `permissions: {...}` therefore runs this resolve twice (three
+ * times when a `.group()` also carries `validateWorkspaceAccess: true`)
+ * for the exact same request, each time re-running the session, member
+ * role, workspace, and org-settings lookups.
+ *
+ * Rather than rely on route wiring alone to avoid every such stack (some
+ * duplication is structural — a workspace-scoped group and its
+ * permission-checked routes legitimately need both macros), memoize the
+ * resolved value per request here. The cache is a `WeakMap` keyed on the
+ * raw `Request` object: it never survives past the request that created
+ * it (no explicit eviction needed) and never leaks across requests, so a
+ * revoked session is still re-checked in full on the very next request.
+ */
+const validateAuthResolutionCache = new WeakMap<
+  Request,
+  Promise<ValidateAuthResolution>
+>();
+
+const resolveValidateAuth = async (
+  request: Request,
+  server: Parameters<typeof createAuditRecorder>[0]["server"],
+): Promise<ValidateAuthResolution> => {
+  const { sessionResult, memberRoleResult } = await getSessionAndMemberRole(
+    request.headers,
+  );
+
+  if (Result.isError(sessionResult)) {
+    return { ok: false, statusCode: 500 };
+  }
+  const session = sessionResult.value?.session;
+  const user = sessionResult.value?.user;
+  const rawOrgId = session?.activeOrganizationId;
+
+  if (!session || !user || !rawOrgId) {
+    return { ok: false, statusCode: 401 };
+  }
+
+  if (Result.isError(memberRoleResult)) {
+    return { ok: false, statusCode: 500 };
+  }
+
+  const memberRole = memberRoleResult.value;
+  if (!memberRole) {
+    return { ok: false, statusCode: 401 };
+  }
+  const activeOrganizationId = toSafeId<"organization">(rawOrgId);
+  const userId = toSafeId<"user">(user.id);
+
+  enrichRequestContext(request, {
+    posthogDistinctId: userId,
+    organizationId: activeOrganizationId,
+  });
+
+  // Load workspaces and org AI/prompt-caching settings in parallel.
+  const [accessibleWorkspaces, orgSettings] = await Promise.all([
+    resolveAccessibleWorkspaces(userId, activeOrganizationId, memberRole.role),
+    loadOrgSettingsForAuth(activeOrganizationId),
+  ]);
+  const { orgAIConfig, promptCachingEnabled } = orgSettings;
+
+  const scopedDb = createScopedDb(
+    rlsDb,
+    accessibleWorkspaces.map((w) => w.id),
+    activeOrganizationId,
+    userId,
+  );
+  const safeDb = createSafeDb(
+    rlsDb,
+    accessibleWorkspaces.map((w) => w.id),
+    activeOrganizationId,
+    userId,
+  );
+
+  const activeWorkspaceIds = accessibleWorkspaces
+    .filter((w) => w.status !== "deleting")
+    .map((w) => w.id);
+
+  const recorderBindings = {
+    organizationId: activeOrganizationId,
+    workspaceId: null,
+    userId,
+    request,
+    server,
+  };
+
+  return {
+    ok: true,
+    value: {
+      user: {
+        id: toSafeId<"user">(user.id),
+      },
+      session: {
+        activeOrganizationId,
+      },
+      activeWorkspaceIds,
+      accessibleWorkspaces,
+      scopedDb,
+      safeDb,
+      memberRole,
+      orgAIConfig,
+      promptCachingEnabled,
+      recordAuditEvent: createAuditRecorder(recorderBindings),
+      createAuditRecorder: (opts?: {
+        workspaceId?: SafeId<"workspace"> | null;
+      }) =>
+        createAuditRecorder({
+          ...recorderBindings,
+          workspaceId:
+            opts && "workspaceId" in opts ? (opts.workspaceId ?? null) : null,
+        }),
+    },
+  };
+};
+
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
     async resolve({ status, request, server }) {
-      const { sessionResult, memberRoleResult } = await getSessionAndMemberRole(
-        request.headers,
-      );
-
-      if (Result.isError(sessionResult)) {
-        return status(500);
-      }
-      const session = sessionResult.value?.session;
-      const user = sessionResult.value?.user;
-      const rawOrgId = session?.activeOrganizationId;
-
-      if (!session || !user || !rawOrgId) {
-        return status(401);
-      }
-
-      if (Result.isError(memberRoleResult)) {
-        return status(500);
-      }
-
-      const memberRole = memberRoleResult.value;
-      if (!memberRole) {
-        return status(401);
-      }
-      const activeOrganizationId = toSafeId<"organization">(rawOrgId);
-      const userId = toSafeId<"user">(user.id);
-
-      enrichRequestContext(request, {
-        posthogDistinctId: userId,
-        organizationId: activeOrganizationId,
-      });
-
-      // Load workspaces and AI config in parallel.
-      const [accessibleWorkspaces, orgAIConfig, promptCachingEnabled] =
-        await Promise.all([
-          resolveAccessibleWorkspaces(
-            userId,
-            activeOrganizationId,
-            memberRole.role,
-          ),
-          loadOrgAIConfig(activeOrganizationId),
-          loadPromptCachingPreference(activeOrganizationId),
-        ]);
-
-      const scopedDb = createScopedDb(
-        rlsDb,
-        accessibleWorkspaces.map((w) => w.id),
-        activeOrganizationId,
-        userId,
-      );
-      const safeDb = createSafeDb(
-        rlsDb,
-        accessibleWorkspaces.map((w) => w.id),
-        activeOrganizationId,
-        userId,
-      );
-
-      const activeWorkspaceIds = accessibleWorkspaces
-        .filter((w) => w.status !== "deleting")
-        .map((w) => w.id);
-
-      const recorderBindings = {
-        organizationId: activeOrganizationId,
-        workspaceId: null,
-        userId,
+      const result = await memoizePerRequest(
+        validateAuthResolutionCache,
         request,
-        server,
-      };
+        () => resolveValidateAuth(request, server),
+      );
 
-      return {
-        user: {
-          id: toSafeId<"user">(user.id),
-        },
-        session: {
-          activeOrganizationId,
-        },
-        /**
-         * Excludes workspaces being deleted. Includes active and
-         * archived workspaces. Use for search, chat, MCP, and any
-         * query that should not surface content from sealed workspaces.
-         */
-        activeWorkspaceIds,
-        /**
-         * All accessible workspaces with status. Only use in
-         * workspaceAccessMacro (which needs the status to return
-         * appropriate HTTP codes) — never pass these IDs as a
-         * search/query allowlist.
-         */
-        accessibleWorkspaces,
-        scopedDb,
-        safeDb,
-        memberRole,
-        orgAIConfig,
-        promptCachingEnabled,
-        /**
-         * Records audit rows in the supplied tx. Identity fields
-         * (org/user/IP/UA) are bound from the request context;
-         * workspaceId defaults to null for root handlers and is
-         * overridden by workspaceAccessMacro to the validated
-         * workspaceId for workspace handlers. Individual events
-         * can still override workspaceId for cross-workspace ops.
-         */
-        recordAuditEvent: createAuditRecorder(recorderBindings),
-        /**
-         * Builds a recorder with an overridden default workspaceId.
-         * Use when threading audit recording through helpers that
-         * don't receive the handler ctx (cross-workspace operations,
-         * shared copy/move utilities).
-         */
-        createAuditRecorder: (opts?: {
-          workspaceId?: SafeId<"workspace"> | null;
-        }) =>
-          createAuditRecorder({
-            ...recorderBindings,
-            workspaceId:
-              opts && "workspaceId" in opts ? (opts.workspaceId ?? null) : null,
-          }),
-      };
+      if (!result.ok) {
+        return status(result.statusCode);
+      }
+
+      return result.value;
     },
   },
 });

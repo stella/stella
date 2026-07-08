@@ -171,9 +171,14 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   .use(workspaceAccessMacro)
   .use(invalidateQuery)
   .use(permissionMacro)
-  .guard({
-    validateAuth: true,
-  })
+  // Deliberately no top-level auth guard here: every route below already
+  // declares `permissions`, which the `permissions` macro expands to
+  // `validateAuth: true` (see permissionMacro in lib/auth.ts). Elysia
+  // expands each macro call site into its own resolve hook (dedup is only
+  // within a single call's hook object, not across guard / group /
+  // route-level sites), so a redundant bare guard here would add a
+  // second, fully independent `validateAuth` resolve to every request.
+  // See tests/security/redundant-validate-auth-guard.test.ts.
   .get("/", readWorkspaces.handler, {
     permissions: readWorkspaces.config.permissions,
   })

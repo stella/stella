@@ -18,7 +18,13 @@ import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 export const chatRoute = new Elysia({ prefix: "/chat" })
   .use(workspaceAccessMacro)
   .use(permissionMacro)
-  .guard({ validateAuth: true })
+  // Deliberately no top-level auth guard: every route below already
+  // declares `permissions`, which implies `validateAuth: true` (see
+  // permissionMacro in lib/auth.ts). A redundant bare guard here would
+  // register a second, independent `validateAuth` resolve hook per
+  // request (Elysia doesn't dedupe macro expansions across separate
+  // guard / route-level call sites). See
+  // tests/security/redundant-validate-auth-guard.test.ts.
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
     permissions: sendMessage.config.permissions,

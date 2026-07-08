@@ -24,9 +24,13 @@ export const organizationSettingsRoute = new Elysia({
 })
   .use(authMacro)
   .use(permissionMacro)
-  .guard({
-    validateAuth: true,
-  })
+  // Deliberately no top-level auth guard: every route below already
+  // declares `permissions`, which implies `validateAuth: true` (see
+  // permissionMacro in lib/auth.ts). A redundant bare guard here would
+  // register a second, independent `validateAuth` resolve hook per
+  // request (Elysia doesn't dedupe macro expansions across separate
+  // guard / route-level call sites). See
+  // tests/security/redundant-validate-auth-guard.test.ts.
   .get("/", readOrganizationSettings.handler, {
     permissions: readOrganizationSettings.config.permissions,
   })
