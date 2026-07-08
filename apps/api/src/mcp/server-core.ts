@@ -32,6 +32,13 @@ import {
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 import { closestToolNames, structuredErrorResult } from "@/api/mcp/tool-utils";
 
+const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
+
+const formatUnknownToolName = (toolName: string): string =>
+  toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
+    ? toolName
+    : `${toolName.slice(0, MAX_TOOL_NAME_SUGGESTION_CHARS)}...`;
+
 /** `missing_scope` envelope: the granted scopes do not include `scope`. */
 const missingScopeResult = (scope: ToolScope): CallToolResult =>
   structuredErrorResult({
@@ -187,13 +194,18 @@ export const createMcpHttpRequestHandler = ({
       if (!definition) {
         // Suggest the closest names the caller can actually see (scope-filtered
         // list), so a typo resolves without leaking tools they lack access to.
-        const visibleNames = (
-          await listMcpTools(context, mode, session.scopes)
-        ).map((tool) => tool.name);
-        const suggestions = closestToolNames(toolName, visibleNames);
+        const suggestions =
+          toolName.length <= MAX_TOOL_NAME_SUGGESTION_CHARS
+            ? closestToolNames(
+                toolName,
+                (await listMcpTools(context, mode, session.scopes)).map(
+                  (tool) => tool.name,
+                ),
+              )
+            : [];
         return structuredErrorResult({
           code: "unknown_tool",
-          message: `Unknown tool: ${toolName}`,
+          message: `Unknown tool: ${formatUnknownToolName(toolName)}`,
           hint:
             suggestions.length > 0
               ? `No such tool. Did you mean: ${suggestions.join(", ")}? Call tools/list for the full set.`

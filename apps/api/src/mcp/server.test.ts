@@ -316,6 +316,47 @@ describe("handleMcpHttpRequest", () => {
     expect(body.result.isError).toBe(true);
   });
 
+  test("does not fuzzy match unusually long unknown tool names", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    getMcpToolScopeHintMock.mockReturnValue(undefined);
+    getMcpToolDefinitionMock.mockResolvedValue(undefined);
+    listMcpToolsMock.mockResolvedValue([
+      {
+        description: "List matters",
+        inputSchema: { type: "object", properties: {} },
+        name: "list_matters",
+      },
+    ]);
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { arguments: {}, name: "x".repeat(5000) },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    expect(listMcpToolsMock).not.toHaveBeenCalled();
+    const item = body.result.content.at(0);
+    expect(item?.type).toBe("text");
+    const parsed =
+      item?.type === "text"
+        ? parseUnknownToolErrorEnvelope(item.text)
+        : undefined;
+    expect(parsed?.error.code).toBe("unknown_tool");
+    expect(parsed?.error.hint).not.toContain("list_matters");
+    expect(body.result.isError).toBe(true);
+  });
+
   test("lists static resources for the request mode", async () => {
     const context = { type: "mcp-context" };
     authenticateMcpRequestMock.mockResolvedValue({
