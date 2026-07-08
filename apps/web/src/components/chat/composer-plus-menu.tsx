@@ -387,13 +387,21 @@ const ComposerModelsSubmenu = ({
         <MenuRadioGroup value={selectedModel ?? ""}>
           {rows.map((row) => (
             <MenuRadioItem
+              // `minmax(0,1fr)` lets the label cell shrink so `truncate`
+              // applies; the default `1fr` track sizes to the longest model
+              // id and forces horizontal overflow (same fix as the matters
+              // picker's TRUNCATING_ITEM_CLASS).
+              className="grid-cols-[1rem_minmax(0,1fr)]"
               key={row.value || "default"}
               onClick={() => {
                 void handleSelect(row.value);
               }}
               value={row.value}
             >
-              <span className="truncate">{row.label}</span>
+              {/* `block`: the radio item's own children wrapper is inline,
+                  and `truncate`'s overflow clipping is inert on inline
+                  elements. */}
+              <span className="block truncate">{row.label}</span>
             </MenuRadioItem>
           ))}
         </MenuRadioGroup>
