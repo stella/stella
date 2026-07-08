@@ -518,12 +518,10 @@ export const useChatEditor = ({
   suggestedFollowupPrompt,
 }: {
   /**
-   * Omit the `/`-triggered `PromptSlash` suggestion popover entirely. Set by
-   * chat surfaces that render the composer's (+) menu with a Skills submenu
-   * (`ChatInputSurface` with `skillsOrganizationId`): those surfaces route
-   * "/" in an empty composer to the (+) menu instead (see
-   * `chat-input-surface.tsx`), so the old popover would otherwise compete
-   * with the new one for the same trigger.
+   * Suppress the `/`-triggered `PromptSlash` popover only for an empty
+   * composer. Chat surfaces with a Skills submenu route that blank-composer
+   * shortcut to the (+) menu instead, while still keeping slash suggestions
+   * after existing text.
    */
   disableSlashSuggestion?: boolean | undefined;
   onDraftStart?: (() => void) | undefined;
@@ -926,16 +924,12 @@ export const useChatEditor = ({
     [],
   );
 
-  // Omitted entirely (not just gated at render time) when the surface routes
-  // "/" through the composer's (+) menu instead — see `disableSlashSuggestion`
-  // above. A configured-but-inert extension would still intercept the trigger
-  // char and race the new popover.
-  const promptSlashExtension = disableSlashSuggestion
-    ? null
-    : PromptSlash.configure({
-        // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
-        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
-      });
+  const promptSlashExtension = PromptSlash.configure({
+    // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
+    suggestion: createPromptSlashSuggestion(() => slashItemsRef.current, {
+      suppressEmptyTrigger: disableSlashSuggestion,
+    }),
+  });
 
   const editor = useEditor({
     autofocus: false,
@@ -974,7 +968,7 @@ export const useChatEditor = ({
         ),
         deleteTriggerWithBackspace: true,
       }),
-      ...(promptSlashExtension ? [promptSlashExtension] : []),
+      promptSlashExtension,
       PastedText,
     ],
     onCreate: ({ editor: nextEditor }) => {

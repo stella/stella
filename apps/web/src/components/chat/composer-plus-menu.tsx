@@ -63,7 +63,6 @@ import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import { MatterIcon } from "@/components/matter-icon";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toSafeId } from "@/lib/safe-id";
@@ -77,6 +76,9 @@ import {
 import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+
+const PROVIDER_LABEL_FALLBACKS: Readonly<Partial<Record<string, string>>> =
+  PROVIDER_LABELS;
 
 /** Enables and drives the Models submenu. Omit on surfaces without a model
  *  picker (the API expects a per-thread `PATCH .../model` target). */
@@ -313,7 +315,7 @@ const ComposerModelsSubmenu = ({
     models;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-  const { data } = useQuery({
+  const { data, isPending: isLoadingModels } = useQuery({
     ...modelOptionsOptions(activeOrganizationId),
     enabled,
   });
@@ -321,17 +323,21 @@ const ComposerModelsSubmenu = ({
   const rows = useMemo(() => {
     const allRows = [
       { value: "", label: t("chat.modelSelector.defaultLabel") },
-      ...(data?.options ?? []).map((option) => ({
-        value: option.value,
-        label: `${PROVIDER_LABELS[option.provider]} · ${option.modelId}`,
-      })),
     ];
+    if (data) {
+      for (const option of data.options) {
+        allRows.push({
+          value: option.value,
+          label: `${PROVIDER_LABEL_FALLBACKS[option.provider] ?? option.provider} · ${option.modelId}`,
+        });
+      }
+    }
     const query = search.trim().toLowerCase();
     if (!query) {
       return allRows;
     }
     return allRows.filter((row) => row.label.toLowerCase().includes(query));
-  }, [data?.options, search, t]);
+  }, [data, search, t]);
 
   const handleSelect = async (value: string) => {
     const model = value === "" ? null : value;
@@ -384,27 +390,31 @@ const ComposerModelsSubmenu = ({
           ref={searchRef}
           value={search}
         />
-        <MenuRadioGroup value={selectedModel ?? ""}>
-          {rows.map((row) => (
-            <MenuRadioItem
-              // `minmax(0,1fr)` lets the label cell shrink so `truncate`
-              // applies; the default `1fr` track sizes to the longest model
-              // id and forces horizontal overflow (same fix as the matters
-              // picker's TRUNCATING_ITEM_CLASS).
-              className="grid-cols-[1rem_minmax(0,1fr)]"
-              key={row.value || "default"}
-              onClick={() => {
-                void handleSelect(row.value);
-              }}
-              value={row.value}
-            >
-              {/* `block`: the radio item's own children wrapper is inline,
-                  and `truncate`'s overflow clipping is inert on inline
-                  elements. */}
-              <span className="block truncate">{row.label}</span>
-            </MenuRadioItem>
-          ))}
-        </MenuRadioGroup>
+        {isLoadingModels ? (
+          <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+        ) : (
+          <MenuRadioGroup value={selectedModel ?? ""}>
+            {rows.map((row) => (
+              <MenuRadioItem
+                // `minmax(0,1fr)` lets the label cell shrink so `truncate`
+                // applies; the default `1fr` track sizes to the longest model
+                // id and forces horizontal overflow (same fix as the matters
+                // picker's TRUNCATING_ITEM_CLASS).
+                className="grid-cols-[1rem_minmax(0,1fr)]"
+                key={row.value || "default"}
+                onClick={() => {
+                  void handleSelect(row.value);
+                }}
+                value={row.value}
+              >
+                {/* `block`: the radio item's own children wrapper is inline,
+                    and `truncate`'s overflow clipping is inert on inline
+                    elements. */}
+                <span className="block truncate">{row.label}</span>
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        )}
       </MenuSubPopup>
     </MenuSub>
   );
@@ -464,18 +474,16 @@ const ComposerSkillsSubmenu = ({
   const { activeOrganizationId, editor } = skills;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    useInfiniteQuery({
-      ...skillsOptions(activeOrganizationId),
-      enabled,
-    });
-
-  useExternalSyncEffect(() => {
-    if (!enabled || !hasNextPage || isFetchingNextPage) {
-      return;
-    }
-    void fetchNextPage();
-  }, [enabled, fetchNextPage, hasNextPage, isFetchingNextPage]);
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isPending: isLoadingSkills,
+  } = useInfiniteQuery({
+    ...skillsOptions(activeOrganizationId),
+    enabled,
+  });
 
   const shortcutRows = useMemo(
     () => commandShortcutRowsFromSkillPages(data?.pages),
@@ -500,6 +508,41 @@ const ComposerSkillsSubmenu = ({
     }
     insertPastedTextChip(editor, slashItemChipAttrs(item));
   };
+
+  let skillItemsContent: React.ReactNode;
+  if (isLoadingSkills) {
+    skillItemsContent = (
+      <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+    );
+  } else if (filteredItems.length === 0) {
+    skillItemsContent = (
+      <ComposerSubmenuEmpty>
+        {t("chat.composerMenu.noSkills")}
+      </ComposerSubmenuEmpty>
+    );
+  } else {
+    skillItemsContent = filteredItems.map((item) => (
+      <MenuItem
+        key={itemKey(item)}
+        onClick={() => {
+          handleSelect(item);
+        }}
+      >
+        <BookOpenIcon className="self-start" />
+        <span className="min-w-0 flex-1">
+          <BidiText as="span" className="block truncate text-sm">
+            {itemName(item)}
+          </BidiText>
+          <BidiText
+            as="span"
+            className="text-muted-foreground block truncate text-xs"
+          >
+            {itemSecondary(item)}
+          </BidiText>
+        </span>
+      </MenuItem>
+    ));
+  }
 
   return (
     <MenuSub
@@ -526,32 +569,16 @@ const ComposerSkillsSubmenu = ({
           ref={searchRef}
           value={search}
         />
-        {filteredItems.length === 0 ? (
-          <ComposerSubmenuEmpty>
-            {t("chat.composerMenu.noSkills")}
-          </ComposerSubmenuEmpty>
-        ) : (
-          filteredItems.map((item) => (
-            <MenuItem
-              key={itemKey(item)}
-              onClick={() => {
-                handleSelect(item);
-              }}
-            >
-              <BookOpenIcon className="self-start" />
-              <span className="min-w-0 flex-1">
-                <BidiText as="span" className="block truncate text-sm">
-                  {itemName(item)}
-                </BidiText>
-                <BidiText
-                  as="span"
-                  className="text-muted-foreground block truncate text-xs"
-                >
-                  {itemSecondary(item)}
-                </BidiText>
-              </span>
-            </MenuItem>
-          ))
+        {skillItemsContent}
+        {hasNextPage && (
+          <MenuItem
+            disabled={isFetchingNextPage}
+            onClick={() => {
+              void fetchNextPage();
+            }}
+          >
+            {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
+          </MenuItem>
         )}
         <MenuSeparator />
         <MenuItem
@@ -606,7 +633,7 @@ const ComposerContextSubmenu = ({
     ...workspacesNavigationOptions(activeOrganizationId),
     enabled,
   });
-  const matters: ContextMatter[] = data?.workspaces ?? [];
+  const matters: ContextMatter[] = data ? data.workspaces : [];
 
   const query = search.trim().toLowerCase();
   const filteredMatters = query
@@ -675,7 +702,7 @@ const ComposerContextMatterSub = ({
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
 
-  const { data: views } = useQuery({
+  const { data: views, isPending: isLoadingViews } = useQuery({
     ...viewsOptions(matter.id),
     enabled: open,
   });
@@ -703,7 +730,7 @@ const ComposerContextMatterSub = ({
   );
   const { data: entitiesData } = useQuery({
     ...useEntitiesOptions(entitiesKey),
-    enabled: open,
+    enabled: open && views !== undefined,
   });
 
   // Cross-matter bookkeeping mirrors `fetchWorkspaceEntities`: only stamp a
@@ -714,13 +741,14 @@ const ComposerContextMatterSub = ({
     threadRef.scope === "workspace" && threadRef.workspaceId === matter.id
       ? undefined
       : matter.id;
-  const fileOptions = useMemo<ChatMentionOption[]>(
-    () =>
-      (entitiesData?.entities ?? []).map((entity) =>
-        buildEntityMentionOption({ entity, sourceWorkspaceId }),
-      ),
-    [entitiesData?.entities, sourceWorkspaceId],
-  );
+  const fileOptions = useMemo<ChatMentionOption[]>(() => {
+    if (!entitiesData) {
+      return [];
+    }
+    return entitiesData.entities.map((entity) =>
+      buildEntityMentionOption({ entity, sourceWorkspaceId }),
+    );
+  }, [entitiesData, sourceWorkspaceId]);
   const matterMentionOption = useMemo<ChatMentionOption | undefined>(
     () =>
       buildWorkspaceMentionOptions({
@@ -735,6 +763,37 @@ const ComposerContextMatterSub = ({
       return;
     }
     insertChatMention(editor, option);
+  };
+
+  const renderFileOptions = () => {
+    if (isLoadingViews || !entitiesData) {
+      return <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>;
+    }
+    if (fileOptions.length === 0) {
+      return (
+        <ComposerSubmenuEmpty>
+          {t("chat.composerMenu.noFiles")}
+        </ComposerSubmenuEmpty>
+      );
+    }
+    return fileOptions.map((option) => (
+      <MenuItem
+        key={option.id}
+        onClick={() => {
+          handleSelect(option);
+        }}
+      >
+        <MentionIcon
+          category={option.category}
+          id={option.id}
+          kind={option.kind}
+          mimeType={option.mimeType}
+        />
+        <BidiText as="span" className="min-w-0 flex-1 truncate">
+          {option.label}
+        </BidiText>
+      </MenuItem>
+    ));
   };
 
   return (
@@ -788,30 +847,7 @@ const ComposerContextMatterSub = ({
           </MenuItem>
         )}
         <MenuSeparator />
-        {fileOptions.length === 0 ? (
-          <ComposerSubmenuEmpty>
-            {t("chat.composerMenu.noFiles")}
-          </ComposerSubmenuEmpty>
-        ) : (
-          fileOptions.map((option) => (
-            <MenuItem
-              key={option.id}
-              onClick={() => {
-                handleSelect(option);
-              }}
-            >
-              <MentionIcon
-                category={option.category}
-                id={option.id}
-                kind={option.kind}
-                mimeType={option.mimeType}
-              />
-              <BidiText as="span" className="min-w-0 flex-1 truncate">
-                {option.label}
-              </BidiText>
-            </MenuItem>
-          ))
-        )}
+        {renderFileOptions()}
       </MenuSubPopup>
     </MenuSub>
   );
@@ -830,11 +866,11 @@ const ComposerMcpSubmenu = ({
   const { activeOrganizationId } = mcp;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
-  const { data: connectorsData } = useQuery({
+  const { data: connectorsData, isPending: isLoadingConnectors } = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled,
   });
-  const { data: connectionsData } = useQuery({
+  const { data: connectionsData, isPending: isLoadingConnections } = useQuery({
     ...mcpConnectionsOptions(activeOrganizationId),
     enabled,
   });
@@ -844,14 +880,16 @@ const ComposerMcpSubmenu = ({
       string,
       NonNullable<typeof connectionsData>["connections"][number]
     >();
-    for (const connection of connectionsData?.connections ?? []) {
-      map.set(connection.connectorSlug, connection);
+    if (connectionsData) {
+      for (const connection of connectionsData.connections) {
+        map.set(connection.connectorSlug, connection);
+      }
     }
     return map;
-  }, [connectionsData?.connections]);
+  }, [connectionsData]);
 
   const query = search.trim().toLowerCase();
-  const connectors = connectorsData?.connectors ?? [];
+  const connectors = connectorsData ? connectorsData.connectors : [];
   const rows = query
     ? connectors.filter((connector) =>
         connector.displayName.toLowerCase().includes(query),
@@ -880,6 +918,46 @@ const ComposerMcpSubmenu = ({
     });
   };
 
+  let mcpRowsContent: React.ReactNode;
+  if (isLoadingConnectors || isLoadingConnections) {
+    mcpRowsContent = (
+      <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+    );
+  } else if (rows.length === 0) {
+    mcpRowsContent = (
+      <ComposerSubmenuEmpty>
+        {t("chat.composerMenu.noMcpServers")}
+      </ComposerSubmenuEmpty>
+    );
+  } else {
+    mcpRowsContent = rows.map((connector) => {
+      const connection = connectionBySlug.get(connector.slug);
+      if (!connection) {
+        return (
+          <MenuItem key={connector.id} onClick={openMcpSettings}>
+            <BidiText as="span" className="truncate">
+              {connector.displayName}
+            </BidiText>
+          </MenuItem>
+        );
+      }
+      return (
+        <MenuCheckboxItem
+          checked={connection.enabled}
+          closeOnClick={false}
+          key={connector.id}
+          onClick={() => {
+            void handleToggle(connection.id, !connection.enabled);
+          }}
+        >
+          <BidiText as="span" className="truncate">
+            {connector.displayName}
+          </BidiText>
+        </MenuCheckboxItem>
+      );
+    });
+  }
+
   return (
     <MenuSub
       onOpenChange={(open) => {
@@ -901,38 +979,7 @@ const ComposerMcpSubmenu = ({
           ref={searchRef}
           value={search}
         />
-        {rows.length === 0 ? (
-          <ComposerSubmenuEmpty>
-            {t("chat.composerMenu.noMcpServers")}
-          </ComposerSubmenuEmpty>
-        ) : (
-          rows.map((connector) => {
-            const connection = connectionBySlug.get(connector.slug);
-            if (!connection) {
-              return (
-                <MenuItem key={connector.id} onClick={openMcpSettings}>
-                  <BidiText as="span" className="truncate">
-                    {connector.displayName}
-                  </BidiText>
-                </MenuItem>
-              );
-            }
-            return (
-              <MenuCheckboxItem
-                checked={connection.enabled}
-                closeOnClick={false}
-                key={connector.id}
-                onClick={() => {
-                  void handleToggle(connection.id, !connection.enabled);
-                }}
-              >
-                <BidiText as="span" className="truncate">
-                  {connector.displayName}
-                </BidiText>
-              </MenuCheckboxItem>
-            );
-          })
-        )}
+        {mcpRowsContent}
         <MenuSeparator />
         <MenuItem onClick={openMcpSettings}>
           {t("chat.composerMenu.openMcpSettings")}

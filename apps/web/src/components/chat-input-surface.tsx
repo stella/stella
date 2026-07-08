@@ -1,6 +1,6 @@
 import "./chat-editor.css";
 import { useCallback, useRef } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -81,6 +81,13 @@ type ChatInputSurfaceProps = {
    * surfaces that don't navigate to the tools catalogue.
    */
   mcpOrganizationId?: string | undefined;
+};
+
+const hasBlockingCharacterShortcutModifier = (
+  event: KeyboardEvent<HTMLElement>,
+) => {
+  const isAltGraph = event.getModifierState("AltGraph");
+  return event.metaKey || (!isAltGraph && (event.altKey || event.ctrlKey));
 };
 
 export const ChatInputSurface = ({
@@ -202,16 +209,15 @@ export const ChatInputSurface = ({
             // opens the (+) menu at Skills instead of typing the character —
             // the composer (+) menu replaces the old slash popover here (see
             // `disableSlashSuggestion` on `useChatEditor`). Modifier
-            // combinations and IME composition fall through untouched.
+            // combinations and IME composition fall through untouched; AltGr
+            // is allowed because some layouts emit printable characters with
+            // Ctrl+Alt set.
             if (
               skillsOrganizationId !== undefined &&
               isBlank &&
               event.key === "/" &&
-              !event.altKey &&
-              !event.ctrlKey &&
               !event.nativeEvent.isComposing &&
-              !event.metaKey &&
-              !event.shiftKey
+              !hasBlockingCharacterShortcutModifier(event)
             ) {
               event.preventDefault();
               plusMenuRef.current?.openSkills();
@@ -228,10 +234,8 @@ export const ChatInputSurface = ({
               context !== undefined &&
               isBlank &&
               event.key === "@" &&
-              !event.altKey &&
-              !event.ctrlKey &&
               !event.nativeEvent.isComposing &&
-              !event.metaKey
+              !hasBlockingCharacterShortcutModifier(event)
             ) {
               event.preventDefault();
               plusMenuRef.current?.openContext();

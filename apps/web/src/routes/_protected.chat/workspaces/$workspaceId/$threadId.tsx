@@ -21,7 +21,7 @@ export const Route = createFileRoute(
     // loader only fills a COLD cache (cached data renders immediately and
     // background-refetches; awaiting here would clobber the maximize-tab
     // `contextMatterIds` seeding).
-    const options = chatThreadOptions({
+    const threadQueryOptions = chatThreadOptions({
       activeOrganizationId: context.user.activeOrganizationId,
       key: {
         scope: "workspace",
@@ -30,10 +30,13 @@ export const Route = createFileRoute(
       },
       context: { allowMissingThread: true },
     });
-    if (context.queryClient.getQueryData(options.queryKey) !== undefined) {
+    if (
+      context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
+      undefined
+    ) {
       return;
     }
-    await ensureRouteQueryData(context.queryClient, options);
+    await ensureRouteQueryData(context.queryClient, threadQueryOptions);
   },
 });
 

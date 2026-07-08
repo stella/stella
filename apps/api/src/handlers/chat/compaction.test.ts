@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
+import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -745,6 +746,16 @@ describe("thread context usage", () => {
 });
 
 describe("per-model compaction budget", () => {
+  test("sizes encoded thread model selections by bare model id", () => {
+    const budget = resolveChatCompactionBudget({
+      chatModelOverride: "openai::gpt-5.4",
+      orgAIConfig: null,
+      organizationId: toSafeId<"organization">("org_test"),
+    });
+
+    expect(budget.triggerTokens).toBe(200_000);
+  });
+
   test("uses half the window, clamped to [64k, 200k]", () => {
     // 128k window -> 64k (lower clamp), 200k -> 100k, 300k -> 150k,
     // 400k/1M -> 200k (upper clamp).

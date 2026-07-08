@@ -69,6 +69,7 @@ type FileThreadLookupInput = {
  * lookup that would have run anyway.
  */
 type ThreadMetadata = {
+  chatModel: string | null;
   contextMatterIds: SafeId<"workspace">[];
   usedAnonymization: boolean;
   webSearchEnabled: boolean;
@@ -89,6 +90,7 @@ type ResolveFileThreadMessagePage = {
   lastActivityAt: string | null;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
+  model: string | null;
   context: ThreadContextUsage | null;
 };
 
@@ -116,6 +118,7 @@ const emptyMessagePage = (
   lastActivityAt: null,
   webSearchAvailable,
   webSearchEnabled: false,
+  model: null,
   context: null,
 });
 
@@ -185,6 +188,7 @@ const loadResolvedThreadMessagePage = async ({
   organizationId,
   orgAIConfig,
   contextMatterIds,
+  chatModel,
   usedAnonymization,
   webSearchAvailable,
   webSearchEnabled,
@@ -242,6 +246,7 @@ const loadResolvedThreadMessagePage = async ({
     lastActivityAt: page.lastActivityAt,
     webSearchAvailable,
     webSearchEnabled,
+    model: chatModel,
     context,
   };
 };
@@ -260,6 +265,7 @@ const findFileChatThread = async (
     await tx
       .select({
         chatThreadId: fileChatThreads.chatThreadId,
+        chatModel: chatThreads.chatModel,
         contextMatterIds: chatThreads.contextMatterIds,
         usedAnonymization: chatThreads.usedAnonymization,
         webSearchEnabled: chatThreads.webSearchEnabled,
@@ -286,6 +292,7 @@ const findFieldKeyedChatThread = async (
     await tx
       .select({
         id: chatThreads.id,
+        chatModel: chatThreads.chatModel,
         contextMatterIds: chatThreads.contextMatterIds,
         usedAnonymization: chatThreads.usedAnonymization,
         webSearchEnabled: chatThreads.webSearchEnabled,
@@ -417,6 +424,7 @@ const createFileChatThread = async (
       organizationId,
       orgAIConfig,
       webSearchAvailable,
+      chatModel: fieldKeyedThread.chatModel,
       contextMatterIds: fieldKeyedThread.contextMatterIds,
       usedAnonymization: fieldKeyedThread.usedAnonymization,
       webSearchEnabled: fieldKeyedThread.webSearchEnabled,
@@ -506,6 +514,7 @@ const resolveFileThread = createSafeHandler(
           organizationId: input.organizationId,
           orgAIConfig,
           webSearchAvailable,
+          chatModel: existing.chatModel,
           contextMatterIds: existing.contextMatterIds,
           usedAnonymization: existing.usedAnonymization,
           webSearchEnabled: existing.webSearchEnabled,
@@ -553,6 +562,7 @@ const resolveFileThread = createSafeHandler(
             organizationId: input.organizationId,
             orgAIConfig,
             webSearchAvailable,
+            chatModel: found.chatModel,
             contextMatterIds: found.contextMatterIds,
             usedAnonymization: found.usedAnonymization,
             webSearchEnabled: found.webSearchEnabled,

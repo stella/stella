@@ -16,6 +16,7 @@ import {
 } from "@/api/handlers/chat/compaction";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
+import { decodeChatModelSelection } from "@/api/lib/chat-model-selection";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 export type ChatCompactionBudget = {
@@ -65,7 +66,9 @@ const resolveChatModelId = ({
   organizationId,
 }: ResolveChatCompactionBudgetOptions): string | undefined => {
   if (chatModelOverride) {
-    return chatModelOverride;
+    return (
+      decodeChatModelSelection(chatModelOverride)?.modelId ?? chatModelOverride
+    );
   }
 
   try {

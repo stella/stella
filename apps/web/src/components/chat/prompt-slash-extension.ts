@@ -144,11 +144,22 @@ const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
  * is read on every keystroke so the host can mix prompts and skills
  * (and any future kinds) without re-creating the extension.
  */
+type CreatePromptSlashSuggestionOptions = {
+  suppressEmptyTrigger?: boolean | undefined;
+};
+
 export const createPromptSlashSuggestion = (
   getItems: () => SlashItem[],
+  options?: CreatePromptSlashSuggestionOptions,
 ): Omit<SuggestionOptions<SlashItem, SlashItem>, "editor"> => ({
   char: "/",
   allowSpaces: false,
+  allow: ({ range, state }) => {
+    if (!options?.suppressEmptyTrigger) {
+      return true;
+    }
+    return state.doc.textBetween(0, range.from, "\n", "\n").trim() !== "";
+  },
   items: ({ query }) => filterItems(getItems(), query),
 
   command: ({ editor, range, props }) => {

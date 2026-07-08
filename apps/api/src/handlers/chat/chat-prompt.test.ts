@@ -43,9 +43,9 @@ const FULL_TOOL_AVAILABILITY = {
 } as const satisfies ChatToolAvailability;
 const SKILL_METADATA = [
   {
-    name: "legal-interpretation",
-    description: "Analyze legal texts using an interpretation framework.",
-    version: "3.0",
+    name: "custom-research-skill",
+    description: "Apply a user-authored research workflow.",
+    version: "1.0",
   },
 ] as const;
 
@@ -142,7 +142,7 @@ describe("chat prompt builders", () => {
     });
 
     expect(first.cacheStablePrefix).toBe(second.cacheStablePrefix);
-    expect(first.cacheStablePrefix).toContain("legal-interpretation");
+    expect(first.cacheStablePrefix).toContain("custom-research-skill");
     expect(first.cacheStablePrefix).not.toContain("First User");
     expect(first.cacheStablePrefix).not.toContain("Current date");
     expect(first.fullPrompt).not.toBe(second.fullPrompt);

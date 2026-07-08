@@ -519,6 +519,7 @@ type FileChatThreadFetchResult = {
   lastActivityAt: string | null;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
+  model: string | null;
   context: ChatContextUsage | null;
 };
 
@@ -546,6 +547,7 @@ const fetchFileChatThread = async ({
     lastActivityAt: response.data.lastActivityAt,
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
+    model: response.data.model,
     context: response.data.context,
   };
 };
@@ -1344,6 +1346,7 @@ export const fileChatThreadOptions = ({
           lastActivityAt: fetched.lastActivityAt,
           webSearchAvailable: fetched.webSearchAvailable,
           webSearchEnabled: fetched.webSearchEnabled,
+          model: fetched.model,
           context: fetched.context,
         },
       );

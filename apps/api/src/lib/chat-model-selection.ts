@@ -39,7 +39,7 @@ export type ChatModelOption = ChatModelSelection & {
 };
 
 const isBYOKProviderValue = (value: string): value is BYOKProvider =>
-  value in BYOK_MODEL_OPTIONS;
+  Object.hasOwn(BYOK_MODEL_OPTIONS, value);
 
 export const encodeChatModelSelection = ({
   provider,

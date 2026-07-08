@@ -605,6 +605,10 @@ export const ChatThreadPage = ({
                         threadQueryOptions.queryKey,
                         (prev) => (prev ? { ...prev, model } : prev),
                       );
+                      void invalidateChatThreadAcrossScopes({
+                        queryClient,
+                        threadId: toSafeId<"chatThread">(threadRef.threadId),
+                      });
                     },
                   }}
                   skillsOrganizationId={activeOrganizationId}

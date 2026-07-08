@@ -77,6 +77,8 @@ describe("encodeChatModelSelection / decodeChatModelSelection", () => {
     "::model-id",
     "not-a-provider::model-id",
     "azure_foundry::gpt-5.4",
+    "constructor::model-id",
+    "toString::model-id",
   ])("rejects malformed input: %s", (value) => {
     expect(decodeChatModelSelection(value)).toBeNull();
   });

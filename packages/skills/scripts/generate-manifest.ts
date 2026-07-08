@@ -47,15 +47,27 @@ const imports = skillEntries.flatMap((skill) => [
       `import ${resource.importName} from "${resource.sourcePath}" with { type: "text" };`,
   ),
 ]);
+const importBlock = imports.length > 0 ? `${imports.join("\n")}\n\n` : "";
+const generatedSkillsBody =
+  skillEntries.length > 0
+    ? `\n${skillEntries.map(formatSkillEntry).join(",\n")}\n`
+    : "";
 
 const output = `// eslint-disable-next-line typescript-eslint/triple-slash-reference -- loads the ambient "*.md" module declaration; no ES import equivalent
 /// <reference path="./markdown.d.ts" />
 
-${imports.join("\n")}
+${importBlock}\
+type GeneratedSkillEntry = {
+  id: string;
+  source: string;
+  resources: readonly {
+    kind: "knowledge" | "prompt";
+    path: string;
+    source: string;
+  }[];
+};
 
-export const GENERATED_SKILLS = [
-${skillEntries.map(formatSkillEntry).join(",\n")}
-] as const;
+export const GENERATED_SKILLS: readonly GeneratedSkillEntry[] = [${generatedSkillsBody}];
 `;
 
 if (process.argv.includes("--check")) {
