@@ -76,6 +76,7 @@ import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
 import { reusableConditions } from "@/routes/_protected.knowledge/-components/template-studio-conditions";
+import "@/routes/_protected.knowledge/-components/template-studio-inspector";
 import {
   protectedRouteApi,
   TEMPLATE_STUDIO_VIEW,

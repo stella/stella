@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import {
   AlertTriangleIcon,
   BookmarkIcon,
@@ -113,6 +113,13 @@ import {
 
 type StudioFacet = "fields" | "guidance" | "history" | "fill";
 type TemplateStudioPayload = { templateId: string };
+
+class TemplateDocumentFetchError extends TaggedError(
+  "TemplateDocumentFetchError",
+)<{
+  message: string;
+  status: number;
+}>() {}
 
 const STUDIO_FACETS: readonly StudioFacet[] = [
   "fields",
@@ -448,6 +455,12 @@ const TemplateFillFacet = ({
       const res = await fetch(presignedUrl, {
         signal: AbortSignal.timeout(15_000),
       });
+      if (!res.ok) {
+        throw new TemplateDocumentFetchError({
+          message: `Template document fetch failed (${res.status})`,
+          status: res.status,
+        });
+      }
       const blob = await res.blob();
       const file = new File([blob], fileName, { type: DOCX_MIME });
       const response = await api.templates.discover.post({ file });

@@ -213,11 +213,10 @@ export const workspaceSearchDocuments = p.pgTable(
   ],
 );
 
-// One row per chat thread. Tenancy is intentionally not denormalised
-// here: the global-search query joins back to `chat_threads` and
-// filters by the owning thread's user/org/workspace scope, so this
-// table never drifts out of sync with thread ownership. Deletes
-// cascade from the thread.
+// One row per entity with extracted plaintext encrypted for search and
+// downstream retrieval. Tenancy is denormalized through organizationId and
+// workspaceId so queries can stay tenant-scoped without joining through the
+// entity graph first. Deletes cascade from the owning entity.
 export const extractedContent = p.pgTable(
   "extracted_content",
   {
