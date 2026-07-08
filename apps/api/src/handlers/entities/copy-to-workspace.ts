@@ -150,11 +150,10 @@ const buildPropertyIdMap = (
       propertyIdMap.set(sourceProp.id, targetSystemFileId);
       continue;
     }
-    if (
-      sourceProp.id === sourceClassifierId &&
-      targetClassifierId !== undefined
-    ) {
-      propertyIdMap.set(sourceProp.id, targetClassifierId);
+    if (sourceProp.id === sourceClassifierId) {
+      if (targetClassifierId !== undefined) {
+        propertyIdMap.set(sourceProp.id, targetClassifierId);
+      }
       continue;
     }
     if (isLegacyClassifier(sourceProp)) {
