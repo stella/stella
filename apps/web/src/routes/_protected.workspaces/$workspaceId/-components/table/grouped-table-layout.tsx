@@ -587,8 +587,7 @@ const GroupSection = ({
   // Publish this section's rows to the parent so the row selection resolves
   // across every group; clear them when the section unmounts.
   const groupKey = groupKeyFor(group.value);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (this section's rows) synced up to the parent so the shared selection resolves across groups
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     reportGroupTreeData(groupKey, treeData);
     return () => reportGroupTreeData(groupKey, NO_ROWS);
   }, [groupKey, treeData, reportGroupTreeData]);

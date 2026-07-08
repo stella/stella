@@ -58,7 +58,6 @@ export const createReadFilesystemTreeHandler = (
           fieldIds: body.fieldIds ?? [],
           excludedKinds: ["task"],
           previewableForAi: false,
-          includeTotalCount: false,
         }),
       );
 

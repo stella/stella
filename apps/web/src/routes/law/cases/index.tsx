@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   keepPreviousData,
@@ -25,6 +25,7 @@ import type {
   DecisionListFilters,
   SearchFacets,
 } from "@/features/case-law/queries/decisions";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
@@ -201,8 +202,7 @@ function PublicCaseLawIndex() {
   const notFound = Route.useSearch({ select: (s) => s.notFound });
   const navigate = Route.useNavigate();
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (notFound flag -> toast + navigate); move into the navigation that sets notFound
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!notFound) {
       return;
     }

@@ -31,6 +31,7 @@ import {
   useActiveDocxStore,
 } from "@/components/ai-suggestions/active-docx-store";
 import { ReviewPanel } from "@/components/ai-suggestions/review-panel";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type SuggestionsFacetProps = {
   entityId: string;
@@ -94,8 +95,7 @@ export const SuggestionsFacet = ({
     hasDispatchedRef.current = false;
   }, [entityId, fileFieldId]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay dispatch of onMissingEditor callback; move into handler/derived guard
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (registration !== undefined) {
       hasDispatchedRef.current = false;
       return;

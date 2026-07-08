@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import {
@@ -34,6 +34,7 @@ import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
@@ -176,8 +177,7 @@ function ChatIndex() {
   });
   const seededDraftRef = useRef<string | null>(null);
   const seedingDraftRef = useRef<string | null>(null);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (derived preference/draft-meta flags fire the seedDraftWebSearch mutation); move into the mutation flow
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const threadId = threadIdRef.current;
     if (
       seededDraftRef.current === threadId ||

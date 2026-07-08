@@ -1,8 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { useForm } from "@tanstack/react-form";
 import { useMutation } from "@tanstack/react-query";
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Navigate,
+  redirect,
+  useNavigate,
+} from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -23,6 +28,7 @@ import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
@@ -71,14 +77,10 @@ function Organization() {
   const isOauthPostLogin =
     typeof window !== "undefined" &&
     hasSignedOauthQuery(window.location.search);
-  const navigate = useNavigate();
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- navigation side-effect driven by derived auth state, move into the data-loading flow
-  useEffect(() => {
-    if (!isPending && !hasOrganizations && !isOauthPostLogin) {
-      void navigate({ to: "/onboarding", replace: true });
-    }
-  }, [hasOrganizations, isOauthPostLogin, isPending, navigate]);
+  if (!isPending && !hasOrganizations && !isOauthPostLogin) {
+    return <Navigate replace to="/onboarding" />;
+  }
 
   if (isPending || (!hasOrganizations && !isOauthPostLogin)) {
     return (
@@ -190,8 +192,7 @@ const OrganizationList = ({
   // Auto-select when there's only one organization
   const singleOrg = organizations.length === 1 ? organizations[0] : null;
   const autoSelected = useRef(false);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (auto-trigger select mutation on derived single-org state), move into handler
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (singleOrg && !autoSelected.current && !isSelectPending) {
       autoSelected.current = true;
       selectOrg(singleOrg.id);

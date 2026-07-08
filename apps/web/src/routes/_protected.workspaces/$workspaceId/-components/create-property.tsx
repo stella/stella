@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
@@ -25,6 +25,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
@@ -333,8 +334,7 @@ const PropertyComposerBody = ({
   // null-render guard happens after all hooks have run so the order
   // stays stable.
   const missingForEdit = isEditMode && !editingProperty;
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (missing-property condition → onClose), drive the close from the lookup/render guard instead
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (missingForEdit) {
       onClose();
     }

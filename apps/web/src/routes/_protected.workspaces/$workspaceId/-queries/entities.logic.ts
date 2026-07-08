@@ -11,7 +11,6 @@ export type EntitiesPageKey = {
   workspaceId: string;
   filters: ConditionNode[];
   sorts: ViewSort[];
-  page: number;
   search?: string;
   pageSize?: number;
   fieldMode?: EntitiesFieldMode;
@@ -35,7 +34,6 @@ export type KanbanGroupKey = EntitiesWindowKey & {
   // The property's option values. Sent by the grouped table so the uncategorized
   // group folds in stale (out-of-options) cells; omitted by the kanban board.
   optionValues?: string[];
-  includeTotalCount?: boolean;
 };
 
 export type GroupCountsKey = {
@@ -58,11 +56,10 @@ export const normalizeVisibleFieldIds = (
 
 export const entitiesKeys = {
   all: (workspaceId: string) => ["entities", workspaceId],
-  page: ({
+  sample: ({
     workspaceId,
     filters,
     sorts,
-    page,
     search,
     pageSize,
     fieldMode,
@@ -76,7 +73,6 @@ export const entitiesKeys = {
       {
         filters,
         sorts,
-        page,
         ...(search?.trim() && { search: search.trim() }),
         pageSize: pageSize ?? DEFAULT_ENTITY_VIEW_PAGE_SIZE,
         fieldMode: normalizedFieldMode,
@@ -154,7 +150,6 @@ export const entitiesKeys = {
     groupByPropertyId,
     groupValue,
     optionValues,
-    includeTotalCount,
   }: KanbanGroupKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
     return [
@@ -173,7 +168,6 @@ export const entitiesKeys = {
         groupByPropertyId,
         groupValue,
         optionValues: optionValues?.toSorted(),
-        includeTotalCount: includeTotalCount ?? false,
       },
     ];
   },

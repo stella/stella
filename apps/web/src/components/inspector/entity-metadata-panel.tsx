@@ -1,7 +1,6 @@
 import type { PropsWithChildren } from "react";
 import {
   useCallback,
-  useEffect,
   useOptimistic,
   useRef,
   useState,
@@ -20,6 +19,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
@@ -205,8 +205,7 @@ const EntityMetadataContent = ({
     ]);
   }, [queryClient, workspaceId]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (workflow-finished refetch), move into handler
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (isWorkflowRunning) {
       sawWorkflowRunning.current = true;
       return;

@@ -131,14 +131,12 @@ type QueryEntitiesProps = {
   sorts: ViewSort[];
   search?: string | undefined;
   cursor?: EntitiesWindowCursorValues | null | undefined;
-  offset?: number | undefined;
   limit: number;
   fieldMode: QueryEntitiesFieldMode;
   fieldIds: SafeId<"property">[];
   excludedKinds?: EntityKind[];
   previewableForAi?: boolean;
   extraConditions?: SQL[];
-  includeTotalCount: boolean;
 };
 
 const organizationMemberIdsSubquery = (
@@ -636,14 +634,12 @@ const queryEntitiesGenerator = async function* ({
   sorts,
   search,
   cursor,
-  offset = 0,
   limit,
   fieldMode,
   fieldIds,
   excludedKinds = [],
   previewableForAi = false,
   extraConditions = [],
-  includeTotalCount,
 }: QueryEntitiesProps) {
   const workspaceCondition = eq(entities.workspaceId, workspaceId);
   const filterConditions = buildFilterConditions(filters);
@@ -680,37 +676,16 @@ const queryEntitiesGenerator = async function* ({
     sql`, `,
   )})`;
 
-  const countRowsPromise = includeTotalCount
-    ? safeDb((tx) =>
-        tx.select({ total: count() }).from(entities).where(whereClause),
-      )
-    : Promise.resolve(null);
-
-  const [idRowsResult, countRowsResult] = await Promise.all([
-    safeDb((tx) => {
-      const query = tx
-        .select({ cursorValues: cursorValuesExpr, id: entities.id })
-        .from(entities)
-        .where(paginatedWhereClause)
-        .orderBy(...sortExpressions)
-        .limit(limit);
-
-      if (offset <= 0) {
-        return query;
-      }
-
-      return query.offset(offset);
-    }),
-    countRowsPromise,
-  ]);
+  const idRowsResult = await safeDb((tx) =>
+    tx
+      .select({ cursorValues: cursorValuesExpr, id: entities.id })
+      .from(entities)
+      .where(paginatedWhereClause)
+      .orderBy(...sortExpressions)
+      .limit(limit),
+  );
 
   const idRows = yield* idRowsResult;
-
-  let totalCount: number | null = null;
-  if (countRowsResult !== null) {
-    const countResult = yield* countRowsResult;
-    totalCount = countResult.at(0)?.total ?? 0;
-  }
 
   const pageIds = idRows.map((r) => r.id);
   const cursorValuesByEntityId = new Map<string, EntitiesWindowCursorValues>(
@@ -721,7 +696,6 @@ const queryEntitiesGenerator = async function* ({
     return Result.ok({
       cursorValuesByEntityId,
       entities: [],
-      totalCount,
     });
   }
 
@@ -1051,7 +1025,6 @@ const queryEntitiesGenerator = async function* ({
   return Result.ok({
     cursorValuesByEntityId,
     entities: result,
-    totalCount,
   });
 };
 

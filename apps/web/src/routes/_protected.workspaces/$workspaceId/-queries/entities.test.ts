@@ -51,19 +51,17 @@ describe("entity query field selection", () => {
   });
 
   test("keeps field selection in the cache identity only for visible mode", () => {
-    const visibleKey = entitiesKeys.page({
+    const visibleKey = entitiesKeys.sample({
       workspaceId: "workspace-1",
       filters: [],
       sorts: [],
-      page: 1,
       fieldMode: "visible",
       fieldIds: ["status", "due", "status"],
     });
-    const fullKey = entitiesKeys.page({
+    const fullKey = entitiesKeys.sample({
       workspaceId: "workspace-1",
       filters: [],
       sorts: [],
-      page: 1,
       fieldMode: "full",
       fieldIds: ["status"],
     });
@@ -78,19 +76,17 @@ describe("entity query field selection", () => {
     });
   });
 
-  test("keeps search in the page cache identity", () => {
-    const searchKey = entitiesKeys.page({
+  test("keeps search in the sample cache identity", () => {
+    const searchKey = entitiesKeys.sample({
       workspaceId: "workspace-1",
       filters: [],
       sorts: [],
-      page: 1,
       search: " closing binder ",
     });
-    const emptyKey = entitiesKeys.page({
+    const emptyKey = entitiesKeys.sample({
       workspaceId: "workspace-1",
       filters: [],
       sorts: [],
-      page: 1,
     });
 
     expect(searchKey).not.toEqual(emptyKey);
@@ -100,21 +96,19 @@ describe("entity query field selection", () => {
     expect(emptyKey.at(-1)).not.toHaveProperty("search");
   });
 
-  test("keeps the AI-previewable flag in the page cache identity", () => {
-    const previewKey = entitiesKeys.page({
+  test("keeps the AI-previewable flag in the sample cache identity", () => {
+    const previewKey = entitiesKeys.sample({
       workspaceId: "workspace-1",
       filters: [],
       sorts: [],
-      page: 1,
       pageSize: 50,
       fieldMode: "visible",
       previewableForAi: true,
     });
-    const regularKey = entitiesKeys.page({
+    const regularKey = entitiesKeys.sample({
       workspaceId: "workspace-1",
       filters: [],
       sorts: [],
-      page: 1,
       pageSize: 50,
       fieldMode: "visible",
     });
@@ -128,14 +122,13 @@ describe("entity query field selection", () => {
     });
   });
 
-  test("keeps excluded kinds in the page cache identity", () => {
+  test("keeps excluded kinds in the sample cache identity", () => {
     expect(
       entitiesKeys
-        .page({
+        .sample({
           workspaceId: "workspace-1",
           filters: [],
           sorts: [],
-          page: 1,
           excludedKinds: ["task", "folder"],
         })
         .at(-1),
@@ -144,24 +137,22 @@ describe("entity query field selection", () => {
     });
   });
 
-  test("keeps extra caller fields out of the page cache identity", () => {
-    const cleanKey = entitiesKeys.page({
+  test("keeps extra caller fields out of the sample cache identity", () => {
+    const cleanKey = entitiesKeys.sample({
       workspaceId: "workspace-1",
       filters: [],
       sorts: [],
-      page: 1,
       search: "nda",
     });
     const noisyInput = {
       workspaceId: "workspace-1",
       filters: [],
       sorts: [],
-      page: 1,
       search: "nda",
       cursor: "cursor-that-must-not-leak",
     };
 
-    expect(entitiesKeys.page(noisyInput)).toEqual(cleanKey);
+    expect(entitiesKeys.sample(noisyInput)).toEqual(cleanKey);
   });
 
   test("keeps cursor state out of the window cache identity", () => {

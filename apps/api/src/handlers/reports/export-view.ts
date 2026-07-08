@@ -3,8 +3,8 @@
  *
  * Validates the source view (must be a table view in this workspace), the
  * requested template (a deployment built-in or a stored `report`-kind org
- * template), and the row cap EARLY (a cheap indexed count) so an oversized view
- * rejects before any job is queued. Inserts a `report_exports` row, records an
+ * template), and the row cap early so an oversized view rejects before any job
+ * is queued. Inserts a `report_exports` row, records an
  * audit event, enqueues the background job, and returns the export id for the
  * frontend to poll.
  *
@@ -28,6 +28,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
 const templateRefSchema = t.Union([
@@ -129,9 +130,8 @@ const exportViewReport = createSafeHandler(
       }
     }
 
-    // Cheap early row-cap check: an indexed count over the view's filters, no
-    // fields loaded. Exceeding the cap is a typed error, never a truncated job.
-    const countResult = yield* Result.await(
+    // +1 so a view exactly one over the cap is detected, never truncated.
+    const cappedRowsResult = yield* Result.await(
       queryEntities({
         safeDb,
         workspaceId,
@@ -139,17 +139,13 @@ const exportViewReport = createSafeHandler(
         currentOrganizationId: organizationId,
         filters: layout.filters,
         sorts: layout.sorts,
-        limit: 1,
+        limit: LIMITS.reportExportMaxRows + 1,
         fieldMode: "visible",
         fieldIds: [],
         excludedKinds: ["folder", "task"],
-        includeTotalCount: true,
       }),
     );
-    if (
-      countResult.totalCount !== null &&
-      isReportRowCountOverCap(countResult.totalCount)
-    ) {
+    if (isReportRowCountOverCap(cappedRowsResult.entities.length)) {
       return Result.err(
         new HandlerError({
           status: 400,

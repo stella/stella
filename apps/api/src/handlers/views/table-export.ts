@@ -792,7 +792,6 @@ const exportTableView = createSafeHandler(
         fieldMode: "visible",
         fieldIds,
         excludedKinds: ["folder", "task"],
-        includeTotalCount: false,
       }),
     );
 

@@ -5,6 +5,7 @@ import { createReadEntitiesHandler } from "@/api/handlers/entities/read";
 import { createReadFilesystemTreeHandler } from "@/api/handlers/entities/read-filesystem-tree";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const queryEntitiesMock = mock();
 
@@ -18,8 +19,7 @@ const userId = toSafeId<"user">("user_entity_read");
 const createContext = (
   body: Parameters<typeof readEntities.handler>[0]["body"],
 ): Parameters<typeof readEntities.handler>[0] =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- test fixture only provides fields used by the safe handler and read handler
-  ({
+  asTestRaw<Parameters<typeof readEntities.handler>[0]>({
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
@@ -28,7 +28,7 @@ const createContext = (
     safeDb: async () => Result.ok([]),
     request: new Request("https://example.test/v1/entities/query"),
     route: "/v1/entities/:workspaceId/query",
-  }) as unknown as Parameters<typeof readEntities.handler>[0];
+  });
 
 describe("entity read handler search", () => {
   beforeEach(() => {
@@ -37,7 +37,6 @@ describe("entity read handler search", () => {
       Result.ok({
         cursorValuesByEntityId: new Map(),
         entities: [],
-        totalCount: 0,
       }),
     );
   });
@@ -47,8 +46,7 @@ describe("entity read handler search", () => {
       createContext({
         filters: [],
         sorts: [],
-        page: 1,
-        pageSize: 50,
+        limit: 50,
         search: "closing binder",
         fieldMode: "visible",
         fieldIds: [],
@@ -71,8 +69,7 @@ describe("entity read handler search", () => {
       createContext({
         filters: [],
         sorts: [],
-        page: 1,
-        pageSize: 50,
+        limit: 50,
         fieldMode: "visible",
         fieldIds: [],
         previewableForAi: true,
@@ -89,13 +86,12 @@ describe("entity read handler search", () => {
     );
   });
 
-  test("keeps legacy page-only pagination working without a cursor", async () => {
+  test("uses cursor pagination without legacy offset", async () => {
     await readEntities.handler(
       createContext({
         filters: [],
         sorts: [],
-        page: 3,
-        pageSize: 25,
+        limit: 25,
         fieldMode: "visible",
         fieldIds: [],
       }),
@@ -105,7 +101,6 @@ describe("entity read handler search", () => {
       expect.objectContaining({
         cursor: null,
         limit: 26,
-        offset: 50,
       }),
     );
   });
@@ -128,7 +123,6 @@ describe("entity read handler search", () => {
         search: "closing binder",
         limit: LIMITS.entitiesCount,
         excludedKinds: ["task"],
-        includeTotalCount: false,
       }),
     );
   });

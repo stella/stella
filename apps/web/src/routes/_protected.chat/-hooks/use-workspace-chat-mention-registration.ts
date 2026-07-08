@@ -62,7 +62,6 @@ export const useWorkspaceChatMentionRegistration = (
         filters,
         sorts,
         ...(search && { search }),
-        page: 1,
         pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
       });
     },
