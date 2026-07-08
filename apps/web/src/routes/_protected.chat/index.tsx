@@ -355,6 +355,7 @@ function ChatIndex() {
             <ChatInputSurface
               anonymized={anonymized}
               autoFocus
+              context={{ activeOrganizationId, threadRef }}
               controller={controller}
               variant="large"
               mcpOrganizationId={activeOrganizationId}

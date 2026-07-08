@@ -592,6 +592,7 @@ export const ChatThreadPage = ({
                 <ChatInputSurface
                   anonymized={anonymized}
                   autoFocus
+                  context={{ activeOrganizationId, threadRef }}
                   controller={controller}
                   isGenerating={isGenerating}
                   mcpOrganizationId={activeOrganizationId}

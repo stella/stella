@@ -835,6 +835,7 @@ describe("acquireChatRuntime reconcile", () => {
     webSearchAvailable: false,
     webSearchEnabled: false,
     context: null,
+    model: null,
     ...overrides,
   });
 

@@ -38,6 +38,7 @@ import {
   CHAT_MENTION_ENTITY_RESULT_LIMIT,
   CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   getMentionViewScope,
+  insertChatMention,
 } from "@/components/chat-mention-helpers";
 import { shouldChipPaste } from "@/components/chat-pasted-text";
 import {
@@ -1194,22 +1195,7 @@ export const useChatEditor = ({
       }
 
       markDraftStarted();
-      editor
-        .chain()
-        .focus()
-        .insertContent({
-          type: "mention",
-          attrs: {
-            id: mention.id,
-            label: mention.label,
-            category: mention.category,
-            kind: mention.kind,
-            mimeType: mention.mimeType,
-            sourceWorkspaceId: mention.sourceWorkspaceId,
-          },
-        })
-        .insertContent(" ")
-        .run();
+      insertChatMention(editor, mention);
     },
     [editor, markDraftStarted],
   );

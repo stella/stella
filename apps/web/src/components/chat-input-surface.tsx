@@ -16,6 +16,7 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import {
   ComposerPlusMenu,
+  type ComposerContextMenuProps,
   type ComposerModelsMenuProps,
   type ComposerPlusMenuHandle,
 } from "@/components/chat/composer-plus-menu";
@@ -70,6 +71,12 @@ type ChatInputSurfaceProps = {
    */
   skillsOrganizationId?: string | undefined;
   /**
+   * When provided, the (+) menu gains a Context submenu (mention a matter
+   * or one of its files), wired to this surface's own editor. Omit on
+   * surfaces without mention insertion.
+   */
+  context?: Omit<ComposerContextMenuProps, "editor"> | undefined;
+  /**
    * When provided, the (+) menu gains an MCP Servers submenu. Omit on
    * surfaces that don't navigate to the tools catalogue.
    */
@@ -90,6 +97,7 @@ export const ChatInputSurface = ({
   dock,
   models,
   skillsOrganizationId,
+  context,
   mcpOrganizationId,
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
@@ -208,6 +216,26 @@ export const ChatInputSurface = ({
               event.preventDefault();
               plusMenuRef.current?.openSkills();
             }
+            // "@" in an empty composer, on a surface with a Context submenu,
+            // opens the (+) menu at Context the same way. Shift is
+            // deliberately NOT excluded: many keyboard layouts (e.g. US
+            // QWERTY) only produce "@" with Shift held, so requiring its
+            // absence would make this unreachable there. A non-empty
+            // composer keeps the existing "@" mention suggestion popover
+            // (`ChatMention` in chat-editor-provider.tsx) untouched — this
+            // only intercepts the empty-composer entry point.
+            if (
+              context !== undefined &&
+              isBlank &&
+              event.key === "@" &&
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.nativeEvent.isComposing &&
+              !event.metaKey
+            ) {
+              event.preventDefault();
+              plusMenuRef.current?.openContext();
+            }
             event.stopPropagation();
           }}
           role="presentation"
@@ -237,6 +265,15 @@ export const ChatInputSurface = ({
         </div>
         <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
           <ComposerPlusMenu
+            context={
+              context
+                ? {
+                    activeOrganizationId: context.activeOrganizationId,
+                    editor,
+                    threadRef: context.threadRef,
+                  }
+                : undefined
+            }
             disabled={inputDisabled}
             mcp={
               mcpOrganizationId
@@ -245,7 +282,7 @@ export const ChatInputSurface = ({
             }
             models={models}
             onOpenFilePicker={openFilePicker}
-            onSlashMenuClose={focus}
+            onProgrammaticMenuClose={focus}
             ref={plusMenuRef}
             skills={
               skillsOrganizationId

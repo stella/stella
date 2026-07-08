@@ -406,7 +406,10 @@ const useCategoryLabel = () => {
   };
 };
 
-const MentionIcon = ({
+/** Resolves the category/kind-appropriate glyph for a mention row. Exported
+ *  so the composer (+) menu's Context submenu can render byte-identical
+ *  icons for the same options the "@" popover lists. */
+export const MentionIcon = ({
   id,
   category,
   kind,
