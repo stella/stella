@@ -15,14 +15,21 @@ export const readOverviewHandler = async ({
   scopedDb,
   workspaceId,
 }: ReadOverviewHandlerProps) => {
-  const { entityCount, recentEntities, kindCounts } = await scopedDb(
-    async (tx) => {
-      const [count, recent, kinds] = await Promise.all([
+  const { entityCount, documentCount, taskCount, recentEntities } =
+    await scopedDb(async (tx) => {
+      const [totals, recent] = await Promise.all([
         tx
-          .select({ count: sql<number>`count(*)::int` })
+          .select({
+            entityCount: sql<number>`count(*)::int`,
+            documentCount: sql<number>`count(*) filter (where ${entities.kind} = 'document')::int`,
+            taskCount: sql<number>`count(*) filter (where ${entities.kind} = 'task')::int`,
+          })
           .from(entities)
           .where(eq(entities.workspaceId, workspaceId))
-          .then((rows) => rows.at(0)?.count ?? 0),
+          .then(
+            (rows) =>
+              rows.at(0) ?? panic("Aggregate overview query returned no rows"),
+          ),
         tx.query.entities.findMany({
           where: {
             workspaceId: { eq: workspaceId },
@@ -92,32 +99,14 @@ export const readOverviewHandler = async ({
           orderBy: { updatedAt: "desc" },
           limit: LIMITS.overviewRecentEntities,
         }),
-        tx
-          .select({
-            kind: entities.kind,
-            count: sql<number>`count(*)::int`,
-          })
-          .from(entities)
-          .where(eq(entities.workspaceId, workspaceId))
-          .groupBy(entities.kind),
       ]);
       return {
-        entityCount: count,
+        entityCount: totals.entityCount,
+        documentCount: totals.documentCount,
+        taskCount: totals.taskCount,
         recentEntities: recent,
-        kindCounts: kinds,
       };
-    },
-  );
-
-  let documentCount = 0;
-  let taskCount = 0;
-  for (const kc of kindCounts) {
-    if (kc.kind === "document") {
-      documentCount = kc.count;
-    } else if (kc.kind === "task") {
-      taskCount = kc.count;
-    }
-  }
+    });
 
   const recent = recentEntities.map((e) => {
     const cv = e.currentVersion ?? panic("Entity has no currentVersion");
