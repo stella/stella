@@ -84,6 +84,7 @@ import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
+import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import type {
@@ -1031,30 +1032,33 @@ const FileChatOverlayInner = ({
     ? ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS
     : undefined;
 
+  const chatThreadContext = {
+    allowMissingThread: true,
+    getContextMatterIds,
+    getSendMode,
+    getUserContext,
+    ...(activeExternal ? { getActiveExternal: () => getActiveExternal() } : {}),
+    ...(activeFile ? { getActiveFile: () => getActiveFile() } : {}),
+    ...(hasDocxEditSurface
+      ? {
+          handleActiveDocxEditToolCall: (input: ApplyActiveDocxEditsInput) =>
+            handleActiveDocxEditToolCall(input),
+        }
+      : {}),
+  };
   const { data } = useSuspenseQuery(
     chatThreadOptions({
       activeOrganizationId,
       key: threadRef,
-      context: {
-        allowMissingThread: true,
-        getContextMatterIds,
-        getSendMode,
-        getUserContext,
-        ...(activeExternal
-          ? { getActiveExternal: () => getActiveExternal() }
-          : {}),
-        ...(activeFile ? { getActiveFile: () => getActiveFile() } : {}),
-        ...(hasDocxEditSurface
-          ? {
-              handleActiveDocxEditToolCall: (
-                input: ApplyActiveDocxEditsInput,
-              ) => handleActiveDocxEditToolCall(input),
-            }
-          : {}),
-      },
+      context: chatThreadContext,
     }),
   );
-  const { chat } = data;
+  const chat = useChatThreadRuntime({
+    activeOrganizationId,
+    context: chatThreadContext,
+    data,
+    key: threadRef,
+  });
   // Seed the picker once per thread. Prefer the server's persisted set;
   // for a brand-new file thread (empty set) fall back to the file's own
   // matter so "the matter this file lives in" is the default context. A

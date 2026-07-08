@@ -3,8 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { toChatThreadId } from "@/lib/chat-thread-ref";
-// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- chatThreadOptions builds the ChatRuntime from component-provided context getters (auth user, matter ids, send mode); a loader prefetch would cache a stub-context runtime under the same key and the first send would bypass anonymization. Fixing needs the queryFn split into a pure data fetch plus in-component runtime construction
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
+import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
 
 export const Route = createFileRoute("/_protected/chat/$threadId")({
   component: ThreadRoute,
@@ -13,6 +14,36 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
   // 1s — it only appears when the load actually stalls, avoiding a flash
   // between two consecutive chats.
   pendingMs: 1000,
+  loader: async ({ context, params }) => {
+    // Prime the pure thread-data query the page suspends on so the fetch
+    // starts during navigation instead of after the component mounts and
+    // suspends. `context` here is a key-shape stub only (no live getters):
+    // `chatThreadOptions` never builds a `ChatRuntime` from it — the
+    // component builds that separately, from its own live getters, via
+    // `useChatThreadRuntime`. See that factory's docs.
+    const options = chatThreadOptions({
+      activeOrganizationId: context.user.activeOrganizationId,
+      key: {
+        scope: "global",
+        threadId: toChatThreadId(params.threadId),
+      },
+      context: { allowMissingThread: true },
+    });
+    // Cached data — fresh, stale, or invalidated — renders immediately;
+    // the component's own observer background-refetches stale entries
+    // after mount and the runtime registry's idle reconcile picks the
+    // refetched messages up. Awaiting a refetch here would block first
+    // paint on a warm navigation and, worse, clobber the "move to main"
+    // seeding: `buildMaximizeTabAction` seeds this key with the inspector
+    // tab's unpersisted `contextMatterIds` and then invalidates, so an
+    // awaited refetch would replace the seed with the server's (possibly
+    // empty) set before the page's matter picker ever saw it. The loader
+    // only fills a cold cache.
+    if (context.queryClient.getQueryData(options.queryKey) !== undefined) {
+      return;
+    }
+    await ensureRouteQueryData(context.queryClient, options);
+  },
 });
 
 function ThreadRoute() {

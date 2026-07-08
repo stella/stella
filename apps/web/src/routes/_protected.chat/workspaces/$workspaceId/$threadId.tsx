@@ -1,9 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { toChatThreadId } from "@/lib/chat-thread-ref";
-// oxlint-disable-next-line require-loader-prefetch/require-loader-prefetch -- chatThreadOptions builds the ChatRuntime from component-provided context getters (auth user, matter ids, send mode); a loader prefetch would cache a stub-context runtime under the same key and the first send would bypass anonymization. Fixing needs the queryFn split into a pure data fetch plus in-component runtime construction
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { ChatThreadPage } from "@/routes/_protected.chat/-components/chat-thread-page";
 import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
+import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
 
 export const Route = createFileRoute(
   "/_protected/chat/workspaces/$workspaceId/$threadId",
@@ -13,6 +14,27 @@ export const Route = createFileRoute(
   // pending splash so consecutive thread navigations don't flash
   // a logo loader between two cached chats.
   pendingMs: 1000,
+  loader: async ({ context, params }) => {
+    // Prime the pure thread-data query the page suspends on; see the
+    // sibling `/_protected/chat/$threadId` loader for why `context` here
+    // is a key-shape stub and never seeds a `ChatRuntime`, and why the
+    // loader only fills a COLD cache (cached data renders immediately and
+    // background-refetches; awaiting here would clobber the maximize-tab
+    // `contextMatterIds` seeding).
+    const options = chatThreadOptions({
+      activeOrganizationId: context.user.activeOrganizationId,
+      key: {
+        scope: "workspace",
+        threadId: toChatThreadId(params.threadId),
+        workspaceId: params.workspaceId,
+      },
+      context: { allowMissingThread: true },
+    });
+    if (context.queryClient.getQueryData(options.queryKey) !== undefined) {
+      return;
+    }
+    await ensureRouteQueryData(context.queryClient, options);
+  },
 });
 
 function WorkspaceThreadRoute() {

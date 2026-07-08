@@ -1,4 +1,4 @@
-import { replaceEqualDeep } from "@tanstack/react-query";
+import { QueryClient, replaceEqualDeep } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -8,13 +8,16 @@ import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { toSafeId, type SafeId } from "@/lib/safe-id";
 import {
   __resetChatRequestStateForTests,
+  acquireChatRuntime,
   buildSendRequestBody,
   chatKeys,
   chatThreadOptions,
   createChatRuntime,
+  installChatRuntimeCleanup,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
   sendThreadChatMessage,
+  type ChatThreadFetched,
 } from "@/routes/_protected.chat/-queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
@@ -795,9 +798,631 @@ describe("chat runtime identity across query refetch", () => {
       context: { allowMissingThread: true },
     });
 
-    // Guards the invariant: the query data embeds a `ChatRuntime` whose
-    // identity and `Symbol` brand must survive every refetch, so this query
-    // must never run through `replaceEqualDeep`.
+    // Guards the known requirement: this query keeps
+    // `structuralSharing: false` (each refetch hands back a fresh object;
+    // see the option's inline comment for the history and rationale).
     expect(options.structuralSharing).toBe(false);
+  });
+});
+
+describe("acquireChatRuntime reconcile", () => {
+  const previousFetch = globalThis.fetch;
+  type FetchHandler = (
+    ...args: Parameters<typeof fetch>
+  ) => ReturnType<typeof fetch>;
+  const createFetchMock = (handler: FetchHandler): typeof fetch =>
+    Object.assign(handler, { preconnect: previousFetch.preconnect });
+
+  beforeEach(() => {
+    __resetChatRequestStateForTests();
+    globalThis.fetch = previousFetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = previousFetch;
+  });
+
+  const threadId = toChatThreadId("thread-acquire");
+  const threadRef = { scope: "global", threadId } as const;
+  const activeOrganizationId = "org_test";
+
+  const buildThreadData = (
+    overrides: Partial<ChatThreadFetched> = {},
+  ): ChatThreadFetched => ({
+    messages: [],
+    olderCursor: null,
+    contextMatterIds: [],
+    lastActivityAt: null,
+    webSearchAvailable: false,
+    webSearchEnabled: false,
+    context: null,
+    ...overrides,
+  });
+
+  const newerThreadData = () =>
+    buildThreadData({
+      lastActivityAt: "2026-07-08T10:00:00.000Z",
+      messages: [
+        createMessage("message-A"),
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          parts: [{ type: "text", content: "Ahoj!" }],
+        },
+      ],
+    });
+
+  const createFinishedSseChunks = () => [
+    { type: "RUN_STARTED", threadId, runId: "run-A" },
+    {
+      type: "TEXT_MESSAGE_START",
+      messageId: assistantMessageId,
+      role: "assistant",
+    },
+    {
+      type: "TEXT_MESSAGE_CONTENT",
+      messageId: assistantMessageId,
+      delta: "Ahoj!",
+    },
+    { type: "TEXT_MESSAGE_END", messageId: assistantMessageId },
+    { type: "RUN_FINISHED", threadId, runId: "run-A", finishReason: "stop" },
+  ];
+
+  test("reattaches to the same runtime when the freshness signal is unchanged", () => {
+    const queryClient = new QueryClient();
+    const data = buildThreadData();
+
+    const first = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data,
+      key: threadRef,
+      queryClient,
+    });
+    const second = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    expect(second).toBe(first);
+  });
+
+  test("rebuilds an idle runtime from the current caller's live getters when newer data arrives", async () => {
+    const queryClient = new QueryClient();
+    const requests: unknown[] = [];
+    globalThis.fetch = createFetchMock(async (_input, init) => {
+      requests.push(parseJsonRequestBody(init));
+      return createSseResponse(createFinishedSseChunks());
+    });
+
+    const first = acquireChatRuntime({
+      activeOrganizationId,
+      context: {
+        allowMissingThread: true,
+        getSendMode: () => CHAT_SEND_MODE.rawOverride,
+      },
+      data: buildThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    // A background refetch delivered messages the idle runtime never saw:
+    // the acquire must rebuild, seeded from the fresh transcript, wired to
+    // THIS caller's getters.
+    const rebuilt = acquireChatRuntime({
+      activeOrganizationId,
+      context: {
+        allowMissingThread: true,
+        getSendMode: () => CHAT_SEND_MODE.anonymized,
+      },
+      data: newerThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+
+    expect(rebuilt).not.toBe(first);
+    expect(rebuilt.getSnapshot().messages).toMatchObject([
+      { id: "message-A", role: "user" },
+      { id: assistantMessageId, role: "assistant" },
+    ]);
+
+    // The next send resolves its mode through the rebuilt runtime's
+    // context. `anonymized` cannot come from the missing-getter fallback
+    // (that fallback is `rawOverride`), so this proves the current
+    // caller's live getter won.
+    await sendThreadChatMessage(
+      rebuilt,
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222b1"),
+    );
+    expect(requests.at(0)).toMatchObject({
+      sendMode: CHAT_SEND_MODE.anonymized,
+      threadId,
+    });
+  });
+
+  test("keeps a mid-stream runtime even when newer data arrives, then rebuilds after the post-turn refetch", async () => {
+    const queryClient = new QueryClient();
+    let markResponseRequested: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    const responseRequested = new Promise<void>((resolve) => {
+      markResponseRequested = resolve;
+    });
+    let releaseResponse: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    globalThis.fetch = createFetchMock(async () => {
+      await new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+        markResponseRequested();
+      });
+      return createSseResponse(createFinishedSseChunks());
+    });
+
+    // Mirrors the /chat route-handoff: the landing page registers the
+    // runtime and starts the stream BEFORE navigating.
+    const preSendData = buildThreadData();
+    const handoff = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+    const started = handoff.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222b2"),
+    );
+    await responseRequested;
+
+    // The destination page acquires while the stream is in flight — even
+    // with a diverged freshness signal it must reattach, never rebuild
+    // (invariant: an in-flight stream survives navigation).
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: newerThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+    expect(reattached).toBe(handoff);
+
+    releaseResponse();
+    await started.stream;
+
+    // Between the turn's onFinish (which only invalidates) and its
+    // refetch landing, the component re-renders from the runtime's final
+    // stream updates while the CACHED data is still pre-send. That
+    // acquire must reattach (stale data equals the entry's frozen
+    // build-time seed), keeping the finished turn on screen instead of
+    // rebuilding a runtime from pre-send messages.
+    const beforeRefetch = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: preSendData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(beforeRefetch).toBe(handoff);
+
+    // Once the invalidation's refetch lands, the fresh data's signal
+    // diverges from the frozen seed and the now-idle runtime is rebuilt
+    // from server-authoritative messages with the current caller's
+    // getters (this is where a handoff runtime sheds the landing page's
+    // getters).
+    const afterRefetch = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data: newerThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+    expect(afterRefetch).not.toBe(handoff);
+  });
+
+  test("keeps distinct runtimes per context capability set and sweeps them all on query GC", () => {
+    const queryClient = new QueryClient();
+    installChatRuntimeCleanup(queryClient);
+    const data = buildThreadData();
+
+    // Both contexts map to the SAME pure-data query key: contextKind
+    // ignores `getActiveDecision`, so both are "plain". Without the
+    // capability fingerprint they would collide in the registry and the
+    // decision-carrying surface could inherit a runtime whose sends omit
+    // activeDecision.
+    const plainOptions = chatThreadOptions({
+      activeOrganizationId,
+      key: threadRef,
+      context: { allowMissingThread: true },
+    });
+    const decisionContext = {
+      allowMissingThread: true,
+      getActiveDecision: () => ({ decisionId: "decision-A" }),
+    };
+    expect(
+      chatThreadOptions({
+        activeOrganizationId,
+        key: threadRef,
+        context: decisionContext,
+      }).queryKey,
+    ).toEqual(plainOptions.queryKey);
+
+    const plainRuntime = acquireChatRuntime({
+      activeOrganizationId,
+      context: { allowMissingThread: true },
+      data,
+      key: threadRef,
+      queryClient,
+    });
+    const decisionRuntime = acquireChatRuntime({
+      activeOrganizationId,
+      context: decisionContext,
+      data,
+      key: threadRef,
+      queryClient,
+    });
+    expect(decisionRuntime).not.toBe(plainRuntime);
+
+    // Each capability set reattaches to its own entry.
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context: { allowMissingThread: true },
+        data,
+        key: threadRef,
+        queryClient,
+      }),
+    ).toBe(plainRuntime);
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context: decisionContext,
+        data,
+        key: threadRef,
+        queryClient,
+      }),
+    ).toBe(decisionRuntime);
+
+    // GC of the shared pure-data query sweeps BOTH entries: a fresh
+    // acquire on either capability set builds a new runtime.
+    queryClient.setQueryData(plainOptions.queryKey, data);
+    queryClient.removeQueries({ queryKey: plainOptions.queryKey });
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context: { allowMissingThread: true },
+        data,
+        key: threadRef,
+        queryClient,
+      }),
+    ).not.toBe(plainRuntime);
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context: decisionContext,
+        data,
+        key: threadRef,
+        queryClient,
+      }),
+    ).not.toBe(decisionRuntime);
+  });
+
+  test("reattaches a busy runtime across capability fingerprints, then rebuilds per fingerprint after the refetch", async () => {
+    const queryClient = new QueryClient();
+    let markResponseRequested: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    const responseRequested = new Promise<void>((resolve) => {
+      markResponseRequested = resolve;
+    });
+    let releaseResponse: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    globalThis.fetch = createFetchMock(async () => {
+      await new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+        markResponseRequested();
+      });
+      return createSseResponse(createFinishedSseChunks());
+    });
+
+    const staleData = buildThreadData();
+    const plainContext = { allowMissingThread: true };
+    // Inspector-like context: `getActiveDecision` changes the registry
+    // fingerprint but not the query key.
+    const decisionContext = {
+      allowMissingThread: true,
+      getActiveDecision: () => ({ decisionId: "decision-A" }),
+    };
+
+    // A stale idle entry already exists under the PLAIN fingerprint (a
+    // previous main-page visit), then the inspector surface builds its
+    // own runtime and starts a stream.
+    const idlePlain = acquireChatRuntime({
+      activeOrganizationId,
+      context: plainContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    const streaming = acquireChatRuntime({
+      activeOrganizationId,
+      context: decisionContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(streaming).not.toBe(idlePlain);
+    const started = streaming.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222b3"),
+    );
+    await responseRequested;
+
+    // "Move to main" mid-stream: the destination page acquires under the
+    // plain fingerprint with still-stale data. Busyness must override
+    // capability splitting — even though the page has its own idle
+    // seed-equal entry, the live stream wins and stays visible.
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context: plainContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(reattached).toBe(streaming);
+
+    releaseResponse();
+    await started.stream;
+
+    // After the turn finished and the invalidation's refetch delivered
+    // fresh data, the plain surface rebuilds under its OWN fingerprint
+    // with its own getters.
+    const rebuiltPlain = acquireChatRuntime({
+      activeOrganizationId,
+      context: plainContext,
+      data: newerThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+    expect(rebuiltPlain).not.toBe(streaming);
+    expect(rebuiltPlain).not.toBe(idlePlain);
+
+    // No leak: the rebuild explicitly dropped the superseded (idle,
+    // diverged-seed) decision-fingerprint entry. Probe with the STALE
+    // data — a surviving entry would reattach seed-equal and hand the
+    // finished foreign runtime back.
+    const decisionAfter = acquireChatRuntime({
+      activeOrganizationId,
+      context: decisionContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(decisionAfter).not.toBe(streaming);
+  });
+
+  test("reattaches a busy runtime across different query keys for the same thread", async () => {
+    const queryClient = new QueryClient();
+    let markResponseRequested: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    const responseRequested = new Promise<void>((resolve) => {
+      markResponseRequested = resolve;
+    });
+    let releaseResponse: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    globalThis.fetch = createFetchMock(async () => {
+      await new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+        markResponseRequested();
+      });
+      return createSseResponse(createFinishedSseChunks());
+    });
+
+    const staleData = buildThreadData();
+    const plainContext = { allowMissingThread: true };
+    // `getActiveSkill` flips contextKind, so this surface's PURE-DATA
+    // query key differs from the plain one — the busy reattach must
+    // match on thread identity, not on the query key.
+    const skillContext = {
+      allowMissingThread: true,
+      getActiveSkill: () => ({ skillName: "Summarize" }),
+    };
+    expect(
+      chatThreadOptions({
+        activeOrganizationId,
+        key: threadRef,
+        context: skillContext,
+      }).queryKey,
+    ).not.toEqual(
+      chatThreadOptions({
+        activeOrganizationId,
+        key: threadRef,
+        context: plainContext,
+      }).queryKey,
+    );
+
+    const streaming = acquireChatRuntime({
+      activeOrganizationId,
+      context: skillContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    const started = streaming.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222b4"),
+    );
+    await responseRequested;
+
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context: plainContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(reattached).toBe(streaming);
+
+    releaseResponse();
+    await started.stream;
+  });
+
+  test("aliases a foreign busy reattach so the post-finish stale render keeps the finished turn", async () => {
+    const queryClient = new QueryClient();
+    let markResponseRequested: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    const responseRequested = new Promise<void>((resolve) => {
+      markResponseRequested = resolve;
+    });
+    let releaseResponse: () => void = () => {
+      throw new Error("Chat response was not requested");
+    };
+    globalThis.fetch = createFetchMock(async () => {
+      await new Promise<void>((resolve) => {
+        releaseResponse = resolve;
+        markResponseRequested();
+      });
+      return createSseResponse(createFinishedSseChunks());
+    });
+
+    const staleData = buildThreadData();
+    const plainContext = { allowMissingThread: true };
+    const skillContext = {
+      allowMissingThread: true,
+      getActiveSkill: () => ({ skillName: "Summarize" }),
+    };
+
+    // No prior entry under the plain key: the mid-stream acquire hits
+    // the cross-key busy scan and records an alias under it.
+    const streaming = acquireChatRuntime({
+      activeOrganizationId,
+      context: skillContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    const started = streaming.startRouteHandoffMessage(
+      createOutgoingMessage("22222222-2222-4222-8222-2222222222b5"),
+    );
+    await responseRequested;
+    const reattached = acquireChatRuntime({
+      activeOrganizationId,
+      context: plainContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(reattached).toBe(streaming);
+
+    releaseResponse();
+    await started.stream;
+
+    // Post-finish, pre-refetch: the plain surface re-renders with STALE
+    // cached data. Without the alias this would be a registry miss (the
+    // runtime is idle now, so the busy scan finds nothing) and a rebuild
+    // from pre-send messages — wiping the finished turn. The alias makes
+    // it a seed-equal exact hit instead.
+    const afterFinishStale = acquireChatRuntime({
+      activeOrganizationId,
+      context: plainContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    expect(afterFinishStale).toBe(streaming);
+
+    // Once the refetch lands, the plain surface rebuilds under its own
+    // fingerprint from fresh messages...
+    const rebuiltPlain = acquireChatRuntime({
+      activeOrganizationId,
+      context: plainContext,
+      data: newerThreadData(),
+      key: threadRef,
+      queryClient,
+    });
+    expect(rebuiltPlain).not.toBe(streaming);
+    // ...replacing the alias (a fresh seed-equal acquire reattaches to
+    // the rebuilt runtime, not the finished foreign one)...
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context: plainContext,
+        data: newerThreadData(),
+        key: threadRef,
+        queryClient,
+      }),
+    ).toBe(rebuiltPlain);
+    // ...and dropping the superseded SOURCE entry: probing the skill
+    // context with the stale data must build fresh, not resurrect the
+    // finished runtime.
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context: skillContext,
+        data: staleData,
+        key: threadRef,
+        queryClient,
+      }),
+    ).not.toBe(streaming);
+  });
+
+  test("GC sweep removes only the entries of the removed query key", () => {
+    const queryClient = new QueryClient();
+    installChatRuntimeCleanup(queryClient);
+    const staleData = buildThreadData();
+    const plainContext = { allowMissingThread: true };
+    const skillContext = {
+      allowMissingThread: true,
+      getActiveSkill: () => ({ skillName: "Summarize" }),
+    };
+    const plainOptions = chatThreadOptions({
+      activeOrganizationId,
+      key: threadRef,
+      context: plainContext,
+    });
+
+    const plainRuntime = acquireChatRuntime({
+      activeOrganizationId,
+      context: plainContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+    const skillRuntime = acquireChatRuntime({
+      activeOrganizationId,
+      context: skillContext,
+      data: staleData,
+      key: threadRef,
+      queryClient,
+    });
+
+    // Remove only the PLAIN query: its entry is swept, but the sibling
+    // query key's entry for the same thread must survive (the sweep is
+    // query-key-scoped; only the busy scan and the rebuild cleanup work
+    // on thread identity).
+    queryClient.setQueryData(plainOptions.queryKey, staleData);
+    queryClient.removeQueries({ queryKey: plainOptions.queryKey });
+
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context: plainContext,
+        data: staleData,
+        key: threadRef,
+        queryClient,
+      }),
+    ).not.toBe(plainRuntime);
+    expect(
+      acquireChatRuntime({
+        activeOrganizationId,
+        context: skillContext,
+        data: staleData,
+        key: threadRef,
+        queryClient,
+      }),
+    ).toBe(skillRuntime);
   });
 });

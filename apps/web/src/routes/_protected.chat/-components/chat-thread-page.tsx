@@ -61,6 +61,7 @@ import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-threa
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
+import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
@@ -120,23 +121,29 @@ export const ChatThreadPage = ({
   const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
   const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
 
+  // A thread can be opened (e.g. via "Move to main" from the inspector)
+  // before its first message has reached the server, so the row may not
+  // exist yet. The fetch handles missing threads gracefully; the row is
+  // created on first send.
+  const chatThreadContext = {
+    allowMissingThread: true,
+    getUserContext,
+    getContextMatterIds,
+    getSendMode,
+  };
   const { data } = useSuspenseQuery(
     chatThreadOptions({
       activeOrganizationId,
       key: threadRef,
-      // A thread can be opened (e.g. via "Move to main" from the
-      // inspector) before its first message has reached the server,
-      // so the row may not exist yet. The fetch handles missing
-      // threads gracefully; the row is created on first send.
-      context: {
-        allowMissingThread: true,
-        getUserContext,
-        getContextMatterIds,
-        getSendMode,
-      },
+      context: chatThreadContext,
     }),
   );
-  const { chat } = data;
+  const chat = useChatThreadRuntime({
+    activeOrganizationId,
+    context: chatThreadContext,
+    data,
+    key: threadRef,
+  });
   useExternalSyncEffect(() => {
     if (seededForThreadId === threadRef.threadId) {
       return;

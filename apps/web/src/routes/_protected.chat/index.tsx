@@ -60,6 +60,7 @@ import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
+  acquireChatRuntime,
   chatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
@@ -397,26 +398,47 @@ function ChatIndex() {
                 if (!(await ensureAIAvailable())) {
                   return;
                 }
-                // Build the request payload first, then resolve the
-                // Chat<> instance from the cache; the thread route
-                // reads the *same* cached instance, so kicking off
-                // `sendMessage` here lets the thread page observe
-                // the in-flight stream as soon as it mounts.
-                const [message, { chat }] = await Promise.all([
+                // Build the request payload and fetch the pure thread data
+                // in parallel, then resolve (and register) the Chat<>
+                // runtime from this component's own live getters; the
+                // thread route resolves the *same* registered runtime (see
+                // `acquireChatRuntime` — this context carries the exact
+                // capability set ChatThreadPage passes, so both map to
+                // the same registry fingerprint), and kicking off the
+                // send here lets the thread page observe the in-flight
+                // stream as soon as it mounts. The stream started below
+                // also makes the runtime BUSY before the destination
+                // page's acquire runs, so its idle-reconcile can never
+                // rebuild the handoff runtime out from under the live
+                // stream — it always takes the mid-stream reattach
+                // branch. The runtime keeps THIS page's getters until the
+                // turn's onFinish invalidation refetches the thread
+                // query; the destination page's post-refetch acquire then
+                // sees the diverged seed signal and rebuilds with its own
+                // getters.
+                const chatThreadContext = {
+                  allowMissingThread: true,
+                  getUserContext,
+                  getContextMatterIds,
+                  getSendMode,
+                };
+                const [message, threadData] = await Promise.all([
                   buildChatRequestMessage(draft),
                   queryClient.ensureQueryData(
                     chatThreadOptions({
                       activeOrganizationId,
                       key: threadRef,
-                      context: {
-                        allowMissingThread: true,
-                        getUserContext,
-                        getContextMatterIds,
-                        getSendMode,
-                      },
+                      context: chatThreadContext,
                     }),
                   ),
                 ]);
+                const chat = acquireChatRuntime({
+                  activeOrganizationId,
+                  context: chatThreadContext,
+                  data: threadData,
+                  key: threadRef,
+                  queryClient,
+                });
 
                 // Start the stream before navigation and require
                 // the user message to be locally visible. If the
