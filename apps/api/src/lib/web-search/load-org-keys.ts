@@ -26,19 +26,24 @@ const decryptOptional = async (
     ? await decryptContent(organizationId, ciphertext, iv)
     : null;
 
-export const loadWebSearchKeys = async (
-  organizationId: SafeId<"organization">,
-): Promise<WebSearchKeys> => {
-  const row = await rootDb.query.organizationSettings.findFirst({
-    where: { organizationId: { eq: organizationId } },
-    columns: {
-      webSearchApiKeyEncrypted: true,
-      webSearchApiKeyIv: true,
-      urlFetchApiKeyEncrypted: true,
-      urlFetchApiKeyIv: true,
-    },
-  });
+/** The `organizationSettings` columns web-search key resolution reads. */
+export type OrgWebSearchKeyRow = {
+  webSearchApiKeyEncrypted: Buffer | null;
+  webSearchApiKeyIv: Buffer | null;
+  urlFetchApiKeyEncrypted: Buffer | null;
+  urlFetchApiKeyIv: Buffer | null;
+};
 
+/**
+ * Resolve web-search keys from an `organizationSettings` row a caller
+ * already fetched (e.g. alongside other columns in its own scoped
+ * read), instead of issuing this module's own `organizationSettings`
+ * lookup. Used by callers that already hold the row.
+ */
+export const resolveWebSearchKeysFromRow = async (
+  organizationId: SafeId<"organization">,
+  row: OrgWebSearchKeyRow | null | undefined,
+): Promise<WebSearchKeys> => {
   const [searchApiKey, fetchApiKey] = await Promise.all([
     decryptOptional(
       organizationId,
@@ -55,7 +60,37 @@ export const loadWebSearchKeys = async (
   return { searchApiKey, fetchApiKey };
 };
 
+export const loadWebSearchKeys = async (
+  organizationId: SafeId<"organization">,
+): Promise<WebSearchKeys> => {
+  const row = await rootDb.query.organizationSettings.findFirst({
+    where: { organizationId: { eq: organizationId } },
+    columns: {
+      webSearchApiKeyEncrypted: true,
+      webSearchApiKeyIv: true,
+      urlFetchApiKeyEncrypted: true,
+      urlFetchApiKeyIv: true,
+    },
+  });
+
+  return await resolveWebSearchKeysFromRow(organizationId, row);
+};
+
 export const loadWebSearchProvidersForOrg = async (
   organizationId: SafeId<"organization">,
 ): Promise<ResolvedWebSearchProviders> =>
   resolveWebSearchProvidersFromEnv(await loadWebSearchKeys(organizationId));
+
+/**
+ * Resolve web-search providers from an `organizationSettings` row a
+ * caller already fetched, instead of this module re-reading the row.
+ * get-messages.ts uses this after widening its own scoped select to
+ * include the web-search key columns.
+ */
+export const resolveWebSearchProvidersFromOrgSettingsRow = async (
+  organizationId: SafeId<"organization">,
+  row: OrgWebSearchKeyRow | null | undefined,
+): Promise<ResolvedWebSearchProviders> =>
+  resolveWebSearchProvidersFromEnv(
+    await resolveWebSearchKeysFromRow(organizationId, row),
+  );

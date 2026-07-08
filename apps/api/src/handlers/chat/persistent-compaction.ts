@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
-import type { SafeDb, SafeDbError, Transaction } from "@/api/db";
+import type { SafeDb, SafeDbError, SafeDbOrTx, Transaction } from "@/api/db";
+import { withScopedTx } from "@/api/db";
 import {
   chatMessages,
   chatThreadCompactions,
@@ -34,39 +35,51 @@ export type ChatThreadCompactionCheckpoint = {
   summaryMarkdown: string;
 };
 
-type ReadLatestChatCompactionProps = {
-  safeDb: SafeDb;
+type ReadLatestChatCompactionOnTxProps = {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+};
+
+/**
+ * Core query, callable directly against an already-open transaction so
+ * callers that share one scoped tx (e.g. get-messages.ts) can run it
+ * without paying for a second `set_config`. Any thrown error is left to
+ * propagate to that transaction's own `safeDb` catch-all.
+ */
+export const readLatestChatCompactionOnTx = async ({
+  threadId,
+  tx,
+}: ReadLatestChatCompactionOnTxProps): Promise<ChatThreadCompactionCheckpoint | null> => {
+  const row = await tx.query.chatThreadCompactions.findFirst({
+    where: {
+      threadId: { eq: threadId },
+      status: { eq: "active" },
+    },
+    columns: {
+      id: true,
+      firstKeptMessageId: true,
+      summarizedMessageCount: true,
+      summary: true,
+      summaryMarkdown: true,
+    },
+    orderBy: { createdAt: "desc" },
+  });
+  return row ?? null;
+};
+
+type ReadLatestChatCompactionProps = SafeDbOrTx & {
   threadId: SafeId<"chatThread">;
 };
 
 export const readLatestChatCompaction = async ({
-  safeDb,
   threadId,
+  ...handle
 }: ReadLatestChatCompactionProps): Promise<
   Result<ChatThreadCompactionCheckpoint | null, SafeDbError>
-> => {
-  const result = await safeDb((tx) =>
-    tx.query.chatThreadCompactions.findFirst({
-      where: {
-        threadId: { eq: threadId },
-        status: { eq: "active" },
-      },
-      columns: {
-        id: true,
-        firstKeptMessageId: true,
-        summarizedMessageCount: true,
-        summary: true,
-        summaryMarkdown: true,
-      },
-      orderBy: { createdAt: "desc" },
-    }),
+> =>
+  await withScopedTx(handle, (tx) =>
+    readLatestChatCompactionOnTx({ threadId, tx }),
   );
-  if (Result.isError(result)) {
-    return Result.err(result.error);
-  }
-
-  return Result.ok(result.value ?? null);
-};
 
 type ApplyChatCompactionCheckpointProps = {
   checkpoint: ChatThreadCompactionCheckpoint;

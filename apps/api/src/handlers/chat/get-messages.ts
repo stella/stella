@@ -1,6 +1,7 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import type { SafeDbError } from "@/api/db";
 import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
@@ -15,7 +16,20 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
+import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
+
+/**
+ * Unwrap a read helper's Result when it ran on this handler's shared `tx`:
+ * with `tx`, the helper's `withScopedTx` never produces an error Result — a
+ * failure throws and is caught by this transaction's own `safeDb`, so an
+ * error Result here would mean that invariant broke.
+ */
+const unwrapTxRead = <T>(result: Result<T, SafeDbError>): T =>
+  Result.isError(result)
+    ? panic(
+        "Chat messages tx-scoped read unexpectedly returned an error Result",
+      )
+    : result.value;
 
 const config = {
   permissions: { chat: ["create"] },
@@ -43,9 +57,17 @@ const getMessages = createSafeRootHandler(
       workspaceId,
     });
 
-    const thread = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.chatThreads.findFirst({
+    // One shared scoped transaction for the whole read-only sequence below:
+    // the thread lookup, org settings (jurisdictions, tool overrides, and
+    // web-search BYOK keys in one widened select), the most-recent message
+    // page, the active compaction checkpoint, and the per-send windowed
+    // history used to estimate context usage. All reads share the same RLS
+    // scope (workspaceIds/organizationId/userId), so one transaction is
+    // semantically identical to the independent transactions this replaced,
+    // while paying for a single `set_config`.
+    const reads = yield* Result.await(
+      safeDb(async (tx) => {
+        const thread = await tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
             userId: { eq: user.id },
@@ -56,42 +78,107 @@ const getMessages = createSafeRootHandler(
             webSearchEnabled: true,
             usedAnonymization: true,
           },
-        }),
-      ),
-    );
-    const orgSettingsForChat = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
-          where: {
-            organizationId: { eq: session.activeOrganizationId },
-          },
-          columns: {
-            practiceJurisdictions: true,
-            nativeToolOverrides: true,
-          },
-        }),
-      ),
-    );
-    const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
-      practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
-      nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
-    });
-    const { webSearchProvider } = await loadWebSearchProvidersForOrg(
-      session.activeOrganizationId,
-    );
-    const webSearchAvailable = isWebSearchAvailable({
-      webSearchProviderAvailable: webSearchProvider !== null,
-      disabledNativeToolSlugs,
-    });
+        });
 
-    if (!thread) {
+        // Widened to also cover the web-search BYOK key columns, so this one
+        // row read serves both the native-tool-override computation below
+        // and web-search provider resolution — replacing a second,
+        // independent read of the same organizationSettings row.
+        const orgSettingsForChat =
+          await tx.query.organizationSettings.findFirst({
+            where: {
+              organizationId: { eq: session.activeOrganizationId },
+            },
+            columns: {
+              practiceJurisdictions: true,
+              nativeToolOverrides: true,
+              webSearchApiKeyEncrypted: true,
+              webSearchApiKeyIv: true,
+              urlFetchApiKeyEncrypted: true,
+              urlFetchApiKeyIv: true,
+            },
+          });
+        const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
+          practiceJurisdictions:
+            orgSettingsForChat?.practiceJurisdictions ?? [],
+          nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
+        });
+        const { webSearchProvider } =
+          await resolveWebSearchProvidersFromOrgSettingsRow(
+            session.activeOrganizationId,
+            orgSettingsForChat,
+          );
+        const webSearchAvailable = isWebSearchAvailable({
+          webSearchProviderAvailable: webSearchProvider !== null,
+          disabledNativeToolSlugs,
+        });
+
+        if (!thread) {
+          return { kind: "not-found" as const, webSearchAvailable };
+        }
+
+        // Reject requests whose scope contradicts the persisted thread.
+        // A workspace-scoped thread asked for as global (or vice versa)
+        // is a client bug — fail loud instead of silently 404'ing or
+        // creating a duplicate.
+        const persistedWorkspaceId = thread.workspaceId ?? null;
+        const requestedWorkspaceId =
+          scope.scope === "workspace" ? scope.workspaceId : null;
+        if (persistedWorkspaceId !== requestedWorkspaceId) {
+          return { kind: "scope-mismatch" as const };
+        }
+
+        // The most-recent page is loaded first; older pages are fetched on
+        // demand from the sibling /messages/older endpoint as the user
+        // scrolls up. lastActivityAt is the newest message's timestamp,
+        // which the client compares against the recap staleness window.
+        const page = unwrapTxRead(
+          await loadChatMessagePage({ tx, threadId, userId: user.id }),
+        );
+
+        // Estimate the model context the next send would carry, mirroring the
+        // send path: the active compaction summary plus the same windowed
+        // history the model receives. Computed only here (the initial page);
+        // the /older pagination endpoint does not carry it. The checkpoint is
+        // read once and threaded into loadWindowedThreadMessages (which would
+        // otherwise re-run the identical query itself), so both observe the
+        // same compaction state instead of racing as two independent reads.
+        // `isAnonymized` mirrors the thread's persisted flag: anonymized
+        // threads never checkpoint, so the capped branch bounds this read the
+        // same way the send path bounds its history window (a long
+        // anonymized thread must not scan every row just to render the
+        // meter).
+        const checkpoint = unwrapTxRead(
+          await readLatestChatCompaction({ tx, threadId }),
+        );
+        const windowedMessages = unwrapTxRead(
+          await loadWindowedThreadMessages({
+            tx,
+            threadId,
+            isAnonymized: thread.usedAnonymization,
+            checkpoint,
+          }),
+        );
+
+        return {
+          kind: "ok" as const,
+          webSearchAvailable,
+          thread,
+          page,
+          checkpoint,
+          windowedMessages,
+        };
+      }),
+    );
+
+    if (reads.kind === "not-found") {
       if (allowMissingThread) {
         return Result.ok({
           messages: [],
           olderCursor: null,
           contextMatterIds: [],
           lastActivityAt: null,
-          webSearchAvailable,
+          webSearchAvailable: reads.webSearchAvailable,
           webSearchEnabled: false,
           context: null,
         });
@@ -105,14 +192,7 @@ const getMessages = createSafeRootHandler(
       );
     }
 
-    // Reject requests whose scope contradicts the persisted thread.
-    // A workspace-scoped thread asked for as global (or vice versa)
-    // is a client bug — fail loud instead of silently 404'ing or
-    // creating a duplicate.
-    const persistedWorkspaceId = thread.workspaceId ?? null;
-    const requestedWorkspaceId =
-      scope.scope === "workspace" ? scope.workspaceId : null;
-    if (persistedWorkspaceId !== requestedWorkspaceId) {
+    if (reads.kind === "scope-mismatch") {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -121,33 +201,9 @@ const getMessages = createSafeRootHandler(
       );
     }
 
-    // The most-recent page is loaded first; older pages are fetched on
-    // demand from the sibling /messages/older endpoint as the user
-    // scrolls up. lastActivityAt is the newest message's timestamp,
-    // which the client compares against the recap staleness window.
-    const page = yield* Result.await(
-      loadChatMessagePage({ safeDb, threadId, userId: user.id }),
-    );
+    const { thread, webSearchAvailable, page, checkpoint, windowedMessages } =
+      reads;
 
-    // Estimate the model context the next send would carry, mirroring the send
-    // path: the active compaction summary plus the same windowed history the
-    // model receives. Computed only here (the initial page); the /older
-    // pagination endpoint does not carry it.
-    // Independent reads, fetched in parallel. `isAnonymized` mirrors the
-    // thread's persisted flag: anonymized threads never checkpoint, so the
-    // capped branch bounds this read the same way the send path bounds its
-    // history window (a long anonymized thread must not scan every row just
-    // to render the meter).
-    const [checkpointResult, windowedMessagesResult] = await Promise.all([
-      readLatestChatCompaction({ safeDb, threadId }),
-      loadWindowedThreadMessages({
-        safeDb,
-        threadId,
-        isAnonymized: thread.usedAnonymization,
-      }),
-    ]);
-    const checkpoint = yield* checkpointResult;
-    const windowedMessages = yield* windowedMessagesResult;
     // Null for a fresh, empty thread (nothing to meter yet); the frontend
     // renders nothing. Keeping the value nullable also unifies this branch with
     // the missing-thread branch (context: null) into one response type.
