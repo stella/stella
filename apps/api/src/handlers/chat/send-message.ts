@@ -303,6 +303,7 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: [],
         accessibleWorkspaceIds,
       }),
+      activeFile: body.activeFile,
       hasActiveDocxEditClient: true,
       hasActiveDocxFileClient: true,
       webSearchEnabled: validationThreadState.webSearchEnabled,
@@ -687,6 +688,7 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: effectiveContextMatterIds,
         accessibleWorkspaceIds,
       }),
+      activeFile: body.activeFile,
       hasActiveDocxEditClient:
         hasActiveDocxFileClient || body.activeTemplate !== undefined,
       hasActiveDocxFileClient,

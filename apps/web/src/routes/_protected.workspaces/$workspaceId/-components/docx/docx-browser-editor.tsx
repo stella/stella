@@ -584,6 +584,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const [docxCommentsDocId, setDocxCommentsDocId] = useState<string | null>(
     null,
   );
+  const [
+    pendingInitialDocxCommentsSyncDocId,
+    setPendingInitialDocxCommentsSyncDocId,
+  ] = useState<string | null>(null);
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
     maxAutoZoom: 0.85,
@@ -1065,14 +1069,20 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   ]);
 
   const handleAiDocxCommentsChange = (comments: DocxComments) => {
+    setPendingInitialDocxCommentsSyncDocId(null);
     setDocxComments(comments);
     handleChange();
   };
 
   const handleEditorDocxCommentsChange = (comments: DocxComments) => {
+    const isInitialEditorSync = pendingInitialDocxCommentsSyncDocId !== null;
+    setPendingInitialDocxCommentsSyncDocId(null);
     const commentsChanged =
       JSON.stringify(docxComments) !== JSON.stringify(comments);
     setDocxComments(comments);
+    if (isInitialEditorSync) {
+      return;
+    }
     if (commentsChanged) {
       handleChange();
     }
@@ -1498,6 +1508,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   if (docxCommentsDocId !== previewIdentity) {
     setDocxCommentsDocId(previewIdentity);
     setDocxComments([]);
+    setPendingInitialDocxCommentsSyncDocId(previewIdentity);
   }
 
   return (

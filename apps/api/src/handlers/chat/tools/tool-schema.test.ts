@@ -323,7 +323,7 @@ describe("chat tool schemas", () => {
     }
   });
 
-  test("registers the server-executed compare_versions tool when a workspace is accessible", () => {
+  test("registers the server-executed compare_versions tool when an active file field is available", () => {
     const baseArgs = {
       orgAIConfig: null,
       memberRole: "owner",
@@ -338,9 +338,15 @@ describe("chat tool schemas", () => {
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
     } as const;
+    const activeFile = {
+      entityId: toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
+      fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
+      supportsDocxEdits: true,
+    } as const;
 
     const withWorkspace = getChatTools({
       ...baseArgs,
+      activeFile,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -360,12 +366,61 @@ describe("chat tool schemas", () => {
 
     const withoutWorkspace = getChatTools({
       ...baseArgs,
+      activeFile,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [],
       }),
     });
     expect(withoutWorkspace).not.toHaveProperty(COMPARE_VERSIONS_TOOL_NAME);
+  });
+
+  test("does not register compare_versions without an active file field", () => {
+    const tools = getChatTools({
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+    });
+    expect(tools).not.toHaveProperty(COMPARE_VERSIONS_TOOL_NAME);
+  });
+
+  test("does not register compare_versions for non-DOCX active files", () => {
+    const tools = getChatTools({
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      hasActiveDocxEditClient: false,
+      hasActiveDocxFileClient: false,
+      activeFile: {
+        entityId: toSafeId<"entity">("33333333-3333-4333-8333-333333333333"),
+        fileFieldId: toSafeId<"field">("44444444-4444-4444-8444-444444444444"),
+      },
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+    });
+    expect(tools).not.toHaveProperty(COMPARE_VERSIONS_TOOL_NAME);
   });
 
   test("only exposes current skill edit tools for editable active skill chats", () => {

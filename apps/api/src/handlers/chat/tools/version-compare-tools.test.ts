@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { SafeDb, Transaction } from "@/api/db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
-import { toSafeId } from "@/api/lib/branded-types";
+import { toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -22,6 +22,15 @@ const entityId = toSafeId<"entity">("55555555-5555-4555-8555-555555555555");
 const otherEntityId = toSafeId<"entity">(
   "66666666-6666-4666-8666-666666666666",
 );
+const activeFileFieldId = toSafeId<"field">(
+  "77777777-7777-4777-8777-777777777777",
+);
+const activeFilePropertyId = toSafeId<"property">(
+  "88888888-8888-4888-8888-888888888888",
+);
+const otherFilePropertyId = toSafeId<"property">(
+  "99999999-9999-4999-8999-999999999999",
+);
 const baseVersionId = "33333333-3333-4333-8333-333333333333";
 const revisedVersionId = "44444444-4444-4444-8444-444444444444";
 
@@ -30,27 +39,53 @@ const toolWorkspaceIds = resolveToolWorkspaceIds({
   accessibleWorkspaceIds: [workspaceId],
 });
 
-const mockDocxFieldContent = {
-  version: 1,
-  type: "file",
-  id: "77777777-7777-4777-8777-777777777777",
-  fileName: "document.docx",
-  mimeType: DOCX_MIME_TYPE,
-  sizeBytes: 1,
-  encrypted: true,
-  sha256Hex: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-  pdfFileId: null,
+const activeFileContext = {
+  entityId,
+  fileFieldId: activeFileFieldId,
 } as const;
+
+const createMockDocxFieldContent = (id: string) =>
+  ({
+    version: 1,
+    type: "file",
+    id,
+    fileName: "document.docx",
+    mimeType: DOCX_MIME_TYPE,
+    sizeBytes: 1,
+    encrypted: true,
+    sha256Hex:
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    pdfFileId: null,
+  }) as const;
+
+const mockDocxFieldContent = createMockDocxFieldContent(
+  "77777777-7777-4777-8777-777777777777",
+);
+
+type MockVersion = {
+  entityId: SafeId<"entity">;
+  workspaceId: typeof workspaceId;
+};
+
+type MockField = {
+  content: typeof mockDocxFieldContent;
+  propertyId: SafeId<"property">;
+};
 
 // A `tx.query.*` seam that answers `entityVersions.findFirst` from a fixed
 // map (undefined = the workspace-scoped lookup found nothing) and provides a
-// DOCX file field when a version does resolve.
+// DOCX active-file property field when a version does resolve.
 const createSafeDb = (
-  versionsById: Record<
-    string,
-    { entityId: typeof entityId; workspaceId: typeof workspaceId } | undefined
-  >,
+  versionsById: Record<string, MockVersion | undefined>,
+  {
+    fieldsByVersionId = {},
+  }: {
+    fieldsByVersionId?: Record<string, MockField[] | undefined>;
+  } = {},
 ): SafeDb => {
+  const defaultFields = [
+    { content: mockDocxFieldContent, propertyId: activeFilePropertyId },
+  ];
   const tx = {
     query: {
       entityVersions: {
@@ -58,7 +93,33 @@ const createSafeDb = (
           versionsById[where.id.eq],
       },
       fields: {
-        findMany: async () => [{ content: mockDocxFieldContent }],
+        findFirst: async ({
+          where,
+        }: {
+          where:
+            | { id: { eq: string } }
+            | {
+                entityVersionId: { eq: string };
+                propertyId: { eq: SafeId<"property"> };
+              };
+        }) => {
+          if ("id" in where) {
+            if (where.id.eq !== activeFileFieldId) {
+              return undefined;
+            }
+            return {
+              content: mockDocxFieldContent,
+              propertyId: activeFilePropertyId,
+              entityVersion: { entityId },
+            };
+          }
+
+          const versionFields =
+            fieldsByVersionId[where.entityVersionId.eq] ?? defaultFields;
+          return versionFields.find(
+            (field) => field.propertyId === where.propertyId.eq,
+          );
+        },
       },
     },
   };
@@ -71,6 +132,7 @@ const getExecute = (safeDb: SafeDb) => {
   const tools = createVersionCompareTools({
     safeDb,
     organizationId,
+    activeFileContext,
     toolWorkspaceIds,
   });
   const tool = tools[COMPARE_VERSIONS_TOOL_NAME];
@@ -86,6 +148,7 @@ describe("createVersionCompareTools", () => {
     const tools = createVersionCompareTools({
       safeDb: createSafeDb({}),
       organizationId,
+      activeFileContext,
       toolWorkspaceIds,
     });
     expect(Object.keys(tools)).toEqual([COMPARE_VERSIONS_TOOL_NAME]);
@@ -145,5 +208,59 @@ describe("createVersionCompareTools", () => {
       ),
     );
     expect(message).toMatch(/different documents/iu);
+  });
+
+  test("rejects versions outside the active document", async () => {
+    const message = await runAndCaptureMessage(
+      getExecute(
+        createSafeDb({
+          [baseVersionId]: { entityId: otherEntityId, workspaceId },
+          [revisedVersionId]: { entityId: otherEntityId, workspaceId },
+        }),
+      ),
+    );
+    expect(message).toMatch(/must belong to the active document/iu);
+  });
+
+  test("requires the active file property in both compared versions", async () => {
+    const message = await runAndCaptureMessage(
+      getExecute(
+        createSafeDb(
+          {
+            [baseVersionId]: { entityId, workspaceId },
+            [revisedVersionId]: { entityId, workspaceId },
+          },
+          {
+            fieldsByVersionId: {
+              [baseVersionId]: [
+                {
+                  content: createMockDocxFieldContent(
+                    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+                  ),
+                  propertyId: otherFilePropertyId,
+                },
+                {
+                  content: createMockDocxFieldContent(
+                    "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                  ),
+                  propertyId: activeFilePropertyId,
+                },
+              ],
+              [revisedVersionId]: [
+                {
+                  content: createMockDocxFieldContent(
+                    "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                  ),
+                  propertyId: otherFilePropertyId,
+                },
+              ],
+            },
+          },
+        ),
+      ),
+    );
+    expect(message).toMatch(
+      /revised version does not contain the active DOCX file/iu,
+    );
   });
 });

@@ -866,6 +866,10 @@ const FileChatOverlayInner = ({
     () => contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
   );
   const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
+  const latestDocxCommentsRef = useRef<DocxComments>(docxComments ?? []);
+  useLayoutEffect(() => {
+    latestDocxCommentsRef.current = docxComments ?? [];
+  }, [docxComments]);
   const hasDocxEditSurface =
     activeFile !== undefined && docxEditorRef !== undefined;
   // Folio's PM view exists almost immediately after DocxBrowserEditor
@@ -1249,8 +1253,9 @@ const FileChatOverlayInner = ({
   // controlled `comments` state. Both the read-tool auto-run watcher and the
   // comment-mutation approval handler drive the same bridge, so `read_comments`
   // sees the same threads `add_comment` / `reply_comment` / `resolve_comment`
-  // write. Returns null before the editor view mounts. A useEffectEvent so
-  // `getComments` reads the latest `docxComments` prop at call time.
+  // write. Returns null before the editor view mounts. The comments ref is
+  // updated synchronously on writes so back-to-back approved mutations compose
+  // before React commits the parent controlled-state update.
   const createFolioAgentBridge = useEffectEvent(() => {
     const ref = docxEditorRef?.current;
     if (!ref) {
@@ -1259,8 +1264,11 @@ const FileChatOverlayInner = ({
     return createEditorRefBridge({
       ref,
       author: userContext.wordEditAuthorName,
-      getComments: () => docxComments ?? [],
-      setComments: (comments) => onDocxCommentsChange?.(comments),
+      getComments: () => latestDocxCommentsRef.current,
+      setComments: (comments) => {
+        latestDocxCommentsRef.current = comments;
+        onDocxCommentsChange?.(comments);
+      },
     });
   });
 

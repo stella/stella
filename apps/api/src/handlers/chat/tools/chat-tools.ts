@@ -200,6 +200,13 @@ type GetChatToolsProps = {
   // accessible set, preventing stale stored pins from widening tool
   // authorization.
   toolWorkspaceIds: AuthorizedToolWorkspaceIds;
+  activeFile?:
+    | {
+        entityId: SafeId<"entity">;
+        fileFieldId?: SafeId<"field"> | undefined;
+        supportsDocxEdits?: boolean | undefined;
+      }
+    | undefined;
   refRegistry: ChatRefRegistry;
   /**
    * `true` when the request comes from a surface that has the
@@ -367,6 +374,7 @@ export const getChatTools = ({
   excludedChatHistoryMessageIds,
   userId,
   toolWorkspaceIds,
+  activeFile,
   refRegistry,
   hasActiveDocxEditClient,
   hasActiveDocxFileClient,
@@ -512,15 +520,22 @@ export const getChatTools = ({
   // anonymous/public surfaces with no accessible workspace never receive write
   // tools. Real per-workspace statuses are threaded through so the handlers'
   // `ensureActiveWorkspace` gate keeps archived matters read-only.
-  // Server-executed version-diff tool. Gated on a non-empty workspace set:
-  // it resolves version ids against `toolWorkspaceIds`, so with no accessible
-  // workspace it could never resolve anything anyway.
+  // Server-executed version-diff tool. Gated on a non-empty workspace set and
+  // an active DOCX file field: it resolves version ids against
+  // `toolWorkspaceIds` and pins the compared DOCX by the active field's
+  // property id.
   const versionCompareTools =
-    toolWorkspaceIds.length === 0
+    toolWorkspaceIds.length === 0 ||
+    activeFile?.supportsDocxEdits !== true ||
+    activeFile.fileFieldId === undefined
       ? {}
       : createVersionCompareTools({
           safeDb,
           organizationId,
+          activeFileContext: {
+            entityId: activeFile.entityId,
+            fileFieldId: activeFile.fileFieldId,
+          },
           toolWorkspaceIds,
         });
 

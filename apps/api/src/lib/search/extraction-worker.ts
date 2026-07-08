@@ -94,6 +94,35 @@ const extractDirectText = (fileBytes: Uint8Array, mimeType: string): string => {
   return normalizeExtractedText($.root().text());
 };
 
+const joinDocxContentWithReservedNotes = ({
+  content,
+  maxChars,
+  notes,
+}: {
+  content: string;
+  maxChars: number;
+  notes: string;
+}): string => {
+  if (content.trim().length === 0) {
+    return notes;
+  }
+  if (notes.trim().length === 0) {
+    return content;
+  }
+
+  const separator = "\n";
+  if (notes.length >= maxChars) {
+    return notes.slice(0, maxChars);
+  }
+
+  const contentMaxChars = maxChars - notes.length - separator.length;
+  if (contentMaxChars <= 0) {
+    return notes.slice(0, maxChars);
+  }
+
+  return `${content.slice(0, contentMaxChars)}${separator}${notes}`;
+};
+
 const extractEmailPlaintext = async ({
   fileBytes,
   maxChars,
@@ -188,7 +217,7 @@ const extract = async (
       .map((paragraph) => paragraph.text)
       .join("\n");
     const notes = reviewer.getNotesAsText();
-    text = [content, notes].filter((s) => s.trim().length > 0).join("\n");
+    text = joinDocxContentWithReservedNotes({ content, maxChars, notes });
   } else if (isDirectTextMimeType(normalizedMimeType)) {
     text = extractDirectText(fileBytes, normalizedMimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {

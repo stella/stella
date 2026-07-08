@@ -51,6 +51,10 @@ const compareVersionsOutputSchema = v.strictObject({
 type CreateVersionCompareToolsProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  activeFileContext: {
+    entityId: SafeId<"entity">;
+    fileFieldId: SafeId<"field">;
+  };
   // Already intersected with the request's accessible set. A version whose
   // workspace is not in this list is treated as not found, so this is the
   // access boundary for the tool: a model cannot diff a version outside the
@@ -64,18 +68,58 @@ type ResolvedVersionDocx = {
   fileId: string;
 };
 
-const findDocxFile = (
-  fieldList: readonly { content: FieldContent }[],
-): Extract<FieldContent, { type: "file" }> | null => {
-  for (const field of fieldList) {
-    if (
-      field.content.type === "file" &&
-      field.content.mimeType === DOCX_MIME_TYPE
-    ) {
-      return field.content;
-    }
+const isDocxFileContent = (
+  content: FieldContent,
+): content is Extract<FieldContent, { type: "file" }> =>
+  content.type === "file" && content.mimeType === DOCX_MIME_TYPE;
+
+const resolveActiveFilePropertyId = async (
+  safeDb: SafeDb,
+  toolWorkspaceIds: AuthorizedToolWorkspaceIds,
+  activeFileContext: CreateVersionCompareToolsProps["activeFileContext"],
+): Promise<SafeId<"property">> => {
+  const activeField = await safeDb((tx) =>
+    tx.query.fields.findFirst({
+      where: {
+        id: { eq: activeFileContext.fileFieldId },
+        workspaceId: { in: toolWorkspaceIds },
+      },
+      columns: { content: true, propertyId: true },
+      with: {
+        entityVersion: { columns: { entityId: true } },
+      },
+    }),
+  );
+
+  if (Result.isError(activeField)) {
+    throw new ChatToolError({
+      message: "Failed to look up the active file field.",
+      cause: activeField.error,
+    });
   }
-  return null;
+  if (!activeField.value) {
+    throw new ChatToolError({
+      message: "The active file field was not found in your workspaces.",
+    });
+  }
+  const activeEntityVersion = activeField.value.entityVersion;
+  if (!activeEntityVersion) {
+    throw new ChatToolError({
+      message: "The active file field is missing its document version.",
+    });
+  }
+  if (activeEntityVersion.entityId !== activeFileContext.entityId) {
+    throw new ChatToolError({
+      message: "The active file field does not belong to this document.",
+    });
+  }
+  if (!isDocxFileContent(activeField.value.content)) {
+    throw new ChatToolError({
+      message: "The active file field is not a DOCX file.",
+    });
+  }
+
+  return activeField.value.propertyId;
 };
 
 /**
@@ -89,6 +133,7 @@ const resolveVersionDocx = async (
   safeDb: SafeDb,
   toolWorkspaceIds: AuthorizedToolWorkspaceIds,
   versionId: SafeId<"entityVersion">,
+  filePropertyId: SafeId<"property">,
   label: string,
 ): Promise<ResolvedVersionDocx> => {
   const version = await safeDb((tx) =>
@@ -113,33 +158,32 @@ const resolveVersionDocx = async (
     });
   }
 
-  const fields = await safeDb((tx) =>
-    // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via the
-    // unique (propertyId, entityVersionId) index.
-    // eslint-disable-next-line require-query-limit/require-query-limit
-    tx.query.fields.findMany({
-      where: { entityVersionId: { eq: versionId } },
+  const field = await safeDb((tx) =>
+    tx.query.fields.findFirst({
+      where: {
+        entityVersionId: { eq: versionId },
+        propertyId: { eq: filePropertyId },
+      },
       columns: { content: true },
     }),
   );
-  if (Result.isError(fields)) {
+  if (Result.isError(field)) {
     throw new ChatToolError({
-      message: `Failed to load the ${label} version's fields.`,
-      cause: fields.error,
+      message: `Failed to load the ${label} version's active file field.`,
+      cause: field.error,
     });
   }
 
-  const file = findDocxFile(fields.value);
-  if (!file) {
+  if (!field.value || !isDocxFileContent(field.value.content)) {
     throw new ChatToolError({
-      message: `The ${label} version does not contain a DOCX file.`,
+      message: `The ${label} version does not contain the active DOCX file.`,
     });
   }
 
   return {
     entityId: version.value.entityId,
     workspaceId: version.value.workspaceId,
-    fileId: file.id,
+    fileId: field.value.content.id,
   };
 };
 
@@ -170,30 +214,54 @@ const loadVersionDocxBuffer = async (
 export const createVersionCompareTools = ({
   safeDb,
   organizationId,
+  activeFileContext,
   toolWorkspaceIds,
 }: CreateVersionCompareToolsProps) => ({
   [COMPARE_VERSIONS_TOOL_NAME]: toolDefinition({
     name: COMPARE_VERSIONS_TOOL_NAME,
     description:
-      "Compare two versions of the same document and report what changed. " +
-      "Pass the entity version ids for the earlier (base) and later " +
-      "(revised) versions; returns a block-level redline (added / deleted / " +
-      "modified blocks) as readable text. Use when the user asks what " +
-      "changed between two versions of a DOCX.",
+      "Compare two versions of the active document's DOCX file and report " +
+      "what changed. Pass the entity version ids for the earlier (base) and " +
+      "later (revised) versions; returns a block-level redline (added / " +
+      "deleted / modified blocks) as readable text. Use when the user asks " +
+      "what changed between two versions of the active DOCX.",
     inputSchema: toTanStackToolSchema(compareVersionsInputSchema),
     outputSchema: toTanStackToolSchema(compareVersionsOutputSchema),
   }).server(async ({ baseVersionId, revisedVersionId }) => {
     const baseId = brandPersistedEntityVersionId(baseVersionId);
     const revisedId = brandPersistedEntityVersionId(revisedVersionId);
+    const filePropertyId = await resolveActiveFilePropertyId(
+      safeDb,
+      toolWorkspaceIds,
+      activeFileContext,
+    );
 
     const [base, revised] = await Promise.all([
-      resolveVersionDocx(safeDb, toolWorkspaceIds, baseId, "base"),
-      resolveVersionDocx(safeDb, toolWorkspaceIds, revisedId, "revised"),
+      resolveVersionDocx(
+        safeDb,
+        toolWorkspaceIds,
+        baseId,
+        filePropertyId,
+        "base",
+      ),
+      resolveVersionDocx(
+        safeDb,
+        toolWorkspaceIds,
+        revisedId,
+        filePropertyId,
+        "revised",
+      ),
     ]);
 
     if (base.entityId !== revised.entityId) {
       throw new ChatToolError({
         message: "The base and revised versions belong to different documents.",
+      });
+    }
+    if (base.entityId !== activeFileContext.entityId) {
+      throw new ChatToolError({
+        message:
+          "The base and revised versions must belong to the active document.",
       });
     }
 

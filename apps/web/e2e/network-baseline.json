@@ -186,6 +186,9 @@
       "GET /v1/views/:id",
       "GET /v1/workspaces/navigation"
     ],
+    "requestCounts": {
+      "GET /api/auth/list-sessions": 2
+    },
     "dbQueries": {
       "GET /api/auth/get-session": 3,
       "GET /api/auth/organization/get-active-member-role": 4,
