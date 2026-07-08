@@ -232,6 +232,45 @@ export type InspectorTab =
 export const isGenericInspectorTab = (tab: InspectorTab): tab is GenericTab =>
   tab.type === "view";
 
+export type DocumentTextSelection = {
+  text: string;
+  /**
+   * Monotonic counter so re-selecting the exact same text re-fires
+   * subscribers that need to respond to repeated selections.
+   */
+  seq: number;
+};
+
+export type AnonymizationMatchSnapshot = {
+  /** Total occurrence count across the whole doc. */
+  totalMatches: number;
+  /**
+   * Per-canonical hit count. Keys mirror the term's `canonical`
+   * string and values are the number of occurrences in the open
+   * document.
+   */
+  countByCanonical: ReadonlyMap<string, number>;
+  /**
+   * Per-canonical label, e.g. "person" or "organization".
+   */
+  labelByCanonical: ReadonlyMap<string, string>;
+};
+
+export type AnonymizationSelectionSource = "doc" | "sidebar";
+
+type AnonymizationSelection = {
+  canonical: string | null;
+  label: string | null;
+  source: AnonymizationSelectionSource | null;
+  /**
+   * Field id of the document the selection belongs to. Multiple
+   * editor panes can be mounted at once; each one only honors
+   * selections that carry its own field id.
+   */
+  fieldId: string | null;
+  seq: number;
+};
+
 type State = {
   tabs: InspectorTab[];
   activeId: string | null;
@@ -285,6 +324,33 @@ type State = {
    * never broadcast.
    */
   reviveSuggestion: InspectorTab | null;
+  /**
+   * Count of visible anonymization inspector facets. The document
+   * editor uses this to gate expensive term highlighting and
+   * detection work while the facet is actually on screen.
+   */
+  anonymizationActiveMountCount: number;
+  /**
+   * Latest non-empty text selection inside a document editor,
+   * keyed by file field id. Folio selections are programmatic
+   * ProseMirror selections, so they need an explicit bridge into
+   * the inspector add-term form.
+   */
+  documentTextSelectionByFieldId: Record<string, DocumentTextSelection>;
+  /**
+   * Live snapshot of which anonymization terms are currently
+   * highlighted in each open document.
+   */
+  anonymizationMatchesByFieldId: Record<string, AnonymizationMatchSnapshot>;
+  /**
+   * Field ids whose detection pipeline is currently in flight.
+   */
+  anonymizationPipelineStartedFieldIds: ReadonlySet<string>;
+  /**
+   * Two-way bridge between document-highlight clicks and inspector
+   * row clicks.
+   */
+  anonymizationSelection: AnonymizationSelection;
 };
 
 type CloseTabOptions = {
@@ -461,6 +527,24 @@ type Actions = {
    *  Cleared after the editor consumes it. */
   requestBlockScroll: (tabId: string, blockId: string) => void;
   clearPendingBlockScroll: () => void;
+  acquireAnonymizationActive: () => void;
+  releaseAnonymizationActive: () => void;
+  publishDocumentTextSelection: (fieldId: string, text: string) => void;
+  clearDocumentTextSelection: (fieldId: string) => void;
+  publishAnonymizationMatches: (
+    fieldId: string,
+    snapshot: AnonymizationMatchSnapshot,
+  ) => void;
+  markAnonymizationPipelineStarted: (fieldId: string) => void;
+  markAnonymizationPipelineRan: (fieldId: string) => void;
+  clearAnonymizationMatches: (fieldId: string) => void;
+  selectAnonymizationTerm: (
+    canonical: string,
+    label: string,
+    source: AnonymizationSelectionSource,
+    fieldId: string,
+  ) => void;
+  clearAnonymizationSelection: () => void;
 };
 
 type FileFieldReplacement = {
@@ -509,6 +593,42 @@ type InspectorBroadcastClock = {
 const INSPECTOR_TABS_CHANNEL_PREFIX = "stella:inspector-tabs:v1";
 const INSPECTOR_MINIMIZED_STORAGE_PREFIX = "stella:inspector-minimized:v1";
 const noopInspectorBroadcastCleanup = () => undefined;
+const EMPTY_ANONYMIZATION_MATCH_SNAPSHOT: AnonymizationMatchSnapshot = {
+  totalMatches: 0,
+  countByCanonical: new Map(),
+  labelByCanonical: new Map(),
+};
+const INITIAL_ANONYMIZATION_SELECTION: AnonymizationSelection = {
+  canonical: null,
+  label: null,
+  source: null,
+  fieldId: null,
+  seq: 0,
+};
+
+const withFieldAdded = (
+  set: ReadonlySet<string>,
+  fieldId: string,
+): ReadonlySet<string> => {
+  if (set.has(fieldId)) {
+    return set;
+  }
+  const next = new Set(set);
+  next.add(fieldId);
+  return next;
+};
+
+const withFieldRemoved = (
+  set: ReadonlySet<string>,
+  fieldId: string,
+): ReadonlySet<string> => {
+  if (!set.has(fieldId)) {
+    return set;
+  }
+  const next = new Set(set);
+  next.delete(fieldId);
+  return next;
+};
 
 const getInspectorMinimizedStorageKey = ({
   userId,
@@ -1059,6 +1179,11 @@ export const useInspectorStore = create<State & Actions>()(
     pendingBlockScroll: null,
     pendingDocxEditTabId: null,
     reviveSuggestion: null,
+    anonymizationActiveMountCount: 0,
+    documentTextSelectionByFieldId: {},
+    anonymizationMatchesByFieldId: {},
+    anonymizationPipelineStartedFieldIds: new Set(),
+    anonymizationSelection: { ...INITIAL_ANONYMIZATION_SELECTION },
 
     openFile: (tab) =>
       set((state) => {
@@ -1672,5 +1797,130 @@ export const useInspectorStore = create<State & Actions>()(
       set((state) => {
         state.pendingBlockScroll = null;
       }),
+
+    acquireAnonymizationActive: () =>
+      set((state) => {
+        state.anonymizationActiveMountCount += 1;
+      }),
+
+    releaseAnonymizationActive: () =>
+      set((state) => {
+        state.anonymizationActiveMountCount = Math.max(
+          0,
+          state.anonymizationActiveMountCount - 1,
+        );
+      }),
+
+    publishDocumentTextSelection: (fieldId, text) =>
+      set((state) => {
+        const prev = state.documentTextSelectionByFieldId[fieldId];
+        state.documentTextSelectionByFieldId = {
+          ...state.documentTextSelectionByFieldId,
+          [fieldId]: { text, seq: (prev?.seq ?? 0) + 1 },
+        };
+      }),
+
+    clearDocumentTextSelection: (fieldId) =>
+      set((state) => {
+        if (!(fieldId in state.documentTextSelectionByFieldId)) {
+          return;
+        }
+        state.documentTextSelectionByFieldId = Object.fromEntries(
+          Object.entries(state.documentTextSelectionByFieldId).filter(
+            ([id]) => id !== fieldId,
+          ),
+        );
+      }),
+
+    publishAnonymizationMatches: (fieldId, snapshot) =>
+      set((state) => {
+        state.anonymizationMatchesByFieldId = {
+          ...state.anonymizationMatchesByFieldId,
+          [fieldId]: snapshot,
+        };
+      }),
+
+    markAnonymizationPipelineStarted: (fieldId) =>
+      set((state) => {
+        state.anonymizationPipelineStartedFieldIds = withFieldAdded(
+          state.anonymizationPipelineStartedFieldIds,
+          fieldId,
+        );
+      }),
+
+    markAnonymizationPipelineRan: (fieldId) =>
+      set((state) => {
+        state.anonymizationPipelineStartedFieldIds = withFieldRemoved(
+          state.anonymizationPipelineStartedFieldIds,
+          fieldId,
+        );
+      }),
+
+    clearAnonymizationMatches: (fieldId) =>
+      set((state) => {
+        const hadMatches = fieldId in state.anonymizationMatchesByFieldId;
+        const nextStarted = withFieldRemoved(
+          state.anonymizationPipelineStartedFieldIds,
+          fieldId,
+        );
+        if (
+          !hadMatches &&
+          nextStarted === state.anonymizationPipelineStartedFieldIds
+        ) {
+          return;
+        }
+        state.anonymizationMatchesByFieldId = hadMatches
+          ? Object.fromEntries(
+              Object.entries(state.anonymizationMatchesByFieldId).filter(
+                ([id]) => id !== fieldId,
+              ),
+            )
+          : state.anonymizationMatchesByFieldId;
+        state.anonymizationPipelineStartedFieldIds = nextStarted;
+      }),
+
+    selectAnonymizationTerm: (canonical, label, source, fieldId) =>
+      set((state) => {
+        state.anonymizationSelection = {
+          canonical,
+          label,
+          source,
+          fieldId,
+          seq: state.anonymizationSelection.seq + 1,
+        };
+      }),
+
+    clearAnonymizationSelection: () =>
+      set((state) => {
+        state.anonymizationSelection = { ...INITIAL_ANONYMIZATION_SELECTION };
+      }),
   })),
 );
+
+export const useIsAnonymizationActive = (): boolean =>
+  useInspectorStore((s) => s.anonymizationActiveMountCount > 0);
+
+export const useDocumentTextSelection = (
+  fieldId: string | null,
+): DocumentTextSelection | null =>
+  useInspectorStore((s) =>
+    fieldId === null
+      ? null
+      : (s.documentTextSelectionByFieldId[fieldId] ?? null),
+  );
+
+export const useAnonymizationMatches = (
+  fieldId: string | null,
+): AnonymizationMatchSnapshot =>
+  useInspectorStore(
+    (s) =>
+      (fieldId ? s.anonymizationMatchesByFieldId[fieldId] : undefined) ??
+      EMPTY_ANONYMIZATION_MATCH_SNAPSHOT,
+  );
+
+export const useAnonymizationMatchesReady = (fieldId: string | null): boolean =>
+  useInspectorStore((s) =>
+    fieldId === null
+      ? false
+      : !s.anonymizationPipelineStartedFieldIds.has(fieldId),
+  );

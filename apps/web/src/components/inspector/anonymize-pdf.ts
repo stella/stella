@@ -1,6 +1,6 @@
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
-import { useAnonymizationMatchesStore } from "@/components/inspector/anonymization-matches-store";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
@@ -59,7 +59,7 @@ export const anonymizePdf = async ({
   // Tell the inspector facet a producer is in flight so
   // it shows "Detecting entities…" while the wasm pipeline
   // runs. Mirrored on every terminal exit below.
-  useAnonymizationMatchesStore.getState().markPipelineStarted(fieldId);
+  useInspectorStore.getState().markAnonymizationPipelineStarted(fieldId);
   try {
     await runPipelineAndCommit({ workspaceId, fieldId, isPdf });
   } finally {
@@ -71,7 +71,7 @@ export const anonymizePdf = async ({
     // permanently holding this field, and reopening the
     // same document would keep the inspector facet stuck
     // on the "Detecting…" placeholder.
-    useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
+    useInspectorStore.getState().markAnonymizationPipelineRan(fieldId);
   }
 };
 
@@ -193,7 +193,7 @@ const runPipelineAndCommit = async ({
     }
     totalMatches += 1;
   }
-  useAnonymizationMatchesStore.getState().publish(fieldId, {
+  useInspectorStore.getState().publishAnonymizationMatches(fieldId, {
     totalMatches,
     countByCanonical,
     labelByCanonical,
@@ -207,5 +207,5 @@ export const clearAnonymization = (fieldId: string): void => {
   // the inspector facet stops showing a stale count when
   // the user navigates away mid-detection. Idempotent for
   // fields that were never published.
-  useAnonymizationMatchesStore.getState().clear(fieldId);
+  useInspectorStore.getState().clearAnonymizationMatches(fieldId);
 };

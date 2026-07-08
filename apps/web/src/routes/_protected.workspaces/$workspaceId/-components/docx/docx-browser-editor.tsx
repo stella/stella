@@ -70,11 +70,10 @@ import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { useFolioCollaborationSession } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
-import { useIsAnonymizationActive } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-active-store";
-import { useAnonymizationMatchesStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-matches-store";
-import { useAnonymizationSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/anonymization-selection-store";
-import { useDocumentTextSelectionStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/document-text-selection-store";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import {
+  useInspectorStore,
+  useIsAnonymizationActive,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
@@ -270,11 +269,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     // inspector facet shows "Detecting entities…" right
     // away instead of flashing "0 entities" during the
     // 300ms gap before the first `run()` fires (and
-    // before that run can call `markPipelineStarted`
+    // before that run can call `markAnonymizationPipelineStarted`
     // itself). The first `run()` also calls it again
     // (idempotent set-add); subsequent runs flip it on
     // around each worker call.
-    useAnonymizationMatchesStore.getState().markPipelineStarted(fieldId);
+    useInspectorStore.getState().markAnonymizationPipelineStarted(fieldId);
     // Track the text+exclusions we received *results* for (not
     // just dispatched). The worker can occasionally drop a
     // request across dev HMR (the singleton's pending map loses
@@ -293,7 +292,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     let inFlightUntil = 0;
     const IN_FLIGHT_TIMEOUT_MS = 10_000;
     const markRan = () =>
-      useAnonymizationMatchesStore.getState().markPipelineRan(fieldId);
+      useInspectorStore.getState().markAnonymizationPipelineRan(fieldId);
     const run = () => {
       if (cancelled) {
         return;
@@ -341,8 +340,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       inFlightUntil = Date.now() + IN_FLIGHT_TIMEOUT_MS;
       // (Re-)mark started: handles reruns triggered by
       // edits or allowlist changes after the first run
-      // already called `markPipelineRan`.
-      useAnonymizationMatchesStore.getState().markPipelineStarted(fieldId);
+      // already called `markAnonymizationPipelineRan`.
+      useInspectorStore.getState().markAnonymizationPipelineStarted(fieldId);
       anonymizeChatTextInWorker({
         text,
         workspaceId,
@@ -466,21 +465,24 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // workspace terms" list stay in sync.
   const handleAnonymizationMatchesChange = useCallback(
     (matches: readonly { canonical: string; label: string }[]) => {
-      const { publish } = useAnonymizationMatchesStore.getState();
+      const { publishAnonymizationMatches } = useInspectorStore.getState();
       if (!isAnonymizationActive) {
         return;
       }
-      publish(fieldId, aggregateAnonymizationMatches(matches));
+      publishAnonymizationMatches(
+        fieldId,
+        aggregateAnonymizationMatches(matches),
+      );
     },
     [fieldId, isAnonymizationActive],
   );
   useExternalSyncEffect(() => {
-    const { clear } = useAnonymizationMatchesStore.getState();
+    const { clearAnonymizationMatches } = useInspectorStore.getState();
     if (!isAnonymizationActive) {
-      clear(fieldId);
+      clearAnonymizationMatches(fieldId);
     }
     return () => {
-      clear(fieldId);
+      clearAnonymizationMatches(fieldId);
     };
   }, [fieldId, isAnonymizationActive]);
 
@@ -499,13 +501,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       if (single.length < 2 || single.length > 200) {
         return;
       }
-      useDocumentTextSelectionStore.getState().publish(fieldId, single);
+      useInspectorStore
+        .getState()
+        .publishDocumentTextSelection(fieldId, single);
     },
     [fieldId],
   );
   useExternalSyncEffect(
     () => () => {
-      useDocumentTextSelectionStore.getState().clear(fieldId);
+      useInspectorStore.getState().clearDocumentTextSelection(fieldId);
     },
     [fieldId],
   );
@@ -522,17 +526,23 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   //   that would re-scroll on its own click.
   const handleAnonymizationTermClick = useCallback(
     (canonical: string, label: string) => {
-      useAnonymizationSelectionStore
+      useInspectorStore
         .getState()
-        .select(canonical, label, "doc", fieldId);
+        .selectAnonymizationTerm(canonical, label, "doc", fieldId);
     },
     [fieldId],
   );
-  const sidebarSelectedCanonical = useAnonymizationSelectionStore((s) =>
-    s.source === "sidebar" && s.fieldId === fieldId ? s.canonical : null,
+  const sidebarSelectedCanonical = useInspectorStore((s) =>
+    s.anonymizationSelection.source === "sidebar" &&
+    s.anonymizationSelection.fieldId === fieldId
+      ? s.anonymizationSelection.canonical
+      : null,
   );
-  const sidebarSelectionSeq = useAnonymizationSelectionStore((s) =>
-    s.source === "sidebar" && s.fieldId === fieldId ? s.seq : 0,
+  const sidebarSelectionSeq = useInspectorStore((s) =>
+    s.anonymizationSelection.source === "sidebar" &&
+    s.anonymizationSelection.fieldId === fieldId
+      ? s.anonymizationSelection.seq
+      : 0,
   );
   const didOpenRef = useRef(false);
   const pendingEditRequestRef = useRef(false);
