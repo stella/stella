@@ -9,7 +9,7 @@ import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
-import { readLatestChatCompaction } from "@/api/handlers/chat/persistent-compaction";
+import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
 import { isWebSearchAvailable } from "@/api/handlers/chat/tools/chat-tools";
 import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -148,9 +148,10 @@ const getMessages = createSafeRootHandler(
         // same way the send path bounds its history window (a long
         // anonymized thread must not scan every row just to render the
         // meter).
-        const checkpoint = unwrapTxRead(
-          await readLatestChatCompaction({ tx, threadId }),
-        );
+        const checkpoint = await readLatestChatCompactionOnTx({
+          threadId,
+          tx,
+        });
         const windowedMessages = unwrapTxRead(
           await loadWindowedThreadMessages({
             tx,
