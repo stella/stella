@@ -12,7 +12,7 @@ import {
   resolveOptionColor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
-type FieldValueVariant = "default" | "table" | "kanban";
+export type FieldValueVariant = "default" | "table" | "kanban";
 
 type FieldValueProps = {
   content: WorkspaceFieldContent | undefined;

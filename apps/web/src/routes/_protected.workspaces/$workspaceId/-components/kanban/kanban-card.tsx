@@ -24,9 +24,10 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
+import { useCellMetadataFlags } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
+import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
-import { FieldValue } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
@@ -234,8 +235,11 @@ export const KanbanCard = ({
             return (
               <KanbanCardFieldValue
                 content={field.content}
+                entity={entity}
+                fieldId={field.id}
                 key={fieldId}
                 property={property}
+                workspaceId={workspaceId}
               />
             );
           })}
@@ -484,15 +488,45 @@ const KanbanEntityMetadataBadges = ({
 
 type KanbanCardFieldValueProps = {
   content: WorkspaceFieldContent;
+  entity: WorkspaceEntity;
+  fieldId: string;
   property: WorkspaceProperty;
+  workspaceId: string;
 };
 
 const KanbanCardFieldValue = ({
   content,
+  entity,
+  fieldId,
   property,
-}: KanbanCardFieldValueProps) => (
-  <FieldValue content={content} property={property} variant="kanban" />
-);
+  workspaceId,
+}: KanbanCardFieldValueProps) => {
+  const { setLocked } = useCellMetadataFlags({
+    workspaceId,
+    entityId: entity.entityId,
+    propertyId: property.id,
+    metadata: entity.cellMetadata[property.id],
+  });
+  const manualSaveProps =
+    property.tool.type === "ai-model"
+      ? { onManualSave: () => setLocked(true) }
+      : {};
+
+  return (
+    <EditableField
+      content={content}
+      displayVariant="kanban"
+      entityId={entity.entityId}
+      entityKind={entity.kind}
+      fieldId={fieldId}
+      property={property}
+      propertyId={property.id}
+      readonly={entity.readOnly}
+      workspaceId={workspaceId}
+      {...manualSaveProps}
+    />
+  );
+};
 
 type KanbanCardFooterProps = {
   entity: WorkspaceEntity;
@@ -511,12 +545,15 @@ const KanbanCardFooter = ({
     return null;
   }
 
-  const authorInitials = entity.createdBy
-    ?.split(" ")
-    .map((part) => part.at(0))
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const authorInitials =
+    entity.createdBy === null
+      ? ""
+      : entity.createdBy
+          .split(" ")
+          .map((part) => part.at(0))
+          .join("")
+          .slice(0, 2)
+          .toUpperCase();
 
   return (
     <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs leading-none">

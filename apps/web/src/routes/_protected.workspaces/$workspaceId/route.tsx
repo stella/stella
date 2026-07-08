@@ -179,7 +179,7 @@ function RouteComponent() {
     // round-trip — clearing the preview synchronously here makes
     // the cell flip preview → pending skeleton → final value, with
     // the skeleton visible for the duration of the refetch. Hold
-    // the preview instead: CellResult only reads it while the
+    // the preview instead: EditableField only reads it while the
     // field is still pending, so once the refetch lands and the
     // field finalises, the preview becomes invisible automatically.
     // The TTL below still cleans up if the stream is abandoned.
