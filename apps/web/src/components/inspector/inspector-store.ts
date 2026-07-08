@@ -249,11 +249,11 @@ export type AnonymizationMatchSnapshot = {
    * string and values are the number of occurrences in the open
    * document.
    */
-  countByCanonical: ReadonlyMap<string, number>;
+  countByCanonical: Map<string, number>;
   /**
    * Per-canonical label, e.g. "person" or "organization".
    */
-  labelByCanonical: ReadonlyMap<string, string>;
+  labelByCanonical: Map<string, string>;
 };
 
 export type AnonymizationSelectionSource = "doc" | "sidebar";
@@ -345,7 +345,7 @@ type State = {
   /**
    * Field ids whose detection pipeline is currently in flight.
    */
-  anonymizationPipelineStartedFieldIds: ReadonlySet<string>;
+  anonymizationPipelineStartedFieldIds: Set<string>;
   /**
    * Two-way bridge between document-highlight clicks and inspector
    * row clicks.
@@ -606,10 +606,7 @@ const INITIAL_ANONYMIZATION_SELECTION: AnonymizationSelection = {
   seq: 0,
 };
 
-const withFieldAdded = (
-  set: ReadonlySet<string>,
-  fieldId: string,
-): ReadonlySet<string> => {
+const withFieldAdded = (set: Set<string>, fieldId: string): Set<string> => {
   if (set.has(fieldId)) {
     return set;
   }
@@ -618,10 +615,7 @@ const withFieldAdded = (
   return next;
 };
 
-const withFieldRemoved = (
-  set: ReadonlySet<string>,
-  fieldId: string,
-): ReadonlySet<string> => {
+const withFieldRemoved = (set: Set<string>, fieldId: string): Set<string> => {
   if (!set.has(fieldId)) {
     return set;
   }
@@ -1822,7 +1816,14 @@ export const useInspectorStore = create<State & Actions>()(
 
     clearDocumentTextSelection: (fieldId) =>
       set((state) => {
-        delete state.documentTextSelectionByFieldId[fieldId];
+        if (!(fieldId in state.documentTextSelectionByFieldId)) {
+          return;
+        }
+        state.documentTextSelectionByFieldId = Object.fromEntries(
+          Object.entries(state.documentTextSelectionByFieldId).filter(
+            ([id]) => id !== fieldId,
+          ),
+        );
       }),
 
     publishAnonymizationMatches: (fieldId, snapshot) =>
@@ -1859,9 +1860,13 @@ export const useInspectorStore = create<State & Actions>()(
         ) {
           return;
         }
-        if (hadMatches) {
-          delete state.anonymizationMatchesByFieldId[fieldId];
-        }
+        state.anonymizationMatchesByFieldId = hadMatches
+          ? Object.fromEntries(
+              Object.entries(state.anonymizationMatchesByFieldId).filter(
+                ([id]) => id !== fieldId,
+              ),
+            )
+          : state.anonymizationMatchesByFieldId;
         state.anonymizationPipelineStartedFieldIds = nextStarted;
       }),
 
