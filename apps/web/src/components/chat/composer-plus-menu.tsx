@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import { useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { Ref } from "react";
 
 import {
   useInfiniteQuery,
@@ -92,6 +93,23 @@ type ComposerPlusMenuProps = {
   /** Positioning for the trigger button, differing per slot: absolute on the
    *  empty placeholder line, `me-auto` at the start of the bottom action row. */
   triggerClassName?: string | undefined;
+  /**
+   * Fired when the menu closes (Escape, outside click, or a selection) after
+   * having been opened programmatically via the imperative handle's
+   * `openSkills()` — the "/" trigger on chat surfaces with a Skills submenu.
+   * Never fired for a menu opened through the ordinary (+) click/hover path.
+   * Lets the caller return focus to the editor instead of Base UI's default
+   * post-close focus target (the trigger button).
+   */
+  onSlashMenuClose?: (() => void) | undefined;
+  ref?: Ref<ComposerPlusMenuHandle>;
+};
+
+/** Imperative handle exposing the "/"-trigger entry point: opens the (+)
+ *  menu with the Skills submenu already open and its search input focused,
+ *  without requiring a real hover/click sequence. */
+export type ComposerPlusMenuHandle = {
+  openSkills: () => void;
 };
 
 // The composer's (+) affordance: a single Menu rendered into whichever slot the
@@ -109,12 +127,40 @@ export const ComposerPlusMenu = ({
   skills,
   mcp,
   triggerClassName,
+  onSlashMenuClose,
+  ref,
 }: ComposerPlusMenuProps) => {
   const t = useTranslations();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false);
+  // Set only by `openSkills()` below; consulted (and cleared) the next time
+  // the root menu closes, so only a "/"-triggered open reroutes focus back
+  // to the editor on close — an ordinary (+) click/Escape still falls back
+  // to Base UI's default (return focus to the trigger button).
+  const openedViaSlashRef = useRef(false);
+
+  useImperativeHandle(ref, () => ({
+    openSkills: () => {
+      openedViaSlashRef.current = true;
+      setMenuOpen(true);
+      setSkillsSubmenuOpen(true);
+    },
+  }));
+
+  const handleMenuOpenChange = (open: boolean) => {
+    setMenuOpen(open);
+    if (open) {
+      return;
+    }
+    setSkillsSubmenuOpen(false);
+    if (openedViaSlashRef.current) {
+      openedViaSlashRef.current = false;
+      onSlashMenuClose?.();
+    }
+  };
 
   return (
-    <Menu onOpenChange={setMenuOpen}>
+    <Menu onOpenChange={handleMenuOpenChange} open={menuOpen}>
       <MenuTrigger
         aria-label={t("chat.composerMenu.open")}
         disabled={disabled}
@@ -138,7 +184,14 @@ export const ComposerPlusMenu = ({
           {t("chat.attachFile")}
         </MenuItem>
         {models && <ComposerModelsSubmenu enabled={menuOpen} models={models} />}
-        {skills && <ComposerSkillsSubmenu enabled={menuOpen} skills={skills} />}
+        {skills && (
+          <ComposerSkillsSubmenu
+            enabled={menuOpen}
+            onOpenChange={setSkillsSubmenuOpen}
+            open={skillsSubmenuOpen}
+            skills={skills}
+          />
+        )}
         {mcp && <ComposerMcpSubmenu enabled={menuOpen} mcp={mcp} />}
       </MenuPopup>
     </Menu>
@@ -319,11 +372,33 @@ const itemKey = (item: SlashItem): string => {
   return `command-${item.command.id}`;
 };
 
+/** Secondary, muted line under an item's name — mirrors the `/`-suggestion
+ *  list's row shape (prompt body / skill description) so both surfaces
+ *  read as one consistent picker. This submenu's items never include
+ *  reserved commands (`buildChatSlashItems` is called without
+ *  `includeReservedCommands`), so the command branch is unreachable here
+ *  but kept for exhaustiveness with `SlashItem`. */
+const itemSecondary = (item: SlashItem): string => {
+  if (item.kind === "prompt") {
+    return item.prompt.body;
+  }
+  if (item.kind === "skill") {
+    return item.skill.description;
+  }
+  return item.command.command;
+};
+
 const ComposerSkillsSubmenu = ({
   enabled,
+  onOpenChange,
+  open,
   skills,
 }: {
   enabled: boolean;
+  /** Controlled open state so the "/" trigger can force this specific
+   *  submenu open alongside the root menu (see `ComposerPlusMenuHandle`). */
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
   skills: ComposerSkillsMenuProps;
 }) => {
   const t = useTranslations();
@@ -370,13 +445,15 @@ const ComposerSkillsSubmenu = ({
 
   return (
     <MenuSub
-      onOpenChange={(open) => {
-        if (open) {
+      onOpenChange={(nextOpen) => {
+        onOpenChange(nextOpen);
+        if (nextOpen) {
           focusSearchOnOpen(searchRef);
         } else {
           setSearch("");
         }
       }}
+      open={open}
     >
       <MenuSubTrigger>
         <BookOpenIcon />
@@ -384,7 +461,7 @@ const ComposerSkillsSubmenu = ({
             value) instead of adding a duplicate key. */}
         {t("chat.landing.prompts")}
       </MenuSubTrigger>
-      <MenuSubPopup className="w-64">
+      <MenuSubPopup className="w-72">
         <ComposerSubmenuSearch
           onChange={setSearch}
           placeholder={t("chat.composerMenu.searchSkills")}
@@ -403,10 +480,18 @@ const ComposerSkillsSubmenu = ({
                 handleSelect(item);
               }}
             >
-              <BookOpenIcon />
-              <BidiText as="span" className="truncate">
-                {itemName(item)}
-              </BidiText>
+              <BookOpenIcon className="self-start" />
+              <span className="min-w-0 flex-1">
+                <BidiText as="span" className="block truncate text-sm">
+                  {itemName(item)}
+                </BidiText>
+                <BidiText
+                  as="span"
+                  className="text-muted-foreground block truncate text-xs"
+                >
+                  {itemSecondary(item)}
+                </BidiText>
+              </span>
             </MenuItem>
           ))
         )}

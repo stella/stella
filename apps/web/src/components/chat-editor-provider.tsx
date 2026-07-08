@@ -508,6 +508,7 @@ export const useChatComposerWiring = ({
 };
 
 export const useChatEditor = ({
+  disableSlashSuggestion = false,
   onDraftStart,
   placeholder,
   reservedCommands = false,
@@ -515,6 +516,15 @@ export const useChatEditor = ({
   threadRef,
   suggestedFollowupPrompt,
 }: {
+  /**
+   * Omit the `/`-triggered `PromptSlash` suggestion popover entirely. Set by
+   * chat surfaces that render the composer's (+) menu with a Skills submenu
+   * (`ChatInputSurface` with `skillsOrganizationId`): those surfaces route
+   * "/" in an empty composer to the (+) menu instead (see
+   * `chat-input-surface.tsx`), so the old popover would otherwise compete
+   * with the new one for the same trigger.
+   */
+  disableSlashSuggestion?: boolean | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   /**
@@ -915,6 +925,17 @@ export const useChatEditor = ({
     [],
   );
 
+  // Omitted entirely (not just gated at render time) when the surface routes
+  // "/" through the composer's (+) menu instead — see `disableSlashSuggestion`
+  // above. A configured-but-inert extension would still intercept the trigger
+  // char and race the new popover.
+  const promptSlashExtension = disableSlashSuggestion
+    ? null
+    : PromptSlash.configure({
+        // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
+        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
+      });
+
   const editor = useEditor({
     autofocus: false,
     content: draftDoc,
@@ -952,10 +973,7 @@ export const useChatEditor = ({
         ),
         deleteTriggerWithBackspace: true,
       }),
-      PromptSlash.configure({
-        // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
-        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
-      }),
+      ...(promptSlashExtension ? [promptSlashExtension] : []),
       PastedText,
     ],
     onCreate: ({ editor: nextEditor }) => {

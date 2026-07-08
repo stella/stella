@@ -336,6 +336,7 @@ export const ChatThreadPage = ({
     seedWebSearch,
   ]);
   const controller = useChatEditor({
+    disableSlashSuggestion: true,
     reservedCommands: true,
     sentMessageHistoryHtml,
     suggestedFollowupPrompt,
@@ -617,7 +618,7 @@ export const ChatThreadPage = ({
                           />
                         ) : undefined
                       }
-                      onNewThread={startNewThread}
+                      onNewThread={messages.length > 0 ? startNewThread : null}
                       threadRef={threadRef}
                     />
                   }

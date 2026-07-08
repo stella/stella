@@ -96,7 +96,11 @@ function ChatIndex() {
     scope: "global",
     threadId: draftThreadId,
   };
-  const controller = useChatEditor({ reservedCommands: true, threadRef });
+  const controller = useChatEditor({
+    disableSlashSuggestion: true,
+    reservedCommands: true,
+    threadRef,
+  });
   const prompts = useSavedPrompts();
   const pinnedOrder = usePinnedStore((s) => s.pinnedOrder);
   const canCreateMatter = usePermissions({ workspace: ["create"] });

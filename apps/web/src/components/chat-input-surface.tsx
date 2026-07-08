@@ -17,6 +17,7 @@ import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachmen
 import {
   ComposerPlusMenu,
   type ComposerModelsMenuProps,
+  type ComposerPlusMenuHandle,
 } from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -93,6 +94,7 @@ export const ChatInputSurface = ({
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
+  const plusMenuRef = useRef<ComposerPlusMenuHandle>(null);
   const {
     attachments,
     canSubmit,
@@ -187,7 +189,27 @@ export const ChatInputSurface = ({
         <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
         <div
           className="chat-editor relative min-w-0 overflow-hidden ps-3 pe-3 pt-2 pb-1"
-          onKeyDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            // "/" in an empty composer, on a surface with a Skills submenu,
+            // opens the (+) menu at Skills instead of typing the character —
+            // the composer (+) menu replaces the old slash popover here (see
+            // `disableSlashSuggestion` on `useChatEditor`). Modifier
+            // combinations and IME composition fall through untouched.
+            if (
+              skillsOrganizationId !== undefined &&
+              isBlank &&
+              event.key === "/" &&
+              !event.altKey &&
+              !event.ctrlKey &&
+              !event.nativeEvent.isComposing &&
+              !event.metaKey &&
+              !event.shiftKey
+            ) {
+              event.preventDefault();
+              plusMenuRef.current?.openSkills();
+            }
+            event.stopPropagation();
+          }}
           role="presentation"
         >
           <PromptEditorContent
@@ -223,6 +245,8 @@ export const ChatInputSurface = ({
             }
             models={models}
             onOpenFilePicker={openFilePicker}
+            onSlashMenuClose={focus}
+            ref={plusMenuRef}
             skills={
               skillsOrganizationId
                 ? { activeOrganizationId: skillsOrganizationId, editor }
