@@ -49,6 +49,7 @@ import {
 } from "@/components/docx-preview-zoom";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { APIError, ClientOperationError, toAPIError } from "@/lib/errors";
@@ -57,7 +58,7 @@ import {
   getPDFPageIdByNumber,
   usePDFStore,
 } from "@/lib/pdf/pdf-context";
-import { ensureRouteQueryData } from "@/lib/react-query";
+import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import { composeRefs } from "@/lib/slot";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
@@ -143,9 +144,15 @@ export const Route = createFileRoute(
     const rendersInPdfViewer =
       field?.content.type === "file" && field.content.mimeType !== DOCX_MIME;
     if (rendersInPdfViewer) {
-      await ensureRouteQueryData(
+      // Warm the file query without blocking route commit: a large PDF
+      // download shouldn't hold the user on the pendingComponent. The
+      // component's useSuspenseQuery scopes the wait to the PDF area.
+      void prefetchRouteQuery(
         context.queryClient,
         fileOptions({ workspaceId: params.workspaceId, fieldId: deps.field }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
       );
     }
   },

@@ -139,11 +139,15 @@ const isColocatedRouteImport = (source) =>
 // resolver. Returns null if the linted file isn't itself under a `routes`
 // directory (shouldn't happen for a confirmed route file, but fails closed).
 const resolveColocatedImportBase = (filename, source) => {
-  const routesIndex = filename.lastIndexOf(ROUTES_SEGMENT);
+  // Windows gives `context.filename` with backslashes, which would make
+  // `lastIndexOf(ROUTES_SEGMENT)` miss; normalize to forward slashes first
+  // (valid path input on Windows, and `join` below normalizes the output).
+  const normalizedFilename = filename.replaceAll("\\", "/");
+  const routesIndex = normalizedFilename.lastIndexOf(ROUTES_SEGMENT);
   if (routesIndex === -1) {
     return null;
   }
-  const aliasRoot = filename.slice(0, routesIndex);
+  const aliasRoot = normalizedFilename.slice(0, routesIndex);
   return join(aliasRoot, source.slice("@/".length));
 };
 
