@@ -15,6 +15,7 @@ const WORKSPACE_BATCH_SIZE = Number(
   process.env["PROPERTY_ROLE_BACKFILL_BATCH_SIZE"] ?? 100,
 );
 const STATEMENT_TIMEOUT_MS = 60_000;
+const STATEMENT_TIMEOUT = `${STATEMENT_TIMEOUT_MS}ms`;
 
 type BatchResult = {
   next_cursor: string | null;
@@ -29,61 +30,67 @@ const backfillBatch = async (
     ? sql`WHERE workspace_id > ${cursorWorkspaceId}::uuid`
     : sql``;
 
-  const rows = await rootDb.execute(sql`
-    WITH workspace_batch AS (
-      SELECT workspace_id
-      FROM (
-        SELECT DISTINCT workspace_id
-        FROM properties
-        ${cursorClause}
-        ORDER BY workspace_id
-        LIMIT ${WORKSPACE_BATCH_SIZE}
-      ) AS workspace_ids
-    ),
-    ranked AS (
+  const rows = await rootDb.transaction(async (tx) => {
+    await tx.execute(
+      sql`SELECT set_config('statement_timeout', ${STATEMENT_TIMEOUT}, true)`,
+    );
+
+    return await tx.execute(sql`
+      WITH workspace_batch AS (
+        SELECT workspace_id
+        FROM (
+          SELECT DISTINCT workspace_id
+          FROM properties
+          ${cursorClause}
+          ORDER BY workspace_id
+          LIMIT ${WORKSPACE_BATCH_SIZE}
+        ) AS workspace_ids
+      ),
+      ranked AS (
+        SELECT
+          p.id,
+          p.workspace_id,
+          row_number() OVER (
+            PARTITION BY p.workspace_id
+            ORDER BY p.created_at ASC, p.id ASC
+          ) AS rn
+        FROM properties p
+        INNER JOIN workspace_batch wb ON wb.workspace_id = p.workspace_id
+        WHERE lower(trim(p.name)) = 'document type'
+          AND p.content->>'type' = 'single-select'
+          AND p.tool->>'type' = 'ai-model'
+      ),
+      candidates AS (
+        SELECT id, workspace_id
+        FROM ranked
+        WHERE rn = 1
+      ),
+      updated AS (
+        UPDATE properties p
+        SET role = 'document-type-classifier'
+        FROM candidates c
+        WHERE p.id = c.id
+          AND p.role IS DISTINCT FROM 'document-type-classifier'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM properties existing
+            WHERE existing.workspace_id = p.workspace_id
+              AND existing.role = 'document-type-classifier'
+              AND existing.id <> p.id
+          )
+        RETURNING p.id
+      )
       SELECT
-        p.id,
-        p.workspace_id,
-        row_number() OVER (
-          PARTITION BY p.workspace_id
-          ORDER BY p.created_at ASC, p.id ASC
-        ) AS rn
-      FROM properties p
-      INNER JOIN workspace_batch wb ON wb.workspace_id = p.workspace_id
-      WHERE lower(trim(p.name)) = 'document type'
-        AND p.content->>'type' = 'single-select'
-        AND p.tool->>'type' = 'ai-model'
-    ),
-    candidates AS (
-      SELECT id, workspace_id
-      FROM ranked
-      WHERE rn = 1
-    ),
-    updated AS (
-      UPDATE properties p
-      SET role = 'document-type-classifier'
-      FROM candidates c
-      WHERE p.id = c.id
-        AND p.role IS DISTINCT FROM 'document-type-classifier'
-        AND NOT EXISTS (
-          SELECT 1
-          FROM properties existing
-          WHERE existing.workspace_id = p.workspace_id
-            AND existing.role = 'document-type-classifier'
-            AND existing.id <> p.id
-        )
-      RETURNING p.id
-    )
-    SELECT
-      (
-        SELECT workspace_id::text
-        FROM workspace_batch
-        ORDER BY workspace_id DESC
-        LIMIT 1
-      ) AS next_cursor,
-      (SELECT count(*)::int FROM workspace_batch) AS scanned_workspaces,
-      (SELECT count(*)::int FROM updated) AS updated
-  `);
+        (
+          SELECT workspace_id::text
+          FROM workspace_batch
+          ORDER BY workspace_id DESC
+          LIMIT 1
+        ) AS next_cursor,
+        (SELECT count(*)::int FROM workspace_batch) AS scanned_workspaces,
+        (SELECT count(*)::int FROM updated) AS updated
+    `);
+  });
 
   const row = rows.at(0);
   if (!row) {
@@ -97,10 +104,6 @@ const backfillBatch = async (
     updated: Number(row["updated"] ?? 0),
   };
 };
-
-await rootDb.execute(
-  sql.raw(`SET statement_timeout = ${STATEMENT_TIMEOUT_MS}`),
-);
 
 console.log("=== BACKFILL PROPERTY ROLES ===");
 console.log(
