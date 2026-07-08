@@ -5,6 +5,7 @@ import {
   buildChatSmokeBody,
   evaluateChatStreamPrefix,
   evaluateChatStreamContentType,
+  evaluateHealthRevision,
   evaluateHttpCheck,
   isExpectedChatBusinessResponse,
   isServerError,
@@ -96,6 +97,53 @@ describe("evaluateHttpCheck", () => {
         mode: "chatSend",
       }).ok,
     ).toBe(false);
+  });
+});
+
+describe("evaluateHealthRevision", () => {
+  test("passes plain health checks when no expected commit is set", () => {
+    expect(
+      evaluateHealthRevision({
+        body: { commit: "old" },
+        expectedCommit: undefined,
+        status: 200,
+      }).ok,
+    ).toBe(true);
+  });
+
+  test("requires the expected commit when provided", () => {
+    expect(
+      evaluateHealthRevision({
+        body: { commit: "abc123" },
+        expectedCommit: "abc123",
+        status: 200,
+      }).ok,
+    ).toBe(true);
+    expect(
+      evaluateHealthRevision({
+        body: { commit: "old" },
+        expectedCommit: "abc123",
+        status: 200,
+      }).ok,
+    ).toBe(false);
+    expect(
+      evaluateHealthRevision({
+        body: { status: "ok" },
+        expectedCommit: "abc123",
+        status: 200,
+      }).ok,
+    ).toBe(false);
+  });
+
+  test("fails on non-2xx health responses before checking commit", () => {
+    const check = evaluateHealthRevision({
+      body: { commit: "abc123" },
+      expectedCommit: "abc123",
+      status: 503,
+    });
+
+    expect(check.ok).toBe(false);
+    expect(check.detail).toBe("503 (expected 2xx)");
   });
 });
 

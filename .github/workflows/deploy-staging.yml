@@ -233,7 +233,7 @@ jobs:
     name: Verify staging deploy
     needs: build-and-deploy
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
 
@@ -272,6 +272,7 @@ jobs:
         env:
           E2E_API_URL: https://api-staging.stll.app
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
+          EXPECTED_COMMIT: ${{ github.sha }}
 
       - name: Upload Playwright report
         if: failure()

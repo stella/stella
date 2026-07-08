@@ -620,7 +620,9 @@ describe("table export", () => {
       ),
       propertyConfig({ numRuns: 50 }),
     );
-  });
+    // 50 zip builds + parses can exceed Bun's default 5s timeout on loaded
+    // CI runners; keep the invariant broad while making runtime deterministic.
+  }, 20_000);
 
   test("merges a graded position into one column with its verdict tier and rationale", () => {
     const verdictTool: PropertyTool = {

@@ -12,8 +12,9 @@ type SmokeSession = {
 const API_URL = process.env["E2E_API_URL"] ?? "https://api-staging.stll.app";
 const WEB_URL = process.env["E2E_WEB_URL"] ?? "https://staging.stll.app";
 
-const READINESS_TIMEOUT_MS = 300_000;
+const READINESS_TIMEOUT_MS = 600_000;
 const READINESS_INTERVAL_MS = 5000;
+const READINESS_LOG_INTERVAL_MS = 30_000;
 // Require several consecutive expected-commit samples before proceeding:
 // during rollover the ALB serves old and new tasks side by side, so a
 // single new-commit hit does not mean later browser traffic avoids the
@@ -31,48 +32,155 @@ type Origin = {
   // The web origin's version.json may be absent on the revision being
   // replaced (it predates this marker), so a missing marker counts as
   // ready: the API gate covers the dominant rollover race regardless.
-  isReady: (expectedCommit: string | undefined) => Promise<boolean>;
+  sample: (expectedCommit: string | undefined) => Promise<ReadinessSample>;
 };
 
-const fetchCommit = async (url: string): Promise<string | null | undefined> => {
+type VersionProbe =
+  | {
+      type: "ok";
+      commit: string | null;
+    }
+  | {
+      type: "missing-marker";
+    }
+  | {
+      type: "http-error";
+      status: number;
+    }
+  | {
+      type: "invalid-json";
+    }
+  | {
+      message: string;
+      type: "network-error";
+    };
+
+type ReadinessSample = {
+  detail: string;
+  label: string;
+  ready: boolean;
+};
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const fetchCommit = async (url: string): Promise<VersionProbe> => {
   try {
     const response = await fetch(url, { signal: AbortSignal.timeout(10_000) });
     if (response.status === 404) {
-      return null;
+      return { type: "missing-marker" };
     }
     if (!response.ok) {
-      return undefined;
+      return { type: "http-error", status: response.status };
     }
-    const { commit } = (await response.json()) as { commit?: string };
-    return commit;
+    const body: unknown = await response.json().catch(() => null);
+    if (!isObject(body)) {
+      return { type: "invalid-json" };
+    }
+    const commit = body["commit"];
+    if (typeof commit === "string") {
+      return { type: "ok", commit };
+    }
+    if (commit === undefined || commit === null) {
+      return { type: "ok", commit: null };
+    }
+    return { type: "invalid-json" };
   } catch {
     // Connection reset/timeout during rollover; treated as not-ready.
-    return undefined;
+    return { type: "network-error", message: "request failed or timed out" };
   }
+};
+
+const sampleRevision = async ({
+  allowMissingMarker,
+  expectedCommit,
+  label,
+  url,
+}: {
+  allowMissingMarker: boolean;
+  expectedCommit: string | undefined;
+  label: string;
+  url: string;
+}): Promise<ReadinessSample> => {
+  const probe = await fetchCommit(url);
+  if (probe.type === "http-error") {
+    return {
+      detail: `HTTP ${String(probe.status)}`,
+      label,
+      ready: false,
+    };
+  }
+  if (probe.type === "invalid-json") {
+    return { detail: "invalid JSON body", label, ready: false };
+  }
+  if (probe.type === "network-error") {
+    return { detail: probe.message, label, ready: false };
+  }
+  if (probe.type === "missing-marker") {
+    return {
+      detail: allowMissingMarker
+        ? "version marker missing; accepted"
+        : "version marker missing",
+      label,
+      ready: allowMissingMarker,
+    };
+  }
+
+  if (!expectedCommit) {
+    return {
+      detail: probe.commit ? `healthy commit ${probe.commit}` : "healthy",
+      label,
+      ready: true,
+    };
+  }
+
+  if (probe.commit === expectedCommit) {
+    return { detail: `commit ${probe.commit}`, label, ready: true };
+  }
+
+  return {
+    detail: probe.commit
+      ? `stale commit ${probe.commit}`
+      : "commit missing from response",
+    label,
+    ready: false,
+  };
 };
 
 const ORIGINS: Origin[] = [
   {
     label: "api",
-    isReady: async (expectedCommit) => {
-      const commit = await fetchCommit(`${API_URL}/health`);
-      if (commit === undefined) {
-        return false;
-      }
-      return !expectedCommit || commit === expectedCommit;
-    },
+    sample: async (expectedCommit) =>
+      await sampleRevision({
+        allowMissingMarker: false,
+        expectedCommit,
+        label: "api",
+        url: `${API_URL}/health`,
+      }),
   },
   {
     label: "web",
-    isReady: async (expectedCommit) => {
-      const commit = await fetchCommit(`${WEB_URL}/version.json`);
-      if (commit === undefined) {
-        return false;
-      }
-      return !expectedCommit || commit === null || commit === expectedCommit;
-    },
+    sample: async (expectedCommit) =>
+      await sampleRevision({
+        allowMissingMarker: true,
+        expectedCommit,
+        label: "web",
+        url: `${WEB_URL}/version.json`,
+      }),
   },
 ];
+
+const formatReadinessSamples = (samples: ReadinessSample[]): string =>
+  samples
+    .map(
+      (sample) =>
+        `${sample.label}: ${sample.ready ? "ready" : "waiting"} (${sample.detail})`,
+    )
+    .join("; ");
+
+const writeReadinessLog = (message: string): void => {
+  process.stdout.write(`[staging-readiness] ${message}\n`);
+};
 
 // Block until both the API and the web origin stably serve the deployed
 // revision. verify-staging fires the moment the promote returns, while
@@ -85,14 +193,35 @@ const waitForDeployedRevision = async (): Promise<void> => {
   const expectedCommit = process.env["EXPECTED_COMMIT"];
   const deadline = Date.now() + READINESS_TIMEOUT_MS;
   let consecutive = 0;
+  let lastSummary = "no readiness samples collected";
+  let nextPeriodicLogAt = 0;
+
+  writeReadinessLog(
+    `waiting for ${expectedCommit ?? "healthy staging"} for up to ${
+      READINESS_TIMEOUT_MS / 1000
+    }s`,
+  );
 
   while (Date.now() < deadline) {
     // oxlint-disable-next-line no-await-in-loop -- sequential readiness sampling: each sample must follow the prior interval to build a streak
-    const readiness = await Promise.all(
-      ORIGINS.map(async (origin) => await origin.isReady(expectedCommit)),
+    const samples = await Promise.all(
+      ORIGINS.map(async (origin) => await origin.sample(expectedCommit)),
     );
-    consecutive = readiness.every(Boolean) ? consecutive + 1 : 0;
+    const summary = formatReadinessSamples(samples);
+    const now = Date.now();
+    consecutive = samples.every((sample) => sample.ready) ? consecutive + 1 : 0;
+    if (summary !== lastSummary || now >= nextPeriodicLogAt) {
+      writeReadinessLog(
+        `${summary}; stable samples ${String(consecutive)}/${String(
+          READINESS_STABLE_SAMPLES,
+        )}`,
+      );
+      nextPeriodicLogAt = now + READINESS_LOG_INTERVAL_MS;
+    }
+    lastSummary = summary;
+
     if (consecutive >= READINESS_STABLE_SAMPLES) {
+      writeReadinessLog(`ready after ${String(consecutive)} stable samples`);
       return;
     }
     // oxlint-disable-next-line no-await-in-loop -- sequential poll backoff: wait between readiness samples
@@ -101,7 +230,7 @@ const waitForDeployedRevision = async (): Promise<void> => {
 
   throw new Error(
     `Staging did not stably serve ${expectedCommit ?? "a healthy revision"} ` +
-      `within ${READINESS_TIMEOUT_MS / 1000}s`,
+      `within ${READINESS_TIMEOUT_MS / 1000}s. Last sample: ${lastSummary}`,
   );
 };
 
