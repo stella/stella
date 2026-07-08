@@ -193,8 +193,7 @@ export const createVersionCompareTools = ({
 
     if (base.entityId !== revised.entityId) {
       throw new ChatToolError({
-        message:
-          "The base and revised versions belong to different documents.",
+        message: "The base and revised versions belong to different documents.",
       });
     }
 
