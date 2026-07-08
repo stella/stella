@@ -526,8 +526,8 @@ export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
     outputPerMTok: 150_000,
   },
   "mistral-medium-latest": {
-    inputPerMTok: 40_000,
-    outputPerMTok: 200_000,
+    inputPerMTok: 150_000,
+    outputPerMTok: 750_000,
   },
   "mistral-medium-3-5": {
     inputPerMTok: 150_000,
