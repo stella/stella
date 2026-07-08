@@ -544,12 +544,15 @@ const KanbanCardFooter = ({
     return null;
   }
 
-  const authorInitials = entity.createdBy
-    .split(" ")
-    .map((part) => part.at(0))
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const authorInitials =
+    entity.createdBy === null
+      ? ""
+      : entity.createdBy
+          .split(" ")
+          .map((part) => part.at(0))
+          .join("")
+          .slice(0, 2)
+          .toUpperCase();
 
   return (
     <div className="text-muted-foreground flex min-w-0 items-center gap-2 text-xs leading-none">

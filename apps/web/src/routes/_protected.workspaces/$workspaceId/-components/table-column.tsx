@@ -263,7 +263,7 @@ const PropertyCell = ({
             displayVariant="table"
             entityId={entity.entityId}
             entityKind={entity.kind}
-            fieldId={field?.id}
+            fieldId={field.id}
             onManualSave={() => setLocked(true)}
             property={property}
             propertyId={property.id}
