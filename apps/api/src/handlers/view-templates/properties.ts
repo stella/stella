@@ -101,7 +101,7 @@ export const collectTemplateProperties = ({
           property.tool.type === "playbook-verdict"
             ? { version: 1, type: "manual-input" }
             : property.tool,
-        role: property.role,
+        role: resolveTemplateExportRole(property, workspaceProperties),
         createIfMissing: creatablePropertyIds.has(property.id),
       };
       if (propertyDeps && propertyDeps.length > 0) {
@@ -109,6 +109,33 @@ export const collectTemplateProperties = ({
       }
       return result;
     });
+};
+
+const resolveTemplateExportRole = (
+  property: WorkspacePropertyTemplateSource,
+  workspaceProperties: readonly WorkspacePropertyTemplateSource[],
+): typeof properties.$inferSelect.role => {
+  if (property.role !== null) {
+    return property.role;
+  }
+
+  if (!isLegacyDocumentTypeClassifierProperty(property)) {
+    return null;
+  }
+
+  const taggedClassifierExists = workspaceProperties.some(
+    (candidate) =>
+      candidate.role === DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+      isDocumentTypeClassifierShape(candidate),
+  );
+  if (taggedClassifierExists) {
+    return null;
+  }
+
+  const legacyClassifiers = workspaceProperties.filter(
+    isLegacyDocumentTypeClassifierProperty,
+  );
+  return legacyClassifiers.length === 1 ? DOCUMENT_TYPE_CLASSIFIER_ROLE : null;
 };
 
 const addDependencySourceIds = (
@@ -761,17 +788,16 @@ const findUniquePropertyByRole = ({
     return tagged;
   }
 
-  if (
-    !isLegacyDocumentTypeClassifierTemplate(templateProperty, roleResolution)
-  ) {
+  if (role !== DOCUMENT_TYPE_CLASSIFIER_ROLE) {
     return undefined;
   }
 
-  return existingProperties.find(
+  const legacyMatches = existingProperties.filter(
     (property) =>
       !consumedExistingPropertyIds.has(property.id) &&
       isLegacyDocumentTypeClassifierProperty(property),
   );
+  return legacyMatches.length === 1 ? legacyMatches[0] : undefined;
 };
 
 const isLegacyDocumentTypeClassifierProperty = (

@@ -307,6 +307,89 @@ describe("collectTemplateProperties", () => {
     ]);
   });
 
+  test("exports a unique unbackfilled legacy classifier with its structural role", () => {
+    const content = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const classifier = {
+      id: "document_type",
+      name: "Document Type",
+      content,
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify the document type.",
+      },
+      system: false,
+      role: null,
+    } satisfies Parameters<
+      typeof collectTemplateProperties
+    >[0]["properties"][number];
+
+    const templateProperties = collectTemplateProperties({
+      layout: tableLayout(classifier.id),
+      properties: [classifier],
+      dependencies: [],
+    });
+
+    expect(templateProperties).toEqual([
+      expect.objectContaining({
+        sourceId: classifier.id,
+        role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+      }),
+    ]);
+  });
+
+  test("keeps duplicate unbackfilled legacy classifiers roleless on export", () => {
+    const content = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const first = {
+      id: "document_type",
+      name: "Document Type",
+      content,
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify the document type.",
+      },
+      system: false,
+      role: null,
+    } satisfies Parameters<
+      typeof collectTemplateProperties
+    >[0]["properties"][number];
+    const second = {
+      ...first,
+      id: "document_type_duplicate",
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify the duplicate document type.",
+      },
+    } satisfies Parameters<
+      typeof collectTemplateProperties
+    >[0]["properties"][number];
+
+    const templateProperties = collectTemplateProperties({
+      layout: tableLayout(first.id),
+      properties: [first, second],
+      dependencies: [],
+    });
+
+    expect(templateProperties).toEqual([
+      expect.objectContaining({
+        sourceId: first.id,
+        role: null,
+      }),
+    ]);
+  });
+
   test("serializes explicit role absence for ordinary document type duplicates", () => {
     const content = {
       version: 1,
@@ -896,6 +979,55 @@ describe("resolveTemplateProperties", () => {
       ok: true,
       layout: tableLayout("tagged_classifier"),
       propertyIds: ["source_document_type", "tagged_classifier"],
+    });
+    expect(returningMock).not.toHaveBeenCalled();
+  });
+
+  test("reuses legacy classifiers for explicit role templates", async () => {
+    const templateContent = {
+      version: 1,
+      type: "single-select",
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    } satisfies ViewTemplateProperty["content"];
+    const { returningMock, tx } = createTemplateReuseTx({
+      id: "existing_property",
+      name: "Document Type",
+      content: templateContent,
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify existing document types.",
+      },
+      role: null,
+    });
+    const templateProperty = {
+      version: 1,
+      sourceId: "source_document_type",
+      name: "Document Type",
+      content: templateContent,
+      tool: {
+        version: 1,
+        type: "ai-model",
+        prompt: "Classify the document type.",
+      },
+      role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+      createIfMissing: true,
+    } satisfies ViewTemplateProperty;
+
+    const result = await resolveTemplateProperties({
+      tx,
+      workspaceId,
+      layout: tableLayout(templateProperty.sourceId),
+      templateProperties: [templateProperty],
+      canCreateProperties: true,
+      recordAuditEvent: noopAuditRecorder,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      layout: tableLayout("existing_property"),
+      propertyIds: ["existing_property"],
     });
     expect(returningMock).not.toHaveBeenCalled();
   });
