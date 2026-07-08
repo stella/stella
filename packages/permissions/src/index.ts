@@ -30,7 +30,6 @@ export const statements = {
   chat: ["create", "update", "delete"],
   organizationSettings: ["update"],
   auditLog: ["read"],
-  promptShortcut: ["create", "update", "delete"],
   agentSkill: ["create", "update", "delete"],
 } as const;
 
@@ -68,7 +67,6 @@ const memberAc = ac.newRole({
   chat: ["create", "update", "delete"],
   organizationSettings: [],
   auditLog: [],
-  promptShortcut: ["create", "update", "delete"],
   agentSkill: ["create", "update", "delete"],
 });
 
@@ -95,7 +93,6 @@ export const roles = {
     chat: ["create", "update", "delete"],
     organizationSettings: ["update"],
     auditLog: ["read"],
-    promptShortcut: ["create", "update", "delete"],
     agentSkill: ["create", "update", "delete"],
   }),
   admin: ac.newRole({
@@ -120,7 +117,6 @@ export const roles = {
     chat: ["create", "update", "delete"],
     organizationSettings: ["update"],
     auditLog: ["read"],
-    promptShortcut: ["create", "update", "delete"],
     agentSkill: ["create", "update", "delete"],
   }),
   member: memberAc,
@@ -146,7 +142,6 @@ export const roles = {
     chat: ["create", "update", "delete"],
     organizationSettings: [],
     auditLog: [],
-    promptShortcut: [],
     agentSkill: [],
   }),
   external: ac.newRole({
@@ -171,7 +166,6 @@ export const roles = {
     chat: [],
     organizationSettings: [],
     auditLog: [],
-    promptShortcut: [],
     agentSkill: [],
   }),
 };

@@ -26,13 +26,6 @@ type ClausesListKey = {
 };
 
 export const knowledgeKeys = {
-  shortcuts: {
-    all: (organizationId: string) => ["shortcuts", organizationId],
-    list: (organizationId: string) => [
-      ...knowledgeKeys.shortcuts.all(organizationId),
-      "list",
-    ],
-  },
   skills: {
     all: (organizationId: string) => ["skills", organizationId],
     list: (organizationId: string, { limit }: SkillsPageKey) => [
@@ -562,21 +555,6 @@ export const playbookVersionsOptions = (
         throw toAPIError(response.error);
       }
 
-      return response.data;
-    },
-    staleTime: STALE_TIME.FIVE.MINUTES,
-  });
-
-// ── Shortcuts queries ────────────────────────────────
-
-export const shortcutsOptions = (organizationId: string) =>
-  queryOptions({
-    queryKey: knowledgeKeys.shortcuts.list(organizationId),
-    queryFn: async ({ signal }) => {
-      const response = await api.shortcuts.get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
       return response.data;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
