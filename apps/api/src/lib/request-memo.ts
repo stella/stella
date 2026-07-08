@@ -26,17 +26,17 @@
  * within a single synchronous hook chain before the first await settles)
  * still only trigger one computation.
  */
-export const memoizePerRequest = <TResult>(
+export const memoizePerRequest = async <TResult>(
   cache: WeakMap<Request, Promise<TResult>>,
   request: Request,
   compute: () => Promise<TResult>,
 ): Promise<TResult> => {
   const cached = cache.get(request);
   if (cached) {
-    return cached;
+    return await cached;
   }
 
   const pending = compute();
   cache.set(request, pending);
-  return pending;
+  return await pending;
 };

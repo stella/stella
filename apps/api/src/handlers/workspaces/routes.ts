@@ -179,19 +179,35 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   // route-level sites), so a redundant bare guard here would add a
   // second, fully independent `validateAuth` resolve to every request.
   // See tests/security/redundant-validate-auth-guard.test.ts.
+  //
+  // The 3 routes below (outside the `/:workspaceId` group) also repeat
+  // `validateAuth: true` alongside `permissions`. This is a type-only
+  // workaround, not a behavioral duplicate: `permissions` is a
+  // function-form macro (see "Known Elysia Gotchas" in AGENTS.md), so the
+  // `validateAuth: true` it returns internally isn't picked up by
+  // Elysia's type-level context composition — only a literal
+  // `validateAuth`/`validateWorkspaceAccess` key at the same call site is.
+  // Runtime dedup (same call's hook object) and the per-request
+  // memoization in `resolveValidateAuth` mean this does not add a second
+  // resolve. Routes inside the group below don't need this: the group's
+  // own `validateWorkspaceAccess: true` already supplies the literal key.
   .get("/", readWorkspaces.handler, {
     permissions: readWorkspaces.config.permissions,
+    validateAuth: true,
   })
   .get("/navigation", readWorkspaceNavigation.handler, {
     permissions: readWorkspaceNavigation.config.permissions,
+    validateAuth: true,
   })
   .put("/", createWorkspaces.handler, {
     body: createWorkspaces.config.body,
     invalidateQuery: true,
     permissions: createWorkspaces.config.permissions,
+    validateAuth: true,
   })
   .get("/active", readActiveWorkspace.handler, {
     permissions: readActiveWorkspace.config.permissions,
+    validateAuth: true,
   })
   .group(
     "/:workspaceId",

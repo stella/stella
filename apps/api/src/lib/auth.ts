@@ -23,7 +23,6 @@ import { authSchema } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { env } from "@/api/env";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -723,51 +722,6 @@ export const resolveAccessibleWorkspaces = async (
   }));
 };
 
-type ValidateAuthValue = {
-  user: { id: SafeId<"user"> };
-  session: { activeOrganizationId: SafeId<"organization"> };
-  /**
-   * Excludes workspaces being deleted. Includes active and
-   * archived workspaces. Use for search, chat, MCP, and any
-   * query that should not surface content from sealed workspaces.
-   */
-  activeWorkspaceIds: SafeId<"workspace">[];
-  /**
-   * All accessible workspaces with status. Only use in
-   * workspaceAccessMacro (which needs the status to return
-   * appropriate HTTP codes) — never pass these IDs as a
-   * search/query allowlist.
-   */
-  accessibleWorkspaces: AccessibleWorkspace[];
-  scopedDb: ReturnType<typeof createScopedDb>;
-  safeDb: ReturnType<typeof createSafeDb>;
-  memberRole: { role: MemberRole };
-  orgAIConfig: OrgAIConfig | null;
-  promptCachingEnabled: boolean;
-  /**
-   * Records audit rows in the supplied tx. Identity fields
-   * (org/user/IP/UA) are bound from the request context;
-   * workspaceId defaults to null for root handlers and is
-   * overridden by workspaceAccessMacro to the validated
-   * workspaceId for workspace handlers. Individual events
-   * can still override workspaceId for cross-workspace ops.
-   */
-  recordAuditEvent: ReturnType<typeof createAuditRecorder>;
-  /**
-   * Builds a recorder with an overridden default workspaceId.
-   * Use when threading audit recording through helpers that
-   * don't receive the handler ctx (cross-workspace operations,
-   * shared copy/move utilities).
-   */
-  createAuditRecorder: (opts?: {
-    workspaceId?: SafeId<"workspace"> | null;
-  }) => ReturnType<typeof createAuditRecorder>;
-};
-
-type ValidateAuthResolution =
-  | { ok: true; value: ValidateAuthValue }
-  | { ok: false; statusCode: 401 | 500 };
-
 /**
  * Per-request memoization of validateAuth's resolution.
  *
@@ -790,38 +744,44 @@ type ValidateAuthResolution =
  * raw `Request` object: it never survives past the request that created
  * it (no explicit eviction needed) and never leaks across requests, so a
  * revoked session is still re-checked in full on the very next request.
+ *
+ * `resolveValidateAuth`'s return type is intentionally left for TypeScript
+ * to infer (no hand-written `ValidateAuthValue`/`ValidateAuthResolution`
+ * annotation). `scopedDb`/`safeDb` come from `createScopedDb`/`createSafeDb`,
+ * which are generic over the concrete Drizzle transaction type; annotating
+ * the resolve's return type with e.g. `ReturnType<typeof createScopedDb>`
+ * collapses that generic to its default constraint (a minimal structural
+ * type used only so test PGlite databases satisfy it) instead of the
+ * concrete transaction type this call site actually infers from `rlsDb`.
+ * Letting inference flow keeps the real (wide) transaction type, which is
+ * what every handler's `ctx.scopedDb`/`ctx.safeDb` callback expects.
  */
-const validateAuthResolutionCache = new WeakMap<
-  Request,
-  Promise<ValidateAuthResolution>
->();
-
 const resolveValidateAuth = async (
   request: Request,
   server: Parameters<typeof createAuditRecorder>[0]["server"],
-): Promise<ValidateAuthResolution> => {
+) => {
   const { sessionResult, memberRoleResult } = await getSessionAndMemberRole(
     request.headers,
   );
 
   if (Result.isError(sessionResult)) {
-    return { ok: false, statusCode: 500 };
+    return { ok: false as const, statusCode: 500 as const };
   }
   const session = sessionResult.value?.session;
   const user = sessionResult.value?.user;
   const rawOrgId = session?.activeOrganizationId;
 
   if (!session || !user || !rawOrgId) {
-    return { ok: false, statusCode: 401 };
+    return { ok: false as const, statusCode: 401 as const };
   }
 
   if (Result.isError(memberRoleResult)) {
-    return { ok: false, statusCode: 500 };
+    return { ok: false as const, statusCode: 500 as const };
   }
 
   const memberRole = memberRoleResult.value;
   if (!memberRole) {
-    return { ok: false, statusCode: 401 };
+    return { ok: false as const, statusCode: 401 as const };
   }
   const activeOrganizationId = toSafeId<"organization">(rawOrgId);
   const userId = toSafeId<"user">(user.id);
@@ -864,7 +824,7 @@ const resolveValidateAuth = async (
   };
 
   return {
-    ok: true,
+    ok: true as const,
     value: {
       user: {
         id: toSafeId<"user">(user.id),
@@ -872,14 +832,39 @@ const resolveValidateAuth = async (
       session: {
         activeOrganizationId,
       },
+      /**
+       * Excludes workspaces being deleted. Includes active and
+       * archived workspaces. Use for search, chat, MCP, and any
+       * query that should not surface content from sealed workspaces.
+       */
       activeWorkspaceIds,
+      /**
+       * All accessible workspaces with status. Only use in
+       * workspaceAccessMacro (which needs the status to return
+       * appropriate HTTP codes) — never pass these IDs as a
+       * search/query allowlist.
+       */
       accessibleWorkspaces,
       scopedDb,
       safeDb,
       memberRole,
       orgAIConfig,
       promptCachingEnabled,
+      /**
+       * Records audit rows in the supplied tx. Identity fields
+       * (org/user/IP/UA) are bound from the request context;
+       * workspaceId defaults to null for root handlers and is
+       * overridden by workspaceAccessMacro to the validated
+       * workspaceId for workspace handlers. Individual events
+       * can still override workspaceId for cross-workspace ops.
+       */
       recordAuditEvent: createAuditRecorder(recorderBindings),
+      /**
+       * Builds a recorder with an overridden default workspaceId.
+       * Use when threading audit recording through helpers that
+       * don't receive the handler ctx (cross-workspace operations,
+       * shared copy/move utilities).
+       */
       createAuditRecorder: (opts?: {
         workspaceId?: SafeId<"workspace"> | null;
       }) =>
@@ -892,13 +877,29 @@ const resolveValidateAuth = async (
   };
 };
 
+/**
+ * Named alias for `resolveValidateAuth`'s resolved value, derived from the
+ * implementation rather than hand-written — see the inference note above.
+ */
+export type ValidateAuthValue = Extract<
+  Awaited<ReturnType<typeof resolveValidateAuth>>,
+  { ok: true }
+>["value"];
+
+type ValidateAuthResolution = Awaited<ReturnType<typeof resolveValidateAuth>>;
+
+const validateAuthResolutionCache = new WeakMap<
+  Request,
+  Promise<ValidateAuthResolution>
+>();
+
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
     async resolve({ status, request, server }) {
       const result = await memoizePerRequest(
         validateAuthResolutionCache,
         request,
-        () => resolveValidateAuth(request, server),
+        async () => await resolveValidateAuth(request, server),
       );
 
       if (!result.ok) {

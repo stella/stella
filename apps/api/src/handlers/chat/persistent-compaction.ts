@@ -77,8 +77,9 @@ export const readLatestChatCompaction = async ({
 }: ReadLatestChatCompactionProps): Promise<
   Result<ChatThreadCompactionCheckpoint | null, SafeDbError>
 > =>
-  await withScopedTx(handle, (tx) =>
-    readLatestChatCompactionOnTx({ threadId, tx }),
+  await withScopedTx(
+    handle,
+    async (tx) => await readLatestChatCompactionOnTx({ threadId, tx }),
   );
 
 type ApplyChatCompactionCheckpointProps = {

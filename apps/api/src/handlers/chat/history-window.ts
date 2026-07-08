@@ -49,12 +49,12 @@ type LoadWindowedThreadMessagesOnTxArgs = {
   isAnonymized: boolean;
   /** Upper bound on rows read in the capped (anonymized) case; defaults to the
    *  per-send history window. */
-  limit?: number;
+  limit?: number | undefined;
   /** The active checkpoint, when the caller already fetched one (e.g.
    *  alongside this call, in the same transaction) — skips this
    *  function's own `readLatestChatCompactionOnTx` read. Omit to have it
    *  self-fetch, as every existing caller does. */
-  checkpoint?: ChatThreadCompactionCheckpoint | null;
+  checkpoint?: ChatThreadCompactionCheckpoint | null | undefined;
 };
 
 /**
@@ -172,14 +172,16 @@ export const loadWindowedThreadMessages = async ({
 }: LoadWindowedThreadMessagesArgs): Promise<
   Result<WindowedThreadMessage[], SafeDbError>
 > =>
-  await withScopedTx(handle, (tx) =>
-    loadWindowedThreadMessagesOnTx({
-      tx,
-      threadId,
-      isAnonymized,
-      limit,
-      checkpoint,
-    }),
+  await withScopedTx(
+    handle,
+    async (tx) =>
+      await loadWindowedThreadMessagesOnTx({
+        tx,
+        threadId,
+        isAnonymized,
+        limit,
+        checkpoint,
+      }),
   );
 
 type LoadFullThreadHistoryArgs = {

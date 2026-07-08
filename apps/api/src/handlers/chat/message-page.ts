@@ -170,8 +170,10 @@ export const loadChatMessagePage = async ({
   before,
   ...handle
 }: LoadChatMessagePageArgs): Promise<Result<ChatMessagePage, SafeDbError>> =>
-  await withScopedTx(handle, (tx) =>
-    loadChatMessagePageOnTx({ tx, threadId, userId, before }),
+  await withScopedTx(
+    handle,
+    async (tx) =>
+      await loadChatMessagePageOnTx({ tx, threadId, userId, before }),
   );
 
 type ChatMessagePageRow = {

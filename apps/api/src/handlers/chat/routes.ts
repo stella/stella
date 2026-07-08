@@ -25,9 +25,20 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   // request (Elysia doesn't dedupe macro expansions across separate
   // guard / route-level call sites). See
   // tests/security/redundant-validate-auth-guard.test.ts.
+  //
+  // Each route below also repeats `validateAuth: true` alongside
+  // `permissions`. This is a type-only workaround, not a behavioral
+  // duplicate: `permissions` is a function-form macro (see "Known Elysia
+  // Gotchas" in AGENTS.md), so the `validateAuth: true` it returns
+  // internally isn't picked up by Elysia's type-level context composition
+  // — only a literal `validateAuth`/`validateWorkspaceAccess` key at the
+  // same call site is. Runtime dedup (same call's hook object) and the
+  // per-request memoization in `resolveValidateAuth` mean this does not
+  // add a second resolve.
   .post("/", sendMessage.handler, {
     body: sendMessage.config.body,
     permissions: sendMessage.config.permissions,
+    validateAuth: true,
   })
   .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
     body: resolveFileThread.config.body,
@@ -37,54 +48,65 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .post("/template-thread", resolveTemplateThread.handler, {
     body: resolveTemplateThread.config.body,
     permissions: resolveTemplateThread.config.permissions,
+    validateAuth: true,
   })
   .post("/template-thread/rotate", rotateTemplateThread.handler, {
     body: rotateTemplateThread.config.body,
     permissions: rotateTemplateThread.config.permissions,
+    validateAuth: true,
   })
   .get("/threads", getThreads.handler, {
     permissions: getThreads.config.permissions,
     query: getThreads.config.query,
+    validateAuth: true,
   })
   .delete("/threads/:threadId", deleteThread.handler, {
     params: deleteThread.config.params,
     permissions: deleteThread.config.permissions,
     query: deleteThread.config.query,
+    validateAuth: true,
   })
   .patch("/threads/:threadId", updateThread.handler, {
     body: updateThread.config.body,
     params: updateThread.config.params,
     permissions: updateThread.config.permissions,
     query: updateThread.config.query,
+    validateAuth: true,
   })
   .patch("/threads/:threadId/title", renameThread.handler, {
     body: renameThread.config.body,
     params: renameThread.config.params,
     permissions: renameThread.config.permissions,
     query: renameThread.config.query,
+    validateAuth: true,
   })
   .get("/threads/:threadId/title", getThreadTitle.handler, {
     params: getThreadTitle.config.params,
     permissions: getThreadTitle.config.permissions,
     query: getThreadTitle.config.query,
+    validateAuth: true,
   })
   .get("/threads/:threadId/messages", getMessages.handler, {
     params: getMessages.config.params,
     permissions: getMessages.config.permissions,
     query: getMessages.config.query,
+    validateAuth: true,
   })
   .get("/threads/:threadId/messages/older", getOlderMessages.handler, {
     params: getOlderMessages.config.params,
     permissions: getOlderMessages.config.permissions,
     query: getOlderMessages.config.query,
+    validateAuth: true,
   })
   .post("/threads/:threadId/recap", getThreadRecap.handler, {
     params: getThreadRecap.config.params,
     permissions: getThreadRecap.config.permissions,
     query: getThreadRecap.config.query,
+    validateAuth: true,
   })
   .post("/threads/:threadId/suggested-prompts", getSuggestedPrompts.handler, {
     params: getSuggestedPrompts.config.params,
     permissions: getSuggestedPrompts.config.permissions,
     query: getSuggestedPrompts.config.query,
+    validateAuth: true,
   });
