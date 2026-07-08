@@ -3,12 +3,19 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
 import { properties, propertyDependencies } from "@/api/db/schema";
+import type { PropertyRole } from "@/api/db/schema";
 import {
   aiModelToolSchema,
   manualInputToolSchema,
   propertyContentSchema,
 } from "@/api/db/schema-validators";
-import type { PropertyTool } from "@/api/db/schema-validators";
+import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
+import {
+  DOCUMENT_TYPE_CLASSIFIER_ROLE,
+  isDocumentTypeClassifierProperty,
+  isDocumentTypeClassifierShape,
+} from "@/api/handlers/properties/create-schema";
+import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -26,8 +33,69 @@ import { serializeAITool } from "@/api/lib/markdown/ai-tool";
 
 type PropertyWithDeps = {
   id: SafeId<"property">;
+  name: string;
+  content: PropertyContent;
+  tool: PropertyTool;
+  role: PropertyRole | null;
   dependencies: { dependsOnPropertyId: SafeId<"property"> }[];
 };
+
+const resolveUpdatedClassifierRole = ({
+  content,
+  name,
+  oldProperty,
+  preserveLegacyIdentity,
+  tool,
+}: {
+  content: PropertyContent;
+  name: string;
+  oldProperty: Pick<PropertyWithDeps, "content" | "name" | "role" | "tool">;
+  preserveLegacyIdentity: boolean;
+  tool: PropertyTool;
+}): PropertyRole | null => {
+  const hadClassifierIdentity =
+    oldProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE ||
+    (preserveLegacyIdentity &&
+      isDocumentTypeClassifierProperty({
+        content: oldProperty.content,
+        name: oldProperty.name,
+        role: null,
+        tool: oldProperty.tool,
+      }));
+
+  if (hadClassifierIdentity) {
+    return isDocumentTypeClassifierShape({ content, tool })
+      ? DOCUMENT_TYPE_CLASSIFIER_ROLE
+      : null;
+  }
+
+  if (isDocumentTypeClassifierProperty({ content, name, role: null, tool })) {
+    return DOCUMENT_TYPE_CLASSIFIER_ROLE;
+  }
+
+  return null;
+};
+
+const isTaggedDocumentTypeClassifier = (
+  property: Pick<PropertyWithDeps, "content" | "name" | "role" | "tool">,
+): boolean =>
+  property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+  isDocumentTypeClassifierProperty({
+    content: property.content,
+    name: property.name,
+    role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+    tool: property.tool,
+  });
+
+const isLegacyDocumentTypeClassifier = (
+  property: Pick<PropertyWithDeps, "content" | "name" | "role" | "tool">,
+): boolean =>
+  isDocumentTypeClassifierProperty({
+    content: property.content,
+    name: property.name,
+    role: null,
+    tool: property.tool,
+  });
 
 /**
  * Collect all transitive dependents of `rootId` via BFS.
@@ -203,12 +271,14 @@ const updateProperty = createSafeHandler(
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        await lockWorkspacePropertyWrites(tx, workspaceId);
         const propertyRows = await tx
           .select({
             id: properties.id,
             name: properties.name,
             content: properties.content,
             tool: properties.tool,
+            role: properties.role,
             status: properties.status,
             playbookDefinitionId: properties.playbookDefinitionId,
           })
@@ -264,7 +334,13 @@ const updateProperty = createSafeHandler(
           body.tool.type === "ai-model" || isStale
             ? await tx.query.properties.findMany({
                 where: { workspaceId: { eq: workspaceId } },
-                columns: { id: true },
+                columns: {
+                  id: true,
+                  name: true,
+                  content: true,
+                  tool: true,
+                  role: true,
+                },
                 limit: LIMITS.propertiesCount,
                 with: {
                   dependencies: {
@@ -273,6 +349,51 @@ const updateProperty = createSafeHandler(
                 },
               })
             : [];
+
+        const otherTaggedClassifierExists = allProperties.some(
+          (property) =>
+            property.id !== propertyId &&
+            isTaggedDocumentTypeClassifier(property),
+        );
+        const legacyClassifierCount = allProperties.filter(
+          isLegacyDocumentTypeClassifier,
+        ).length;
+        const nextRole = resolveUpdatedClassifierRole({
+          content,
+          name,
+          oldProperty,
+          preserveLegacyIdentity:
+            !otherTaggedClassifierExists && legacyClassifierCount === 1,
+          tool: dbTool,
+        });
+        const isAcquiringClassifierRole =
+          oldProperty.role !== DOCUMENT_TYPE_CLASSIFIER_ROLE &&
+          nextRole === DOCUMENT_TYPE_CLASSIFIER_ROLE;
+
+        if (
+          nextRole !== null &&
+          allProperties.some((property) => {
+            if (property.id === propertyId) {
+              return false;
+            }
+
+            if (isTaggedDocumentTypeClassifier(property)) {
+              return true;
+            }
+
+            if (!isAcquiringClassifierRole) {
+              return false;
+            }
+
+            return isLegacyDocumentTypeClassifier(property);
+          })
+        ) {
+          return {
+            ok: false as const,
+            status: 422 as const,
+            message: "Document type classifier already exists",
+          };
+        }
 
         if (
           body.tool.type === "ai-model" &&
@@ -297,6 +418,7 @@ const updateProperty = createSafeHandler(
             name,
             content,
             tool: dbTool,
+            role: nextRole,
             status: isStale ? "stale" : "fresh",
           })
           .where(eq(properties.id, propertyId));
@@ -354,6 +476,7 @@ const updateProperty = createSafeHandler(
             name: { old: oldProperty.name, new: name },
             content: { old: oldProperty.content, new: content },
             tool: { old: oldProperty.tool, new: dbTool },
+            role: { old: oldProperty.role, new: nextRole },
             dependencies: {
               old: oldDependencies,
               new: preserveDependencies ? oldDependencies : dependencies,

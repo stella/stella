@@ -218,6 +218,121 @@ describe("duplicateWorkspace", () => {
     expect(insertedAuditLogs).toHaveLength(1);
   });
 
+  test("preserves property roles when duplicating a matter", async () => {
+    const insertedProperties: unknown[] = [];
+    const propertyContent: PropertyContent = {
+      type: "single-select",
+      version: 1,
+      options: [{ color: "blue", value: "Contract" }],
+      fallback: null,
+    };
+
+    const { safeDb, scopedDb } = createScopedDbMock({
+      query: {
+        workspaces: {
+          findFirst: async () => ({
+            id: "ws_source123",
+            name: "Smith v Jones",
+            clientId: null,
+            billingReference: null,
+            color: null,
+            leadUserId: null,
+          }),
+        },
+        properties: {
+          findMany: async () => [
+            {
+              id: "prop_document_type",
+              workspaceId: "ws_source123",
+              name: "Type de document",
+              status: "active",
+              content: propertyContent,
+              tool: {
+                type: "ai-model",
+                version: 1,
+                prompt: "Classify the document type.",
+              },
+              system: false,
+              kinds: ["document"],
+              role: "document-type-classifier",
+            },
+          ],
+        },
+        propertyDependencies: {
+          findMany: async () => [],
+        },
+        workspaceViews: {
+          findMany: async () => [],
+        },
+        workspaceMembers: {
+          findMany: async () => [],
+        },
+        workspaceContacts: {
+          findMany: async () => [],
+        },
+        organizationSettings: {
+          findFirst: async () => null,
+        },
+      },
+      select: (selectedFields: Record<string, unknown>) => {
+        if ("total" in selectedFields) {
+          return {
+            from: () => ({
+              where: async () => [{ total: 0 }],
+            }),
+          };
+        }
+
+        if ("name" in selectedFields) {
+          return {
+            from: () => ({
+              where: async () => [],
+            }),
+          };
+        }
+
+        throw new Error("Unexpected select fields");
+      },
+      insert: (table: unknown) => ({
+        values: (value: unknown) => {
+          if (table === matterCounters) {
+            return {
+              onConflictDoUpdate: () => ({
+                returning: async () => [{ lastValue: 1 }],
+              }),
+            };
+          }
+
+          if (table === properties) {
+            insertedProperties.push(value);
+            return undefined;
+          }
+
+          if (table === auditLogs || table === workspaces) {
+            return undefined;
+          }
+
+          throw new Error("Unexpected insert table");
+        },
+      }),
+      execute: async () => undefined,
+    });
+
+    const result = await duplicateWorkspace.handler(
+      createContext({ safeDb, scopedDb }),
+    );
+
+    expect(result).toEqual({ workspaceId: expect.any(String) });
+    expect(insertedProperties).toEqual([
+      [
+        expect.objectContaining({
+          name: "Type de document",
+          role: "document-type-classifier",
+        }),
+      ],
+    ]);
+  });
+
   test("copies and remaps image thumbnail refs when duplicating content", async () => {
     s3FileMock.mockClear();
     s3WriteMock.mockClear();

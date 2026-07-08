@@ -48,7 +48,7 @@ import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$
 import {
   buildDocTypeGate,
   docTypeGateLabel,
-  isDocumentTypeClassifier,
+  resolveDocumentTypeClassifier,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
@@ -425,7 +425,7 @@ const PropertyComposerBody = ({
   // same gate a playbook run writes), so the column runs only for those docs and
   // shows only in that section. Offered only when a Document Type classifier
   // exists; null means every type (ungated).
-  const classifier = properties.find(isDocumentTypeClassifier);
+  const classifier = resolveDocumentTypeClassifier(properties);
   const docTypeOptions =
     classifier?.content.type === "single-select"
       ? classifier.content.options

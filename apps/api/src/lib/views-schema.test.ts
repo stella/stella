@@ -154,6 +154,20 @@ describe("view template property validation", () => {
       }),
     ).toBe(true);
   });
+
+  test("accepts explicit role absence", () => {
+    expect(
+      Value.Check(tViewTemplatePropertySchema, {
+        version: 1,
+        sourceId: "source_document_type",
+        name: "Document Type",
+        content: { version: 1, type: "text" },
+        tool: { version: 1, type: "manual-input" },
+        role: null,
+        createIfMissing: true,
+      }),
+    ).toBe(true);
+  });
 });
 
 // Property tests below assert that the two parallel schemas

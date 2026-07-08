@@ -21,6 +21,7 @@ import {
   type FieldFileRef,
 } from "@/api/handlers/files/field-file-refs";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
+import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
 import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -85,6 +86,34 @@ type PropertyMappingRow = {
   name: string;
   content: { type: string };
   system: boolean;
+  role: string | null;
+  tool?: { type: string } | undefined;
+};
+
+const normalizePropertyName = (name: string): string =>
+  name.trim().toLowerCase();
+
+const isClassifierShape = (property: PropertyMappingRow): boolean =>
+  property.content.type === "single-select" &&
+  property.tool?.type === "ai-model";
+
+const isLegacyClassifier = (property: PropertyMappingRow): boolean =>
+  property.role === null &&
+  normalizePropertyName(property.name) === "document type" &&
+  isClassifierShape(property);
+
+const findClassifierId = (
+  properties: readonly PropertyMappingRow[],
+): SafeId<"property"> | undefined => {
+  const tagged = properties.find(
+    (property) => property.role === DOCUMENT_TYPE_CLASSIFIER_ROLE,
+  );
+  if (tagged) {
+    return tagged.id;
+  }
+
+  const legacyCandidates = properties.filter(isLegacyClassifier);
+  return legacyCandidates.length === 1 ? legacyCandidates[0]?.id : undefined;
 };
 
 /**
@@ -102,6 +131,8 @@ const buildPropertyIdMap = (
   const propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
   const targetByKey = new Map<string, SafeId<"property">>();
   let targetSystemFileId: SafeId<"property"> | undefined;
+  const sourceClassifierId = findClassifierId(sourceProperties);
+  const targetClassifierId = findClassifierId(targetProperties);
   for (const prop of targetProperties) {
     if (prop.system && prop.content.type === "file") {
       targetSystemFileId = prop.id;
@@ -117,6 +148,15 @@ const buildPropertyIdMap = (
   for (const sourceProp of sourceProperties) {
     if (sourceProp.system && sourceProp.content.type === "file") {
       propertyIdMap.set(sourceProp.id, targetSystemFileId);
+      continue;
+    }
+    if (sourceProp.id === sourceClassifierId) {
+      if (targetClassifierId !== undefined) {
+        propertyIdMap.set(sourceProp.id, targetClassifierId);
+      }
+      continue;
+    }
+    if (isLegacyClassifier(sourceProp)) {
       continue;
     }
     const targetId = targetByKey.get(
@@ -337,16 +377,27 @@ const copyToWorkspaceHandler = async function* ({
       safeDb(async (tx) => {
         const [sourceProperties, targetProperties] = await Promise.all([
           tx.query.properties.findMany({
-            where: {
-              workspaceId: { eq: sourceWorkspaceId },
-              id: { in: [...requiredPropertyIds] },
+            where: { workspaceId: { eq: sourceWorkspaceId } },
+            columns: {
+              id: true,
+              name: true,
+              content: true,
+              system: true,
+              role: true,
+              tool: true,
             },
-            columns: { id: true, name: true, content: true, system: true },
             limit: LIMITS.propertiesCount,
           }),
           tx.query.properties.findMany({
             where: { workspaceId: { eq: targetWorkspaceId } },
-            columns: { id: true, name: true, content: true, system: true },
+            columns: {
+              id: true,
+              name: true,
+              content: true,
+              system: true,
+              role: true,
+              tool: true,
+            },
             limit: LIMITS.propertiesCount,
           }),
         ]);

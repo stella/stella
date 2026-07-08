@@ -88,6 +88,7 @@ const createViewTemplate = createSafeHandler(
             content: true,
             tool: true,
             system: true,
+            role: true,
           },
           limit: LIMITS.propertiesCount,
         });

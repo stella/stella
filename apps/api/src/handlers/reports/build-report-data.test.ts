@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { JustificationContent } from "@/api/db/schema";
-import type { FieldContent, PropertyTool } from "@/api/db/schema-validators";
+import type {
+  FieldContent,
+  PropertyContent,
+  PropertyTool,
+} from "@/api/db/schema-validators";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { buildExportColumns } from "@/api/handlers/views/table-export";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -11,6 +15,7 @@ import type { ViewLayout } from "@/api/lib/views-schema";
 
 import {
   assembleReportData,
+  findDocTypePropertyId,
   isReportRowCountOverCap,
 } from "./build-report-data";
 import {
@@ -35,6 +40,13 @@ const aiTool: PropertyTool = {
 };
 
 const manualTool: PropertyTool = { version: 1, type: "manual-input" };
+const textPropertyContent: PropertyContent = { version: 1, type: "text" };
+const docTypePropertyContent: PropertyContent = {
+  version: 1,
+  type: "single-select",
+  options: [{ value: "NDA", color: "blue" }],
+  fallback: null,
+};
 
 const verdictTool = (
   askPropertyId: string,
@@ -49,22 +61,46 @@ const verdictTool = (
 });
 
 const properties = [
-  { id: ASK_LAW, name: "Governing law", tool: aiTool },
+  {
+    id: ASK_LAW,
+    name: "Governing law",
+    content: textPropertyContent,
+    role: null,
+    tool: aiTool,
+  },
   {
     id: VERDICT_LAW,
     name: "Governing law verdict",
+    content: docTypePropertyContent,
+    role: null,
     tool: verdictTool(ASK_LAW, "high"),
   },
-  { id: ASK_TERM, name: "Term", tool: aiTool },
+  {
+    id: ASK_TERM,
+    name: "Term",
+    content: textPropertyContent,
+    role: null,
+    tool: aiTool,
+  },
   {
     id: VERDICT_TERM,
     name: "Term verdict",
+    content: docTypePropertyContent,
+    role: null,
     tool: verdictTool(ASK_TERM, "blocker"),
   },
-  { id: DOC_TYPE, name: "Document Type", tool: aiTool },
+  {
+    id: DOC_TYPE,
+    name: "Document Type",
+    content: docTypePropertyContent,
+    role: null,
+    tool: aiTool,
+  },
   {
     id: NOTES,
     name: "Notes",
+    content: textPropertyContent,
+    role: null,
     tool: manualTool,
   },
 ];
@@ -201,6 +237,39 @@ describe("assembleReportData", () => {
     expect(lawField?.severity).toBe("high");
   });
 
+  test("resolves the document type classifier by role before name", () => {
+    const localizedProperties = properties.map((property) =>
+      property.id === DOC_TYPE
+        ? {
+            ...property,
+            name: "Type de document",
+            role: "document-type-classifier" as const,
+          }
+        : property,
+    );
+
+    expect(findDocTypePropertyId(localizedProperties)).toBe(DOC_TYPE);
+  });
+
+  test("ignores role-tagged classifiers with the wrong content shape", () => {
+    const malformed = {
+      id: DOC_TYPE,
+      name: "Type de document",
+      content: textPropertyContent,
+      role: "document-type-classifier" as const,
+      tool: aiTool,
+    };
+    const fallback = {
+      id: NOTES,
+      name: "Document Type",
+      content: docTypePropertyContent,
+      role: null,
+      tool: aiTool,
+    };
+
+    expect(findDocTypePropertyId([malformed, fallback])).toBe(NOTES);
+  });
+
   test("derives risks from deviation/missing verdicts with rationale + citation", () => {
     const layout = tableLayout({ columnOrder: [ASK_LAW, ASK_TERM] });
     const columns = buildExportColumns(layout, properties);
@@ -282,7 +351,15 @@ describe("assembleReportData", () => {
   test("empty-playbook view yields empty risks and a valid report", () => {
     const layout = tableLayout({ columnOrder: [ASK_LAW] });
     // Only the ASK property; no verdict property present.
-    const bare = [{ id: ASK_LAW, name: "Governing law", tool: aiTool }];
+    const bare = [
+      {
+        id: ASK_LAW,
+        name: "Governing law",
+        content: textPropertyContent,
+        role: null,
+        tool: aiTool,
+      },
+    ];
     const columns = buildExportColumns(layout, bare);
     const entity = makeEntity(ENTITY_A, "NDA", [
       field("f1", ASK_LAW, text("Czech law")),

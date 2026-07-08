@@ -20,11 +20,12 @@
 import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db";
-import type { JustificationContent } from "@/api/db/schema";
-import type { PropertyTool } from "@/api/db/schema-validators";
+import type { JustificationContent, PropertyRole } from "@/api/db/schema";
+import type { PropertyContent, PropertyTool } from "@/api/db/schema-validators";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { queryEntities } from "@/api/handlers/entities/query-entities";
 import type { PositionSeverity } from "@/api/handlers/playbooks/position-facets";
+import { isDocumentTypeClassifierShape } from "@/api/handlers/properties/create-schema";
 import {
   buildExportColumns,
   formatFieldContent,
@@ -52,7 +53,13 @@ const SEVERITY_ORDER = ["blocker", "high", "medium", "low"] as const;
 
 type TableLayout = Extract<ViewLayout, { type: "table" }>;
 
-type ReportProperty = { id: string; name: string; tool: PropertyTool };
+type ReportProperty = {
+  id: string;
+  name: string;
+  content: PropertyContent;
+  role: PropertyRole | null;
+  tool: PropertyTool;
+};
 
 type ExportColumn = ReturnType<typeof buildExportColumns>[number];
 type ReportPropertyColumn = Extract<ExportColumn, { type: "property" }>;
@@ -408,16 +415,30 @@ const formatGeneratedAt = (now: Date): string =>
     timeZone: "UTC",
   }).format(now);
 
-/** The workspace "Document Type" classifier property id (single-select AI
- *  column named "document type"), or null when the workspace has none. Matched
- *  by name to mirror `resolveDocTypeClassifier`. */
-const findDocTypePropertyId = (properties: ReportProperty[]): string | null => {
-  const match = properties.find(
+/** The workspace "Document Type" classifier property id, or null when absent. */
+export const findDocTypePropertyId = (
+  properties: ReportProperty[],
+): string | null => {
+  const roleMatch = properties.find(
+    (property) =>
+      property.role === "document-type-classifier" &&
+      isDocumentTypeClassifierShape({
+        content: property.content,
+        tool: property.tool,
+      }),
+  );
+  if (roleMatch) {
+    return roleMatch.id;
+  }
+  const nameMatch = properties.find(
     (property) =>
       property.name.trim().toLowerCase() === "document type" &&
-      property.tool.type === "ai-model",
+      isDocumentTypeClassifierShape({
+        content: property.content,
+        tool: property.tool,
+      }),
   );
-  return match?.id ?? null;
+  return nameMatch?.id ?? null;
 };
 
 type BuildReportDataArgs = {
@@ -453,7 +474,13 @@ export const buildReportData = async ({
       safeDb((tx) =>
         tx.query.properties.findMany({
           where: { workspaceId: { eq: workspaceId } },
-          columns: { id: true, name: true, tool: true },
+          columns: {
+            id: true,
+            name: true,
+            content: true,
+            role: true,
+            tool: true,
+          },
           orderBy: { createdAt: "asc" },
           limit: LIMITS.propertiesCount,
         }),

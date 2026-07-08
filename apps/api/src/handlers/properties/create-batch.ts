@@ -4,8 +4,10 @@ import { t } from "elysia";
 
 import { properties, propertyDependencies } from "@/api/db/schema";
 import {
+  DOCUMENT_TYPE_CLASSIFIER_ROLE,
   buildPropertyParts,
   createPropertyBodySchema,
+  isDocumentTypeClassifierProperty,
 } from "@/api/handlers/properties/create-schema";
 import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -43,7 +45,13 @@ const createPropertiesBatch = createSafeHandler(
       safeDb(async (tx) => {
         await lockWorkspacePropertyWrites(tx, workspaceId);
         const existingRows = await tx
-          .select({ id: properties.id })
+          .select({
+            id: properties.id,
+            name: properties.name,
+            content: properties.content,
+            tool: properties.tool,
+            role: properties.role,
+          })
           .from(properties)
           .where(eq(properties.workspaceId, workspaceId));
 
@@ -52,6 +60,30 @@ const createPropertiesBatch = createSafeHandler(
             ok: false as const,
             status: 400 as const,
             message: "Properties limit reached",
+          };
+        }
+
+        const createsDocumentTypeClassifier = builtItems.filter(
+          ({ built }) =>
+            !("status" in built) &&
+            built.role === DOCUMENT_TYPE_CLASSIFIER_ROLE,
+        );
+        if (
+          createsDocumentTypeClassifier.length > 0 &&
+          (createsDocumentTypeClassifier.length > 1 ||
+            existingRows.some((row) =>
+              isDocumentTypeClassifierProperty({
+                content: row.content,
+                name: row.name,
+                role: row.role,
+                tool: row.tool,
+              }),
+            ))
+        ) {
+          return {
+            ok: false as const,
+            status: 422 as const,
+            message: "Document type classifier already exists",
           };
         }
 
@@ -89,7 +121,7 @@ const createPropertiesBatch = createSafeHandler(
           if ("status" in built) {
             continue;
           }
-          const { content, tool, dependencies } = built;
+          const { content, tool, dependencies, role } = built;
           const initialStatus = tool.type === "ai-model" ? "stale" : "fresh";
 
           // oxlint-disable-next-line no-await-in-loop -- sequential property inserts in one transaction; each row's id feeds its dependency rows and audit event
@@ -100,6 +132,7 @@ const createPropertiesBatch = createSafeHandler(
               name,
               content,
               tool,
+              role,
               status: initialStatus,
             })
             .returning({ id: properties.id });
