@@ -44,18 +44,18 @@ const resolveUpdatedClassifierRole = ({
   content,
   name,
   oldProperty,
-  otherTaggedClassifierExists,
+  preserveLegacyIdentity,
   tool,
 }: {
   content: PropertyContent;
   name: string;
   oldProperty: Pick<PropertyWithDeps, "content" | "name" | "role" | "tool">;
-  otherTaggedClassifierExists: boolean;
+  preserveLegacyIdentity: boolean;
   tool: PropertyTool;
 }): PropertyRole | null => {
   const hadClassifierIdentity =
     oldProperty.role === DOCUMENT_TYPE_CLASSIFIER_ROLE ||
-    (!otherTaggedClassifierExists &&
+    (preserveLegacyIdentity &&
       isDocumentTypeClassifierProperty({
         content: oldProperty.content,
         name: oldProperty.name,
@@ -84,6 +84,16 @@ const isTaggedDocumentTypeClassifier = (
     content: property.content,
     name: property.name,
     role: DOCUMENT_TYPE_CLASSIFIER_ROLE,
+    tool: property.tool,
+  });
+
+const isLegacyDocumentTypeClassifier = (
+  property: Pick<PropertyWithDeps, "content" | "name" | "role" | "tool">,
+): boolean =>
+  isDocumentTypeClassifierProperty({
+    content: property.content,
+    name: property.name,
+    role: null,
     tool: property.tool,
   });
 
@@ -345,11 +355,15 @@ const updateProperty = createSafeHandler(
             property.id !== propertyId &&
             isTaggedDocumentTypeClassifier(property),
         );
+        const legacyClassifierCount = allProperties.filter(
+          isLegacyDocumentTypeClassifier,
+        ).length;
         const nextRole = resolveUpdatedClassifierRole({
           content,
           name,
           oldProperty,
-          otherTaggedClassifierExists,
+          preserveLegacyIdentity:
+            !otherTaggedClassifierExists && legacyClassifierCount === 1,
           tool: dbTool,
         });
         const isAcquiringClassifierRole =
@@ -371,12 +385,7 @@ const updateProperty = createSafeHandler(
               return false;
             }
 
-            return isDocumentTypeClassifierProperty({
-              content: property.content,
-              name: property.name,
-              role: null,
-              tool: property.tool,
-            });
+            return isLegacyDocumentTypeClassifier(property);
           })
         ) {
           return {
