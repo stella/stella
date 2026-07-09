@@ -38,11 +38,11 @@
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
     "codegen": "cd ../../apps/api && bun scripts/export-mcp-tool-registry.ts && cd ../../packages/cli && bun run src/codegen.ts && oxfmt .",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json && cp src/generated/registry-snapshot.json dist/generated/registry-snapshot.json && printf '%s\\n' '#!/usr/bin/env node' > dist/cli.js.tmp && tail -n +2 dist/cli.js >> dist/cli.js.tmp && mv dist/cli.js.tmp dist/cli.js && chmod +x dist/cli.js",
+    "build": "rm -rf dist && bun ../../node_modules/@typescript/native/bin/tsc -p tsconfig.build.json && cp src/generated/registry-snapshot.json dist/generated/registry-snapshot.json && printf '%s\\n' '#!/usr/bin/env node' > dist/cli.js.tmp && tail -n +2 dist/cli.js >> dist/cli.js.tmp && mv dist/cli.js.tmp dist/cli.js && chmod +x dist/cli.js",
     "prepack": "bun run build",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "bun ../../node_modules/@typescript/native/bin/tsc --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/cli",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/cli",
     "format": "oxfmt ."

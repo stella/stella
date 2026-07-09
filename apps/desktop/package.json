@@ -14,7 +14,7 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/desktop",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/desktop",
     "test": "bun test --pass-with-no-tests",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun ../../node_modules/@typescript/native/bin/tsc --noEmit"
   },
   "dependencies": {
     "@stll/ui": "workspace:*",
