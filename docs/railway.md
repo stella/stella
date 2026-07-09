@@ -95,47 +95,47 @@ shape is `railway/template-manifest.json`.
 
 Template editor checklist for `api` variables:
 
-| Variable                   | Source                                              | Prompt user? |
-| -------------------------- | --------------------------------------------------- | ------------ |
-| `DATABASE_URL`             | `${{Postgres.DATABASE_URL}}`                        | No           |
-| `REDIS_URL`                | `${{Redis.REDIS_URL}}`                              | No           |
-| `FRONTEND_URL`             | `https://${{web.RAILWAY_PUBLIC_DOMAIN}}`            | No           |
-| `BETTER_AUTH_URL`          | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`            | No           |
-| `PUBLIC_URL`               | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`            | No           |
-| `BETTER_AUTH_SECRET`       | `${{secret(64, "abcdef0123456789")}}`               | No           |
-| `CONTENT_ENCRYPTION_KEY`   | `${{secret(64, "abcdef0123456789")}}`               | No           |
-| `SELFHOST_LOCAL_PASSWORD_AUTH` | `true`                                          | No           |
-| `SELFHOST_BOOTSTRAP_TOKEN` | `${{secret(40, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")}}` | No           |
-| `EMAIL_PROVIDER`           | Optional: `smtp` or `ses`                           | No           |
-| `SMTP_HOST`                | Optional SMTP host                                  | No           |
-| `SMTP_PASSWORD`            | Optional SMTP password or API key                   | No           |
-| `SMTP_PORT`                | Optional SMTP port                                  | No           |
-| `SMTP_USERNAME`            | Optional SMTP username                              | No           |
-| `TRANSACTIONAL_EMAIL_FROM` | Optional verified sender address                    | No           |
-| `S3_ENDPOINT`              | `${{stella-files.ENDPOINT}}`                        | No           |
-| `S3_BUCKET`                | `${{stella-files.BUCKET}}`                          | No           |
-| `S3_REGION`                | `${{stella-files.REGION}}`                          | No           |
-| `S3_ACCESS_KEY_ID`         | `${{stella-files.ACCESS_KEY_ID}}`                   | No           |
-| `S3_SECRET_ACCESS_KEY`     | `${{stella-files.SECRET_ACCESS_KEY}}`               | No           |
-| `GOTENBERG_URL`            | `http://${{gotenberg.RAILWAY_PRIVATE_DOMAIN}}:3000` | No           |
-| `GOTENBERG_USERNAME`       | `${{gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME}}`  | No           |
-| `GOTENBERG_PASSWORD`       | `${{gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD}}`  | No           |
+| Variable                       | Source                                                                              | Prompt user? |
+| ------------------------------ | ----------------------------------------------------------------------------------- | ------------ |
+| `DATABASE_URL`                 | `${{Postgres.DATABASE_URL}}`                                                        | No           |
+| `REDIS_URL`                    | `${{Redis.REDIS_URL}}`                                                              | No           |
+| `FRONTEND_URL`                 | `https://${{web.RAILWAY_PUBLIC_DOMAIN}}`                                            | No           |
+| `BETTER_AUTH_URL`              | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`                                            | No           |
+| `PUBLIC_URL`                   | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`                                            | No           |
+| `BETTER_AUTH_SECRET`           | `${{secret(64, "abcdef0123456789")}}`                                               | No           |
+| `CONTENT_ENCRYPTION_KEY`       | `${{secret(64, "abcdef0123456789")}}`                                               | No           |
+| `SELFHOST_LOCAL_PASSWORD_AUTH` | `true`                                                                              | No           |
+| `SELFHOST_BOOTSTRAP_TOKEN`     | `${{secret(40, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")}}` | No           |
+| `EMAIL_PROVIDER`               | Optional: `smtp` or `ses`                                                           | No           |
+| `SMTP_HOST`                    | Optional SMTP host                                                                  | No           |
+| `SMTP_PASSWORD`                | Optional SMTP password or API key                                                   | No           |
+| `SMTP_PORT`                    | Optional SMTP port                                                                  | No           |
+| `SMTP_USERNAME`                | Optional SMTP username                                                              | No           |
+| `TRANSACTIONAL_EMAIL_FROM`     | Optional verified sender address                                                    | No           |
+| `S3_ENDPOINT`                  | `${{stella-files.ENDPOINT}}`                                                        | No           |
+| `S3_BUCKET`                    | `${{stella-files.BUCKET}}`                                                          | No           |
+| `S3_REGION`                    | `${{stella-files.REGION}}`                                                          | No           |
+| `S3_ACCESS_KEY_ID`             | `${{stella-files.ACCESS_KEY_ID}}`                                                   | No           |
+| `S3_SECRET_ACCESS_KEY`         | `${{stella-files.SECRET_ACCESS_KEY}}`                                               | No           |
+| `GOTENBERG_URL`                | `http://${{gotenberg.RAILWAY_PRIVATE_DOMAIN}}:3000`                                 | No           |
+| `GOTENBERG_USERNAME`           | `${{gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME}}`                                  | No           |
+| `GOTENBERG_PASSWORD`           | `${{gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD}}`                                  | No           |
 
 Template editor checklist for managed service variables:
 
-| Service     | Variable                              | Source                                                                   | Prompt user? |
-| ----------- | ------------------------------------- | ------------------------------------------------------------------------ | ------------ |
-| `Postgres`  | `PGDATA`                              | `/var/lib/postgresql/data/pgdata`                                        | No           |
-| `Postgres`  | `PGPORT`                              | `5432`                                                                   | No           |
-| `Postgres`  | `POSTGRES_DB`                         | `railway`                                                                | No           |
-| `Postgres`  | `POSTGRES_USER`                       | `postgres`                                                               | No           |
-| `Postgres`  | `SSL_CERT_DAYS`                       | `820`                                                                    | No           |
-| `Postgres`  | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `60`                                                                     | No           |
-| `Redis`     | `REDISPORT`                           | `6379`                                                                   | No           |
-| `Redis`     | `REDISUSER`                           | `default`                                                                | No           |
-| `gotenberg` | `API_ENABLE_BASIC_AUTH`               | `true`                                                                   | No           |
+| Service     | Variable                              | Source                                                                    | Prompt user? |
+| ----------- | ------------------------------------- | ------------------------------------------------------------------------- | ------------ |
+| `Postgres`  | `PGDATA`                              | `/var/lib/postgresql/data/pgdata`                                         | No           |
+| `Postgres`  | `PGPORT`                              | `5432`                                                                    | No           |
+| `Postgres`  | `POSTGRES_DB`                         | `railway`                                                                 | No           |
+| `Postgres`  | `POSTGRES_USER`                       | `postgres`                                                                | No           |
+| `Postgres`  | `SSL_CERT_DAYS`                       | `820`                                                                     | No           |
+| `Postgres`  | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `60`                                                                      | No           |
+| `Redis`     | `REDISPORT`                           | `6379`                                                                    | No           |
+| `Redis`     | `REDISUSER`                           | `default`                                                                 | No           |
+| `gotenberg` | `API_ENABLE_BASIC_AUTH`               | `true`                                                                    | No           |
 | `gotenberg` | `GOTENBERG_API_BASIC_AUTH_USERNAME`   | `${{secret(32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")}}` | No           |
-| `gotenberg` | `GOTENBERG_API_BASIC_AUTH_PASSWORD`   | `${{secret(64, "abcdef0123456789")}}`                                    | No           |
+| `gotenberg` | `GOTENBERG_API_BASIC_AUTH_PASSWORD`   | `${{secret(64, "abcdef0123456789")}}`                                     | No           |
 
 ## Web Variables
 
@@ -218,6 +218,44 @@ remain:
 ```bash
 bun run check:railway-template-draft -- --template <template-id>
 ```
+
+## Template Source Drift Guard
+
+The template-source project must keep same-project references such as
+`${{Postgres.DATABASE_URL}}` and `${{stella-files.ACCESS_KEY_ID}}` as Railway
+references. Do not copy rendered values from the Railway UI into app services:
+rendered database, Redis, bucket, or Gotenberg credentials can drift after a
+service is recreated or a secret rotates, causing later deployments to fail
+even though older deployments keep running.
+
+`.github/workflows/railway-template-source.yml` runs a non-mutating rendered
+credential check on a schedule and by manual dispatch. It verifies that the
+rendered API variables match the rendered Postgres, Redis, and Gotenberg
+credentials. Configure these GitHub settings:
+
+```bash
+RAILWAY_PROJECT_TOKEN=<Railway project token for the template-source project>
+# Or use an account/team API token instead:
+RAILWAY_API_TOKEN=<Railway account or team API token>
+RAILWAY_TEMPLATE_PROJECT_ID=<template-source-project-id>
+RAILWAY_TEMPLATE_ENVIRONMENT=production
+```
+
+Run the same check locally with:
+
+```bash
+bun run check:railway-template-source-runtime -- \
+  --project <template-source-project-id> \
+  --environment production
+```
+
+This check intentionally uses rendered variables: it catches the class of
+failures where a live source project stores template functions such as
+`secret(...)` directly and Railway expands each nested reference differently.
+Use `sync:railway-template-source` to compare the checked-in manifest before
+generating a draft, but do not apply generated-secret template functions to a
+live deployable source project unless you are also reinitializing the dependent
+service state from scratch.
 
 ## Source-Backed Smoke Verification
 
