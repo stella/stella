@@ -38,6 +38,7 @@ import {
   stringProp,
   structuredErrorResult,
   textResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
 type ResearchAdminToolName =
@@ -378,12 +379,13 @@ const handleSearchLegislationTool: McpToolHandler = async ({
 
   const parsed = v.safeParse(searchLegislationArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected search filters (query/title/…) or law_id with optional block_id/relation_type/full_text",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -506,9 +508,11 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listAuditLogArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      "Invalid input: expected { workspace_id?, action?, resource_type?, resource_id?, user_id?, from?, to?, limit?, cursor? }",
-    );
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { workspace_id?, action?, resource_type?, resource_id?, user_id?, from?, to?, limit?, cursor? }",
+    });
   }
   const input = parsed.output;
 
@@ -704,12 +708,13 @@ const handleManageOrganizationTool: McpToolHandler = async ({
 }) => {
   const parsed = v.safeParse(manageOrganizationArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { action: 'add_member'|'remove_member'|'update_org_settings', matter_id?, user_id?, matter_number_pattern?, matter_number_padding?, prompt_caching_enabled? }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 

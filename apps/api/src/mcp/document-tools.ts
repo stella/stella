@@ -65,7 +65,9 @@ import {
   notFoundResult,
   nullableStringProp,
   stringProp,
+  structuredErrorResult,
   textResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
 type DocumentToolName =
@@ -820,12 +822,13 @@ const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listDocumentsArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { matter_id: string, mode?: 'flat'|'children', parent_id?: string, limit?: integer, cursor?: string }",
       ),
-    );
+    });
   }
 
   const workspaceId = ensureWorkspaceAccess({
@@ -1040,12 +1043,13 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(readDocumentArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { entity_id: string, ... }",
       ),
-    );
+    });
   }
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);
@@ -1589,12 +1593,13 @@ const updateDocumentEntity = async ({
 const handleSaveDocumentTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(saveDocumentArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { matter_id, name, parent_id?, kind? } to create, or { entity_id, name?/parent_id?/move_to_root?/version_id?/label?/description? } to update",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -1614,9 +1619,11 @@ const deleteDocumentArgsSchema = v.strictObject({
 const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(deleteDocumentArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      "Invalid input: expected { entity_id: string, version_id?: string }",
-    );
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { entity_id: string, version_id?: string }",
+    });
   }
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);
@@ -1710,9 +1717,11 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listPropertiesArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      "Invalid input: expected { matter_id: string, limit?: integer, cursor?: string }",
-    );
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { matter_id: string, limit?: integer, cursor?: string }",
+    });
   }
 
   const workspaceId = ensureWorkspaceAccess({
@@ -1839,12 +1848,18 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(setFieldValueArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      "Invalid input: expected { entity_id: string, property_id: string, content: { type, value, currency? } }",
-    );
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { entity_id: string, property_id: string, content: { type, value, currency? } }",
+    });
   }
   if (!isUuid(parsed.output.property_id)) {
-    return errorResult("Invalid input: property_id must be a UUID");
+    return structuredErrorResult({
+      code: "validation_error",
+      issues: [{ path: "property_id", message: "property_id must be a UUID" }],
+      message: "Invalid input: property_id must be a UUID",
+    });
   }
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);

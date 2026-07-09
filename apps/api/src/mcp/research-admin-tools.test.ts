@@ -36,6 +36,9 @@ const createContext = (
   userId: toSafeId<"user">("user_1"),
 });
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
 const errorText = (result: McpToolResponse): string => {
   if (isMcpEgressPlan(result)) {
     throw new Error("expected a CallToolResult, got an egress plan");
@@ -43,6 +46,26 @@ const errorText = (result: McpToolResponse): string => {
   expect(result.isError).toBe(true);
   const first = result.content[0];
   return first !== undefined && "text" in first ? first.text : "";
+};
+
+// The human message of a structured `{ error: { code, message, issues? } }`
+// envelope. Used where a validation failure now carries the envelope instead of
+// bare plain text; legacy plain-text errors fall through unchanged.
+const errorMessage = (result: McpToolResponse): string => {
+  const raw = errorText(result);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+  if (isRecord(parsed) && isRecord(parsed["error"])) {
+    const message = parsed["error"]["message"];
+    if (typeof message === "string") {
+      return message;
+    }
+  }
+  return raw;
 };
 
 const runManageOrg = async (args: Record<string, unknown>) =>
@@ -146,7 +169,7 @@ describe("search_legislation feature gating", () => {
       args: { block_id: "a1" },
       context: createContext("owner"),
     });
-    expect(errorText(result)).toBe("block_id requires law_id");
+    expect(errorMessage(result)).toBe("block_id requires law_id");
   });
 
   test("requires at least one search filter in search mode", async () => {
@@ -154,7 +177,7 @@ describe("search_legislation feature gating", () => {
       args: {},
       context: createContext("owner"),
     });
-    expect(errorText(result)).toBe(
+    expect(errorMessage(result)).toBe(
       "Provide law_id to read a law, or at least one search filter",
     );
   });
@@ -163,14 +186,14 @@ describe("search_legislation feature gating", () => {
 describe("manage_organization per-action validation", () => {
   test("requires user_id for a member action", async () => {
     expect(
-      errorText(
+      errorMessage(
         await runManageOrg({ action: "add_member", matter_id: "ws_1" }),
       ),
     ).toBe("user_id is required for add_member and remove_member");
   });
 
   test("rejects org-settings fields on a member action", async () => {
-    const message = errorText(
+    const message = errorMessage(
       await runManageOrg({
         action: "remove_member",
         matter_id: "ws_1",
@@ -185,13 +208,13 @@ describe("manage_organization per-action validation", () => {
 
   test("rejects an empty update_org_settings action", async () => {
     expect(
-      errorText(await runManageOrg({ action: "update_org_settings" })),
+      errorMessage(await runManageOrg({ action: "update_org_settings" })),
     ).toBe("Provide at least one setting to change for update_org_settings");
   });
 
   test("requires the matter pattern and padding to be sent together", async () => {
     expect(
-      errorText(
+      errorMessage(
         await runManageOrg({
           action: "update_org_settings",
           matter_number_pattern: "{YYYY}-{SEQ}",
@@ -253,7 +276,7 @@ describe("manage_organization remove_member confirm gate", () => {
   test("update_org_settings is unaffected by the confirm gate", async () => {
     // A non-remove action needs no confirm; its own validation fires first.
     expect(
-      errorText(await runManageOrg({ action: "update_org_settings" })),
+      errorMessage(await runManageOrg({ action: "update_org_settings" })),
     ).toBe("Provide at least one setting to change for update_org_settings");
   });
 });

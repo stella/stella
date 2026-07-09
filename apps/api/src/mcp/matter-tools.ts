@@ -70,6 +70,7 @@ import {
   nullableStringProp,
   stringProp,
   textResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
 type MatterToolName =
@@ -531,12 +532,13 @@ const saveMatterArgsSchema = v.pipe(
 const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(saveMatterArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { matter_id?: string, name?: string, client_id?: string, reference?: string, billing_reference?: string|null, status?: 'active'|'archived' }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -690,7 +692,10 @@ const handleDeleteMatterTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(deleteMatterArgsSchema, args);
   if (!parsed.success) {
-    return errorResult("Invalid input: expected { matter_id: string }");
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: "Invalid input: expected { matter_id: string }",
+    });
   }
 
   // The HTTP delete route sits inside the active-only workspace group, so an
@@ -778,12 +783,13 @@ const saveContactArgsSchema = v.pipe(
 const handleSaveContactTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(saveContactArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { contact_id?: string, type?: 'person'|'organization', display_name?: string, first_name?: string|null, last_name?: string|null, organization_name?: string|null, notes?: string|null }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -874,7 +880,10 @@ const handleDeleteContactTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(deleteContactArgsSchema, args);
   if (!parsed.success) {
-    return errorResult("Invalid input: expected { contact_id: string }");
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: "Invalid input: expected { contact_id: string }",
+    });
   }
 
   const deleted = await Result.gen(() =>
@@ -908,9 +917,10 @@ const handleLookupBusinessRegistryTool: McpToolHandler = async ({
 
   const parsed = v.safeParse(lookupBusinessRegistryArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      `Invalid input: expected { registry: one of ${BUSINESS_REGISTRY_SLUGS.join(", ")}, query: string }`,
-    );
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: `Invalid input: expected { registry: one of ${BUSINESS_REGISTRY_SLUGS.join(", ")}, query: string }`,
+    });
   }
 
   const result = await lookupBusinessRegistryShared({
@@ -1096,12 +1106,13 @@ const handleListTasksTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listTasksArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { matter_id?: string, task_id?: string, date_from?: YYYY-MM-DD, date_to?: YYYY-MM-DD, status?: string, limit?: integer, cursor?: string }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -1522,12 +1533,13 @@ const validateSaveTaskTargets = async ({
 const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(saveTaskArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { task_id?, matter_id?, name?, status?, priority?, due_date?, add_assignee_user_id?, remove_assignee_user_id?, link_entity_id?, unlink_link_id? }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -1765,12 +1777,13 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
 
   const parsed = v.safeParse(linkMatterContactArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { matter_id: string, contact_id?: string, role?: string, workspace_contact_id?: string }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 

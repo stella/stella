@@ -414,18 +414,56 @@ const parsePayload = (result: CallToolResult): unknown => {
   return Result.isOk(parsed) ? parsed.value : undefined;
 };
 
-/** The structured tool-error envelope: `{ error: { code, message, hint? } }`. */
+/** One structured validation issue: dot-path (empty for root) plus reason. */
+type ErrorIssue = {
+  path: string;
+  message: string;
+};
+
+/**
+ * The structured tool-error envelope:
+ * `{ error: { code, message, hint?, issues? } }`. `issues` is only present on a
+ * `validation_error` and pinpoints the offending fields.
+ */
 type ErrorEnvelope = {
   code: string;
   message: string;
   hint: string | undefined;
+  issues: readonly ErrorIssue[];
+};
+
+/**
+ * Parse the `issues` array off a `validation_error` envelope. Tolerant: a
+ * malformed or absent `issues` yields `[]`, and only well-formed
+ * `{ path, message }` entries survive, so an older CLI never breaks on a newer
+ * server's payload (and a newer CLI never breaks on an older one that omits it).
+ */
+const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
+  const raw = error["issues"];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const issues: ErrorIssue[] = [];
+  for (const entry of raw) {
+    if (!isRecord(entry)) {
+      continue;
+    }
+    const path = entry["path"];
+    const message = entry["message"];
+    if (typeof path === "string" && typeof message === "string") {
+      issues.push({ path, message });
+    }
+  }
+  return issues;
 };
 
 /**
  * Parse the structured tool-error envelope
- * (`{"error":{"code","message","hint?","retryable?"}}`) a modern server tags
- * every tool failure with. Returns `null` for a legacy plain-text or
- * bare-`{code}` error so the caller falls back to today's behavior.
+ * (`{"error":{"code","message","hint?","issues?","retryable?"}}`) a modern
+ * server tags every tool failure with. Unknown fields are ignored, so a newer
+ * server that grows the envelope never breaks this parser. Returns `null` for a
+ * legacy plain-text or bare-`{code}` error so the caller falls back to today's
+ * behavior.
  */
 const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
   if (!isRecord(payload)) {
@@ -441,7 +479,12 @@ const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     return null;
   }
   const hint = error["hint"];
-  return { code, message, hint: typeof hint === "string" ? hint : undefined };
+  return {
+    code,
+    message,
+    hint: typeof hint === "string" ? hint : undefined,
+    issues: parseErrorIssues(error),
+  };
 };
 
 /**
@@ -633,6 +676,16 @@ const renderCallResult = ({
     const envelope = errorEnvelope(errorPayload);
     if (envelope !== null) {
       writers.stderr(`error: ${envelope.message}\n`);
+      // Field-level validation issues follow the summary, one indented line
+      // each, so an agent can map a failure back to the offending field. A
+      // root issue (empty path) renders its message without a bare `: ` prefix.
+      for (const issue of envelope.issues) {
+        writers.stderr(
+          issue.path === ""
+            ? `  ${issue.message}\n`
+            : `  ${issue.path}: ${issue.message}\n`,
+        );
+      }
       if (envelope.hint !== undefined) {
         writers.stderr(`hint: ${envelope.hint}\n`);
       }
