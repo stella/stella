@@ -250,6 +250,8 @@ const buildContext = ({
     accessibleWorkspaceStatusById: new Map(
       workspaceIds.map((id) => [id, "active"]),
     ),
+    accessibleWorkspaces: [],
+    grantedScopes: [],
     memberRole,
     organizationId: toSafeId<"organization">(organizationId),
     recordAuditEvent: asTestRaw(mock(async () => undefined)),

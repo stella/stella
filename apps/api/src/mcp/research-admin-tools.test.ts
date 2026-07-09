@@ -28,6 +28,8 @@ const createContext = (
   accessibleWorkspaceIds: [],
   accessibleWorkspaceIdSet: new Set(),
   accessibleWorkspaceStatusById: new Map(),
+  accessibleWorkspaces: [],
+  grantedScopes: [],
   memberRole,
   organizationId: toSafeId<"organization">("org_1"),
   recordAuditEvent: async () => {},

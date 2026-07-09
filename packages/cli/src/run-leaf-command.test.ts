@@ -148,6 +148,12 @@ describe("classifyToolError: structured envelope -> exit map (S4)", () => {
     expect(classifyToolError(envelope("confirmation_required"))).toBe(
       EXIT_CODES.aborted,
     );
+    expect(classifyToolError(envelope("permission_denied"))).toBe(
+      EXIT_CODES.permissionDenied,
+    );
+    expect(classifyToolError(envelope("usage_limited"))).toBe(
+      EXIT_CODES.usageLimited,
+    );
     expect(classifyToolError(envelope("rate_limited"))).toBe(EXIT_CODES.server);
     expect(classifyToolError(envelope("unknown_tool"))).toBe(EXIT_CODES.server);
     expect(classifyToolError(envelope("internal_error"))).toBe(

@@ -7,6 +7,8 @@ import {
   countCapabilityDispositions,
   deriveCapabilityId,
   deriveDomain,
+  deriveHandlerImportPath,
+  detectContextFidelityFeatures,
   finalIdSegment,
   findInlineCapabilityMismatches,
   findStaleAccessOverrides,
@@ -15,6 +17,8 @@ import {
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
+  scanContextFidelity,
+  serializeDispatchModule,
   serializeCatalog,
 } from "./capability-catalog";
 
@@ -606,5 +610,79 @@ describe("resolveScope", () => {
         unmappedDomains: new Set(),
       }),
     ).toEqual({ status: "unmapped" });
+  });
+});
+
+describe("deriveHandlerImportPath", () => {
+  test("maps a handler file path to the @/api module alias", () => {
+    expect(
+      deriveHandlerImportPath("apps/api/src/handlers/time-entries/create.ts"),
+    ).toBe("@/api/handlers/time-entries/create");
+  });
+
+  test("panics on a path outside apps/api/src", () => {
+    expect(() => deriveHandlerImportPath("packages/cli/src/x.ts")).toThrow();
+  });
+});
+
+describe("serializeDispatchModule", () => {
+  test("emits a lazy import thunk per record, named export threaded", () => {
+    const out = serializeDispatchModule([
+      {
+        id: "time-entries.create",
+        importPath: "@/api/handlers/time-entries/create",
+        exportName: undefined,
+      },
+      {
+        id: "views.export.named",
+        importPath: "@/api/handlers/views/export",
+        exportName: "named",
+      },
+    ]);
+    expect(out).toContain(
+      '"time-entries.create": { load: () => import("@/api/handlers/time-entries/create") },',
+    );
+    expect(out).toContain(
+      '"views.export.named": { load: () => import("@/api/handlers/views/export"), exportName: "named" },',
+    );
+    expect(out).toContain("export const CAPABILITY_DISPATCH");
+    expect(out.endsWith("\n")).toBe(true);
+  });
+});
+
+describe("context-fidelity scan", () => {
+  test("detects destructured set/redirect/cookie usage", () => {
+    expect(
+      detectContextFidelityFeatures("const { set } = ctx; set.status = 201;"),
+    ).toEqual(["set.status"]);
+    expect(detectContextFidelityFeatures("return redirect('/x');")).toEqual([
+      "redirect()",
+    ]);
+    expect(detectContextFidelityFeatures("const rows = new Set();")).toEqual(
+      [],
+    );
+  });
+
+  test("flags a tripped-but-unwaived capability and stale waivers", () => {
+    const scan = scanContextFidelity({
+      entries: [
+        { id: "a.set", source: "set.headers['x'] = '1';" },
+        { id: "b.clean", source: "return Result.ok({});" },
+      ],
+      waivedIds: new Set(["b.clean"]),
+    });
+    expect(scan.violations).toEqual([
+      { id: "a.set", features: ["set.headers"] },
+    ]);
+    expect(scan.staleWaivers).toEqual(["b.clean"]);
+  });
+
+  test("a waived tripped capability is not a violation", () => {
+    const scan = scanContextFidelity({
+      entries: [{ id: "a.set", source: "set.status = 200;" }],
+      waivedIds: new Set(["a.set"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleWaivers).toEqual([]);
   });
 });

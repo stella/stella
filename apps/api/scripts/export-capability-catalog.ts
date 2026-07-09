@@ -33,20 +33,25 @@
 import { panic, Result } from "better-result";
 import path from "node:path";
 
+import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import {
   type AccessClassification,
+  type CapabilityDispatchRecord,
   capInputSchema,
   type CapabilityInputSchema,
   compareScopeStrictness,
   deriveCapabilityId,
   deriveDomain,
+  deriveHandlerImportPath,
   findInlineCapabilityMismatches,
   findStaleAccessOverrides,
   isDestructiveName,
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
+  scanContextFidelity,
   serializeCatalog,
+  serializeDispatchModule,
 } from "./lib/capability-catalog";
 import {
   discoverSafeHandlers,
@@ -59,6 +64,11 @@ import {
 const CATALOG_PATH = path.resolve(
   REPO_ROOT,
   "apps/api/src/mcp/generated/capability-catalog.json",
+);
+
+const DISPATCH_PATH = path.resolve(
+  REPO_ROOT,
+  "apps/api/src/mcp/generated/capability-dispatch.ts",
 );
 
 /**
@@ -372,6 +382,7 @@ const resolveEntryScopeAgainstTool = ({
 
 type BuildResult = {
   entries: CapabilityEntry[];
+  dispatchRecords: CapabilityDispatchRecord[];
   errors: string[];
   /** Capability ids whose input schema was omitted for exceeding the byte cap. */
   truncatedSchemas: string[];
@@ -395,7 +406,10 @@ const buildCatalog = async (): Promise<BuildResult> => {
   );
 
   const kindsByFile = new Map(files.map((file) => [file.id, file.kinds]));
+  const sourceByFile = new Map(files.map((file) => [file.id, file.source]));
   const entries: CapabilityEntry[] = [];
+  const dispatchRecords: CapabilityDispatchRecord[] = [];
+  const entrySources: { id: string; source: string }[] = [];
   const idToFile = new Map<string, string>();
   const presentDomains = new Set<string>();
   const accessOverrideUses: string[] = [];
@@ -600,6 +614,32 @@ const buildCatalog = async (): Promise<BuildResult> => {
       mcp: toCapabilityMcp(endpoint.exposure),
     };
     entries.push(entry);
+    dispatchRecords.push({
+      id,
+      importPath: deriveHandlerImportPath(endpoint.file),
+      exportName: endpoint.exportName,
+    });
+    const source = sourceByFile.get(endpoint.file);
+    if (source !== undefined) {
+      entrySources.push({ id, source });
+    }
+  }
+
+  // Class guard: a capability whose handler reaches for a context feature the
+  // synthesized invoke context cannot honor must be waived, or the export fails.
+  const fidelity = scanContextFidelity({
+    entries: entrySources,
+    waivedIds: new Set(CONTEXT_FIDELITY_WAIVERS.keys()),
+  });
+  for (const { id, features } of fidelity.violations) {
+    errors.push(
+      `context-fidelity: capability "${id}" uses un-honorable context feature(s) [${features.join(", ")}] the generic invoke path cannot honor. Refactor the handler to return a plain payload, or add "${id}" to CONTEXT_FIDELITY_WAIVERS with a justification (it will then be refused at invoke)`,
+    );
+  }
+  for (const id of fidelity.staleWaivers) {
+    errors.push(
+      `stale CONTEXT_FIDELITY_WAIVERS entry "${id}": its handler no longer uses an un-honorable context feature (remove it)`,
+    );
   }
 
   // Keep the mapping/override tables honest: a table entry that no longer
@@ -650,8 +690,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
   }
 
   entries.sort((a, b) => a.id.localeCompare(b.id));
+  dispatchRecords.sort((a, b) => a.id.localeCompare(b.id));
   truncatedSchemas.sort((a, b) => a.localeCompare(b));
-  return { entries, errors, truncatedSchemas };
+  return { entries, dispatchRecords, errors, truncatedSchemas };
 };
 
 const printErrors = (errors: readonly string[]): void => {
@@ -746,7 +787,8 @@ const parseCommitted = async (): Promise<unknown[] | null> => {
 
 const main = async (): Promise<number> => {
   const checkMode = process.argv.includes("--check");
-  const { entries, errors, truncatedSchemas } = await buildCatalog();
+  const { entries, dispatchRecords, errors, truncatedSchemas } =
+    await buildCatalog();
 
   if (errors.length > 0) {
     printErrors(errors);
@@ -760,11 +802,13 @@ const main = async (): Promise<number> => {
   }
 
   const serialized = serializeCatalog(entries);
+  const dispatchSerialized = serializeDispatchModule(dispatchRecords);
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);
+    await Bun.write(DISPATCH_PATH, dispatchSerialized);
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}\n`,
+      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH} and ${DISPATCH_PATH}\n`,
     );
     return 0;
   }
@@ -772,21 +816,35 @@ const main = async (): Promise<number> => {
   const committedText = await Bun.file(CATALOG_PATH)
     .text()
     .catch(() => null);
-  if (committedText === serialized) {
+  const committedDispatch = await Bun.file(DISPATCH_PATH)
+    .text()
+    .catch(() => null);
+  if (
+    committedText === serialized &&
+    committedDispatch === dispatchSerialized
+  ) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capabilities, catalog is up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capabilities, catalog and dispatch module are up to date.`,
     );
     return 0;
   }
 
-  const committed = await parseCommitted();
-  if (committed === null) {
+  if (committedDispatch !== dispatchSerialized) {
     console.error(
-      "\nexport-capability-catalog: committed catalog is missing or malformed. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
+      "\nexport-capability-catalog: committed capability-dispatch.ts is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
     );
-    return 1;
   }
-  summarizeDrift(committed, entries);
+
+  if (committedText !== serialized) {
+    const committed = await parseCommitted();
+    if (committed === null) {
+      console.error(
+        "\nexport-capability-catalog: committed catalog is missing or malformed. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
+      );
+      return 1;
+    }
+    summarizeDrift(committed, entries);
+  }
   return 1;
 };
 

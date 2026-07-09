@@ -30,6 +30,8 @@ export const EXIT_CODES = {
   featureDisabled: 5,
   notFound: 6,
   aborted: 7,
+  permissionDenied: 8,
+  usageLimited: 9,
 } as const;
 
 export type ExitCode = (typeof EXIT_CODES)[keyof typeof EXIT_CODES];
@@ -46,6 +48,8 @@ export const MCP_ERROR_CODE_EXIT_MAP: Readonly<Record<string, ExitCode>> = {
   feature_disabled: EXIT_CODES.featureDisabled,
   not_found: EXIT_CODES.notFound,
   confirmation_required: EXIT_CODES.aborted,
+  permission_denied: EXIT_CODES.permissionDenied,
+  usage_limited: EXIT_CODES.usageLimited,
   rate_limited: EXIT_CODES.server,
   unknown_tool: EXIT_CODES.server,
   internal_error: EXIT_CODES.server,

@@ -161,6 +161,20 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
       scope: "admin_read",
       itemsKey: "items",
     },
+    list_capabilities: {
+      command: ["capability", "list"],
+      scope: "read",
+      itemsKey: "items",
+    },
+    describe_capability: {
+      command: ["capability", "describe"],
+      scope: "read",
+    },
+    invoke_capability: {
+      command: ["capability", "invoke"],
+      scope: "read",
+    },
+
     manage_organization: {
       command: ["organization"],
       scope: "admin_write",

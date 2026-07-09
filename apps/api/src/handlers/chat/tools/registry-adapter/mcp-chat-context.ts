@@ -4,6 +4,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
 
 /**
@@ -82,10 +83,19 @@ export const buildMcpContextFromChat = (
   deps: ChatRegistryContextDeps,
 ): McpRequestContext => {
   const accessibleWorkspaceIds = [...deps.toolWorkspaceIds];
+  const accessibleWorkspaceStatusById = deriveWorkspaceStatusMap(deps);
   return {
     accessibleWorkspaceIds,
     accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
-    accessibleWorkspaceStatusById: deriveWorkspaceStatusMap(deps),
+    accessibleWorkspaceStatusById,
+    // Reconstructed from the authorized id set + status map; chat never
+    // dispatches the generic capability path, so this is unread on this surface.
+    accessibleWorkspaces: [...accessibleWorkspaceStatusById].map(
+      ([id, status]) => ({ id: brandPersistedWorkspaceId(id), status }),
+    ),
+    // A session-authed chat turn carries no OAuth scopes; the generic capability
+    // path (the only reader of grantedScopes) is never reached from chat.
+    grantedScopes: [],
     memberRole: deps.memberRole,
     organizationId: deps.organizationId,
     recordAuditEvent: deps.recordAuditEvent ?? NO_OP_AUDIT_RECORDER,

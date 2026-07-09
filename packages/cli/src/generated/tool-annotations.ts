@@ -222,4 +222,17 @@ export const generatedToolAnnotations: Readonly<
     command: ["feedback", "send"],
     scope: "feedback",
   },
+  list_capabilities: {
+    command: ["capability", "list"],
+    scope: "read",
+    itemsKey: "items",
+  },
+  describe_capability: {
+    command: ["capability", "describe"],
+    scope: "read",
+  },
+  invoke_capability: {
+    command: ["capability", "invoke"],
+    scope: "read",
+  },
 };

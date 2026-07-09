@@ -458,6 +458,8 @@ const createContext = ({
       archivedWorkspaceIds.includes(workspaceId) ? "archived" : "active",
     ]),
   ),
+  accessibleWorkspaces: [],
+  grantedScopes: [],
   memberRole: "owner",
   organizationId: toSafeId<"organization">("org_1"),
   recordAuditEvent,

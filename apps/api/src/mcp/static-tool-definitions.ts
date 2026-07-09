@@ -1,5 +1,6 @@
 import { unreachable } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
+import { CAPABILITY_TOOL_SET } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_SET } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
@@ -25,6 +26,7 @@ export const DEFAULT_MCP_TOOL_SETS = [
   BILLING_TOOL_SET,
   RESEARCH_ADMIN_TOOL_SET,
   FEEDBACK_TOOL_SET,
+  CAPABILITY_TOOL_SET,
 ] as const satisfies readonly McpToolSet<readonly McpToolDefinition[]>[];
 
 /**
@@ -43,6 +45,7 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...BILLING_TOOL_SET.definitions,
   ...RESEARCH_ADMIN_TOOL_SET.definitions,
   ...FEEDBACK_TOOL_SET.definitions,
+  ...CAPABILITY_TOOL_SET.definitions,
 ] as const satisfies readonly McpToolDefinition[];
 
 /**

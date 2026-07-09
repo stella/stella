@@ -5,6 +5,7 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import { captureError } from "@/api/lib/analytics";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
+import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
@@ -55,6 +56,12 @@ const REGISTRY_READ_TOOL_HANDLERS = {
   get_usage: BILLING_TOOL_HANDLERS.get_usage,
   search_legislation: RESEARCH_ADMIN_TOOL_HANDLERS.search_legislation,
   list_audit_log: RESEARCH_ADMIN_TOOL_HANDLERS.list_audit_log,
+  // Non-projectable (`chatProjectable: false`): the capability meta-tools are
+  // reached over MCP/CLI, never from chat, and the orchestrator refuses them
+  // before dispatch. Wired only to keep this map exhaustive over every read
+  // tool.
+  list_capabilities: CAPABILITY_TOOL_HANDLERS.list_capabilities,
+  describe_capability: CAPABILITY_TOOL_HANDLERS.describe_capability,
 } satisfies Record<RegistryReadToolName, McpToolHandler>;
 
 export const firstTextContent = (result: CallToolResult): string => {
