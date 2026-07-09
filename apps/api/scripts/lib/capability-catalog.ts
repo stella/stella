@@ -91,7 +91,7 @@ export const finalIdSegment = (id: string): string =>
 
 const GET_LIKE_PREFIX = /^(?:get|list|read)/u;
 
-const DESTRUCTIVE_NAME_PREFIX = /^(?:delete|remove)/u;
+const DESTRUCTIVE_TOKENS = new Set(["delete", "remove"]);
 
 /**
  * Whether the capability's final id segment names a delete-like operation.
@@ -99,9 +99,25 @@ const DESTRUCTIVE_NAME_PREFIX = /^(?:delete|remove)/u;
  * `update` verb on a parent resource (e.g. `document-types.delete-by-id` under
  * `organizationSettings:["update"]`), which the verb classification alone
  * would report as non-destructive.
+ *
+ * The segment is tokenized on hyphens and camelCase boundaries; the name is
+ * delete-like when the FIRST or LAST token is `delete`/`remove`. This catches
+ * both verb-first (`delete-by-id`, `deleteWorkspaceAnonymizationTerm`) and
+ * verb-last (`workspace-members-remove`, `entity-links-delete`) naming.
+ * Mid-name tokens deliberately do not match, to avoid false positives.
  */
-export const isDestructiveName = (id: string): boolean =>
-  DESTRUCTIVE_NAME_PREFIX.test(finalIdSegment(id));
+export const isDestructiveName = (id: string): boolean => {
+  const tokens = finalIdSegment(id)
+    .split(/-|(?=[A-Z])/u)
+    .map((token) => token.toLowerCase())
+    .filter((token) => token.length > 0);
+  const first = tokens.at(0);
+  const last = tokens.at(-1);
+  return (
+    (first !== undefined && DESTRUCTIVE_TOKENS.has(first)) ||
+    (last !== undefined && DESTRUCTIVE_TOKENS.has(last))
+  );
+};
 
 export type AccessResolution =
   | { status: "resolved"; access: "read" | "write"; destructive: boolean }

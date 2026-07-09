@@ -209,6 +209,25 @@ describe("isDestructiveName", () => {
     ).toBe(true);
   });
 
+  test("matches delete/remove-suffixed final segments", () => {
+    expect(isDestructiveName("workspaces.workspace-members-remove")).toBe(true);
+    expect(isDestructiveName("workspaces.workspace-contacts-delete")).toBe(
+      true,
+    );
+    expect(isDestructiveName("tasks.entity-links-delete")).toBe(true);
+    expect(isDestructiveName("tasks.assignees-remove")).toBe(true);
+  });
+
+  test("matches camelCase suffix forms", () => {
+    expect(isDestructiveName("things.someNamedExportDelete")).toBe(true);
+    expect(isDestructiveName("things.entityLinksRemove")).toBe(true);
+  });
+
+  test("does not match mid-name delete/remove tokens", () => {
+    expect(isDestructiveName("things.bulk-delete-draft")).toBe(false);
+    expect(isDestructiveName("things.bulkRemoveDraft")).toBe(false);
+  });
+
   test("does not match soft operations or delete elsewhere in the id", () => {
     expect(isDestructiveName("workspaces.archive")).toBe(false);
     expect(isDestructiveName("entities.restore-version")).toBe(false);
@@ -217,6 +236,31 @@ describe("isDestructiveName", () => {
 });
 
 describe("resolveAccess destructive-name escalation", () => {
+  test("escalates a suffix-named delete authorized via update", () => {
+    expect(
+      resolveAccess({
+        id: "workspaces.workspace-members-remove",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {},
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: true });
+  });
+
+  test("the opt-out still suppresses a first-token remove whose last token is not delete-like", () => {
+    // `remove-entries` matches on its FIRST token under the tokenized rule,
+    // so the reviewed opt-out is still required (and still consulted).
+    expect(
+      resolveAccess({
+        id: "invoices.remove-entries",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {},
+        destructiveNameOptOuts: new Set(["invoices.remove-entries"]),
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: false });
+  });
+
   test("escalates an update-authorized delete to destructive", () => {
     expect(
       resolveAccess({
