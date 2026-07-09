@@ -14,7 +14,7 @@
     "docker:reset-dev": "docker compose --profile dev down -v && docker compose --profile dev up -d",
     "docker:stop-dev": "docker compose --profile dev down",
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "typecheck": "bun ../../node_modules/@typescript/native/bin/tsc --noEmit",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/api",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "oxfmt .",

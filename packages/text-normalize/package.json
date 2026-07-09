@@ -42,10 +42,10 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "rm -rf dist && bun ../../node_modules/@typescript/native/bin/tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && bun ../../packages/scripts/src/tsc-native.ts -p tsconfig.build.json",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
-    "typecheck": "bun ../../node_modules/@typescript/native/bin/tsc --noEmit",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/text-normalize",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/text-normalize",
     "format": "oxfmt .",

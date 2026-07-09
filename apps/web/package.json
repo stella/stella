@@ -11,7 +11,7 @@
     "clean": "git clean -xdf .cache .turbo node_modules",
     "typegen": "bun ../../packages/scripts/src/i18n-typegen.ts src/i18n/langs",
     "glossary": "bun ../../packages/scripts/src/glossary-gen.ts src/i18n",
-    "typecheck": "bun ../../node_modules/@typescript/native/bin/tsc --noEmit && bun ../../node_modules/@typescript/native/bin/tsc --noEmit -p e2e/tsconfig.json",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit && bun ../../packages/scripts/src/tsc-native.ts --noEmit -p e2e/tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/web",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/web",
     "format": "oxfmt -c ../../.oxfmtrc.json .",
