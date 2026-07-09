@@ -181,6 +181,25 @@ export const getDisabledNativeToolSlugs = ({
   ).map((tool) => tool.slug);
 };
 
+/**
+ * Row-level convenience over `getDisabledNativeToolSlugs` for the
+ * organization_settings columns, whose values are null when the org never
+ * configured them and whose row is absent for a brand-new org. Keeps the
+ * defaulting in one place instead of every handler that loads the row.
+ */
+export const getDisabledNativeToolSlugsFromSettingsRow = (
+  row:
+    | {
+        practiceJurisdictions: readonly PracticeJurisdiction[] | null;
+        nativeToolOverrides: Readonly<Record<string, boolean>> | null;
+      }
+    | undefined,
+): readonly string[] =>
+  getDisabledNativeToolSlugs({
+    practiceJurisdictions: row?.practiceJurisdictions ?? [],
+    nativeToolOverrides: row?.nativeToolOverrides ?? {},
+  });
+
 export const mcpConnectorCatalogMetadata = (
   _connector: McpConnectorCatalogSource,
 ): McpConnectorCatalogMetadata => ({ recommendedJurisdictions: [] });

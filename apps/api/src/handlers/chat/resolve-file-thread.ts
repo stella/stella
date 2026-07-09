@@ -13,7 +13,7 @@ import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
 import { isWebSearchAvailable } from "@/api/handlers/chat/tools/chat-tools";
-import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
+import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -143,10 +143,8 @@ const loadWebSearchAvailable = async (
       urlFetchApiKeyIv: true,
     },
   });
-  const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
-    practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
-    nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
-  });
+  const disabledNativeToolSlugs =
+    getDisabledNativeToolSlugsFromSettingsRow(orgSettingsForChat);
   const { webSearchProvider } =
     await resolveWebSearchProvidersFromOrgSettingsRow(
       organizationId,
