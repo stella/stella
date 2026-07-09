@@ -1094,6 +1094,27 @@
   },
   "errors": {
     "actionFailed": "Toiming ebaõnnestus",
+    "api": {
+      "badRequest": "Päringut ei saanud lõpule viia.",
+      "conflict": "Päring on praeguse olekuga vastuolus.",
+      "forbidden": "Teil pole selleks toiminguks õigust.",
+      "notFound": "Soovitud üksust ei leitud.",
+      "payloadTooLarge": "Päring on liiga suur.",
+      "rateLimited": "Liiga palju päringuid. Proovige hiljem uuesti.",
+      "server": "Midagi läks valesti. Proovige uuesti.",
+      "serviceUnavailable": "Teenus pole ajutiselt saadaval. Proovige uuesti.",
+      "unauthorized": "Logige palun uuesti sisse.",
+      "unknown": "Midagi läks valesti. Proovige uuesti.",
+      "validation": "Kontrollige päringut ja proovige uuesti."
+    },
+    "apiCodes": {
+      "accessDenied": "Juurdepääs keelatud.",
+      "forbidden": "Teil pole selleks toiminguks õigust.",
+      "internalServerError": "Midagi läks valesti. Proovige uuesti.",
+      "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
+      "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
+      "usageLimitExceeded": "Kasutuslimiit on täis."
+    },
     "failedToAcceptInvitation": "Kutse vastuvõtmine ebaõnnestus",
     "failedToAddParty": "Osapoole lisamine ebaõnnestus",
     "failedToCancelInvitation": "Kutse tühistamine ebaõnnestus",

@@ -1094,6 +1094,27 @@
   },
   "errors": {
     "actionFailed": "A művelet sikertelen",
+    "api": {
+      "badRequest": "A kérést nem sikerült teljesíteni.",
+      "conflict": "A kérés ütközik a jelenlegi állapottal.",
+      "forbidden": "Nincs jogosultsága ehhez a művelethez.",
+      "notFound": "A kért elem nem található.",
+      "payloadTooLarge": "A kérés túl nagy.",
+      "rateLimited": "Túl sok kérés. Próbálja újra később.",
+      "server": "Hiba történt. Próbálja újra.",
+      "serviceUnavailable": "A szolgáltatás átmenetileg nem érhető el. Próbálja újra.",
+      "unauthorized": "Jelentkezzen be újra.",
+      "unknown": "Hiba történt. Próbálja újra.",
+      "validation": "Ellenőrizze a kérést, majd próbálja újra."
+    },
+    "apiCodes": {
+      "accessDenied": "Hozzáférés megtagadva.",
+      "forbidden": "Nincs jogosultsága ehhez a művelethez.",
+      "internalServerError": "Hiba történt. Próbálja újra.",
+      "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
+      "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
+      "usageLimitExceeded": "Elérte a használati korlátot."
+    },
     "failedToAcceptInvitation": "Nem sikerült elfogadni a meghívót",
     "failedToAddParty": "Nem sikerült hozzáadni a felet",
     "failedToCancelInvitation": "Nem sikerült visszavonni a meghívót",

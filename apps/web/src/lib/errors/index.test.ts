@@ -7,21 +7,23 @@ import {
   isUnauthorizedError,
   toAPIError,
   toAuthClientError,
+  userErrorFromThrown,
   userErrorMessage,
 } from "./index";
 
 describe("toAPIError", () => {
-  test("wraps string payloads directly", () => {
+  test("localizes string payloads by status and preserves the raw message", () => {
     const error = toAPIError({
       status: 400,
       value: "Bad request",
     });
 
     expect(APIError.is(error)).toBe(true);
-    expect(error.message).toBe("Bad request");
+    expect(error.message).toBe("The request could not be completed.");
+    expect(error.rawMessage).toBe("Bad request");
   });
 
-  test("serializes validation payloads", () => {
+  test("localizes validation payloads and preserves serialized details", () => {
     const error = toAPIError({
       status: 422,
       value: {
@@ -31,11 +33,13 @@ describe("toAPIError", () => {
       },
     });
 
-    expect(error.message).toContain('"type":"validation"');
-    expect(error.message).toContain('"on":"body"');
+    expect(error.code).toBe("validation");
+    expect(error.message).toBe("Please check the request and try again.");
+    expect(error.rawMessage).toContain('"type":"validation"');
+    expect(error.rawMessage).toContain('"on":"body"');
   });
 
-  test("uses object message for non-validation payloads", () => {
+  test("localizes uncoded object payloads by status", () => {
     const error = toAPIError({
       status: 404,
       value: {
@@ -43,7 +47,22 @@ describe("toAPIError", () => {
       },
     });
 
-    expect(error.message).toBe("Not found");
+    expect(error.message).toBe("We could not find what you requested.");
+    expect(error.rawMessage).toBe("Not found");
+  });
+
+  test("localizes known object codes", () => {
+    const error = toAPIError({
+      status: 403,
+      value: {
+        code: "forbidden",
+        message: "Forbidden",
+      },
+    });
+
+    expect(error.code).toBe("forbidden");
+    expect(error.message).toBe("You do not have permission to do this.");
+    expect(error.rawMessage).toBe("Forbidden");
   });
 });
 
@@ -60,7 +79,7 @@ describe("userErrorMessage", () => {
     ).toBe("Something went wrong");
   });
 
-  test("shows 4xx messages directly", () => {
+  test("uses fallback for uncoded 4xx messages", () => {
     expect(
       userErrorMessage(
         {
@@ -69,7 +88,61 @@ describe("userErrorMessage", () => {
         },
         "Something went wrong",
       ),
-    ).toBe("Missing field");
+    ).toBe("Something went wrong");
+  });
+
+  test("shows localized coded 4xx messages", () => {
+    expect(
+      userErrorMessage(
+        {
+          status: 403,
+          value: {
+            code: "forbidden",
+            message: "Forbidden",
+          },
+        },
+        "Something went wrong",
+      ),
+    ).toBe("You do not have permission to do this.");
+  });
+
+  test("uses fallback for thrown uncoded API errors", () => {
+    expect(
+      userErrorFromThrown(
+        new APIError({
+          message: "Raw message",
+          status: 400,
+        }),
+        "Something went wrong",
+      ),
+    ).toBe("Something went wrong");
+  });
+
+  test("shows localized coded thrown API errors", () => {
+    expect(
+      userErrorFromThrown(
+        new APIError({
+          code: "usage_limit_exceeded",
+          message: "Usage limit reached.",
+          status: 402,
+        }),
+        "Something went wrong",
+      ),
+    ).toBe("Usage limit reached.");
+  });
+
+  test("shows localized thrown auth client errors", () => {
+    expect(
+      userErrorFromThrown(
+        new AuthClientError({
+          code: "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
+          message: "You are not a member of this organization.",
+          status: 403,
+          statusText: "Forbidden",
+        }),
+        "Something went wrong",
+      ),
+    ).toBe("You are not a member of this organization.");
   });
 });
 
@@ -81,7 +154,7 @@ describe("toAuthClientError", () => {
     });
 
     expect(AuthClientError.is(error)).toBe(true);
-    expect(error.message).toBe("Unknown better-auth error");
+    expect(error.message).toBe("The request could not be completed.");
   });
 
   test("falls back to APIError for unknown codes", () => {
@@ -93,7 +166,20 @@ describe("toAuthClientError", () => {
     });
 
     expect(APIError.is(error)).toBe(true);
-    expect(error.message).toBe("SOMETHING_ELSE - Unexpected");
+    expect(error.message).toBe("Please sign in again.");
+    expect(error.rawMessage).toBe("Unexpected");
+  });
+
+  test("localizes known auth client codes", () => {
+    const error = toAuthClientError({
+      code: "YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION",
+      message: "No membership",
+      status: 403,
+      statusText: "Forbidden",
+    });
+
+    expect(AuthClientError.is(error)).toBe(true);
+    expect(error.message).toBe("You are not a member of this organization.");
   });
 });
 

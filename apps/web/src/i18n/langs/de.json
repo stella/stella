@@ -1094,6 +1094,27 @@
   },
   "errors": {
     "actionFailed": "Aktion fehlgeschlagen",
+    "api": {
+      "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
+      "conflict": "Die Anfrage steht im Konflikt mit dem aktuellen Zustand.",
+      "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "notFound": "Das Angeforderte konnte nicht gefunden werden.",
+      "payloadTooLarge": "Die Anfrage ist zu groß.",
+      "rateLimited": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
+      "server": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "serviceUnavailable": "Der Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut.",
+      "unauthorized": "Bitte melden Sie sich erneut an.",
+      "unknown": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "validation": "Bitte prüfen Sie die Anfrage und versuchen Sie es erneut."
+    },
+    "apiCodes": {
+      "accessDenied": "Zugriff verweigert.",
+      "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
+      "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
+      "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Workspace-Kontexts zu verwenden.",
+      "usageLimitExceeded": "Nutzungslimit erreicht."
+    },
     "failedToAcceptInvitation": "Einladung konnte nicht angenommen werden",
     "failedToAddParty": "Partei konnte nicht hinzugefügt werden",
     "failedToCancelInvitation": "Einladung konnte nicht storniert werden",

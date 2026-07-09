@@ -1094,6 +1094,27 @@
   },
   "errors": {
     "actionFailed": "Action échouée",
+    "api": {
+      "badRequest": "La requête n’a pas pu être terminée.",
+      "conflict": "La requête est en conflit avec l’état actuel.",
+      "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
+      "notFound": "Nous n’avons pas trouvé l’élément demandé.",
+      "payloadTooLarge": "La requête est trop volumineuse.",
+      "rateLimited": "Trop de requêtes. Veuillez réessayer plus tard.",
+      "server": "Une erreur s’est produite. Veuillez réessayer.",
+      "serviceUnavailable": "Le service est temporairement indisponible. Veuillez réessayer.",
+      "unauthorized": "Veuillez vous reconnecter.",
+      "unknown": "Une erreur s’est produite. Veuillez réessayer.",
+      "validation": "Veuillez vérifier la requête et réessayer."
+    },
+    "apiCodes": {
+      "accessDenied": "Accès refusé.",
+      "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
+      "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
+      "notOrganizationMember": "Vous n’êtes pas membre de cette organisation.",
+      "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
+      "usageLimitExceeded": "Limite d’utilisation atteinte."
+    },
     "failedToAcceptInvitation": "Impossible d'accepter l'invitation",
     "failedToAddParty": "Impossible d'ajouter la partie",
     "failedToCancelInvitation": "Impossible d'annuler l'invitation",

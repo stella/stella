@@ -1094,6 +1094,27 @@
   },
   "errors": {
     "actionFailed": "فشل الإجراء",
+    "api": {
+      "badRequest": "تعذر إكمال الطلب.",
+      "conflict": "يتعارض الطلب مع الحالة الحالية.",
+      "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "notFound": "تعذر العثور على ما طلبته.",
+      "payloadTooLarge": "الطلب كبير جدًا.",
+      "rateLimited": "طلبات كثيرة جدًا. يرجى المحاولة لاحقًا.",
+      "server": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+      "serviceUnavailable": "الخدمة غير متاحة مؤقتًا. يرجى المحاولة مرة أخرى.",
+      "unauthorized": "يرجى تسجيل الدخول مرة أخرى.",
+      "unknown": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+      "validation": "يرجى التحقق من الطلب والمحاولة مرة أخرى."
+    },
+    "apiCodes": {
+      "accessDenied": "تم رفض الوصول.",
+      "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
+      "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+      "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
+      "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
+      "usageLimitExceeded": "تم بلوغ حد الاستخدام."
+    },
     "failedToAcceptInvitation": "تعذّر قبول الدعوة",
     "failedToAddParty": "تعذّرت إضافة الطرف",
     "failedToCancelInvitation": "تعذّر إلغاء الدعوة",

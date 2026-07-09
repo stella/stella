@@ -110,8 +110,9 @@ run_typecheck() {
 
 run_ratchet_guard() {
   # Whole-repo convention metrics (as-casts, `?? []` fallbacks, barrel index
-  # files) that may only ever decrease vs a committed baseline. A rise fails; a
-  # fall just prompts `bun scripts/ratchet.ts --write`. The --self-test run
+  # files, direct error-message display) that may only ever decrease vs a
+  # committed baseline. A rise fails; a fall just prompts
+  # `bun scripts/ratchet.ts --write`. The --self-test run
   # first proves each counter counts what it claims, so a broken guard cannot
   # pass silently.
   bun scripts/ratchet.ts --self-test || return 1

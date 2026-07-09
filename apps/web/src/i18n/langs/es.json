@@ -1094,6 +1094,27 @@
   },
   "errors": {
     "actionFailed": "Acción fallida",
+    "api": {
+      "badRequest": "No se pudo completar la solicitud.",
+      "conflict": "La solicitud entra en conflicto con el estado actual.",
+      "forbidden": "No tienes permiso para hacer esto.",
+      "notFound": "No pudimos encontrar lo solicitado.",
+      "payloadTooLarge": "La solicitud es demasiado grande.",
+      "rateLimited": "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
+      "server": "Algo salió mal. Inténtalo de nuevo.",
+      "serviceUnavailable": "El servicio no está disponible temporalmente. Inténtalo de nuevo.",
+      "unauthorized": "Inicia sesión de nuevo.",
+      "unknown": "Algo salió mal. Inténtalo de nuevo.",
+      "validation": "Revisa la solicitud e inténtalo de nuevo."
+    },
+    "apiCodes": {
+      "accessDenied": "Acceso denegado.",
+      "forbidden": "No tienes permiso para hacer esto.",
+      "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
+      "notOrganizationMember": "No eres miembro de esta organización.",
+      "thirdPartyBoundaryRefusal": "La solicitud intentó usar contenido fuera del contexto de espacio de trabajo permitido.",
+      "usageLimitExceeded": "Se alcanzó el límite de uso."
+    },
     "failedToAcceptInvitation": "No se pudo aceptar la invitación",
     "failedToAddParty": "No se pudo añadir la parte",
     "failedToCancelInvitation": "No se pudo cancelar la invitación",

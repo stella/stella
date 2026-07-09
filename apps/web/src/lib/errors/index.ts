@@ -1,10 +1,15 @@
 import { TaggedError } from "better-result";
 
+import { getTranslator } from "@/i18n/i18n-store";
+import type { TranslationKey } from "@/i18n/types";
+
 export { FetchBoundaryError } from "@stll/errors";
 
 export class APIError extends TaggedError("ApiError")<{
+  code?: string | undefined;
   status: number;
   message: string;
+  rawMessage?: string | undefined;
   /**
    * Structured fields some 4xx responses include alongside the
    * human-readable message. The 402 usage-limit path uses
@@ -49,6 +54,7 @@ type ToAPIErrorProps = {
         expected?: string;
       }
     | {
+        code?: string | undefined;
         type?: never;
         message: string;
       };
@@ -57,15 +63,19 @@ type ToAPIErrorProps = {
 export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
   if (typeof value === "string") {
     return new APIError({
+      message: localizeAPIError({ status }),
+      rawMessage: value,
       status,
-      message: value,
     });
   }
 
   if (value.type === "validation") {
+    const rawMessage = JSON.stringify(value);
     return new APIError({
+      code: API_ERROR_CODE.validation,
+      message: localizeAPIError({ code: API_ERROR_CODE.validation, status }),
+      rawMessage,
       status,
-      message: JSON.stringify(value),
     });
   }
 
@@ -74,11 +84,88 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
   // payload without re-fetching. `message` is hoisted for the
   // simple toast path.
   const details = pickDetails(value);
+  const rawMessage = value.message;
   return new APIError({
+    ...(value.code ? { code: value.code } : {}),
     status,
-    message: value.message,
+    message: localizeAPIError({
+      code: value.code,
+      details,
+      status,
+    }),
+    rawMessage,
     ...(details ? { details } : {}),
   });
+};
+
+const API_ERROR_CODE = {
+  validation: "validation",
+} as const;
+
+const STATUS_ERROR_KEYS = {
+  badRequest: "errors.api.badRequest",
+  conflict: "errors.api.conflict",
+  forbidden: "errors.api.forbidden",
+  notFound: "errors.api.notFound",
+  payloadTooLarge: "errors.api.payloadTooLarge",
+  rateLimited: "errors.api.rateLimited",
+  server: "errors.api.server",
+  serviceUnavailable: "errors.api.serviceUnavailable",
+  unauthorized: "errors.api.unauthorized",
+  unknown: "errors.api.unknown",
+  validation: "errors.api.validation",
+} as const satisfies Record<string, TranslationKey>;
+
+const CODE_ERROR_KEYS = {
+  access_denied: "errors.apiCodes.accessDenied",
+  forbidden: "errors.apiCodes.forbidden",
+  internal_server_error: "errors.apiCodes.internalServerError",
+  third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
+  usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
+  validation: STATUS_ERROR_KEYS.validation,
+} as const satisfies Record<string, TranslationKey>;
+
+const STATUS_TO_KEY: Readonly<Record<number, TranslationKey>> = {
+  400: STATUS_ERROR_KEYS.badRequest,
+  401: STATUS_ERROR_KEYS.unauthorized,
+  402: "errors.apiCodes.usageLimitExceeded",
+  403: STATUS_ERROR_KEYS.forbidden,
+  404: STATUS_ERROR_KEYS.notFound,
+  409: STATUS_ERROR_KEYS.conflict,
+  413: STATUS_ERROR_KEYS.payloadTooLarge,
+  422: STATUS_ERROR_KEYS.validation,
+  429: STATUS_ERROR_KEYS.rateLimited,
+  500: STATUS_ERROR_KEYS.server,
+  502: STATUS_ERROR_KEYS.serviceUnavailable,
+};
+
+const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
+  code in CODE_ERROR_KEYS;
+
+const translate = (key: TranslationKey): string => getTranslator()(key);
+
+type LocalizeAPIErrorInput = {
+  code?: string | undefined;
+  details?: Record<string, unknown> | undefined;
+  status: number;
+};
+
+const localizeAPIError = ({
+  code,
+  details,
+  status,
+}: LocalizeAPIErrorInput): string => {
+  if (code && isKnownErrorCode(code)) {
+    return translate(CODE_ERROR_KEYS[code]);
+  }
+  if (
+    status === 402 &&
+    typeof details?.reason === "string" &&
+    isKnownErrorCode(details.reason)
+  ) {
+    return translate(CODE_ERROR_KEYS[details.reason]);
+  }
+  return translate(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
 };
 
 const KNOWN_TEXT_KEYS: ReadonlySet<string> = new Set(["message", "code"]);
@@ -106,7 +193,8 @@ export const userErrorMessage = (
   if (error.status >= SERVER_ERROR_THRESHOLD) {
     return fallback;
   }
-  return toAPIError(error).message;
+  const apiError = toAPIError(error);
+  return apiError.code ? apiError.message : fallback;
 };
 
 /** User-safe error description for thrown errors (e.g. from
@@ -116,11 +204,14 @@ export const userErrorFromThrown = (
   error: unknown,
   fallback: string,
 ): string => {
+  if (AuthClientError.is(error)) {
+    return error.message;
+  }
   if (APIError.is(error)) {
     if (error.status >= SERVER_ERROR_THRESHOLD) {
       return fallback;
     }
-    return error.message;
+    return error.code ? error.message : fallback;
   }
   return fallback;
 };
@@ -148,20 +239,32 @@ type ToAuthClientErrorProps = {
 const isAuthClientErrorCode = (code: string): code is AuthErrorCode =>
   code in AUTH_ERROR_CODES;
 
+const AUTH_ERROR_KEYS = {
+  YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
+    "errors.apiCodes.notOrganizationMember",
+} as const satisfies Record<AuthErrorCode, TranslationKey>;
+
 export const toAuthClientError = (props: ToAuthClientErrorProps) => {
   const { code, status, statusText } = props;
-  const message = props.message ?? "Unknown better-auth error";
+  const message = translate(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
 
   if (!props.code) {
     return new AuthClientError({ message, status, statusText });
   }
 
   if (code && isAuthClientErrorCode(code)) {
-    return new AuthClientError({ code, message, status, statusText });
+    return new AuthClientError({
+      code,
+      message: translate(AUTH_ERROR_KEYS[code]),
+      status,
+      statusText,
+    });
   }
 
   return new APIError({
-    message: `${code} - ${message}`,
+    code,
+    message,
+    rawMessage: props.message,
     status,
   });
 };

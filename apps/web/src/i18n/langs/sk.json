@@ -1094,6 +1094,27 @@
   },
   "errors": {
     "actionFailed": "Akcia zlyhala",
+    "api": {
+      "badRequest": "Požiadavku sa nepodarilo dokončiť.",
+      "conflict": "Požiadavka je v konflikte s aktuálnym stavom.",
+      "forbidden": "Na túto akciu nemáte oprávnenie.",
+      "notFound": "Požadovanú položku sa nepodarilo nájsť.",
+      "payloadTooLarge": "Požiadavka je príliš veľká.",
+      "rateLimited": "Príliš veľa požiadaviek. Skúste to prosím neskôr.",
+      "server": "Niečo sa pokazilo. Skúste to prosím znova.",
+      "serviceUnavailable": "Služba je dočasne nedostupná. Skúste to prosím znova.",
+      "unauthorized": "Prihláste sa prosím znova.",
+      "unknown": "Niečo sa pokazilo. Skúste to prosím znova.",
+      "validation": "Skontrolujte prosím požiadavku a skúste to znova."
+    },
+    "apiCodes": {
+      "accessDenied": "Prístup zamietnutý.",
+      "forbidden": "Na túto akciu nemáte oprávnenie.",
+      "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
+      "notOrganizationMember": "Nie ste členom tejto organizácie.",
+      "thirdPartyBoundaryRefusal": "Požiadavka sa pokúsila použiť obsah mimo povoleného kontextu pracovného priestoru.",
+      "usageLimitExceeded": "Bol dosiahnutý limit používania."
+    },
     "failedToAcceptInvitation": "Nepodarilo sa prijať pozvánku",
     "failedToAddParty": "Nepodarilo sa pridať stranu",
     "failedToCancelInvitation": "Nepodarilo sa zrušiť pozvánku",
