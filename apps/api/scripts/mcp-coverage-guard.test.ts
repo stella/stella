@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { isRecord } from "./lib/enumerate-safe-handlers";
 import {
   classifyCoverage,
   computeBaselineDiff,
@@ -21,6 +22,21 @@ describe("toEndpointIdentifier", () => {
 
   test("returns the absolute path unchanged when it is outside the root", () => {
     expect(toEndpointIdentifier("/other/x.ts", "/repo")).toBe("/other/x.ts");
+  });
+});
+
+describe("isRecord", () => {
+  test("accepts plain objects only", () => {
+    expect(isRecord({})).toBe(true);
+    expect(isRecord({ a: 1 })).toBe(true);
+  });
+
+  test("rejects arrays, null, and primitives", () => {
+    expect(isRecord([])).toBe(false);
+    expect(isRecord(["a"])).toBe(false);
+    expect(isRecord(null)).toBe(false);
+    expect(isRecord("x")).toBe(false);
+    expect(isRecord(1)).toBe(false);
   });
 });
 

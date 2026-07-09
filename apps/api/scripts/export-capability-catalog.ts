@@ -30,7 +30,7 @@
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import path from "node:path";
 
 import {
@@ -39,7 +39,9 @@ import {
   type CapabilityInputSchema,
   deriveCapabilityId,
   deriveDomain,
+  findInlineCapabilityMismatches,
   findStaleAccessOverrides,
+  isDestructiveName,
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
@@ -157,6 +159,36 @@ const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
   "templates.fill-to-workspace": { access: "write", destructive: false },
 };
 
+/**
+ * Reviewed opt-outs from the delete/remove name heuristic (see
+ * `isDestructiveName`): capabilities whose final id segment starts with
+ * delete/remove but that destroy nothing. Kept tight by a stale-entry check (an
+ * entry the heuristic would not have escalated fails the export).
+ *
+ * - `invoices.remove-entries`: unlinks time entries/expenses from an invoice
+ *   (`invoiceId: null`); the entries survive and return to the unbilled pool.
+ */
+const DESTRUCTIVE_NAME_OPT_OUTS: ReadonlySet<string> = new Set([
+  "invoices.remove-entries",
+]);
+
+/**
+ * Files with `capability`-annotated endpoints defined INLINE in route files
+ * (mounted directly into Elysia, never exported as `{ config, handler }`).
+ * These are known catalog GAPS: an inline endpoint cannot be enumerated, so its
+ * capability is not projected into the catalog (nor invokable through the
+ * generic path) until the handler is refactored into an endpoint module. Counts
+ * are exact, so a NEW inline capability disposition fails the export instead of
+ * silently vanishing from the catalog; shrink an entry when its file is
+ * refactored. Companion to the coverage guard's INLINE_ENDPOINT_ALLOWLIST.
+ */
+const INLINE_CAPABILITY_ALLOWLIST: Record<string, number> = {
+  "apps/api/src/handlers/case-law/routes.ts": 5,
+  "apps/api/src/handlers/legislation/corpus-routes.ts": 2,
+  "apps/api/src/handlers/time-entries/routes.ts": 3,
+  "apps/api/src/handlers/workspaces/routes.ts": 2,
+};
+
 type CapabilityMcp =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
@@ -263,7 +295,43 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const presentDomains = new Set<string>();
   const accessOverrideUses: string[] = [];
   const kindOverrideUses: string[] = [];
+  const optOutUses = new Set<string>();
   const truncatedSchemas: string[] = [];
+
+  // Enumerable `capability` endpoints per file, for the inline-capability
+  // invariant: any textual `capability` disposition beyond these is an inline
+  // endpoint the catalog cannot see.
+  const enumerableCapabilityByFile = new Map<string, number>();
+  for (const endpoint of endpoints) {
+    if (endpoint.exposure.type !== "capability") {
+      continue;
+    }
+    enumerableCapabilityByFile.set(
+      endpoint.file,
+      (enumerableCapabilityByFile.get(endpoint.file) ?? 0) + 1,
+    );
+  }
+  const inlineMismatches = findInlineCapabilityMismatches({
+    files: files.map(({ id, source }) => ({
+      id,
+      source,
+      enumerableCapabilityCount: enumerableCapabilityByFile.get(id) ?? 0,
+    })),
+    allowlist: INLINE_CAPABILITY_ALLOWLIST,
+  });
+  for (const { id, inlineCount, allowed } of inlineMismatches) {
+    errors.push(
+      `inline capability endpoints in ${id}: ${inlineCount} inline \`capability\` disposition(s) but ${allowed} allowlisted. Inline endpoints cannot be projected into the catalog; refactor them into \`{ config, handler }\` endpoint modules (or, for the pre-existing pinned gaps only, update INLINE_CAPABILITY_ALLOWLIST)`,
+    );
+  }
+  const discoveredFiles = new Set(files.map(({ id }) => id));
+  for (const id of Object.keys(INLINE_CAPABILITY_ALLOWLIST)) {
+    if (!discoveredFiles.has(id)) {
+      errors.push(
+        `stale INLINE_CAPABILITY_ALLOWLIST entry "${id}": file no longer discovered (remove it so it cannot admit future inline capabilities)`,
+      );
+    }
+  }
 
   for (const endpoint of endpoints) {
     if (
@@ -307,7 +375,18 @@ const buildCatalog = async (): Promise<BuildResult> => {
       verbs,
       hasPermissions,
       overrides: ACCESS_OVERRIDES,
+      destructiveNameOptOuts: DESTRUCTIVE_NAME_OPT_OUTS,
     });
+    if (
+      DESTRUCTIVE_NAME_OPT_OUTS.has(id) &&
+      accessResolution.status === "resolved" &&
+      isDestructiveName(id) &&
+      !accessResolution.destructive
+    ) {
+      // The opt-out changed the outcome (the name heuristic would have
+      // escalated, and the verbs did not already make it destructive).
+      optOutUses.add(id);
+    }
     if (accessResolution.status === "resolved" && id in ACCESS_OVERRIDES) {
       // Only counts as "used" when the override was actually consulted — a
       // classifiable handler ignores its override, so it stays reportable.
@@ -391,6 +470,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (!kindOverrideUses.includes(id)) {
       errors.push(
         `stale HANDLER_KIND_OVERRIDES entry "${id}": no ambiguous handler file uses it (remove it)`,
+      );
+    }
+  }
+  for (const id of DESTRUCTIVE_NAME_OPT_OUTS) {
+    if (!optOutUses.has(id)) {
+      errors.push(
+        `stale DESTRUCTIVE_NAME_OPT_OUTS entry "${id}": the delete/remove name heuristic would not escalate it (remove it)`,
       );
     }
   }
@@ -493,8 +579,15 @@ const parseCommitted = async (): Promise<unknown[] | null> => {
   if (!(await file.exists())) {
     return null;
   }
-  const parsed: unknown = await file.json();
-  return Array.isArray(parsed) ? parsed : null;
+  // Malformed committed JSON is drift, not a crash: `null` routes the caller to
+  // the "regenerate" message instead of letting `file.json()` throw.
+  const parsed = await Result.tryPromise(
+    async (): Promise<unknown> => await file.json(),
+  );
+  if (Result.isError(parsed)) {
+    return null;
+  }
+  return Array.isArray(parsed.value) ? parsed.value : null;
 };
 
 const main = async (): Promise<number> => {

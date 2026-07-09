@@ -91,6 +91,18 @@ export const finalIdSegment = (id: string): string =>
 
 const GET_LIKE_PREFIX = /^(?:get|list|read)/u;
 
+const DESTRUCTIVE_NAME_PREFIX = /^(?:delete|remove)/u;
+
+/**
+ * Whether the capability's final id segment names a delete-like operation.
+ * Complements the permission-verb path: several deletes are authorized via an
+ * `update` verb on a parent resource (e.g. `document-types.delete-by-id` under
+ * `organizationSettings:["update"]`), which the verb classification alone
+ * would report as non-destructive.
+ */
+export const isDestructiveName = (id: string): boolean =>
+  DESTRUCTIVE_NAME_PREFIX.test(finalIdSegment(id));
+
 export type AccessResolution =
   | { status: "resolved"; access: "read" | "write"; destructive: boolean }
   | { status: "needs-override"; reason: string };
@@ -101,27 +113,46 @@ export type AccessResolution =
  *    requires an ACCESS_OVERRIDES entry (id -> classification), else fails;
  *  - handlers without permissions (session/token/public) default to read only
  *    when the final id segment looks like a getter (get/list/read prefix),
- *    otherwise require an override.
+ *    otherwise require an override;
+ *  - a resolved entry whose final id segment starts with delete/remove is
+ *    escalated to destructive (deletes authorized via an `update` verb would
+ *    otherwise come out non-destructive) unless the id is in
+ *    `destructiveNameOptOuts` (reviewed false positives, e.g. an unlink that
+ *    destroys nothing).
  */
 export const resolveAccess = ({
   id,
   verbs,
   hasPermissions,
   overrides,
+  destructiveNameOptOuts = new Set<string>(),
 }: {
   id: string;
   verbs: readonly string[];
   hasPermissions: boolean;
   overrides: Record<string, AccessClassification>;
+  destructiveNameOptOuts?: ReadonlySet<string>;
 }): AccessResolution => {
+  const escalate = (resolution: AccessResolution): AccessResolution => {
+    if (
+      resolution.status !== "resolved" ||
+      resolution.destructive ||
+      !isDestructiveName(id) ||
+      destructiveNameOptOuts.has(id)
+    ) {
+      return resolution;
+    }
+    return { ...resolution, destructive: true };
+  };
+
   const override = overrides[id];
   if (hasPermissions) {
     const classified = classifyVerbs(verbs);
     if (classified.ok) {
-      return { status: "resolved", ...classified.value };
+      return escalate({ status: "resolved", ...classified.value });
     }
     if (override) {
-      return { status: "resolved", ...override };
+      return escalate({ status: "resolved", ...override });
     }
     return {
       status: "needs-override",
@@ -129,7 +160,7 @@ export const resolveAccess = ({
     };
   }
   if (override) {
-    return { status: "resolved", ...override };
+    return escalate({ status: "resolved", ...override });
   }
   if (GET_LIKE_PREFIX.test(finalIdSegment(id))) {
     return { status: "resolved", access: "read", destructive: false };
@@ -242,6 +273,57 @@ export const capInputSchema = (
  */
 export const serializeCatalog = (entries: readonly unknown[]): string =>
   `${JSON.stringify(entries)}\n`;
+
+/**
+ * Textual count of `capability` dispositions in a handler file's source. Same
+ * approach as the coverage guard's factory call-site counting: an inline
+ * endpoint's config is invisible to module enumeration, but its disposition is
+ * still text in the file.
+ */
+export const countCapabilityDispositions = (source: string): number =>
+  source.match(/type:\s*"capability"/gu)?.length ?? 0;
+
+export type InlineCapabilityFile = {
+  /** Repo-relative file path. */
+  id: string;
+  source: string;
+  /** Enumerable `{ config, handler }` endpoints in the file with a `capability` disposition. */
+  enumerableCapabilityCount: number;
+};
+
+export type InlineCapabilityMismatch = {
+  id: string;
+  inlineCount: number;
+  allowed: number;
+};
+
+/**
+ * Inline-capability invariant: per file, the textual `capability` disposition
+ * count minus the enumerable capability endpoints must exactly equal the pinned
+ * allowlist count (0 when not allowlisted). An inline (non-enumerable) endpoint
+ * cannot be projected into the capability catalog, so an unpinned inline
+ * `capability` disposition is a capability that would silently vanish from the
+ * catalog — the export must fail instead. Pinned counts are exact so they can
+ * only shrink (refactor to an endpoint module), never silently grow.
+ */
+export const findInlineCapabilityMismatches = ({
+  files,
+  allowlist,
+}: {
+  files: readonly InlineCapabilityFile[];
+  allowlist: Record<string, number>;
+}): InlineCapabilityMismatch[] => {
+  const mismatches: InlineCapabilityMismatch[] = [];
+  for (const { id, source, enumerableCapabilityCount } of files) {
+    const inlineCount =
+      countCapabilityDispositions(source) - enumerableCapabilityCount;
+    const allowed = allowlist[id] ?? 0;
+    if (inlineCount !== allowed) {
+      mismatches.push({ id, inlineCount, allowed });
+    }
+  }
+  return mismatches.sort((a, b) => a.id.localeCompare(b.id));
+};
 
 export type ScopeResolution =
   | { status: "resolved"; scope: string }

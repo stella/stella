@@ -94,7 +94,7 @@ export const toEndpointIdentifier = (
 };
 
 export const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /** Narrow an unknown default export to an endpoint definition shape. */
 export const isEndpointModule = (

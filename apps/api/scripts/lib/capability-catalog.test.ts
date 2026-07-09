@@ -3,10 +3,13 @@ import { describe, expect, test } from "bun:test";
 import {
   capInputSchema,
   classifyVerbs,
+  countCapabilityDispositions,
   deriveCapabilityId,
   deriveDomain,
   finalIdSegment,
+  findInlineCapabilityMismatches,
   findStaleAccessOverrides,
+  isDestructiveName,
   MAX_CAPABILITY_SCHEMA_BYTES,
   resolveAccess,
   resolveHandlerKind,
@@ -191,6 +194,173 @@ describe("resolveAccess", () => {
         },
       }),
     ).toEqual({ status: "resolved", access: "write", destructive: true });
+  });
+});
+
+describe("isDestructiveName", () => {
+  test("matches delete/remove-prefixed final segments, including camelCase named exports", () => {
+    expect(isDestructiveName("document-types.delete-by-id")).toBe(true);
+    expect(isDestructiveName("invoices.remove-entries")).toBe(true);
+    expect(
+      isDestructiveName(
+        "workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm",
+      ),
+    ).toBe(true);
+  });
+
+  test("does not match soft operations or delete elsewhere in the id", () => {
+    expect(isDestructiveName("workspaces.archive")).toBe(false);
+    expect(isDestructiveName("entities.restore-version")).toBe(false);
+    expect(isDestructiveName("entities.delete.read-status")).toBe(false);
+  });
+});
+
+describe("resolveAccess destructive-name escalation", () => {
+  test("escalates an update-authorized delete to destructive", () => {
+    expect(
+      resolveAccess({
+        id: "document-types.delete-by-id",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {},
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: true });
+  });
+
+  test("keeps a verb-derived destructive delete destructive", () => {
+    expect(
+      resolveAccess({
+        id: "entities.delete",
+        verbs: ["delete"],
+        hasPermissions: true,
+        overrides: {},
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: true });
+  });
+
+  test("respects an explicit opt-out for a non-destructive unlink", () => {
+    expect(
+      resolveAccess({
+        id: "invoices.remove-entries",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {},
+        destructiveNameOptOuts: new Set(["invoices.remove-entries"]),
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: false });
+  });
+
+  test("also escalates an ACCESS_OVERRIDES-resolved entry", () => {
+    expect(
+      resolveAccess({
+        id: "things.delete-draft",
+        verbs: ["use"],
+        hasPermissions: true,
+        overrides: {
+          "things.delete-draft": { access: "write", destructive: false },
+        },
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: true });
+  });
+
+  test("leaves non-delete names alone", () => {
+    expect(
+      resolveAccess({
+        id: "entities.update",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {},
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: false });
+  });
+});
+
+describe("countCapabilityDispositions", () => {
+  test("counts capability dispositions, ignoring other types", () => {
+    const source = `
+      const a = { mcp: { type: "capability", reason: "billing_admin" } };
+      const b = { mcp: { type: "internal", reason: "search_ui" } };
+      const c = { mcp: { type: "capability", reason: "workflow_orchestration" } };
+      const d = { mcp: { type: "tool", name: "search" } };
+    `;
+    expect(countCapabilityDispositions(source)).toBe(2);
+  });
+
+  test("is zero for a file without capability dispositions", () => {
+    expect(
+      countCapabilityDispositions('mcp: { type: "covered", by: "x" }'),
+    ).toBe(0);
+  });
+});
+
+describe("findInlineCapabilityMismatches", () => {
+  const capability = (reason: string) =>
+    `mcp: { type: "capability", reason: "${reason}" }`;
+
+  test("flags an unpinned inline capability disposition", () => {
+    const mismatches = findInlineCapabilityMismatches({
+      files: [
+        {
+          id: "routes.ts",
+          source: capability("billing_admin"),
+          enumerableCapabilityCount: 0,
+        },
+      ],
+      allowlist: {},
+    });
+    expect(mismatches).toEqual([
+      { id: "routes.ts", inlineCount: 1, allowed: 0 },
+    ]);
+  });
+
+  test("passes an endpoint module whose dispositions are all enumerable", () => {
+    expect(
+      findInlineCapabilityMismatches({
+        files: [
+          {
+            id: "create.ts",
+            source: capability("billing_admin"),
+            enumerableCapabilityCount: 1,
+          },
+        ],
+        allowlist: {},
+      }),
+    ).toEqual([]);
+  });
+
+  test("passes a pinned file at its exact count and flags one extra", () => {
+    const two = `${capability("billing_admin")}\n${capability("billing_admin")}`;
+    const three = `${two}\n${capability("billing_admin")}`;
+    expect(
+      findInlineCapabilityMismatches({
+        files: [{ id: "routes.ts", source: two, enumerableCapabilityCount: 0 }],
+        allowlist: { "routes.ts": 2 },
+      }),
+    ).toEqual([]);
+    expect(
+      findInlineCapabilityMismatches({
+        files: [
+          { id: "routes.ts", source: three, enumerableCapabilityCount: 0 },
+        ],
+        allowlist: { "routes.ts": 2 },
+      }),
+    ).toEqual([{ id: "routes.ts", inlineCount: 3, allowed: 2 }]);
+  });
+
+  test("flags a pinned file whose inline capabilities were refactored away", () => {
+    // The count must shrink with the refactor, so the stale pin is visible.
+    expect(
+      findInlineCapabilityMismatches({
+        files: [
+          {
+            id: "routes.ts",
+            source: 'mcp: { type: "tool", name: "search" }',
+            enumerableCapabilityCount: 0,
+          },
+        ],
+        allowlist: { "routes.ts": 2 },
+      }),
+    ).toEqual([{ id: "routes.ts", inlineCount: 0, allowed: 2 }]);
   });
 });
 
