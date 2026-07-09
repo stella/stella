@@ -40,7 +40,7 @@
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test",
     "test:property": "bun test $(grep -rlF 'fc.assert' src --include='*.test.ts')",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/template-conditions",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/template-conditions",
     "format": "oxfmt .",

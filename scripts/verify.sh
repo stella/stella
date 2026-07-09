@@ -98,7 +98,7 @@ run_rust_format() {
 }
 
 run_typecheck() {
-  # tsgo processes are memory-hungry; serialize typecheck tasks so
+  # tsc processes are memory-hungry; serialize typecheck tasks so
   # parallel instances cannot exhaust memory on contributor machines.
   # CI runs lint and typecheck as separate jobs; results match.
   if [[ -n "$affected_flag" ]]; then

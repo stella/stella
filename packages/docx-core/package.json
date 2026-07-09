@@ -41,7 +41,7 @@
     "build": "tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/docx-core",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/docx-core",
     "format": "oxfmt .",

@@ -520,7 +520,7 @@ export default defineConfig({
       // from a large intersection of module-augmented command interfaces.
       // oxlint's type-aware pass resolves the editor to `error`-typed here
       // (the only web consumer of toggleBold/toggleHeading/isActive), while
-      // tsc and tsgo --noEmit both type-check the file clean.
+      // tsc --noEmit type-checks the file clean.
       files: [
         "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx",
       ],

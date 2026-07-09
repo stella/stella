@@ -13,7 +13,7 @@
     "dev": "email dev -p 3002",
     "export": "email export",
     "start": "email start -p 3002",
-    "typecheck": "tsgo --noEmit",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "typegen": "bun ../scripts/src/i18n-typegen.ts i18n/langs",
     "i18n:check": "bun ../scripts/src/i18n-typegen.ts i18n/langs --check && bun ../scripts/src/i18n-check.ts i18n/langs",
     "i18n:sync": "bun ../scripts/src/i18n-check.ts i18n/langs --sync && bun ../scripts/src/i18n-typegen.ts i18n/langs",
