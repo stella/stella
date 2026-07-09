@@ -259,7 +259,7 @@ export const login = async (
         codeVerifier,
         metadata,
         redirectUri: callback.redirectUri,
-        resource: getMcpResourceUrl(metadata),
+        resource: getMcpResourceUrl(serverUrl),
       }),
     );
 

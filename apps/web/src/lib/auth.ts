@@ -7,6 +7,7 @@ import {
   organizationClient,
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+import { Result } from "better-result";
 
 import { ac, roles } from "@stll/permissions";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -46,10 +47,18 @@ const withOauthQueryFromHash = (ctx: {
   }
 
   const contentType = ctx.headers.get("content-type");
-  const body =
-    typeof ctx.body === "string" && contentType === "application/json"
-      ? JSON.parse(ctx.body)
-      : ctx.body;
+  const rawBody = ctx.body;
+  let body = rawBody;
+  if (
+    typeof rawBody === "string" &&
+    contentType?.toLowerCase().startsWith("application/json")
+  ) {
+    const parsed = Result.try((): unknown => JSON.parse(rawBody));
+    if (Result.isError(parsed)) {
+      return;
+    }
+    body = parsed.value;
+  }
 
   if (typeof body !== "object" || body === null || "oauth_query" in body) {
     return;

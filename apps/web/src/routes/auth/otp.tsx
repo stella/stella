@@ -38,7 +38,9 @@ function OTP() {
     <OTPPanel
       email={email}
       initialOtp={devOtp ?? undefined}
-      onVerified={() => navigate({ href: redirectTo, replace: true })}
+      onVerified={async () => {
+        await navigate({ href: redirectTo, replace: true });
+      }}
       redirectTo={redirectTo}
     />
   );
