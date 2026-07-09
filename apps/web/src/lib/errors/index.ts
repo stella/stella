@@ -57,10 +57,19 @@ type ToAPIErrorProps = {
         code?: string | undefined;
         type?: never;
         message: string;
-      };
+      }
+    | null
+    | undefined;
 };
 
 export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
+  if (!value) {
+    return new APIError({
+      message: localizeAPIError({ status }),
+      status,
+    });
+  }
+
   if (typeof value === "string") {
     return new APIError({
       message: localizeAPIError({ status }),
@@ -125,7 +134,7 @@ const CODE_ERROR_KEYS = {
   validation: STATUS_ERROR_KEYS.validation,
 } as const satisfies Record<string, TranslationKey>;
 
-const STATUS_TO_KEY: Readonly<Record<number, TranslationKey>> = {
+const STATUS_TO_KEY: Readonly<Record<number, TranslationKey | undefined>> = {
   400: STATUS_ERROR_KEYS.badRequest,
   401: STATUS_ERROR_KEYS.unauthorized,
   402: "errors.apiCodes.usageLimitExceeded",
@@ -140,7 +149,7 @@ const STATUS_TO_KEY: Readonly<Record<number, TranslationKey>> = {
 };
 
 const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
-  code in CODE_ERROR_KEYS;
+  Object.hasOwn(CODE_ERROR_KEYS, code);
 
 const translate = (key: TranslationKey): string => getTranslator()(key);
 
@@ -237,7 +246,7 @@ type ToAuthClientErrorProps = {
 };
 
 const isAuthClientErrorCode = (code: string): code is AuthErrorCode =>
-  code in AUTH_ERROR_CODES;
+  Object.hasOwn(AUTH_ERROR_CODES, code);
 
 const AUTH_ERROR_KEYS = {
   YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:

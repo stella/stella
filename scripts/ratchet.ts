@@ -230,18 +230,21 @@ const DIRECT_ERROR_MESSAGE =
   /\berror\s+instanceof\s+Error\s*\?\s*error\.message\b|\berror\.message\s*\?\?|\bresult\.error\.message\s*\?\?|\bAPIError\.is\([^)]*\)\s*&&[\s\S]{0,120}?\berror\.message\b/gu;
 
 const countDirectErrorMessageDisplay = (content: string): number => {
-  let total = 0;
+  const strippedLines: string[] = [];
   let literalState = NO_OPEN_TEMPLATE;
 
   for (const raw of content.split("\n")) {
     const { code, state } = stripLine(raw, literalState);
     literalState = state;
     if (COMMENT_LINE.test(code)) {
+      strippedLines.push("");
       continue;
     }
-    total += (code.match(DIRECT_ERROR_MESSAGE) ?? []).length;
+    strippedLines.push(code);
   }
-  return total;
+
+  const strippedContent = strippedLines.join("\n");
+  return (strippedContent.match(DIRECT_ERROR_MESSAGE) ?? []).length;
 };
 
 // Barrel files are selected by the include glob; every matched file counts as
@@ -554,14 +557,16 @@ const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
   "stellaToast.add({ title: error.message ?? fallback });",
   "stellaToast.add({ title: result.error.message ?? fallback });",
+  "if (APIError.is(error) &&",
+  "    error.message) {",
   "const internal = userErrorMessage(response.error, fallback);",
   'const literal = "error.message ?? fallback";',
   "// error instanceof Error ? error.message : fallback",
 ];
 const SELF_TEST_DIRECT_ERROR = `${DIRECT_ERROR_FIXTURE_LINES.join("\n")}\n`;
-// Expected: three direct user-facing-ish raw-message displays; helper use,
+// Expected: four direct user-facing-ish raw-message displays; helper use,
 // string literal, and comment are excluded.
-const EXPECTED_DIRECT_ERROR = 3;
+const EXPECTED_DIRECT_ERROR = 4;
 
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);

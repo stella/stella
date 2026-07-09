@@ -64,6 +64,18 @@ describe("toAPIError", () => {
     expect(error.message).toBe("You do not have permission to do this.");
     expect(error.rawMessage).toBe("Forbidden");
   });
+
+  test("localizes malformed empty payloads by status", () => {
+    const error = toAPIError({
+      status: 502,
+      value: null,
+    });
+
+    expect(error.message).toBe(
+      "The service is temporarily unavailable. Please try again.",
+    );
+    expect(error.rawMessage).toBeUndefined();
+  });
 });
 
 describe("userErrorMessage", () => {
