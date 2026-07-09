@@ -13,11 +13,11 @@ import {
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import {
   defaultCompositeFormat,
-  type EditableField,
   type EditableLookupFormat,
   type EditablePart,
   type FieldValidation,
   isLookupRegistry,
+  type TemplateEditableField,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 // ── Manifest <-> state ───────────────────────────────────
 
@@ -31,7 +31,7 @@ const INPUT_TYPE_VALUES = [
 
 export const isInputType = (
   value: string,
-): value is EditableField["inputType"] =>
+): value is TemplateEditableField["inputType"] =>
   INPUT_TYPE_VALUES.some((type) => type === value);
 
 const trimChar = (value: string, ch: string): string => {
@@ -243,7 +243,7 @@ const parseEditableLookupFormats = (raw: unknown): EditableLookupFormat[] => {
 
 type ManifestField = {
   path: string;
-  inputType: EditableField["inputType"];
+  inputType: TemplateEditableField["inputType"];
   label?: string;
   required?: boolean;
   options?: string[];
@@ -253,12 +253,12 @@ type ManifestField = {
   parts?: EditablePart[];
   format?: string;
   optionsFrom?: string;
-  lookup?: EditableField["lookup"];
+  lookup?: TemplateEditableField["lookup"];
   formula?: string;
   condition?: string;
   conditionAst?: ConditionNode;
   hint?: string;
-  dateFormat?: EditableField["dateFormat"];
+  dateFormat?: TemplateEditableField["dateFormat"];
   validation?: FieldValidation;
 };
 

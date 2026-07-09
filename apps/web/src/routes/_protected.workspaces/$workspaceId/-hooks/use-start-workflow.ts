@@ -17,7 +17,6 @@ import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-quer
 
 /**
  * Returns a function that starts an AI extraction workflow via REST.
- * Replaces the old `useWorkflowActor().startWorkflow()` Rivet call.
  */
 export const useStartWorkflow = (workspaceId: string) => {
   const queryClient = useQueryClient();
