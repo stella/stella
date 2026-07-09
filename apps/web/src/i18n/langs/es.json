@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Acceso denegado.",
+      "accountDeletionOtpExpired": "El código de verificación ha caducado. Solicita uno nuevo.",
+      "accountDeletionOtpInvalid": "Código de verificación no válido.",
       "deeplKeyRejected": "La clave de DeepL guardada fue rechazada. Sustitúyela en la configuración de la organización.",
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "forbidden": "No tienes permiso para hacer esto.",

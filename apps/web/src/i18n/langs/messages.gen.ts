@@ -1112,6 +1112,8 @@ type Messages = {
     };
     "apiCodes": {
       "accessDenied": "Access denied.";
+      "accountDeletionOtpExpired": "The verification code has expired. Request a new code.";
+      "accountDeletionOtpInvalid": "Invalid verification code.";
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "forbidden": "You do not have permission to do this.";

@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Prieiga uždrausta.",
+      "accountDeletionOtpExpired": "Patvirtinimo kodas nebegalioja. Paprašykite naujo kodo.",
+      "accountDeletionOtpInvalid": "Netinkamas patvirtinimo kodas.",
       "deeplKeyRejected": "Išsaugotas „DeepL“ raktas buvo atmestas. Pakeiskite jį organizacijos nustatymuose.",
       "deeplQuotaExceeded": "Šios organizacijos „DeepL“ simbolių kvota išnaudota.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",

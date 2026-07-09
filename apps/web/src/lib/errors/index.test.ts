@@ -90,6 +90,22 @@ describe("toAPIError", () => {
     expect(error.rawMessage).toBe("Raw provider error");
   });
 
+  test.each([
+    ["account_deletion_otp_invalid", "Invalid verification code."],
+    [
+      "account_deletion_otp_expired",
+      "The verification code has expired. Request a new code.",
+    ],
+  ])("localizes the account deletion code %s", (code, expected) => {
+    const error = toAPIError({
+      status: 400,
+      value: { code, message: "Raw verification error" },
+    });
+
+    expect(error.message).toBe(expected);
+    expect(error.rawMessage).toBe("Raw verification error");
+  });
+
   test("localizes malformed empty payloads by status", () => {
     const error = toAPIError({
       status: 502,

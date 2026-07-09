@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Juurdepääs keelatud.",
+      "accountDeletionOtpExpired": "Kinnituskood on aegunud. Taotlege uus kood.",
+      "accountDeletionOtpInvalid": "Kinnituskood ei kehti.",
       "deeplKeyRejected": "Salvestatud DeepL-i võti lükati tagasi. Asendage see organisatsiooni seadetes.",
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "forbidden": "Teil pole selleks toiminguks õigust.",

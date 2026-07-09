@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Odmowa dostępu.",
+      "accountDeletionOtpExpired": "Kod weryfikacyjny wygasł. Poproś o nowy kod.",
+      "accountDeletionOtpInvalid": "Nieprawidłowy kod weryfikacyjny.",
       "deeplKeyRejected": "Zapisany klucz DeepL został odrzucony. Zastąp go w ustawieniach organizacji.",
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",

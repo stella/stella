@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Prístup zamietnutý.",
+      "accountDeletionOtpExpired": "Platnosť overovacieho kódu vypršala. Vyžiadajte si nový kód.",
+      "accountDeletionOtpInvalid": "Neplatný overovací kód.",
       "deeplKeyRejected": "Uložený kľúč DeepL bol odmietnutý. Nahraďte ho v nastaveniach organizácie.",
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",

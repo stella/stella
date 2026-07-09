@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Zugriff verweigert.",
+      "accountDeletionOtpExpired": "Der Bestätigungscode ist abgelaufen. Fordern Sie einen neuen Code an.",
+      "accountDeletionOtpInvalid": "Ungültiger Bestätigungscode.",
       "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",

@@ -337,6 +337,11 @@ export const getPendingTasksAndMembers = async (
 /**
  * Verifies the OTP and deletes the user from the database.
  */
+const ACCOUNT_DELETION_ERROR_CODE = {
+  otpExpired: "account_deletion_otp_expired",
+  otpInvalid: "account_deletion_otp_invalid",
+} as const;
+
 export const verifyAndDeleteUser = async (
   currentUserId: string,
   email: string,
@@ -370,6 +375,7 @@ export const verifyAndDeleteUser = async (
 
         if (!verificationRow) {
           throw new HandlerError({
+            code: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
             status: 400,
             message: "Invalid verification code",
           });
@@ -382,6 +388,7 @@ export const verifyAndDeleteUser = async (
             .where(eq(verification.identifier, identifier));
 
           throw new HandlerError({
+            code: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
             status: 400,
             message: "Invalid verification code",
           });
@@ -393,6 +400,7 @@ export const verifyAndDeleteUser = async (
             .where(eq(verification.identifier, identifier));
 
           throw new HandlerError({
+            code: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
             status: 400,
             message: "Verification code has expired",
           });

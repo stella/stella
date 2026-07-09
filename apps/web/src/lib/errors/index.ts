@@ -132,6 +132,8 @@ const STATUS_ERROR_KEYS = {
 
 const CODE_ERROR_KEYS = {
   access_denied: "errors.apiCodes.accessDenied",
+  account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
+  account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   forbidden: "errors.apiCodes.forbidden",

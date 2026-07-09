@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Piekļuve liegta.",
+      "accountDeletionOtpExpired": "Verifikācijas koda derīguma termiņš ir beidzies. Pieprasiet jaunu kodu.",
+      "accountDeletionOtpInvalid": "Nederīgs verifikācijas kods.",
       "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",

@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "تم رفض الوصول.",
+      "accountDeletionOtpExpired": "انتهت صلاحية رمز التحقق. اطلب رمزًا جديدًا.",
+      "accountDeletionOtpInvalid": "رمز التحقق غير صالح.",
       "deeplKeyRejected": "تم رفض مفتاح DeepL المحفوظ. استبدله في إعدادات المؤسسة.",
       "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
