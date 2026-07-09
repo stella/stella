@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "El código de verificación ha caducado. Solicita uno nuevo.",
       "accountDeletionOtpInvalid": "Código de verificación no válido.",
       "accountDeletionSoleOwner": "Transfiere la propiedad o elimina las organizaciones de las que seas el único propietario antes de eliminar tu cuenta.",
+      "accountDeletionTaskReassignmentInvalid": "Revisa cada reasignación de tarea activa. Cada destinatario debe ser otro miembro del asunto que aún no esté asignado a la tarea.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Hay demasiadas asignaciones de tareas activas que deben reasignarse. Completa o reasigna algunas tareas antes de eliminar tu cuenta.",
       "aiConfigModelInvalid": "La configuración del modelo de IA no es válida. Revisa los modelos seleccionados.",
       "aiConfigProviderInvalid": "La configuración del proveedor de IA no es válida. Revisa los ajustes del proveedor.",
       "aiConfigProviderValidationFailed": "El proveedor de IA rechazó la configuración. Revisa la clave de API y el modelo.",

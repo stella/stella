@@ -104,6 +104,7 @@ describe("account deletion task handoff rules", () => {
     );
 
     expect(error.status).toBe(400);
+    expect(error.code).toBe("account_deletion_task_reassignment_invalid");
     expect(error.message).toBe(
       "All active task assignments must be reassigned before deleting your account.",
     );
@@ -123,6 +124,7 @@ describe("account deletion task handoff rules", () => {
     );
 
     expect(error.status).toBe(400);
+    expect(error.code).toBe("account_deletion_task_reassignment_invalid");
     expect(error.message).toBe(
       "Task reassignment target must be another workspace member.",
     );
@@ -150,6 +152,7 @@ describe("account deletion task handoff rules", () => {
     );
 
     expect(error.status).toBe(400);
+    expect(error.code).toBe("account_deletion_task_reassignment_invalid");
     expect(error.message).toBe(
       "Task reassignment target must be a member of the task workspace.",
     );
@@ -179,6 +182,7 @@ describe("account deletion task handoff rules", () => {
     );
 
     expect(error.status).toBe(400);
+    expect(error.code).toBe("account_deletion_task_reassignment_invalid");
     expect(error.message).toBe(
       "Selected task reassignment target is already assigned to one of the tasks.",
     );

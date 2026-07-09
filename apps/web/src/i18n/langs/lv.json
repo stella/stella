@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "Verifikācijas koda derīguma termiņš ir beidzies. Pieprasiet jaunu kodu.",
       "accountDeletionOtpInvalid": "Nederīgs verifikācijas kods.",
       "accountDeletionSoleOwner": "Pirms konta dzēšanas nododiet īpašumtiesības vai dzēsiet organizācijas, kuru vienīgais īpašnieks esat.",
+      "accountDeletionTaskReassignmentInvalid": "Pārbaudiet katra aktīvā uzdevuma pārdali. Katram saņēmējam jābūt citam lietas dalībniekam, kurš vēl nav piešķirts uzdevumam.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Jāpārdala pārāk daudz aktīvu uzdevumu. Pirms konta dzēšanas pabeidziet vai pārdaliet dažus uzdevumus.",
       "aiConfigModelInvalid": "MI modeļa konfigurācija nav derīga. Pārbaudiet atlasītos modeļus.",
       "aiConfigProviderInvalid": "MI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
       "aiConfigProviderValidationFailed": "MI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",

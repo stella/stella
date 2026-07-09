@@ -135,6 +135,10 @@ const CODE_ERROR_KEYS = {
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
   account_deletion_sole_owner: "errors.apiCodes.accountDeletionSoleOwner",
+  account_deletion_task_reassignment_invalid:
+    "errors.apiCodes.accountDeletionTaskReassignmentInvalid",
+  account_deletion_task_reassignment_limit_exceeded:
+    "errors.apiCodes.accountDeletionTaskReassignmentLimitExceeded",
   ai_config_model_invalid: "errors.apiCodes.aiConfigModelInvalid",
   ai_config_provider_invalid: "errors.apiCodes.aiConfigProviderInvalid",
   ai_config_provider_validation_failed:

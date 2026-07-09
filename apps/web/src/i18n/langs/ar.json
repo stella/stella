@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "انتهت صلاحية رمز التحقق. اطلب رمزًا جديدًا.",
       "accountDeletionOtpInvalid": "رمز التحقق غير صالح.",
       "accountDeletionSoleOwner": "انقل ملكية المؤسسات التي تملكها بمفردك أو احذفها قبل حذف حسابك.",
+      "accountDeletionTaskReassignmentInvalid": "راجع إعادة تعيين كل مهمة نشطة. يجب أن يكون كل مستلم عضوًا آخر في الملف وغير معيّن للمهمة بالفعل.",
+      "accountDeletionTaskReassignmentLimitExceeded": "يجب إعادة تعيين عدد كبير جدًا من المهام النشطة. أكمل بعض المهام أو أعد تعيينها قبل حذف حسابك.",
       "aiConfigModelInvalid": "إعداد نموذج الذكاء الاصطناعي غير صالح. تحقق من النماذج المحددة.",
       "aiConfigProviderInvalid": "إعداد مزود الذكاء الاصطناعي غير صالح. تحقق من إعدادات المزود.",
       "aiConfigProviderValidationFailed": "رفض مزود الذكاء الاصطناعي الإعداد. تحقق من مفتاح API والنموذج.",

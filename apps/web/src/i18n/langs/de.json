@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "Der Bestätigungscode ist abgelaufen. Fordern Sie einen neuen Code an.",
       "accountDeletionOtpInvalid": "Ungültiger Bestätigungscode.",
       "accountDeletionSoleOwner": "Übertragen Sie die Inhaberschaft oder löschen Sie Organisationen, deren alleiniger Inhaber Sie sind, bevor Sie Ihr Konto löschen.",
+      "accountDeletionTaskReassignmentInvalid": "Prüfen Sie jede Neuzuweisung einer aktiven Aufgabe. Jede Zielperson muss ein anderes Mitglied der Akte sein und darf der Aufgabe noch nicht zugewiesen sein.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Zu viele aktive Aufgabenzuweisungen müssen geändert werden. Schließen Sie einige Aufgaben ab oder weisen Sie sie neu zu, bevor Sie Ihr Konto löschen.",
       "aiConfigModelInvalid": "Die KI-Modellkonfiguration ist ungültig. Prüfen Sie die ausgewählten Modelle.",
       "aiConfigProviderInvalid": "Die Konfiguration des KI-Anbieters ist ungültig. Prüfen Sie die Anbietereinstellungen.",
       "aiConfigProviderValidationFailed": "Der KI-Anbieter hat die Konfiguration abgelehnt. Prüfen Sie API-Schlüssel und Modell.",

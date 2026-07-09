@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "The verification code has expired. Request a new code.",
       "accountDeletionOtpInvalid": "Invalid verification code.",
       "accountDeletionSoleOwner": "Transfer ownership or delete organizations you solely own before deleting your account.",
+      "accountDeletionTaskReassignmentInvalid": "Review every active task reassignment. Each target must be another member of the task's matter who is not already assigned.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Too many active task assignments must be reassigned. Complete or reassign some tasks before deleting your account.",
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.",
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.",
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.",

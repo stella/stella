@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "Az ellenőrző kód lejárt. Kérjen új kódot.",
       "accountDeletionOtpInvalid": "Érvénytelen ellenőrző kód.",
       "accountDeletionSoleOwner": "A fiók törlése előtt adja át a kizárólagos tulajdonában lévő szervezetek tulajdonjogát, vagy törölje őket.",
+      "accountDeletionTaskReassignmentInvalid": "Ellenőrizze minden aktív feladat átadását. Minden célszemélynek az ügy másik, a feladathoz még nem rendelt tagjának kell lennie.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Túl sok aktív feladatot kell átadni. A fiók törlése előtt fejezzen be vagy adjon át néhány feladatot.",
       "aiConfigModelInvalid": "Az AI-modell beállítása érvénytelen. Ellenőrizze a kiválasztott modelleket.",
       "aiConfigProviderInvalid": "Az AI-szolgáltató beállítása érvénytelen. Ellenőrizze a szolgáltató beállításait.",
       "aiConfigProviderValidationFailed": "Az AI-szolgáltató elutasította a beállítást. Ellenőrizze az API-kulcsot és a modellt.",

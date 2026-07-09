@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "Platnosť overovacieho kódu vypršala. Vyžiadajte si nový kód.",
       "accountDeletionOtpInvalid": "Neplatný overovací kód.",
       "accountDeletionSoleOwner": "Pred odstránením účtu preveďte vlastníctvo organizácií, ktorých ste jediným vlastníkom, alebo ich odstráňte.",
+      "accountDeletionTaskReassignmentInvalid": "Skontrolujte každé preradenie aktívnej úlohy. Každý nový riešiteľ musí byť iným členom spisu, ktorý ešte nie je priradený k úlohe.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Je potrebné preradiť príliš veľa aktívnych úloh. Pred odstránením účtu niektoré úlohy dokončite alebo preraďte.",
       "aiConfigModelInvalid": "Konfigurácia modelu AI je neplatná. Skontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurácia poskytovateľa AI je neplatná. Skontrolujte nastavenia poskytovateľa.",
       "aiConfigProviderValidationFailed": "Poskytovateľ AI konfiguráciu odmietol. Skontrolujte kľúč API a model.",

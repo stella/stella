@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "Kod weryfikacyjny wygasł. Poproś o nowy kod.",
       "accountDeletionOtpInvalid": "Nieprawidłowy kod weryfikacyjny.",
       "accountDeletionSoleOwner": "Przed usunięciem konta przenieś własność organizacji, których jesteś jedynym właścicielem, lub je usuń.",
+      "accountDeletionTaskReassignmentInvalid": "Sprawdź każde przeniesienie aktywnego zadania. Każda wskazana osoba musi być innym członkiem sprawy, który nie jest jeszcze przypisany do zadania.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Zbyt wiele aktywnych zadań wymaga przeniesienia. Przed usunięciem konta ukończ lub przenieś część zadań.",
       "aiConfigModelInvalid": "Konfiguracja modelu AI jest nieprawidłowa. Sprawdź wybrane modele.",
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",

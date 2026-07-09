@@ -127,6 +127,25 @@ describe("toAPIError", () => {
 
   test.each([
     [
+      "account_deletion_task_reassignment_invalid",
+      "Review every active task reassignment. Each target must be another member of the task's matter who is not already assigned.",
+    ],
+    [
+      "account_deletion_task_reassignment_limit_exceeded",
+      "Too many active task assignments must be reassigned. Complete or reassign some tasks before deleting your account.",
+    ],
+  ])("localizes the task reassignment code %s", (code, expected) => {
+    const error = toAPIError({
+      status: 400,
+      value: { code, message: "Raw task reassignment error" },
+    });
+
+    expect(error.message).toBe(expected);
+    expect(error.rawMessage).toBe("Raw task reassignment error");
+  });
+
+  test.each([
+    [
       "account_deletion_sole_owner",
       "Transfer ownership or delete organizations you solely own before deleting your account.",
     ],

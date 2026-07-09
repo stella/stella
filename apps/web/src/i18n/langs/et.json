@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "Kinnituskood on aegunud. Taotlege uus kood.",
       "accountDeletionOtpInvalid": "Kinnituskood ei kehti.",
       "accountDeletionSoleOwner": "Enne konto kustutamist andke ainuomandis organisatsioonide omandiõigus üle või kustutage need.",
+      "accountDeletionTaskReassignmentInvalid": "Kontrollige iga aktiivse ülesande ümbermääramist. Iga uus vastutaja peab olema toimiku teine liige, kes pole veel ülesandele määratud.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Ümber tuleb määrata liiga palju aktiivseid ülesandeid. Enne konto kustutamist lõpetage või määrake ümber mõned ülesanded.",
       "aiConfigModelInvalid": "AI-mudeli seadistus ei kehti. Kontrollige valitud mudeleid.",
       "aiConfigProviderInvalid": "AI-teenusepakkuja seadistus ei kehti. Kontrollige teenusepakkuja seadeid.",
       "aiConfigProviderValidationFailed": "AI-teenusepakkuja lükkas seadistuse tagasi. Kontrollige API-võtit ja mudelit.",

@@ -555,6 +555,7 @@ export const verifyAndDeleteUser = async (
           LIMITS.accountDeletionTaskAssignmentsMax
         ) {
           throw new HandlerError({
+            code: "account_deletion_task_reassignment_limit_exceeded",
             status: 400,
             message:
               "Too many active task assignments to reassign during account deletion.",

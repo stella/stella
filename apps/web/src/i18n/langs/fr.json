@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "Le code de vérification a expiré. Demandez un nouveau code.",
       "accountDeletionOtpInvalid": "Code de vérification invalide.",
       "accountDeletionSoleOwner": "Transférez la propriété ou supprimez les organisations dont vous êtes l’unique propriétaire avant de supprimer votre compte.",
+      "accountDeletionTaskReassignmentInvalid": "Vérifiez chaque réaffectation de tâche active. Chaque destinataire doit être un autre membre du dossier qui n’est pas déjà affecté à la tâche.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Trop de tâches actives doivent être réaffectées. Terminez ou réaffectez certaines tâches avant de supprimer votre compte.",
       "aiConfigModelInvalid": "La configuration du modèle d’IA est invalide. Vérifiez les modèles sélectionnés.",
       "aiConfigProviderInvalid": "La configuration du fournisseur d’IA est invalide. Vérifiez les paramètres du fournisseur.",
       "aiConfigProviderValidationFailed": "Le fournisseur d’IA a refusé la configuration. Vérifiez la clé API et le modèle.",

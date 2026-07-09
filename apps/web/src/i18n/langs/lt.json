@@ -1112,6 +1112,8 @@
       "accountDeletionOtpExpired": "Patvirtinimo kodas nebegalioja. Paprašykite naujo kodo.",
       "accountDeletionOtpInvalid": "Netinkamas patvirtinimo kodas.",
       "accountDeletionSoleOwner": "Prieš ištrindami paskyrą perduokite vien tik jums priklausančių organizacijų nuosavybę arba jas ištrinkite.",
+      "accountDeletionTaskReassignmentInvalid": "Patikrinkite kiekvienos aktyvios užduoties perskyrimą. Kiekvienas gavėjas turi būti kitas bylos narys, dar nepriskirtas užduočiai.",
+      "accountDeletionTaskReassignmentLimitExceeded": "Reikia perskirti per daug aktyvių užduočių. Prieš ištrindami paskyrą užbaikite arba perskirkite dalį užduočių.",
       "aiConfigModelInvalid": "DI modelio konfigūracija netinkama. Patikrinkite pasirinktus modelius.",
       "aiConfigProviderInvalid": "DI teikėjo konfigūracija netinkama. Patikrinkite teikėjo nustatymus.",
       "aiConfigProviderValidationFailed": "DI teikėjas atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
