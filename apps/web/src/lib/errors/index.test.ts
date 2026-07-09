@@ -159,26 +159,25 @@ describe("userErrorMessage", () => {
     ).toBe("You do not have permission to do this.");
   });
 
-  test.each([
-    "entitlement_inactive",
-    "no_entitlement",
-    "usage_limit_exceeded",
-  ])("shows localized structured usage rejection %s", (reason) => {
-    const value = {
-      message: "Raw usage rejection",
-      reason,
-    };
+  test.each(["entitlement_inactive", "no_entitlement", "usage_limit_exceeded"])(
+    "shows localized structured usage rejection %s",
+    (reason) => {
+      const value = {
+        message: "Raw usage rejection",
+        reason,
+      };
 
-    expect(
-      userErrorMessage(
-        {
-          status: 402,
-          value,
-        },
-        "Something went wrong",
-      ),
-    ).toBe("Usage limit reached.");
-  });
+      expect(
+        userErrorMessage(
+          {
+            status: 402,
+            value,
+          },
+          "Something went wrong",
+        ),
+      ).toBe("Usage limit reached.");
+    },
+  );
 
   test("uses fallback for unmapped coded 4xx messages", () => {
     expect(
