@@ -4,7 +4,7 @@ import type { TemplateRecipeDefinition } from "@stll/api/types";
 import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio-react";
 
 import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
-import type { EditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
+import type { TemplateEditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
 
 // The Studio's editable manifest data + live document selection. Lives in a
 // module-level store (not the inspector tab payload, which must be
@@ -12,7 +12,7 @@ import type { EditableField } from "@/routes/_protected.knowledge/-components/te
 // History tab — rendered in the global inspector, a separate React tree — share
 // one source of truth. Only one template is authored at a time.
 
-export type StudioField = EditableField & {
+export type StudioField = TemplateEditableField & {
   aiPrompt: string | undefined;
   /** Person fills a stub; AI rewords it per occurrence to fit the context. */
   aiAdapt: boolean;

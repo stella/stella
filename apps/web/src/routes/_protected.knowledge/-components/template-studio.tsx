@@ -101,7 +101,7 @@ import {
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import { filledByForFieldMeta } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
-import type { EditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
+import type { TemplateEditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
   clausesOptions as clauseLibraryOptions,
   knowledgeKeys,
@@ -390,7 +390,7 @@ type GestureEnrichment =
   | {
       status: "ready";
       label: string | undefined;
-      inputType: EditableField["inputType"] | undefined;
+      inputType: TemplateEditableField["inputType"] | undefined;
       aiPrompt: string | undefined;
       fieldPath: string | undefined;
     };

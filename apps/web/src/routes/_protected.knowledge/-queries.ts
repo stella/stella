@@ -570,8 +570,8 @@ export const skillsOptions = (organizationId: string) =>
     queryFn: async ({ pageParam, signal }) => {
       const response = await api.skills.get({
         query: {
+          ...(pageParam ? { cursor: pageParam } : {}),
           limit: SKILLS_PAGE_SIZE,
-          offset: pageParam,
         },
         fetch: { signal },
       });
@@ -580,8 +580,8 @@ export const skillsOptions = (organizationId: string) =>
       }
       return response.data;
     },
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) => lastPage.nextOffset ?? undefined,
+    initialPageParam: null as string | null,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 

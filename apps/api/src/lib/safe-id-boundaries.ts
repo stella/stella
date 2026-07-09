@@ -99,6 +99,10 @@ export const brandPersistedAuditLogId = (
   auditLogId: string,
 ): SafeId<"auditLog"> => toSafeId<"auditLog">(auditLogId);
 
+export const brandPersistedAgentSkillId = (
+  agentSkillId: string,
+): SafeId<"agentSkill"> => toSafeId<"agentSkill">(agentSkillId);
+
 export const brandPersistedBillingCodeId = (
   billingCodeId: string,
 ): SafeId<"billingCode"> => toSafeId<"billingCode">(billingCodeId);

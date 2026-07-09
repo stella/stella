@@ -208,8 +208,7 @@ function RouteComponent() {
     previewClearTimersRef.current.set(key, nextTimer);
   };
 
-  // Subscribe to workspace SSE events for real-time query
-  // invalidation (replaces the Rivet sync actor for this workspace).
+  // Subscribe to workspace SSE events for real-time query invalidation.
   useWorkspaceSSE(workspaceId, { onEvent: handleWorkspaceSSEEvent });
 
   // Register the matter's entities as `@`-mention sources for any

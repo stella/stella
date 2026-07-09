@@ -1695,22 +1695,7 @@ export default defineConfig({
       files: ["apps/api/src/handlers/**/*.ts"],
       rules: {
         "no-body-ownership-ids/no-body-ownership-ids": "error",
-        "no-offset-pagination/no-offset-pagination": [
-          "error",
-          {
-            // Legacy offset-paginated list endpoints. New list endpoints must
-            // use cursor pagination and return Page<T>.
-            allowedFiles: [
-              "apps/api/src/handlers/billing-codes/read.ts",
-              "apps/api/src/handlers/expenses/read.ts",
-              "apps/api/src/handlers/invoices/read.ts",
-              "apps/api/src/handlers/rates/entries-read.ts",
-              "apps/api/src/handlers/rates/read.ts",
-              "apps/api/src/handlers/skills/list.ts",
-              "apps/api/src/handlers/time-entries/read.ts",
-            ],
-          },
-        ],
+        "no-offset-pagination/no-offset-pagination": "error",
         "no-raw-user-id-schema/no-raw-user-id-schema": "error",
         "no-untyped-updates/no-untyped-updates": "error",
         "security-guards/no-unscoped-user-query": "error",
