@@ -12,6 +12,8 @@ import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
+import { isWebSearchAvailable } from "@/api/handlers/chat/tools/chat-tools";
+import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -22,6 +24,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 /**
  * Unwrap a read helper's Result when it ran on this handler's shared `tx`:
@@ -70,18 +73,18 @@ type ThreadMetadata = {
 
 /**
  * Same shape `GET /chat/threads/:id/messages` returns for its initial page
- * (see `get-messages.ts`), minus `webSearchAvailable`: that field depends on
- * an organizationSettings read this handler does not otherwise make, and
- * adding it here would double this already-inside-a-tx handler's query
- * count for a value that is org-wide (not thread-specific) and self-corrects
- * on the next natural `chatThreadOptions` fetch or thread send. The frontend
- * seed defaults it conservatively (unavailable) until then.
+ * (see `get-messages.ts`), including `webSearchAvailable`: resolved once per
+ * transaction by `loadWebSearchAvailable` below (mirroring
+ * `get-messages.ts`'s widened `organizationSettings` select) and threaded
+ * into every branch that builds this page, so the frontend's
+ * `fileChatThreadOptions` seed never has to guess the org-wide flag.
  */
 type ResolveFileThreadMessagePage = {
   messages: ClientMessage[];
   olderCursor: string | null;
   contextMatterIds: SafeId<"workspace">[];
   lastActivityAt: string | null;
+  webSearchAvailable: boolean;
   webSearchEnabled: boolean;
   context: ThreadContextUsage | null;
 };
@@ -101,14 +104,60 @@ type ResolveFileThreadTxResult =
 /** A thread just inserted in this same tx cannot have messages yet — return
  *  the static empty page instead of querying a thread that was never written
  *  to. */
-const emptyMessagePage = (): ResolveFileThreadMessagePage => ({
+const emptyMessagePage = (
+  webSearchAvailable: boolean,
+): ResolveFileThreadMessagePage => ({
   messages: [],
   olderCursor: null,
   contextMatterIds: [],
   lastActivityAt: null,
+  webSearchAvailable,
   webSearchEnabled: false,
   context: null,
 });
+
+/**
+ * Organization-wide web-search availability: an org key (or the platform
+ * fallback) resolves to a provider, and the org has not disabled the
+ * `web_search` native tool for its practice jurisdictions. Mirrors
+ * `get-messages.ts`'s widened `organizationSettings` select and helper
+ * chain (`getDisabledNativeToolSlugs` +
+ * `resolveWebSearchProvidersFromOrgSettingsRow` + `isWebSearchAvailable`)
+ * exactly, run once per transaction on this handler's already-open `tx` so
+ * it costs one extra round-trip, not a second GET after the thread resolves.
+ */
+const loadWebSearchAvailable = async (
+  tx: Transaction,
+  organizationId: SafeId<"organization">,
+): Promise<boolean> => {
+  const orgSettingsForChat = await tx.query.organizationSettings.findFirst({
+    where: {
+      organizationId: { eq: organizationId },
+    },
+    columns: {
+      practiceJurisdictions: true,
+      nativeToolOverrides: true,
+      webSearchApiKeyEncrypted: true,
+      webSearchApiKeyIv: true,
+      urlFetchApiKeyEncrypted: true,
+      urlFetchApiKeyIv: true,
+    },
+  });
+  const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
+    practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
+    nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
+  });
+  const { webSearchProvider } =
+    await resolveWebSearchProvidersFromOrgSettingsRow(
+      organizationId,
+      orgSettingsForChat,
+    );
+
+  return isWebSearchAvailable({
+    webSearchProviderAvailable: webSearchProvider !== null,
+    disabledNativeToolSlugs,
+  });
+};
 
 type LoadResolvedThreadMessagePageArgs = ThreadMetadata & {
   tx: Transaction;
@@ -116,15 +165,17 @@ type LoadResolvedThreadMessagePageArgs = ThreadMetadata & {
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  webSearchAvailable: boolean;
 };
 
 /**
  * Loads the same initial message page `get-messages.ts` loads (lines 131-162
  * there), reusing its exact helpers on this handler's already-open `tx` so
  * the reads share one `set_config` instead of paying for a second
- * round-trip GET. `webResearch` is hardcoded false in the context-usage
- * estimate for the same reason `webSearchEnabled`'s sibling
- * `webSearchAvailable` is omitted from `ResolveFileThreadMessagePage` above.
+ * round-trip GET. `webSearchAvailable` is resolved once per transaction by
+ * `loadWebSearchAvailable` and passed in so the context-usage estimate's
+ * `webResearch` gate mirrors `get-messages.ts`'s (provider availability AND
+ * the thread's opt-in), not a hardcoded false.
  */
 const loadResolvedThreadMessagePage = async ({
   tx,
@@ -134,6 +185,7 @@ const loadResolvedThreadMessagePage = async ({
   orgAIConfig,
   contextMatterIds,
   usedAnonymization,
+  webSearchAvailable,
   webSearchEnabled,
 }: LoadResolvedThreadMessagePageArgs): Promise<ResolveFileThreadMessagePage> => {
   const page = unwrapTxRead(
@@ -154,7 +206,7 @@ const loadResolvedThreadMessagePage = async ({
   const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
     toolAvailability: {
       templateAuthoring: false,
-      webResearch: false,
+      webResearch: webSearchAvailable && webSearchEnabled,
       folioAgentDocTools: false,
     },
   });
@@ -186,6 +238,7 @@ const loadResolvedThreadMessagePage = async ({
     olderCursor: page.olderCursor,
     contextMatterIds,
     lastActivityAt: page.lastActivityAt,
+    webSearchAvailable,
     webSearchEnabled,
     context,
   };
@@ -292,6 +345,7 @@ const createFileChatThread = async (
   }: FileThreadLookupInput,
   recordAuditEvent: AuditRecorder,
   orgAIConfig: OrgAIConfig | null,
+  webSearchAvailable: boolean,
 ): Promise<ResolveFileThreadTxResult> => {
   const entity = await tx.query.entities.findFirst({
     where: {
@@ -360,6 +414,7 @@ const createFileChatThread = async (
       userId,
       organizationId,
       orgAIConfig,
+      webSearchAvailable,
       contextMatterIds: fieldKeyedThread.contextMatterIds,
       usedAnonymization: fieldKeyedThread.usedAnonymization,
       webSearchEnabled: fieldKeyedThread.webSearchEnabled,
@@ -411,7 +466,7 @@ const createFileChatThread = async (
   return {
     ok: true,
     chatThreadId,
-    messagePage: emptyMessagePage(),
+    messagePage: emptyMessagePage(webSearchAvailable),
   };
 };
 
@@ -435,6 +490,10 @@ const resolveFileThread = createSafeHandler(
     };
 
     const txResult = await safeDb(async (tx) => {
+      const webSearchAvailable = await loadWebSearchAvailable(
+        tx,
+        input.organizationId,
+      );
       const existing = await findFileChatThread(tx, input);
 
       if (existing) {
@@ -444,6 +503,7 @@ const resolveFileThread = createSafeHandler(
           userId: input.userId,
           organizationId: input.organizationId,
           orgAIConfig,
+          webSearchAvailable,
           contextMatterIds: existing.contextMatterIds,
           usedAnonymization: existing.usedAnonymization,
           webSearchEnabled: existing.webSearchEnabled,
@@ -461,6 +521,7 @@ const resolveFileThread = createSafeHandler(
         input,
         recordAuditEvent,
         orgAIConfig,
+        webSearchAvailable,
       );
     });
 
@@ -474,6 +535,10 @@ const resolveFileThread = createSafeHandler(
 
       const recovered = yield* Result.await(
         safeDb(async (tx) => {
+          const webSearchAvailable = await loadWebSearchAvailable(
+            tx,
+            input.organizationId,
+          );
           const found = await findFileChatThread(tx, input);
           if (!found) {
             return null;
@@ -485,6 +550,7 @@ const resolveFileThread = createSafeHandler(
             userId: input.userId,
             organizationId: input.organizationId,
             orgAIConfig,
+            webSearchAvailable,
             contextMatterIds: found.contextMatterIds,
             usedAnonymization: found.usedAnonymization,
             webSearchEnabled: found.webSearchEnabled,

@@ -499,14 +499,15 @@ const fetchGroupedChatThreads = async ({
 
 type FileChatThreadFetchResult = {
   threadId: ChatThreadId;
-  /** The rest mirror `ChatThreadFetched` (minus `webSearchAvailable`, which
-   *  the POST does not compute — see `fileChatThreadOptions`) so the initial
-   *  message page it resolved can seed `chatThreadOptions`' cache directly,
-   *  collapsing the POST -> GET /messages waterfall into one round trip. */
+  /** The rest mirror `ChatThreadFetched` so the initial message page the
+   *  POST resolved (see `resolve-file-thread.ts`) can seed
+   *  `chatThreadOptions`' cache directly, collapsing the POST -> GET
+   *  /messages waterfall into one round trip. */
   messages: PersistedChatMessage[];
   olderCursor: string | null;
   contextMatterIds: string[];
   lastActivityAt: string | null;
+  webSearchAvailable: boolean;
   webSearchEnabled: boolean;
   context: ChatContextUsage | null;
 };
@@ -533,6 +534,7 @@ const fetchFileChatThread = async ({
     olderCursor: response.data.olderCursor,
     contextMatterIds: response.data.contextMatterIds,
     lastActivityAt: response.data.lastActivityAt,
+    webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
     context: response.data.context,
   };
@@ -1310,12 +1312,7 @@ export const fileChatThreadOptions = ({
           olderCursor: fetched.olderCursor,
           contextMatterIds: fetched.contextMatterIds,
           lastActivityAt: fetched.lastActivityAt,
-          // Not returned by the POST — computing it would cost this
-          // handler an extra organizationSettings read for an org-wide
-          // (not thread-specific) value. Conservative default; corrected by
-          // the thread's own next natural chatThreadOptions fetch (15 min
-          // staleTime) or its first message send.
-          webSearchAvailable: false,
+          webSearchAvailable: fetched.webSearchAvailable,
           webSearchEnabled: fetched.webSearchEnabled,
           context: fetched.context,
         },

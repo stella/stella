@@ -1324,7 +1324,7 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6,
-      "POST /v1/chat/workspaces/:id/file-thread": 9,
+      "POST /v1/chat/workspaces/:id/file-thread": 13,
       "POST /v1/workspaces/:id/justifications/query": 6
     }
   },
@@ -1401,7 +1401,7 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6,
-      "POST /v1/chat/workspaces/:id/file-thread": 12,
+      "POST /v1/chat/workspaces/:id/file-thread": 13,
       "POST /v1/workspaces/:id/justifications/query": 6
     }
   },
