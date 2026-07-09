@@ -19,7 +19,7 @@ export default createSafeHandler(
   {
     body: createFromLegalSourceBodySchema,
     permissions: { entity: ["create"] },
-    mcp: { type: "internal", reason: "document_processing" },
+    mcp: { type: "capability", reason: "document_processing" },
   },
   async function* (ctx) {
     const {

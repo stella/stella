@@ -47,7 +47,7 @@ const config = {
   permissions: {
     entity: ["update"],
   },
-  mcp: { type: "internal", reason: "workspace_schema" },
+  mcp: { type: "capability", reason: "workspace_schema" },
   body: t.Object({
     propertyId: tSafeId("property"),
     flag: t.Literal(VERIFIED_COLUMN_FLAG),

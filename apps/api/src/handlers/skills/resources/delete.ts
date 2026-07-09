@@ -21,7 +21,7 @@ const deleteSkillResourceBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "internal", reason: "agent_tool_authoring" },
+  mcp: { type: "capability", reason: "agent_tool_authoring" },
   params: deleteSkillResourceParamsSchema,
   body: deleteSkillResourceBodySchema,
 } satisfies HandlerConfig;

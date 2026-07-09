@@ -28,7 +28,7 @@ const createExpenseBodySchema = t.Object({
 
 const config = {
   permissions: { expense: ["create"] },
-  mcp: { type: "internal", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin" },
   body: createExpenseBodySchema,
 } satisfies HandlerConfig;
 

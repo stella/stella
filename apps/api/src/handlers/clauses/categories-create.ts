@@ -5,7 +5,7 @@ import { createCategoryBodySchema, createCategoryHandler } from "./categories";
 
 const config = {
   permissions: { clause: ["create"] },
-  mcp: { type: "internal", reason: "knowledge_library_admin" },
+  mcp: { type: "capability", reason: "knowledge_library_admin" },
   body: createCategoryBodySchema,
 } satisfies HandlerConfig;
 

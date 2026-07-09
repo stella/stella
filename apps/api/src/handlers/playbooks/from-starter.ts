@@ -17,7 +17,7 @@ const fromStarterBodySchema = t.Object({
 
 const config = {
   permissions: { playbook: ["create"] },
-  mcp: { type: "internal", reason: "knowledge_library_admin" },
+  mcp: { type: "capability", reason: "knowledge_library_admin" },
   body: fromStarterBodySchema,
 } satisfies HandlerConfig;
 

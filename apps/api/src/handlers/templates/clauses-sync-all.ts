@@ -13,7 +13,7 @@ const syncAllTemplateClausesParamsSchema = t.Object({
 
 const config = {
   permissions: { template: ["update"] },
-  mcp: { type: "internal", reason: "template_authoring_ui" },
+  mcp: { type: "capability", reason: "template_authoring_ui" },
   params: syncAllTemplateClausesParamsSchema,
 } satisfies HandlerConfig;
 

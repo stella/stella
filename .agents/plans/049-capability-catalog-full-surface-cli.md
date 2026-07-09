@@ -23,15 +23,22 @@ them wholesale.
 
 ## Design Decisions
 
-- **Capability universe = the safe-handler enumeration.** The coverage guard
-  (`apps/api/scripts/mcp-coverage-guard.ts`) already enumerates every
-  `createSafe*Handler` export and forces an `mcp` disposition on each. A
-  capability is any handler whose disposition is `tool` or `covered`;
-  `internal` stays a waiver. No new annotation burden on handler authors:
-  catalog membership is derived from the disposition that already exists.
-  Capability IDs are derived from handler paths
-  (`handlers/time-entries/create.ts` → `time-entries.create`), stable and
-  collision-checked by a drift guard.
+- **Capability universe = the safe-handler enumeration, with a fourth
+  disposition.** The coverage guard (`apps/api/scripts/mcp-coverage-guard.ts`)
+  already enumerates every `createSafe*Handler` export and forces an `mcp`
+  disposition on each. The existing taxonomy conflated two meanings of
+  `internal`: genuine plumbing (auth/token exchange, presign mechanics, SSE,
+  MCP transport, account deletion, hosted-billing checkout, secrets values)
+  and operations waived from the curated tool list only because of the MCP
+  context budget (template authoring, knowledge-library admin, workspace
+  schema, skills authoring, billing admin, corpus admin, ...). The latter get
+  a new explicit disposition `{ type: "capability", reason }`: invokable
+  through the generic path, deliberately not a curated tool. Catalog
+  membership is `tool | covered | capability`; `internal` shrinks back to
+  permanent waivers only, so the "full control minus permanent waivers"
+  promise is typed, not an export-script allowlist. Capability IDs are
+  derived from handler paths (`handlers/time-entries/create.ts` →
+  `time-entries.create`), stable and collision-checked by a drift guard.
 
 - **Catalog entries are projections of handler configs, not hand-written.**
   Handler configs hold TypeBox schemas (`body`/`params`/`query`), which are

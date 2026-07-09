@@ -31,7 +31,7 @@ import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 const exportCsv = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "internal", reason: "billing_admin" },
+    mcp: { type: "capability", reason: "billing_admin" },
     query: exportCsvQuerySchema,
   } satisfies HandlerConfig,
   async function* ({ query, scopedDb, session, workspaceId }) {
@@ -54,7 +54,7 @@ const exportCsv = createSafeHandler(
 const exportLedes = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "internal", reason: "billing_admin" },
+    mcp: { type: "capability", reason: "billing_admin" },
     query: exportLedesQuerySchema,
   } satisfies HandlerConfig,
   async function* ({ query, scopedDb, session, workspaceId }) {
@@ -77,7 +77,7 @@ const exportLedes = createSafeHandler(
 const exportPdf = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "internal", reason: "billing_admin" },
+    mcp: { type: "capability", reason: "billing_admin" },
     query: exportPdfQuerySchema,
   } satisfies HandlerConfig,
   async function* ({ query, scopedDb, session, workspaceId }) {

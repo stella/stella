@@ -40,7 +40,7 @@ const createInvoiceBodySchema = t.Object({
 const createInvoice = createSafeHandler(
   {
     permissions: { invoice: ["create"] },
-    mcp: { type: "internal", reason: "billing_admin" },
+    mcp: { type: "capability", reason: "billing_admin" },
     body: createInvoiceBodySchema,
   },
   async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {

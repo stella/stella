@@ -87,7 +87,7 @@ ${numbered}`;
 
 const config = {
   permissions: { clause: ["update"] },
-  mcp: { type: "internal", reason: "knowledge_library_admin" },
+  mcp: { type: "capability", reason: "knowledge_library_admin" },
   body: rewriteClauseBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

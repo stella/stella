@@ -57,9 +57,63 @@ import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
 export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
 
 /**
- * Approved, permanent reasons an endpoint is intentionally not exposed as an
- * MCP tool. This is a closed union (no freetext): a new waiver category is a
- * deliberate, reviewed addition here, not an ad-hoc string.
+ * Reasons an endpoint is a real end-to-end capability a user or their agent
+ * would legitimately automate (CRUD on their data/config, triggering/retrying
+ * processing, exports) but is deliberately *not* a curated static MCP tool: the
+ * curated tool list is capped for the agent context budget, so the long tail is
+ * reached through the generic capability path instead. A `capability`
+ * disposition still lands in the exported capability catalog; only `internal`
+ * (below) is fully waived. Closed union (no freetext): a new capability
+ * category is a deliberate, reviewed addition here.
+ *
+ * - `template_authoring_ui`: Template Studio authoring endpoints (create/save/
+ *   version templates, categories, clause slots) beyond the curated template
+ *   tools.
+ * - `workspace_schema`: table/view/property/document-type configuration and
+ *   metadata operations that shape a workspace.
+ * - `knowledge_library_admin`: clause/playbook authoring, versioning, import/
+ *   export, and review operations beyond the curated knowledge tools.
+ * - `agent_tool_authoring`: skill/catalogue CRUD used to author tools; enabled
+ *   skills are also exposed through the dynamic MCP gateway.
+ * - `anonymization_admin`: anonymization term/allowlist configuration.
+ * - `legal_corpus_admin`: corpus ingestion, linking, and analysis operations
+ *   beyond the public legal-search tool contract.
+ * - `workflow_orchestration`: workflow queue/run/progress operations.
+ * - `reporting_export`: report and table export generation/readback.
+ * - `contact_directory`: organization contact directory list/search.
+ * - `billing_admin`: billing/invoice/expense/rate-card/time-entry CRUD and
+ *   invoice generation (checkout and payment-provider plumbing stays
+ *   `internal` under `hosted_billing`).
+ * - `document_processing`: document upload/download/version/translate/duplicate/
+ *   restore/compare and processing triggers. UI-only viewer/facet/grouping
+ *   reads and bounding-box generation stay `internal` under the same reason.
+ * - `assistant_chat`: chat thread CRUD (list/read/update/delete threads and
+ *   their messages). Chat generation/streaming runtime and per-surface thread
+ *   plumbing stay `internal` under the same reason.
+ * - `chat_thread_ui`: chat-thread rename. Breadcrumb title lookup stays
+ *   `internal` under the same reason.
+ */
+export type McpCapabilityReason =
+  | "template_authoring_ui"
+  | "workspace_schema"
+  | "knowledge_library_admin"
+  | "agent_tool_authoring"
+  | "anonymization_admin"
+  | "legal_corpus_admin"
+  | "workflow_orchestration"
+  | "reporting_export"
+  | "contact_directory"
+  | "billing_admin"
+  | "document_processing"
+  | "assistant_chat"
+  | "chat_thread_ui";
+
+/**
+ * Approved, permanent reasons an endpoint is intentionally never reachable from
+ * an agent surface at all: transport/plumbing/UI mechanics and the approved
+ * permanent exclusions. Unlike `McpCapabilityReason`, these stay out of the
+ * capability catalog entirely. Closed union (no freetext): a new waiver category
+ * is a deliberate, reviewed addition here.
  *
  * - `auth_plumbing`: better-auth / sign-in / verification / session routes.
  * - `upload_mechanics`: presign / finalize / abort / preflight upload steps.
@@ -69,12 +123,11 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  * - `webhook`: inbound webhooks from external providers.
  * - `dev_only`: routes mounted only in development.
  * - `account_lifecycle`: account deletion / lifecycle flows.
- * - `hosted_billing`: hosted-billing setup and management surfaces.
+ * - `hosted_billing`: hosted-billing checkout / setup / management plumbing.
  * - `mcp_transport`: the MCP transport / connector routes themselves.
  * - `health_infra`: health and smoke endpoints.
- * - `chat_thread_ui`: chat-thread management endpoints that back UI chrome
- *   (breadcrumb title lookup, inline rename); agents reach threads through the
- *   chat surface, not by managing thread metadata directly.
+ * - `chat_thread_ui`: chat-thread UI chrome reads (breadcrumb title lookup);
+ *   the rename operation is a `capability` under the same reason.
  * - `provider_secret`: writes/probes of provider API keys and secrets (AI
  *   provider config, DeepL key, web-search key, provider validation). Secret
  *   material must never transit an agent surface; these stay dashboard-only.
@@ -82,36 +135,19 @@ export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
  *   (which backends can be deployed), an operator concern, not an agent action.
  * - `ui_navigation_state`: per-user UI navigation state (active workspace,
  *   navigation tree) that only makes sense for the interactive web client.
- * - `assistant_chat`: the built-in assistant chat plumbing (threads, messages,
- *   recaps, suggested prompts). An MCP client drives its own agent, so it never
- *   reaches into stella's own chat threads.
+ * - `assistant_chat`: chat generation/streaming runtime and per-surface thread
+ *   plumbing (suggested prompts, recaps, template/file thread resolution). The
+ *   thread-CRUD operations are `capability` under the same reason.
  * - `url_preview`: server-side external-URL unfurl/preview mechanics.
  * - `public_indexing`: public listing, facet, and sitemap endpoints used for
  *   SEO/UI discovery; agents use the curated public search/read tools instead.
- * - `legal_corpus_admin`: corpus ingestion, linking, and analysis support
- *   surfaces that are not part of the public legal-search tool contract.
  * - `search_ui`: search refinement/facet/summary affordances for the web UI and
  *   in-app chat; MCP clients use `search` / `search_across_matters`.
- * - `billing_admin`: billing configuration and invoice/expense workflows beyond
- *   the curated time-entry, invoice-read, and rate-resolution tools.
- * - `workspace_schema`: table/view/property/document-type configuration and
- *   metadata endpoints that shape the interactive workspace UI.
- * - `document_processing`: upload/download, translation, extraction, versioning,
- *   and bulk document-processing jobs outside the curated document CRUD tools.
- * - `template_authoring_ui`: Template Studio auxiliary endpoints beyond the
- *   curated list/fill/save template tools.
- * - `knowledge_library_admin`: clause/playbook authoring, version, import/export,
- *   and review support endpoints beyond the curated knowledge tools.
- * - `agent_tool_authoring`: skill/catalogue CRUD used to author tools; enabled
- *   skills are exposed through the dynamic MCP gateway instead.
- * - `workflow_orchestration`: workflow queue/run/progress support for the
- *   browser workspace experience.
- * - `anonymization_admin`: anonymization term/allowlist configuration surfaces.
+ * - `document_processing`: UI-only viewer/facet/grouping reads and bounding-box
+ *   generation; the real document operations are `capability` under the same
+ *   reason.
  * - `native_tool_ui`: native-tool helper endpoints whose agent surface is a
  *   chat/native integration rather than the static MCP registry.
- * - `reporting_export`: report and table export generation/readback endpoints.
- * - `contact_directory`: organization contact directory list/search endpoints;
- *   MCP currently exposes contact detail/lookup and matter contact context.
  */
 export type McpInternalReason =
   | "auth_plumbing"
@@ -131,19 +167,9 @@ export type McpInternalReason =
   | "assistant_chat"
   | "url_preview"
   | "public_indexing"
-  | "legal_corpus_admin"
   | "search_ui"
-  | "billing_admin"
-  | "workspace_schema"
   | "document_processing"
-  | "template_authoring_ui"
-  | "knowledge_library_admin"
-  | "agent_tool_authoring"
-  | "workflow_orchestration"
-  | "anonymization_admin"
-  | "native_tool_ui"
-  | "reporting_export"
-  | "contact_directory";
+  | "native_tool_ui";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler
@@ -153,12 +179,20 @@ export type McpInternalReason =
  * - `tool`: this endpoint is the backing implementation of tool `name`.
  * - `covered`: the capability is reachable through tool `by`, via a different
  *   code path (e.g. a shared handler the tool re-uses).
- * - `internal`: intentionally never an MCP tool; `reason` is an approved,
- *   closed-union waiver category.
+ * - `capability`: a real end-to-end operation a user or their agent legitimately
+ *   automates (CRUD on their data/config, triggering/retrying processing,
+ *   exports), deliberately not a curated static MCP tool because the tool list
+ *   is capped for the agent context budget. Reached through the generic
+ *   capability path and included in the exported capability catalog; `reason` is
+ *   an approved, closed-union category.
+ * - `internal`: intentionally never reachable from an agent surface; `reason` is
+ *   an approved, closed-union permanent waiver (transport/plumbing/UI mechanics
+ *   and the approved permanent exclusions).
  */
 export type McpExposure =
   | { type: "tool"; name: McpToolName }
   | { type: "covered"; by: McpToolName }
+  | { type: "capability"; reason: McpCapabilityReason }
   | { type: "internal"; reason: McpInternalReason };
 
 /**

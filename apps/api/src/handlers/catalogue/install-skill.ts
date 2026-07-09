@@ -34,7 +34,7 @@ const installSkillBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "internal", reason: "agent_tool_authoring" },
+  mcp: { type: "capability", reason: "agent_tool_authoring" },
   body: installSkillBody,
 } satisfies HandlerConfig;
 

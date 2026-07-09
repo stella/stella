@@ -25,7 +25,7 @@ const listTemplateVersionsQuerySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "internal", reason: "template_authoring_ui" },
+  mcp: { type: "capability", reason: "template_authoring_ui" },
   params: listTemplateVersionsParamsSchema,
   query: listTemplateVersionsQuerySchema,
 } satisfies HandlerConfig;

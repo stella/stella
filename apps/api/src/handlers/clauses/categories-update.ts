@@ -12,7 +12,7 @@ const updateClauseCategoryParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["update"] },
-  mcp: { type: "internal", reason: "knowledge_library_admin" },
+  mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: updateClauseCategoryParamsSchema,
   body: updateCategoryBodySchema,
 } satisfies HandlerConfig;

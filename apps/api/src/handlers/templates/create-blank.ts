@@ -63,7 +63,7 @@ const config = {
   permissions: { template: ["create"] },
   // Not reachable through save_template (which requires a DOCX on create);
   // blank-template creation stays a tracked gap.
-  mcp: { type: "internal", reason: "template_authoring_ui" },
+  mcp: { type: "capability", reason: "template_authoring_ui" },
   body: createBlankTemplateBodySchema,
 } satisfies HandlerConfig;
 

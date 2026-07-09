@@ -18,7 +18,7 @@ const paramsSchema = workspaceParams({
 
 const config = {
   permissions: { entity: ["update"] },
-  mcp: { type: "internal", reason: "document_processing" },
+  mcp: { type: "capability", reason: "document_processing" },
   params: paramsSchema,
 } satisfies HandlerConfig;
 
