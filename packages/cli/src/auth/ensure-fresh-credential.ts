@@ -58,7 +58,7 @@ export const ensureFreshCredential = async (
     clientId: input.credential.clientId,
     metadata: input.metadata,
     refreshToken: input.credential.refreshToken,
-    resource: getMcpResourceUrl(input.credential.serverUrl),
+    resource: getMcpResourceUrl(input.metadata),
   });
   if (Result.isError(refreshed)) {
     return Result.err(refreshed.error);

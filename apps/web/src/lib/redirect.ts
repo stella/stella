@@ -22,6 +22,9 @@ const isSafeRedirectPath = (s: string) => /^\/(?![/\\])/u.test(s);
 
 const DEFAULT_REDIRECT: FileRouteTypes["to"] = "/";
 
+export const normalizeRedirectTo = (value: string): string =>
+  isSafeRedirectPath(value) ? value : DEFAULT_REDIRECT;
+
 /**
  * Valibot schema for redirectTo search param.
  * Validates that the URL is safe (prevents open-redirect attacks)
@@ -30,5 +33,5 @@ const DEFAULT_REDIRECT: FileRouteTypes["to"] = "/";
  */
 export const redirectToSchema = v.pipe(
   v.optional(v.string(), DEFAULT_REDIRECT),
-  v.transform((s) => (isSafeRedirectPath(s) ? s : DEFAULT_REDIRECT)),
+  v.transform(normalizeRedirectTo),
 );

@@ -12,11 +12,14 @@
 // generator). The snapshot is committed, so registry drift shows up as a diff.
 
 import { listMcpResources } from "@/api/mcp/resources";
+import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import type { McpCliToolAnnotation } from "@/api/mcp/tool-types";
 
 // The four wire fields exposed by `tools/list` (scope/feature/access/anonymized
 // are server-internal and never leave the server).
 type RegistryToolListing = {
+  cli: McpCliToolAnnotation;
   name: string;
   description: string;
   inputSchema: unknown;
@@ -26,6 +29,7 @@ type RegistryToolListing = {
 const listings: RegistryToolListing[] = [];
 for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
   listings.push({
+    cli: DEFAULT_MCP_CLI_ANNOTATIONS[tool.name],
     name: tool.name,
     description: tool.description,
     inputSchema: tool.inputSchema,

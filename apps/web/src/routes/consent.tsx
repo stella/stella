@@ -1,7 +1,12 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  redirect,
+  useLocation,
+} from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -19,8 +24,10 @@ import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
 import {
+  getOauthHashFragment,
   getOauthClientDisplayName,
   getOauthRedirectUrl,
+  getSignedOauthQueryFromHash,
 } from "@/lib/oauth-provider";
 import type { OAuthScopeDisplayEntry } from "@/lib/oauth-scopes";
 import {
@@ -41,8 +48,16 @@ export const Route = createFileRoute("/consent")({
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location }) => {
     const authContext = await loadAuthContext(context.queryClient);
+    const bridgedQuery = getSignedOauthQueryFromHash(location.hash);
 
     if (!authContext.session) {
+      if (bridgedQuery) {
+        throw redirect({
+          href: `/auth#${getOauthHashFragment(bridgedQuery)}`,
+          replace: true,
+        });
+      }
+
       throw redirect({
         to: "/auth",
         search: {
@@ -62,12 +77,18 @@ export const Route = createFileRoute("/consent")({
 
 function ConsentPage() {
   const t = useTranslations();
-  const clientId = Route.useSearch({
+  const bridgedQuery = useLocation({
+    select: (location) => getSignedOauthQueryFromHash(location.hash),
+  });
+  const bridgedParams = bridgedQuery ? new URLSearchParams(bridgedQuery) : null;
+  const searchClientId = Route.useSearch({
     select: (search) => search.client_id ?? null,
   });
-  const scope = Route.useSearch({
+  const searchScope = Route.useSearch({
     select: (search) => search.scope,
   });
+  const clientId = searchClientId ?? bridgedParams?.get("client_id") ?? null;
+  const scope = searchScope ?? bridgedParams?.get("scope") ?? undefined;
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.session?.activeOrganizationId ?? null,
   });

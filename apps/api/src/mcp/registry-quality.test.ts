@@ -4,6 +4,7 @@ import { toMcpTools } from "@/api/mcp/gateway/list-tools";
 import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
+  DEFAULT_MCP_TOOL_SETS,
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
 
@@ -196,6 +197,22 @@ describe("MCP registry access coherence", () => {
         ).toBe(false);
       }
     }
+  });
+});
+
+describe("MCP static tool-set coherence", () => {
+  test("each static tool set binds exactly one handler per advertised definition", () => {
+    for (const toolSet of DEFAULT_MCP_TOOL_SETS) {
+      const definitionNames = toolSet.definitions.map((tool) => tool.name);
+      const handlerNames = Object.keys(toolSet.handlers);
+
+      expect(handlerNames.sort()).toEqual(definitionNames.sort());
+    }
+  });
+
+  test("static tool names are unique across tool sets", () => {
+    const names = DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => tool.name);
+    expect(new Set(names).size).toBe(names.length);
   });
 });
 

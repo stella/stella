@@ -8,6 +8,8 @@
 // `ToolScope` in `../route-types.ts`; keep both sides in sync by hand until a
 // shared package exists.
 
+import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
+
 /** Mirrors `apps/api/src/mcp/constants.ts`'s `MCP_HTTP_PATH`. */
 const MCP_HTTP_PATH = "/mcp";
 
@@ -18,8 +20,9 @@ const MCP_HTTP_PATH = "/mcp";
  * `@better-auth/oauth-provider`); without it the server returns an opaque
  * token that the CLI cannot decode for `stella auth whoami`.
  */
-export const getMcpResourceUrl = (serverUrl: string): string =>
-  new URL(MCP_HTTP_PATH, serverUrl).toString();
+export const getMcpResourceUrl = (
+  metadata: Pick<AuthorizationServerMetadata, "issuer">,
+): string => new URL(MCP_HTTP_PATH, metadata.issuer).toString();
 
 /**
  * Candidate RFC 8414 authorization-server-metadata paths, tried in order.

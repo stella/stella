@@ -89,6 +89,7 @@ const buildAuthorizeUrl = (input: {
   url.searchParams.set("redirect_uri", input.redirectUri);
   url.searchParams.set("code_challenge", input.codeChallenge);
   url.searchParams.set("code_challenge_method", "S256");
+  url.searchParams.set("prompt", "consent");
   url.searchParams.set("state", input.state);
   if (input.scopes.length > 0) {
     url.searchParams.set("scope", input.scopes.join(" "));
@@ -258,7 +259,7 @@ export const login = async (
         codeVerifier,
         metadata,
         redirectUri: callback.redirectUri,
-        resource: getMcpResourceUrl(serverUrl),
+        resource: getMcpResourceUrl(metadata),
       }),
     );
 

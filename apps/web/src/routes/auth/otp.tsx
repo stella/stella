@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { OTPPanel } from "@/components/auth/otp-panel";
@@ -28,6 +28,7 @@ export const Route = createFileRoute("/auth/otp")({
 });
 
 function OTP() {
+  const navigate = useNavigate();
   const { email, redirectTo } = Route.useSearch({
     select: (s) => ({ email: s.email, redirectTo: s.redirectTo }),
   });
@@ -37,6 +38,7 @@ function OTP() {
     <OTPPanel
       email={email}
       initialOtp={devOtp ?? undefined}
+      onVerified={() => navigate({ href: redirectTo, replace: true })}
       redirectTo={redirectTo}
     />
   );

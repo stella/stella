@@ -23,7 +23,7 @@ export type AuthorizationServerMetadata = {
     | undefined;
 };
 
-const authorizationServerMetadataSchema = v.strictObject({
+const authorizationServerMetadataSchema = v.object({
   issuer: v.pipe(v.string(), v.url()),
   authorization_endpoint: v.pipe(v.string(), v.url()),
   token_endpoint: v.pipe(v.string(), v.url()),

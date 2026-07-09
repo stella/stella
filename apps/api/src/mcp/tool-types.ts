@@ -106,6 +106,56 @@ export type McpToolDefinition = {
   scope: ToolScope;
 };
 
+export type McpCliToolScope =
+  | "read"
+  | "matters_write"
+  | "documents_write"
+  | "knowledge_write"
+  | "search"
+  | "onboarding"
+  | "templates"
+  | "billing_write"
+  | "admin_read"
+  | "admin_write"
+  | "feedback";
+
+export type McpCliDiscriminatorSubcommand = {
+  command: string;
+  destructive?: true;
+  include?: readonly string[];
+  required?: readonly string[];
+};
+
+export type McpCliToolAnnotation = {
+  command: readonly string[];
+  excluded?: true;
+  scope?: McpCliToolScope;
+  itemsKey?: string;
+  singleReadWhen?: string;
+  columns?: readonly string[];
+  windowedText?: true;
+  paginationless?: true;
+  inputOnly?: readonly string[];
+  discriminator?: {
+    prop: string;
+    subcommands: Record<string, McpCliDiscriminatorSubcommand>;
+  };
+  flagRename?: Record<string, string>;
+};
+
+export type McpCliToolAnnotationMap<
+  TDefinitions extends readonly McpToolDefinition[],
+> = Readonly<Record<TDefinitions[number]["name"], McpCliToolAnnotation>>;
+
+export const defineMcpCliToolAnnotations = <
+  const TDefinitions extends readonly McpToolDefinition[],
+  const TAnnotations extends McpCliToolAnnotationMap<TDefinitions>,
+>(
+  _definitions: TDefinitions,
+  annotations: TAnnotations &
+    Record<Exclude<keyof TAnnotations, TDefinitions[number]["name"]>, never>,
+): McpCliToolAnnotationMap<TDefinitions> => annotations;
+
 /**
  * Compat search hit before egress. Carries `workspaceId` so the egress pipeline
  * can group per-workspace anonymization; the field is stripped before the
@@ -203,6 +253,30 @@ export type McpToolHandler = ({
   args: Record<string, unknown>;
   context: McpRequestContext;
 }) => Promise<McpToolResponse>;
+
+export type McpToolHandlerMap<
+  TDefinitions extends readonly McpToolDefinition[],
+> = Readonly<Record<TDefinitions[number]["name"], McpToolHandler>>;
+
+export type McpToolSet<TDefinitions extends readonly McpToolDefinition[]> = {
+  readonly definitions: TDefinitions;
+  readonly handlers: McpToolHandlerMap<TDefinitions>;
+};
+
+/**
+ * Binds advertised tool definitions to their dispatch handlers in one typed
+ * value. Adding, removing, or renaming a static tool now forces the handler map
+ * to change in the same module; the central registry derives both surfaces from
+ * these sets instead of maintaining a second name list.
+ */
+export const defineMcpToolSet = <
+  const TDefinitions extends readonly McpToolDefinition[],
+  const THandlers extends McpToolHandlerMap<TDefinitions>,
+>(
+  definitions: TDefinitions,
+  handlers: THandlers &
+    Record<Exclude<keyof THandlers, TDefinitions[number]["name"]>, never>,
+): McpToolSet<TDefinitions> => ({ definitions, handlers });
 
 /**
  * Foundation for expressing one anonymizable text field as code instead of a

@@ -50,6 +50,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
   confirmProp,
@@ -1887,3 +1888,8 @@ export const DOCUMENT_TOOL_HANDLERS = {
   save_document: handleSaveDocumentTool,
   set_field_value: handleSetFieldValueTool,
 } satisfies Record<DocumentToolName, McpToolHandler>;
+
+export const DOCUMENT_TOOL_SET = defineMcpToolSet(
+  DOCUMENT_TOOL_DEFINITIONS,
+  DOCUMENT_TOOL_HANDLERS,
+);
