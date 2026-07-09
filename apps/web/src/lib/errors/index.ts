@@ -151,6 +151,9 @@ const STATUS_TO_KEY: Readonly<Record<number, TranslationKey | undefined>> = {
 const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
   Object.hasOwn(CODE_ERROR_KEYS, code);
 
+const isDisplayableAPIError = (error: APIError): boolean =>
+  typeof error.code === "string" && isKnownErrorCode(error.code);
+
 const translate = (key: TranslationKey): string => getTranslator()(key);
 
 type LocalizeAPIErrorInput = {
@@ -203,7 +206,7 @@ export const userErrorMessage = (
     return fallback;
   }
   const apiError = toAPIError(error);
-  return apiError.code ? apiError.message : fallback;
+  return isDisplayableAPIError(apiError) ? apiError.message : fallback;
 };
 
 /** User-safe error description for thrown errors (e.g. from
@@ -220,7 +223,7 @@ export const userErrorFromThrown = (
     if (error.status >= SERVER_ERROR_THRESHOLD) {
       return fallback;
     }
-    return error.code ? error.message : fallback;
+    return isDisplayableAPIError(error) ? error.message : fallback;
   }
   return fallback;
 };

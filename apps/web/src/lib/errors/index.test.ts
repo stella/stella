@@ -118,12 +118,40 @@ describe("userErrorMessage", () => {
     ).toBe("You do not have permission to do this.");
   });
 
+  test("uses fallback for unmapped coded 4xx messages", () => {
+    expect(
+      userErrorMessage(
+        {
+          status: 409,
+          value: {
+            code: "desktop_edit_session_taken_over",
+            message: "Desktop edit session was taken over.",
+          },
+        },
+        "Something went wrong",
+      ),
+    ).toBe("Something went wrong");
+  });
+
   test("uses fallback for thrown uncoded API errors", () => {
     expect(
       userErrorFromThrown(
         new APIError({
           message: "Raw message",
           status: 400,
+        }),
+        "Something went wrong",
+      ),
+    ).toBe("Something went wrong");
+  });
+
+  test("uses fallback for thrown unmapped API error codes", () => {
+    expect(
+      userErrorFromThrown(
+        new APIError({
+          code: "desktop_edit_session_taken_over",
+          message: "The request conflicts with the current state.",
+          status: 409,
         }),
         "Something went wrong",
       ),
