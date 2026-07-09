@@ -111,6 +111,11 @@ const API_ERROR_CODE = {
   validation: "validation",
 } as const;
 
+const RAW_INTERNAL_TOOL_ERROR_CODE = {
+  legalSourceStructuralRepairRequired:
+    "legal_source_structural_repair_required",
+} as const;
+
 const STATUS_ERROR_KEYS = {
   badRequest: "errors.api.badRequest",
   conflict: "errors.api.conflict",
@@ -156,6 +161,17 @@ const isDisplayableAPIError = (error: APIError): boolean =>
   typeof error.code === "string" && isKnownErrorCode(error.code);
 
 const translate = (key: TranslationKey): string => getTranslator()(key);
+
+export const internalToolErrorMessage = (error: APIError): string => {
+  if (
+    error.code ===
+      RAW_INTERNAL_TOOL_ERROR_CODE.legalSourceStructuralRepairRequired &&
+    typeof error.rawMessage === "string"
+  ) {
+    return error.rawMessage;
+  }
+  return error.message;
+};
 
 type LocalizeAPIErrorInput = {
   code?: string | undefined;

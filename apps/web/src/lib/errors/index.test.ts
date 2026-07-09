@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   APIError,
   AuthClientError,
+  internalToolErrorMessage,
   isMemberError,
   isUnauthorizedError,
   toAPIError,
@@ -223,6 +224,36 @@ describe("userErrorMessage", () => {
         "Something went wrong",
       ),
     ).toBe("You are not a member of this organization.");
+  });
+});
+
+describe("internalToolErrorMessage", () => {
+  test("preserves allowlisted structural repair diagnostics", () => {
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: "legal_source_structural_repair_required",
+        message: "Structural repair required: section heading is missing",
+      },
+    });
+
+    expect(internalToolErrorMessage(error)).toBe(
+      "Structural repair required: section heading is missing",
+    );
+  });
+
+  test("does not expose raw messages for other errors", () => {
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: "unexpected_internal_detail",
+        message: "Sensitive raw detail",
+      },
+    });
+
+    expect(internalToolErrorMessage(error)).toBe(
+      "Please check the request and try again.",
+    );
   });
 });
 
