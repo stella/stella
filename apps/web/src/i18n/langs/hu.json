@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
+      "legalSourceEntityLimitReached": "Ez az ügy elérte az entitások korlátját, ezért a dokumentum nem hozható létre.",
+      "legalSourceFilePropertyMissing": "Ebből az ügyből hiányzik egy fájltulajdonság, ezért a dokumentum nem hozható létre.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
       "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
       "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",

@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Se ha agotado la cuota de caracteres de DeepL de esta organización.",
       "forbidden": "No tienes permiso para hacer esto.",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
+      "legalSourceEntityLimitReached": "Este asunto ha alcanzado el límite de entidades, por lo que no se pudo crear el documento.",
+      "legalSourceFilePropertyMissing": "A este asunto le falta una propiedad de archivo, por lo que no se pudo crear el documento.",
       "notOrganizationMember": "No eres miembro de esta organización.",
       "providerKeyRejected": "El proveedor rechazó la clave de API.",
       "providerRateLimited": "Se alcanzó el límite de solicitudes del proveedor. Inténtalo de nuevo en breve.",

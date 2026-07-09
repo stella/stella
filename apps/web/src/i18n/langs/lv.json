@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
+      "legalSourceEntityLimitReached": "Šajā lietā ir sasniegts entītiju ierobežojums, tāpēc dokumentu nevarēja izveidot.",
+      "legalSourceFilePropertyMissing": "Šajā lietā trūkst faila rekvizīta, tāpēc dokumentu nevarēja izveidot.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
       "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
       "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",

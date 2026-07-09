@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "internalServerError": "Niečo sa pokazilo. Skúste to prosím znova.",
+      "legalSourceEntityLimitReached": "Tento spis dosiahol limit entít, preto dokument nebolo možné vytvoriť.",
+      "legalSourceFilePropertyMissing": "V tomto spise chýba vlastnosť súboru, preto dokument nebolo možné vytvoriť.",
       "notOrganizationMember": "Nie ste členom tejto organizácie.",
       "providerKeyRejected": "Poskytovateľ odmietol kľúč API.",
       "providerRateLimited": "Bol dosiahnutý limit požiadaviek poskytovateľa. Skúste to čoskoro znova.",

@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Le quota de caractères DeepL de cette organisation est épuisé.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
+      "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’entités, le document n’a donc pas pu être créé.",
+      "legalSourceFilePropertyMissing": "Il manque une propriété de fichier dans ce dossier, le document n’a donc pas pu être créé.",
       "notOrganizationMember": "Vous n’êtes pas membre de cette organisation.",
       "providerKeyRejected": "Le fournisseur a refusé la clé API.",
       "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",

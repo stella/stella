@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
+      "legalSourceEntityLimitReached": "Ta sprawa osiągnęła limit encji, dlatego nie można było utworzyć dokumentu.",
+      "legalSourceFilePropertyMissing": "W tej sprawie brakuje właściwości pliku, dlatego nie można było utworzyć dokumentu.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
       "providerKeyRejected": "Dostawca odrzucił klucz API.",
       "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",

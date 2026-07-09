@@ -143,6 +143,10 @@ const CODE_ERROR_KEYS = {
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   forbidden: "errors.apiCodes.forbidden",
   internal_server_error: "errors.apiCodes.internalServerError",
+  legal_source_entity_limit_reached:
+    "errors.apiCodes.legalSourceEntityLimitReached",
+  legal_source_file_property_missing:
+    "errors.apiCodes.legalSourceFilePropertyMissing",
   provider_key_rejected: "errors.apiCodes.providerKeyRejected",
   provider_rate_limited: "errors.apiCodes.providerRateLimited",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",

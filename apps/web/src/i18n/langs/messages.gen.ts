@@ -1122,6 +1122,8 @@ type Messages = {
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "forbidden": "You do not have permission to do this.";
       "internalServerError": "The server could not complete the action. Please try again.";
+      "legalSourceEntityLimitReached": "This matter has reached the entity limit, so the document could not be created.";
+      "legalSourceFilePropertyMissing": "This matter is missing a file property, so the document could not be created.";
       "notOrganizationMember": "You are not a member of this organization.";
       "providerKeyRejected": "The provider rejected the API key.";
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";

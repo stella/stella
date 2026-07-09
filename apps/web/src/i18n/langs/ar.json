@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
+      "legalSourceEntityLimitReached": "وصل هذا الملف إلى الحد الأقصى للكيانات، لذا تعذر إنشاء المستند.",
+      "legalSourceFilePropertyMissing": "يفتقر هذا الملف إلى خاصية ملف، لذا تعذر إنشاء المستند.",
       "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
       "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
       "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",

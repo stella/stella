@@ -91,6 +91,25 @@ describe("toAPIError", () => {
   });
 
   test.each([
+    [
+      "legal_source_entity_limit_reached",
+      "This matter has reached the entity limit, so the document could not be created.",
+    ],
+    [
+      "legal_source_file_property_missing",
+      "This matter is missing a file property, so the document could not be created.",
+    ],
+  ])("localizes the legal-source creation code %s", (code, expected) => {
+    const error = toAPIError({
+      status: 422,
+      value: { code, message: "Raw legal-source creation error" },
+    });
+
+    expect(error.message).toBe(expected);
+    expect(error.rawMessage).toBe("Raw legal-source creation error");
+  });
+
+  test.each([
     ["account_deletion_otp_invalid", "Invalid verification code."],
     [
       "account_deletion_otp_expired",

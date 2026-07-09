@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Šios organizacijos „DeepL“ simbolių kvota išnaudota.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
+      "legalSourceEntityLimitReached": "Šioje byloje pasiektas objektų limitas, todėl dokumento sukurti nepavyko.",
+      "legalSourceFilePropertyMissing": "Šioje byloje trūksta failo ypatybės, todėl dokumento sukurti nepavyko.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
       "providerKeyRejected": "Teikėjas atmetė API raktą.",
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",

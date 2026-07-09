@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Limit znaků DeepL pro tuto organizaci byl vyčerpán.",
       "forbidden": "K této akci nemáte oprávnění.",
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
+      "legalSourceEntityLimitReached": "Tato věc dosáhla limitu entit, takže dokument nelze vytvořit.",
+      "legalSourceFilePropertyMissing": "V této věci chybí vlastnost souboru, takže dokument nelze vytvořit.",
       "notOrganizationMember": "Nejste členem této organizace.",
       "providerKeyRejected": "Poskytovatel odmítl klíč API.",
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",

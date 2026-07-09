@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
+      "legalSourceEntityLimitReached": "See toimik on jõudnud olemite piiranguni, mistõttu dokumenti ei saanud luua.",
+      "legalSourceFilePropertyMissing": "Sellel asjal puudub faili atribuut, mistõttu dokumenti ei saanud luua.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
       "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",

@@ -104,12 +104,14 @@ const toHandlerError = (
   switch (error._tag) {
     case "EntityLimitError":
       return new HandlerError({
+        code: "legal_source_entity_limit_reached",
         status: 409,
         message:
           "This matter has reached the entity limit, so the document could not be created.",
       });
     case "MissingFilePropertyError":
       return new HandlerError({
+        code: "legal_source_file_property_missing",
         status: 422,
         message:
           "This matter is missing a file property, so the document could not be created.",

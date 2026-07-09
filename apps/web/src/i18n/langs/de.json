@@ -1119,6 +1119,8 @@
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "legalSourceEntityLimitReached": "Diese Angelegenheit hat das Entitätenlimit erreicht, daher konnte das Dokument nicht erstellt werden.",
+      "legalSourceFilePropertyMissing": "In dieser Angelegenheit fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
