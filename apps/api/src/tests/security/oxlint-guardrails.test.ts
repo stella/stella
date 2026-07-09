@@ -19,15 +19,20 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain('return "process.env[...]"');
   });
 
-  test("JSX literal rule remains scoped to files using translation markers", () => {
+  test("JSX literal rule is not scoped to files using translation markers", () => {
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-untranslated-jsx-literal.ts",
     );
+    const oxlintConfig = readRootFixture("oxlint.config.ts");
 
     expect(pluginSource).toContain("options.requireTranslationUsage === true");
     expect(pluginSource).toContain("sourceText.includes(marker)");
     expect(pluginSource).toContain("useTranslations");
     expect(pluginSource).toContain("TranslationKey");
+    expect(oxlintConfig).toContain(
+      '"no-untranslated-jsx-literal/no-untranslated-jsx-literal": [',
+    );
+    expect(oxlintConfig).not.toContain("requireTranslationUsage: true");
   });
 
   test("require-contained-handler excludes onBlur and resolves non-identifier refs", () => {

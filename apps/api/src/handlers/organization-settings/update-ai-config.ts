@@ -59,6 +59,12 @@ const config = {
   body: updateAIConfigBody,
 } satisfies HandlerConfig;
 
+const AI_CONFIG_ERROR_CODE = {
+  modelInvalid: "ai_config_model_invalid",
+  providerInvalid: "ai_config_provider_invalid",
+  providerValidationFailed: "ai_config_provider_validation_failed",
+} as const;
+
 /**
  * Update the org's AI config (BYOK).
  *
@@ -108,7 +114,11 @@ const updateAIConfig = createSafeRootHandler(
     );
     if (!providerResult.valid) {
       return Result.err(
-        new HandlerError({ status: 400, message: providerResult.error }),
+        new HandlerError({
+          code: AI_CONFIG_ERROR_CODE.providerInvalid,
+          status: 400,
+          message: providerResult.error,
+        }),
       );
     }
 
@@ -118,7 +128,11 @@ const updateAIConfig = createSafeRootHandler(
     );
     if (!modelResult.valid) {
       return Result.err(
-        new HandlerError({ status: 400, message: modelResult.error }),
+        new HandlerError({
+          code: AI_CONFIG_ERROR_CODE.modelInvalid,
+          status: 400,
+          message: modelResult.error,
+        }),
       );
     }
 
@@ -155,6 +169,7 @@ const updateAIConfig = createSafeRootHandler(
     if (failures.length > 0) {
       return Result.err(
         new HandlerError({
+          code: AI_CONFIG_ERROR_CODE.providerValidationFailed,
           status: 400,
           message: failures.join("; "),
         }),

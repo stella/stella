@@ -269,5 +269,47 @@
       "apps/api/src/scheduler/index.ts": 1,
       "apps/web/src/lib/errors/index.ts": 1
     }
+  },
+  "direct-error-message-display": {
+    "count": 51,
+    "files": {
+      "apps/web/src/components/auth/otp-panel.tsx": 1,
+      "apps/web/src/components/auth/sign-in-panel.tsx": 4,
+      "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx": 1,
+      "apps/web/src/components/chat/case-law-open.ts": 1,
+      "apps/web/src/components/chat/entity-open.ts": 1,
+      "apps/web/src/components/inspector/anonymization-facet.tsx": 1,
+      "apps/web/src/components/inspector/file-tab-panel.tsx": 1,
+      "apps/web/src/components/require-ai-key.tsx": 1,
+      "apps/web/src/components/route-components.logic.ts": 1,
+      "apps/web/src/components/translate-document-dialog.tsx": 1,
+      "apps/web/src/components/usage/usage-limit-modal.tsx": 1,
+      "apps/web/src/hooks/use-sign-out.ts": 1,
+      "apps/web/src/lib/pdf/pdf-loader.ts": 2,
+      "apps/web/src/routes/_protected.contacts/$contactId.tsx": 1,
+      "apps/web/src/routes/_protected.contacts/index.tsx": 2,
+      "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/catalogue/tool-detail-view.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/catalogue/use-uninstall-entry.ts": 1,
+      "apps/web/src/routes/_protected.organization/-mutations.ts": 2,
+      "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx": 2,
+      "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 3,
+      "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx": 3,
+      "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/organization/web-search-keys-card.tsx": 1,
+      "apps/web/src/routes/_protected.settings/organization.members.tsx": 1,
+      "apps/web/src/routes/_protected.settings/organization.usage.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx": 2,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version.ts": 1,
+      "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx": 1,
+      "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx": 2,
+      "apps/web/src/routes/auth/organization.tsx": 2,
+      "apps/web/src/routes/consent.tsx": 1
+    }
   }
 }

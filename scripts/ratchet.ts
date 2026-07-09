@@ -226,6 +226,27 @@ const countNullishArrayFallback = (content: string): number => {
   return total;
 };
 
+const DIRECT_ERROR_MESSAGE =
+  /\berror\s+instanceof\s+Error\s*\?\s*error\.message\b|\berror\.message\s*\?\?|\bresult\.error\.message\s*\?\?|\bAPIError\.is\([^)]*\)\s*&&[\s\S]{0,120}?\berror\.message\b/gu;
+
+const countDirectErrorMessageDisplay = (content: string): number => {
+  const strippedLines: string[] = [];
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code, state } = stripLine(raw, literalState);
+    literalState = state;
+    if (COMMENT_LINE.test(code)) {
+      strippedLines.push("");
+      continue;
+    }
+    strippedLines.push(code);
+  }
+
+  const strippedContent = strippedLines.join("\n");
+  return (strippedContent.match(DIRECT_ERROR_MESSAGE) ?? []).length;
+};
+
 // Barrel files are selected by the include glob; every matched file counts as
 // one barrel (presence metric).
 const countPresence = (): number => 1;
@@ -272,6 +293,18 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: (file) =>
       isExcludedSource(file) || file.includes("apps/web/src/routes/"),
     count: countPresence,
+  },
+  {
+    id: "direct-error-message-display",
+    description:
+      "direct display of raw error.message/result.error.message in web source; prefer translated fallbacks and userError helpers",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: (file) =>
+      isExcludedSource(file) ||
+      file === "apps/web/src/lib/errors/index.ts" ||
+      file.includes("apps/web/src/routes/dev/") ||
+      file.startsWith("apps/web/src/workers/"),
+    count: countDirectErrorMessageDisplay,
   },
 ];
 
@@ -520,6 +553,21 @@ const SELF_TEST_NULLISH = `${NULLISH_FIXTURE_LINES.join("\n")}\n`;
 // string/template false positives (e, f, g) are excluded.
 const EXPECTED_NULLISH = 5;
 
+const DIRECT_ERROR_FIXTURE_LINES = [
+  "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
+  "stellaToast.add({ title: error.message ?? fallback });",
+  "stellaToast.add({ title: result.error.message ?? fallback });",
+  "if (APIError.is(error) &&",
+  "    error.message) {",
+  "const internal = userErrorMessage(response.error, fallback);",
+  'const literal = "error.message ?? fallback";',
+  "// error instanceof Error ? error.message : fallback",
+];
+const SELF_TEST_DIRECT_ERROR = `${DIRECT_ERROR_FIXTURE_LINES.join("\n")}\n`;
+// Expected: four direct user-facing-ish raw-message displays; helper use,
+// string literal, and comment are excluded.
+const EXPECTED_DIRECT_ERROR = 4;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -533,6 +581,11 @@ const runSelfTest = (): number => {
   try {
     writeFixture(root, "apps/api/src/casts.ts", SELF_TEST_AS_CASTS);
     writeFixture(root, "apps/web/src/nullish.ts", SELF_TEST_NULLISH);
+    writeFixture(
+      root,
+      "apps/web/src/error-display.tsx",
+      SELF_TEST_DIRECT_ERROR,
+    );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
     // Excluded companions: these must NOT be counted.
@@ -569,6 +622,13 @@ const runSelfTest = (): number => {
     if (barrelMetric.count !== 2) {
       failures.push(
         `barrel-index-files counted ${barrelMetric.count}, expected 2`,
+      );
+    }
+
+    const directErrorMetric = snapshot["direct-error-message-display"];
+    if (directErrorMetric.count !== EXPECTED_DIRECT_ERROR) {
+      failures.push(
+        `direct-error-message-display counted ${directErrorMetric.count}, expected ${EXPECTED_DIRECT_ERROR}`,
       );
     }
 

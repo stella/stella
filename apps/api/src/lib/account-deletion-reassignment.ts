@@ -54,6 +54,7 @@ export const buildAccountDeletionTaskReassignmentTargets = ({
     const reassignedUserId = targetByEntityId.get(assignment.entityId);
     if (!reassignedUserId) {
       throw new HandlerError({
+        code: "account_deletion_task_reassignment_invalid",
         status: 400,
         message:
           "All active task assignments must be reassigned before deleting your account.",
@@ -62,6 +63,7 @@ export const buildAccountDeletionTaskReassignmentTargets = ({
 
     if (reassignedUserId === currentUserId) {
       throw new HandlerError({
+        code: "account_deletion_task_reassignment_invalid",
         status: 400,
         message: "Task reassignment target must be another workspace member.",
       });
@@ -114,6 +116,7 @@ export const validateAccountDeletionTaskReassignmentTargets = ({
     const membershipKey = `${target.workspaceId}:${target.reassignedUserId}`;
     if (!validMembershipKeys.has(membershipKey)) {
       throw new HandlerError({
+        code: "account_deletion_task_reassignment_invalid",
         status: 400,
         message:
           "Task reassignment target must be a member of the task workspace.",
@@ -123,6 +126,7 @@ export const validateAccountDeletionTaskReassignmentTargets = ({
     const assignmentKey = `${target.entityId}:${target.reassignedUserId}`;
     if (existingReassignmentKeys.has(assignmentKey)) {
       throw new HandlerError({
+        code: "account_deletion_task_reassignment_invalid",
         status: 400,
         message:
           "Selected task reassignment target is already assigned to one of the tasks.",

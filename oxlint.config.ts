@@ -904,12 +904,11 @@ export default defineConfig({
           },
         ],
         "no-raw-api-url/no-raw-api-url": "error",
-        // Initial i18n ratchet: catch new raw JSX copy in files that
-        // already participate in use-intl. Remove `requireTranslationUsage`
-        // once legacy product UI literals have been migrated.
+        // Catch raw JSX copy across product UI. Use narrow disables only for
+        // non-user-facing literals such as technical fixtures or brand marks.
         "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
           "error",
-          { requireTranslationUsage: true },
+          { allowedText: ["Anthropic", "Google AI", "OpenAI"] },
         ],
         "require-router-select/require-router-select": "error",
         "require-matter-affordance/require-matter-affordance": "error",
@@ -917,6 +916,15 @@ export default defineConfig({
         "sonarjs/jsx-no-leaked-render": "error",
         "sonarjs/no-hook-setter-in-body": "error",
         "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/routes/dev/**/*.{ts,tsx}",
+        "apps/web/src/components/dev-sidebar-group.tsx",
+      ],
+      rules: {
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": "off",
       },
     },
     {

@@ -5,6 +5,7 @@ import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import {
+  ACCOUNT_DELETION_ERROR_CODE,
   checkUserOrganizationOwnership,
   getUserEmail,
   verifyAndDeleteUser,
@@ -45,6 +46,7 @@ const deleteAccountVerify = createSafeSessionHandler(
     if (ownershipCheck.isSoleOwner) {
       return Result.err(
         new HandlerError({
+          code: ACCOUNT_DELETION_ERROR_CODE.soleOwner,
           status: 400,
           message: `Cannot delete account because you are the sole owner of organization "${ownershipCheck.orgName}". Please transfer ownership or delete the organization first.`,
         }),

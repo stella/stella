@@ -1,7 +1,5 @@
 import { TaggedError } from "better-result";
 
-import type { ChatTransportErrorCode } from "@stll/anonymize-chat";
-
 export { FetchBoundaryError } from "@stll/errors";
 
 export type HandlerErrorStatusCode =
@@ -17,7 +15,7 @@ export type HandlerErrorStatusCode =
   | 500
   | 502;
 
-export type HandlerErrorCode = ChatTransportErrorCode;
+export type HandlerErrorCode = string;
 
 /**
  * Structured 402 usage-limit detail surfaced alongside the message so the

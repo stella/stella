@@ -33,6 +33,7 @@ const deleteAccountSendOtp = createSafeSessionHandler(
     if (ownershipCheck.isSoleOwner) {
       return Result.err(
         new HandlerError({
+          code: "account_deletion_sole_owner",
           status: 400,
           message: `Cannot delete account because you are the sole owner of organization "${ownershipCheck.orgName}". Please transfer ownership or delete the organization first.`,
         }),

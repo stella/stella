@@ -44,7 +44,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { toAPIError } from "@/lib/errors";
+import { internalToolErrorMessage, toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import {
   fetchOlderMessages,
@@ -632,7 +632,7 @@ export const useChatSession = ({
         const apiError = toAPIError(response.error);
         const failure: CreateDocumentOutput = {
           success: false,
-          message: apiError.message,
+          message: internalToolErrorMessage(apiError),
         };
         await addToolResult({
           tool: "create-document",

@@ -23,6 +23,11 @@ const updateWebSearchKeyBody = t.Object({
   apiKey: t.String({ minLength: 1, maxLength: 256 }),
 });
 
+const WEB_SEARCH_KEY_ERROR_CODE = {
+  keyRejected: "provider_key_rejected",
+  rateLimited: "provider_rate_limited",
+} as const;
+
 const config = {
   permissions: { organizationSettings: ["update"] },
   mcp: { type: "internal", reason: "provider_secret" },
@@ -57,6 +62,7 @@ const updateWebSearchKey = createSafeRootHandler(
         if (error.status === 401 || error.status === 403) {
           return Result.err(
             new HandlerError({
+              code: WEB_SEARCH_KEY_ERROR_CODE.keyRejected,
               status: 400,
               message: "The provider rejected the API key",
             }),
@@ -65,6 +71,7 @@ const updateWebSearchKey = createSafeRootHandler(
         if (error.status === 429) {
           return Result.err(
             new HandlerError({
+              code: WEB_SEARCH_KEY_ERROR_CODE.rateLimited,
               status: 429,
               message: "Rate limited while validating the key",
             }),

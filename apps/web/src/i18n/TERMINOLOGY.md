@@ -277,6 +277,16 @@ English value, so a freshly-synced key ships as English until it is
 translated — the untranslated-value check (below) guards against
 that shipping silently.
 
+## Coverage Gates
+
+Oxlint blocks raw JSX copy across product UI, regardless of whether
+the file already imports `use-intl`. Dev-only playgrounds are excluded
+in `oxlint.config.ts`; product exceptions need narrow disables or
+explicit allowed text. The ratchet in `scripts/ratchet.ts` separately
+tracks direct display of `error.message`/`result.error.message`;
+user-facing error UI should use translated fallbacks and the shared
+error helpers rather than rendering server English directly.
+
 ## Date and Number Formatting
 
 Do NOT embed formatted dates or numbers in translation strings.

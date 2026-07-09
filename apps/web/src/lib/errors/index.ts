@@ -1,10 +1,15 @@
 import { TaggedError } from "better-result";
 
+import { getTranslator } from "@/i18n/i18n-store";
+import type { TranslationKey } from "@/i18n/types";
+
 export { FetchBoundaryError } from "@stll/errors";
 
 export class APIError extends TaggedError("ApiError")<{
+  code?: string | undefined;
   status: number;
   message: string;
+  rawMessage?: string | undefined;
   /**
    * Structured fields some 4xx responses include alongside the
    * human-readable message. The 402 usage-limit path uses
@@ -49,23 +54,37 @@ type ToAPIErrorProps = {
         expected?: string;
       }
     | {
+        code?: string | undefined;
         type?: never;
         message: string;
-      };
+      }
+    | null
+    | undefined;
 };
 
 export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
+  if (value === null || value === undefined) {
+    return new APIError({
+      message: localizeAPIError({ status }),
+      status,
+    });
+  }
+
   if (typeof value === "string") {
     return new APIError({
+      message: localizeAPIError({ status }),
+      rawMessage: value,
       status,
-      message: value,
     });
   }
 
   if (value.type === "validation") {
+    const rawMessage = JSON.stringify(value);
     return new APIError({
+      code: API_ERROR_CODE.validation,
+      message: localizeAPIError({ code: API_ERROR_CODE.validation, status }),
+      rawMessage,
       status,
-      message: JSON.stringify(value),
     });
   }
 
@@ -74,11 +93,142 @@ export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
   // payload without re-fetching. `message` is hoisted for the
   // simple toast path.
   const details = pickDetails(value);
+  const rawMessage = value.message;
   return new APIError({
+    ...(value.code ? { code: value.code } : {}),
     status,
-    message: value.message,
+    message: localizeAPIError({
+      code: value.code,
+      details,
+      status,
+    }),
+    rawMessage,
     ...(details ? { details } : {}),
   });
+};
+
+const API_ERROR_CODE = {
+  validation: "validation",
+} as const;
+
+const RAW_INTERNAL_TOOL_ERROR_CODE = {
+  legalSourceStructuralRepairRequired:
+    "legal_source_structural_repair_required",
+} as const;
+
+const STATUS_ERROR_KEYS = {
+  badRequest: "errors.api.badRequest",
+  conflict: "errors.api.conflict",
+  forbidden: "errors.api.forbidden",
+  notFound: "errors.api.notFound",
+  payloadTooLarge: "errors.api.payloadTooLarge",
+  rateLimited: "errors.api.rateLimited",
+  server: "errors.api.server",
+  serviceUnavailable: "errors.api.serviceUnavailable",
+  unauthorized: "errors.api.unauthorized",
+  unknown: "errors.api.unknown",
+  validation: "errors.api.validation",
+} as const satisfies Record<string, TranslationKey>;
+
+const CODE_ERROR_KEYS = {
+  access_denied: "errors.apiCodes.accessDenied",
+  account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
+  account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
+  account_deletion_sole_owner: "errors.apiCodes.accountDeletionSoleOwner",
+  account_deletion_task_reassignment_invalid:
+    "errors.apiCodes.accountDeletionTaskReassignmentInvalid",
+  account_deletion_task_reassignment_limit_exceeded:
+    "errors.apiCodes.accountDeletionTaskReassignmentLimitExceeded",
+  ai_config_model_invalid: "errors.apiCodes.aiConfigModelInvalid",
+  ai_config_provider_invalid: "errors.apiCodes.aiConfigProviderInvalid",
+  ai_config_provider_validation_failed:
+    "errors.apiCodes.aiConfigProviderValidationFailed",
+  deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
+  deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
+  forbidden: "errors.apiCodes.forbidden",
+  internal_server_error: "errors.apiCodes.internalServerError",
+  legal_source_entity_limit_reached:
+    "errors.apiCodes.legalSourceEntityLimitReached",
+  legal_source_file_property_missing:
+    "errors.apiCodes.legalSourceFilePropertyMissing",
+  provider_key_rejected: "errors.apiCodes.providerKeyRejected",
+  provider_rate_limited: "errors.apiCodes.providerRateLimited",
+  third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
+  usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
+  validation: STATUS_ERROR_KEYS.validation,
+} as const satisfies Record<string, TranslationKey>;
+
+const USAGE_REJECTION_REASON_KEYS = {
+  entitlement_inactive: CODE_ERROR_KEYS.usage_limit_exceeded,
+  no_entitlement: CODE_ERROR_KEYS.usage_limit_exceeded,
+  usage_limit_exceeded: CODE_ERROR_KEYS.usage_limit_exceeded,
+} as const satisfies Record<string, TranslationKey>;
+
+const STATUS_TO_KEY: Readonly<Record<number, TranslationKey | undefined>> = {
+  400: STATUS_ERROR_KEYS.badRequest,
+  401: STATUS_ERROR_KEYS.unauthorized,
+  403: STATUS_ERROR_KEYS.forbidden,
+  404: STATUS_ERROR_KEYS.notFound,
+  409: STATUS_ERROR_KEYS.conflict,
+  413: STATUS_ERROR_KEYS.payloadTooLarge,
+  422: STATUS_ERROR_KEYS.validation,
+  429: STATUS_ERROR_KEYS.rateLimited,
+  500: STATUS_ERROR_KEYS.server,
+  502: STATUS_ERROR_KEYS.serviceUnavailable,
+};
+
+const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
+  Object.hasOwn(CODE_ERROR_KEYS, code);
+
+const isUsageRejectionReason = (
+  reason: string,
+): reason is keyof typeof USAGE_REJECTION_REASON_KEYS =>
+  Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
+
+const isStructuredUsageRejection = (error: APIError): boolean =>
+  error.status === 402 &&
+  typeof error.details?.["reason"] === "string" &&
+  isUsageRejectionReason(error.details["reason"]);
+
+const isDisplayableAPIError = (error: APIError): boolean =>
+  (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
+  isStructuredUsageRejection(error);
+
+const translate = (key: TranslationKey): string => getTranslator()(key);
+
+export const internalToolErrorMessage = (error: APIError): string => {
+  if (
+    error.code ===
+      RAW_INTERNAL_TOOL_ERROR_CODE.legalSourceStructuralRepairRequired &&
+    typeof error.rawMessage === "string"
+  ) {
+    return error.rawMessage;
+  }
+  return error.message;
+};
+
+type LocalizeAPIErrorInput = {
+  code?: string | undefined;
+  details?: Record<string, unknown> | undefined;
+  status: number;
+};
+
+const localizeAPIError = ({
+  code,
+  details,
+  status,
+}: LocalizeAPIErrorInput): string => {
+  if (code && isKnownErrorCode(code)) {
+    return translate(CODE_ERROR_KEYS[code]);
+  }
+  if (
+    status === 402 &&
+    typeof details?.["reason"] === "string" &&
+    isUsageRejectionReason(details["reason"])
+  ) {
+    return translate(USAGE_REJECTION_REASON_KEYS[details["reason"]]);
+  }
+  return translate(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
 };
 
 const KNOWN_TEXT_KEYS: ReadonlySet<string> = new Set(["message", "code"]);
@@ -106,7 +256,8 @@ export const userErrorMessage = (
   if (error.status >= SERVER_ERROR_THRESHOLD) {
     return fallback;
   }
-  return toAPIError(error).message;
+  const apiError = toAPIError(error);
+  return isDisplayableAPIError(apiError) ? apiError.message : fallback;
 };
 
 /** User-safe error description for thrown errors (e.g. from
@@ -116,11 +267,14 @@ export const userErrorFromThrown = (
   error: unknown,
   fallback: string,
 ): string => {
+  if (AuthClientError.is(error)) {
+    return error.message;
+  }
   if (APIError.is(error)) {
     if (error.status >= SERVER_ERROR_THRESHOLD) {
       return fallback;
     }
-    return error.message;
+    return isDisplayableAPIError(error) ? error.message : fallback;
   }
   return fallback;
 };
@@ -146,22 +300,34 @@ type ToAuthClientErrorProps = {
 };
 
 const isAuthClientErrorCode = (code: string): code is AuthErrorCode =>
-  code in AUTH_ERROR_CODES;
+  Object.hasOwn(AUTH_ERROR_CODES, code);
+
+const AUTH_ERROR_KEYS = {
+  YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION:
+    "errors.apiCodes.notOrganizationMember",
+} as const satisfies Record<AuthErrorCode, TranslationKey>;
 
 export const toAuthClientError = (props: ToAuthClientErrorProps) => {
   const { code, status, statusText } = props;
-  const message = props.message ?? "Unknown better-auth error";
+  const message = translate(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
 
   if (!props.code) {
     return new AuthClientError({ message, status, statusText });
   }
 
   if (code && isAuthClientErrorCode(code)) {
-    return new AuthClientError({ code, message, status, statusText });
+    return new AuthClientError({
+      code,
+      message: translate(AUTH_ERROR_KEYS[code]),
+      status,
+      statusText,
+    });
   }
 
   return new APIError({
-    message: `${code} - ${message}`,
+    code,
+    message,
+    rawMessage: props.message,
     status,
   });
 };

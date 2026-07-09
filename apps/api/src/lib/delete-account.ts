@@ -337,6 +337,12 @@ export const getPendingTasksAndMembers = async (
 /**
  * Verifies the OTP and deletes the user from the database.
  */
+export const ACCOUNT_DELETION_ERROR_CODE = {
+  otpExpired: "account_deletion_otp_expired",
+  otpInvalid: "account_deletion_otp_invalid",
+  soleOwner: "account_deletion_sole_owner",
+} as const;
+
 export const verifyAndDeleteUser = async (
   currentUserId: string,
   email: string,
@@ -370,6 +376,7 @@ export const verifyAndDeleteUser = async (
 
         if (!verificationRow) {
           throw new HandlerError({
+            code: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
             status: 400,
             message: "Invalid verification code",
           });
@@ -382,6 +389,7 @@ export const verifyAndDeleteUser = async (
             .where(eq(verification.identifier, identifier));
 
           throw new HandlerError({
+            code: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
             status: 400,
             message: "Invalid verification code",
           });
@@ -393,6 +401,7 @@ export const verifyAndDeleteUser = async (
             .where(eq(verification.identifier, identifier));
 
           throw new HandlerError({
+            code: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
             status: 400,
             message: "Verification code has expired",
           });
@@ -433,6 +442,7 @@ export const verifyAndDeleteUser = async (
         );
         if (soleOwnedOrg) {
           throw new HandlerError({
+            code: ACCOUNT_DELETION_ERROR_CODE.soleOwner,
             status: 400,
             message: `Cannot delete account because you are the sole owner of organization "${soleOwnedOrg.orgName}". Please transfer ownership or delete the organization first.`,
           });
@@ -545,6 +555,7 @@ export const verifyAndDeleteUser = async (
           LIMITS.accountDeletionTaskAssignmentsMax
         ) {
           throw new HandlerError({
+            code: "account_deletion_task_reassignment_limit_exceeded",
             status: 400,
             message:
               "Too many active task assignments to reassign during account deletion.",

@@ -381,6 +381,13 @@ const hasWorkspaceId = <TContext extends object>(
 ): ctx is TContext & { workspaceId: SafeId<"workspace"> } =>
   "workspaceId" in ctx;
 
+const API_ERROR_CODE = {
+  accessDenied: "access_denied",
+  forbidden: "forbidden",
+  internalServerError: "internal_server_error",
+  usageLimitExceeded: "usage_limit_exceeded",
+} as const satisfies Record<string, HandlerErrorCode>;
+
 // This needs function overloads. A generic arrow returning `status(statusCode)`
 // widens too much, and the casted version trips oxlint's unsafe assertion rule.
 function toSafeStatusResponse<TStatusCode extends HandlerErrorStatusCode>(
@@ -439,6 +446,7 @@ const runSafeHandler = async <
       });
 
       return toSafeStatusResponse(500, {
+        code: API_ERROR_CODE.internalServerError,
         message: "Internal server error",
       });
     }
@@ -451,7 +459,10 @@ const runSafeHandler = async <
         statusCode: 400,
       });
 
-      return toSafeStatusResponse(400, { message: "Access denied" });
+      return toSafeStatusResponse(400, {
+        code: API_ERROR_CODE.accessDenied,
+        message: "Access denied",
+      });
     }
 
     logAndCaptureSafeError({
@@ -461,7 +472,10 @@ const runSafeHandler = async <
       statusCode: 500,
     });
 
-    return toSafeStatusResponse(500, { message: "Internal server error" });
+    return toSafeStatusResponse(500, {
+      code: API_ERROR_CODE.internalServerError,
+      message: "Internal server error",
+    });
   } catch (error) {
     // A typed HandlerError thrown synchronously (or escaping the
     // Result.gen pipeline) must still surface as its own status,
@@ -489,7 +503,10 @@ const runSafeHandler = async <
       statusCode: 500,
     });
 
-    return toSafeStatusResponse(500, { message: "Internal server error" });
+    return toSafeStatusResponse(500, {
+      code: API_ERROR_CODE.internalServerError,
+      message: "Internal server error",
+    });
   }
 };
 
@@ -504,7 +521,10 @@ const createSafeScopedHandler = <
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
     if (!hasMemberPermission(ctx.memberRole, config.permissions)) {
-      return toSafeStatusResponse(403, { message: "Forbidden" });
+      return toSafeStatusResponse(403, {
+        code: API_ERROR_CODE.forbidden,
+        message: "Forbidden",
+      });
     }
 
     // Resolve the metering context only when enforcement is on. It reads
@@ -611,13 +631,17 @@ const runUsagePreflight = async ({
       error: checkResult.error,
       statusCode: 500,
     });
-    return toSafeStatusResponse(500, { message: "Internal server error" });
+    return toSafeStatusResponse(500, {
+      code: API_ERROR_CODE.internalServerError,
+      message: "Internal server error",
+    });
   }
   const check = checkResult.value;
   if (check.ok) {
     return null;
   }
   return toSafeStatusResponse(402, {
+    code: API_ERROR_CODE.usageLimitExceeded,
     message: check.error.message,
     reason: check.error.reason,
     required: check.error.required,
@@ -683,6 +707,7 @@ export const assertUsageAvailableForHandler = async ({
     // and captures it) so the user retries; we don't let an infrastructure
     // failure look like an over-limit situation.
     return new HandlerError({
+      code: API_ERROR_CODE.internalServerError,
       status: 500,
       message: "Internal server error",
       cause: checkResult.error,
@@ -693,6 +718,7 @@ export const assertUsageAvailableForHandler = async ({
     return null;
   }
   return new HandlerError({
+    code: API_ERROR_CODE.usageLimitExceeded,
     status: 402,
     message: check.error.message,
     usage: {
