@@ -33,8 +33,16 @@ import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
-import { getOauthRedirectUrl, hasSignedOauthQuery } from "@/lib/oauth-provider";
-import { isAcceptInvitationRedirect, redirectToSchema } from "@/lib/redirect";
+import {
+  getOauthHashFragment,
+  getOauthRedirectUrl,
+  getSignedOauthQueryFromHash,
+  hasSignedOauthQuery,
+} from "@/lib/oauth-provider";
+import {
+  isAcceptInvitationRedirect,
+  normalizeRedirectTo,
+} from "@/lib/redirect";
 import { toFormErrors } from "@/lib/schema";
 import {
   createSlug,
@@ -42,13 +50,22 @@ import {
 } from "@/routes/_protected.organization/-utils";
 
 const searchSchema = v.object({
-  redirectTo: redirectToSchema,
+  redirectTo: v.optional(v.pipe(v.string(), v.transform(normalizeRedirectTo))),
 });
 
 export const Route = createFileRoute("/auth/organization")({
   validateSearch: searchSchema,
   beforeLoad: ({ context, location, search }) => {
+    const bridgedQuery = getSignedOauthQueryFromHash(location.hash);
+
     if (!context.session) {
+      if (bridgedQuery) {
+        throw redirect({
+          href: `/auth#${getOauthHashFragment(bridgedQuery)}`,
+          replace: true,
+        });
+      }
+
       throw redirect({
         to: "/auth",
         search: {
@@ -58,14 +75,15 @@ export const Route = createFileRoute("/auth/organization")({
       });
     }
 
-    const isOauthPostLogin = hasSignedOauthQuery(location.searchStr);
+    const isOauthPostLogin =
+      bridgedQuery !== null || hasSignedOauthQuery(location.searchStr);
 
     if (
       !isOauthPostLogin &&
       (context.session.activeOrganizationId ||
-        isAcceptInvitationRedirect(search.redirectTo))
+        isAcceptInvitationRedirect(search.redirectTo ?? "/"))
     ) {
-      throw redirect({ to: search.redirectTo, replace: true });
+      throw redirect({ to: search.redirectTo ?? "/", replace: true });
     }
   },
   component: Organization,
@@ -76,7 +94,8 @@ function Organization() {
   const hasOrganizations = (organizations?.length ?? 0) > 0;
   const isOauthPostLogin =
     typeof window !== "undefined" &&
-    hasSignedOauthQuery(window.location.search);
+    (getSignedOauthQueryFromHash(window.location.hash) !== null ||
+      hasSignedOauthQuery(window.location.search));
 
   if (!isPending && !hasOrganizations && !isOauthPostLogin) {
     return <Navigate replace to="/onboarding" />;
@@ -157,7 +176,7 @@ const OrganizationList = ({
   organizations,
 }: OrganizationListProps) => {
   const t = useTranslations();
-  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo });
+  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo ?? "/" });
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();
@@ -252,7 +271,7 @@ const CreateOrganizationForm = ({
   isOauthPostLogin: boolean;
 }) => {
   const t = useTranslations();
-  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo });
+  const redirectTo = Route.useSearch({ select: (s) => s.redirectTo ?? "/" });
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const invalidateSession = useInvalidateSession();

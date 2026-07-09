@@ -42,6 +42,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   confirmProp,
   ensureActiveWorkspace,
@@ -1409,3 +1410,8 @@ export const KNOWLEDGE_TOOL_HANDLERS = {
   run_playbook: handleRunPlaybookTool,
   save_clause: handleSaveClauseTool,
 } satisfies Record<KnowledgeToolName, McpToolHandler>;
+
+export const KNOWLEDGE_TOOL_SET = defineMcpToolSet(
+  KNOWLEDGE_TOOL_DEFINITIONS,
+  KNOWLEDGE_TOOL_HANDLERS,
+);

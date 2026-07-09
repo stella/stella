@@ -48,6 +48,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
   DEFAULT_LIST_LIMIT,
@@ -1623,3 +1624,8 @@ export const STELLA_TOOL_HANDLERS = {
   search_across_matters: handleSearchAcrossMattersTool,
   set_practice_jurisdictions: handleSetPracticeJurisdictionsTool,
 } satisfies Record<StellaToolName, McpToolHandler>;
+
+export const STELLA_TOOL_SET = defineMcpToolSet(
+  STELLA_TOOL_DEFINITIONS,
+  STELLA_TOOL_HANDLERS,
+);

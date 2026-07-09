@@ -14,6 +14,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   buildDocumentUrl,
   buildMatterUrl,
@@ -454,3 +455,8 @@ export const COMPAT_TOOL_HANDLERS = {
   fetch: handleCompatFetchTool,
   search: handleCompatSearchTool,
 } satisfies Record<CompatToolName, McpToolHandler>;
+
+export const COMPAT_TOOL_SET = defineMcpToolSet(
+  COMPAT_TOOL_DEFINITIONS,
+  COMPAT_TOOL_HANDLERS,
+);

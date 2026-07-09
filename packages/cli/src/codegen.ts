@@ -13,12 +13,15 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import packageJson from "../package.json" with { type: "json" };
-import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { generateResourceTree } from "./generate-resource-tree.js";
 import { generateRouteMap } from "./generate-route-map.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
 import type { ResourceListing } from "./resource-types.js";
-import type { RegistryToolListing } from "./route-types.js";
+import type {
+  DiscriminatorSubcommand,
+  RegistryToolListing,
+  ToolAnnotation,
+} from "./route-types.js";
 
 const snapshotUrl = new URL(
   "generated/registry-snapshot.json",
@@ -33,11 +36,123 @@ const resourceOutputUrl = new URL(
   "generated/resource-tree.ts",
   import.meta.url,
 );
+const annotationOutputUrl = new URL(
+  "generated/tool-annotations.ts",
+  import.meta.url,
+);
+
+const toolScopes = [
+  "read",
+  "matters_write",
+  "documents_write",
+  "knowledge_write",
+  "search",
+  "onboarding",
+  "templates",
+  "billing_write",
+  "admin_read",
+  "admin_write",
+  "feedback",
+] as const;
+
+const stringArraySchema = v.array(v.string());
+
+const discriminatorSubcommandSchema = v.looseObject({
+  command: v.string(),
+  destructive: v.optional(v.literal(true)),
+  include: v.optional(stringArraySchema),
+  required: v.optional(stringArraySchema),
+});
+
+const cliAnnotationSchema = v.looseObject({
+  command: stringArraySchema,
+  excluded: v.optional(v.literal(true)),
+  scope: v.optional(v.picklist(toolScopes)),
+  itemsKey: v.optional(v.string()),
+  singleReadWhen: v.optional(v.string()),
+  columns: v.optional(stringArraySchema),
+  windowedText: v.optional(v.literal(true)),
+  paginationless: v.optional(v.literal(true)),
+  inputOnly: v.optional(stringArraySchema),
+  discriminator: v.optional(
+    v.looseObject({
+      prop: v.string(),
+      subcommands: v.record(v.string(), discriminatorSubcommandSchema),
+    }),
+  ),
+  flagRename: v.optional(v.record(v.string(), v.string())),
+});
+
+type ParsedDiscriminatorSubcommand = v.InferOutput<
+  typeof discriminatorSubcommandSchema
+>;
+type ParsedCliAnnotation = v.InferOutput<typeof cliAnnotationSchema>;
+
+const projectDiscriminatorSubcommand = (
+  subcommand: ParsedDiscriminatorSubcommand,
+): DiscriminatorSubcommand => {
+  const projected: DiscriminatorSubcommand = { command: subcommand.command };
+  if (subcommand.destructive !== undefined) {
+    projected.destructive = subcommand.destructive;
+  }
+  if (subcommand.include !== undefined) {
+    projected.include = subcommand.include;
+  }
+  if (subcommand.required !== undefined) {
+    projected.required = subcommand.required;
+  }
+  return projected;
+};
+
+const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
+  const annotation: ToolAnnotation = { command: cli.command };
+  if (cli.excluded !== undefined) {
+    annotation.excluded = cli.excluded;
+  }
+  if (cli.scope !== undefined) {
+    annotation.scope = cli.scope;
+  }
+  if (cli.itemsKey !== undefined) {
+    annotation.itemsKey = cli.itemsKey;
+  }
+  if (cli.singleReadWhen !== undefined) {
+    annotation.singleReadWhen = cli.singleReadWhen;
+  }
+  if (cli.columns !== undefined) {
+    annotation.columns = cli.columns;
+  }
+  if (cli.windowedText !== undefined) {
+    annotation.windowedText = cli.windowedText;
+  }
+  if (cli.paginationless !== undefined) {
+    annotation.paginationless = cli.paginationless;
+  }
+  if (cli.inputOnly !== undefined) {
+    annotation.inputOnly = cli.inputOnly;
+  }
+  if (cli.discriminator !== undefined) {
+    const subcommands: Record<string, DiscriminatorSubcommand> = {};
+    for (const [key, subcommand] of Object.entries(
+      cli.discriminator.subcommands,
+    )) {
+      subcommands[key] = projectDiscriminatorSubcommand(subcommand);
+    }
+    annotation.discriminator = {
+      prop: cli.discriminator.prop,
+      subcommands,
+    };
+  }
+  if (cli.flagRename !== undefined) {
+    annotation.flagRename = cli.flagRename;
+  }
+  return annotation;
+};
 
 // Validate the snapshot into the four wire fields so the codegen input is typed
 // (not `any` off `.json()`) and a malformed snapshot fails loudly.
 const listingSchema = v.array(
   v.looseObject({
+    cli: cliAnnotationSchema,
     name: v.string(),
     description: v.string(),
     inputSchema: v.record(v.string(), v.unknown()),
@@ -61,6 +176,7 @@ if (!snapshot.success) {
 // Project the validated snapshot to the exact `RegistryToolListing` shape
 // (dropping valibot's `| undefined` widening on optional annotation hints).
 const listings: RegistryToolListing[] = [];
+const toolAnnotations: Record<string, ToolAnnotation> = {};
 for (const tool of snapshot.output) {
   const annotations: { readOnlyHint?: boolean; destructiveHint?: boolean } = {};
   if (tool.annotations?.readOnlyHint !== undefined) {
@@ -75,9 +191,10 @@ for (const tool of snapshot.output) {
     inputSchema: tool.inputSchema,
     ...(tool.annotations === undefined ? {} : { annotations }),
   });
+  toolAnnotations[tool.name] = projectToolAnnotation(tool.cli);
 }
 
-const routeMap = generateRouteMap(listings, TOOL_ANNOTATIONS);
+const routeMap = generateRouteMap(listings, toolAnnotations);
 
 // Emit the TanStack Intent agent skill from the same registry inputs, into the
 // spec-mandated `skills/<name>/SKILL.md` at the package root. Committing it means
@@ -87,8 +204,25 @@ const skillUrl = new URL(`../skills/${SKILL_NAME}/SKILL.md`, import.meta.url);
 await mkdir(new URL(`../skills/${SKILL_NAME}/`, import.meta.url), {
   recursive: true,
 });
-await writeFile(skillUrl, generateCliSkill(listings, TOOL_ANNOTATIONS));
+await writeFile(skillUrl, generateCliSkill(listings, toolAnnotations));
 process.stderr.write(`Wrote ${skillUrl.pathname}\n`);
+
+const annotationHeader = `// GENERATED by \`bun run codegen\`. Do not edit by hand.
+//
+// API-owned CLI metadata projected from \`registry-snapshot.json\`. This keeps
+// the runtime registry-refresh path on the same command-shaping metadata as the
+// build-time route map without maintaining a second handwritten table.
+
+import type { ToolAnnotation } from "../route-types.js";
+
+export const generatedToolAnnotations: Readonly<Record<string, ToolAnnotation>> = `;
+
+await writeFile(
+  annotationOutputUrl,
+  `${annotationHeader}${JSON.stringify(toolAnnotations, null, 2)};\n`,
+);
+
+process.stderr.write(`Wrote ${annotationOutputUrl.pathname}\n`);
 
 const header = `/* eslint-disable unicorn/numeric-separators-style -- generated JSON literals */
 // GENERATED by \`bun run codegen\` (spec 051 S5.2). Do not edit by hand.

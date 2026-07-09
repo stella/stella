@@ -39,6 +39,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   confirmProp,
   DEFAULT_LIST_LIMIT,
@@ -1488,3 +1489,8 @@ export const BILLING_TOOL_HANDLERS = {
   list_invoices: handleListInvoicesTool,
   get_usage: handleGetUsageTool,
 } satisfies Record<BillingToolName, McpToolHandler>;
+
+export const BILLING_TOOL_SET = defineMcpToolSet(
+  BILLING_TOOL_DEFINITIONS,
+  BILLING_TOOL_HANDLERS,
+);

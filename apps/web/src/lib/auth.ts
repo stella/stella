@@ -7,12 +7,14 @@ import {
   organizationClient,
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+import { Result } from "better-result";
 
 import { ac, roles } from "@stll/permissions";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { env } from "@/env";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 import { createSecretTokenBoundary } from "@/lib/secret-token";
 import type { SecretToken } from "@/lib/secret-token";
 
@@ -25,6 +27,46 @@ const sessionRevocationTokenBoundary = createSecretTokenBoundary(
 const defineBetterAuthClientPlugin = <TPlugin extends BetterAuthClientPlugin>(
   plugin: TPlugin,
 ): TPlugin => plugin;
+
+const withOauthQueryFromHash = (ctx: {
+  body?: unknown;
+  headers: Headers;
+  method: string;
+}) => {
+  if (
+    typeof window === "undefined" ||
+    ctx.method === "GET" ||
+    ctx.method === "DELETE"
+  ) {
+    return;
+  }
+
+  const oauthQuery = getSignedOauthQueryFromHash(window.location.hash);
+  if (!oauthQuery) {
+    return;
+  }
+
+  const contentType = ctx.headers.get("content-type");
+  const rawBody = ctx.body;
+  let body = rawBody;
+  if (
+    typeof rawBody === "string" &&
+    contentType?.toLowerCase().startsWith("application/json")
+  ) {
+    const parsed = Result.try((): unknown => JSON.parse(rawBody));
+    if (Result.isError(parsed)) {
+      return;
+    }
+    body = parsed.value;
+  }
+
+  if (typeof body !== "object" || body === null || "oauth_query" in body) {
+    return;
+  }
+
+  ctx.headers.set("content-type", "application/json");
+  ctx.body = JSON.stringify({ ...body, oauth_query: oauthQuery });
+};
 
 export type SessionRevocationToken = SecretToken<
   typeof SESSION_REVOCATION_TOKEN
@@ -59,6 +101,7 @@ export const authClient = createAuthClient({
         return useI18nStore.getState().lang;
       },
     },
+    onRequest: withOauthQueryFromHash,
     onError: (context) => {
       if (context.response.status === HTTP_TOO_MANY_REQUESTS) {
         const t = getTranslator();

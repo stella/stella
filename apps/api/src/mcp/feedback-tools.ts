@@ -20,6 +20,7 @@ import {
   verifyFeedbackToken,
 } from "@/api/mcp/feedback-token";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   enumProp,
   MCP_INTERNAL_ERROR_HINT,
@@ -695,3 +696,8 @@ const mapIntakeResponse = async (
 export const FEEDBACK_TOOL_HANDLERS = {
   send_feedback: handleSendFeedbackTool,
 } satisfies Record<"send_feedback", McpToolHandler>;
+
+export const FEEDBACK_TOOL_SET = defineMcpToolSet(
+  FEEDBACK_TOOL_DEFINITIONS,
+  FEEDBACK_TOOL_HANDLERS,
+);

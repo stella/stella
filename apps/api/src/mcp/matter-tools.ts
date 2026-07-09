@@ -54,6 +54,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
   confirmProp,
@@ -1839,3 +1840,8 @@ export const MATTER_TOOL_HANDLERS = {
   save_task: handleSaveTaskTool,
   link_matter_contact: handleLinkMatterContactTool,
 } satisfies Record<MatterToolName, McpToolHandler>;
+
+export const MATTER_TOOL_SET = defineMcpToolSet(
+  MATTER_TOOL_DEFINITIONS,
+  MATTER_TOOL_HANDLERS,
+);

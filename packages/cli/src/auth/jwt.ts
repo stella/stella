@@ -22,7 +22,7 @@ export type AccessTokenClaims = {
   readonly aud?: string | readonly string[] | undefined;
 };
 
-const accessTokenClaimsSchema = v.strictObject({
+const accessTokenClaimsSchema = v.object({
   sub: v.string(),
   org_id: v.optional(v.string()),
   scope: v.optional(v.string()),

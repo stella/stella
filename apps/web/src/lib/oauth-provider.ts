@@ -1,4 +1,5 @@
 const OAUTH_SIGNATURE_PARAM = "sig";
+const OAUTH_QUERY_HASH_PARAM = "oauth_query";
 
 export const hasSignedOauthQuery = (search: string) => {
   const query = search.startsWith("?") ? search.slice(1) : search;
@@ -7,6 +8,26 @@ export const hasSignedOauthQuery = (search: string) => {
   }
 
   return new URLSearchParams(query).has(OAUTH_SIGNATURE_PARAM);
+};
+
+export const getSignedOauthQueryFromHash = (hash: string): string | null => {
+  const fragment = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (fragment.length === 0) {
+    return null;
+  }
+
+  const query = new URLSearchParams(fragment).get(OAUTH_QUERY_HASH_PARAM);
+  if (!query || !hasSignedOauthQuery(query)) {
+    return null;
+  }
+
+  return query;
+};
+
+export const getOauthHashFragment = (query: string): string => {
+  const fragment = new URLSearchParams();
+  fragment.set(OAUTH_QUERY_HASH_PARAM, query);
+  return fragment.toString();
 };
 
 export const getOauthClientDisplayName = (value: unknown): string | null => {

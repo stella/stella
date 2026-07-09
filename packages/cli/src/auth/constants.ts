@@ -17,6 +17,12 @@ const MCP_HTTP_PATH = "/mcp";
  * access token (see `checkResource`/`isJwtAccessToken` in
  * `@better-auth/oauth-provider`); without it the server returns an opaque
  * token that the CLI cannot decode for `stella auth whoami`.
+ *
+ * Derived from the resolved server URL, never the authorization-server
+ * `issuer`: the API validates token audience against its public MCP URL
+ * (`PUBLIC_URL ?? BETTER_AUTH_URL`, see `getMcpBaseUrl`), which is the host
+ * the CLI targets, while the issuer may live on a different hostname in
+ * split-host deployments.
  */
 export const getMcpResourceUrl = (serverUrl: string): string =>
   new URL(MCP_HTTP_PATH, serverUrl).toString();

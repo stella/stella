@@ -2,7 +2,9 @@ import { describe, expect, test } from "bun:test";
 
 import {
   getOauthClientDisplayName,
+  getOauthHashFragment,
   getOauthRedirectUrl,
+  getSignedOauthQueryFromHash,
   hasSignedOauthQuery,
 } from "@/lib/oauth-provider";
 
@@ -15,6 +17,23 @@ describe("hasSignedOauthQuery", () => {
 
   test("ignores ordinary query strings", () => {
     expect(hasSignedOauthQuery("?redirectTo=%2Fdashboard")).toBe(false);
+  });
+});
+
+describe("getSignedOauthQueryFromHash", () => {
+  test("preserves repeated Better Auth signed query params from the hash bridge", () => {
+    const query =
+      "client_id=client-123&ba_param=client_id&ba_param=scope&scope=openid&sig=abc123";
+
+    expect(getSignedOauthQueryFromHash(getOauthHashFragment(query))).toBe(
+      query,
+    );
+  });
+
+  test("ignores hash fragments without signed OAuth params", () => {
+    expect(getSignedOauthQueryFromHash("#oauth_query=redirectTo%3D%252F")).toBe(
+      null,
+    );
   });
 });
 

@@ -45,6 +45,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
 } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   enumProp,
   errorResult,
@@ -972,3 +973,8 @@ export const TEMPLATE_TOOL_HANDLERS = {
   list_templates: handleListTemplatesTool,
   save_template: handleSaveTemplateTool,
 } satisfies Record<TemplateToolName, McpToolHandler>;
+
+export const TEMPLATE_TOOL_SET = defineMcpToolSet(
+  TEMPLATE_TOOL_DEFINITIONS,
+  TEMPLATE_TOOL_HANDLERS,
+);

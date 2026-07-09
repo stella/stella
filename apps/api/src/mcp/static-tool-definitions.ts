@@ -1,15 +1,31 @@
 import { unreachable } from "@/api/lib/errors/tagged-errors";
-import { BILLING_TOOL_DEFINITIONS } from "@/api/mcp/billing-tools";
-import { COMPAT_TOOL_DEFINITIONS } from "@/api/mcp/compat-tools";
+import { BILLING_TOOL_SET } from "@/api/mcp/billing-tools";
+import { COMPAT_TOOL_SET } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
-import { DOCUMENT_TOOL_DEFINITIONS } from "@/api/mcp/document-tools";
-import { FEEDBACK_TOOL_DEFINITIONS } from "@/api/mcp/feedback-tools";
-import { KNOWLEDGE_TOOL_DEFINITIONS } from "@/api/mcp/knowledge-tools";
-import { MATTER_TOOL_DEFINITIONS } from "@/api/mcp/matter-tools";
-import { RESEARCH_ADMIN_TOOL_DEFINITIONS } from "@/api/mcp/research-admin-tools";
-import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
-import { TEMPLATE_TOOL_DEFINITIONS } from "@/api/mcp/template-tools";
-import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
+import { DOCUMENT_TOOL_SET } from "@/api/mcp/document-tools";
+import { FEEDBACK_TOOL_SET } from "@/api/mcp/feedback-tools";
+import { KNOWLEDGE_TOOL_SET } from "@/api/mcp/knowledge-tools";
+import { MATTER_TOOL_SET } from "@/api/mcp/matter-tools";
+import { RESEARCH_ADMIN_TOOL_SET } from "@/api/mcp/research-admin-tools";
+import { STELLA_TOOL_SET } from "@/api/mcp/stella-tools";
+import { TEMPLATE_TOOL_SET } from "@/api/mcp/template-tools";
+import type {
+  McpToolDefinition,
+  McpToolSet,
+  ToolScope,
+} from "@/api/mcp/tool-types";
+
+export const DEFAULT_MCP_TOOL_SETS = [
+  COMPAT_TOOL_SET,
+  STELLA_TOOL_SET,
+  TEMPLATE_TOOL_SET,
+  DOCUMENT_TOOL_SET,
+  MATTER_TOOL_SET,
+  KNOWLEDGE_TOOL_SET,
+  BILLING_TOOL_SET,
+  RESEARCH_ADMIN_TOOL_SET,
+  FEEDBACK_TOOL_SET,
+] as const satisfies readonly McpToolSet<readonly McpToolDefinition[]>[];
 
 /**
  * The single MCP tool registry. Every mode-specific surface (default list,
@@ -18,15 +34,15 @@ import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
  * catch.
  */
 export const DEFAULT_MCP_TOOL_DEFINITIONS = [
-  ...COMPAT_TOOL_DEFINITIONS,
-  ...STELLA_TOOL_DEFINITIONS,
-  ...TEMPLATE_TOOL_DEFINITIONS,
-  ...DOCUMENT_TOOL_DEFINITIONS,
-  ...MATTER_TOOL_DEFINITIONS,
-  ...KNOWLEDGE_TOOL_DEFINITIONS,
-  ...BILLING_TOOL_DEFINITIONS,
-  ...RESEARCH_ADMIN_TOOL_DEFINITIONS,
-  ...FEEDBACK_TOOL_DEFINITIONS,
+  ...COMPAT_TOOL_SET.definitions,
+  ...STELLA_TOOL_SET.definitions,
+  ...TEMPLATE_TOOL_SET.definitions,
+  ...DOCUMENT_TOOL_SET.definitions,
+  ...MATTER_TOOL_SET.definitions,
+  ...KNOWLEDGE_TOOL_SET.definitions,
+  ...BILLING_TOOL_SET.definitions,
+  ...RESEARCH_ADMIN_TOOL_SET.definitions,
+  ...FEEDBACK_TOOL_SET.definitions,
 ] as const satisfies readonly McpToolDefinition[];
 
 /**

@@ -27,6 +27,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
+import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
   bindWorkspaceRecorder,
   confirmProp,
@@ -779,3 +780,8 @@ export const RESEARCH_ADMIN_TOOL_HANDLERS = {
   list_audit_log: handleListAuditLogTool,
   manage_organization: handleManageOrganizationTool,
 } satisfies Record<ResearchAdminToolName, McpToolHandler>;
+
+export const RESEARCH_ADMIN_TOOL_SET = defineMcpToolSet(
+  RESEARCH_ADMIN_TOOL_DEFINITIONS,
+  RESEARCH_ADMIN_TOOL_HANDLERS,
+);
