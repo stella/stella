@@ -1114,6 +1114,8 @@
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
+      "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
+      "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",
       "thirdPartyBoundaryRefusal": "Die Anfrage hat versucht, Inhalte außerhalb des erlaubten Workspace-Kontexts zu verwenden.",
       "usageLimitExceeded": "Nutzungslimit erreicht."
     },

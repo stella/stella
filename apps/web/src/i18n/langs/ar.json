@@ -1114,6 +1114,8 @@
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
+      "providerKeyRejected": "رفض مزود الخدمة مفتاح API.",
+      "providerRateLimited": "تم بلوغ حد طلبات مزود الخدمة. حاول مرة أخرى بعد قليل.",
       "thirdPartyBoundaryRefusal": "حاول الطلب استخدام محتوى خارج سياق مساحة العمل المسموح به.",
       "usageLimitExceeded": "تم بلوغ حد الاستخدام."
     },

@@ -1114,6 +1114,8 @@
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "notOrganizationMember": "Vous n’êtes pas membre de cette organisation.",
+      "providerKeyRejected": "Le fournisseur a refusé la clé API.",
+      "providerRateLimited": "La limite de requêtes du fournisseur a été atteinte. Réessayez dans quelques instants.",
       "thirdPartyBoundaryRefusal": "La requête a tenté d’utiliser du contenu hors du contexte d’espace de travail autorisé.",
       "usageLimitExceeded": "Limite d’utilisation atteinte."
     },

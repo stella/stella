@@ -1114,6 +1114,8 @@
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",
+      "providerKeyRejected": "Teenusepakkuja lükkas API-võtme tagasi.",
+      "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis."
     },

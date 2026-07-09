@@ -1114,6 +1114,8 @@
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
+      "providerKeyRejected": "A szolgáltató elutasította az API-kulcsot.",
+      "providerRateLimited": "Elérte a szolgáltató kérési korlátját. Próbálja újra rövidesen.",
       "thirdPartyBoundaryRefusal": "A kérés a megengedett munkaterület-környezeten kívüli tartalmat próbált használni.",
       "usageLimitExceeded": "Elérte a használati korlátot."
     },

@@ -1114,6 +1114,8 @@
       "forbidden": "You do not have permission to do this.",
       "internalServerError": "The server could not complete the action. Please try again.",
       "notOrganizationMember": "You are not a member of this organization.",
+      "providerKeyRejected": "The provider rejected the API key.",
+      "providerRateLimited": "The provider rate limit was reached. Try again shortly.",
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.",
       "usageLimitExceeded": "Usage limit reached."
     },

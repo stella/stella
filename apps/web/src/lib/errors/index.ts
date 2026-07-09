@@ -136,6 +136,8 @@ const CODE_ERROR_KEYS = {
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   forbidden: "errors.apiCodes.forbidden",
   internal_server_error: "errors.apiCodes.internalServerError",
+  provider_key_rejected: "errors.apiCodes.providerKeyRejected",
+  provider_rate_limited: "errors.apiCodes.providerRateLimited",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
   validation: STATUS_ERROR_KEYS.validation,

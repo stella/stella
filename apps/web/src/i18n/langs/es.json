@@ -1114,6 +1114,8 @@
       "forbidden": "No tienes permiso para hacer esto.",
       "internalServerError": "Algo salió mal. Inténtalo de nuevo.",
       "notOrganizationMember": "No eres miembro de esta organización.",
+      "providerKeyRejected": "El proveedor rechazó la clave de API.",
+      "providerRateLimited": "Se alcanzó el límite de solicitudes del proveedor. Inténtalo de nuevo en breve.",
       "thirdPartyBoundaryRefusal": "La solicitud intentó usar contenido fuera del contexto de espacio de trabajo permitido.",
       "usageLimitExceeded": "Se alcanzó el límite de uso."
     },

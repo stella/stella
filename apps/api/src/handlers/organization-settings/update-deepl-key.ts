@@ -20,6 +20,12 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const FREE_BASE_URL = "https://api-free.deepl.com";
 
+const DEEPL_KEY_ERROR_CODE = {
+  keyRejected: "deepl_key_rejected",
+  quotaExceeded: "deepl_quota_exceeded",
+  rateLimited: "provider_rate_limited",
+} as const;
+
 const updateDeepLKeyBody = t.Object({
   apiKey: t.String({ minLength: 1, maxLength: 256 }),
 });
@@ -56,6 +62,7 @@ const updateDeepLKey = createSafeRootHandler(
       if (DeepLAuthError.is(error)) {
         return Result.err(
           new HandlerError({
+            code: DEEPL_KEY_ERROR_CODE.keyRejected,
             status: 400,
             message: "DeepL rejected the API key",
           }),
@@ -64,6 +71,7 @@ const updateDeepLKey = createSafeRootHandler(
       if (DeepLQuotaError.is(error)) {
         return Result.err(
           new HandlerError({
+            code: DEEPL_KEY_ERROR_CODE.quotaExceeded,
             status: 400,
             message:
               "DeepL key is valid but its character quota is already exhausted",
@@ -73,6 +81,7 @@ const updateDeepLKey = createSafeRootHandler(
       if (DeepLRateLimitError.is(error)) {
         return Result.err(
           new HandlerError({
+            code: DEEPL_KEY_ERROR_CODE.rateLimited,
             status: 429,
             message: "DeepL rate limit hit while validating the key",
           }),

@@ -1114,6 +1114,8 @@
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "internalServerError": "Coś poszło nie tak. Spróbuj ponownie.",
       "notOrganizationMember": "Nie jesteś członkiem tej organizacji.",
+      "providerKeyRejected": "Dostawca odrzucił klucz API.",
+      "providerRateLimited": "Osiągnięto limit żądań dostawcy. Spróbuj ponownie za chwilę.",
       "thirdPartyBoundaryRefusal": "Żądanie próbowało użyć treści spoza dozwolonego kontekstu obszaru roboczego.",
       "usageLimitExceeded": "Osiągnięto limit użycia."
     },

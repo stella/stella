@@ -1114,6 +1114,8 @@
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
+      "providerKeyRejected": "Teikėjas atmetė API raktą.",
+      "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas."
     },

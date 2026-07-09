@@ -1114,6 +1114,8 @@
       "forbidden": "K této akci nemáte oprávnění.",
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
       "notOrganizationMember": "Nejste členem této organizace.",
+      "providerKeyRejected": "Poskytovatel odmítl klíč API.",
+      "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití."
     },

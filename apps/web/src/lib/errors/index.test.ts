@@ -75,6 +75,11 @@ describe("toAPIError", () => {
       "deepl_quota_exceeded",
       "The DeepL character quota for this organization has been used up.",
     ],
+    ["provider_key_rejected", "The provider rejected the API key."],
+    [
+      "provider_rate_limited",
+      "The provider rate limit was reached. Try again shortly.",
+    ],
   ])("localizes the known provider code %s", (code, expected) => {
     const error = toAPIError({
       status: 400,

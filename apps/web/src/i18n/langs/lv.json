@@ -1114,6 +1114,8 @@
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
+      "providerKeyRejected": "Pakalpojuma sniedzējs noraidīja API atslēgu.",
+      "providerRateLimited": "Sasniegts pakalpojuma sniedzēja pieprasījumu limits. Drīzumā mēģiniet vēlreiz.",
       "thirdPartyBoundaryRefusal": "Pieprasījums mēģināja izmantot saturu ārpus atļautā darbvietas konteksta.",
       "usageLimitExceeded": "Sasniegts lietošanas limits."
     },
