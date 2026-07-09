@@ -141,6 +141,12 @@ const CODE_ERROR_KEYS = {
   validation: STATUS_ERROR_KEYS.validation,
 } as const satisfies Record<string, TranslationKey>;
 
+const USAGE_REJECTION_REASON_KEYS = {
+  entitlement_inactive: CODE_ERROR_KEYS.usage_limit_exceeded,
+  no_entitlement: CODE_ERROR_KEYS.usage_limit_exceeded,
+  usage_limit_exceeded: CODE_ERROR_KEYS.usage_limit_exceeded,
+} as const satisfies Record<string, TranslationKey>;
+
 const STATUS_TO_KEY: Readonly<Record<number, TranslationKey | undefined>> = {
   400: STATUS_ERROR_KEYS.badRequest,
   401: STATUS_ERROR_KEYS.unauthorized,
@@ -157,8 +163,19 @@ const STATUS_TO_KEY: Readonly<Record<number, TranslationKey | undefined>> = {
 const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
   Object.hasOwn(CODE_ERROR_KEYS, code);
 
+const isUsageRejectionReason = (
+  reason: string,
+): reason is keyof typeof USAGE_REJECTION_REASON_KEYS =>
+  Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
+
+const isStructuredUsageRejection = (error: APIError): boolean =>
+  error.status === 402 &&
+  typeof error.details?.["reason"] === "string" &&
+  isUsageRejectionReason(error.details["reason"]);
+
 const isDisplayableAPIError = (error: APIError): boolean =>
-  typeof error.code === "string" && isKnownErrorCode(error.code);
+  (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
+  isStructuredUsageRejection(error);
 
 const translate = (key: TranslationKey): string => getTranslator()(key);
 
@@ -190,9 +207,9 @@ const localizeAPIError = ({
   if (
     status === 402 &&
     typeof details?.["reason"] === "string" &&
-    isKnownErrorCode(details["reason"])
+    isUsageRejectionReason(details["reason"])
   ) {
-    return translate(CODE_ERROR_KEYS[details["reason"]]);
+    return translate(USAGE_REJECTION_REASON_KEYS[details["reason"]]);
   }
   return translate(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
 };
