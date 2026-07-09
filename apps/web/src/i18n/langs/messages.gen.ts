@@ -501,6 +501,9 @@ type Messages = {
       };
     };
     "sources": "Sources:";
+    "spawnSubagents": {
+      "failed": "Failed";
+    };
     "stopResponse": "Stop";
     "stopped": "Stopped";
     "suggestionSeverity": {
@@ -581,6 +584,7 @@ type Messages = {
       "search-chat-history": "Searching chat history";
       "set_field_value": "Set field value";
       "set_practice_jurisdictions": "Set practice jurisdictions";
+      "spawn_subagents": "Delegating to subagents";
       "suggest_template_fields": "Suggesting template fields";
       "unknown": "Using tool";
       "update-entity-fields": "Updating metadata";

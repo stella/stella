@@ -40,6 +40,7 @@ import { isApprovalPart } from "@/components/chat/chat-ui-tools";
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { SourceChips } from "@/components/chat/source-chips";
+import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
@@ -1272,6 +1273,23 @@ const AssistantMessageParts = ({
           // Other states (approval-requested, input-*) still need to fall
           // through to the approval/tool-call cards.
           return null;
+        }
+
+        if (part.type === "tool-call" && part.name === "spawn_subagents") {
+          if (
+            isApprovalPart(part) &&
+            (part.state === "approval-requested" ||
+              part.state === "approval-responded")
+          ) {
+            return (
+              <ToolApprovalCard
+                key={part.id}
+                part={part}
+                workspaceId={workspaceId}
+              />
+            );
+          }
+          return <SpawnSubagentsCard key={part.id} part={part} />;
         }
 
         if (part.type === "tool-call") {

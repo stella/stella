@@ -498,6 +498,9 @@
       }
     },
     "sources": "Allikad:",
+    "spawnSubagents": {
+      "failed": "Ebaõnnestus"
+    },
     "stopResponse": "Peata",
     "stopped": "Peatatud",
     "suggestionSeverity": {
@@ -578,6 +581,7 @@
       "search-chat-history": "Vestlusajaloo otsimine",
       "set_field_value": "Määra välja väärtus",
       "set_practice_jurisdictions": "Määra praktikajurisdiktsioonid",
+      "spawn_subagents": "Delegeerimine alamagentidele",
       "suggest_template_fields": "Pakun malli välju",
       "unknown": "Tööriista kasutamine",
       "update-entity-fields": "Metaandmete uuendamine",

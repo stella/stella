@@ -156,6 +156,7 @@ export const USAGE_ACTION_TYPES = [
   "doc_review",
   "case_law",
   "background",
+  "subagent",
 ] as const;
 export type UsageActionType = (typeof USAGE_ACTION_TYPES)[number];
 

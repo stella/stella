@@ -130,6 +130,16 @@ const isUuidString = (value: unknown): value is string =>
   typeof value === "string" && UUID_REGEX.test(value);
 
 export type ChatRefRegistry = {
+  /**
+   * Deduped union of every workspace id any tool (including subagents)
+   * resolved a matter or entity ref for on this turn, regardless of
+   * whether that content ever reached the assistant's response parts.
+   * Used to widen `chat_threads.data_workspace_ids` so a subagent that
+   * read a matter but only returned a free-form summary still triggers
+   * scope persistence — otherwise a later access revocation would leave
+   * that content readable via the persisted assistant text.
+   */
+  getRegisteredWorkspaceIds: () => SafeId<"workspace">[];
   hydrateAssistantTextRefs: (text: string) => string;
   hydrateAssistantValueRefs: (value: unknown) => unknown;
   resolveAssistantTextRefs: (text: string) => string;
@@ -431,7 +441,18 @@ export const createChatRefRegistry = (): ChatRefRegistry => {
     return Object.fromEntries(entries);
   };
 
+  const getRegisteredWorkspaceIds = (): SafeId<"workspace">[] => {
+    const ids = new Set<SafeId<"workspace">>([
+      ...matterState.refToTarget.values(),
+      ...[...entityState.refToTarget.values()].map(
+        (target) => target.workspaceId,
+      ),
+    ]);
+    return [...ids];
+  };
+
   return {
+    getRegisteredWorkspaceIds,
     hydrateAssistantTextRefs,
     hydrateAssistantValueRefs,
     resolveAssistantTextRefs,

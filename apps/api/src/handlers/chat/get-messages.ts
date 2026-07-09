@@ -10,7 +10,10 @@ import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budg
 import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
-import { isWebSearchAvailable } from "@/api/handlers/chat/tools/chat-tools";
+import {
+  areSubagentToolsRegistered,
+  isWebSearchAvailable,
+} from "@/api/handlers/chat/tools/chat-tools";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -217,6 +220,7 @@ const getMessages = createSafeRootHandler(
         templateAuthoring: false,
         webResearch: webSearchAvailable && thread.webSearchEnabled,
         folioAgentDocTools: false,
+        subagents: areSubagentToolsRegistered({ delegationDepth: 0 }),
       },
     });
     const { triggerTokens } = resolveChatCompactionBudget({

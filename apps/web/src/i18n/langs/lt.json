@@ -498,6 +498,9 @@
       }
     },
     "sources": "Šaltiniai:",
+    "spawnSubagents": {
+      "failed": "Nepavyko"
+    },
     "stopResponse": "Stabdyti",
     "stopped": "Sustabdyta",
     "suggestionSeverity": {
@@ -578,6 +581,7 @@
       "search-chat-history": "Ieškoma pokalbio istorijoje",
       "set_field_value": "Nustatyti lauko reikšmę",
       "set_practice_jurisdictions": "Nustatyti praktikos jurisdikcijas",
+      "spawn_subagents": "Deleguojama subagentams",
       "suggest_template_fields": "Siūlomi šablono laukai",
       "unknown": "Naudojamas įrankis",
       "update-entity-fields": "Atnaujinami metaduomenys",

@@ -498,6 +498,9 @@
       }
     },
     "sources": "Források:",
+    "spawnSubagents": {
+      "failed": "Sikertelen"
+    },
     "stopResponse": "Leállítás",
     "stopped": "Leállítva",
     "suggestionSeverity": {
@@ -578,6 +581,7 @@
       "search-chat-history": "Csevegési előzmények keresése",
       "set_field_value": "Mezőérték beállítása",
       "set_practice_jurisdictions": "Joghatóságok beállítása",
+      "spawn_subagents": "Delegálás alügynököknek",
       "suggest_template_fields": "Sablonmezők javaslása",
       "unknown": "Eszköz használata",
       "update-entity-fields": "Metaadatok frissítése",

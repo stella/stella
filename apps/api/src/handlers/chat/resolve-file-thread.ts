@@ -12,7 +12,10 @@ import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
-import { isWebSearchAvailable } from "@/api/handlers/chat/tools/chat-tools";
+import {
+  areSubagentToolsRegistered,
+  isWebSearchAvailable,
+} from "@/api/handlers/chat/tools/chat-tools";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -206,6 +209,7 @@ const loadResolvedThreadMessagePage = async ({
       templateAuthoring: false,
       webResearch: webSearchAvailable && webSearchEnabled,
       folioAgentDocTools: false,
+      subagents: areSubagentToolsRegistered({ delegationDepth: 0 }),
     },
   });
   const { triggerTokens } = resolveChatCompactionBudget({

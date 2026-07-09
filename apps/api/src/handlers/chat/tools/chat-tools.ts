@@ -4,6 +4,7 @@ import type { SkillMetadata } from "@stll/skills";
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/skills";
+import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
   createActiveDocxEditTool,
@@ -46,6 +47,12 @@ import {
   type ChatRegistryWriteToolMap,
 } from "@/api/handlers/chat/tools/registry-write-tools";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
+import {
+  createSpawnSubagentsTool,
+  SPAWN_SUBAGENTS_TOOL_NAME,
+  SUBAGENT_DELEGATION_DEPTH_CAP,
+} from "@/api/handlers/chat/tools/spawn-subagents-tool";
+import { projectToolMapForSubagent } from "@/api/handlers/chat/tools/subagent-tools";
 import {
   createTemplateAuthoringTools,
   createTemplateTools,
@@ -128,6 +135,22 @@ export const areTemplateAuthoringToolsRegistered = (
   memberRole: keyof typeof roles,
 ): boolean => roles[memberRole].authorize({ template: ["create"] }).success;
 
+type SubagentToolsRegisteredProps = {
+  delegationDepth?: number | undefined;
+};
+
+/**
+ * Single source of truth for "is `spawn_subagents` registered on this
+ * turn". `getChatTools` uses the same `delegationDepth` comparison to
+ * decide registration; prompt construction uses this predicate to
+ * decide whether the delegation section may steer the model to the
+ * tool.
+ */
+export const areSubagentToolsRegistered = ({
+  delegationDepth,
+}: SubagentToolsRegisteredProps): boolean =>
+  (delegationDepth ?? 0) < SUBAGENT_DELEGATION_DEPTH_CAP;
+
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ChatCodeModeToolMap;
@@ -151,6 +174,7 @@ type TemplateTools = ReturnType<typeof createTemplateTools>;
 type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
 type VersionCompareTools = ReturnType<typeof createVersionCompareTools>;
 type RegistryWriteTools = ChatRegistryWriteToolMap;
+type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -168,7 +192,8 @@ type BuiltInChatTools = OrgTools &
   TemplateTools &
   TemplateAuthoringTools &
   VersionCompareTools &
-  RegistryWriteTools;
+  RegistryWriteTools &
+  SubagentTools;
 
 export type ChatTools = BuiltInChatTools;
 type BuiltInChatToolPolicyName =
@@ -192,6 +217,12 @@ type GetChatToolsProps = {
   // platform provider. A missing value silently falls back and fails there, so
   // every caller must thread it through explicitly.
   orgAIConfig: OrgAIConfig | null;
+  /**
+   * The request's scope workspace (or `null` for global chat), for
+   * subagent usage metering. Distinct from `toolWorkspaceIds`, which
+   * is the (possibly pinned) set of workspaces tools may read/write.
+   */
+  requestWorkspaceId: SafeId<"workspace"> | null;
   threadId: SafeId<"chatThread">;
   excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   userId: SafeId<"user">;
@@ -208,6 +239,14 @@ type GetChatToolsProps = {
       }
     | undefined;
   refRegistry: ChatRefRegistry;
+  /**
+   * The turn's anonymization boundary. Threaded into
+   * `createSpawnSubagentsTool` so each subagent's own model calls cross
+   * the same anonymize/deanonymize boundary as the parent turn; the
+   * recursive `buildSubagentToolset` call re-spreads `props`, so nested
+   * levels inherit it automatically.
+   */
+  thirdPartyBoundary: ChatThirdPartyBoundary;
   /**
    * `true` when the request comes from a surface that has the
    * apply-active-docx-edits client executor mounted (the file
@@ -270,6 +309,14 @@ type GetChatToolsProps = {
   workspaceStatusById?:
     | ReadonlyMap<string, AccessibleWorkspace["status"]>
     | undefined;
+  /**
+   * Current delegation depth; 0 at top level. Subagent toolsets are
+   * built by re-invoking `getChatTools` with `depth + 1` (see
+   * `createSpawnSubagentsTool`'s `buildSubagentToolset`), which is how
+   * `spawn_subagents` stops being registered past
+   * `SUBAGENT_DELEGATION_DEPTH_CAP`.
+   */
+  delegationDepth?: number | undefined;
 };
 
 const createActiveDocxEditTools = () => ({
@@ -359,34 +406,42 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   save_time_entry: CHAT_TOOL_POLICY_KIND.mutation,
   set_field_value: CHAT_TOOL_POLICY_KIND.mutation,
   set_practice_jurisdictions: CHAT_TOOL_POLICY_KIND.mutation,
+  // The whole delegation is approved as a unit (Option A): once the user
+  // approves `spawn_subagents`, the subagents' own projected tools (writes
+  // included) run under that single grant, with no further per-call approval.
+  [SPAWN_SUBAGENTS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
 } as const satisfies Record<
   BuiltInChatToolPolicyName,
   (typeof CHAT_TOOL_POLICY_KIND)[keyof typeof CHAT_TOOL_POLICY_KIND]
 >;
 
-export const getChatTools = ({
-  safeDb,
-  scopedDb,
-  organizationId,
-  memberRole,
-  orgAIConfig,
-  threadId,
-  excludedChatHistoryMessageIds,
-  userId,
-  toolWorkspaceIds,
-  activeFile,
-  refRegistry,
-  hasActiveDocxEditClient,
-  hasActiveDocxFileClient,
-  webSearchEnabled,
-  webSearchProviders,
-  externalTools = {},
-  disabledNativeToolSlugs,
-  skillMetadata,
-  activeSkillContext,
-  recordAuditEvent,
-  workspaceStatusById,
-}: GetChatToolsProps): ChatToolMap => {
+export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
+  const {
+    safeDb,
+    scopedDb,
+    organizationId,
+    memberRole,
+    orgAIConfig,
+    requestWorkspaceId,
+    threadId,
+    excludedChatHistoryMessageIds,
+    userId,
+    toolWorkspaceIds,
+    activeFile,
+    refRegistry,
+    thirdPartyBoundary,
+    hasActiveDocxEditClient,
+    hasActiveDocxFileClient,
+    webSearchEnabled,
+    webSearchProviders,
+    externalTools = {},
+    disabledNativeToolSlugs,
+    skillMetadata,
+    activeSkillContext,
+    recordAuditEvent,
+    workspaceStatusById,
+  } = props;
+
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
@@ -554,6 +609,33 @@ export const getChatTools = ({
           workspaceStatusById,
         });
 
+  // Delegation is capped at one level: a subagent's own toolset (built by
+  // re-invoking `getChatTools` at `delegationDepth + 1`) never registers
+  // `spawn_subagents`, so a subagent cannot spawn further subagents. The
+  // recursive call also forces `hasActiveDocxEditClient: false`, since a
+  // nested loop has no client to satisfy that tool's `addToolResult` contract.
+  const delegationDepth = props.delegationDepth ?? 0;
+  const subagentTools = areSubagentToolsRegistered({ delegationDepth })
+    ? createSpawnSubagentsTool({
+        buildSubagentToolset: () =>
+          projectToolMapForSubagent(
+            getChatTools({
+              ...props,
+              hasActiveDocxEditClient: false,
+              delegationDepth: delegationDepth + 1,
+            }),
+          ),
+        organizationId,
+        orgAIConfig,
+        safeDb,
+        thirdPartyBoundary,
+        userId,
+        workspaceId: requestWorkspaceId,
+        threadId,
+        delegationDepth,
+      })
+    : {};
+
   return applyChatToolPolicies({
     policyKinds: BUILT_IN_CHAT_TOOL_POLICY_KINDS,
     tools: {
@@ -574,6 +656,7 @@ export const getChatTools = ({
       ...webSearchTools,
       ...registryWriteTools,
       ...externalChatTools,
+      ...subagentTools,
     },
   });
 };

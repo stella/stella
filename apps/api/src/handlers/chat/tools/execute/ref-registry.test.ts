@@ -142,3 +142,58 @@ describe("chat ref registry", () => {
     expect(Result.isError(result)).toBe(true);
   });
 });
+
+describe("getRegisteredWorkspaceIds", () => {
+  // Folds every workspace a subagent (or the top-level turn) resolved a
+  // matter or entity ref for into thread scope (`chat_threads.data_workspace_ids`).
+  // Missing a workspace here means a later access revocation leaves that
+  // workspace's content readable via the persisted assistant text.
+
+  test("returns an empty array when nothing has been registered", () => {
+    const registry = createChatRefRegistry();
+
+    expect(registry.getRegisteredWorkspaceIds()).toEqual([]);
+  });
+
+  test("includes every workspace registered via a matter ref", () => {
+    const registry = createChatRefRegistry();
+    const workspaceA = toSafeId<"workspace">(
+      "0dc54d0c-10d7-501d-897e-e801dbd0998c",
+    );
+    const workspaceB = toSafeId<"workspace">(
+      "4e919658-a448-5354-8e3a-e99911214d2c",
+    );
+
+    registry.toMatterRef(workspaceA);
+    registry.toMatterRef(workspaceB);
+
+    expect(new Set(registry.getRegisteredWorkspaceIds())).toEqual(
+      new Set([workspaceA, workspaceB]),
+    );
+  });
+
+  test("folds in a workspace registered only via an entity ref", () => {
+    const registry = createChatRefRegistry();
+    const workspaceC = toSafeId<"workspace">(
+      "c09ec856-d945-5ecc-82e3-bb5382165f34",
+    );
+    const entityId = toSafeId<"entity">("e650e388-8d13-59ca-8adb-e81e1916deea");
+
+    registry.toEntityRef({ entityId, workspaceId: workspaceC });
+
+    expect(registry.getRegisteredWorkspaceIds()).toEqual([workspaceC]);
+  });
+
+  test("dedupes a workspace registered via both a matter ref and an entity ref", () => {
+    const registry = createChatRefRegistry();
+    const workspaceId = toSafeId<"workspace">(
+      "37286c24-6145-572e-ad27-15a1d4454d59",
+    );
+    const entityId = toSafeId<"entity">("6111c8e9-1404-5b6f-8a9a-0e3a93e8179a");
+
+    registry.toMatterRef(workspaceId);
+    registry.toEntityRef({ entityId, workspaceId });
+
+    expect(registry.getRegisteredWorkspaceIds()).toEqual([workspaceId]);
+  });
+});

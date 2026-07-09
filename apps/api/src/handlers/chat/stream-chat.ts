@@ -355,7 +355,7 @@ const chatAttemptTerminalError = (
 ): ChatLoopDetectedError | ChatEmptyCompletionError | null =>
   state.finalLoopDetection ?? state.emptyCompletion;
 
-const projectChatToolSchemasForProvider = ({
+export const projectChatToolSchemasForProvider = ({
   modelTools,
   provider,
 }: {
