@@ -134,6 +134,11 @@ const CODE_ERROR_KEYS = {
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",
+  account_deletion_sole_owner: "errors.apiCodes.accountDeletionSoleOwner",
+  ai_config_model_invalid: "errors.apiCodes.aiConfigModelInvalid",
+  ai_config_provider_invalid: "errors.apiCodes.aiConfigProviderInvalid",
+  ai_config_provider_validation_failed:
+    "errors.apiCodes.aiConfigProviderValidationFailed",
   deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
   deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   forbidden: "errors.apiCodes.forbidden",

@@ -106,6 +106,32 @@ describe("toAPIError", () => {
     expect(error.rawMessage).toBe("Raw verification error");
   });
 
+  test.each([
+    [
+      "account_deletion_sole_owner",
+      "Transfer ownership or delete organizations you solely own before deleting your account.",
+    ],
+    [
+      "ai_config_provider_invalid",
+      "The AI provider configuration is invalid. Check the provider settings.",
+    ],
+    [
+      "ai_config_model_invalid",
+      "The AI model configuration is invalid. Check the selected models.",
+    ],
+    [
+      "ai_config_provider_validation_failed",
+      "The AI provider rejected the configuration. Check the API key and model.",
+    ],
+  ])("localizes the actionable configuration code %s", (code, expected) => {
+    const error = toAPIError({
+      status: 400,
+      value: { code, message: "Raw configuration error" },
+    });
+
+    expect(error.message).toBe(expected);
+  });
+
   test("localizes malformed empty payloads by status", () => {
     const error = toAPIError({
       status: 502,

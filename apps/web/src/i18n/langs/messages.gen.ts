@@ -1114,6 +1114,10 @@ type Messages = {
       "accessDenied": "Access denied.";
       "accountDeletionOtpExpired": "The verification code has expired. Request a new code.";
       "accountDeletionOtpInvalid": "Invalid verification code.";
+      "accountDeletionSoleOwner": "Transfer ownership or delete organizations you solely own before deleting your account.";
+      "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.";
+      "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.";
+      "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.";
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "forbidden": "You do not have permission to do this.";

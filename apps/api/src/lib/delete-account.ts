@@ -337,9 +337,10 @@ export const getPendingTasksAndMembers = async (
 /**
  * Verifies the OTP and deletes the user from the database.
  */
-const ACCOUNT_DELETION_ERROR_CODE = {
+export const ACCOUNT_DELETION_ERROR_CODE = {
   otpExpired: "account_deletion_otp_expired",
   otpInvalid: "account_deletion_otp_invalid",
+  soleOwner: "account_deletion_sole_owner",
 } as const;
 
 export const verifyAndDeleteUser = async (
@@ -441,6 +442,7 @@ export const verifyAndDeleteUser = async (
         );
         if (soleOwnedOrg) {
           throw new HandlerError({
+            code: ACCOUNT_DELETION_ERROR_CODE.soleOwner,
             status: 400,
             message: `Cannot delete account because you are the sole owner of organization "${soleOwnedOrg.orgName}". Please transfer ownership or delete the organization first.`,
           });
