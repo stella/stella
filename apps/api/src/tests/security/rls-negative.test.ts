@@ -1331,7 +1331,7 @@ describe("cross-org isolation", () => {
     // wsB1 is in the session wsIds, so entities in wsB1
     // are visible (ws policy only checks wsIds). This is
     // the expected behavior — workspace IDs are server-set
-    // from resolveAccessibleWorkspaces which filters by
+    // from resolveMemberAccess which filters by
     // user membership. The test documents this.
     expect(c).toBeGreaterThan(0);
   });
@@ -1346,7 +1346,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
   // where RLS only checks workspace_id. This documents
   // that org_id is not enforced at the RLS level; it is
   // safe because workspace IDs are server-set by
-  // resolveAccessibleWorkspaces which filters by org.
+  // resolveMemberAccess which filters by org.
 
   test("INSERT timeEntry with correct ws but wrong org → succeeds (ws policy only)", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {

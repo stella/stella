@@ -791,6 +791,11 @@ const ResolvedFileChatOverlay = ({
         fieldId: activeFile.fileFieldId,
         workspaceId,
       },
+      // Must match FileChatOverlayInner's own `hasDocxEditSurface` below
+      // (same `docxEditorRef` prop, and `activeFile` is always defined
+      // here) so the cache entry this query seeds lands under the same
+      // key that overlay's chatThreadOptions lookup will use.
+      hasDocxEditSurface: docxEditorRef !== undefined,
     }),
   );
 

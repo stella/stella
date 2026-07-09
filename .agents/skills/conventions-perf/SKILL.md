@@ -157,22 +157,28 @@ Worst DB-query budgets per endpoint:
 
 | Endpoint                                   | Route (first seen)                          | DB query budget |
 | ------------------------------------------- | -------------------------------------------- | ---------------- |
-| `GET /v1/contacts/:id`                      | `/contacts/$contactId`                       | 16                |
-| `GET /v1/entities/:id/entity/:id/versions`  | `/workspaces/$workspaceId/$viewId/document`  | 16                |
-| `POST /v1/chat/workspaces/:id/file-thread`  | `/workspaces/$workspaceId/entities/$entityId` | 14                |
-| `GET /v1/catalogue`                         | `/knowledge/mcp target`                      | 13                |
-| `GET /v1/workspaces`                        | `/todos`                                     | 12                |
+| `POST /v1/chat/workspaces/:id/file-thread`  | `/workspaces/$workspaceId/entities/$entityId` | 12 (creation path) |
+| `GET /v1/workspaces`                        | `/todos`                                     | 10                |
+| `GET /v1/entities/:id/entity/:id/versions`  | `/workspaces/$workspaceId/$viewId/document`  | 10                |
+| `GET /v1/contacts/:id`                      | `/contacts/$contactId`                       | 9                 |
 
-(The previous top offenders were fixed in 2026-07: the validateAuth
+(Two 2026-07 rounds paid down the earlier debt: the validateAuth
 resolve used to run 2-3 times per request, a 14-21 query floor on every
-authenticated endpoint, now ~6; chat thread messages went 27 to 9-12 and
-workspace overview 25 to 9 after batching. The remaining budgets above
-mostly sit near the floor plus a handful of handler reads; the next
-meaningful lever is the per-`safeDb`-call `set_config` round trip.)
+authenticated endpoint, now 4 (per-request memoization, one merged
+member-access join, no per-request jwks read); chat thread messages
+went 27 to 10, workspace overview 25 to 7, and the hot handlers share
+one transaction instead of paying a `set_config` per read. Remaining
+levers: better-auth's session+user pair (cookieCache trades a bounded
+revocation-staleness window and needs maintainer sign-off; the drizzle
+adapter's experimental joins flag is INCOMPATIBLE with RQBv2 relations,
+do not retry it) and any handler still stacking separate safeDb calls.)
 
 Deepest waterfalls: `/workspaces/$workspaceId/entities/$entityId` at depth 11
-remains the clear outlier; `/workspaces/$workspaceId/$viewId/document` is next
-at 9, then `/workspaces/$workspaceId/expenses` at 7.
+is a legacy redirect shim (render-fetches versions, then client-navigates to
+the document page, concatenating two waterfalls); the durable fix is
+retiring the shim, not tuning it. The document page itself is depth 8
+(its chat thread messages GET was folded into the file-thread POST
+response and cache-seeded).
 
 ## Cross-Links
 

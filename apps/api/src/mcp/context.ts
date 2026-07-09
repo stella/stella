@@ -1,13 +1,11 @@
 import { panic } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import { createSafeDb, createScopedDb } from "@/api/db";
 import type { SafeDb, ScopedDb } from "@/api/db";
-import { member } from "@/api/db/auth-schema";
-import { rootDb, rlsDb } from "@/api/db/root";
+import { rlsDb } from "@/api/db/root";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { resolveAccessibleWorkspaces } from "@/api/lib/auth";
+import { resolveMemberAccess } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -46,33 +44,20 @@ export const resolveMcpSessionContext = async (
     userId: session.userId,
   });
 
-  const memberRow = await rootDb
-    .select({ role: member.role })
-    .from(member)
-    .where(
-      and(
-        eq(member.userId, session.userId),
-        eq(member.organizationId, session.organizationId),
-      ),
-    )
-    .then((rows) => rows.at(0));
+  const memberAccess = await resolveMemberAccess(userId, organizationId);
 
-  if (!memberRow) {
+  if (!memberAccess) {
     throw new McpOrganizationAccessError({
       message: "User is not a member of this organization",
     });
   }
 
-  if (!isMemberRole(memberRow.role)) {
+  if (!isMemberRole(memberAccess.role)) {
     panic("User has an invalid member role");
   }
 
-  const memberRole = memberRow.role;
-  const accessibleWorkspaces = await resolveAccessibleWorkspaces(
-    userId,
-    organizationId,
-    memberRole,
-  );
+  const memberRole = memberAccess.role;
+  const accessibleWorkspaces = memberAccess.accessibleWorkspaces;
   // RLS receives all IDs regardless of status (matches the Elysia
   // auth path). Business-logic fields exclude deleting workspaces
   // so MCP tools don't surface content from sealed workspaces.

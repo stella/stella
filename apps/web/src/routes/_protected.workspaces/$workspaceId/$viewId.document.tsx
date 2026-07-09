@@ -75,6 +75,7 @@ import {
   entityVersionsOptions,
   fieldFileOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
+import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pdf-viewer-controls";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
@@ -130,6 +131,21 @@ export const Route = createFileRoute(
     const entity = await ensureRouteQueryData(
       context.queryClient,
       entityOptions(params.workspaceId, deps.entity),
+    );
+
+    // useSyncJustifications mounts with entityIds=[deps.entity] as soon as the
+    // component renders; warm the same query so it's a cache hit. The hook
+    // normalizes entityIds (dedupe + sort) before building the key, but for a
+    // single-element array that's a no-op, so the key matches exactly.
+    void prefetchRouteQuery(
+      context.queryClient,
+      justificationsOptions({
+        workspaceId: params.workspaceId,
+        entityIds: [deps.entity],
+      }),
+      (error: unknown) => {
+        getAnalytics().captureError(error);
+      },
     );
 
     // `field` is the fieldId FullscreenPdfViewer eventually reads via

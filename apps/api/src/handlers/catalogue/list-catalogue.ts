@@ -24,7 +24,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
-import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
+import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
 
@@ -98,26 +98,37 @@ const listCatalogue = createSafeRootHandler(
       .map((entry) => entry.slug);
     const mcpUrls = filterCatalogueByKind("mcp").map((entry) => entry.url);
 
-    const settings = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.organizationSettings.findFirst({
+    // One shared scoped transaction for the catalogue's read-only sequence:
+    // org settings (jurisdictions, tool overrides, and web-search BYOK keys
+    // in one widened select), the visible/authored agent-skill rows, the
+    // installed curated MCP connectors, and the org's custom MCP
+    // connectors. All reads share the same RLS scope (organizationId), so
+    // one transaction is semantically identical to the independent
+    // transactions this replaced, while paying for a single `set_config`.
+    const reads = yield* Result.await(
+      safeDb(async (tx) => {
+        // Widened to also cover the web-search BYOK key columns, so this
+        // one row read serves both the native-tool-override computation
+        // below and web-search provider resolution — replacing a second,
+        // independent read of the same organizationSettings row.
+        const settings = await tx.query.organizationSettings.findFirst({
           where: {
             organizationId: { eq: session.activeOrganizationId },
           },
           columns: {
             practiceJurisdictions: true,
             nativeToolOverrides: true,
+            webSearchApiKeyEncrypted: true,
+            webSearchApiKeyIv: true,
+            urlFetchApiKeyEncrypted: true,
+            urlFetchApiKeyIv: true,
           },
-        }),
-      ),
-    );
+        });
 
-    const visibleSkillRows =
-      skillSlugs.length === 0
-        ? []
-        : yield* Result.await(
-            safeDb((tx) =>
-              tx
+        const visibleSkillRows =
+          skillSlugs.length === 0
+            ? []
+            : await tx
                 .select({
                   id: agentSkills.id,
                   slug: agentSkills.slug,
@@ -139,18 +150,14 @@ const listCatalogue = createSafeRootHandler(
                       eq(agentSkills.userId, user.id),
                     ),
                   ),
-                ),
-            ),
-          );
+                );
 
-    // Authored skills the user created via "Add custom skill" (and
-    // legacy prompt_shortcuts migrated by the unification migration).
-    // They have no curated catalogue entry, so the loop below would
-    // miss them — append synthetic entries so the unified Tools page
-    // can manage them after creation.
-    const authoredSkillRows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+        // Authored skills the user created via "Add custom skill" (and
+        // legacy prompt_shortcuts migrated by the unification migration).
+        // They have no curated catalogue entry, so the loop below would
+        // miss them — append synthetic entries so the unified Tools page
+        // can manage them after creation.
+        const authoredSkillRows = await tx
           .select({
             id: agentSkills.id,
             slug: agentSkills.slug,
@@ -169,16 +176,12 @@ const listCatalogue = createSafeRootHandler(
                 eq(agentSkills.userId, user.id),
               ),
             ),
-          ),
-      ),
-    );
+          );
 
-    const installedMcps =
-      mcpUrls.length === 0
-        ? []
-        : yield* Result.await(
-            safeDb((tx) =>
-              tx
+        const installedMcps =
+          mcpUrls.length === 0
+            ? []
+            : await tx
                 .select({
                   url: mcpConnectors.url,
                   slug: mcpConnectors.slug,
@@ -196,19 +199,15 @@ const listCatalogue = createSafeRootHandler(
                     ),
                     inArray(mcpConnectors.url, mcpUrls),
                   ),
-                ),
-            ),
-          );
+                );
 
-    // Org-owned MCP connectors that don't match any curated catalogue
-    // entry URL. These are "custom" connectors the user added via the
-    // old /knowledge/mcp page (or its successor); they need to show up
-    // in /knowledge/tools so the user can manage them after the
-    // surface unification. Capped to match /mcp/connectors so a large
-    // org can't turn this endpoint into an unbounded read.
-    const orgCustomMcps = yield* Result.await(
-      safeDb((tx) =>
-        tx
+        // Org-owned MCP connectors that don't match any curated catalogue
+        // entry URL. These are "custom" connectors the user added via the
+        // old /knowledge/mcp page (or its successor); they need to show up
+        // in /knowledge/tools so the user can manage them after the
+        // surface unification. Capped to match /mcp/connectors so a large
+        // org can't turn this endpoint into an unbounded read.
+        const orgCustomMcps = await tx
           .select({
             id: mcpConnectors.id,
             slug: mcpConnectors.slug,
@@ -224,8 +223,8 @@ const listCatalogue = createSafeRootHandler(
             iconUrl: mcpConnectors.iconUrl,
             oauthIssuer: mcpConnectors.oauthIssuer,
             // Server-reported metadata is per-user; read the caller's own
-            // connection so one member's account-specific text never leaks
-            // to another.
+            // connection so one member's account-specific text never
+            // leaks to another.
             instructions: mcpUserConnections.instructions,
             serverVersion: mcpUserConnections.serverVersion,
           })
@@ -244,9 +243,24 @@ const listCatalogue = createSafeRootHandler(
             ),
           )
           .orderBy(mcpConnectors.displayName, mcpConnectors.id)
-          .limit(LIMITS.mcpConnectorsPageSizeMax),
-      ),
+          .limit(LIMITS.mcpConnectorsPageSizeMax);
+
+        return {
+          settings,
+          visibleSkillRows,
+          authoredSkillRows,
+          installedMcps,
+          orgCustomMcps,
+        };
+      }),
     );
+    const {
+      settings,
+      visibleSkillRows,
+      authoredSkillRows,
+      installedMcps,
+      orgCustomMcps,
+    } = reads;
     const curatedMcpUrlSet = new Set(mcpUrls);
 
     const practiceJurisdictions = settings?.practiceJurisdictions ?? [];
@@ -291,9 +305,11 @@ const listCatalogue = createSafeRootHandler(
     // Org-aware: available when the deploy supplies a key or the org
     // has its own BYOK key (org-level enable/disable is applied
     // separately below via nativeToolOverrides).
-    const { webSearchProvider } = await loadWebSearchProvidersForOrg(
-      session.activeOrganizationId,
-    );
+    const { webSearchProvider } =
+      await resolveWebSearchProvidersFromOrgSettingsRow(
+        session.activeOrganizationId,
+        settings,
+      );
     const webSearchDeployAvailable = webSearchProvider !== null;
 
     const response: CatalogueEntryResponse[] = [];
