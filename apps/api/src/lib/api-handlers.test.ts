@@ -72,7 +72,10 @@ describe("createSafeRootHandler usage preflight", () => {
         throw new Error("Expected usage preflight to return a status response");
       }
       expect(result.code).toBe(500);
-      expect(result.response).toEqual({ message: "Internal server error" });
+      expect(result.response).toEqual({
+        code: "internal_server_error",
+        message: "Internal server error",
+      });
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
     }
@@ -223,7 +226,10 @@ describe("createSafeRootHandler permission gate", () => {
       throw new Error("expected a status response");
     }
     expect(result.code).toBe(403);
-    expect(result.response).toEqual({ message: "Forbidden" });
+    expect(result.response).toEqual({
+      code: "forbidden",
+      message: "Forbidden",
+    });
   });
 
   test("runs the handler when the role holds the permission", async () => {
