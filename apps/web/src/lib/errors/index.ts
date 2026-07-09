@@ -63,7 +63,7 @@ type ToAPIErrorProps = {
 };
 
 export const toAPIError = ({ status, value }: ToAPIErrorProps) => {
-  if (!value) {
+  if (value === null || value === undefined) {
     return new APIError({
       message: localizeAPIError({ status }),
       status,
@@ -137,7 +137,6 @@ const CODE_ERROR_KEYS = {
 const STATUS_TO_KEY: Readonly<Record<number, TranslationKey | undefined>> = {
   400: STATUS_ERROR_KEYS.badRequest,
   401: STATUS_ERROR_KEYS.unauthorized,
-  402: "errors.apiCodes.usageLimitExceeded",
   403: STATUS_ERROR_KEYS.forbidden,
   404: STATUS_ERROR_KEYS.notFound,
   409: STATUS_ERROR_KEYS.conflict,
@@ -172,10 +171,10 @@ const localizeAPIError = ({
   }
   if (
     status === 402 &&
-    typeof details?.reason === "string" &&
-    isKnownErrorCode(details.reason)
+    typeof details?.["reason"] === "string" &&
+    isKnownErrorCode(details["reason"])
   ) {
-    return translate(CODE_ERROR_KEYS[details.reason]);
+    return translate(CODE_ERROR_KEYS[details["reason"]]);
   }
   return translate(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
 };

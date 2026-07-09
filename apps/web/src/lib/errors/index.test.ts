@@ -76,6 +76,27 @@ describe("toAPIError", () => {
     );
     expect(error.rawMessage).toBeUndefined();
   });
+
+  test("does not label uncoded payment-required responses as usage limits", () => {
+    const error = toAPIError({
+      status: 402,
+      value: {
+        message: "The configured AI provider rejected the request.",
+      },
+    });
+
+    expect(error.message).toBe("The request failed. Please try again.");
+  });
+
+  test("localizes payment-required responses with a usage-limit reason", () => {
+    const value = {
+      message: "Usage limit exceeded",
+      reason: "usage_limit_exceeded",
+    };
+    const error = toAPIError({ status: 402, value });
+
+    expect(error.message).toBe("Usage limit reached.");
+  });
 });
 
 describe("userErrorMessage", () => {
@@ -206,8 +227,10 @@ describe("toAuthClientError", () => {
     });
 
     expect(APIError.is(error)).toBe(true);
-    expect(error.message).toBe("Please sign in again.");
-    expect(error.rawMessage).toBe("Unexpected");
+    if (APIError.is(error)) {
+      expect(error.message).toBe("Please sign in again.");
+      expect(error.rawMessage).toBe("Unexpected");
+    }
   });
 
   test("localizes known auth client codes", () => {
