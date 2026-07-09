@@ -31,6 +31,8 @@
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 
 import { panic, Result } from "better-result";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
@@ -70,6 +72,38 @@ const DISPATCH_PATH = path.resolve(
   REPO_ROOT,
   "apps/api/src/mcp/generated/capability-dispatch.ts",
 );
+
+const OXFMT_BIN = path.resolve(REPO_ROOT, "node_modules/.bin/oxfmt");
+const OXFMT_CONFIG = path.resolve(REPO_ROOT, ".oxfmtrc.json");
+
+/**
+ * Format a generated TS module with the repo's oxfmt config before it is
+ * written or drift-compared, mirroring how the CLI codegen runs oxfmt over its
+ * generated modules. Formatting through the real formatter (instead of hand-
+ * matching its wrapping style) keeps the committed artifact byte-identical to
+ * what CI's `oxfmt --check` expects, so the `--check` drift guard and the
+ * format gate can never disagree. The temp file lives outside the repo so no
+ * ignore rules apply to it.
+ */
+const formatGeneratedModule = async (raw: string): Promise<string> => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), "capability-dispatch-"));
+  const tmpFile = path.join(dir, "capability-dispatch.ts");
+  try {
+    await Bun.write(tmpFile, raw);
+    const proc = Bun.spawnSync([OXFMT_BIN, "-c", OXFMT_CONFIG, tmpFile], {
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    if (proc.exitCode !== 0) {
+      return panic(
+        `export-capability-catalog: oxfmt failed on the generated dispatch module: ${proc.stderr.toString()}`,
+      );
+    }
+    return await Bun.file(tmpFile).text();
+  } finally {
+    await rm(dir, { force: true, recursive: true });
+  }
+};
 
 /**
  * MCP OAuth scope per capability domain (the first id segment). One scope per
@@ -802,7 +836,9 @@ const main = async (): Promise<number> => {
   }
 
   const serialized = serializeCatalog(entries);
-  const dispatchSerialized = serializeDispatchModule(dispatchRecords);
+  const dispatchSerialized = await formatGeneratedModule(
+    serializeDispatchModule(dispatchRecords),
+  );
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);

@@ -626,7 +626,7 @@ describe("deriveHandlerImportPath", () => {
 });
 
 describe("serializeDispatchModule", () => {
-  test("emits a lazy import thunk per record, named export threaded", () => {
+  test("emits an async lazy import thunk per record, named export threaded", () => {
     const out = serializeDispatchModule([
       {
         id: "time-entries.create",
@@ -634,19 +634,86 @@ describe("serializeDispatchModule", () => {
         exportName: undefined,
       },
       {
-        id: "views.export.named",
+        id: "views.export.readViewExport",
         importPath: "@/api/handlers/views/export",
-        exportName: "named",
+        exportName: "readViewExport",
       },
     ]);
     expect(out).toContain(
-      '"time-entries.create": { load: () => import("@/api/handlers/time-entries/create") },',
+      '"time-entries.create": { load: async () => await import("@/api/handlers/time-entries/create") },',
     );
     expect(out).toContain(
-      '"views.export.named": { load: () => import("@/api/handlers/views/export"), exportName: "named" },',
+      '"views.export.readViewExport": { load: async () => await import("@/api/handlers/views/export"), exportName: "readViewExport" },',
     );
     expect(out).toContain("export const CAPABILITY_DISPATCH");
     expect(out.endsWith("\n")).toBe(true);
+  });
+
+  // Code-sanitization guard: every interpolated value must match its strict
+  // pattern or the serializer throws, so a crafted handler path or export name
+  // can never alter the generated module's code structure.
+  test("rejects an id outside the strict pattern", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: 'evil"; process.exit(1); //',
+          importPath: "@/api/handlers/x/y",
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe id/u);
+    expect(() =>
+      serializeDispatchModule([
+        { id: "a b", importPath: "@/api/handlers/x/y", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe id/u);
+  });
+
+  test("rejects an import path outside the @/api alias or with unsafe characters", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y",
+          importPath: '@/api/handlers/x") as never; //',
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe import path/u);
+    expect(() =>
+      serializeDispatchModule([
+        { id: "x.y", importPath: "node:child_process", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe import path/u);
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y",
+          importPath: "@/api/handlers/X/Upper",
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe import path/u);
+  });
+
+  test("rejects an export name that is not a plain identifier", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y.z",
+          importPath: "@/api/handlers/x/y",
+          exportName: 'a"] ?? evil["b',
+        },
+      ]),
+    ).toThrow(/unsafe export name/u);
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y.z",
+          importPath: "@/api/handlers/x/y",
+          exportName: "1startsWithDigit",
+        },
+      ]),
+    ).toThrow(/unsafe export name/u);
   });
 });
 

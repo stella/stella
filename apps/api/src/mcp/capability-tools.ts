@@ -189,6 +189,10 @@ const statusResponseMessage = (response: unknown): string => {
   if (isRecord(response) && typeof response["message"] === "string") {
     return response["message"];
   }
+  // Some status paths carry a bare string body (e.g. `status(403, "Forbidden")`).
+  if (typeof response === "string" && response.length > 0) {
+    return response;
+  }
   return "The capability handler rejected the request";
 };
 
@@ -323,6 +327,44 @@ const hintForUnknownId = (id: string): string => {
     : "Call list_capabilities to browse available capability ids.";
 };
 
+type GuardedEndpoint =
+  | { ok: true; endpoint: EndpointDefinition }
+  | { ok: false; result: CallToolResult };
+
+/**
+ * Load a capability's endpoint with failures contained: a rejecting dynamic
+ * import (or a module without the `{ config, handler }` shape) is captured and
+ * mapped to a structured `internal_error` envelope instead of escaping as an
+ * unhandled rejection. Shared by `describe_capability` and `invoke_capability`.
+ */
+const loadEndpointGuarded = async (
+  id: string,
+  toolName: "describe_capability" | "invoke_capability",
+): Promise<GuardedEndpoint> => {
+  let endpoint: EndpointDefinition | null;
+  try {
+    endpoint = await loadEndpoint(id);
+  } catch (error) {
+    captureError(error, { source: "mcp", toolName });
+    endpoint = null;
+  }
+  if (!endpoint) {
+    captureError(new Error(`capability dispatch missing endpoint: ${id}`), {
+      source: "mcp",
+      toolName,
+    });
+    return {
+      ok: false,
+      result: structuredErrorResult({
+        code: "internal_error",
+        message: "Could not load the capability definition",
+        hint: MCP_INTERNAL_ERROR_HINT,
+      }),
+    };
+  }
+  return { ok: true, endpoint };
+};
+
 const describeCapabilityHandler = async ({
   args,
 }: {
@@ -338,18 +380,11 @@ const describeCapabilityHandler = async ({
     return notFoundWithHint(id);
   }
 
-  const endpoint = await loadEndpoint(id);
-  if (!endpoint) {
-    captureError(new Error(`capability dispatch missing endpoint: ${id}`), {
-      source: "mcp",
-      toolName: "describe_capability",
-    });
-    return structuredErrorResult({
-      code: "internal_error",
-      message: "Could not load the capability definition",
-      hint: MCP_INTERNAL_ERROR_HINT,
-    });
+  const loaded = await loadEndpointGuarded(id, "describe_capability");
+  if (!loaded.ok) {
+    return loaded.result;
   }
+  const endpoint = loaded.endpoint;
 
   // The live TypeBox schemas are plain objects plus symbol metadata; the final
   // JSON serialization (textResult in the egress pipeline) drops the symbols, so
@@ -556,18 +591,11 @@ const executeInvoke = async ({
   input: InvokeInput;
   validateOnly: boolean;
 }): Promise<McpToolResponse> => {
-  const endpoint = await loadEndpoint(id);
-  if (!endpoint) {
-    captureError(new Error(`capability dispatch missing endpoint: ${id}`), {
-      source: "mcp",
-      toolName: "invoke_capability",
-    });
-    return structuredErrorResult({
-      code: "internal_error",
-      message: "Could not load the capability definition",
-      hint: MCP_INTERNAL_ERROR_HINT,
-    });
+  const loaded = await loadEndpointGuarded(id, "invoke_capability");
+  if (!loaded.ok) {
+    return loaded.result;
   }
+  const endpoint = loaded.endpoint;
 
   const isWorkspace = entry.handlerKind === "workspace";
   // 5. Input validation against the live TypeBox schemas. A workspace-scoped
@@ -615,14 +643,15 @@ const executeInvoke = async ({
   const validatedParams = paramsResult.ok ? paramsResult.value : undefined;
   const validatedQuery = queryResult.ok ? queryResult.value : undefined;
 
-  // 6. Context synthesis: resolve the workspace (workspace kind only), then
-  // build the safe-handler context and run the handler through the wrapper.
+  // 6. Context synthesis: resolve the workspace (workspace kind only) from the
+  // VALIDATED params (so schema defaults/coercion are respected), then build the
+  // safe-handler context and run the handler through the wrapper.
   let workspaceId: SafeId<"workspace"> | undefined;
   if (isWorkspace) {
     const resolved = resolveCapabilityWorkspace({
       context,
       entry,
-      params: input.params,
+      params: validatedParams,
     });
     if (!resolved.ok) {
       return resolved.result;

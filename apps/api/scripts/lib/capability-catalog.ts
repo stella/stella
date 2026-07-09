@@ -360,12 +360,62 @@ export type CapabilityDispatchRecord = {
 };
 
 /**
+ * Strict shape guards for every value interpolated into the generated dispatch
+ * module. All three values are derived mechanically (id from the handler file
+ * path + export name, import path from the same file path), so a mismatch means
+ * the derivation produced something outside its own contract: the serializer
+ * throws rather than emitting it. Combined with `JSON.stringify` for the actual
+ * literal emission, no interpolated value can alter the generated module's code
+ * structure.
+ *
+ * - id: dot-joined path segments plus an optional camelCase export-name
+ *   segment (e.g. `entities.read-summaries.readEntitySummariesCount`).
+ * - import path: the fixed `@/api/` alias prefix plus lowercase path segments.
+ * - export name: a plain TS identifier.
+ */
+const DISPATCH_ID_PATTERN = /^[a-zA-Z0-9.-]+$/u;
+const DISPATCH_IMPORT_PATH_PATTERN = /^@\/api\/[a-z0-9/.-]+$/u;
+const DISPATCH_EXPORT_NAME_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/u;
+
+const assertSafeDispatchRecord = ({
+  id,
+  importPath,
+  exportName,
+}: CapabilityDispatchRecord): void => {
+  if (!DISPATCH_ID_PATTERN.test(id)) {
+    panic(
+      `capability-catalog: refusing to emit dispatch entry with unsafe id ${JSON.stringify(id)} (must match ${DISPATCH_ID_PATTERN})`,
+    );
+  }
+  if (!DISPATCH_IMPORT_PATH_PATTERN.test(importPath)) {
+    panic(
+      `capability-catalog: refusing to emit dispatch entry "${id}" with unsafe import path ${JSON.stringify(importPath)} (must match ${DISPATCH_IMPORT_PATH_PATTERN})`,
+    );
+  }
+  if (
+    exportName !== undefined &&
+    !DISPATCH_EXPORT_NAME_PATTERN.test(exportName)
+  ) {
+    panic(
+      `capability-catalog: refusing to emit dispatch entry "${id}" with unsafe export name ${JSON.stringify(exportName)} (must match ${DISPATCH_EXPORT_NAME_PATTERN})`,
+    );
+  }
+};
+
+/**
  * Serialize the generated capability-dispatch module: a typed map from
  * capability id to a lazy `import()` thunk (plus the export name for a non-
  * default export). Same determinism contract as the JSON catalog: the caller
- * passes id-sorted records. The server reads `.import()` then the named (or
+ * passes id-sorted records. The server reads `.load()` then the named (or
  * default) export to reach the `{ config, handler }` endpoint definition, so the
  * generic invoke path runs the exact code REST does.
+ *
+ * Every interpolated value is validated against a strict pattern first (see
+ * `assertSafeDispatchRecord`) and emitted through `JSON.stringify`, so the
+ * generated code's structure cannot be influenced by a crafted handler path or
+ * export name. The output is raw (single-line entries); the exporter formats it
+ * with oxfmt before writing/comparing, mirroring how the CLI codegen formats
+ * its generated modules, so the committed artifact passes `oxfmt --check`.
  */
 export const serializeDispatchModule = (
   records: readonly CapabilityDispatchRecord[],
@@ -389,8 +439,10 @@ export type CapabilityDispatchEntry = {
 export const CAPABILITY_DISPATCH = {
 `;
   const body = records
-    .map(({ id, importPath, exportName }) => {
-      const loader = `load: () => import(${JSON.stringify(importPath)})`;
+    .map((record) => {
+      assertSafeDispatchRecord(record);
+      const { id, importPath, exportName } = record;
+      const loader = `load: async () => await import(${JSON.stringify(importPath)})`;
       const named =
         exportName === undefined
           ? ""
