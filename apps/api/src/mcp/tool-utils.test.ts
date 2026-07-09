@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { encodePaginationCursor } from "@/api/lib/pagination";
@@ -7,11 +8,13 @@ import {
   buildCaseLawDecisionUrl,
   closestToolNames,
   isToolErrorResult,
+  mapValibotIssues,
   notFoundResult,
   parseOptionalCursor,
   resolveWindowBounds,
   slugifyCaseLawPathSegment,
   structuredErrorResult,
+  validationErrorResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
@@ -379,6 +382,85 @@ describe("structuredErrorResult", () => {
 
     expect(text).not.toContain("hint");
     expect(text).not.toContain("retryable");
+  });
+
+  test("includes issues under error.issues when non-empty", () => {
+    const result = structuredErrorResult({
+      code: "validation_error",
+      message: "bad arg",
+      issues: [{ path: "matter_id", message: "Required" }],
+    });
+
+    expect(JSON.parse(errorText(result))).toEqual({
+      error: {
+        code: "validation_error",
+        message: "bad arg",
+        issues: [{ path: "matter_id", message: "Required" }],
+      },
+    });
+  });
+
+  test("omits an empty issues array so the shape stays minimal", () => {
+    const text = errorText(
+      structuredErrorResult({
+        code: "validation_error",
+        message: "bad arg",
+        issues: [],
+      }),
+    );
+
+    expect(text).not.toContain("issues");
+  });
+});
+
+describe("mapValibotIssues", () => {
+  const schema = v.strictObject({
+    matter_id: v.pipe(v.string(), v.minLength(1)),
+    limit: v.optional(v.pipe(v.number(), v.integer())),
+  });
+
+  test("maps a field issue to its dot-path", () => {
+    const parsed = v.safeParse(schema, { matter_id: 123 });
+    if (parsed.success) {
+      throw new Error("expected a validation failure");
+    }
+
+    const issues = mapValibotIssues(parsed.issues);
+    expect(issues.at(0)?.path).toBe("matter_id");
+    expect(typeof issues.at(0)?.message).toBe("string");
+  });
+
+  test("falls back to an empty path for a root issue", () => {
+    // A top-level type mismatch has no field, so `getDotPath` yields no path.
+    const parsed = v.safeParse(v.pipe(v.string(), v.minLength(1)), 123);
+    if (parsed.success) {
+      throw new Error("expected a validation failure");
+    }
+
+    expect(mapValibotIssues(parsed.issues).at(0)?.path).toBe("");
+  });
+});
+
+describe("validationErrorResult", () => {
+  test("emits a validation_error envelope with mapped issues", () => {
+    const schema = v.strictObject({ name: v.pipe(v.string(), v.minLength(1)) });
+    const parsed = v.safeParse(schema, {});
+    if (parsed.success) {
+      throw new Error("expected a validation failure");
+    }
+
+    const result = validationErrorResult({
+      issues: parsed.issues,
+      message: "name is required",
+    });
+
+    expect(result.isError).toBe(true);
+    const payload = JSON.parse(errorText(result));
+    expect(payload.error.code).toBe("validation_error");
+    expect(payload.error.message).toBe("name is required");
+    expect(payload.error.issues).toEqual([
+      { path: "name", message: expect.any(String) },
+    ]);
   });
 });
 

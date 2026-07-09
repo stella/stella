@@ -26,3 +26,12 @@ export const MCP_ERROR_CODES = [
 ] as const;
 
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+
+/**
+ * One structured validation issue in the error envelope. `path` is the dot-path
+ * to the offending field (empty string for a whole-object / root issue);
+ * `message` is the human-readable reason. Emitted under `error.issues` only for
+ * `validation_error` envelopes, so agents and the CLI can pinpoint the field
+ * that failed instead of parsing the collapsed summary message.
+ */
+export type McpValidationIssue = { path: string; message: string };

@@ -210,6 +210,34 @@ const expectErrorEnvelope = (
   expect(parseToolPayload(result)).toEqual({ error: expected });
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// The parsed `error` object of a structured `{ error: { code, message,
+// issues? } }` envelope. Throws if the result is not a structured envelope.
+const validationEnvelope = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+): Record<string, unknown> => {
+  expect(result.isError).toBe(true);
+  const payload = parseToolPayload(result);
+  if (!isRecord(payload) || !isRecord(payload["error"])) {
+    throw new Error("expected a structured error envelope");
+  }
+  return payload["error"];
+};
+
+// Assert a `validation_error` envelope carrying the given human message. The
+// structured `issues` are asserted separately in the tests where their
+// dot-paths are the point.
+const expectValidationMessage = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+  message: string,
+): void => {
+  const error = validationEnvelope(result);
+  expect(error["code"]).toBe("validation_error");
+  expect(error["message"]).toBe(message);
+};
+
 const FEATURE_DISABLED_HINT =
   "This deployment or organization has this feature turned off; it cannot be enabled from the client.";
 
@@ -1722,10 +1750,23 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "list_documents",
     });
 
-    expect(result).toEqual({
-      content: [{ type: "text", text: "parent_id requires mode 'children'" }],
-      isError: true,
+    expectValidationMessage(result, "parent_id requires mode 'children'");
+  });
+
+  test("list_documents surfaces a field-level issue with a dot-path", async () => {
+    const result = await handleMcpToolCall({
+      // matter_id must be a string; a number fails the field validator, so the
+      // envelope carries a structured issue pinpointing the offending field.
+      args: { matter_id: 123 },
+      context: createContext(),
+      toolName: "list_documents",
     });
+
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "matter_id", message: expect.any(String) },
+    ]);
   });
 
   test("read_document rejects compare_with_version_id without version_id", async () => {
@@ -1735,15 +1776,10 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "read_document",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "compare_with_version_id requires version_id (the target version)",
-        },
-      ],
-      isError: true,
-    });
+    expectValidationMessage(
+      result,
+      "compare_with_version_id requires version_id (the target version)",
+    );
   });
 
   test("save_document (update branch) rejects an empty update", async () => {
@@ -1753,15 +1789,10 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "save_document",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Provide at least one change: name, parent_id/move_to_root, or version_id with label/description",
-        },
-      ],
-      isError: true,
-    });
+    expectValidationMessage(
+      result,
+      "Provide at least one change: name, parent_id/move_to_root, or version_id with label/description",
+    );
   });
 
   test("save_document (update branch) rejects parent_id together with move_to_root", async () => {
@@ -1775,15 +1806,10 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "save_document",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Provide either parent_id or move_to_root, not both",
-        },
-      ],
-      isError: true,
-    });
+    expectValidationMessage(
+      result,
+      "Provide either parent_id or move_to_root, not both",
+    );
   });
 
   test("save_document (update branch) rejects label without version_id", async () => {
@@ -1795,12 +1821,7 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "save_document",
     });
 
-    expect(result).toEqual({
-      content: [
-        { type: "text", text: "label and description require version_id" },
-      ],
-      isError: true,
-    });
+    expectValidationMessage(result, "label and description require version_id");
   });
 
   test("save_document rejects matter_id (a create field) alongside entity_id", async () => {
@@ -1810,15 +1831,10 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "save_document",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "matter_id applies only when creating; omit it when updating a document",
-        },
-      ],
-      isError: true,
-    });
+    expectValidationMessage(
+      result,
+      "matter_id applies only when creating; omit it when updating a document",
+    );
   });
 
   test("list_matters rejects matter_id combined with a list filter", async () => {
@@ -1937,10 +1953,7 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "save_matter",
     });
 
-    expect(result).toEqual({
-      content: [{ type: "text", text: "name is required to create a matter" }],
-      isError: true,
-    });
+    expectValidationMessage(result, "name is required to create a matter");
   });
 
   // Archived matters stay readable but are read-only through the write tools,
@@ -2000,10 +2013,7 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "save_contact",
     });
 
-    expect(result).toEqual({
-      content: [{ type: "text", text: "type is required to create a contact" }],
-      isError: true,
-    });
+    expectValidationMessage(result, "type is required to create a contact");
   });
 
   test("save_task rejects a create with no matter_id", async () => {
@@ -2013,12 +2023,7 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "save_task",
     });
 
-    expect(result).toEqual({
-      content: [
-        { type: "text", text: "matter_id is required to create a task" },
-      ],
-      isError: true,
-    });
+    expectValidationMessage(result, "matter_id is required to create a task");
   });
 
   // list_tasks (detail) and save_task confine themselves to entities of kind
@@ -2437,12 +2442,10 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "save_time_entry",
     });
 
-    expect(result).toEqual({
-      content: [
-        { type: "text", text: "Provide at least one change to the time entry" },
-      ],
-      isError: true,
-    });
+    expectValidationMessage(
+      result,
+      "Provide at least one change to the time entry",
+    );
   });
 
   // Time-and-billing tools carry FEATURE_TIME_BILLING; get_usage carries

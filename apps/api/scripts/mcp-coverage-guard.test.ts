@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { isRecord } from "./lib/enumerate-safe-handlers";
 import {
   classifyCoverage,
   computeBaselineDiff,
@@ -21,6 +22,21 @@ describe("toEndpointIdentifier", () => {
 
   test("returns the absolute path unchanged when it is outside the root", () => {
     expect(toEndpointIdentifier("/other/x.ts", "/repo")).toBe("/other/x.ts");
+  });
+});
+
+describe("isRecord", () => {
+  test("accepts plain objects only", () => {
+    expect(isRecord({})).toBe(true);
+    expect(isRecord({ a: 1 })).toBe(true);
+  });
+
+  test("rejects arrays, null, and primitives", () => {
+    expect(isRecord([])).toBe(false);
+    expect(isRecord(["a"])).toBe(false);
+    expect(isRecord(null)).toBe(false);
+    expect(isRecord("x")).toBe(false);
+    expect(isRecord(1)).toBe(false);
   });
 });
 
@@ -51,6 +67,12 @@ describe("parseExposure", () => {
       type: "covered",
       by: "search",
     });
+    expect(
+      parseExposure({ type: "capability", reason: "billing_admin" }),
+    ).toEqual({
+      type: "capability",
+      reason: "billing_admin",
+    });
     expect(parseExposure({ type: "internal", reason: "webhook" })).toEqual({
       type: "internal",
       reason: "webhook",
@@ -58,6 +80,7 @@ describe("parseExposure", () => {
     // Missing discriminant payloads are invalid, not silently accepted.
     expect(parseExposure({ type: "tool" }).type).toBe("invalid");
     expect(parseExposure({ type: "covered" }).type).toBe("invalid");
+    expect(parseExposure({ type: "capability" }).type).toBe("invalid");
     expect(parseExposure({ type: "bogus" }).type).toBe("invalid");
   });
 
@@ -223,6 +246,13 @@ describe("classifyCoverage", () => {
         {
           id: "cov.ts",
           exposure: { type: "covered", by: "read_contact" },
+        },
+        // A `capability` disposition is valid on its own: it is reached through
+        // the generic capability path, so it needs no tool-name cross-check and
+        // never orphans a tool.
+        {
+          id: "cap.ts",
+          exposure: { type: "capability", reason: "billing_admin" },
         },
       ],
       registryToolNames,

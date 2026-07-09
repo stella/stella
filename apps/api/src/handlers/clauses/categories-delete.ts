@@ -12,7 +12,7 @@ const deleteClauseCategoryParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["delete"] },
-  mcp: { type: "internal", reason: "knowledge_library_admin" },
+  mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: deleteClauseCategoryParamsSchema,
 } satisfies HandlerConfig;
 

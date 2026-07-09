@@ -45,34 +45,29 @@
 import { panic } from "better-result";
 import path from "node:path";
 
-// Repo root resolved from this script's location so identifiers are stable
-// regardless of the process working directory.
-const SCRIPTS_DIR = import.meta.dir;
-const REPO_ROOT = path.resolve(SCRIPTS_DIR, "../../..");
-const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
+import type { ParsedExposure } from "./lib/enumerate-safe-handlers";
+import {
+  discoverSafeHandlers,
+  enumerateModuleEndpoints,
+  isEndpointModule,
+  parseExposure,
+  REPO_ROOT,
+  toEndpointIdentifier,
+} from "./lib/enumerate-safe-handlers";
+
 const BASELINE_PATH = path.resolve(
   REPO_ROOT,
   "apps/api/mcp-coverage-baseline.json",
 );
 
-const EXPOSURE_TYPES = ["tool", "covered", "internal", "pending"] as const;
+const EXPOSURE_TYPES = [
+  "tool",
+  "covered",
+  "capability",
+  "internal",
+  "pending",
+] as const;
 type ExposureType = (typeof EXPOSURE_TYPES)[number];
-
-/**
- * Only import files that textually contain a safe-handler factory call. The
- * handlers tree also holds pure helpers and standalone CLI scripts (e.g.
- * case-law/seed-court-weights.ts, which runs a DB seed and process.exit at
- * module top level); importing those would execute their side effects and
- * can kill the guard process. Files without a factory call cannot define an
- * endpoint config, so skipping them without importing is sound.
- *
- * Global so `String.prototype.match` can count call sites per file for the
- * hidden-endpoint invariant. The trailing `[<(]` excludes bare identifier
- * mentions (imports, re-exports) and only matches a call or generic
- * instantiation, so an `import { createSafeHandler }` line is never counted.
- */
-const SAFE_HANDLER_CALL_PATTERN =
-  /createSafe(?:Root|Session|Token|Public)?Handler[<(]/gu;
 
 /**
  * Files that legitimately define endpoints inline (via a `createSafe*Handler`
@@ -120,102 +115,15 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: MCP-only tool, files feedback via a prefilled GitHub issue URL or the email transport (apps/api/src/mcp/feedback-tools.ts)",
 };
 
-export type EnumeratedEndpoint = {
-  id: string;
-  mcp: unknown;
+// Re-exported from the shared enumeration lib so the guard's own test suite
+// (which imports these from `./mcp-coverage-guard`) keeps its import surface.
+export {
+  enumerateModuleEndpoints,
+  isEndpointModule,
+  parseExposure,
+  toEndpointIdentifier,
 };
-
-export type ParsedExposure =
-  | { type: "tool"; name: string }
-  | { type: "covered"; by: string }
-  | { type: "internal"; reason: string }
-  | { type: "pending" }
-  | { type: "invalid"; raw: unknown };
-
-/** Repo-relative identifier for an endpoint module (stable across machines). */
-export const toEndpointIdentifier = (
-  absPath: string,
-  repoRoot: string,
-): string => {
-  const normalizedRoot = repoRoot.endsWith("/") ? repoRoot : `${repoRoot}/`;
-  return absPath.startsWith(normalizedRoot)
-    ? absPath.slice(normalizedRoot.length)
-    : absPath;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-/** Narrow an unknown default export to an endpoint definition shape. */
-export const isEndpointModule = (
-  value: unknown,
-): value is { config: Record<string, unknown>; handler: unknown } => {
-  if (!isRecord(value)) {
-    return false;
-  }
-  return typeof value["handler"] === "function" && isRecord(value["config"]);
-};
-
-/** Parse a config's `mcp` value into a discriminated result the guard checks. */
-export const parseExposure = (mcp: unknown): ParsedExposure => {
-  if (!isRecord(mcp)) {
-    return { type: "invalid", raw: mcp };
-  }
-  const type = mcp["type"];
-  if (type === "pending") {
-    return { type: "pending" };
-  }
-  const name = mcp["name"];
-  if (type === "tool" && typeof name === "string") {
-    return { type: "tool", name };
-  }
-  const by = mcp["by"];
-  if (type === "covered" && typeof by === "string") {
-    return { type: "covered", by };
-  }
-  const reason = mcp["reason"];
-  if (type === "internal" && typeof reason === "string") {
-    return { type: "internal", reason };
-  }
-  return { type: "invalid", raw: mcp };
-};
-
-/**
- * Enumerate every `{ config, handler }` export a module exposes as an endpoint,
- * deduplicated by object identity. The default export takes the plain module id;
- * a named export takes `id#exportName`. An object exported as both default and a
- * name is recorded once under the default id, so existing baseline entries stay
- * valid. Pure (a plain record in, no I/O) so the self-test can exercise it.
- */
-export const enumerateModuleEndpoints = (
-  mod: Record<string, unknown>,
-  moduleId: string,
-): { id: string; exposure: ParsedExposure }[] => {
-  const endpoints: { id: string; exposure: ParsedExposure }[] = [];
-  const claimed = new Set<object>();
-
-  const defaultExport = mod["default"];
-  if (isEndpointModule(defaultExport)) {
-    claimed.add(defaultExport);
-    endpoints.push({
-      id: moduleId,
-      exposure: parseExposure(defaultExport.config["mcp"]),
-    });
-  }
-
-  for (const [key, value] of Object.entries(mod)) {
-    if (key === "default" || !isEndpointModule(value) || claimed.has(value)) {
-      continue;
-    }
-    claimed.add(value);
-    endpoints.push({
-      id: `${moduleId}#${key}`,
-      exposure: parseExposure(value.config["mcp"]),
-    });
-  }
-
-  return endpoints;
-};
+export type { ParsedExposure };
 
 export type CoverageIssues = {
   missingMcp: string[];
@@ -407,47 +315,16 @@ type Discovered = {
 };
 
 const discoverEndpoints = async (): Promise<Discovered> => {
-  // Seed env defaults so handler modules import without real services (same
-  // approach as exact-mirror-guard).
-  await import("../src/tests/setup-env");
-  const { Glob } = await import("bun");
-  const glob = new Glob(HANDLERS_GLOB);
-
-  const endpoints: { id: string; exposure: ParsedExposure }[] = [];
-  const importErrors: { id: string; message: string }[] = [];
-  const files: FileEndpointCount[] = [];
-
-  for await (const rel of glob.scan({ cwd: REPO_ROOT, absolute: true })) {
-    if (rel.endsWith(".test.ts")) {
-      continue;
-    }
-    const source = await Bun.file(rel).text();
-    const callCount = (source.match(SAFE_HANDLER_CALL_PATTERN) ?? []).length;
-    if (callCount === 0) {
-      continue;
-    }
-    const id = toEndpointIdentifier(rel, REPO_ROOT);
-    let mod: unknown;
-    try {
-      mod = await import(rel);
-    } catch (error) {
-      importErrors.push({
-        id,
-        message: error instanceof Error ? error.message : String(error),
-      });
-      continue;
-    }
-    if (!isRecord(mod)) {
-      continue;
-    }
-    const moduleEndpoints = enumerateModuleEndpoints(mod, id);
-    endpoints.push(...moduleEndpoints);
-    files.push({ id, callCount, enumerableCount: moduleEndpoints.length });
-  }
-
-  endpoints.sort((a, b) => a.id.localeCompare(b.id));
-  files.sort((a, b) => a.id.localeCompare(b.id));
-  return { endpoints, importErrors, files };
+  const { endpoints, files, importErrors } = await discoverSafeHandlers();
+  return {
+    endpoints: endpoints.map(({ id, exposure }) => ({ id, exposure })),
+    importErrors,
+    files: files.map(({ id, callCount, enumerableCount }) => ({
+      id,
+      callCount,
+      enumerableCount,
+    })),
+  };
 };
 
 const printIssues = (issues: CoverageIssues): boolean => {

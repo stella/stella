@@ -85,6 +85,21 @@ const parseToolPayload = (
   return JSON.parse(item.text) as unknown;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// The parsed `error` object of a structured `{ error: { code, message,
+// issues? } }` validation envelope.
+const validationEnvelope = (
+  result: Awaited<ReturnType<typeof handleMcpToolCall>>,
+): Record<string, unknown> => {
+  const payload = parseToolPayload(result);
+  if (!isRecord(payload) || !isRecord(payload["error"])) {
+    throw new Error("expected a structured error envelope");
+  }
+  return payload["error"];
+};
+
 const createScopedDb = (templates: unknown[] = []) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(async (run: (tx: unknown) => unknown) => {
@@ -802,15 +817,12 @@ describe("MCP template tools", () => {
       toolName: "save_template",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Provide docx_base64 to create a template, or template_id to configure an existing template's fields",
-        },
-      ],
-      isError: true,
-    });
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe(
+      "Provide docx_base64 to create a template, or template_id to configure an existing template's fields",
+    );
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
     expect(configureTemplateFieldsMock).not.toHaveBeenCalled();
   });

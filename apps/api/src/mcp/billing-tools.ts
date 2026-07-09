@@ -53,6 +53,7 @@ import {
   nullableStringProp,
   stringProp,
   textResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
 type BillingToolName =
@@ -707,12 +708,13 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listTimeEntriesArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { matter_id?: string, time_entry_id?: string, entity_id?: string, user_id?: string, date_from?: YYYY-MM-DD, date_to?: YYYY-MM-DD, status?: string, limit?: integer, cursor?: string }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -976,12 +978,13 @@ const saveTimeEntryArgsSchema = v.pipe(
 const handleSaveTimeEntryTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(saveTimeEntryArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { time_entry_id?, matter_id?, entity_id?, date_worked?, timezone_id?, duration_minutes?, rate_at_entry?, currency?, narrative?, invoice_narrative?, billable?, no_charge?, task_code?, activity_code?, status? }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -1106,7 +1109,10 @@ const handleDeleteTimeEntryTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(deleteTimeEntryArgsSchema, args);
   if (!parsed.success) {
-    return errorResult("Invalid input: expected { time_entry_id: string }");
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: "Invalid input: expected { time_entry_id: string }",
+    });
   }
 
   const timeEntryId = brandPersistedTimeEntryId(parsed.output.time_entry_id);
@@ -1148,9 +1154,11 @@ const handleResolveRateTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(resolveRateArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      "Invalid input: expected { matter_id: string, user_id: string, date: YYYY-MM-DD }",
-    );
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { matter_id: string, user_id: string, date: YYYY-MM-DD }",
+    });
   }
 
   const workspaceId = ensureWorkspaceAccess({
@@ -1289,12 +1297,13 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listInvoicesArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { matter_id?: string, invoice_id?: string, limit?: integer, cursor?: string }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -1463,7 +1472,10 @@ const handleGetUsageTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(getUsageArgsSchema, args);
   if (!parsed.success) {
-    return errorResult("Invalid input: expected no parameters");
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: "Invalid input: expected no parameters",
+    });
   }
 
   const entitlement = await Result.gen(() =>

@@ -155,7 +155,7 @@ const extractFieldValues = async ({
 
 const config = {
   permissions: { template: ["use"] },
-  mcp: { type: "internal", reason: "template_authoring_ui" },
+  mcp: { type: "capability", reason: "template_authoring_ui" },
   params: prefillParamsSchema,
   body: prefillBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

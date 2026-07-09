@@ -29,7 +29,7 @@ const updateAnonymizationBlacklistBodySchema = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "internal", reason: "anonymization_admin" },
+  mcp: { type: "capability", reason: "anonymization_admin" },
   body: updateAnonymizationBlacklistBodySchema,
 } satisfies HandlerConfig;
 

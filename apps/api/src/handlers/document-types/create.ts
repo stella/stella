@@ -15,7 +15,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "internal", reason: "workspace_schema" },
+  mcp: { type: "capability", reason: "workspace_schema" },
   body: createDocumentTypeBodySchema,
 } satisfies HandlerConfig;
 

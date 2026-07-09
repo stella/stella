@@ -14,7 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { playbook: ["approve"] },
-  mcp: { type: "internal", reason: "knowledge_library_admin" },
+  mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: playbookDefinitionParamsSchema,
 } satisfies HandlerConfig;
 

@@ -69,6 +69,7 @@ import {
   resolveWindowBounds,
   stringProp,
   textResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
@@ -1587,9 +1588,11 @@ const handleSetPracticeJurisdictionsTool: McpToolHandler = async ({
 
   const parsed = v.safeParse(setPracticeJurisdictionsArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      "Invalid input: expected { jurisdictions: Array<{ countryCode: ISO 3166-1 alpha-2, isPrimary: boolean }> }",
-    );
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { jurisdictions: Array<{ countryCode: ISO 3166-1 alpha-2, isPrimary: boolean }> }",
+    });
   }
 
   const primaryCount = parsed.output.jurisdictions.filter(

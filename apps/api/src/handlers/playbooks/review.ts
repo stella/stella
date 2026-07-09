@@ -33,7 +33,7 @@ import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 // queues NO workflow — the only write is the audit row.
 const config = {
   permissions: { playbook: ["apply"] },
-  mcp: { type: "internal", reason: "knowledge_library_admin" },
+  mcp: { type: "capability", reason: "knowledge_library_admin" },
   params: workspaceParams({ playbookId: tSafeId("playbookDefinition") }),
   // `entityId` and `fileFieldId` identify the active document inside the
   // already-validated workspace, not ownership ids; ownership comes from the

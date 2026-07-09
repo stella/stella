@@ -538,6 +538,34 @@ describe("error tiers -> exit codes (S4)", () => {
     expect(result.exitCode).toBe(4);
     expect(result.stderr).toContain("Insufficient permissions");
   });
+
+  test("a validation_error envelope renders issues on stderr and exits 2", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        error: {
+          code: "validation_error",
+          message: "Invalid input",
+          issues: [
+            { path: "matter_id", message: "Required" },
+            { path: "", message: "at least one filter is required" },
+          ],
+        },
+      },
+      isError: true,
+    }));
+    const result = await runCli({
+      args: ["matter", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(2);
+    expect(result.stderr).toContain("error: Invalid input");
+    // A field issue renders as `  <path>: <message>`; a root issue (empty path)
+    // renders its message without a bare `: ` prefix.
+    expect(result.stderr).toContain("  matter_id: Required");
+    expect(result.stderr).toContain("  at least one filter is required");
+  });
 });
 
 describe("help surfaces --input for inputOnly tools", () => {

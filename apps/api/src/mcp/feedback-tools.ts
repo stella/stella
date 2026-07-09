@@ -27,6 +27,7 @@ import {
   stringProp,
   structuredErrorResult,
   textResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
 const FEEDBACK_KINDS = ["bug", "feature_request", "docs", "other"] as const;
@@ -302,8 +303,8 @@ const resolveReporterEmail = async (
 const handleSendFeedbackTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(feedbackArgsSchema, args);
   if (!parsed.success) {
-    return structuredErrorResult({
-      code: "validation_error",
+    return validationErrorResult({
+      issues: parsed.issues,
       message:
         parsed.issues.at(0)?.message ?? "Invalid send_feedback arguments",
       hint:

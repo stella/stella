@@ -52,6 +52,7 @@ import {
   nullableStringProp,
   stringProp,
   textResult,
+  validationErrorResult,
 } from "@/api/mcp/tool-utils";
 
 type KnowledgeToolName =
@@ -892,12 +893,13 @@ const handleListClausesTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listClausesArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { clause_id?: string, version_id?: string, category_id?: string, query?: string, include_categories?: boolean, limit?: integer, cursor?: string }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -1064,12 +1066,13 @@ const saveClauseArgsSchema = v.pipe(
 const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(saveClauseArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { clause_id?: string, title?: string, body?: array, category_id?: string|null, language?: string|null, description?: string|null, usage_notes?: string|null, metadata?: object|null, snapshot_version?: boolean }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -1189,7 +1192,10 @@ const handleDeleteClauseTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(deleteClauseArgsSchema, args);
   if (!parsed.success) {
-    return errorResult("Invalid input: expected { clause_id: string }");
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: "Invalid input: expected { clause_id: string }",
+    });
   }
 
   const deleted = await Result.gen(() =>
@@ -1266,12 +1272,13 @@ const handleListPlaybooksTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listPlaybooksArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      crossFieldOrGeneric(
+    return validationErrorResult({
+      issues: parsed.issues,
+      message: crossFieldOrGeneric(
         parsed.issues,
         "Invalid input: expected { playbook_id?: string, limit?: integer, cursor?: string }",
       ),
-    );
+    });
   }
   const input = parsed.output;
 
@@ -1321,9 +1328,11 @@ const handleRunPlaybookTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(runPlaybookArgsSchema, args);
   if (!parsed.success) {
-    return errorResult(
-      "Invalid input: expected { matter_id: string, playbook_id: string }",
-    );
+    return validationErrorResult({
+      issues: parsed.issues,
+      message:
+        "Invalid input: expected { matter_id: string, playbook_id: string }",
+    });
   }
 
   // A playbook run materializes columns in the matter, so the matter must be

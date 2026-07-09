@@ -69,7 +69,7 @@ const readWorkspace = createSafeHandler(
 const readWorkflow = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "internal", reason: "workflow_orchestration" },
+    mcp: { type: "capability", reason: "workflow_orchestration" },
   } satisfies HandlerConfig,
   async function* ({ workspaceId }) {
     const response = yield* Result.await(
@@ -83,7 +83,7 @@ const readWorkflow = createSafeHandler(
 const readJustifications = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "internal", reason: "workflow_orchestration" },
+    mcp: { type: "capability", reason: "workflow_orchestration" },
     body: t.Object({
       entityIds: t.Array(tSafeId("entity"), {
         minItems: 1,

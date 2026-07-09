@@ -19,7 +19,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { property: ["create"] },
-  mcp: { type: "internal", reason: "workspace_schema" },
+  mcp: { type: "capability", reason: "workspace_schema" },
   body: t.Object({
     items: t.Array(createPropertyBodySchema, { minItems: 1, maxItems: 10 }),
   }),

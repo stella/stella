@@ -263,6 +263,18 @@ jobs:
           (cd packages/cli && bun run codegen)
           git diff --exit-code -- packages/cli/src/generated packages/cli/skills
 
+      - name: Capability catalog drift guard
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        # The committed capability catalog (every `tool`/`covered` safe handler,
+        # projected to id + input schema + permissions + scope + access +
+        # destructive) must match the live handler graph. `--check` regenerates
+        # it in-memory and byte-compares against the committed JSON, so a handler
+        # or mapping-table change cannot silently ship a stale catalog.
+        # Regenerate: `bun --env-file=apps/api/.env
+        # apps/api/scripts/export-capability-catalog.ts`.
+        run: |
+          bun apps/api/scripts/export-capability-catalog.ts --check
+
       - name: exactMirror route guard
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         # Elysia builds an "exactMirror" serializer per route schema. Some

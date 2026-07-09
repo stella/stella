@@ -1,5 +1,6 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { panic, TaggedError } from "better-result";
+import * as v from "valibot";
 
 import { env } from "@/api/env";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
@@ -13,7 +14,7 @@ import {
 } from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
-import type { McpErrorCode } from "@/api/mcp/error-codes";
+import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
 
 /**
  * Wrap the request-scoped recorder so audit rows written by the reused backing
@@ -141,19 +142,23 @@ export const MCP_INTERNAL_ERROR_HINT =
 
 /**
  * Structured tool-error envelope. The single text content is
- * `{"error":{"code","message","hint?","retryable?"}}`; `isError` is set so MCP
- * clients still treat it as a failure. Undefined `hint`/`retryable` are omitted
- * so the serialized shape stays minimal. Agents branch on `code`; `hint` tells
- * them the next step. The companion CLI keys its exit codes off `error.code`.
+ * `{"error":{"code","message","hint?","issues?","retryable?"}}`; `isError` is
+ * set so MCP clients still treat it as a failure. Undefined
+ * `hint`/`issues`/`retryable` are omitted so the serialized shape stays minimal
+ * (an empty `issues` array is treated as absent). Agents branch on `code`;
+ * `hint` tells them the next step; `issues` pinpoints the failing fields on a
+ * `validation_error`. The companion CLI keys its exit codes off `error.code`.
  */
 export const structuredErrorResult = ({
   code,
   hint,
+  issues,
   message,
   retryable,
 }: {
   code: McpErrorCode;
   hint?: string | undefined;
+  issues?: readonly McpValidationIssue[] | undefined;
   message: string;
   retryable?: boolean | undefined;
 }): CallToolResult => {
@@ -161,10 +166,14 @@ export const structuredErrorResult = ({
     code: McpErrorCode;
     message: string;
     hint?: string;
+    issues?: readonly McpValidationIssue[];
     retryable?: boolean;
   } = { code, message };
   if (hint !== undefined) {
     error.hint = hint;
+  }
+  if (issues !== undefined && issues.length > 0) {
+    error.issues = issues;
   }
   if (retryable !== undefined) {
     error.retryable = retryable;
@@ -175,6 +184,43 @@ export const structuredErrorResult = ({
     isError: true,
   };
 };
+
+/**
+ * Map Valibot issues to the envelope's `{ path, message }` shape. `path` is the
+ * issue's dot-path (`v.getDotPath`), falling back to "" for a root/whole-object
+ * issue with no path (e.g. a `strictObject` unknown-key or cross-field
+ * `partialCheck` forwarded to the root).
+ */
+export const mapValibotIssues = (
+  issues: readonly v.BaseIssue<unknown>[],
+): McpValidationIssue[] =>
+  issues.map((issue) => ({
+    path: v.getDotPath(issue) ?? "",
+    message: issue.message,
+  }));
+
+/**
+ * `validation_error` envelope for a failed tool argument parse. `message` is the
+ * caller-facing summary (today's collapsed single line); `issues` is the raw
+ * Valibot issue list, mapped to the structured `{ path, message }[]` the CLI and
+ * agents branch on. This is the single sink every `safeParse` failure path in
+ * the tool modules routes through, replacing the legacy code-less `errorResult`.
+ */
+export const validationErrorResult = ({
+  hint,
+  issues,
+  message,
+}: {
+  hint?: string | undefined;
+  issues: readonly v.BaseIssue<unknown>[];
+  message: string;
+}): CallToolResult =>
+  structuredErrorResult({
+    code: "validation_error",
+    hint,
+    issues: mapValibotIssues(issues),
+    message,
+  });
 
 /** `not_found` envelope for a resource that does not exist or is inaccessible. */
 export const notFoundResult = (
@@ -259,9 +305,23 @@ export const toolThrownErrorToMcpResult = (
   return null;
 };
 
-/** `validation_error` envelope for a bad argument, hinting at the fix. */
-const argValidationError = (message: string, hint: string): CallToolResult =>
-  structuredErrorResult({ code: "validation_error", hint, message });
+/**
+ * `validation_error` envelope for a bad argument, hinting at the fix. `path` is
+ * the offending property name, surfaced as the single structured issue so this
+ * hand-rolled parser produces the same `error.issues` shape as the Valibot
+ * `safeParse` paths.
+ */
+const argValidationError = (
+  message: string,
+  hint: string,
+  path: string,
+): CallToolResult =>
+  structuredErrorResult({
+    code: "validation_error",
+    hint,
+    issues: [{ path, message }],
+    message,
+  });
 
 export const parseRequiredString = (
   args: Record<string, unknown>,
@@ -273,12 +333,14 @@ export const parseRequiredString = (
     return argValidationError(
       `Missing required parameter: ${key}`,
       `Provide '${key}' as a non-empty string.`,
+      key,
     );
   }
   if (opts?.maxLength !== undefined && value.length > opts.maxLength) {
     return argValidationError(
       `Parameter ${key} exceeds maximum length of ${opts.maxLength}`,
       `Shorten '${key}' to at most ${opts.maxLength} characters.`,
+      key,
     );
   }
   return value;
@@ -303,6 +365,7 @@ export const parseOptionalEnum = <TValues extends readonly string[]>({
     return argValidationError(
       `Invalid parameter: ${key}. Expected one of ${values.join(", ")}`,
       `Set '${key}' to one of: ${values.join(", ")}.`,
+      key,
     );
   }
   return value;
@@ -332,6 +395,7 @@ export const parseOptionalLimit = ({
     return argValidationError(
       `Invalid parameter: ${key}. Expected an integer between 1 and ${max}`,
       `Set '${key}' to an integer between 1 and ${max}.`,
+      key,
     );
   }
   return value;
@@ -360,12 +424,14 @@ export const parseOptionalCursor = ({
     return argValidationError(
       `Invalid parameter: ${key}. Expected an opaque cursor string`,
       `Pass the '${key}' as the opaque cursor returned by a previous call, or omit it for the first page.`,
+      key,
     );
   }
   if (value.length > MAX_CURSOR_LENGTH) {
     return argValidationError(
       `Parameter ${key} exceeds maximum length of ${MAX_CURSOR_LENGTH}`,
       `Pass the '${key}' verbatim as returned; a valid cursor never exceeds ${MAX_CURSOR_LENGTH} characters.`,
+      key,
     );
   }
   return value;
@@ -417,6 +483,7 @@ const decodeTextWindowOffset = (
     return argValidationError(
       "Invalid cursor",
       "Pass the 'cursor' verbatim as returned by a previous call, or omit it to read from the start.",
+      "cursor",
     );
   }
   return candidate;

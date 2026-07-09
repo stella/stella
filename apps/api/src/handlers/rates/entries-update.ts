@@ -24,7 +24,7 @@ const rateEntryParamsSchema = workspaceParams({
 const updateRateEntry = createSafeHandler(
   {
     permissions: { rate: ["update"] },
-    mcp: { type: "internal", reason: "billing_admin" },
+    mcp: { type: "capability", reason: "billing_admin" },
     params: rateEntryParamsSchema,
     body: updateRateEntryBodySchema,
   },

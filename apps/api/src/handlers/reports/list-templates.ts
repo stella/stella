@@ -18,7 +18,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "internal", reason: "reporting_export" },
+  mcp: { type: "capability", reason: "reporting_export" },
   params: workspaceParams({}),
 } satisfies HandlerConfig;
 

@@ -146,6 +146,16 @@ run_cli_registry_snapshot() {
   git diff --exit-code -- packages/cli/src/generated packages/cli/skills
 }
 
+run_capability_catalog() {
+  # The committed capability catalog (every `tool`/`covered` safe handler,
+  # projected to id + input schema + permissions + scope + access) must match
+  # the live handler graph. `--check` regenerates it in-memory and byte-compares
+  # against the committed JSON, so a handler or mapping change cannot silently
+  # ship a stale catalog. Regenerate:
+  # `bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts`.
+  bun apps/api/scripts/export-capability-catalog.ts --check
+}
+
 run_knip() {
   local workspace
   for workspace in apps/api apps/legal-atlas-runner apps/web; do
@@ -176,6 +186,7 @@ run_step "Ratchet guard" run_ratchet_guard
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "CLI registry snapshot" run_cli_registry_snapshot
+run_step "Capability catalog drift" run_capability_catalog
 run_step "Knip production deps" run_knip
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh
