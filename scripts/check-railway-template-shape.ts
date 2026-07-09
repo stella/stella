@@ -240,6 +240,7 @@ expect(
 for (const requiredText of [
   "check-rendered-credentials",
   "Project-Access-Token",
+  "projectToken",
   "RAILWAY_PROJECT_TOKEN",
   "rendered credentials ok",
   "rendered credentials disagree",

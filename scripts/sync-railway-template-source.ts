@@ -58,6 +58,27 @@ type ProjectQueryData = {
   } | null;
 };
 
+type ProjectTokenQueryData = {
+  projectToken: {
+    environment: {
+      name: string;
+      serviceInstances: {
+        edges: {
+          node: {
+            serviceId: string;
+            serviceName: string;
+          };
+        }[];
+      };
+    };
+    environmentId: string;
+    project: {
+      name: string;
+    };
+    projectId: string;
+  };
+};
+
 type VariablesQueryData = {
   variables: unknown;
 };
@@ -202,8 +223,74 @@ const graphql = async <TData>(
 type ResolvedProject = {
   environmentId: string;
   environmentName: string;
+  projectId: string;
   projectName: string;
   serviceIdsByName: Map<string, string>;
+};
+
+const resolveProjectToken = async ({
+  auth,
+  environment,
+  projectId,
+}: {
+  auth: RailwayAuth;
+  environment: string;
+  projectId?: string;
+}): Promise<ResolvedProject> => {
+  const data = await graphql<ProjectTokenQueryData>(
+    auth,
+    `
+      query {
+        projectToken {
+          projectId
+          environmentId
+          project {
+            name
+          }
+          environment {
+            name
+            serviceInstances {
+              edges {
+                node {
+                  serviceId
+                  serviceName
+                }
+              }
+            }
+          }
+        }
+      }
+    `,
+    {},
+  );
+
+  if (projectId && data.projectToken.projectId !== projectId) {
+    throw new RailwayTemplateSyncError(
+      "RAILWAY_PROJECT_TOKEN is scoped to a different project than --project",
+    );
+  }
+
+  if (
+    data.projectToken.environmentId !== environment &&
+    data.projectToken.environment.name !== environment
+  ) {
+    throw new RailwayTemplateSyncError(
+      "RAILWAY_PROJECT_TOKEN is scoped to a different environment than --environment",
+    );
+  }
+
+  return {
+    environmentId: data.projectToken.environmentId,
+    environmentName: data.projectToken.environment.name,
+    projectId: data.projectToken.projectId,
+    projectName: data.projectToken.project.name,
+    serviceIdsByName: new Map(
+      data.projectToken.environment.serviceInstances.edges.map((edge) => [
+        edge.node.serviceName,
+        edge.node.serviceId,
+      ]),
+    ),
+  };
 };
 
 const resolveProject = async ({
@@ -212,9 +299,19 @@ const resolveProject = async ({
   environment,
 }: {
   auth: RailwayAuth;
-  projectId: string;
+  projectId?: string;
   environment: string;
 }): Promise<ResolvedProject> => {
+  if (auth.type === "project") {
+    return resolveProjectToken({ auth, environment, projectId });
+  }
+
+  if (!projectId) {
+    throw new RailwayTemplateSyncError(
+      "Pass --project or set RAILWAY_TEMPLATE_PROJECT_ID",
+    );
+  }
+
   const data = await graphql<ProjectQueryData>(
     auth,
     `
@@ -263,6 +360,7 @@ const resolveProject = async ({
   return {
     environmentId: selectedEnvironment.id,
     environmentName: selectedEnvironment.name,
+    projectId: data.project.id,
     projectName: data.project.name,
     serviceIdsByName: new Map(
       selectedEnvironment.serviceInstances.edges.map((edge) => [
@@ -440,17 +538,15 @@ const assertSameSecret = (
 
 const checkRenderedCredentials = async ({
   auth,
-  projectId,
   resolvedProject,
 }: {
   auth: RailwayAuth;
-  projectId: string;
   resolvedProject: ResolvedProject;
 }) => {
   const readRendered = async (serviceName: string) =>
     await readVariables({
       environmentId: resolvedProject.environmentId,
-      projectId,
+      projectId: resolvedProject.projectId,
       serviceId: requireServiceId(
         resolvedProject.serviceIdsByName,
         serviceName,
@@ -535,15 +631,9 @@ const main = async () => {
     },
   });
 
-  const projectId = project ?? process.env["RAILWAY_TEMPLATE_PROJECT_ID"];
-  if (!projectId) {
-    throw new RailwayTemplateSyncError(
-      "Pass --project or set RAILWAY_TEMPLATE_PROJECT_ID",
-    );
-  }
-
   const manifest = readManifest();
   const auth = readRailwayAuth();
+  const projectId = project ?? process.env["RAILWAY_TEMPLATE_PROJECT_ID"];
   const resolvedProject = await resolveProject({
     auth,
     projectId,
@@ -554,7 +644,7 @@ const main = async () => {
   });
 
   if (checkRenderedCredentialsOnly) {
-    await checkRenderedCredentials({ auth, projectId, resolvedProject });
+    await checkRenderedCredentials({ auth, resolvedProject });
     console.log("railway-template-source: rendered credentials ok");
     return;
   }
@@ -580,7 +670,7 @@ const main = async () => {
     // eslint-disable-next-line no-await-in-loop -- diff output is intentionally ordered by service for operator review.
     const current = await readVariables({
       auth,
-      projectId,
+      projectId: resolvedProject.projectId,
       environmentId: resolvedProject.environmentId,
       serviceId,
     });
@@ -607,7 +697,7 @@ const main = async () => {
       // eslint-disable-next-line no-await-in-loop -- service variable writes are intentionally sequential to keep Railway changes easy to audit.
       await writeVariables({
         auth,
-        projectId,
+        projectId: resolvedProject.projectId,
         environmentId: resolvedProject.environmentId,
         serviceId,
         variables: service.variables,
