@@ -36,7 +36,7 @@ type AIConfigResult = {
 
 const config = {
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 
 /**

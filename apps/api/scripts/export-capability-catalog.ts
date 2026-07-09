@@ -37,6 +37,7 @@ import {
   type AccessClassification,
   capInputSchema,
   type CapabilityInputSchema,
+  compareScopeStrictness,
   deriveCapabilityId,
   deriveDomain,
   findInlineCapabilityMismatches,
@@ -114,6 +115,52 @@ const DOMAIN_SCOPE: Record<string, string> = {
  * catalog rather than assigned an invented scope.
  */
 const UNMAPPED_DOMAINS: ReadonlySet<string> = new Set<string>();
+
+/**
+ * Strictness tiers for the covered-tool scope check (see
+ * `compareScopeStrictness`). Scopes are independent OAuth grants, so this
+ * ordering is a reviewed export-time decision, not a server-side hierarchy:
+ * search < read < the per-domain write/admin-read consents < admin_write.
+ * Distinct scopes sharing a tier (e.g. matters_write vs documents_write) are
+ * incomparable: an entry whose covering tool sits at the same tier under a
+ * different scope fails the export until pinned in ENTRY_SCOPE_OVERRIDES.
+ */
+const SCOPE_STRICTNESS: Record<string, number> = {
+  "stella:search": 0,
+  "stella:read": 1,
+  "stella:onboarding": 2,
+  "stella:templates": 2,
+  "stella:documents_write": 2,
+  "stella:matters_write": 2,
+  "stella:knowledge_write": 2,
+  "stella:billing_write": 2,
+  "stella:skills": 2,
+  "stella:external_mcps": 2,
+  "stella:feedback": 2,
+  "stella:admin_read": 2,
+  "stella:admin_write": 3,
+};
+
+/**
+ * Per-entry scope pins for `tool`/`covered` entries whose covering tool's scope
+ * is incomparable with their domain scope (same strictness tier, different
+ * consent family). Each pin is a reviewed decision; the pinned scope is still
+ * checked against the covering tool, so a pin cannot under-claim. All current
+ * entries back `save_document` / `delete_document` / `set_field_value`
+ * (stella:documents_write) from domains mapped to stella:matters_write: the
+ * capability is the same operation as the tool, so the generic path demands
+ * the same consent.
+ */
+const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
+  "entities.create": "stella:documents_write",
+  "entities.delete": "stella:documents_write",
+  "entities.delete-version": "stella:documents_write",
+  "entities.move": "stella:documents_write",
+  "entities.rename": "stella:documents_write",
+  "entities.update-version-description": "stella:documents_write",
+  "entities.update-version-label": "stella:documents_write",
+  "fields.upsert-by-id": "stella:documents_write",
+};
 
 /**
  * Handler-scope kind for capabilities whose file mixes safe-handler factories,
@@ -274,6 +321,55 @@ const buildInputSchema = (
   return inputSchema;
 };
 
+type EntryScopeResult =
+  | { status: "resolved"; scope: string }
+  | { status: "error"; message: string };
+
+/**
+ * Final scope for a `tool`/`covered` entry: the entry must never advertise a
+ * weaker consent than the curated tool that backs it, or the generic capability
+ * path would gate the same operation behind less consent than the tool. The
+ * domain scope (or an ENTRY_SCOPE_OVERRIDES pin) is kept when it is at least as
+ * strict as the covering tool's scope, the tool's scope is inherited when
+ * stricter, and an incomparable/unknown pairing fails the export.
+ */
+const resolveEntryScopeAgainstTool = ({
+  id,
+  domainScope,
+  toolName,
+  toolScope,
+  override,
+}: {
+  id: string;
+  domainScope: string;
+  toolName: string;
+  toolScope: string | undefined;
+  override: string | undefined;
+}): EntryScopeResult => {
+  if (toolScope === undefined) {
+    return {
+      status: "error",
+      message: `capability "${id}" names covering tool "${toolName}", which is not in the static registry`,
+    };
+  }
+  const base = override ?? domainScope;
+  const comparison = compareScopeStrictness({
+    first: base,
+    second: toolScope,
+    tiers: SCOPE_STRICTNESS,
+  });
+  if (comparison === "equal" || comparison === "first-stricter") {
+    return { status: "resolved", scope: base };
+  }
+  if (comparison === "second-stricter") {
+    return { status: "resolved", scope: toolScope };
+  }
+  return {
+    status: "error",
+    message: `capability "${id}" would advertise scope "${base}" weaker than (or ${comparison} with) covering tool "${toolName}"'s scope "${toolScope}"; pin the entry in ENTRY_SCOPE_OVERRIDES or extend SCOPE_STRICTNESS`,
+  };
+};
+
 type BuildResult = {
   entries: CapabilityEntry[];
   errors: string[];
@@ -289,6 +385,15 @@ const buildCatalog = async (): Promise<BuildResult> => {
     errors.push(`import failed: ${id}: ${message}`);
   }
 
+  // Covering-tool scopes for the under-claim check. Imported dynamically after
+  // discovery so `setup-env` has already seeded the API env defaults the module
+  // graph validates at load (same ordering as the coverage guard).
+  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+    await import("../src/mcp/static-tool-definitions");
+  const toolScopeByName = new Map<string, string>(
+    DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool.scope]),
+  );
+
   const kindsByFile = new Map(files.map((file) => [file.id, file.kinds]));
   const entries: CapabilityEntry[] = [];
   const idToFile = new Map<string, string>();
@@ -296,6 +401,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const accessOverrideUses: string[] = [];
   const kindOverrideUses: string[] = [];
   const optOutUses = new Set<string>();
+  const scopeOverrideUses = new Set<string>();
   const truncatedSchemas: string[] = [];
 
   // Enumerable `capability` endpoints per file, for the inline-capability
@@ -436,6 +542,47 @@ const buildCatalog = async (): Promise<BuildResult> => {
       continue;
     }
 
+    let scope = scopeResolution.scope;
+    if (
+      endpoint.exposure.type === "tool" ||
+      endpoint.exposure.type === "covered"
+    ) {
+      const toolName =
+        endpoint.exposure.type === "tool"
+          ? endpoint.exposure.name
+          : endpoint.exposure.by;
+      const override = ENTRY_SCOPE_OVERRIDES[id];
+      const entryScope = resolveEntryScopeAgainstTool({
+        id,
+        domainScope: scopeResolution.scope,
+        toolName,
+        toolScope: toolScopeByName.get(toolName),
+        override,
+      });
+      if (entryScope.status === "error") {
+        errors.push(entryScope.message);
+        continue;
+      }
+      scope = entryScope.scope;
+      if (override !== undefined) {
+        // The pin is "used" only when it changed the outcome; a pin the
+        // domain scope would have resolved identically without is stale.
+        const withoutPin = resolveEntryScopeAgainstTool({
+          id,
+          domainScope: scopeResolution.scope,
+          toolName,
+          toolScope: toolScopeByName.get(toolName),
+          override: undefined,
+        });
+        if (
+          withoutPin.status === "error" ||
+          withoutPin.scope !== entryScope.scope
+        ) {
+          scopeOverrideUses.add(id);
+        }
+      }
+    }
+
     const capped = capInputSchema(buildInputSchema(endpoint.config));
     if (capped.truncated) {
       truncatedSchemas.push(id);
@@ -445,7 +592,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       handlerKind: kindResolution.kind,
       access: accessResolution.access,
       destructive: accessResolution.destructive,
-      scope: scopeResolution.scope,
+      scope,
       ...(hasPermissions ? { permissions } : {}),
       ...(capped.truncated
         ? { inputSchemaTruncated: true as const }
@@ -477,6 +624,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (!optOutUses.has(id)) {
       errors.push(
         `stale DESTRUCTIVE_NAME_OPT_OUTS entry "${id}": the delete/remove name heuristic would not escalate it (remove it)`,
+      );
+    }
+  }
+  for (const id of Object.keys(ENTRY_SCOPE_OVERRIDES)) {
+    if (!scopeOverrideUses.has(id)) {
+      errors.push(
+        `stale ENTRY_SCOPE_OVERRIDES entry "${id}": the domain scope resolves identically without it (remove it)`,
       );
     }
   }

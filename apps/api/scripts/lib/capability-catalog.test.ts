@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   capInputSchema,
   classifyVerbs,
+  compareScopeStrictness,
   countCapabilityDispositions,
   deriveCapabilityId,
   deriveDomain,
@@ -471,6 +472,62 @@ describe("serializeCatalog", () => {
   test("round-trips through JSON.parse", () => {
     const entries = [{ id: "x", inputSchemaTruncated: true }];
     expect(JSON.parse(serializeCatalog(entries))).toEqual(entries);
+  });
+});
+
+describe("compareScopeStrictness", () => {
+  const tiers = {
+    "stella:read": 1,
+    "stella:matters_write": 2,
+    "stella:documents_write": 2,
+    "stella:admin_write": 3,
+  };
+
+  test("identical scopes are equal without consulting the table", () => {
+    expect(
+      compareScopeStrictness({
+        first: "stella:unknown",
+        second: "stella:unknown",
+        tiers,
+      }),
+    ).toBe("equal");
+  });
+
+  test("orders scopes across tiers", () => {
+    expect(
+      compareScopeStrictness({
+        first: "stella:admin_write",
+        second: "stella:matters_write",
+        tiers,
+      }),
+    ).toBe("first-stricter");
+    expect(
+      compareScopeStrictness({
+        first: "stella:read",
+        second: "stella:admin_write",
+        tiers,
+      }),
+    ).toBe("second-stricter");
+  });
+
+  test("different scopes at the same tier are incomparable", () => {
+    expect(
+      compareScopeStrictness({
+        first: "stella:matters_write",
+        second: "stella:documents_write",
+        tiers,
+      }),
+    ).toBe("incomparable");
+  });
+
+  test("a scope missing from the table is unknown (fail-closed)", () => {
+    expect(
+      compareScopeStrictness({
+        first: "stella:matters_write",
+        second: "stella:brand-new",
+        tiers,
+      }),
+    ).toBe("unknown");
   });
 });
 

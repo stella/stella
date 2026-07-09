@@ -325,6 +325,44 @@ export const findInlineCapabilityMismatches = ({
   return mismatches.sort((a, b) => a.id.localeCompare(b.id));
 };
 
+export type ScopeComparison =
+  | "equal"
+  | "first-stricter"
+  | "second-stricter"
+  | "incomparable"
+  | "unknown";
+
+/**
+ * Compare two MCP scopes under an explicit strictness-tier table (the exporter
+ * owns the table; scopes are independent OAuth grants with no inherent
+ * hierarchy, so comparability is a reviewed decision). Different tiers are
+ * comparable (higher tier = stricter consent); different scopes at the same
+ * tier are incomparable; a scope missing from the table is unknown. Both
+ * non-comparable outcomes are fail-closed at the call site.
+ */
+export const compareScopeStrictness = ({
+  first,
+  second,
+  tiers,
+}: {
+  first: string;
+  second: string;
+  tiers: Record<string, number>;
+}): ScopeComparison => {
+  if (first === second) {
+    return "equal";
+  }
+  const firstTier = tiers[first];
+  const secondTier = tiers[second];
+  if (firstTier === undefined || secondTier === undefined) {
+    return "unknown";
+  }
+  if (firstTier === secondTier) {
+    return "incomparable";
+  }
+  return firstTier > secondTier ? "first-stricter" : "second-stricter";
+};
+
 export type ScopeResolution =
   | { status: "resolved"; scope: string }
   | { status: "acknowledged-unmapped" }
