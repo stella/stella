@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Juurdepääs keelatud.",
+      "deeplKeyRejected": "Salvestatud DeepL-i võti lükati tagasi. Asendage see organisatsiooni seadetes.",
+      "deeplQuotaExceeded": "Selle organisatsiooni DeepL-i tähemärgikvoot on ammendatud.",
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "internalServerError": "Midagi läks valesti. Proovige uuesti.",
       "notOrganizationMember": "Te ei ole selle organisatsiooni liige.",

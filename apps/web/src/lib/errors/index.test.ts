@@ -65,6 +65,25 @@ describe("toAPIError", () => {
     expect(error.rawMessage).toBe("Forbidden");
   });
 
+  test.each([
+    [
+      "deepl_key_rejected",
+      "The stored DeepL key was rejected. Replace it in organization settings.",
+    ],
+    [
+      "deepl_quota_exceeded",
+      "The DeepL character quota for this organization has been used up.",
+    ],
+  ])("localizes the known provider code %s", (code, expected) => {
+    const error = toAPIError({
+      status: 400,
+      value: { code, message: "Raw provider error" },
+    });
+
+    expect(error.message).toBe(expected);
+    expect(error.rawMessage).toBe("Raw provider error");
+  });
+
   test("localizes malformed empty payloads by status", () => {
     const error = toAPIError({
       status: 502,

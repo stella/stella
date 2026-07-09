@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Hozzáférés megtagadva.",
+      "deeplKeyRejected": "A mentett DeepL-kulcsot a szolgáltató elutasította. Cserélje le a szervezet beállításaiban.",
+      "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",

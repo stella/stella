@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Access denied.",
+      "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.",
+      "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.",
       "forbidden": "You do not have permission to do this.",
       "internalServerError": "The server could not complete the action. Please try again.",
       "notOrganizationMember": "You are not a member of this organization.",

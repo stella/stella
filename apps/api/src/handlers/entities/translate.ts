@@ -50,6 +50,11 @@ const DEEPL_SUPPORTED_MIME_TYPES = new Set<string>([
   "application/xliff+xml",
 ]);
 
+const TRANSLATION_ERROR_CODE = {
+  deeplKeyRejected: "deepl_key_rejected",
+  deeplQuotaExceeded: "deepl_quota_exceeded",
+} as const;
+
 const translateBody = t.Object({
   fieldId: tSafeId("field"),
   targetLang: t.String({ minLength: 2, maxLength: 16 }),
@@ -222,6 +227,7 @@ const translateEntity = createSafeHandler(
       if (DeepLAuthError.is(error)) {
         return Result.err(
           new HandlerError({
+            code: TRANSLATION_ERROR_CODE.deeplKeyRejected,
             status: 400,
             message:
               "Stored DeepL key was rejected. Please rotate it in settings.",
@@ -231,6 +237,7 @@ const translateEntity = createSafeHandler(
       if (DeepLQuotaError.is(error)) {
         return Result.err(
           new HandlerError({
+            code: TRANSLATION_ERROR_CODE.deeplQuotaExceeded,
             status: 402,
             message: "DeepL character quota exceeded for this organisation",
           }),

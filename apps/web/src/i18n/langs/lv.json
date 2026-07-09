@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Piekļuve liegta.",
+      "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
+      "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "internalServerError": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",

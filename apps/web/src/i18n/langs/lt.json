@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Prieiga uždrausta.",
+      "deeplKeyRejected": "Išsaugotas „DeepL“ raktas buvo atmestas. Pakeiskite jį organizacijos nustatymuose.",
+      "deeplQuotaExceeded": "Šios organizacijos „DeepL“ simbolių kvota išnaudota.",
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "internalServerError": "Kažkas nepavyko. Bandykite dar kartą.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",

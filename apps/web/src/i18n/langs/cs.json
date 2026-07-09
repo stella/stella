@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Přístup odepřen.",
+      "deeplKeyRejected": "Uložený klíč DeepL byl odmítnut. Nahraďte ho v nastavení organizace.",
+      "deeplQuotaExceeded": "Limit znaků DeepL pro tuto organizaci byl vyčerpán.",
       "forbidden": "K této akci nemáte oprávnění.",
       "internalServerError": "Něco se pokazilo. Zkuste to prosím znovu.",
       "notOrganizationMember": "Nejste členem této organizace.",

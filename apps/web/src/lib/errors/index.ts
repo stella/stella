@@ -127,6 +127,8 @@ const STATUS_ERROR_KEYS = {
 
 const CODE_ERROR_KEYS = {
   access_denied: "errors.apiCodes.accessDenied",
+  deepl_key_rejected: "errors.apiCodes.deeplKeyRejected",
+  deepl_quota_exceeded: "errors.apiCodes.deeplQuotaExceeded",
   forbidden: "errors.apiCodes.forbidden",
   internal_server_error: "errors.apiCodes.internalServerError",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",

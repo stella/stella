@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Accès refusé.",
+      "deeplKeyRejected": "La clé DeepL enregistrée a été refusée. Remplacez-la dans les paramètres de l’organisation.",
+      "deeplQuotaExceeded": "Le quota de caractères DeepL de cette organisation est épuisé.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "notOrganizationMember": "Vous n’êtes pas membre de cette organisation.",

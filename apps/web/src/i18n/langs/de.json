@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "Zugriff verweigert.",
+      "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
+      "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",

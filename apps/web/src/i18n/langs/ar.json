@@ -1109,6 +1109,8 @@
     },
     "apiCodes": {
       "accessDenied": "تم رفض الوصول.",
+      "deeplKeyRejected": "تم رفض مفتاح DeepL المحفوظ. استبدله في إعدادات المؤسسة.",
+      "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
       "forbidden": "ليست لديك صلاحية لتنفيذ ذلك.",
       "internalServerError": "حدث خطأ ما. يرجى المحاولة مرة أخرى.",
       "notOrganizationMember": "أنت لست عضوًا في هذه المؤسسة.",
