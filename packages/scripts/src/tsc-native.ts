@@ -12,4 +12,8 @@ const result = spawnSync(process.execPath, [tsc, ...process.argv.slice(2)], {
   stdio: "inherit",
 });
 
+if (result.error) {
+  console.error(result.error);
+}
+
 process.exit(result.status ?? 1);
