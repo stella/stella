@@ -50,7 +50,6 @@ minimumReleaseAgeExcludes = [
   # migration. Remove once the release family clears quarantine.
   "typescript",
   "@typescript/native",
-  "@typescript/typescript6",
   "@typescript/typescript-aix-ppc64",
   "@typescript/typescript-darwin-arm64",
   "@typescript/typescript-darwin-x64",
