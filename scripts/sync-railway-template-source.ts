@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import path from "node:path";
 import { parseArgs } from "node:util";
 
 const MANIFEST_PATH = "railway/template-manifest.json";
@@ -8,6 +8,12 @@ const RAILWAY_GRAPHQL_URL = "https://backboard.railway.com/graphql/v2";
 const RAILWAY_GRAPHQL_TIMEOUT_MS = 10_000;
 const DEFAULT_ENVIRONMENT = "production";
 const TEMPLATE_FUNCTION_PATTERN = /\$\{\{\s*(?:secret|randomInt)\(/u;
+const SERVICE_NAMES = {
+  api: "api",
+  gotenberg: "gotenberg",
+  postgres: "Postgres",
+  redis: "Redis",
+} as const;
 
 class RailwayTemplateSyncError extends Error {
   constructor(message: string) {
@@ -63,8 +69,8 @@ type VariableCollectionUpsertData = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const readJson = (path: string): unknown =>
-  JSON.parse(readFileSync(path, "utf-8"));
+const readJson = (filePath: string): unknown =>
+  JSON.parse(readFileSync(filePath, "utf-8"));
 
 const readStringRecord = (
   value: unknown,
@@ -114,7 +120,7 @@ const readRailwayToken = () => {
     return fromEnv;
   }
 
-  const configPath = join(homedir(), ".railway", "config.json");
+  const configPath = path.join(homedir(), ".railway", "config.json");
   if (!existsSync(configPath)) {
     throw new RailwayTemplateSyncError(
       "Set RAILWAY_API_TOKEN or log in with the Railway CLI first",
@@ -155,6 +161,9 @@ const graphql = async <TData>(
     );
   }
 
+  // SAFETY: Railway GraphQL validates the response shape for the query; callers
+  // provide the matching data type for the query document they pass here.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
   const payload = (await response.json()) as GraphqlResponse<TData>;
   if (payload.errors && payload.errors.length > 0) {
     throw new RailwayTemplateSyncError(
@@ -246,11 +255,13 @@ const readVariables = async ({
   projectId,
   environmentId,
   serviceId,
+  unrendered = true,
 }: {
   token: string;
   projectId: string;
   environmentId: string;
   serviceId: string;
+  unrendered?: boolean;
 }) => {
   const data = await graphql<VariablesQueryData>(
     token,
@@ -259,19 +270,34 @@ const readVariables = async ({
         $projectId: String!
         $environmentId: String!
         $serviceId: String!
+        $unrendered: Boolean!
       ) {
         variables(
           projectId: $projectId
           environmentId: $environmentId
           serviceId: $serviceId
-          unrendered: true
+          unrendered: $unrendered
         )
       }
     `,
-    { projectId, environmentId, serviceId },
+    { environmentId, projectId, serviceId, unrendered },
   );
 
   return data.variables;
+};
+
+const requireServiceId = (
+  serviceIdsByName: Map<string, string>,
+  serviceName: string,
+  projectName: string,
+) => {
+  const serviceId = serviceIdsByName.get(serviceName);
+  if (!serviceId) {
+    throw new RailwayTemplateSyncError(
+      `Service ${serviceName} not found in ${projectName}`,
+    );
+  }
+  return serviceId;
 };
 
 const writeVariables = async ({
@@ -340,10 +366,134 @@ const hasTemplateFunction = (variables: Record<string, string>) =>
     TEMPLATE_FUNCTION_PATTERN.test(value),
   );
 
+const extractUrlPassword = (value: string | undefined, label: string) => {
+  if (!value) {
+    throw new RailwayTemplateSyncError(`${label} is missing`);
+  }
+
+  try {
+    const url = new URL(value);
+    if (!url.password) {
+      throw new RailwayTemplateSyncError(`${label} has no password`);
+    }
+    return decodeURIComponent(url.password);
+  } catch (error) {
+    if (error instanceof RailwayTemplateSyncError) {
+      throw error;
+    }
+    throw new RailwayTemplateSyncError(`${label} is not a valid URL`);
+  }
+};
+
+const assertSameSecret = (
+  label: string,
+  values: Record<string, string | undefined>,
+) => {
+  const entries = Object.entries(values);
+  if (entries.length === 0) {
+    throw new RailwayTemplateSyncError(`${label} has no values to compare`);
+  }
+
+  const first = entries.at(0);
+  if (!first) {
+    throw new RailwayTemplateSyncError(`${label} has no values to compare`);
+  }
+  const [firstKey, firstValue] = first;
+  if (!firstValue) {
+    throw new RailwayTemplateSyncError(`${label} missing ${firstKey}`);
+  }
+
+  for (const [key, value] of entries.slice(1)) {
+    if (!value) {
+      throw new RailwayTemplateSyncError(`${label} missing ${key}`);
+    }
+    if (value !== firstValue) {
+      throw new RailwayTemplateSyncError(
+        `${label} rendered credentials disagree: ${firstKey} does not match ${key}`,
+      );
+    }
+  }
+};
+
+const checkRenderedCredentials = async ({
+  token,
+  projectId,
+  resolvedProject,
+}: {
+  token: string;
+  projectId: string;
+  resolvedProject: ResolvedProject;
+}) => {
+  const readRendered = async (serviceName: string) =>
+    await readVariables({
+      environmentId: resolvedProject.environmentId,
+      projectId,
+      serviceId: requireServiceId(
+        resolvedProject.serviceIdsByName,
+        serviceName,
+        resolvedProject.projectName,
+      ),
+      token,
+      unrendered: false,
+    });
+
+  const postgres = await readRendered(SERVICE_NAMES.postgres);
+  const redis = await readRendered(SERVICE_NAMES.redis);
+  const api = await readRendered(SERVICE_NAMES.api);
+  const gotenberg = await readRendered(SERVICE_NAMES.gotenberg);
+
+  assertSameSecret("Postgres password", {
+    "Postgres.DATABASE_PUBLIC_URL password": extractUrlPassword(
+      postgres["DATABASE_PUBLIC_URL"],
+      "Postgres.DATABASE_PUBLIC_URL",
+    ),
+    "Postgres.DATABASE_URL password": extractUrlPassword(
+      postgres["DATABASE_URL"],
+      "Postgres.DATABASE_URL",
+    ),
+    "Postgres.PGPASSWORD": postgres["PGPASSWORD"],
+    "Postgres.POSTGRES_PASSWORD": postgres["POSTGRES_PASSWORD"],
+    "api.DATABASE_URL password": extractUrlPassword(
+      api["DATABASE_URL"],
+      "api.DATABASE_URL",
+    ),
+  });
+
+  assertSameSecret("Redis password", {
+    "Redis.REDIS_PUBLIC_URL password": extractUrlPassword(
+      redis["REDIS_PUBLIC_URL"],
+      "Redis.REDIS_PUBLIC_URL",
+    ),
+    "Redis.REDIS_URL password": extractUrlPassword(
+      redis["REDIS_URL"],
+      "Redis.REDIS_URL",
+    ),
+    "Redis.REDISPASSWORD": redis["REDISPASSWORD"],
+    "Redis.REDIS_PASSWORD": redis["REDIS_PASSWORD"],
+    "api.REDIS_URL password": extractUrlPassword(
+      api["REDIS_URL"],
+      "api.REDIS_URL",
+    ),
+  });
+
+  assertSameSecret("Gotenberg username", {
+    "api.GOTENBERG_USERNAME": api["GOTENBERG_USERNAME"],
+    "gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME":
+      gotenberg["GOTENBERG_API_BASIC_AUTH_USERNAME"],
+  });
+
+  assertSameSecret("Gotenberg password", {
+    "api.GOTENBERG_PASSWORD": api["GOTENBERG_PASSWORD"],
+    "gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD":
+      gotenberg["GOTENBERG_API_BASIC_AUTH_PASSWORD"],
+  });
+};
+
 const main = async () => {
   const {
     values: {
       apply,
+      "check-rendered-credentials": checkRenderedCredentialsOnly,
       environment,
       project,
       prune,
@@ -352,6 +502,7 @@ const main = async () => {
   } = parseArgs({
     options: {
       apply: { type: "boolean" },
+      "check-rendered-credentials": { type: "boolean" },
       environment: { type: "string" },
       project: { type: "string" },
       prune: { type: "boolean" },
@@ -377,18 +528,23 @@ const main = async () => {
       DEFAULT_ENVIRONMENT,
   });
 
+  if (checkRenderedCredentialsOnly) {
+    await checkRenderedCredentials({ projectId, resolvedProject, token });
+    console.log("railway-template-source: rendered credentials ok");
+    return;
+  }
+
   console.log(
     `railway-template-source: ${apply ? "apply variables" : "dry-run variables"} ${resolvedProject.projectName}/${resolvedProject.environmentName}`,
   );
 
   let hasDrift = false;
   for (const [serviceName, service] of Object.entries(manifest.services)) {
-    const serviceId = resolvedProject.serviceIdsByName.get(serviceName);
-    if (!serviceId) {
-      throw new RailwayTemplateSyncError(
-        `Service ${serviceName} not found in ${resolvedProject.projectName}`,
-      );
-    }
+    const serviceId = requireServiceId(
+      resolvedProject.serviceIdsByName,
+      serviceName,
+      resolvedProject.projectName,
+    );
 
     if (apply && hasTemplateFunction(service.variables) && !templateSource) {
       throw new RailwayTemplateSyncError(

@@ -8,6 +8,8 @@ const TEMPLATE_README_PATH = "railway/template-readme.md";
 const TEMPLATE_MANIFEST_PATH = "railway/template-manifest.json";
 const DOCKERIGNORE_PATH = ".dockerignore";
 const RAILWAY_SMOKE_WORKFLOW_PATH = ".github/workflows/railway-smoke.yml";
+const RAILWAY_TEMPLATE_SOURCE_WORKFLOW_PATH =
+  ".github/workflows/railway-template-source.yml";
 const RAILWAY_SMOKE_SCRIPT_PATH = "scripts/check-railway-smoke.ts";
 const RAILWAY_SYNC_SCRIPT_PATH = "scripts/sync-railway-template-source.ts";
 const API_HEALTH_ROUTE_PATH = "apps/api/src/handlers/health/routes.ts";
@@ -213,6 +215,10 @@ expect(
     railwayDoc.includes("networking, or config files"),
   "Railway docs must require manual review of non-variable template shape",
 );
+expect(
+  railwayDoc.includes("## Template Source Drift Guard"),
+  "Railway docs must describe the template-source drift guard",
+);
 
 const railwaySyncScript = readText(RAILWAY_SYNC_SCRIPT_PATH);
 expect(
@@ -223,6 +229,25 @@ expect(
   railwaySyncScript.includes("Dry run found variable drift."),
   "Railway sync script must fail dry runs with variable drift",
 );
+expect(
+  railwaySyncScript.includes("unrendered = true"),
+  "Railway sync script must compare unrendered variables so same-project references cannot flatten to literals",
+);
+expect(
+  railwaySyncScript.includes("skipDeploys: true"),
+  "Railway sync script must not trigger deploys while syncing template-source variables",
+);
+for (const requiredText of [
+  "check-rendered-credentials",
+  "rendered credentials ok",
+  "rendered credentials disagree",
+  "Gotenberg password",
+]) {
+  expect(
+    railwaySyncScript.includes(requiredText),
+    `Railway sync script must include rendered credential guard text: ${requiredText}`,
+  );
+}
 
 const templateReadme = readText(TEMPLATE_README_PATH);
 for (const heading of [
@@ -276,6 +301,23 @@ for (const requiredText of [
   expect(
     railwaySmokeWorkflow.includes(requiredText),
     `Railway smoke workflow must include ${requiredText}`,
+  );
+}
+
+const railwayTemplateSourceWorkflow = readText(
+  RAILWAY_TEMPLATE_SOURCE_WORKFLOW_PATH,
+);
+for (const requiredText of [
+  "schedule:",
+  "workflow_dispatch:",
+  "RAILWAY_API_TOKEN",
+  "RAILWAY_TEMPLATE_PROJECT_ID",
+  "RAILWAY_TEMPLATE_ENVIRONMENT",
+  "check:railway-template-source-runtime",
+]) {
+  expect(
+    railwayTemplateSourceWorkflow.includes(requiredText),
+    `Railway template-source workflow must include ${requiredText}`,
   );
 }
 

@@ -31,6 +31,7 @@
     "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts",
     "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",
     "check:railway-template": "bun scripts/check-railway-template-shape.ts",
+    "check:railway-template-source-runtime": "bun scripts/sync-railway-template-source.ts --check-rendered-credentials",
     "sync:railway-template-source": "bun scripts/sync-railway-template-source.ts",
     "test": "turbo run test",
     "test:property": "turbo run test:property",

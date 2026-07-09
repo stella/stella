@@ -1,0 +1,46 @@
+name: Railway Template Source
+
+on:
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: "Railway template-source project ID. Defaults to RAILWAY_TEMPLATE_PROJECT_ID."
+        required: false
+        type: string
+      environment:
+        description: "Railway environment name or ID."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-template-source
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    name: Check template-source runtime credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Check Railway template-source runtime credentials
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_TEMPLATE_PROJECT_ID: ${{ inputs.project_id || vars.RAILWAY_TEMPLATE_PROJECT_ID }}
+          RAILWAY_TEMPLATE_ENVIRONMENT: ${{ inputs.environment || vars.RAILWAY_TEMPLATE_ENVIRONMENT || 'production' }}
+        run: bun run check:railway-template-source-runtime
