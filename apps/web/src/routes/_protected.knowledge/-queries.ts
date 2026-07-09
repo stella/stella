@@ -568,11 +568,14 @@ export const skillsOptions = (organizationId: string) =>
       limit: SKILLS_PAGE_SIZE,
     }),
     queryFn: async ({ pageParam, signal }) => {
+      const query: { limit: number; cursor?: string } = {
+        limit: SKILLS_PAGE_SIZE,
+      };
+      if (pageParam !== "") {
+        query.cursor = pageParam;
+      }
       const response = await api.skills.get({
-        query: {
-          ...(pageParam ? { cursor: pageParam } : {}),
-          limit: SKILLS_PAGE_SIZE,
-        },
+        query,
         fetch: { signal },
       });
       if (response.error) {
@@ -580,8 +583,8 @@ export const skillsOptions = (organizationId: string) =>
       }
       return response.data;
     },
-    initialPageParam: null as string | null,
-    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    initialPageParam: "",
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
