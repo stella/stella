@@ -1,9 +1,9 @@
 #!/usr/bin/env bun
 
 import { spawnSync } from "node:child_process";
-import { join } from "node:path";
+import path from "node:path";
 
-const tsc = join(
+const tsc = path.join(
   import.meta.dir,
   "../../../node_modules/@typescript/native/bin/tsc",
 );
