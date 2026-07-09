@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { count, desc, gte, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
@@ -7,6 +8,8 @@ import {
   caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 type SourceStatus = {
   adapterKey: string;
@@ -172,3 +175,21 @@ export const getIngestionStatus = async (
     };
   });
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "legal_corpus_admin" },
+} satisfies HandlerConfig;
+
+const getCaseLawIngestionStatus = createSafeRootHandler(
+  config,
+  async function* ({ scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(async () => await getIngestionStatus(scopedDb)),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default getCaseLawIngestionStatus;

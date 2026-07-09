@@ -72,6 +72,11 @@ const CATALOG_PATH = path.resolve(
 const DOMAIN_SCOPE: Record<string, string> = {
   "audit-logs": "stella:admin_read",
   "billing-codes": "stella:billing_write",
+  // Corpus reads (decision analysis, ingestion status, matter-link list)
+  // alongside matter-link create/delete, which link a global decision into a
+  // workspace matter; the domain contains workspace-scoped writes, so it reuses
+  // the workspace write bucket rather than the read scope legislation uses.
+  "case-law": "stella:matters_write",
   catalogue: "stella:skills",
   // No dedicated chat/assistant consent scope exists; chat-thread CRUD is
   // workspace-scoped user content, so it reuses the workspace write bucket.
@@ -229,12 +234,7 @@ const DESTRUCTIVE_NAME_OPT_OUTS: ReadonlySet<string> = new Set([
  * silently vanishing from the catalog; shrink an entry when its file is
  * refactored. Companion to the coverage guard's INLINE_ENDPOINT_ALLOWLIST.
  */
-const INLINE_CAPABILITY_ALLOWLIST: Record<string, number> = {
-  "apps/api/src/handlers/case-law/routes.ts": 5,
-  "apps/api/src/handlers/legislation/corpus-routes.ts": 2,
-  "apps/api/src/handlers/time-entries/routes.ts": 3,
-  "apps/api/src/handlers/workspaces/routes.ts": 2,
-};
+const INLINE_CAPABILITY_ALLOWLIST: Record<string, number> = {};
 
 type CapabilityMcp =
   | { type: "tool"; name: string }

@@ -1,9 +1,12 @@
+import { Result } from "better-result";
 import { count, eq } from "drizzle-orm";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { caseLawMatterLinks } from "@/api/db/schema";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -98,3 +101,31 @@ export const createMatterLinkHandler = async ({
 
   return link;
 };
+
+const config = {
+  permissions: { entity: ["create"] },
+  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  body: createMatterLinkBodySchema,
+} satisfies HandlerConfig;
+
+const createMatterLink = createSafeHandler(
+  config,
+  async function* ({ body, recordAuditEvent, scopedDb, user, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await createMatterLinkHandler({
+            workspaceId,
+            userId: user.id,
+            body,
+            scopedDb,
+            recordAuditEvent,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default createMatterLink;

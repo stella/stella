@@ -6,7 +6,9 @@
  * until the analysis is ready.
  */
 
+import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
+import { t } from "elysia";
 import * as v from "valibot";
 
 import type {
@@ -34,9 +36,15 @@ import { caseLawDecisions } from "@/api/db/schema";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
-import { getTanStackTextModelForRole } from "@/api/lib/tanstack-ai-models";
+import {
+  getTanStackTextModelForRole,
+  requireTanStackAIAvailableForRole,
+} from "@/api/lib/tanstack-ai-models";
 
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
 import { formatDecisionForPrompt } from "./prompts/base";
@@ -274,3 +282,42 @@ export const generateAnalysis = async (
 
   return { status: "generating" };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
+} satisfies HandlerConfig;
+
+const generateDecisionAnalysis = createSafeRootHandler(
+  config,
+  async function* ({
+    params: { decisionId },
+    session,
+    scopedDb,
+    orgAIConfig,
+    promptCachingEnabled,
+  }) {
+    yield* requireTanStackAIAvailableForRole({
+      orgConfig: orgAIConfig,
+      role: "fast",
+    });
+
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await generateAnalysis(
+            decisionId,
+            scopedDb,
+            session.activeOrganizationId,
+            orgAIConfig,
+            promptCachingEnabled,
+          ),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default generateDecisionAnalysis;

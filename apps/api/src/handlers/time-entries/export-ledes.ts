@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -8,6 +9,8 @@ import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -200,3 +203,30 @@ export const exportLedesHandler = async ({
 
   return lines.join("\n");
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "billing_admin" },
+  query: exportLedesQuerySchema,
+} satisfies HandlerConfig;
+
+const exportLedes = createSafeHandler(
+  config,
+  async function* ({ query, scopedDb, session, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await exportLedesHandler({
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            query,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default exportLedes;

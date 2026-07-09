@@ -1,11 +1,15 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status } from "elysia";
+import { status, t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import { caseLawMatterLinks } from "@/api/db/schema";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 
 type DeleteMatterLinkProps = {
   scopedDb: ScopedDb;
@@ -49,3 +53,38 @@ export const deleteMatterLinkHandler = async ({
 
   return { success: true };
 };
+
+const config = {
+  permissions: { entity: ["delete"] },
+  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  params: t.Object({
+    workspaceId: tSafeId("workspace"),
+    linkId: tSafeId("caseLawMatterLink"),
+  }),
+} satisfies HandlerConfig;
+
+const deleteMatterLink = createSafeHandler(
+  config,
+  async function* ({
+    params: { linkId },
+    recordAuditEvent,
+    scopedDb,
+    workspaceId,
+  }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await deleteMatterLinkHandler({
+            workspaceId,
+            linkId,
+            scopedDb,
+            recordAuditEvent,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default deleteMatterLink;

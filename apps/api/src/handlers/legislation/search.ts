@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status, t } from "elysia";
@@ -8,6 +9,8 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import { isUuid, tSafeId } from "@/api/lib/custom-schema";
@@ -424,3 +427,23 @@ export const searchLegislationHandler = async (
 
   return { hits, nextCursor, totalCount: null };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  body: searchLegislationBodySchema,
+} satisfies HandlerConfig;
+
+const searchLegislation = createSafeRootHandler(
+  config,
+  async function* ({ body, scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await searchLegislationHandler(body, scopedDb),
+      ),
+    );
+    return Result.ok(response);
+  },
+);
+
+export default searchLegislation;

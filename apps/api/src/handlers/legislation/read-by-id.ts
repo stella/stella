@@ -1,5 +1,6 @@
+import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { status } from "elysia";
+import { status, t } from "elysia";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -13,7 +14,10 @@ import {
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { captureError } from "@/api/lib/analytics";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 
 /**
  * Read one legislation document for display. Prefers canonical text/AST
@@ -96,3 +100,23 @@ export const readLegislationHandler = async (
 
   return { ...rest, documentAst, fulltext };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  params: t.Object({ documentId: tSafeId("legislationDocument") }),
+} satisfies HandlerConfig;
+
+const readLegislation = createSafeRootHandler(
+  config,
+  async function* ({ params: { documentId }, scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await readLegislationHandler(documentId, scopedDb),
+      ),
+    );
+    return Result.ok(response);
+  },
+);
+
+export default readLegislation;

@@ -1,152 +1,17 @@
-import { Result } from "better-result";
-import Elysia, { t } from "elysia";
+import Elysia from "elysia";
 
-import { generateAnalysis } from "@/api/handlers/case-law/analysis/generate";
-import { getIngestionStatus } from "@/api/handlers/case-law/ingestion/status";
-import {
-  createMatterLinkBodySchema,
-  createMatterLinkHandler,
-} from "@/api/handlers/case-law/matter-links/create";
-import { deleteMatterLinkHandler } from "@/api/handlers/case-law/matter-links/delete";
-import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
+import generateDecisionAnalysis from "@/api/handlers/case-law/analysis/generate";
+import getCaseLawIngestionStatus from "@/api/handlers/case-law/ingestion/status";
+import createMatterLink from "@/api/handlers/case-law/matter-links/create";
+import deleteMatterLink from "@/api/handlers/case-law/matter-links/delete";
+import listMatterLinks from "@/api/handlers/case-law/matter-links/list";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
-import {
-  createSafeHandler,
-  createSafeRootHandler,
-} from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
 import {
   ADMIN_BYPASS_ROLES,
   authMacro,
   permissionMacro,
   workspaceAccessMacro,
 } from "@/api/lib/auth";
-import { tSafeId } from "@/api/lib/custom-schema";
-import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
-
-const generateDecisionAnalysis = createSafeRootHandler(
-  {
-    permissions: { workspace: ["read"] },
-    mcp: { type: "capability", reason: "legal_corpus_admin" },
-    params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
-  } satisfies HandlerConfig,
-  async function* ({
-    params: { decisionId },
-    session,
-    scopedDb,
-    orgAIConfig,
-    promptCachingEnabled,
-  }) {
-    yield* requireTanStackAIAvailableForRole({
-      orgConfig: orgAIConfig,
-      role: "fast",
-    });
-
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await generateAnalysis(
-            decisionId,
-            scopedDb,
-            session.activeOrganizationId,
-            orgAIConfig,
-            promptCachingEnabled,
-          ),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-const listMatterLinks = createSafeHandler(
-  {
-    permissions: { workspace: ["read"] },
-    mcp: { type: "capability", reason: "legal_corpus_admin" },
-  } satisfies HandlerConfig,
-  async function* ({ scopedDb, workspaceId }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await listMatterLinksHandler({
-            workspaceId,
-            scopedDb,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-const createMatterLink = createSafeHandler(
-  {
-    permissions: { entity: ["create"] },
-    mcp: { type: "capability", reason: "legal_corpus_admin" },
-    body: createMatterLinkBodySchema,
-  } satisfies HandlerConfig,
-  async function* ({ body, recordAuditEvent, scopedDb, user, workspaceId }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await createMatterLinkHandler({
-            workspaceId,
-            userId: user.id,
-            body,
-            scopedDb,
-            recordAuditEvent,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-const deleteMatterLink = createSafeHandler(
-  {
-    permissions: { entity: ["delete"] },
-    mcp: { type: "capability", reason: "legal_corpus_admin" },
-    params: t.Object({
-      workspaceId: tSafeId("workspace"),
-      linkId: tSafeId("caseLawMatterLink"),
-    }),
-  } satisfies HandlerConfig,
-  async function* ({
-    params: { linkId },
-    recordAuditEvent,
-    scopedDb,
-    workspaceId,
-  }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await deleteMatterLinkHandler({
-            workspaceId,
-            linkId,
-            scopedDb,
-            recordAuditEvent,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-const getCaseLawIngestionStatus = createSafeRootHandler(
-  {
-    permissions: { workspace: ["read"] },
-    mcp: { type: "capability", reason: "legal_corpus_admin" },
-  } satisfies HandlerConfig,
-  async function* ({ scopedDb }) {
-    const response = yield* Result.await(
-      Result.tryPromise(async () => await getIngestionStatus(scopedDb)),
-    );
-
-    return Result.ok(response);
-  },
-);
 
 const authenticatedCaseLawRoute = new Elysia({
   prefix: "/case",

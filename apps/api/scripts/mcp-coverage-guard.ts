@@ -82,13 +82,10 @@ type ExposureType = (typeof EXPOSURE_TYPES)[number];
  */
 const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
   "apps/api/src/handlers/case-law/public-routes.ts": 7,
-  "apps/api/src/handlers/case-law/routes.ts": 5,
   "apps/api/src/handlers/files/routes.ts": 4,
-  "apps/api/src/handlers/legislation/corpus-routes.ts": 2,
   "apps/api/src/handlers/search/routes.ts": 5,
   "apps/api/src/handlers/tasks/my-tasks-route.ts": 1,
-  "apps/api/src/handlers/time-entries/routes.ts": 3,
-  "apps/api/src/handlers/workspaces/routes.ts": 6,
+  "apps/api/src/handlers/workspaces/routes.ts": 4,
 };
 
 /**
