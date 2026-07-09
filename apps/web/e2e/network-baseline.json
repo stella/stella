@@ -1373,7 +1373,7 @@
       "GET /v1/views/:id": 1,
       "GET /v1/workspaces/:id": 1,
       "GET /v1/workspaces/:id/anonymization-terms": 1,
-      "GET /v1/workspaces/:id/events": 1,
+      "GET /v1/workspaces/:id/events": 2,
       "GET /v1/workspaces/:id/overview": 1,
       "GET /v1/workspaces/:id/workflow": 1,
       "GET /v1/workspaces/navigation": 1,
