@@ -234,7 +234,9 @@ rendered API variables match the rendered Postgres, Redis, and Gotenberg
 credentials. Configure these GitHub settings:
 
 ```bash
-RAILWAY_API_TOKEN=<Railway token with read access to the template-source project>
+RAILWAY_PROJECT_TOKEN=<Railway project token for the template-source project>
+# Or use an account/team API token instead:
+RAILWAY_API_TOKEN=<Railway account or team API token>
 RAILWAY_TEMPLATE_PROJECT_ID=<template-source-project-id>
 RAILWAY_TEMPLATE_ENVIRONMENT=production
 ```

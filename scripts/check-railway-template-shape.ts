@@ -239,6 +239,8 @@ expect(
 );
 for (const requiredText of [
   "check-rendered-credentials",
+  "Project-Access-Token",
+  "RAILWAY_PROJECT_TOKEN",
   "rendered credentials ok",
   "rendered credentials disagree",
   "Gotenberg password",
@@ -310,6 +312,7 @@ const railwayTemplateSourceWorkflow = readText(
 for (const requiredText of [
   "schedule:",
   "workflow_dispatch:",
+  "RAILWAY_PROJECT_TOKEN",
   "RAILWAY_API_TOKEN",
   "RAILWAY_TEMPLATE_PROJECT_ID",
   "RAILWAY_TEMPLATE_ENVIRONMENT",

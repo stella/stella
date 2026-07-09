@@ -40,6 +40,7 @@ jobs:
 
       - name: Check Railway template-source runtime credentials
         env:
+          RAILWAY_PROJECT_TOKEN: ${{ secrets.RAILWAY_PROJECT_TOKEN }}
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_TEMPLATE_PROJECT_ID: ${{ inputs.project_id || vars.RAILWAY_TEMPLATE_PROJECT_ID }}
           RAILWAY_TEMPLATE_ENVIRONMENT: ${{ inputs.environment || vars.RAILWAY_TEMPLATE_ENVIRONMENT || 'production' }}

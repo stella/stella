@@ -59,12 +59,22 @@ type ProjectQueryData = {
 };
 
 type VariablesQueryData = {
-  variables: Record<string, string>;
+  variables: unknown;
 };
 
 type VariableCollectionUpsertData = {
   variableCollectionUpsert: boolean;
 };
+
+type RailwayAuth =
+  | {
+      type: "bearer";
+      token: string;
+    }
+  | {
+      type: "project";
+      token: string;
+    };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -114,16 +124,21 @@ const readManifest = (): TemplateManifest => {
   return { services };
 };
 
-const readRailwayToken = () => {
+const readRailwayAuth = (): RailwayAuth => {
+  const fromProjectEnv = process.env["RAILWAY_PROJECT_TOKEN"]?.trim();
+  if (fromProjectEnv) {
+    return { token: fromProjectEnv, type: "project" };
+  }
+
   const fromEnv = process.env["RAILWAY_API_TOKEN"]?.trim();
   if (fromEnv) {
-    return fromEnv;
+    return { token: fromEnv, type: "bearer" };
   }
 
   const configPath = path.join(homedir(), ".railway", "config.json");
   if (!existsSync(configPath)) {
     throw new RailwayTemplateSyncError(
-      "Set RAILWAY_API_TOKEN or log in with the Railway CLI first",
+      "Set RAILWAY_PROJECT_TOKEN, set RAILWAY_API_TOKEN, or log in with the Railway CLI first",
     );
   }
 
@@ -138,19 +153,27 @@ const readRailwayToken = () => {
     );
   }
 
-  return config["user"]["accessToken"];
+  return { token: config["user"]["accessToken"], type: "bearer" };
+};
+
+const authHeaders = (auth: RailwayAuth): Record<string, string> => {
+  if (auth.type === "project") {
+    return { "Project-Access-Token": auth.token };
+  }
+
+  return { authorization: `Bearer ${auth.token}` };
 };
 
 const graphql = async <TData>(
-  token: string,
+  auth: RailwayAuth,
   query: string,
   variables: Record<string, unknown>,
 ) => {
   const response = await fetch(RAILWAY_GRAPHQL_URL, {
     method: "POST",
     headers: {
-      authorization: `Bearer ${token}`,
       "content-type": "application/json",
+      ...authHeaders(auth),
     },
     body: JSON.stringify({ query, variables }),
     signal: AbortSignal.timeout(RAILWAY_GRAPHQL_TIMEOUT_MS),
@@ -184,16 +207,16 @@ type ResolvedProject = {
 };
 
 const resolveProject = async ({
-  token,
+  auth,
   projectId,
   environment,
 }: {
-  token: string;
+  auth: RailwayAuth;
   projectId: string;
   environment: string;
 }): Promise<ResolvedProject> => {
   const data = await graphql<ProjectQueryData>(
-    token,
+    auth,
     `
       query ($projectId: String!) {
         project(id: $projectId) {
@@ -251,20 +274,20 @@ const resolveProject = async ({
 };
 
 const readVariables = async ({
-  token,
+  auth,
   projectId,
   environmentId,
   serviceId,
   unrendered = true,
 }: {
-  token: string;
+  auth: RailwayAuth;
   projectId: string;
   environmentId: string;
   serviceId: string;
   unrendered?: boolean;
 }) => {
   const data = await graphql<VariablesQueryData>(
-    token,
+    auth,
     `
       query (
         $projectId: String!
@@ -283,7 +306,7 @@ const readVariables = async ({
     { environmentId, projectId, serviceId, unrendered },
   );
 
-  return data.variables;
+  return readStringRecord(data.variables, "Railway variables");
 };
 
 const requireServiceId = (
@@ -301,14 +324,14 @@ const requireServiceId = (
 };
 
 const writeVariables = async ({
-  token,
+  auth,
   projectId,
   environmentId,
   serviceId,
   variables,
   prune,
 }: {
-  token: string;
+  auth: RailwayAuth;
   projectId: string;
   environmentId: string;
   serviceId: string;
@@ -316,7 +339,7 @@ const writeVariables = async ({
   prune: boolean;
 }) => {
   const data = await graphql<VariableCollectionUpsertData>(
-    token,
+    auth,
     `
       mutation ($input: VariableCollectionUpsertInput!) {
         variableCollectionUpsert(input: $input)
@@ -416,11 +439,11 @@ const assertSameSecret = (
 };
 
 const checkRenderedCredentials = async ({
-  token,
+  auth,
   projectId,
   resolvedProject,
 }: {
-  token: string;
+  auth: RailwayAuth;
   projectId: string;
   resolvedProject: ResolvedProject;
 }) => {
@@ -433,14 +456,16 @@ const checkRenderedCredentials = async ({
         serviceName,
         resolvedProject.projectName,
       ),
-      token,
+      auth,
       unrendered: false,
     });
 
-  const postgres = await readRendered(SERVICE_NAMES.postgres);
-  const redis = await readRendered(SERVICE_NAMES.redis);
-  const api = await readRendered(SERVICE_NAMES.api);
-  const gotenberg = await readRendered(SERVICE_NAMES.gotenberg);
+  const [postgres, redis, api, gotenberg] = await Promise.all([
+    readRendered(SERVICE_NAMES.postgres),
+    readRendered(SERVICE_NAMES.redis),
+    readRendered(SERVICE_NAMES.api),
+    readRendered(SERVICE_NAMES.gotenberg),
+  ]);
 
   assertSameSecret("Postgres password", {
     "Postgres.DATABASE_PUBLIC_URL password": extractUrlPassword(
@@ -518,9 +543,9 @@ const main = async () => {
   }
 
   const manifest = readManifest();
-  const token = readRailwayToken();
+  const auth = readRailwayAuth();
   const resolvedProject = await resolveProject({
-    token,
+    auth,
     projectId,
     environment:
       environment ??
@@ -529,7 +554,7 @@ const main = async () => {
   });
 
   if (checkRenderedCredentialsOnly) {
-    await checkRenderedCredentials({ projectId, resolvedProject, token });
+    await checkRenderedCredentials({ auth, projectId, resolvedProject });
     console.log("railway-template-source: rendered credentials ok");
     return;
   }
@@ -554,7 +579,7 @@ const main = async () => {
 
     // eslint-disable-next-line no-await-in-loop -- diff output is intentionally ordered by service for operator review.
     const current = await readVariables({
-      token,
+      auth,
       projectId,
       environmentId: resolvedProject.environmentId,
       serviceId,
@@ -581,7 +606,7 @@ const main = async () => {
     if (apply) {
       // eslint-disable-next-line no-await-in-loop -- service variable writes are intentionally sequential to keep Railway changes easy to audit.
       await writeVariables({
-        token,
+        auth,
         projectId,
         environmentId: resolvedProject.environmentId,
         serviceId,
