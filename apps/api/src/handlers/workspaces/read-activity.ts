@@ -127,7 +127,7 @@ const readWorkspaceActivity = createSafeHandler(
           return { entityRows: await entityRowsQuery, threadRows: [] };
         }
 
-        const [entityRows, threadRows] = await Promise.all([
+        const [queriedEntityRows, queriedThreadRows] = await Promise.all([
           entityRowsQuery,
           tx
             .select({
@@ -153,7 +153,10 @@ const readWorkspaceActivity = createSafeHandler(
             .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
             .limit(limit + 1),
         ]);
-        return { entityRows, threadRows };
+        return {
+          entityRows: queriedEntityRows,
+          threadRows: queriedThreadRows,
+        };
       }),
     );
 
