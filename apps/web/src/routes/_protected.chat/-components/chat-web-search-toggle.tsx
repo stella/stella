@@ -92,8 +92,10 @@ export const ChatWebSearchToggle = ({
       return { previous };
     },
     onError: (error, _nextEnabled, context) => {
-      for (const [key, data] of context?.previous ?? []) {
-        queryClient.setQueryData(key, data);
+      if (context) {
+        for (const [key, data] of context.previous) {
+          queryClient.setQueryData(key, data);
+        }
       }
       stellaToast.add({
         title: userErrorFromThrown(error, t("errors.actionFailed")),
