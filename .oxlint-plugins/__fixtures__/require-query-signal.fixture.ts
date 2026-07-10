@@ -127,6 +127,12 @@ export const signalDestructuredFetchOptions = {
     await fetch(url, { signal }),
 };
 
+export const aliasedSignalOptions = {
+  queryKey: ["thing", "aliased-signal"],
+  queryFn: async ({ signal: querySignal }: { signal: AbortSignal }) =>
+    await fetch(url, { signal: querySignal }),
+};
+
 export const signalDestructuredEdenOptions = {
   queryKey: ["things", "safe"],
   queryFn: async ({ signal }: { signal: AbortSignal }) =>

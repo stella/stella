@@ -118,16 +118,25 @@ const isQueryFnFunction = (fn) => {
 
 // TanStack Query always invokes queryFn with one context argument; the
 // signal is threaded by destructuring it from that first parameter.
-const hasSignalParam = (fn) => {
+const signalBindingName = (fn) => {
   const firstParam = fn.params?.at(0);
   if (firstParam?.type !== "ObjectPattern") {
-    return false;
+    return null;
   }
-  return firstParam.properties.some(
+  const signalProperty = firstParam.properties.find(
     (property) =>
       property?.type === "Property" &&
       getPropertyName(property.key) === "signal",
   );
+  const value = unwrapTS(signalProperty?.value);
+  if (value?.type === "Identifier") {
+    return value.name;
+  }
+  if (value?.type === "AssignmentPattern") {
+    const left = unwrapTS(value.left);
+    return left?.type === "Identifier" ? left.name : null;
+  }
+  return null;
 };
 
 const isFetchCallee = (callee) => {
@@ -188,28 +197,28 @@ const isEdenApiCallee = (callee) => {
   return rootIdentifier(unwrapped.object)?.name === "api";
 };
 
-const containsSignalIdentifier = (node) => {
+const containsSignalIdentifier = (node, bindingName) => {
   const unwrapped = unwrapTS(node);
   if (!unwrapped || typeof unwrapped.type !== "string") {
     return false;
   }
-  if (isIdentifier(unwrapped, "signal")) {
+  if (isIdentifier(unwrapped, bindingName)) {
     return true;
   }
   if (unwrapped.type === "MemberExpression" && !unwrapped.computed) {
-    return containsSignalIdentifier(unwrapped.object);
+    return containsSignalIdentifier(unwrapped.object, bindingName);
   }
   if (unwrapped.type === "Property" && !unwrapped.computed) {
-    return containsSignalIdentifier(unwrapped.value);
+    return containsSignalIdentifier(unwrapped.value, bindingName);
   }
   return Object.entries(unwrapped).some(([key, value]) => {
     if (key === "parent") {
       return false;
     }
     if (Array.isArray(value)) {
-      return value.some(containsSignalIdentifier);
+      return value.some((item) => containsSignalIdentifier(item, bindingName));
     }
-    return containsSignalIdentifier(value);
+    return containsSignalIdentifier(value, bindingName);
   });
 };
 
@@ -225,10 +234,11 @@ const getObjectPropertyValue = (node, name) => {
   return property?.value ?? null;
 };
 
-const callThreadsSignal = (node) => {
+const callThreadsSignal = (node, bindingName) => {
   if (isFetchCallee(node.callee)) {
     return containsSignalIdentifier(
       getObjectPropertyValue(node.arguments.at(1), "signal"),
+      bindingName,
     );
   }
   return node.arguments.some((argument) =>
@@ -237,6 +247,7 @@ const callThreadsSignal = (node) => {
         getObjectPropertyValue(argument, "fetch"),
         "signal",
       ),
+      bindingName,
     ),
   );
 };
@@ -265,10 +276,11 @@ export default {
             }
 
             const owner = nearestEnclosingFunction(node);
+            const bindingName = owner ? signalBindingName(owner) : null;
             if (
               !owner ||
               !isQueryFnFunction(owner) ||
-              (hasSignalParam(owner) && callThreadsSignal(node))
+              (bindingName !== null && callThreadsSignal(node, bindingName))
             ) {
               return;
             }
