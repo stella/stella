@@ -12,6 +12,8 @@ import * as slimdom from "slimdom";
 
 import { placeholderPattern } from "@stll/template-conditions";
 
+import { compareCodepoint } from "@/api/lib/collation";
+
 import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
 import type { DiscoveredPlaceholder } from "./types";
 
@@ -84,8 +86,8 @@ export const discoverPlaceholders = async (
 
   return (
     [...counts.entries()]
-      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- placeholder name is a template merge-field path, not display text
-      .toSorted(([a], [b]) => a.localeCompare(b))
+      // placeholder name is a template merge-field path, not display text
+      .toSorted(([a], [b]) => compareCodepoint(a, b))
       .map(([name, count]) => ({ name, count }))
   );
 };

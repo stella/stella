@@ -9,6 +9,7 @@ import type {
   ContactPhone,
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { compareCodepoint } from "@/api/lib/collation";
 import {
   contactWorkspaceAccessSql,
   resolveWorkspaceScope,
@@ -336,8 +337,8 @@ const facetBuckets = (
       }
       return bucket;
     })
-    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- facet value is a raw filter key (id/enum), a count tiebreak, not display text
-    .sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+    // facet value is a raw filter key (id/enum), a count tiebreak, not display text
+    .sort((a, b) => b.count - a.count || compareCodepoint(a.value, b.value));
 
 const totalFrom = (rows: CountRow[]): number => Number(rows.at(0)?.total ?? 0);
 
@@ -1017,8 +1018,8 @@ export const searchGlobal = async ({
     ...contactRows.map(mapContactHit),
     ...caseLawRows.map(mapCaseLawHit),
     ...chatRows.map(mapChatHit),
-    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- hit.id tiebreak for deterministic ranking, not display text
-  ].sort((a, b) => b.score - a.score || b.hit.id.localeCompare(a.hit.id));
+    // hit.id tiebreak for deterministic ranking, not display text
+  ].sort((a, b) => b.score - a.score || compareCodepoint(b.hit.id, a.hit.id));
 
   const hits = scoredHits.slice(offset, offset + limit).map(({ hit }) => hit);
   const totalEntities = totalFrom(entityCount);

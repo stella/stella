@@ -1,6 +1,7 @@
 // Pure helpers for streaming a folder subtree as a ZIP archive.
 // `download-zip.ts` wires these to the database, S3, and `client-zip`.
 
+import { compareCodepoint } from "@/api/lib/collation";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 /** A folder descendant, with the fields needed to rebuild the tree. */
@@ -19,12 +20,10 @@ type BuildArchivePathsArgs = {
 
 // Deterministic archive entry order (id/name fields as stable sort keys, not
 // linguistic sorting) so the same subtree always streams identically.
-/* oxlint-disable require-cached-collator/require-cached-collator -- deterministic id/path ordering for ZIP entry order, not display text */
 const compareArchiveNode = (a: ArchiveNode, b: ArchiveNode): number =>
-  a.parentId.localeCompare(b.parentId) ||
-  sanitizeFilename(a.name).localeCompare(sanitizeFilename(b.name)) ||
-  a.id.localeCompare(b.id);
-/* oxlint-enable require-cached-collator/require-cached-collator */
+  compareCodepoint(a.parentId, b.parentId) ||
+  compareCodepoint(sanitizeFilename(a.name), sanitizeFilename(b.name)) ||
+  compareCodepoint(a.id, b.id);
 
 const uniqueSegment = (seen: Set<string>, segment: string): string => {
   if (!seen.has(segment)) {

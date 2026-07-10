@@ -18,6 +18,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { compareCodepoint } from "@/api/lib/collation";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import {
@@ -227,8 +228,8 @@ const downloadZipHandler = async function* ({
   });
   rawFiles.sort(
     (a, b) =>
-      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- deterministic archive entry order (path/id), not display text
-      a.rawPath.localeCompare(b.rawPath) || a.fileId.localeCompare(b.fileId),
+      compareCodepoint(a.rawPath, b.rawPath) ||
+      compareCodepoint(a.fileId, b.fileId),
   );
 
   const seenPaths = new Set<string>();

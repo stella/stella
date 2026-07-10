@@ -6,6 +6,7 @@ import type { LinkMetadata, searchDocuments } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { compareCodepoint } from "@/api/lib/collation";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { docxReviewMarkupToSearchText } from "@/api/lib/docx-review-markup";
 import { isoToRegconfig } from "@/api/lib/search/detect-language";
@@ -101,10 +102,9 @@ const buildSearchDocument = async (
   const fieldTexts: string[] = [];
   let title = entity.name;
 
-  // Sort by propertyId for deterministic title extraction
+  // Sort by propertyId (an internal id) for deterministic title extraction
   const sortedFields = [...version.fields].toSorted((a, b) =>
-    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- propertyId is an internal id, sorted for determinism, not display text
-    a.propertyId.localeCompare(b.propertyId),
+    compareCodepoint(a.propertyId, b.propertyId),
   );
 
   for (const field of sortedFields) {
