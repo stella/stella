@@ -280,10 +280,11 @@ export const applySorts = <T extends FilterableEntity>(
   items: T[],
   sorts: ViewSort[],
   // Property values are user-entered text (as opposed to e.g. an id), so
-  // sorting them needs the viewer's locale, not codepoint order. Callers pass
-  // the request locale (extractLangFromRequest); default "en" only covers
-  // call sites (tests, scripts) that have none to give.
-  locale = "en",
+  // sorting them needs the viewer's locale, not codepoint order. Callers must
+  // pass the request locale (extractLangFromRequest) explicitly; there is no
+  // implicit default, since an implicit locale is the bug this module guards
+  // against.
+  locale: string,
 ): T[] => {
   if (sorts.length === 0) {
     return items;
