@@ -251,6 +251,41 @@ const countDirectErrorMessageDisplay = (content: string): number => {
 // one barrel (presence metric).
 const countPresence = (): number => 1;
 
+// Raw date/timezone footguns: `new Date("YYYY-MM-DD")` parses as UTC
+// midnight (an off-by-one day once rendered west of UTC), `Date.parse(...)`
+// of a non-ISO string is engine-dependent, and day-length millisecond
+// arithmetic (`24 * 60 * 60 * 1000`, `86_400_000`/`86400000`) breaks across
+// a DST transition (the clocks-change day is 23 or 25 hours, not 24). Use
+// `parseIsoDateLocal` / `addDays` from `apps/{api,web}/src/lib/dates.ts`
+// instead.
+//
+// Line-based, like the counters above: a comment line is skipped and a
+// trailing `//` tail is dropped, but (unlike `countAsCasts`) string/template
+// contents are NOT blanked first, because the string quote characters
+// themselves are part of what this counter matches (`new Date("`). Accepted
+// fidelity limit: a `//` sitting inside an earlier string on the same line
+// would truncate the line before a later match — rare for date-parsing code
+// and consistent with this file's other documented tradeoffs.
+const RAW_DATE_STRING_ARG = /\bnew\s+Date\(\s*["`]/gu;
+const DATE_PARSE_CALL = /\bDate\.parse\(/gu;
+const DAY_MS_ARITHMETIC_EXPR = /24\s*\*\s*60\s*\*\s*60\s*\*\s*1000\b/gu;
+const DAY_MS_LITERAL = /\b86_400_000\b|\b86400000\b/gu;
+
+const countRawDateParsing = (content: string): number => {
+  let total = 0;
+  for (const raw of content.split("\n")) {
+    if (COMMENT_LINE.test(raw)) {
+      continue;
+    }
+    const code = raw.replace(LINE_COMMENT_TAIL, "");
+    total += (code.match(RAW_DATE_STRING_ARG) ?? []).length;
+    total += (code.match(DATE_PARSE_CALL) ?? []).length;
+    total += (code.match(DAY_MS_ARITHMETIC_EXPR) ?? []).length;
+    total += (code.match(DAY_MS_LITERAL) ?? []).length;
+  }
+  return total;
+};
+
 // --- Metric table -----------------------------------------------------------
 
 type FileCounter = (content: string) => number;
@@ -305,6 +340,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       file.includes("apps/web/src/routes/dev/") ||
       file.startsWith("apps/web/src/workers/"),
     count: countDirectErrorMessageDisplay,
+  },
+  {
+    id: "raw-date-parsing",
+    description:
+      'string-literal date parsing (`new Date("...")`, `new Date(`...`)`, `Date.parse(...)`) and day-length ms arithmetic literals (`24 * 60 * 60 * 1000`, `86_400_000`/`86400000`) in app source (excl. tests/gen); prefer `parseIsoDateLocal`/`addDays` from apps/{api,web}/src/lib/dates.ts',
+    include: APP_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countRawDateParsing,
   },
 ];
 
@@ -568,6 +611,25 @@ const SELF_TEST_DIRECT_ERROR = `${DIRECT_ERROR_FIXTURE_LINES.join("\n")}\n`;
 // string literal, and comment are excluded.
 const EXPECTED_DIRECT_ERROR = 4;
 
+const RAW_DATE_FIXTURE_LINES = [
+  'const a = new Date("2024-01-01");',
+  "const b = new Date(`2024-01-01`);",
+  "const c = Date.parse(rawInput);",
+  "const d = now.getTime() + 24 * 60 * 60 * 1000;",
+  "const e = now.getTime() + 86_400_000;",
+  "const f = now.getTime() + 86400000;",
+  "const g = new Date(); // no-arg constructor is safe, must not count",
+  "const h = new Date(year, month - 1, day); // date-parts ctor is safe",
+  "const i = new Date(existingDate); // copying a Date instance is safe",
+  '// new Date("2024-01-01") mentioned in a comment must not count',
+  "const j = parseIsoDateLocal(iso); // helper call is safe",
+];
+const SELF_TEST_RAW_DATE = `${RAW_DATE_FIXTURE_LINES.join("\n")}\n`;
+// Expected: a(1) + b(1) + c(1) + d(1) + e(1) + f(1) = 6. The no-arg/parts/
+// copy Date constructors, the safe helper call, and the comment mention are
+// all excluded.
+const EXPECTED_RAW_DATE = 6;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -588,6 +650,7 @@ const runSelfTest = (): number => {
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
+    writeFixture(root, "apps/api/src/raw-date.ts", SELF_TEST_RAW_DATE);
     // Excluded companions: these must NOT be counted.
     writeFixture(
       root,
@@ -595,6 +658,7 @@ const runSelfTest = (): number => {
       "const z = value as Widget;\n",
     );
     writeFixture(root, "apps/web/src/types.gen.ts", "const g = x as Y;\n");
+    writeFixture(root, "apps/api/src/raw-date.test.ts", SELF_TEST_RAW_DATE);
 
     const snapshot = scanAll(root);
 
@@ -630,6 +694,16 @@ const runSelfTest = (): number => {
       failures.push(
         `direct-error-message-display counted ${directErrorMetric.count}, expected ${EXPECTED_DIRECT_ERROR}`,
       );
+    }
+
+    const rawDateMetric = snapshot["raw-date-parsing"];
+    if (rawDateMetric.count !== EXPECTED_RAW_DATE) {
+      failures.push(
+        `raw-date-parsing counted ${rawDateMetric.count}, expected ${EXPECTED_RAW_DATE}`,
+      );
+    }
+    if ("apps/api/src/raw-date.test.ts" in rawDateMetric.files) {
+      failures.push("raw-date-parsing did not exclude a .test.ts file");
     }
 
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.
