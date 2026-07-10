@@ -43,8 +43,8 @@ import {
 } from "@/api/handlers/chat/compaction";
 import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import {
+  computeAssistantTurnWorkspaceIds,
   expandThreadDataScope,
-  extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
@@ -835,21 +835,17 @@ const sendMessage = createSafeRootHandler(
                 // hallucinated or stale UUID from the model never
                 // lands in `data_workspace_ids`. An out-of-set ID
                 // would fail the RLS subset check on every later
-                // persist, silently breaking the thread.
-                // Also union in the workspaces the ref registry resolved DURING
-                // this stream (the delta vs. the pre-stream snapshot): a
-                // subagent can read matter/entity content and return it as
-                // free-form text, so the structural scan above never sees it,
-                // but the shared registry holds the resolved ref. Excluding the
-                // snapshot keeps prompt-only pins/history refs out of scope.
-                const assistantWorkspaceIds = [
-                  ...extractAssistantWorkspaceIds(
-                    resolvedResponseMessage.parts,
-                  ),
-                  ...refRegistry
-                    .getRegisteredWorkspaceIds()
-                    .filter((id) => !workspaceIdsBeforeStream.has(id)),
-                ].filter((id) => accessibleSet.has(id));
+                // persist, silently breaking the thread. Also union in the
+                // workspaces the ref registry resolved DURING this stream —
+                // see `computeAssistantTurnWorkspaceIds`'s docstring for why
+                // that delta matters for subagent reads.
+                const assistantWorkspaceIds = computeAssistantTurnWorkspaceIds({
+                  responseParts: resolvedResponseMessage.parts,
+                  workspaceIdsBeforeStream,
+                  registeredWorkspaceIdsAfterStream:
+                    refRegistry.getRegisteredWorkspaceIds(),
+                  accessibleWorkspaceIds: accessibleSet,
+                });
                 const expandResult = await expandThreadDataScope({
                   currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
                   newWorkspaceIds: assistantWorkspaceIds,

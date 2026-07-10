@@ -9,6 +9,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
+  computeAssistantTurnWorkspaceIds,
   expandThreadDataScope,
   extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
@@ -380,6 +381,77 @@ describe("extractThreadDataWorkspaceIds", () => {
     expect(
       extractThreadDataWorkspaceIds(messagesBeforeTruncation.slice(0, 1)),
     ).toEqual([wsA]);
+  });
+});
+
+describe("computeAssistantTurnWorkspaceIds", () => {
+  // `send-message.ts` snapshots `refRegistry.getRegisteredWorkspaceIds()`
+  // before streaming and diffs it against the post-stream snapshot passed
+  // here as `registeredWorkspaceIdsAfterStream`. This is the mechanism that
+  // widens `chat_threads.data_workspace_ids` when a `spawn_subagents`
+  // subagent reads workspace-scoped content and only returns a free-form
+  // text summary — no structural `matterRef`/`workspaceId` field or
+  // `#stella-*` ref ever reaches the parent's response parts, so the
+  // structural scan alone would miss it.
+
+  test("folds in a workspace a subagent registered mid-stream, even with no matching response part", () => {
+    const ids = computeAssistantTurnWorkspaceIds({
+      responseParts: [
+        { type: "text", content: "Done — see the summary above." },
+      ],
+      workspaceIdsBeforeStream: new Set(),
+      registeredWorkspaceIdsAfterStream: [wsA],
+      accessibleWorkspaceIds: new Set([wsA]),
+    });
+
+    expect(ids).toEqual([wsA]);
+  });
+
+  test("excludes a workspace that was already registered before the stream started", () => {
+    // Prompt-time pins / prior-turn history refs should not re-widen scope
+    // on every later turn.
+    const ids = computeAssistantTurnWorkspaceIds({
+      responseParts: [],
+      workspaceIdsBeforeStream: new Set([wsA]),
+      registeredWorkspaceIdsAfterStream: [wsA],
+      accessibleWorkspaceIds: new Set([wsA]),
+    });
+
+    expect(ids).toEqual([]);
+  });
+
+  test("drops a subagent-registered workspace the caller can no longer access", () => {
+    // Guards against a stale/revoked workspace id ever reaching
+    // `data_workspace_ids`, mirroring the same accessibleWorkspaceIds
+    // intersection `extractIncomingMessageWorkspaceIds` callers apply.
+    const ids = computeAssistantTurnWorkspaceIds({
+      responseParts: [],
+      workspaceIdsBeforeStream: new Set(),
+      registeredWorkspaceIdsAfterStream: [wsA],
+      accessibleWorkspaceIds: new Set(),
+    });
+
+    expect(ids).toEqual([]);
+  });
+
+  test("unions the structural response scan with the registry delta", () => {
+    const ids = computeAssistantTurnWorkspaceIds({
+      responseParts: [
+        {
+          type: "tool-call",
+          id: "call_1",
+          name: "mcp__test__listMatters",
+          arguments: "{}",
+          state: "complete",
+          output: { items: [{ matterRef: wsB, name: "Matter B" }] },
+        },
+      ],
+      workspaceIdsBeforeStream: new Set(),
+      registeredWorkspaceIdsAfterStream: [wsA],
+      accessibleWorkspaceIds: new Set([wsA, wsB]),
+    });
+
+    expect(new Set(ids)).toEqual(new Set([wsA, wsB]));
   });
 });
 
