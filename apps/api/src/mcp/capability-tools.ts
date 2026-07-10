@@ -74,11 +74,20 @@ type CatalogEntry = {
    */
   allowsArchivedWorkspace?: boolean;
   /**
-   * When true, this capability's handler returns a web `Response` (file/stream)
-   * on success. The generic invoke path cannot serialize a streamed file, so it
-   * refuses these pre-execution; the REST route remains the way to fetch them.
+   * When true, this capability's handler returns a file on success (a web
+   * `Response` or raw binary bytes). The generic invoke path cannot serialize
+   * either, so it refuses these pre-execution; the REST route remains the way
+   * to fetch them.
    */
   returnsFileResponse?: boolean;
+  /**
+   * When true, this capability's config schema contains a `t.File()`/`t.Files()`
+   * field (`format: "binary"`). JSON input cannot carry a `File` — a plain
+   * string would pass schema validation and reach the handler where it expects
+   * a `File` — so the invoke gate refuses these pre-execution and points at the
+   * presigned-upload flow. Derived mechanically by the export script.
+   */
+  requiresFileInput?: boolean;
   permissions?: unknown;
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
   inputSchemaTruncated?: true;
@@ -480,9 +489,11 @@ const describeCapabilityHandler = async ({
       handlerKind: entry.handlerKind,
       scope: entry.scope,
       // Surfacing these lets an agent learn, before invoking, that the
-      // capability returns a file (invoke refuses it) or tolerates an archived
+      // capability returns a file (invoke refuses it), takes a file upload
+      // (invoke refuses it; use the presigned flow), or tolerates an archived
       // workspace (e.g. unarchive).
       returnsFileResponse: entry.returnsFileResponse === true,
+      requiresFileInput: entry.requiresFileInput === true,
       allowsArchivedWorkspace: entry.allowsArchivedWorkspace === true,
       permissions: entry.permissions ?? null,
       disposition: entry.mcp,
@@ -620,14 +631,25 @@ const invokeCapabilityHandler = async ({
       hint: "Perform this operation in the stella app, which has the required request context.",
     });
   }
-  // File/stream capabilities return a web Response the generic path cannot
-  // serialize; refuse them before execution (a runtime backstop in
-  // executeInvoke also catches any that slip past this flag).
+  // File/stream capabilities return a web Response or raw binary bytes the
+  // generic path cannot serialize; refuse them before execution (a runtime
+  // backstop in mapHandlerResult also catches any that slip past this flag).
   if (entry.returnsFileResponse === true) {
     return structuredErrorResult({
       code: "feature_disabled",
       message: `Capability "${id}" returns a file or stream and is not available through invoke_capability`,
       hint: "Fetch the file through its REST route or the stella app; invoke_capability only returns structured JSON.",
+    });
+  }
+  // File-input capabilities take a `t.File()` body field; JSON input cannot
+  // carry a File (a plain string would pass validation and reach the handler
+  // where it expects a File), so refuse pre-execution — before validateOnly
+  // too, which would otherwise report `valid: true` for an un-runnable input.
+  if (entry.requiresFileInput === true) {
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: `Capability "${id}" takes a file upload and is not available through invoke_capability`,
+      hint: "Upload the file via the presigned-upload flow (request an upload URL, PUT the bytes to S3, then create the record), or use the stella app.",
     });
   }
 
@@ -789,12 +811,25 @@ const executeInvoke = async ({
 };
 
 /**
+ * A file/stream/binary success value the structured egress must never
+ * serialize: a web `Response`, raw bytes (`ArrayBuffer` or any of its views,
+ * `Uint8Array` included), a `ReadableStream`, or a `Blob`. Stringifying any of
+ * these would emit garbage ("[object Response]", `{"0":37,"1":80,...}` for
+ * byte arrays) or drain a stream.
+ */
+const isBinaryPayload = (value: unknown): boolean =>
+  value instanceof Response ||
+  value instanceof ArrayBuffer ||
+  ArrayBuffer.isView(value) ||
+  value instanceof ReadableStream ||
+  value instanceof Blob;
+
+/**
  * Map a capability handler's raw return onto an MCP response:
  *  - a safe-handler `status(code, body)` -> the error envelope;
- *  - a web `Response` -> `feature_disabled` (runtime backstop for fix-6: the
- *    catalog flag refuses file/stream capabilities pre-execution, and this
- *    catches any that slip past; never stringify the Response — that would emit
- *    "[object Response]" or drain a stream);
+ *  - a `Response`/binary payload (see `isBinaryPayload`) -> `feature_disabled`
+ *    (runtime backstop for fix-6: the catalog flag refuses file capabilities
+ *    pre-execution, and this catches any that slip past);
  *  - anything else -> the structured success payload.
  */
 export const mapHandlerResult = ({
@@ -808,7 +843,7 @@ export const mapHandlerResult = ({
     const statusCode = typeof result.code === "number" ? result.code : 500;
     return mapStatusResponse(statusCode, result.response);
   }
-  if (result instanceof Response) {
+  if (isBinaryPayload(result)) {
     return structuredErrorResult({
       code: "feature_disabled",
       message: `Capability "${id}" returned a file or stream, which invoke_capability cannot deliver`,

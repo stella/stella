@@ -621,12 +621,43 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
   });
 
+  test("(layer a) a helper-built binary capability is refused pre-execution", async () => {
+    // time-entries.export-pdf returns a Uint8Array (not a Response) via a
+    // helper; the flag refuses it before dispatch.
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-pdf",
+        input: { params: { workspaceId: "ws_1" } },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("feature_disabled");
+    expect(error.message).toContain("file or stream");
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
   test("(layer b) mapHandlerResult refuses a Response the handler returns", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new Response("file bytes"),
     });
     expect(mappedError(mapped).code).toBe("feature_disabled");
+  });
+
+  test("(layer b) mapHandlerResult refuses every binary payload shape", () => {
+    const binaries: [string, unknown][] = [
+      ["Uint8Array", new Uint8Array([37, 80, 68, 70])],
+      ["ArrayBuffer", new ArrayBuffer(8)],
+      ["DataView (ArrayBuffer view)", new DataView(new ArrayBuffer(8))],
+      ["ReadableStream", new ReadableStream()],
+      ["Blob", new Blob(["bytes"])],
+    ];
+    for (const [label, value] of binaries) {
+      const mapped = mapHandlerResult({ id: "x.y", result: value });
+      expect(mappedError(mapped).code, label).toBe("feature_disabled");
+    }
   });
 
   test("(layer b) mapHandlerResult passes a plain payload through", () => {
@@ -644,6 +675,83 @@ describe("invoke_capability file-response gate (fix-6)", () => {
       result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
     });
     expect(mappedError(mapped).code).toBe("not_found");
+  });
+});
+
+// --- file-input capabilities refused (t.File over JSON) ----------------------
+
+describe("invoke_capability file-input gate", () => {
+  test("a requiresFileInput capability is refused pre-execution on invoke", async () => {
+    // entities.upload's body carries t.File(); JSON cannot deliver a File, so
+    // the gate refuses before validation/dispatch with a presigned-flow hint.
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "entities.upload",
+        input: {
+          params: { workspaceId: "ws_1" },
+          body: { file: "not-a-file" },
+        },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("feature_disabled");
+    expect(error.message).toContain("file upload");
+    expect(error.hint).toContain("presigned");
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("validateOnly is refused too (a string would falsely validate as a File)", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "entities.upload",
+        input: {
+          params: { workspaceId: "ws_1" },
+          body: { file: "not-a-file" },
+        },
+        validateOnly: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("feature_disabled");
+  });
+
+  test("describe_capability exposes requiresFileInput", async () => {
+    const flagged = await call("describe_capability", {
+      capability: "entities.upload",
+    });
+    expect(
+      parseToolPayload<{ requiresFileInput: boolean }>(flagged)
+        .requiresFileInput,
+    ).toBe(true);
+
+    const plain = await call("describe_capability", {
+      capability: "time-entries.create",
+    });
+    expect(
+      parseToolPayload<{ requiresFileInput: boolean }>(plain).requiresFileInput,
+    ).toBe(false);
+  });
+
+  test("the catalog flag matches the live schema (mechanical derivation)", () => {
+    // Every t.File-bearing catalog capability carries the flag; three known
+    // seeds spot-check the derivation. `in` narrowing because the JSON module
+    // type only carries the field on flagged entries.
+    const flagged = new Set(
+      capabilityCatalog
+        .filter((e) => "requiresFileInput" in e && e.requiresFileInput === true)
+        .map((e) => e.id),
+    );
+    for (const id of [
+      "entities.upload",
+      "clauses.import",
+      "templates.create",
+    ]) {
+      expect(flagged.has(id), id).toBe(true);
+    }
+    expect(flagged.has("time-entries.export-csv")).toBe(false);
   });
 });
 

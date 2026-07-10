@@ -21,6 +21,7 @@ import {
   scanContextFidelity,
   scanFileResponseReturns,
   scanRouteHookGuards,
+  schemaContainsBinaryFormat,
   serializeDispatchModule,
   serializeCatalog,
 } from "./capability-catalog";
@@ -761,6 +762,63 @@ describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
   });
 });
 
+describe("schemaContainsBinaryFormat", () => {
+  test("detects a t.File-shaped field (format: binary) at any depth", () => {
+    // Exactly how t.File({ maxSize }) serializes.
+    const file = {
+      default: "File",
+      maxSize: "50m",
+      type: "string",
+      format: "binary",
+    };
+    expect(schemaContainsBinaryFormat(file)).toBe(true);
+    expect(
+      schemaContainsBinaryFormat({
+        body: { type: "object", properties: { upload: file } },
+      }),
+    ).toBe(true);
+  });
+
+  test("detects t.Files (array items with format: binary)", () => {
+    // Exactly how t.Files() serializes.
+    expect(
+      schemaContainsBinaryFormat({
+        elysiaMeta: "Files",
+        type: "array",
+        items: { default: "Files", type: "string", format: "binary" },
+      }),
+    ).toBe(true);
+  });
+
+  test("detects binary inside union branches (anyOf)", () => {
+    expect(
+      schemaContainsBinaryFormat({
+        anyOf: [{ type: "string" }, { type: "string", format: "binary" }],
+      }),
+    ).toBe(true);
+  });
+
+  test("is false for plain schemas and other string formats", () => {
+    expect(
+      schemaContainsBinaryFormat({
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          when: { type: "string", format: "date-time" },
+        },
+      }),
+    ).toBe(false);
+    expect(schemaContainsBinaryFormat(undefined)).toBe(false);
+    expect(schemaContainsBinaryFormat("binary")).toBe(false);
+    // A field merely NAMED format is not a binary marker.
+    expect(
+      schemaContainsBinaryFormat({
+        properties: { format: { type: "string" } },
+      }),
+    ).toBe(false);
+  });
+});
+
 describe("returnsInlineFileResponse", () => {
   test("detects an inline Result.ok(new Response(...)) success return", () => {
     expect(
@@ -768,6 +826,15 @@ describe("returnsInlineFileResponse", () => {
     ).toBe(true);
     expect(
       returnsInlineFileResponse("return Result.ok(\n    new Response(zip));"),
+    ).toBe(true);
+  });
+
+  test("detects inline binary success returns (Uint8Array, Blob)", () => {
+    expect(
+      returnsInlineFileResponse("return Result.ok(new Uint8Array(buffer));"),
+    ).toBe(true);
+    expect(
+      returnsInlineFileResponse("return Result.ok(new Blob([bytes]));"),
     ).toBe(true);
   });
 
@@ -808,7 +875,7 @@ describe("scanFileResponseReturns", () => {
     expect(scan.staleFlags).toEqual([]);
   });
 
-  test("keeps a flagged variable-returned Response honest via constructsResponse", () => {
+  test("keeps a flagged variable-returned Response honest via the stale signal", () => {
     // templates.fill-shaped: returns a Response via a helper, so the inline
     // detector misses it, but it still constructs a Response, so not stale.
     const scan = scanFileResponseReturns({
@@ -819,6 +886,24 @@ describe("scanFileResponseReturns", () => {
         },
       ],
       flaggedIds: new Set(["templates.fill"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("keeps a flagged helper-built binary payload honest via the stale signal", () => {
+    // time-entries.export-pdf-shaped: the bytes come back from a helper typed
+    // Uint8Array, invisible to the inline detector, but the Uint8Array mention
+    // keeps the flag non-stale.
+    const scan = scanFileResponseReturns({
+      entries: [
+        {
+          id: "time-entries.export-pdf",
+          source:
+            "const buildMinimalPdf = (lines: readonly string[]): Uint8Array => enc.encode(pdf);\nreturn Result.ok(response);",
+        },
+      ],
+      flaggedIds: new Set(["time-entries.export-pdf"]),
     });
     expect(scan.violations).toEqual([]);
     expect(scan.staleFlags).toEqual([]);

@@ -54,6 +54,7 @@ import {
   scanContextFidelity,
   scanFileResponseReturns,
   scanRouteHookGuards,
+  schemaContainsBinaryFormat,
   serializeCatalog,
   serializeDispatchModule,
 } from "./lib/capability-catalog";
@@ -299,20 +300,28 @@ const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Capabilities whose handler returns a web `Response` (file/stream) on success.
- * The generic invoke path cannot serialize a streamed file, so these are refused
- * pre-execution (a runtime backstop also catches any that slip past). Carried
- * into the catalog as `returnsFileResponse`. Sweep of catalog handlers returning
- * `Result.ok(new Response(...))` (or a Response via a helper): the four inline
- * cases are also caught by the class-guard scan below; `templates.fill` returns
- * its Response through `fillHandler`, so it is seeded here explicitly. Stale-
- * checked: a flagged id whose handler no longer constructs a Response fails.
+ * Capabilities whose success payload is a file: a web `Response` (file/stream)
+ * or raw binary bytes. The generic invoke path cannot serialize either, so
+ * these are refused pre-execution (a runtime backstop in `mapHandlerResult`
+ * also rejects Response/binary values that slip past). Carried into the
+ * catalog as `returnsFileResponse`. Sweep of catalog handlers:
+ *  - `Result.ok(new Response(...))` inline (also caught by the class-guard
+ *    scan): clauses.export, entities.download-zip, templates.fill-by-id,
+ *    views.table-export;
+ *  - Response via a helper: `templates.fill` (through `fillHandler`);
+ *  - raw binary via a helper: `time-entries.export-pdf` returns a `Uint8Array`
+ *    through `exportPdfHandler`/`buildMinimalPdf`, invisible to the inline
+ *    scan, so it is seeded explicitly (its siblings export-csv/export-ledes
+ *    return plain strings, which serialize fine and stay invokable).
+ * Stale-checked: a flagged id whose handler no longer constructs any file-like
+ * value (Response/Uint8Array/ArrayBuffer/Blob/ReadableStream) fails the export.
  */
 const RETURNS_FILE_RESPONSE: ReadonlySet<string> = new Set([
   "clauses.export",
   "entities.download-zip",
   "templates.fill",
   "templates.fill-by-id",
+  "time-entries.export-pdf",
   "views.table-export",
 ]);
 
@@ -340,8 +349,16 @@ type CapabilityEntry = {
   scope: string;
   /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
   allowsArchivedWorkspace?: true;
-  /** Handler returns a file/stream `Response` on success (fix-6). */
+  /** Success payload is a file: a `Response` or raw binary bytes (fix-6). */
   returnsFileResponse?: true;
+  /**
+   * Config schema contains a `t.File()`/`t.Files()` field (`format: "binary"`).
+   * Derived mechanically from the live config (`schemaContainsBinaryFormat`),
+   * never hand-listed; the invoke gate refuses flagged entries because JSON
+   * input cannot carry a `File` (a plain string would pass validation and reach
+   * the handler where it expects a `File`). Use the presigned-upload flow.
+   */
+  requiresFileInput?: true;
   permissions?: unknown;
   /**
    * Absent when the schema exceeded MAX_CAPABILITY_SCHEMA_BYTES (see
@@ -473,6 +490,57 @@ type BuildResult = {
   truncatedSchemas: string[];
 };
 
+type BuildCatalogEntryOptions = {
+  id: string;
+  kind: HandlerKind;
+  access: { access: "read" | "write"; destructive: boolean };
+  scope: string;
+  hasPermissions: boolean;
+  permissions: unknown;
+  /** Live (pre-cap) input schema; flag derivation must see the full schema. */
+  inputSchema: CapabilityInputSchema;
+  capped: ReturnType<typeof capInputSchema>;
+  exposure: ParsedExposure;
+};
+
+/**
+ * Assemble one catalog entry from its resolved pieces. `requiresFileInput` is
+ * derived from the LIVE (pre-cap) schema so a snapshot-truncated capability
+ * still carries the flag; the boolean flags are emitted only when true so the
+ * compact snapshot stays minimal.
+ */
+const buildCatalogEntry = ({
+  id,
+  kind,
+  access,
+  scope,
+  hasPermissions,
+  permissions,
+  inputSchema,
+  capped,
+  exposure,
+}: BuildCatalogEntryOptions): CapabilityEntry => ({
+  id,
+  handlerKind: kind,
+  access: access.access,
+  destructive: access.destructive,
+  scope,
+  ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
+    ? { allowsArchivedWorkspace: true as const }
+    : {}),
+  ...(RETURNS_FILE_RESPONSE.has(id)
+    ? { returnsFileResponse: true as const }
+    : {}),
+  ...(schemaContainsBinaryFormat(inputSchema)
+    ? { requiresFileInput: true as const }
+    : {}),
+  ...(hasPermissions ? { permissions } : {}),
+  ...(capped.truncated
+    ? { inputSchemaTruncated: true as const }
+    : { inputSchema: capped.inputSchema }),
+  mcp: toCapabilityMcp(exposure),
+});
+
 /**
  * Class guards over the built catalog entries. Each returns reviewer-actionable
  * messages (empty when clean) that fail the export:
@@ -517,12 +585,12 @@ const collectClassGuardErrors = ({
   });
   for (const id of fileResponses.violations) {
     errors.push(
-      `file-response: capability "${id}" returns a web Response on success, which the generic invoke path cannot serialize. Add "${id}" to RETURNS_FILE_RESPONSE (it will be refused at invoke), or refactor the handler to return a structured payload`,
+      `file-response: capability "${id}" returns a web Response or raw binary payload on success, which the generic invoke path cannot serialize. Add "${id}" to RETURNS_FILE_RESPONSE (it will be refused at invoke), or refactor the handler to return a structured payload`,
     );
   }
   for (const id of fileResponses.staleFlags) {
     errors.push(
-      `stale RETURNS_FILE_RESPONSE entry "${id}": it is no longer a catalog capability that constructs a Response (remove it)`,
+      `stale RETURNS_FILE_RESPONSE entry "${id}": it is no longer a catalog capability that constructs a file-like value (remove it)`,
     );
   }
 
@@ -761,29 +829,24 @@ const buildCatalog = async (): Promise<BuildResult> => {
       }
     }
 
-    const capped = capInputSchema(buildInputSchema(endpoint.config));
+    const inputSchema = buildInputSchema(endpoint.config);
+    const capped = capInputSchema(inputSchema);
     if (capped.truncated) {
       truncatedSchemas.push(id);
     }
-    const entry: CapabilityEntry = {
-      id,
-      handlerKind: kindResolution.kind,
-      access: accessResolution.access,
-      destructive: accessResolution.destructive,
-      scope,
-      ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
-        ? { allowsArchivedWorkspace: true as const }
-        : {}),
-      ...(RETURNS_FILE_RESPONSE.has(id)
-        ? { returnsFileResponse: true as const }
-        : {}),
-      ...(hasPermissions ? { permissions } : {}),
-      ...(capped.truncated
-        ? { inputSchemaTruncated: true as const }
-        : { inputSchema: capped.inputSchema }),
-      mcp: toCapabilityMcp(endpoint.exposure),
-    };
-    entries.push(entry);
+    entries.push(
+      buildCatalogEntry({
+        id,
+        kind: kindResolution.kind,
+        access: accessResolution,
+        scope,
+        hasPermissions,
+        permissions,
+        inputSchema,
+        capped,
+        exposure: endpoint.exposure,
+      }),
+    );
     dispatchRecords.push({
       id,
       importPath: deriveHandlerImportPath(endpoint.file),

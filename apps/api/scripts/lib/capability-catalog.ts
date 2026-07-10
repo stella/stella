@@ -609,36 +609,75 @@ export const scanContextFidelity = ({
   return { violations, staleWaivers };
 };
 
+// --- File-input schema detection --------------------------------------------
+
+/**
+ * Whether a live config schema (an Elysia `t.*` TypeBox object) contains a
+ * binary/file field anywhere. `t.File()` serializes as
+ * `{ type: "string", format: "binary" }` (and `t.Files()` as an array of the
+ * same), so a recursive walk for `format: "binary"` mechanically identifies
+ * every file-input field, however deeply nested. Used to derive the catalog's
+ * `requiresFileInput` flag: the generic invoke path validates JSON, where a
+ * plain string passes `Value.Check` for a `format: "binary"` string schema but
+ * the handler expects a `File`; flagged capabilities are refused at invoke and
+ * routed to the presigned-upload flow. Derived, never hand-listed, so it is
+ * stale-proof by construction. Walks enumerable properties only (TypeBox symbol
+ * metadata never carries schema structure).
+ */
+export const schemaContainsBinaryFormat = (schema: unknown): boolean => {
+  if (Array.isArray(schema)) {
+    return schema.some(schemaContainsBinaryFormat);
+  }
+  if (typeof schema !== "object" || schema === null) {
+    return false;
+  }
+  const record: Record<string, unknown> = { ...schema };
+  if (record["format"] === "binary") {
+    return true;
+  }
+  return Object.values(record).some(schemaContainsBinaryFormat);
+};
+
 // --- File-response scan (fix-6) ---------------------------------------------
 
 /**
- * Whether a handler's success path returns a web `Response` constructed inline
- * (`Result.ok(new Response(...))`). This catches the common file/stream export
- * shape as a hard class guard. A handler that returns a `Response` via an
- * intermediate variable (e.g. `templates.fill` delegating to a helper) is not
- * matched here; it is seeded manually into the flag table and kept honest by the
- * stale check below (`constructsResponse`).
+ * Whether a handler's success path returns a file-like value constructed
+ * inline: `Result.ok(new Response(...))` (file/stream export) or
+ * `Result.ok(new Uint8Array(...))` / `Result.ok(new Blob(...))` (raw binary
+ * payload). This catches the common export shapes as a hard class guard. A
+ * handler that returns one via an intermediate variable (e.g. `templates.fill`
+ * delegating to a helper, or `time-entries.export-pdf` building its bytes in a
+ * helper) is not matched here; it is seeded manually into the flag table and
+ * kept honest by the stale check below (`constructsBinaryLike`).
  */
 export const returnsInlineFileResponse = (source: string): boolean =>
-  /Result\.ok\(\s*new Response\b/su.test(source);
+  /Result\.ok\(\s*new (?:Response|Uint8Array|Blob)\b/su.test(source);
 
-/** Whether a handler constructs any web `Response` (stale-check signal). */
-export const constructsResponse = (source: string): boolean =>
-  /\bnew Response\s*\(/u.test(source);
+/**
+ * Whether a handler constructs or names any file-like value — a web `Response`,
+ * `Uint8Array`/`ArrayBuffer` bytes, a `Blob`, or a `ReadableStream`. Stale-check
+ * signal only (keeps the flag table honest); the refusal itself keys off the
+ * flag plus the runtime backstop in `mapHandlerResult`.
+ */
+export const constructsBinaryLike = (source: string): boolean =>
+  /\bnew Response\s*\(|\bUint8Array\b|\bArrayBuffer\b|\bnew Blob\s*\(|\bReadableStream\b/u.test(
+    source,
+  );
 
 export type FileResponseScan = {
-  /** Catalog ids whose success path inline-returns a Response but are not flagged. */
+  /** Catalog ids whose success path inline-returns a file-like value but are not flagged. */
   violations: string[];
-  /** Flagged ids whose handler no longer constructs any Response (remove them). */
+  /** Flagged ids whose handler no longer constructs any file-like value (remove them). */
   staleFlags: string[];
 };
 
 /**
- * Class guard for capabilities that return a file/stream Response: the generic
- * invoke path cannot serialize one, so each must be flagged (carried into the
- * catalog as `returnsFileResponse` and refused at invoke). Any catalog handler
- * whose success path inline-returns a Response but is unflagged is a violation;
- * a flagged id whose handler no longer constructs any Response is stale.
+ * Class guard for capabilities whose success payload is a file: a web
+ * `Response` or raw binary bytes. The generic invoke path cannot serialize
+ * either, so each must be flagged (carried into the catalog as
+ * `returnsFileResponse` and refused at invoke). Any catalog handler whose
+ * success path inline-returns one but is unflagged is a violation; a flagged id
+ * whose handler no longer constructs any file-like value is stale.
  */
 export const scanFileResponseReturns = ({
   entries,
@@ -657,7 +696,7 @@ export const scanFileResponseReturns = ({
   const staleFlags: string[] = [];
   for (const id of flaggedIds) {
     const source = sourceById.get(id);
-    if (source === undefined || !constructsResponse(source)) {
+    if (source === undefined || !constructsBinaryLike(source)) {
       staleFlags.push(id);
     }
   }
