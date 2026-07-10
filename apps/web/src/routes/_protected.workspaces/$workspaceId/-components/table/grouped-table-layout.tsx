@@ -1,11 +1,4 @@
-import {
-  type RefObject,
-  useCallback,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type RefObject, useCallback, useMemo, useRef, useState } from "react";
 
 import {
   useInfiniteQuery,
@@ -66,6 +59,7 @@ import {
   getWorkspaceGridTemplateColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import type { WorkspaceGridStyle } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
@@ -274,11 +268,18 @@ export const GroupedTableLayout = ({
     [allTreeData],
   );
   // The cross-group row-id union grows as each group's first page lands, so
-  // passing it as a prop re-renders every section on every group load (each
-  // rebuilding its table). Sections only read it inside the "select all"
-  // handler, never during render, so pass a stable getter instead: the prop
-  // stays referentially stable and the per-load re-render fan-out disappears.
-  const getAllRowIds = useEffectEvent(() => allRowIds);
+  // passing it as a prop would re-render every section on every group load
+  // (each rebuilding its table). Sections only need it inside the "select
+  // all" click handler, never during render, so publish it to the table
+  // store instead: `WorkspaceTable` reads it imperatively
+  // (`useTableStore.getState()`) at click time rather than subscribing, so
+  // the per-load re-render fan-out disappears. (An Effect Event is the wrong
+  // tool here — it may only be called from an Effect in the component that
+  // defines it, not threaded through props and invoked from a click handler
+  // several components away.)
+  useExternalSyncEffect(() => {
+    useTableStore.getState().setPreservableRowIds(view.id, allRowIds);
+  }, [view.id, allRowIds]);
 
   if (groupByPropertyId === null || isUnsupportedGrouping) {
     return (
@@ -341,7 +342,6 @@ export const GroupedTableLayout = ({
             optionValues={optionValues}
             outerScrollRef={scrollRef}
             reportGroupTreeData={reportGroupTreeData}
-            selectAllPreservableRowIds={getAllRowIds}
             sumProperties={sumProperties}
             tableState={tableState}
             view={view}
@@ -487,7 +487,6 @@ type GroupSectionProps = {
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
   reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
-  selectAllPreservableRowIds: () => string[];
 };
 
 const GroupSection = ({
@@ -505,7 +504,6 @@ const GroupSection = ({
   tableState,
   outerScrollRef,
   reportGroupTreeData,
-  selectAllPreservableRowIds,
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -676,10 +674,10 @@ const GroupSection = ({
                 }
               }}
               outerScrollRef={outerScrollRef}
-              selectAllPreservableRowIds={selectAllPreservableRowIds}
               showAddRow={false}
               stickyColumnHeader={false}
               table={table}
+              viewId={view.id}
               workspaceId={workspaceId}
             />
           </GroupScopeProvider>

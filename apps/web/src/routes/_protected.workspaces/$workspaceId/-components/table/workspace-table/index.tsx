@@ -68,6 +68,7 @@ import type {
   WorkspaceGridStyle,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import { DraggableRow } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells";
+import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useRenameEntity } from "@/routes/_protected.workspaces/$workspaceId/-mutations/entities";
 import { countDescendants } from "@/routes/_protected.workspaces/$workspaceId/-utils";
@@ -96,10 +97,11 @@ type WorkspaceTableProps = {
   // scroll boxes break the sticky group header). In this mode rows render
   // directly rather than virtualized — group pages are bounded.
   outerScrollRef?: RefObject<HTMLDivElement | null>;
-  // Union of every section's row ids, so a grouped section's select-all keeps
-  // selections in other sections (they share one selection) while still dropping
-  // stale ids. Omitted by the flat table.
-  selectAllPreservableRowIds?: () => string[];
+  // Set by a grouped section (its `view.id`) so "select all" can read the
+  // cross-group row-id union from the table store at click time and keep
+  // selections in other sections (they share one selection) while still
+  // dropping stale ids. Omitted by the flat table.
+  viewId?: string;
 };
 
 // A grouped section virtualizes against a shared ancestor scroll it does not
@@ -122,7 +124,7 @@ export const WorkspaceTable = ({
   stickyColumnHeader = true,
   fillHeight = true,
   outerScrollRef,
-  selectAllPreservableRowIds,
+  viewId,
 }: WorkspaceTableProps) => {
   const inlineFlow = outerScrollRef !== undefined;
   const t = useTranslations();
@@ -224,9 +226,12 @@ export const WorkspaceTable = ({
     rowSelection: table.state.rowSelection,
   });
   const handleToggleSelectAll = useCallback(() => {
-    // Read the latest cross-group row-id union at click time from the
-    // getter, so this table never re-renders as that union grows during load.
-    const preservableRowIds = selectAllPreservableRowIds?.();
+    // Read the latest cross-group row-id union at click time directly from
+    // the table store (never subscribed), so this table never re-renders as
+    // that union grows during load.
+    const preservableRowIds = viewId
+      ? useTableStore.getState().preservableRowIds[viewId]
+      : undefined;
     table.setRowSelection(
       getNextSelectAllRowSelection({
         selectableRowIds,
@@ -234,7 +239,7 @@ export const WorkspaceTable = ({
         ...(preservableRowIds && { preservableRowIds }),
       }),
     );
-  }, [selectableRowIds, selectAllPreservableRowIds, table]);
+  }, [selectableRowIds, viewId, table]);
 
   const rowLabels = useMemo(() => {
     // Compute logical row labels that account for collapsed
