@@ -10,6 +10,7 @@ import {
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { compareByLocale } from "@/api/lib/collation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const createInfoSoudClient = () => new InfoSoudClient({ cache: false });
@@ -64,11 +65,12 @@ const infosoudCourts = createSafeHandler(config, async function* ({ request }) {
           ...districtCourts,
         ]);
 
+        // Court names are always Czech (InfoSoud is the Czech court
+        // registry), independent of the viewer's UI locale.
+        const compareCourtNames = compareByLocale("cs-CZ");
         return Object.entries(courtMap)
           .map(([code, name]) => ({ code, name }))
-          .toSorted((left, right) =>
-            left.name.localeCompare(right.name, "cs-CZ"),
-          );
+          .toSorted((left, right) => compareCourtNames(left.name, right.name));
       },
       catch: toInfoSoudCourtsError,
     }),

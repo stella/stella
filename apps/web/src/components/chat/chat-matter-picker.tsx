@@ -2,7 +2,7 @@ import { useDeferredValue, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDownIcon, SearchIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import {
   Menu,
@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { compareByLocale } from "@/lib/collation";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
@@ -68,6 +69,7 @@ export const ChatMatterPicker = ({
 }: ChatMatterPickerProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const locale = useLocale();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -145,6 +147,7 @@ export const ChatMatterPicker = ({
       }
       group.matters.push(m);
     }
+    const compareLabel = compareByLocale(locale);
     return [...map.values()].sort((a, b) => {
       // "Direct" sinks to the bottom; everything else alphabetical
       // by client name so the order is stable across renders.
@@ -154,7 +157,7 @@ export const ChatMatterPicker = ({
       if (b.key === NO_CLIENT_KEY) {
         return -1;
       }
-      return a.label.localeCompare(b.label);
+      return compareLabel(a.label, b.label);
     });
   })();
 

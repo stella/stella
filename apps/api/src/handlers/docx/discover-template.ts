@@ -11,6 +11,8 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { compareCodepoint } from "@/api/lib/collation";
+
 import { parseBlockTree, scanBlockDirectives } from "./block-directives";
 import { PLACEHOLDER_RE } from "./discover-placeholders";
 import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
@@ -578,7 +580,9 @@ export const discoverTemplate = async (
 
   // Build DiscoveredPlaceholder[] (backward-compat)
   const placeholders: DiscoveredPlaceholder[] = [...placeholderCounts.entries()]
-    .toSorted(([a], [b]) => a.localeCompare(b))
+    // placeholder name is a template merge-field path (e.g. "client.name"),
+    // not display text
+    .toSorted(([a], [b]) => compareCodepoint(a, b))
     .map(([name, count]) => ({ name, count }));
 
   // Build DiscoveredField[]
@@ -617,8 +621,8 @@ export const discoverTemplate = async (
     discoveredFields.push(field);
   }
 
-  // Sort fields alphabetically
-  discoveredFields.sort((a, b) => a.path.localeCompare(b.path));
+  // Sort fields by path (a template merge-field path, not display text)
+  discoveredFields.sort((a, b) => compareCodepoint(a.path, b.path));
 
   return {
     placeholders,

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { CheckIcon, XIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
@@ -9,6 +9,7 @@ import { Separator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 
 import { UserIdentity } from "@/components/user-avatar";
+import { compareByLocale } from "@/lib/collation";
 import { getDisplayName } from "@/routes/_protected.workspaces/-components/team-avatars";
 import type {
   LeadFilter,
@@ -37,6 +38,7 @@ export const TeamFilterPopover = ({
   workspaces,
 }: TeamFilterPopoverProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const [search, setSearch] = useState("");
 
   const members: MemberOption[] = (() => {
@@ -52,8 +54,9 @@ export const TeamFilterPopover = ({
         }
       }
     }
+    const compareUserName = compareByLocale(locale);
     return [...map.values()].sort((a, b) =>
-      a.userName.localeCompare(b.userName),
+      compareUserName(a.userName, b.userName),
     );
   })();
 

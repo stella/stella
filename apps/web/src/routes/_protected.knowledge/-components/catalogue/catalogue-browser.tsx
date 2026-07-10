@@ -12,7 +12,7 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
@@ -49,6 +49,7 @@ import {
   ResponsiveActionToolbarItem,
 } from "@/components/responsive-action-toolbar";
 import type { TranslationKey } from "@/i18n/types";
+import { compareByLocale } from "@/lib/collation";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   BlueprintGallerySheet,
@@ -145,6 +146,7 @@ export const CatalogueBrowser = ({
   practiceJurisdictions,
 }: CatalogueBrowserProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const navigate = useNavigate();
   const { data } = useSuspenseQuery(catalogueOptions(organizationId));
   const [filter, setFilter] = useState<CatalogueBrowserFilterKind>(
@@ -221,11 +223,12 @@ export const CatalogueBrowser = ({
         entry.tags.some((tag) => tag.toLowerCase().includes(normalised))
       );
     });
+    const compareName = compareByLocale(locale);
     return [...subset].sort((left, right) => {
       if (left.isRecommendedForOrg !== right.isRecommendedForOrg) {
         return left.isRecommendedForOrg ? -1 : 1;
       }
-      return localizedName(left).localeCompare(localizedName(right));
+      return compareName(localizedName(left), localizedName(right));
     });
   })();
 

@@ -11,7 +11,7 @@ import {
   PlusIcon,
   SlidersHorizontalIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
 
@@ -99,6 +99,7 @@ const FOCUS_FLASH_MS = 1500;
 
 function RouteComponent() {
   const t = useTranslations();
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -168,11 +169,11 @@ function RouteComponent() {
   const filtered = applyMattersFilters(searched, filters);
 
   const sorted = filtered.toSorted((a, b) => {
-    const cmp = compareWorkspacesByKey(a, b, sortKey);
+    const cmp = compareWorkspacesByKey(a, b, sortKey, locale);
     return sortDesc ? -cmp : cmp;
   });
 
-  const groups = groupBy === "client" ? groupByClient(sorted) : null;
+  const groups = groupBy === "client" ? groupByClient(sorted, locale) : null;
 
   const collapsedSet = new Set(collapsedGroups);
   const displayed = groups

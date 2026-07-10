@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { CheckIcon, XIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
@@ -9,6 +9,7 @@ import { Input } from "@stll/ui/components/input";
 import { Separator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 
+import { compareByLocale } from "@/lib/collation";
 import type { Workspace } from "@/routes/_protected.workspaces/-types";
 
 type ClientFilterPopoverProps = {
@@ -23,6 +24,7 @@ export const ClientFilterPopover = ({
   workspaces,
 }: ClientFilterPopoverProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const [search, setSearch] = useState("");
 
   const clients = (() => {
@@ -32,8 +34,9 @@ export const ClientFilterPopover = ({
         map.set(w.client.id, w.client);
       }
     }
+    const compareDisplayName = compareByLocale(locale);
     return [...map.values()].sort((a, b) =>
-      a.displayName.localeCompare(b.displayName),
+      compareDisplayName(a.displayName, b.displayName),
     );
   })();
 

@@ -527,6 +527,7 @@ const findInstalledSkill = async ({
           activeSkillPriority(a.id, activeSkillId) -
             activeSkillPriority(b.id, activeSkillId) ||
           scopePriority(a.scope) - scopePriority(b.scope) ||
+          // oxlint-disable-next-line require-cached-collator/require-cached-collator -- id tiebreak for deterministic ordering, not display text
           a.id.localeCompare(b.id),
       )
       .at(0) ?? null,
@@ -583,6 +584,7 @@ const resolveSkillPrecedence = (
     });
   }
 
+  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- `name` here is the skill slug (machine identifier); `displayName` carries the user-facing text
   return skills.toSorted((a, b) => a.name.localeCompare(b.name));
 };
 

@@ -39,6 +39,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { compareByLocale } from "@/lib/collation";
 import {
   DEEPL_TARGET_LANGUAGES,
   type DeepLTargetLanguageCode,
@@ -90,7 +91,8 @@ export const TranslateDocumentDialog = ({
       code: lang.code,
       label: t(`common.languages.${lang.code}`),
     }));
-    return items.sort((a, b) => a.label.localeCompare(b.label, locale));
+    const compareLabel = compareByLocale(locale);
+    return items.sort((a, b) => compareLabel(a.label, b.label));
   })();
 
   const selectedLanguage =

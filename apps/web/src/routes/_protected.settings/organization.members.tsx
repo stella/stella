@@ -12,7 +12,7 @@ import {
   EllipsisVerticalIcon,
   SearchIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
@@ -53,6 +53,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
+import { compareByLocale } from "@/lib/collation";
 import { toAuthClientError } from "@/lib/errors";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
@@ -157,6 +158,7 @@ export const Route = createFileRoute(
 
 function Members() {
   const t = useTranslations();
+  const locale = useLocale();
   const activeOrganizationId = Route.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -189,10 +191,11 @@ function Members() {
         )
       : data.members;
 
+    const compareName = compareByLocale(locale);
     const sorted = [...filtered].sort((a, b) => {
       let cmp: number;
       if (sort.key === "name") {
-        cmp = a.user.name.localeCompare(b.user.name);
+        cmp = compareName(a.user.name, b.user.name);
       } else if (sort.key === "role") {
         cmp = rolePriority[a.role] - rolePriority[b.role];
       } else {

@@ -19,6 +19,8 @@ import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
+import { compareCodepoint } from "@/api/lib/collation";
+
 import { isElement } from "./ooxml";
 import type {
   DiscoveredField,
@@ -692,7 +694,8 @@ const compareCustomXmlSlots = (
     return left.index.length - right.index.length;
   }
 
-  return left.index.localeCompare(right.index);
+  // index is a DOCX custom-XML part slot index, not display text.
+  return compareCodepoint(left.index, right.index);
 };
 
 /**

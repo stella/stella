@@ -15,7 +15,7 @@ import {
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
@@ -45,6 +45,7 @@ import {
 } from "@/components/inspector/inspector-store";
 import { MarkdownIcon } from "@/components/markdown-icon";
 import { api } from "@/lib/api";
+import { compareByLocale } from "@/lib/collation";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
 import { APIError, toAPIError, userErrorFromThrown } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -112,6 +113,7 @@ type SkillEditorProps = {
 export function SkillEditor({ skillId }: SkillEditorProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -484,7 +486,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
 
-  const fileNodes = buildSkillNodes(resources, emptyPendingFolders);
+  const fileNodes = buildSkillNodes(resources, emptyPendingFolders, locale);
   const allFolderIds = (() => {
     const ids = new Set<string>();
     const walk = (siblings: FileTreeNode[]) => {
@@ -1412,6 +1414,7 @@ const fileIcon = (fileName: string) => {
 const buildSkillNodes = (
   resources: SkillResource[],
   pendingFolders: string[],
+  locale: string,
 ): FileTreeNode[] => {
   const root: FileTreeNode[] = [];
   const folderByPath = new Map<string, FileTreeNode[]>();
@@ -1452,12 +1455,13 @@ const buildSkillNodes = (
   for (const folder of pendingFolders) {
     ensureFolder(folder);
   }
+  const compareName = compareByLocale(locale);
   const sortNodes = (siblings: FileTreeNode[]) => {
     siblings.sort((a, b) => {
       if (a.kind !== b.kind) {
         return a.kind === "folder" ? -1 : 1;
       }
-      return a.name.localeCompare(b.name);
+      return compareName(a.name, b.name);
     });
     for (const node of siblings) {
       if (node.children) {
