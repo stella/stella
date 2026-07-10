@@ -24,6 +24,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -216,7 +217,18 @@ const loadResolvedThreadMessagePage = async ({
       subagents: areSubagentToolsRegistered({ delegationDepth: 0 }),
     },
   });
+  // Mirrors `get-messages.ts`'s context-usage estimate: without the
+  // thread's model override, the budget falls back to the org's chat-role
+  // default context window even when the thread is pinned to a model with
+  // a different one, so the estimate (and its compaction trigger) can be
+  // wrong for the model this thread will actually send with.
+  const chatModelOverride = resolveEffectiveChatModelId({
+    devModelId: undefined,
+    threadChatModel: chatModel,
+    orgAIConfig,
+  });
   const { triggerTokens } = resolveChatCompactionBudget({
+    chatModelOverride,
     orgAIConfig,
     organizationId,
   });
