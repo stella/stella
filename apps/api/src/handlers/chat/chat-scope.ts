@@ -1,37 +1,29 @@
 import { Result } from "better-result";
 
+import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type ResolveChatScopeProps = {
-  accessibleWorkspaceIds: SafeId<"workspace">[];
+  getWorkspaceAccess: (
+    workspaceId: SafeId<"workspace">,
+  ) => Promise<AccessibleWorkspace | null>;
   workspaceId?: SafeId<"workspace"> | undefined;
 };
 
-type ResolveChatScopeResult = Result<
-  | {
-      scope: "global";
-    }
-  | {
-      scope: "workspace";
-      workspaceId: SafeId<"workspace">;
-    },
-  HandlerError<404>
->;
-
-export const resolveChatScope = ({
-  accessibleWorkspaceIds,
+export const resolveChatScope = async function* ({
+  getWorkspaceAccess,
   workspaceId,
-}: ResolveChatScopeProps): ResolveChatScopeResult => {
+}: ResolveChatScopeProps) {
   if (!workspaceId) {
-    return Result.ok({ scope: "global" });
+    return Result.ok({ scope: "global" } as const);
   }
 
-  const matchedWorkspaceId = accessibleWorkspaceIds.find(
-    (accessibleWorkspaceId) => accessibleWorkspaceId === workspaceId,
+  const workspace = yield* Result.await(
+    Result.tryPromise(async () => await getWorkspaceAccess(workspaceId)),
   );
 
-  if (!matchedWorkspaceId) {
+  if (!workspace || workspace.status === "deleting") {
     return Result.err(
       new HandlerError({
         status: 404,
@@ -42,6 +34,6 @@ export const resolveChatScope = ({
 
   return Result.ok({
     scope: "workspace",
-    workspaceId: matchedWorkspaceId,
-  });
+    workspaceId: workspace.id,
+  } as const);
 };

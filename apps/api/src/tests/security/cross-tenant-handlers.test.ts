@@ -37,9 +37,14 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 type TestHandlerContext = {
-  activeWorkspaceIds: SafeId<"workspace">[];
-  accessibleWorkspaces: { id: SafeId<"workspace">; status: "active" }[];
   createAuditRecorder: () => AuditRecorder;
+  getActiveWorkspaceIds: () => Promise<SafeId<"workspace">[]>;
+  getAccessibleWorkspaces: () => Promise<
+    { id: SafeId<"workspace">; status: "active" }[]
+  >;
+  getWorkspaceAccess: (
+    workspaceId: SafeId<"workspace">,
+  ) => Promise<{ id: SafeId<"workspace">; status: "active" } | null>;
   memberRole: { role: "owner" };
   orgAIConfig: null;
   promptCachingEnabled: false;
@@ -348,12 +353,18 @@ const createWorkspaceContext = ({
   );
 
   return {
-    activeWorkspaceIds,
-    accessibleWorkspaces: activeWorkspaceIds.map((id) => ({
-      id,
-      status: "active",
-    })),
     createAuditRecorder: () => noopAuditRecorder,
+    getActiveWorkspaceIds: () => Promise.resolve(activeWorkspaceIds),
+    getAccessibleWorkspaces: () =>
+      Promise.resolve(
+        activeWorkspaceIds.map((id) => ({ id, status: "active" as const })),
+      ),
+    getWorkspaceAccess: (targetWorkspaceId) =>
+      Promise.resolve(
+        activeWorkspaceIds.includes(targetWorkspaceId)
+          ? { id: targetWorkspaceId, status: "active" }
+          : null,
+      ),
     memberRole: { role: "owner" },
     orgAIConfig: null,
     promptCachingEnabled: false,

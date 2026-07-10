@@ -35,8 +35,11 @@ export type SynthesizedCapabilityContext = {
   session: { activeOrganizationId: SafeId<"organization"> };
   scopedDb: ScopedDb;
   safeDb: SafeDb;
-  activeWorkspaceIds: SafeId<"workspace">[];
-  accessibleWorkspaces: AccessibleWorkspace[];
+  getActiveWorkspaceIds: () => Promise<SafeId<"workspace">[]>;
+  getAccessibleWorkspaces: () => Promise<AccessibleWorkspace[]>;
+  getWorkspaceAccess: (
+    workspaceId: SafeId<"workspace">,
+  ) => Promise<AccessibleWorkspace | null>;
   memberRole: { role: MemberRole };
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
@@ -94,8 +97,15 @@ export const synthesizeCapabilityContext = async ({
     session: { activeOrganizationId: context.organizationId },
     scopedDb: context.scopedDb,
     safeDb: context.safeDb,
-    activeWorkspaceIds: context.accessibleWorkspaceIds,
-    accessibleWorkspaces: context.accessibleWorkspaces,
+    getActiveWorkspaceIds: () =>
+      Promise.resolve(context.accessibleWorkspaceIds),
+    getAccessibleWorkspaces: () =>
+      Promise.resolve(context.accessibleWorkspaces),
+    getWorkspaceAccess: (targetWorkspaceId) => {
+      const status =
+        context.accessibleWorkspaceStatusById.get(targetWorkspaceId);
+      return Promise.resolve(status ? { id: targetWorkspaceId, status } : null);
+    },
     memberRole: { role: context.memberRole },
     orgAIConfig,
     promptCachingEnabled,

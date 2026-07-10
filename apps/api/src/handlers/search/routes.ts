@@ -24,7 +24,10 @@ const searchEndpoint = createSafeRootHandler(
     mcp: { type: "tool", name: "search" },
     body: searchBodySchema,
   } satisfies HandlerConfig,
-  async function* ({ activeWorkspaceIds, body, scopedDb, session, user }) {
+  async function* ({ body, getActiveWorkspaceIds, scopedDb, session, user }) {
+    const activeWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -48,7 +51,10 @@ const searchFacetsEndpoint = createSafeRootHandler(
     mcp: { type: "internal", reason: "search_ui" },
     body: searchFacetsBodySchema,
   } satisfies HandlerConfig,
-  async function* ({ activeWorkspaceIds, body, scopedDb, session }) {
+  async function* ({ body, getActiveWorkspaceIds, scopedDb, session }) {
+    const activeWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -108,8 +114,8 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     requiresUsage: { actionType: "chat", modelRole: "fast" },
   } satisfies HandlerConfig,
   async function* ({
-    activeWorkspaceIds,
     body,
+    getActiveWorkspaceIds,
     orgAIConfig,
     promptCachingEnabled,
     safeDb,
@@ -117,6 +123,9 @@ const summarizeSearchEndpoint = createSafeRootHandler(
     session,
     user,
   }) {
+    const activeWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -144,14 +153,17 @@ const searchSummaryChatEndpoint = createSafeRootHandler(
     body: searchSummaryChatBodySchema,
   } satisfies HandlerConfig,
   async function* ({
-    activeWorkspaceIds,
     body,
+    getActiveWorkspaceIds,
     safeDb,
     scopedDb,
     session,
     user,
     recordAuditEvent,
   }) {
+    const activeWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>

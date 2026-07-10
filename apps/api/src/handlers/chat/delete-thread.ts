@@ -30,7 +30,7 @@ const config = {
 const deleteThread = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     query: { workspaceId },
     params,
     recordAuditEvent,
@@ -38,7 +38,7 @@ const deleteThread = createSafeRootHandler(
     user,
   }) {
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 

@@ -1,7 +1,9 @@
 import { Result } from "better-result";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { t } from "elysia";
 import * as v from "valibot";
 
+import { entities, extractedContent, workspaces } from "@/api/db/schema";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {
   mergeManifestWithDiscovery,
@@ -171,15 +173,7 @@ const config = {
  */
 const prefillTemplate = createSafeRootHandler(
   config,
-  async function* ({
-    safeDb,
-    session,
-    activeWorkspaceIds,
-    params,
-    body,
-    orgAIConfig,
-    user,
-  }) {
+  async function* ({ safeDb, session, params, body, orgAIConfig, user }) {
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForRole({
@@ -265,20 +259,34 @@ const prefillTemplate = createSafeRootHandler(
         // chat document tools apply.
         const contentRows = yield* Result.await(
           safeDb((tx) =>
-            tx.query.extractedContent.findMany({
-              where: {
-                entityId: { in: entityIds },
-                organizationId: { eq: organizationId },
-                workspaceId: { in: activeWorkspaceIds },
-              },
+            tx
+              .select({
+                ciphertext: extractedContent.ciphertext,
+                iv: extractedContent.iv,
+                name: entities.name,
+              })
+              .from(extractedContent)
+              .innerJoin(
+                entities,
+                and(
+                  eq(entities.id, extractedContent.entityId),
+                  eq(entities.workspaceId, extractedContent.workspaceId),
+                ),
+              )
+              .innerJoin(
+                workspaces,
+                eq(workspaces.id, extractedContent.workspaceId),
+              )
+              .where(
+                and(
+                  inArray(extractedContent.entityId, entityIds),
+                  eq(extractedContent.organizationId, organizationId),
+                  ne(workspaces.status, "deleting"),
+                ),
+              )
               // One extractedContent row per entity, and entityIds is capped at
               // MAX_PICKED_ENTITIES above, so the result set stays bounded.
-              limit: MAX_PICKED_ENTITIES,
-              columns: { ciphertext: true, iv: true },
-              with: {
-                entity: { columns: { name: true } },
-              },
-            }),
+              .limit(MAX_PICKED_ENTITIES),
           ),
         );
 
@@ -287,7 +295,7 @@ const prefillTemplate = createSafeRootHandler(
             try: async () =>
               await Promise.all(
                 contentRows.map(async (row) => ({
-                  label: row.entity?.name ?? "Document",
+                  label: row.name ?? "Document",
                   text: await decryptContent(
                     organizationId,
                     row.ciphertext,

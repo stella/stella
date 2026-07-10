@@ -258,13 +258,14 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     };
     scopedDb: ScopedDb;
     safeDb: SafeDb;
-    /**
-     * Excludes workspaces being deleted. Includes active and
-     * archived workspaces. Use for search, chat, MCP, and any
-     * query that should not surface content from sealed workspaces.
-     */
-    activeWorkspaceIds: SafeId<"workspace">[];
-    accessibleWorkspaces: AccessibleWorkspace[];
+    /** Resolve non-deleting workspace IDs only when an operation spans matters. */
+    getActiveWorkspaceIds: () => Promise<SafeId<"workspace">[]>;
+    /** Resolve every accessible workspace only when status metadata is needed. */
+    getAccessibleWorkspaces: () => Promise<AccessibleWorkspace[]>;
+    /** Resolve one workspace by primary key without expanding the access set. */
+    getWorkspaceAccess: (
+      workspaceId: SafeId<"workspace">,
+    ) => Promise<AccessibleWorkspace | null>;
     memberRole: {
       role: keyof typeof roles;
     };

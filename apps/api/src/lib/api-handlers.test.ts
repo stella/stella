@@ -181,8 +181,9 @@ const createContext = (
     scopedDb: async () => {
       throw new DatabaseError({ message: "scopedDb should not be called" });
     },
-    activeWorkspaceIds: [],
-    accessibleWorkspaces: [],
+    getActiveWorkspaceIds: () => Promise.resolve([]),
+    getAccessibleWorkspaces: () => Promise.resolve([]),
+    getWorkspaceAccess: () => Promise.resolve(null),
     orgAIConfig,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,

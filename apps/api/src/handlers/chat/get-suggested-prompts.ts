@@ -77,7 +77,7 @@ export const cleanSuggestionsText = (text: string): string[] => {
 const getSuggestedPrompts = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     orgAIConfig,
     params: { threadId },
     promptCachingEnabled,
@@ -98,7 +98,7 @@ const getSuggestedPrompts = createSafeRootHandler(
     }
 
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 

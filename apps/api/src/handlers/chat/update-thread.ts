@@ -27,7 +27,7 @@ const config = {
 const updateThread = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     body,
     query: { workspaceId },
     params,
@@ -37,7 +37,7 @@ const updateThread = createSafeRootHandler(
     recordAuditEvent,
   }) {
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 

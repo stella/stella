@@ -182,9 +182,9 @@ const config = {
 const sendMessage = createSafeRootHandler(
   config,
   async function* ({
-    accessibleWorkspaces,
-    activeWorkspaceIds,
     body,
+    getAccessibleWorkspaces,
+    getWorkspaceAccess,
     memberRole,
     orgAIConfig,
     promptCachingEnabled,
@@ -203,17 +203,22 @@ const sendMessage = createSafeRootHandler(
     yield* assertDevModelOverride(body.devModelId, orgAIConfig);
     const externalMcpNullUnionStrategy = "json-schema";
 
-    const accessibleWorkspaceIds = activeWorkspaceIds;
+    const accessibleWorkspaces = yield* Result.await(
+      Result.tryPromise(async () => await getAccessibleWorkspaces()),
+    );
+    const accessibleWorkspaceIds = accessibleWorkspaces
+      .filter((workspace) => workspace.status !== "deleting")
+      .map((workspace) => workspace.id);
     // Real per-workspace statuses for the projected write tools' MCP context.
-    // `activeWorkspaceIds` includes archived workspaces, so the write handlers'
+    // The usable ID set includes archived workspaces, so the write handlers'
     // `ensureActiveWorkspace` gate must see the true status (not a default) to
     // keep archived matters read-only.
     const workspaceStatusById = new Map<string, AccessibleWorkspace["status"]>(
       accessibleWorkspaces.map((workspace) => [workspace.id, workspace.status]),
     );
-    /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
+    /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope performs targeted workspace authorization */
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId: body.workspaceId,
     });
     /* eslint-enable no-body-ownership-ids/no-body-ownership-ids */

@@ -1,11 +1,12 @@
 import { panic } from "better-result";
 
-import { createSafeDb, createScopedDb } from "@/api/db";
+import { createMembershipSafeDb, createMembershipScopedDb } from "@/api/db";
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { rlsDb } from "@/api/db/root";
+import { workspaces } from "@/api/db/schema";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { resolveMemberAccess } from "@/api/lib/auth";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -30,7 +31,7 @@ export type McpRequestContext = {
   /**
    * Every accessible (non-deleting) workspace with its status. The generic
    * capability path (`invoke_capability`) needs this to build the
-   * `accessibleWorkspaces` field the safe-handler context carries; existing
+   * `getAccessibleWorkspaces` resolver the safe-handler context carries; existing
    * tools resolve access through `accessibleWorkspaceIdSet` /
    * `accessibleWorkspaceStatusById` and do not read it.
    */
@@ -66,26 +67,31 @@ export const resolveMcpSessionContext = async (
     userId: session.userId,
   });
 
-  const memberAccess = await resolveMemberAccess(userId, organizationId);
+  const authorization = await resolveMemberAuthorization({
+    organizationId,
+    userId,
+  });
 
-  if (!memberAccess) {
+  if (!authorization) {
     throw new McpOrganizationAccessError({
       message: "User is not a member of this organization",
     });
   }
 
-  if (!isMemberRole(memberAccess.role)) {
+  if (!isMemberRole(authorization.role)) {
     panic("User has an invalid member role");
   }
 
-  const memberRole = memberAccess.role;
-  const accessibleWorkspaces = memberAccess.accessibleWorkspaces;
-  // RLS receives all IDs regardless of status (matches the Elysia
-  // auth path). Business-logic fields exclude deleting workspaces
-  // so MCP tools don't surface content from sealed workspaces.
-  const allWorkspaceIds = accessibleWorkspaces.map((workspace) =>
-    brandPersistedWorkspaceId(workspace.id),
+  const memberRole = authorization.role;
+  const scopedDb = createMembershipScopedDb(rlsDb, { organizationId, userId });
+  const accessibleWorkspaces = await scopedDb((tx) =>
+    tx
+      .select({ id: workspaces.id, status: workspaces.status })
+      .from(workspaces),
   );
+  // Business-logic fields exclude deleting workspaces so MCP tools don't
+  // surface content from sealed workspaces. RLS derives membership from the
+  // scalar organization/user transaction context independently.
   const usableWorkspaces = accessibleWorkspaces.filter(
     (w) => w.status !== "deleting",
   );
@@ -111,8 +117,8 @@ export const resolveMcpSessionContext = async (
       userId,
       workspaceId: null,
     }),
-    safeDb: createSafeDb(rlsDb, allWorkspaceIds, organizationId, userId),
-    scopedDb: createScopedDb(rlsDb, allWorkspaceIds, organizationId, userId),
+    safeDb: createMembershipSafeDb(rlsDb, { organizationId, userId }),
+    scopedDb,
     userId,
   };
 };

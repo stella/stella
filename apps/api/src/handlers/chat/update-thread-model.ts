@@ -34,7 +34,7 @@ const config = {
 const updateThreadModel = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     body: { model },
     orgAIConfig,
     query: { workspaceId },
@@ -60,7 +60,7 @@ const updateThreadModel = createSafeRootHandler(
     }
 
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 
