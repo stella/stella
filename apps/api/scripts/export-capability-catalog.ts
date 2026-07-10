@@ -35,6 +35,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+// Pure CLI generator modules (constants, classes, pure functions; no env, no
+// I/O at import time), imported relatively because `@stll/cli`'s exports map
+// only exposes its bin entry. The coverage doc computes each capability's REAL
+// generated command path through the same `buildCliRouteTree` codegen uses, so
+// collision fallbacks (curated command wins, capability relocates under
+// `stella capability <domain> <action>`) are never hand-replicated here.
+import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
+import type { RouteNode } from "../../../packages/cli/src/route-types";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import {
   type AccessClassification,
@@ -1194,6 +1203,90 @@ const parseCommitted = async (): Promise<unknown[] | null> => {
   return Array.isArray(parsed.value) ? parsed.value : null;
 };
 
+/** Collect every capability leaf's real command path from the generated tree. */
+const collectCapabilityCommandPaths = (
+  node: RouteNode,
+  into: Map<string, readonly string[]>,
+): void => {
+  if (node.kind === "capability-leaf") {
+    into.set(node.spec.capabilityId, node.spec.commandPath);
+    return;
+  }
+  if (node.kind === "route") {
+    for (const child of Object.values(node.children)) {
+      collectCapabilityCommandPaths(child, into);
+    }
+  }
+};
+
+type CliCommandPathsResult = {
+  cliCommandPathById: Map<string, readonly string[]>;
+  errors: string[];
+};
+
+/**
+ * The REAL generated CLI command path per capability id, for the coverage doc:
+ * run the CLI's own `buildCliRouteTree` over the same inputs codegen consumes —
+ * the live tool registry (the source `registry-snapshot.json` is projected
+ * from) plus the just-serialized catalog, revalidated through the CLI's own
+ * `parseCapabilityCatalog` so both sides see the identical projection. Curated
+ * commands win collisions and a colliding capability relocates under
+ * `stella capability <domain> <action>`, exactly as in the shipped CLI.
+ * Registry imports stay dynamic so the env is seeded before the module graph
+ * validates it (same ordering as buildCatalog).
+ */
+const computeCliCommandPaths = async (
+  serializedCatalog: string,
+): Promise<CliCommandPathsResult> => {
+  const errors: string[] = [];
+  const cliCommandPathById = new Map<string, readonly string[]>();
+
+  const cliEntries = parseCapabilityCatalog(JSON.parse(serializedCatalog));
+  if (cliEntries === null) {
+    errors.push(
+      "coverage doc: the generated catalog failed the CLI's parseCapabilityCatalog validation; fix the exporter/loader mismatch",
+    );
+    return { cliCommandPathById, errors };
+  }
+
+  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+    await import("../src/mcp/static-tool-definitions");
+  const { DEFAULT_MCP_CLI_ANNOTATIONS } =
+    await import("../src/mcp/static-cli-metadata");
+  const listings = DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => {
+    const listing: {
+      name: string;
+      description: string;
+      inputSchema: Record<string, unknown>;
+      annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+    } = {
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    };
+    if (tool.annotations !== undefined) {
+      listing.annotations = tool.annotations;
+    }
+    return listing;
+  });
+
+  const built = Result.try(() =>
+    buildCliRouteTree({
+      listings,
+      annotations: DEFAULT_MCP_CLI_ANNOTATIONS,
+      entries: cliEntries,
+    }),
+  );
+  if (Result.isError(built)) {
+    errors.push(
+      `coverage doc: buildCliRouteTree failed: ${built.error instanceof Error ? built.error.message : String(built.error)}`,
+    );
+    return { cliCommandPathById, errors };
+  }
+  collectCapabilityCommandPaths(built.value.tree, cliCommandPathById);
+  return { cliCommandPathById, errors };
+};
+
 const main = async (): Promise<number> => {
   const checkMode = process.argv.includes("--check");
   const {
@@ -1219,7 +1312,34 @@ const main = async (): Promise<number> => {
   const dispatchSerialized = await formatGeneratedModule(
     serializeDispatchModule(dispatchRecords),
   );
-  const doc = serializeCoverageDoc({ entries, internalWaiverCounts });
+
+  const { cliCommandPathById, errors: pathErrors } =
+    await computeCliCommandPaths(serialized);
+  // Every non-file capability-disposition entry must have a generated command
+  // path; a miss means the CLI tree and the catalog disagree, which must fail
+  // the export rather than ship a doc row with a wrong or absent invocation.
+  for (const entry of entries) {
+    if (
+      entry.mcp.type === "capability" &&
+      entry.requiresFileInput !== true &&
+      entry.returnsFileResponse !== true &&
+      !cliCommandPathById.has(entry.id)
+    ) {
+      pathErrors.push(
+        `coverage doc: capability "${entry.id}" has no generated CLI command path (missing from the built route tree)`,
+      );
+    }
+  }
+  if (pathErrors.length > 0) {
+    printErrors(pathErrors);
+    return 1;
+  }
+
+  const doc = serializeCoverageDoc({
+    entries,
+    cliCommandPathById,
+    internalWaiverCounts,
+  });
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);

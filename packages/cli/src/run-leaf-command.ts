@@ -495,15 +495,27 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     return null;
   }
   const hint = error["hint"];
-  const requestId = error["requestId"];
   return {
     code,
     message,
     hint: typeof hint === "string" ? hint : undefined,
     issues: parseErrorIssues(error),
-    requestId: typeof requestId === "string" ? requestId : undefined,
+    requestId: parseRequestId(error["requestId"]),
   };
 };
+
+/**
+ * The server mints receipts as `req_` + 32 lowercase-hex chars
+ * (apps/api/src/lib/observability/request-context.ts); the range is kept
+ * tolerant so a future longer/shorter hex tail still renders. Anything else —
+ * in particular a value smuggling ANSI escape sequences from a compromised or
+ * untrusted server — is DROPPED entirely, never printed to the terminal.
+ */
+const REQUEST_ID_SHAPE = /^req_[0-9a-f]{16,64}$/u;
+
+/** A well-formed receipt id, or `undefined` (drop, don't sanitize) otherwise. */
+const parseRequestId = (value: unknown): string | undefined =>
+  typeof value === "string" && REQUEST_ID_SHAPE.test(value) ? value : undefined;
 
 const RECEIPT_DIM = "\u001B[2m";
 const RECEIPT_RESET = "\u001B[0m";
@@ -512,13 +524,18 @@ const RECEIPT_RESET = "\u001B[0m";
  * The `request id: …` receipt line, dimmed on a TTY and plain on a pipe (so an
  * agent capturing stderr reads a clean, greppable line). Shared by the error
  * path (after the envelope) and the capability write path (after a mutation).
+ * Callers only receive ids that passed {@link parseRequestId}, so the value is
+ * terminal-safe by construction.
  */
 export const requestIdLine = (requestId: string, isTTY: boolean): string =>
   isTTY
     ? `${RECEIPT_DIM}request id: ${requestId}${RECEIPT_RESET}\n`
     : `request id: ${requestId}\n`;
 
-/** Read the `meta.requestId` receipt off a success payload, if present. */
+/**
+ * Read the `meta.requestId` receipt off a success payload, if present and
+ * well-formed (see {@link parseRequestId}; a malformed id is dropped).
+ */
 export const readRequestReceipt = (payload: unknown): string | undefined => {
   if (!isRecord(payload)) {
     return undefined;
@@ -527,8 +544,7 @@ export const readRequestReceipt = (payload: unknown): string | undefined => {
   if (!isRecord(meta)) {
     return undefined;
   }
-  const requestId = meta["requestId"];
-  return typeof requestId === "string" ? requestId : undefined;
+  return parseRequestId(meta["requestId"]);
 };
 
 /**

@@ -178,7 +178,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `legislation.boe-text-block` | read | stella:read | FEATURE_PUBLIC_LAW | covered by `search_legislation` |
 | `legislation.borme-summary` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella legislation borme-summary` |
 | `legislation.read-by-id` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella legislation read-by-id` |
-| `legislation.search` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella legislation search` |
+| `legislation.search` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation search` |
 
 ## organization-settings
 

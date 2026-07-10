@@ -463,11 +463,15 @@ describe("confirm passthrough (capability invoke)", () => {
 });
 
 describe("request-id receipt helpers", () => {
-  test("errorEnvelope parses error.requestId when present", () => {
+  const GOOD_ID = "req_0123456789abcdef0123456789abcdef";
+  // An untrusted server smuggling ANSI escape sequences into the receipt.
+  const ANSI_ID = "req_\u001B]0;pwned\u0007\u001B[31mabcdef0123456789";
+
+  test("errorEnvelope parses a well-formed error.requestId", () => {
     const envelope = errorEnvelope({
-      error: { code: "not_found", message: "gone", requestId: "req_abc" },
+      error: { code: "not_found", message: "gone", requestId: GOOD_ID },
     });
-    expect(envelope?.requestId).toBe("req_abc");
+    expect(envelope?.requestId).toBe(GOOD_ID);
   });
 
   test("errorEnvelope tolerates a missing/non-string requestId", () => {
@@ -482,19 +486,34 @@ describe("request-id receipt helpers", () => {
     ).toBeUndefined();
   });
 
-  test("requestIdLine dims on a TTY and stays plain on a pipe", () => {
-    expect(requestIdLine("req_abc", false)).toBe("request id: req_abc\n");
-    const tty = requestIdLine("req_abc", true);
-    expect(tty).toContain("request id: req_abc");
-    expect(tty).not.toBe("request id: req_abc\n");
+  test("errorEnvelope drops a malformed or ANSI-laced requestId entirely", () => {
+    for (const bad of [ANSI_ID, "req_UPPERCASE0123", "req_short", "nope", ""]) {
+      expect(
+        errorEnvelope({
+          error: { code: "not_found", message: "gone", requestId: bad },
+        })?.requestId,
+        JSON.stringify(bad),
+      ).toBeUndefined();
+    }
   });
 
-  test("readRequestReceipt reads meta.requestId, else undefined", () => {
-    expect(readRequestReceipt({ ok: true, meta: { requestId: "req_x" } })).toBe(
-      "req_x",
+  test("requestIdLine dims on a TTY and stays plain on a pipe", () => {
+    expect(requestIdLine(GOOD_ID, false)).toBe(`request id: ${GOOD_ID}\n`);
+    const tty = requestIdLine(GOOD_ID, true);
+    expect(tty).toContain(`request id: ${GOOD_ID}`);
+    expect(tty).not.toBe(`request id: ${GOOD_ID}\n`);
+  });
+
+  test("readRequestReceipt reads a well-formed meta.requestId, else undefined", () => {
+    expect(readRequestReceipt({ ok: true, meta: { requestId: GOOD_ID } })).toBe(
+      GOOD_ID,
     );
     expect(readRequestReceipt({ ok: true })).toBeUndefined();
     expect(readRequestReceipt({ meta: { requestId: 1 } })).toBeUndefined();
     expect(readRequestReceipt("nope")).toBeUndefined();
+    // A malformed/ANSI-laced receipt is dropped, never printed.
+    expect(
+      readRequestReceipt({ meta: { requestId: ANSI_ID } }),
+    ).toBeUndefined();
   });
 });

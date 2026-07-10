@@ -964,24 +964,19 @@ const renderAccessCell = (entry: CoverageDocEntry): string =>
   entry.destructive ? `${entry.access}, destructive` : entry.access;
 
 /**
- * camelCase (or already-kebab) segment to kebab-case, for the generic-invoke
- * CLI path: `readEntitySummariesCount` -> `read-entity-summaries-count`;
- * `time-entries` is left unchanged (no case boundary to split).
+ * "Reachable via" column text for one entry. `cliCommandPathById` carries the
+ * REAL generated command path per capability id, computed by the exporter
+ * through the CLI's own `buildCliRouteTree` (the same builder codegen uses), so
+ * collision fallbacks (e.g. `legislation.search` relocated under
+ * `stella capability legislation search`) render their actual invocation
+ * instead of an id-derived guess. A capability-disposition entry missing from
+ * the map is an exporter invariant violation (the map is built from the same
+ * entries), so it panics rather than printing a wrong path.
  */
-const toKebabSegment = (segment: string): string =>
-  segment
-    .replace(/(?<lower>[a-z0-9])(?<upper>[A-Z])/gu, "$<lower>-$<upper>")
-    .toLowerCase();
-
-/** `time-entries.create` -> `stella time-entries create`. */
-const toCliInvocation = (id: string): string =>
-  `stella ${id
-    .split(".")
-    .map((segment) => toKebabSegment(segment))
-    .join(" ")}`;
-
-/** "Reachable via" column text for one entry. */
-const renderReachableViaCell = (entry: CoverageDocEntry): string => {
+const renderReachableViaCell = (
+  entry: CoverageDocEntry,
+  cliCommandPathById: ReadonlyMap<string, readonly string[]>,
+): string => {
   if (entry.mcp.type === "tool") {
     return `curated tool \`${entry.mcp.name}\``;
   }
@@ -991,22 +986,29 @@ const renderReachableViaCell = (entry: CoverageDocEntry): string => {
   if (entry.requiresFileInput || entry.returnsFileResponse) {
     return "generic invoke: file I/O — not runnable via CLI/JSON (describe only)";
   }
-  return `generic invoke → \`${toCliInvocation(entry.id)}\``;
+  const commandPath =
+    cliCommandPathById.get(entry.id) ??
+    panic(
+      `coverage doc: no generated CLI command path for capability "${entry.id}"`,
+    );
+  return `generic invoke → \`stella ${commandPath.join(" ")}\``;
 };
 
 /** Render one domain's capability table (header row through the last entry). */
 const renderDomainSection = ({
   domain,
   entries,
+  cliCommandPathById,
 }: {
   domain: string;
   entries: readonly CoverageDocEntry[];
+  cliCommandPathById: ReadonlyMap<string, readonly string[]>;
 }): string => {
   const rows = [...entries]
     .sort((a, b) => a.id.localeCompare(b.id))
     .map(
       (entry) =>
-        `| \`${entry.id}\` | ${renderAccessCell(entry)} | ${entry.scope} | ${entry.feature ?? "—"} | ${renderReachableViaCell(entry)} |`,
+        `| \`${entry.id}\` | ${renderAccessCell(entry)} | ${entry.scope} | ${entry.feature ?? "—"} | ${renderReachableViaCell(entry, cliCommandPathById)} |`,
     );
   return `## ${domain}
 
@@ -1047,16 +1049,21 @@ Total: ${total}
 /**
  * Render the deterministic markdown coverage doc: one section per domain
  * (alphabetical, entries id-sorted within), then the waived-internal-handlers
- * summary. Pure projection of the built catalog entries plus internal-waiver
- * reason counts; the exporter byte-compares this against the committed
- * `docs/capability-coverage.md` in `--check` mode, so the output must be fully
- * deterministic (stable sort, fixed column order, single trailing newline).
+ * summary. Pure projection of the built catalog entries, the per-capability
+ * generated CLI command paths (from the CLI's own route-tree builder), and
+ * internal-waiver reason counts; the exporter byte-compares this against the
+ * committed `docs/capability-coverage.md` in `--check` mode, so the output must
+ * be fully deterministic (stable sort, fixed column order, single trailing
+ * newline).
  */
 export const serializeCoverageDoc = ({
   entries,
+  cliCommandPathById,
   internalWaiverCounts,
 }: {
   entries: readonly CoverageDocEntry[];
+  /** Capability id -> the REAL generated CLI command path (collision-aware). */
+  cliCommandPathById: ReadonlyMap<string, readonly string[]>;
   internalWaiverCounts: Readonly<Record<string, number>>;
 }): string => {
   const byDomain = new Map<string, CoverageDocEntry[]>();
@@ -1072,6 +1079,7 @@ export const serializeCoverageDoc = ({
       renderDomainSection({
         domain,
         entries: byDomain.get(domain) ?? [],
+        cliCommandPathById,
       }),
     );
 

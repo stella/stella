@@ -273,7 +273,11 @@ const api = new Elysia()
         "MCP-Protocol-Version",
         SESSION_ID_HEADER,
       ],
-      exposeHeaders: ["set-auth-token", "Content-Disposition"],
+      exposeHeaders: [
+        "set-auth-token",
+        "Content-Disposition",
+        REQUEST_ID_HEADER,
+      ],
     }),
   )
   .onError(({ error, set, code, request, route }) => {
