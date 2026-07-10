@@ -50,8 +50,22 @@ export const decryptOrgAIConfigRow = async ({
   const ciphertext = decodeNullableByteaText(row?.aiConfigEncrypted);
   const iv = decodeNullableByteaText(row?.aiConfigIv);
 
-  if (!ciphertext || !iv) {
+  if (!ciphertext && !iv) {
     return { status: "ok", config: null };
+  }
+
+  // Exactly one of ciphertext/IV present is a malformed row, not "no
+  // config": report it as corrupt so AI-invoking callers fail closed
+  // instead of silently falling back to the default provider.
+  if (!ciphertext || !iv) {
+    const error = new Error(
+      "organization AI config row has ciphertext or IV but not both",
+    );
+    captureError(error, {
+      organizationId,
+      source: "loadOrgAIConfig",
+    });
+    return { status: "corrupt", error };
   }
 
   try {

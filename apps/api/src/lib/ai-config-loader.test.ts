@@ -58,6 +58,23 @@ describe("loadOrgAIConfig", () => {
     );
   });
 
+  test("treats a row with ciphertext but no IV (or vice versa) as corrupt", async () => {
+    const missingIv = await decryptOrgAIConfigRow({
+      decrypt: decryptAIConfigMock,
+      organizationId,
+      row: { aiConfigEncrypted: "\\x0a0b", aiConfigIv: null },
+    });
+    const missingCiphertext = await decryptOrgAIConfigRow({
+      decrypt: decryptAIConfigMock,
+      organizationId,
+      row: { aiConfigEncrypted: null, aiConfigIv: "\\x0102" },
+    });
+
+    expect(missingIv.status).toBe("corrupt");
+    expect(missingCiphertext.status).toBe("corrupt");
+    expect(decryptAIConfigMock).not.toHaveBeenCalled();
+  });
+
   test("reports a corrupt row instead of throwing, for degrade-capable callers", async () => {
     const decryptError = new Error("invalid config");
     const decrypt = mock(async () => {
