@@ -61,22 +61,27 @@ const PRODUCT_WRAPPER_TYPES = new Set([
   "TSTypeAssertion",
 ]);
 
+const unwrapExpression = (node) => {
+  let current = node;
+  while (current && PRODUCT_WRAPPER_TYPES.has(current.type)) {
+    current = current.expression;
+  }
+  return current;
+};
+
 // Collect the numeric-literal leaves of a `*` chain (`a * b * c * ...`).
 const collectProductLiterals = (node, out: number[]): void => {
-  if (!node) {
+  const expression = unwrapExpression(node);
+  if (!expression) {
     return;
   }
-  if (PRODUCT_WRAPPER_TYPES.has(node.type)) {
-    collectProductLiterals(node.expression, out);
+  if (expression.type === "BinaryExpression" && expression.operator === "*") {
+    collectProductLiterals(expression.left, out);
+    collectProductLiterals(expression.right, out);
     return;
   }
-  if (node.type === "BinaryExpression" && node.operator === "*") {
-    collectProductLiterals(node.left, out);
-    collectProductLiterals(node.right, out);
-    return;
-  }
-  if (node.type === "Literal" && typeof node.value === "number") {
-    out.push(node.value);
+  if (expression.type === "Literal" && typeof expression.value === "number") {
+    out.push(expression.value);
   }
 };
 
@@ -95,14 +100,17 @@ const isDayLengthProduct = (literals: readonly number[]): boolean => {
 // text is inspected, so `` `${value}T00:00:00` `` passes and a date-only
 // `` `${y}-${m}-${d}` `` is flagged.
 const isDateOnlyStringArg = (arg): boolean => {
-  if (!arg) {
+  const expression = unwrapExpression(arg);
+  if (!expression) {
     return false;
   }
-  if (arg.type === "Literal") {
-    return typeof arg.value === "string" && !arg.value.includes("T");
+  if (expression.type === "Literal") {
+    return (
+      typeof expression.value === "string" && !expression.value.includes("T")
+    );
   }
-  if (arg.type === "TemplateLiteral") {
-    return !arg.quasis.some(
+  if (expression.type === "TemplateLiteral") {
+    return !expression.quasis.some(
       (quasi) =>
         typeof quasi.value?.raw === "string" && quasi.value.raw.includes("T"),
     );

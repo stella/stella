@@ -20,6 +20,10 @@ declare const lookbackDays: number;
 const _dateOnlyLiteral = new Date("2024-01-01");
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
 const _dateOnlyTemplate = new Date(`${year}-${month}-${day}`);
+// oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
+const _dateOnlyGrouped = new Date(("2024-01-01"));
+// oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
+const _dateOnlyTyped = new Date("2024-01-01" satisfies string);
 
 // --- Flagged: Date.parse (engine-dependent for non-ISO input) ---
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
@@ -52,6 +56,8 @@ const _unrelatedProduct = 24 * 7;
 export const noRawDateParsingFixture = [
   _dateOnlyLiteral,
   _dateOnlyTemplate,
+  _dateOnlyGrouped,
+  _dateOnlyTyped,
   _parsed,
   _dayChain,
   _dayChainWithFactor,
