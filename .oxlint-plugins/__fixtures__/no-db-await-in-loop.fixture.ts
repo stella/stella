@@ -1,7 +1,8 @@
 // Passive regression fixture for `no-db-await-in-loop/no-db-await-in-loop`.
 //
 // Each `oxlint-disable-next-line` below intentionally suppresses a case the
-// rule MUST flag (a DB call awaited inside a loop body, or a fan-out via
+// rule MUST flag (a DB call awaited inside a loop body through native `await`
+// or `yield* Result.await(...)`, or a fan-out via
 // `Promise.all(items.map(...))` / `Promise.allSettled(items.map(...))`,
 // inline or via a named callback resolved to its local definition, awaited
 // or not). If the rule regresses, the matching disable goes unused and
@@ -24,6 +25,9 @@ declare const tx: {
   };
 };
 declare const safeDb: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
+declare const Result: {
+  await: <T>(promise: Promise<T>) => AsyncGenerator<never, T, unknown>;
+};
 declare const items: { id: string }[];
 declare const itemsTable: unknown;
 declare const idColumn: unknown;
@@ -54,6 +58,18 @@ export const whileLoopAwaitSafeDb = async () => {
     index += 1;
   }
   return results;
+};
+
+export const forOfLoopResultAwaitSafeDb = async function* () {
+  for (const item of items) {
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: safe handlers await DB results through delegated Result generators
+    yield* Result.await(
+      safeDb(async (scopedTx: typeof tx) => {
+        const inserted = await scopedTx.insert(itemsTable).values(item);
+        return inserted;
+      }),
+    );
+  }
 };
 
 export const promiseAllMapFanOut = async () => {
@@ -97,11 +113,39 @@ export const promiseAllSettledMapFanOut = async () => {
   );
 };
 
+export const resultAwaitPromiseAllMapFanOut = async function* () {
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: safe handlers may delegate a Promise.all fan-out through Result.await
+  yield* Result.await(
+    Promise.all(
+      items.map(
+        // oxlint-disable-next-line typescript/promise-function-async -- fixture: the awaitless callback proves Result.await fan-out detection does not depend on an inner AwaitExpression
+        (item) =>
+          safeDb(async (scopedTx: typeof tx) => {
+            const result = await scopedTx.insert(itemsTable).values(item);
+            return result;
+          }),
+      ),
+    ),
+  );
+};
+
 // --- Cases the rule MUST NOT flag ---
 
 // A single DB await outside any loop.
 export const singleAwaitOutsideLoop = async () => {
   await db.select().from(itemsTable).where(items[0]?.id);
+};
+
+export const singleResultAwaitOutsideLoop = async function* () {
+  yield* Result.await(
+    safeDb(async (scopedTx: typeof tx) => {
+      const selected = await scopedTx
+        .select()
+        .from(itemsTable)
+        .where(items[0]?.id);
+      return selected;
+    }),
+  );
 };
 
 // Batched: one query for the whole loop's ids, built with `inArray` after

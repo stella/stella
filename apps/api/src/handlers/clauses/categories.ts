@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -240,35 +240,35 @@ export const updateCategoryHandler = async function* ({
       );
     }
 
-    // Walk the ancestor chain to reject a reparent that would create a cycle
-    // (mirrors the template category handler).
-    const visited = new Set<SafeId<"clauseCategory">>([categoryId]);
-    let checkId: SafeId<"clauseCategory"> | null = parentId;
-    while (checkId) {
-      if (visited.has(checkId)) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Cannot create circular category hierarchy",
-          }),
-        );
-      }
-      visited.add(checkId);
-      const currentId: SafeId<"clauseCategory"> = checkId;
-      const ancestor:
-        | { parentId: SafeId<"clauseCategory"> | null }
-        | undefined = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.clauseCategories.findFirst({
-            where: {
-              id: { eq: currentId },
-              organizationId: { eq: organizationId },
-            },
-            columns: { parentId: true },
-          }),
-        ),
+    const createsCycle = yield* Result.await(
+      safeDb(async (tx) => {
+        const result = await tx.execute<{ found: boolean }>(sql`
+          WITH RECURSIVE ancestors(id, parent_id) AS (
+            SELECT category.id, category.parent_id
+            FROM ${clauseCategories} category
+            WHERE category.id = ${parentId}
+              AND category.organization_id = ${organizationId}
+            UNION
+            SELECT category.id, category.parent_id
+            FROM ${clauseCategories} category
+            INNER JOIN ancestors
+              ON category.id = ancestors.parent_id
+            WHERE category.organization_id = ${organizationId}
+          )
+          SELECT EXISTS (
+            SELECT 1 FROM ancestors WHERE id = ${categoryId}
+          ) AS found
+        `);
+        return result.at(0)?.found === true;
+      }),
+    );
+    if (createsCycle) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot create circular category hierarchy",
+        }),
       );
-      checkId = ancestor?.parentId ?? null;
     }
   }
 

@@ -14,8 +14,11 @@
 //     call whose callee resolves to `safeDb` — bare (`safeDb(cb)`, common in
 //     `createSafeHandler` generators) or as a property access
 //     (`ctx.safeDb(cb)`, `context.safeDb(cb)`).
+//   - Safe handlers express the same operation as
+//     `yield* Result.await(safeDb(...))`; delegated `YieldExpression` nodes
+//     with that shape are treated as DB awaits too.
 //   - "Inside a loop" is found by walking up `parent` links from the
-//     `AwaitExpression`. The walk stops as soon as it reaches either:
+//     await/yield node. The walk stops as soon as it reaches either:
 //       1. A `for` / `for-of` / `for-in` / `while` / `do-while` node whose
 //          `body` is (an ancestor of) the await -> flag.
 //       2. A function boundary (function declaration/expression/arrow) ->
@@ -183,6 +186,25 @@ const isDbAwaitCall = (node: unknown): boolean => {
   }
   const root = getChainRootName(node);
   return root !== null && DB_ROOT_NAMES.has(root);
+};
+
+const getResultAwaitArgument = (node: unknown): unknown => {
+  if (getType(node) !== "CallExpression") {
+    return null;
+  }
+  const callee = getField(node, "callee");
+  if (
+    getType(callee) !== "MemberExpression" ||
+    isComputed(callee) ||
+    !isIdentifier(getField(callee, "object"), "Result") ||
+    getPropertyName(getField(callee, "property")) !== "await"
+  ) {
+    return null;
+  }
+  const args = getField(node, "arguments");
+  return Array.isArray(args) && args.length === 1
+    ? unwrapExpression(args[0])
+    : null;
 };
 
 // `<expr>.map(...)` / `.forEach(...)` / `.flatMap(...)`.
@@ -473,17 +495,35 @@ export default {
         },
       },
       create(context) {
+        const reportAwaitedExpression = (
+          node: unknown,
+          argument: unknown,
+        ): void => {
+          if (isDbAwaitCall(argument)) {
+            if (findLoopOrMapContext(node) !== null) {
+              context.report({ node, messageId: "noDbAwaitInLoop" });
+            }
+            return;
+          }
+          if (isPromiseAllMapFanOutWithDbCallback(argument)) {
+            context.report({ node, messageId: "noDbAwaitInLoop" });
+          }
+        };
+
         return {
           AwaitExpression(node: unknown) {
             const argument = unwrapExpression(getField(node, "argument"));
-            if (isDbAwaitCall(argument)) {
-              if (findLoopOrMapContext(node) !== null) {
-                context.report({ node, messageId: "noDbAwaitInLoop" });
-              }
+            reportAwaitedExpression(node, argument);
+          },
+          YieldExpression(node: unknown) {
+            if (getField(node, "delegate") !== true) {
               return;
             }
-            if (isPromiseAllMapFanOutWithDbCallback(argument)) {
-              context.report({ node, messageId: "noDbAwaitInLoop" });
+            const resultAwaitArgument = getResultAwaitArgument(
+              unwrapExpression(getField(node, "argument")),
+            );
+            if (resultAwaitArgument !== null) {
+              reportAwaitedExpression(node, resultAwaitArgument);
             }
           },
         };
