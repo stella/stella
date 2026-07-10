@@ -1,4 +1,30 @@
-const collators = new Map<string, Intl.Collator>();
+const COLLATOR_CACHE_LIMIT = 16;
+
+const collatorCache = (() => {
+  const collators = new Map<string, Intl.Collator>();
+
+  return {
+    get: (locale: string): Intl.Collator | undefined => {
+      const collator = collators.get(locale);
+      if (!collator) {
+        return undefined;
+      }
+      collators.delete(locale);
+      collators.set(locale, collator);
+      return collator;
+    },
+    set: (locale: string, collator: Intl.Collator): void => {
+      collators.set(locale, collator);
+      if (collators.size <= COLLATOR_CACHE_LIMIT) {
+        return;
+      }
+      const oldestLocale = collators.keys().next();
+      if (!oldestLocale.done) {
+        collators.delete(oldestLocale.value);
+      }
+    },
+  };
+})();
 
 /**
  * `Intl.Collator` for `locale`, cached per locale.
@@ -18,12 +44,12 @@ const collators = new Map<string, Intl.Collator>();
  * when the runtime doesn't already default to "cs"/"sk").
  */
 export const getCollator = (locale: string): Intl.Collator => {
-  const cached = collators.get(locale);
+  const cached = collatorCache.get(locale);
   if (cached) {
     return cached;
   }
   const collator = new Intl.Collator(locale);
-  collators.set(locale, collator);
+  collatorCache.set(locale, collator);
   return collator;
 };
 
