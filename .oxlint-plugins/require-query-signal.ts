@@ -55,6 +55,20 @@ const FUNCTION_TYPES = new Set([
 
 const isFunctionNode = (node) => FUNCTION_TYPES.has(node?.type);
 
+const unwrapTS = (node) => {
+  let current = node;
+  while (
+    current &&
+    (current.type === "TSNonNullExpression" ||
+      current.type === "TSAsExpression" ||
+      current.type === "TSSatisfiesExpression" ||
+      current.type === "TSInstantiationExpression")
+  ) {
+    current = current.expression;
+  }
+  return current;
+};
+
 // Climb `.parent` links until the nearest enclosing function is found. Used
 // both to find the function that "owns" a fetch/api call (so calls inside a
 // nested closure are not attributed to the outer queryFn) and to walk from
@@ -117,36 +131,39 @@ const hasSignalParam = (fn) => {
 };
 
 const isFetchCallee = (callee) => {
-  if (isIdentifier(callee, "fetch")) {
+  const unwrapped = unwrapTS(callee);
+  if (isIdentifier(unwrapped, "fetch")) {
     return true;
   }
-  if (callee?.type !== "MemberExpression" || callee.computed !== false) {
+  if (unwrapped?.type !== "MemberExpression" || unwrapped.computed !== false) {
     return false;
   }
-  if (!isIdentifier(callee.property, "fetch")) {
+  if (!isIdentifier(unwrapped.property, "fetch")) {
     return false;
   }
+  const object = unwrapTS(unwrapped.object);
   return (
-    isIdentifier(callee.object, "globalThis") ||
-    isIdentifier(callee.object, "window") ||
-    isIdentifier(callee.object, "self")
+    isIdentifier(object, "globalThis") ||
+    isIdentifier(object, "window") ||
+    isIdentifier(object, "self")
   );
 };
 
 // Resolve the identifier a member/call chain is rooted at, e.g.
 // `api.foo({...}).bar.get` -> the `api` Identifier node.
 const rootIdentifier = (node) => {
-  if (!node || typeof node.type !== "string") {
+  const unwrapped = unwrapTS(node);
+  if (!unwrapped || typeof unwrapped.type !== "string") {
     return null;
   }
-  if (node.type === "Identifier") {
-    return node;
+  if (unwrapped.type === "Identifier") {
+    return unwrapped;
   }
-  if (node.type === "MemberExpression") {
-    return rootIdentifier(node.object);
+  if (unwrapped.type === "MemberExpression") {
+    return rootIdentifier(unwrapped.object);
   }
-  if (node.type === "CallExpression") {
-    return rootIdentifier(node.callee);
+  if (unwrapped.type === "CallExpression") {
+    return rootIdentifier(unwrapped.callee);
   }
   return null;
 };
@@ -161,13 +178,65 @@ const HTTP_VERBS = new Set(["get", "post", "put", "patch", "delete", "head"]);
 // CLAUDE.md). A call chain rooted at that identifier and ending in an HTTP
 // verb hits the network.
 const isEdenApiCallee = (callee) => {
-  if (callee?.type !== "MemberExpression" || callee.computed !== false) {
+  const unwrapped = unwrapTS(callee);
+  if (unwrapped?.type !== "MemberExpression" || unwrapped.computed !== false) {
     return false;
   }
-  if (!HTTP_VERBS.has(getPropertyName(callee.property))) {
+  if (!HTTP_VERBS.has(getPropertyName(unwrapped.property))) {
     return false;
   }
-  return rootIdentifier(callee.object)?.name === "api";
+  return rootIdentifier(unwrapped.object)?.name === "api";
+};
+
+const containsSignalIdentifier = (node) => {
+  const unwrapped = unwrapTS(node);
+  if (!unwrapped || typeof unwrapped.type !== "string") {
+    return false;
+  }
+  if (isIdentifier(unwrapped, "signal")) {
+    return true;
+  }
+  if (unwrapped.type === "MemberExpression" && !unwrapped.computed) {
+    return containsSignalIdentifier(unwrapped.object);
+  }
+  if (unwrapped.type === "Property" && !unwrapped.computed) {
+    return containsSignalIdentifier(unwrapped.value);
+  }
+  return Object.entries(unwrapped).some(([key, value]) => {
+    if (key === "parent") {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.some(containsSignalIdentifier);
+    }
+    return containsSignalIdentifier(value);
+  });
+};
+
+const getObjectPropertyValue = (node, name) => {
+  const object = unwrapTS(node);
+  if (object?.type !== "ObjectExpression") {
+    return null;
+  }
+  const property = object.properties.find(
+    (candidate) =>
+      candidate?.type === "Property" && getPropertyName(candidate.key) === name,
+  );
+  return property?.value ?? null;
+};
+
+const callThreadsSignal = (node) => {
+  if (isFetchCallee(node.callee)) {
+    return containsSignalIdentifier(
+      getObjectPropertyValue(node.arguments.at(1), "signal"),
+    );
+  }
+  return containsSignalIdentifier(
+    getObjectPropertyValue(
+      getObjectPropertyValue(node.arguments.at(0), "fetch"),
+      "signal",
+    ),
+  );
 };
 
 export default {
@@ -194,7 +263,11 @@ export default {
             }
 
             const owner = nearestEnclosingFunction(node);
-            if (!owner || !isQueryFnFunction(owner) || hasSignalParam(owner)) {
+            if (
+              !owner ||
+              !isQueryFnFunction(owner) ||
+              (hasSignalParam(owner) && callThreadsSignal(node))
+            ) {
               return;
             }
 

@@ -8,6 +8,7 @@
 
 declare const url: string;
 declare const workspaceId: string;
+declare const request: { signal: AbortSignal };
 
 const api = {
   things: {
@@ -81,6 +82,29 @@ export const directCallInsideIfOptions = {
   },
 };
 
+export const signalOnlyReachesFirstCallOptions = {
+  queryKey: ["thing", "two-requests"],
+  queryFn: async ({ signal }: { signal: AbortSignal }) => {
+    await fetch(url, { signal });
+    // oxlint-disable-next-line require-query-signal/require-query-signal
+    return await api.things.get();
+  },
+};
+
+export const assertedApiWithoutSignalOptions = {
+  queryKey: ["things", "asserted"],
+  queryFn: async ({ signal: _signal }: { signal: AbortSignal }) =>
+    // oxlint-disable-next-line require-query-signal/require-query-signal, typescript/no-unnecessary-type-assertion -- Exercise TS-wrapper traversal while preserving the missing-signal finding.
+    await (api as typeof api).things.get(),
+};
+
+export const unrelatedSignalPropertyOptions = {
+  queryKey: ["thing", "unrelated-signal"],
+  queryFn: async ({ signal: _signal }: { signal: AbortSignal }) =>
+    // oxlint-disable-next-line require-query-signal/require-query-signal
+    await fetch(url, { signal: request.signal }),
+};
+
 // Factory functions that return a query-options object are still in scope.
 export const thingOptions = () => ({
   queryKey: ["thing", "factory"],
@@ -114,6 +138,14 @@ export const signalAlongsideOtherParamsOptions = {
     const response = await api.things.get({ fetch: { signal } });
     return { ...response, pageParam };
   },
+};
+
+export const composedSignalOptions = {
+  queryKey: ["thing", "timeout"],
+  queryFn: async ({ signal }: { signal: AbortSignal }) =>
+    await window.fetch(url, {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(1000)]),
+    }),
 };
 
 // Identifier reference — the rule does not follow into helper functions.
