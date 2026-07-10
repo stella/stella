@@ -31,6 +31,14 @@ export const MCP_ERROR_CODES = [
    * will not succeed. The CLI keys exit code 9 off it.
    */
   "usage_limited",
+  /**
+   * The request is valid but conflicts with current state (a backing handler's
+   * 409): duplicate link, name already taken, concurrent edit. Distinct from
+   * `validation_error` (the input itself is well-formed) and `not_found`; the
+   * handler's message names the conflicting resource. The CLI keys exit code
+   * 10 off it.
+   */
+  "conflict",
   /** The caller exceeded a rate limit; retry after the window. */
   "rate_limited",
   /** No tool with the given name is exposed on this surface. */

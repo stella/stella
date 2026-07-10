@@ -16,6 +16,7 @@ import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
+import { isCapabilityFeatureEnabled } from "@/api/mcp/capability-feature";
 import { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { CONTEXT_FIDELITY_WAIVERS } from "@/api/mcp/capability-waivers";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -91,6 +92,15 @@ type CatalogEntry = {
    * presigned-upload flow. Derived mechanically by the export script.
    */
   requiresFileInput?: boolean;
+  /**
+   * Deployment feature flag (`FEATURE_*` env key) gating this capability,
+   * mirroring the `feature` field on static tools: inherited from the covering
+   * tool for tool/covered dispositions, or from the export script's reviewed
+   * domain table. While the flag is off, `list_capabilities` hides the entry
+   * and describe/invoke refuse it with `feature_disabled` (see
+   * `isCapabilityFeatureEnabled`).
+   */
+  feature?: string;
   permissions?: unknown;
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
   inputSchemaTruncated?: true;
@@ -130,6 +140,7 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   (value["access"] === "read" || value["access"] === "write") &&
   typeof value["destructive"] === "boolean" &&
   typeof value["scope"] === "string" &&
+  (value["feature"] === undefined || typeof value["feature"] === "string") &&
   isMcpDisposition(value["mcp"]);
 
 /**
@@ -250,6 +261,24 @@ const validatePart = (
 
 // --- Result mapping ----------------------------------------------------------
 
+/**
+ * Deliberate map from every 4xx a safe handler actually returns (sweep of
+ * `HandlerError`/`status(...)` statuses in apps/api/src/handlers) onto the
+ * error envelope, preserving the handler's message:
+ *  - 400 validation, 422 semantic validation, 413 payload too large ->
+ *    `validation_error`;
+ *  - 401 (unauthenticated) and 403 (role/permission) -> `permission_denied`
+ *    (the generic path is always authenticated, so a 401 here is an
+ *    authorization gap, not a login prompt);
+ *  - 404 -> `not_found`; 402 -> `usage_limited`; 429 -> `rate_limited`;
+ *  - 409 -> `conflict` (duplicate link/name, concurrent edit; the message
+ *    names the conflicting resource).
+ * Unlisted statuses fall through to `internal_error` deliberately: 5xx are
+ * genuine server failures (500/502 in handlers), 2xx/3xx status responses do
+ * not occur on catalog handlers (302 lives in oauth-callback/verify, which are
+ * `internal`-disposition; `redirect()` also trips the context-fidelity scan),
+ * and 410 is unused across the handler tree.
+ */
 const STATUS_CODE_TO_ENVELOPE: {
   min: number;
   max: number;
@@ -260,6 +289,9 @@ const STATUS_CODE_TO_ENVELOPE: {
   { min: 402, max: 402, code: "usage_limited" },
   { min: 403, max: 403, code: "permission_denied" },
   { min: 404, max: 404, code: "not_found" },
+  { min: 409, max: 409, code: "conflict" },
+  { min: 413, max: 413, code: "validation_error" },
+  { min: 422, max: 422, code: "validation_error" },
   { min: 429, max: 429, code: "rate_limited" },
 ];
 
@@ -360,8 +392,12 @@ const listCapabilitiesHandler = async ({
     });
   }
 
+  // Feature-gated entries whose flag is off are not advertised, matching how
+  // the static tools/list hides gated-off tools (describe/invoke also refuse
+  // them, closing the guess-the-id bypass).
   const filtered = CATALOG.filter(
     (entry) =>
+      isCapabilityFeatureEnabled(entry.feature) &&
       (domain === undefined || capabilityDomain(entry.id) === domain) &&
       (access === "all" || entry.access === access) &&
       (afterId === undefined || entry.id > afterId),
@@ -406,6 +442,18 @@ const decodeCapabilityCursor = (cursor: string): string | undefined | null => {
 
 const notFoundWithHint = (id: string): CallToolResult =>
   notFoundResult(`No capability with id "${id}"`, hintForUnknownId(id));
+
+/**
+ * Refusal for a capability whose deployment feature flag is off. Same message
+ * as the static-tool dispatch guard (tools.ts) so agents see one behavior for
+ * gated-off surface, tool or capability.
+ */
+const featureDisabledResult = (): CallToolResult =>
+  structuredErrorResult({
+    code: "feature_disabled",
+    message: "This feature is not enabled on this deployment",
+    hint: "This deployment or organization has this feature turned off; it cannot be enabled from the client.",
+  });
 
 const hintForUnknownId = (id: string): string => {
   const suggestions = closestToolNames(id, CATALOG_IDS);
@@ -467,6 +515,13 @@ const describeCapabilityHandler = async ({
     return notFoundWithHint(id);
   }
 
+  // Match the static-tool surface: a gated-off tool is hidden from the list
+  // AND rejected on direct dispatch, so describing a gated-off capability is
+  // refused too (never leak a disabled feature's schema by direct id).
+  if (!isCapabilityFeatureEnabled(entry.feature)) {
+    return featureDisabledResult();
+  }
+
   const loaded = await loadEndpointGuarded(id, "describe_capability");
   if (!loaded.ok) {
     return loaded.result;
@@ -499,6 +554,7 @@ const describeCapabilityHandler = async ({
       returnsFileResponse: entry.returnsFileResponse === true,
       requiresFileInput: entry.requiresFileInput === true,
       allowsArchivedWorkspace: entry.allowsArchivedWorkspace === true,
+      feature: entry.feature ?? null,
       permissions: entry.permissions ?? null,
       disposition: entry.mcp,
       inputSchema,
@@ -618,7 +674,15 @@ const invokeCapabilityHandler = async ({
     return notFoundWithHint(id);
   }
 
-  // 2. Disposition / feature. token/public capabilities self-authorize from a
+  // 2. Deployment feature gate. Mirrors the static-tool dispatch guard
+  // (tools.ts): the list surface hides a gated-off entry, and this closes the
+  // guess-the-id bypass. Runs before every other gate (validateOnly included)
+  // so a disabled feature leaks nothing about its capabilities.
+  if (!isCapabilityFeatureEnabled(entry.feature)) {
+    return featureDisabledResult();
+  }
+
+  // 3. Disposition / fidelity. token/public capabilities self-authorize from a
   // body/param token and are not reachable through the generic path; a waived
   // capability's handler needs response plumbing the synthesized context drops.
   if (entry.handlerKind === "token" || entry.handlerKind === "public") {
@@ -657,7 +721,7 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  // 3. Scope: the session must hold the capability's catalog scope.
+  // 4. Scope: the session must hold the capability's catalog scope.
   if (!context.grantedScopes.includes(entry.scope)) {
     return structuredErrorResult({
       code: "missing_scope",
@@ -666,7 +730,7 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  // 4. Destructive confirm gate.
+  // 5. Destructive confirm gate.
   if (entry.destructive && args["confirm"] !== true) {
     return structuredErrorResult({
       code: "confirmation_required",
@@ -699,6 +763,44 @@ const invokeCapabilityHandler = async ({
   }
 };
 
+/**
+ * Gate parity with the static-tool path (tools.ts / gateway/list-tools.ts /
+ * server-core.ts). Every gate a static tool call passes through has a stated
+ * equivalent here (numbered gates live in `invokeCapabilityHandler` and this
+ * function); absences are deliberate and explained:
+ *
+ * - Advertised-list filtering (list-tools): list_capabilities hides
+ *   feature-disabled entries; the three meta-tools are `excluded` from the
+ *   anonymized surface entirely, so no anonymized projection exists to filter.
+ *   Deliberate difference: entries whose SCOPE the session lacks are still
+ *   listed (scope is consent, not secrecy; the item names its scope and the
+ *   missing_scope error tells the agent how to re-consent), whereas tools/list
+ *   filters by granted scope.
+ * - unknown_tool for unregistered names: gate 1 returns not_found with a
+ *   closest-id hint (capability ids are data, not tools).
+ * - Feature gate (tools.ts dispatch guard): gate 2, same feature_disabled
+ *   envelope, also applied to describe and the list filter.
+ * - Scope recheck (server-core missing_scope): the transport already gates the
+ *   invoke_capability tool itself; gate 4 rechecks the per-capability catalog
+ *   scope against the session's grants.
+ * - Destructive confirm (tools.ts destructiveHint): gate 5, from the catalog's
+ *   per-capability `destructive` flag.
+ * - Workspace access (per-tool `ensureActiveWorkspace` bridging): gate 7
+ *   mirrors `validateWorkspaceAccess`(-IncludingArchived per fix-4 flag).
+ * - Member permissions + usage preflight: run inside the safe-handler wrapper
+ *   (`endpoint.handler`), the same code path REST uses; validateOnly
+ *   additionally mirrors the permission gate explicitly (the wrapper is not
+ *   called on that path).
+ * - Egress finalization + anonymization (finalizeMcpEgress): applied by
+ *   handleMcpToolCall to this handler's returned egress plan exactly as for
+ *   any static tool; anonymized mode never reaches here (tools excluded).
+ * - internal_error capture (tools.ts try/catch): invokeCapabilityHandler wraps
+ *   this function in its own try/catch with captureError.
+ * - Invoke-only gates with no static equivalent: context-fidelity waivers,
+ *   file-response/file-input refusals, token/public-kind refusal, and the
+ *   per-(org, capability) rate limit (static tools hand-write their bridging
+ *   and REST routes carry their own limits).
+ */
 const executeInvoke = async ({
   context,
   entry,
@@ -719,7 +821,7 @@ const executeInvoke = async ({
   const endpoint = loaded.endpoint;
 
   const isWorkspace = entry.handlerKind === "workspace";
-  // 5. Input validation against the live TypeBox schemas. A workspace-scoped
+  // 6. Input validation against the live TypeBox schemas. A workspace-scoped
   // capability takes its workspace as `input.params.workspaceId`: some configs
   // declare it in their own params schema (validated here), the rest inherit it
   // from the route macro (absent from the config schema, so it rides through as
@@ -747,7 +849,7 @@ const executeInvoke = async ({
   const validatedParams = paramsResult.ok ? paramsResult.value : undefined;
   const validatedQuery = queryResult.ok ? queryResult.value : undefined;
 
-  // 6. Workspace resolution (workspace kind only), from the VALIDATED params so
+  // 7. Workspace resolution (workspace kind only), from the VALIDATED params so
   // schema defaults/coercion are respected. This runs BEFORE the validateOnly
   // return so `validateOnly: true` mirrors a real invoke: a missing/inaccessible/
   // archived workspace fails here with the same envelope it would at execution,
@@ -797,7 +899,7 @@ const executeInvoke = async ({
     });
   }
 
-  // 7. Gateway rate limit, per (organization, capability). Mirrors the explicit
+  // 8. Gateway rate limit, per (organization, capability). Mirrors the explicit
   // per-route limits some REST routes carry (e.g. entities.translate); capped
   // before execution so a runaway agent cannot drive backend cost through the
   // generic path. validateOnly (above) is exempt: it never executes.

@@ -44,6 +44,17 @@ void mock.module("@/api/mcp/capability-rate-limit", () => ({
   consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
 }));
 
+// Controllable feature gate: the real module short-circuits on the dev test
+// env, so the deployment-gate tests toggle flags through this set instead
+// (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
+const disabledFeatures = new Set<string>();
+const realCapabilityFeature = await import("@/api/mcp/capability-feature");
+void mock.module("@/api/mcp/capability-feature", () => ({
+  ...realCapabilityFeature,
+  isCapabilityFeatureEnabled: (feature: string | undefined) =>
+    feature === undefined || !disabledFeatures.has(feature),
+}));
+
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
 const { mapHandlerResult } = await import("@/api/mcp/capability-tools");
 const { ElysiaCustomStatusResponse } = await import("elysia");
@@ -152,6 +163,7 @@ beforeEach(() => {
   loadOrgSettingsMock.mockClear();
   consumeRateLimitMock.mockClear();
   consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
+  disabledFeatures.clear();
 });
 
 afterAll(() => {
@@ -799,3 +811,123 @@ const mappedError = (
   }
   return asTestRaw<{ error: ErrorEnvelope }>(JSON.parse(item.text)).error;
 };
+
+// --- deployment feature gates -------------------------------------------------
+
+describe("invoke_capability deployment feature gate", () => {
+  test("a gated-off capability is refused on invoke with feature_disabled", async () => {
+    disabledFeatures.add("FEATURE_TIME_BILLING");
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: { params: { workspaceId: "ws_1" } },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("feature_disabled");
+    expect(error.message).toContain("not enabled on this deployment");
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("validateOnly is refused too (the gate runs before everything)", async () => {
+    disabledFeatures.add("FEATURE_TIME_BILLING");
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: { params: { workspaceId: "ws_1" } },
+        validateOnly: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("feature_disabled");
+  });
+
+  test("describe_capability refuses a gated-off entry (no schema leak)", async () => {
+    disabledFeatures.add("FEATURE_TIME_BILLING");
+    const result = await call("describe_capability", {
+      capability: "time-entries.export-csv",
+    });
+    expect(errorEnvelope(result).code).toBe("feature_disabled");
+  });
+
+  test("list_capabilities does not advertise gated-off entries", async () => {
+    disabledFeatures.add("FEATURE_TIME_BILLING");
+    const result = await call("list_capabilities", {
+      domain: "time-entries",
+      limit: 50,
+    });
+    const payload = parseToolPayload<{ items: { id: string }[] }>(result);
+    expect(payload.items).toHaveLength(0);
+  });
+
+  test("the same capability works again once the flag is on", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: { params: { workspaceId: "ws_1" } },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(parseToolPayload<string>(result)).toContain("Date,");
+  });
+
+  test("describe exposes the feature flag on an enabled entry", async () => {
+    const result = await call("describe_capability", {
+      capability: "time-entries.export-csv",
+    });
+    const payload = parseToolPayload<{ feature: string | null }>(result);
+    expect(payload.feature).toBe("FEATURE_TIME_BILLING");
+  });
+});
+
+// --- expected-status mapping (409 conflict et al.) ----------------------------
+
+describe("status-to-envelope mapping", () => {
+  test("a handler 409 maps to conflict, preserving the handler's message", () => {
+    const mapped = mapHandlerResult({
+      id: "case-law.matter-links.create",
+      result: new ElysiaCustomStatusResponse(409, {
+        message: "Decision already linked to this matter",
+      }),
+    });
+    const error = mappedError(mapped);
+    expect(error.code).toBe("conflict");
+    expect(error.message).toBe("Decision already linked to this matter");
+  });
+
+  test("a handler 422 maps to validation_error, preserving the message", () => {
+    const mapped = mapHandlerResult({
+      id: "x.y",
+      result: new ElysiaCustomStatusResponse(422, {
+        message: "dateFrom must precede dateTo",
+      }),
+    });
+    const error = mappedError(mapped);
+    expect(error.code).toBe("validation_error");
+    expect(error.message).toBe("dateFrom must precede dateTo");
+  });
+
+  test("a handler 401 maps to permission_denied", () => {
+    const mapped = mapHandlerResult({
+      id: "x.y",
+      result: new ElysiaCustomStatusResponse(401, { message: "Unauthorized" }),
+    });
+    expect(mappedError(mapped).code).toBe("permission_denied");
+  });
+
+  test("a 5xx stays internal_error with a generic message (no leak)", () => {
+    const mapped = mapHandlerResult({
+      id: "x.y",
+      result: new ElysiaCustomStatusResponse(502, {
+        message: "upstream gotenberg at 10.0.3.7 refused",
+      }),
+    });
+    const error = mappedError(mapped);
+    expect(error.code).toBe("internal_error");
+    expect(error.message).not.toContain("10.0.3.7");
+  });
+});

@@ -36,6 +36,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
+import type { McpToolFeatureFlag } from "../src/mcp/tool-types";
 import {
   type AccessClassification,
   type CapabilityDispatchRecord,
@@ -336,6 +337,45 @@ const RETURNS_FILE_RESPONSE: ReadonlySet<string> = new Set([
  */
 const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
 
+/**
+ * Deployment feature flag per capability domain, mirroring the `feature` field
+ * on static tools so the generic invoke path honors the same deployment gates
+ * as the advertised tool list (list_capabilities hides, describe/invoke refuse
+ * with `feature_disabled`). An entry's flag resolves as: the covering tool's
+ * `feature` (mechanical, for tool/covered dispositions) else this table.
+ *
+ * Seeded from the sweep of feature-tagged static tools and server-enforced
+ * route gates:
+ *  - FEATURE_TIME_BILLING gates the billing tool family (list/save/delete
+ *    time entries, resolve_rate, list_invoices) and the billing app routes;
+ *    the whole billing capability surface (time-entries, rates, invoices,
+ *    expenses, billing-codes) rides the same flag.
+ *  - FEATURE_PUBLIC_LAW gates the public legal-corpus surface (search_case_law,
+ *    read_case_law_decision, search_legislation, and the public case-law
+ *    routes); legislation and case-law capabilities (corpus analysis,
+ *    matter-links into corpus decisions, ingestion admin) are corpus-backed.
+ *  - FEATURE_USAGE gates only `get_usage` (tool disposition; inherited
+ *    mechanically, no capability-disposition entries), so `usage` needs no row.
+ * Web-only flags (FEATURE_CHAT, FEATURE_CONTACTS, FEATURE_TODOS, ...) gate UI
+ * routes, not any API surface (their REST routes mount unconditionally), so
+ * they are deliberately NOT applied here: invoke stays exactly as gated as the
+ * REST + static-tool surface, no stricter.
+ *
+ * Guards: a stale domain (no catalog entries) fails the export; a domain whose
+ * covering tools carry a feature but that is absent here (or that names a
+ * different feature than an entry inherits) fails the export, so a new gated
+ * tool family cannot leave its sibling capabilities un-gated.
+ */
+const DOMAIN_FEATURE: Record<string, McpToolFeatureFlag> = {
+  "billing-codes": "FEATURE_TIME_BILLING",
+  "case-law": "FEATURE_PUBLIC_LAW",
+  expenses: "FEATURE_TIME_BILLING",
+  invoices: "FEATURE_TIME_BILLING",
+  legislation: "FEATURE_PUBLIC_LAW",
+  rates: "FEATURE_TIME_BILLING",
+  "time-entries": "FEATURE_TIME_BILLING",
+};
+
 type CapabilityMcp =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
@@ -359,6 +399,12 @@ type CapabilityEntry = {
    * the handler where it expects a `File`). Use the presigned-upload flow.
    */
   requiresFileInput?: true;
+  /**
+   * Deployment feature flag gating this capability: the covering tool's
+   * `feature` (tool/covered dispositions) else the DOMAIN_FEATURE table.
+   * Consulted by list_capabilities/describe/invoke (see capability-feature.ts).
+   */
+  feature?: McpToolFeatureFlag;
   permissions?: unknown;
   /**
    * Absent when the schema exceeded MAX_CAPABILITY_SCHEMA_BYTES (see
@@ -490,6 +536,17 @@ type BuildResult = {
   truncatedSchemas: string[];
 };
 
+/** Covering-tool name for a tool/covered exposure; undefined otherwise. */
+const coveringToolOf = (exposure: ParsedExposure): string | undefined => {
+  if (exposure.type === "tool") {
+    return exposure.name;
+  }
+  if (exposure.type === "covered") {
+    return exposure.by;
+  }
+  return undefined;
+};
+
 type BuildCatalogEntryOptions = {
   id: string;
   kind: HandlerKind;
@@ -501,6 +558,7 @@ type BuildCatalogEntryOptions = {
   inputSchema: CapabilityInputSchema;
   capped: ReturnType<typeof capInputSchema>;
   exposure: ParsedExposure;
+  feature: McpToolFeatureFlag | undefined;
 };
 
 /**
@@ -519,6 +577,7 @@ const buildCatalogEntry = ({
   inputSchema,
   capped,
   exposure,
+  feature,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
   handlerKind: kind,
@@ -534,6 +593,7 @@ const buildCatalogEntry = ({
   ...(schemaContainsBinaryFormat(inputSchema)
     ? { requiresFileInput: true as const }
     : {}),
+  ...(feature === undefined ? {} : { feature }),
   ...(hasPermissions ? { permissions } : {}),
   ...(capped.truncated
     ? { inputSchemaTruncated: true as const }
@@ -556,10 +616,12 @@ const collectClassGuardErrors = ({
   entries,
   entrySources,
   routeFiles,
+  toolFeatureByName,
 }: {
   entries: readonly CapabilityEntry[];
   entrySources: readonly { id: string; source: string }[];
   routeFiles: readonly { id: string; source: string }[];
+  toolFeatureByName: ReadonlyMap<string, McpToolFeatureFlag>;
 }): string[] => {
   const errors: string[] = [];
   const capabilityIdSet = new Set(entries.map((entry) => entry.id));
@@ -617,6 +679,54 @@ const collectClassGuardErrors = ({
       );
     }
   }
+
+  // Feature-gate coherence: DOMAIN_FEATURE must stay in lockstep with the
+  // covering tools' feature tags so a gated tool family can never leave its
+  // sibling capability-disposition entries un-gated (or gated differently).
+  const presentDomains = new Set(
+    entries.map((entry) => deriveDomain(entry.id)),
+  );
+  for (const domain of Object.keys(DOMAIN_FEATURE)) {
+    if (!presentDomains.has(domain)) {
+      errors.push(
+        `stale DOMAIN_FEATURE entry "${domain}": no catalog capability is in that domain (remove it)`,
+      );
+    }
+  }
+  const inheritedByDomain = new Map<string, Set<McpToolFeatureFlag>>();
+  const capabilityDispositionDomains = new Set<string>();
+  for (const entry of entries) {
+    const domain = deriveDomain(entry.id);
+    if (entry.mcp.type === "capability") {
+      capabilityDispositionDomains.add(domain);
+      continue;
+    }
+    const covering = entry.mcp.type === "tool" ? entry.mcp.name : entry.mcp.by;
+    const inherited = toolFeatureByName.get(covering);
+    if (inherited !== undefined) {
+      const set = inheritedByDomain.get(domain) ?? new Set();
+      set.add(inherited);
+      inheritedByDomain.set(domain, set);
+    }
+  }
+  for (const [domain, inherited] of inheritedByDomain) {
+    const tableFeature = DOMAIN_FEATURE[domain];
+    for (const feature of inherited) {
+      if (tableFeature !== undefined && tableFeature !== feature) {
+        errors.push(
+          `DOMAIN_FEATURE["${domain}"] = "${tableFeature}" conflicts with covering-tool feature "${feature}" inherited by the domain's tool/covered entries; align them`,
+        );
+      }
+    }
+    if (
+      tableFeature === undefined &&
+      capabilityDispositionDomains.has(domain)
+    ) {
+      errors.push(
+        `domain "${domain}" inherits covering-tool feature(s) [${[...inherited].join(", ")}] but has capability-disposition entries and no DOMAIN_FEATURE row; add one so the whole domain is gated consistently`,
+      );
+    }
+  }
   return errors;
 };
 
@@ -635,6 +745,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
     await import("../src/mcp/static-tool-definitions");
   const toolScopeByName = new Map<string, string>(
     DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool.scope]),
+  );
+  // Covering-tool feature flags: a tool/covered entry inherits its covering
+  // tool's deployment gate mechanically (see DOMAIN_FEATURE for the rest).
+  const toolFeatureByName = new Map<string, McpToolFeatureFlag>(
+    DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((tool) =>
+      tool.feature === undefined ? [] : [[tool.name, tool.feature] as const],
+    ),
   );
 
   const kindsByFile = new Map(files.map((file) => [file.id, file.kinds]));
@@ -834,6 +951,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
     if (capped.truncated) {
       truncatedSchemas.push(id);
     }
+    // Deployment feature gate: the covering tool's flag wins (mechanical
+    // inheritance), the reviewed domain table covers the rest.
+    const coveringToolName = coveringToolOf(endpoint.exposure);
+    const inheritedFeature =
+      coveringToolName === undefined
+        ? undefined
+        : toolFeatureByName.get(coveringToolName);
     entries.push(
       buildCatalogEntry({
         id,
@@ -845,6 +969,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
         inputSchema,
         capped,
         exposure: endpoint.exposure,
+        feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
       }),
     );
     dispatchRecords.push({
@@ -865,6 +990,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
     entries,
     entrySources,
     routeFiles: files.filter((file) => file.id.endsWith("routes.ts")),
+    toolFeatureByName,
   })) {
     errors.push(message);
   }

@@ -44,6 +44,7 @@ const EXIT_CODE_DESCRIPTIONS = {
   permissionDenied:
     "permission denied (member role lacks the required permission)",
   usageLimited: "usage entitlement exceeded",
+  conflict: "conflict with current state (duplicate or concurrent change)",
 } satisfies Record<keyof typeof EXIT_CODES, string>;
 
 type CommandRow = {

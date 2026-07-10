@@ -79,6 +79,7 @@ the active session; `stella auth logout` clears it.
 | 7    | confirmation aborted (a destructive op was declined)          |
 | 8    | permission denied (member role lacks the required permission) |
 | 9    | usage entitlement exceeded                                    |
+| 10   | conflict with current state (duplicate or concurrent change)  |
 
 The exit code lines up with the tool-error `code`: `validation_error` -> 2,
 `missing_scope` -> 3, `feature_disabled` -> 5, `not_found` -> 6,

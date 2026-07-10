@@ -157,6 +157,8 @@ describe("classifyToolError: structured envelope -> exit map (S4)", () => {
     expect(classifyToolError(envelope("usage_limited"))).toBe(
       EXIT_CODES.usageLimited,
     );
+    expect(classifyToolError(envelope("conflict"))).toBe(EXIT_CODES.conflict);
+    expect(EXIT_CODES.conflict).toBe(10);
     expect(classifyToolError(envelope("rate_limited"))).toBe(EXIT_CODES.server);
     expect(classifyToolError(envelope("unknown_tool"))).toBe(EXIT_CODES.server);
     expect(classifyToolError(envelope("internal_error"))).toBe(
@@ -317,9 +319,13 @@ const makeTtyContext = ({
   const stdoutChunks: string[] = [];
   const stderrChunks: string[] = [];
   const stdout = Object.assign(new PassThrough(), { isTTY });
-  stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk.toString()));
+  stdout.on("data", (chunk: Buffer) => {
+    stdoutChunks.push(chunk.toString());
+  });
   const stderr = Object.assign(new PassThrough(), { isTTY });
-  stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk.toString()));
+  stderr.on("data", (chunk: Buffer) => {
+    stderrChunks.push(chunk.toString());
+  });
   const proc = { stdin, stdout, stderr, exitCode: undefined, env: {} };
   const context: Context = {
     // SAFETY: runLeafCommand only reads stdin/stdout/stderr/exitCode off the
