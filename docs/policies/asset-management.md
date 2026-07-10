@@ -1,7 +1,7 @@
 # Asset Management Policy
 
 **Owner:** Engineering
-**Last reviewed:** 2026-02-22
+**Last reviewed:** 2026-07-10
 **Review cadence:** Annual
 
 ## Purpose
@@ -20,40 +20,41 @@ and container base images used in the Stella monorepo.
 
 ### Software Bill of Materials (SBOM)
 
-1. **CycloneDX SBOM.** A machine-readable SBOM
-   (`sbom.cdx.json`) is generated on every push to `main`
-   that modifies `bun.lock` or any `package.json`. The
-   `sbom.yml` workflow uses `@cyclonedx/cdxgen` to produce a
-   CycloneDX 1.6 inventory of all dependencies with package
-   URLs (PURLs) and license metadata.
+<!-- evidence: asset-provenance-inventory -->
 
-2. **Committed to repository.** The SBOM is committed directly
-   to the repo so that any point-in-time checkout includes a
-   complete dependency snapshot. Build artifacts are also
-   uploaded with 365-day retention.
+1. **CycloneDX SBOM.** The shared provenance workflow generates
+   machine-readable CycloneDX inventories for the JavaScript workspace
+   and the desktop Rust application. Project definitions and output
+   locations are declared in `.provenance.yml`; the scheduled
+   `provenance-nightly.yml` workflow proposes refreshed artifacts through
+   a pull request.
 
-3. **Third-party notices.** The `THIRD-PARTY-NOTICES.txt` file
-   is regenerated alongside the SBOM using
-   `generate-license-file`, providing full license texts for
-   all dependencies. This file is committed to the repository.
+2. **Committed to repository.** SBOMs live under
+   `provenance/projects/<project>/sbom.cdx.json`, so a checkout contains
+   the reviewed dependency snapshot for each configured project.
+
+3. **Third-party notices.** Per-project notice files live beside the
+   SBOMs, with the repository-level aggregate at
+   `provenance/THIRD-PARTY-NOTICES.repo.txt`.
 
 ### Dependency tracking
+
+<!-- evidence: asset-dependency-quarantine -->
 
 4. **Lockfile as source of truth.** `bun.lock` records exact
    resolved versions for all packages. It is committed to the
    repository and integrity-checked during `bun ci` in the CI
    pipeline.
 
-5. **Dependabot monitoring.** Dependabot tracks three
+5. **Dependabot monitoring.** Dependabot tracks four
    ecosystems (`.github/dependabot.yml`):
-   - **Bun packages:** daily checks, grouped by library family
-     (TanStack, Vite, React, Prettier, AI, PostHog, TipTap,
-     AWS, Drizzle, Elysia, RivetKit, oxlint, and others).
+   - **Bun packages:** weekly checks, grouped by library family.
    - **GitHub Actions:** weekly checks, grouped.
    - **Docker base images:** weekly checks.
+   - **Cargo crates:** weekly checks, grouped by runtime family.
 
-   All updates use a 3-day cooldown before adoption. Bun
-   updates ignore patch-level changes (minor and major only).
+   All updates use a five-day cooldown before adoption, aligned with
+   Bun's `minimumReleaseAge` quarantine.
 
 6. **Workspace consistency.** `sherif` runs as a `postinstall`
    hook and is available via `bun run lint:ws`. It flags
@@ -85,8 +86,8 @@ and container base images used in the Stella monorepo.
 
 ## Enforcement
 
-- The SBOM is regenerated automatically; manual updates are
-  not required.
+- Provenance refreshes are proposed automatically and remain reviewable
+  as ordinary repository changes.
 - `sherif` runs on every `bun install`, catching version drift
   before it reaches CI.
 - Dependency review is a required status check on `main`;

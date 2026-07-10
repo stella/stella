@@ -26,6 +26,10 @@ bun.lock                                @jan-kubica
 apps/api/src/lib/auth.ts                @jan-kubica
 apps/api/src/db/auth-schema.ts          @jan-kubica
 
+# Database schema, RLS, connection boundaries, and immutable migrations.
+apps/api/src/db/                        @jan-kubica
+apps/api/drizzle/                       @jan-kubica
+
 # Catalogue curation — only maintainers flip recommendations.
 packages/catalogue/entries/recommended.json   @jan-kubica
 packages/catalogue/MAINTAINERS                @jan-kubica

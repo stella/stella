@@ -1,7 +1,7 @@
 # Vendor and Third-Party Management Policy
 
 **Owner:** Engineering
-**Last reviewed:** 2026-05-01
+**Last reviewed:** 2026-07-10
 **Review cadence:** Annual
 
 ## Purpose
@@ -42,32 +42,31 @@ service SDKs (AI providers, email, analytics, storage).
 
 ### Supply-chain integrity
 
+<!-- evidence: vendor-supply-chain -->
+
 4. **Pinned versions.** All GitHub Actions are referenced by
    full commit SHA in workflow files. The Docker base image is
    pinned by SHA-256 digest. npm dependencies are locked via
    `bun.lock`.
 
-5. **Cooldown period.** Dependabot is configured with a 3-day
+5. **Cooldown period.** Dependabot is configured with a five-day
    cooldown (`open-pull-requests-limit` and schedule
    settings in `.github/dependabot.yml`) before proposing
    updates, reducing exposure to compromised releases that
    are quickly retracted.
 
-6. **Automated updates.** Dependabot submits PRs for outdated
-   dependencies on a defined cadence: daily for runtime
-   packages, weekly for GitHub Actions and Docker images.
+6. **Automated updates.** Dependabot checks Bun packages, GitHub
+   Actions, Docker images, and Cargo crates weekly.
    Updates pass through the same CI gate as any other PR.
 
 ### Inventory and transparency
 
-7. **SBOM.** A CycloneDX 1.6 SBOM (`sbom.cdx.json`) is
-   generated on every dependency change and committed to the
-   repository, providing a machine-readable inventory of all
-   third-party components with PURLs and license metadata.
+7. **SBOM.** CycloneDX inventories are committed under
+   `provenance/projects/`, providing machine-readable component,
+   package-URL, and license metadata for configured projects.
 
-8. **Third-party notices.** `THIRD-PARTY-NOTICES.txt` contains
-   the full license text of every dependency, regenerated
-   automatically alongside the SBOM.
+8. **Third-party notices.** Project and repository notice files under
+   `provenance/` are regenerated alongside the SBOMs.
 
 9. **Dependency grouping.** Dependabot groups related packages
    (e.g., TanStack, TipTap, Drizzle, Elysia) into single PRs,
@@ -85,8 +84,10 @@ service SDKs (AI providers, email, analytics, storage).
 
 ### Provider abstraction
 
-12. **AI provider independence.** AI features use the Vercel
-    AI SDK, which abstracts the underlying model provider.
+<!-- evidence: vendor-provider-abstraction -->
+
+12. **AI provider independence.** AI features use TanStack AI behind
+    Stella's model-role resolver, which abstracts the underlying provider.
     The provider is selectable via configuration, enabling
     failover or migration without rewriting business logic.
 
@@ -99,8 +100,7 @@ service SDKs (AI providers, email, analytics, storage).
 - `dependency-review` is a required status check on `main`;
   PRs introducing blocked licenses or high-severity CVEs
   cannot merge.
-- SBOM generation is automated; no manual inventory
-  maintenance is required.
+- Provenance refreshes are automated and reviewed as pull requests.
 - Pinned SHAs and digests are reviewed during workflow PR
   review; `CODEOWNERS` assigns `.github/` changes to an admin
   reviewer.
