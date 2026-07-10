@@ -7,11 +7,11 @@
 // which parses with try/catch and validates the result against a Valibot
 // schema, returning `null` on any failure.
 //
-// This is a lexical heuristic, not a type-aware or whole-module scope
-// analysis: it tracks, within a single function, `.getItem(` calls whose
+// This is a lexical heuristic, not a type-aware or whole-module data-flow
+// analysis: it tracks, through nested lexical function scopes, `.getItem(` calls whose
 // object chain mentions the literal identifier `localStorage` or
 // `sessionStorage` (direct call, `window.localStorage`, etc.), plus any
-// variable declared directly from such a call in that same function. It
+// variable declared directly from such a call in the same or an enclosing function. It
 // does not follow a value through a generic `Storage`-typed parameter or
 // a helper indirection layer (e.g. a `storage: Storage` parameter chosen
 // at runtime between local/session storage) — those sites are outside
@@ -130,16 +130,58 @@ export default {
         },
       },
       create(context) {
-        // Stack of per-function Sets of variable names assigned directly
-        // from a storage `.getItem()` call. Index 0 covers module/top-level
-        // scope (code outside any function).
-        const storageVarStack: Set<string>[] = [new Set()];
+        type Scope = {
+          declaredNames: Set<string>;
+          storageNames: Set<string>;
+        };
+        const createScope = (): Scope => ({
+          declaredNames: new Set(),
+          storageNames: new Set(),
+        });
+        const storageVarStack: Scope[] = [createScope()];
 
-        const currentScope = (): Set<string> =>
+        const currentScope = (): Scope =>
           storageVarStack.at(-1) ?? storageVarStack[0]!;
 
-        const enterFunction = () => {
-          storageVarStack.push(new Set());
+        const collectBoundNames = (pattern, names: Set<string>) => {
+          const current = peel(pattern);
+          if (!current || typeof current !== "object") {
+            return;
+          }
+          if (current.type === "Identifier") {
+            names.add(current.name);
+            return;
+          }
+          if (current.type === "RestElement") {
+            collectBoundNames(current.argument, names);
+            return;
+          }
+          if (current.type === "AssignmentPattern") {
+            collectBoundNames(current.left, names);
+            return;
+          }
+          if (current.type === "ArrayPattern") {
+            for (const element of current.elements) {
+              collectBoundNames(element, names);
+            }
+            return;
+          }
+          if (current.type === "ObjectPattern") {
+            for (const property of current.properties) {
+              collectBoundNames(
+                property.type === "Property" ? property.value : property,
+                names,
+              );
+            }
+          }
+        };
+
+        const enterFunction = (node) => {
+          const scope = createScope();
+          for (const parameter of node.params ?? []) {
+            collectBoundNames(parameter, scope.declaredNames);
+          }
+          storageVarStack.push(scope);
         };
         const exitFunction = () => {
           if (storageVarStack.length > 1) {
@@ -150,7 +192,7 @@ export default {
         return {
           Program() {
             storageVarStack.length = 1;
-            storageVarStack[0] = new Set();
+            storageVarStack[0] = createScope();
           },
           FunctionDeclaration: enterFunction,
           "FunctionDeclaration:exit": exitFunction,
@@ -160,13 +202,14 @@ export default {
           "ArrowFunctionExpression:exit": exitFunction,
 
           VariableDeclarator(node) {
+            collectBoundNames(node.id, currentScope().declaredNames);
             if (
               node.id.type !== "Identifier" ||
               !isStorageGetItemCall(node.init)
             ) {
               return;
             }
-            currentScope().add(node.id.name);
+            currentScope().storageNames.add(node.id.name);
           },
 
           CallExpression(node) {
@@ -187,9 +230,22 @@ export default {
             ) {
               candidate = peel((candidate as { left: unknown }).left);
             }
-            const flagged =
-              isStorageGetItemCall(candidate) ||
-              (isIdentifier(candidate) && currentScope().has(candidate.name));
+            let trackedVariable = false;
+            if (isIdentifier(candidate)) {
+              for (
+                let index = storageVarStack.length - 1;
+                index >= 0;
+                index--
+              ) {
+                const scope = storageVarStack[index];
+                if (!scope?.declaredNames.has(candidate.name)) {
+                  continue;
+                }
+                trackedVariable = scope.storageNames.has(candidate.name);
+                break;
+              }
+            }
+            const flagged = isStorageGetItemCall(candidate) || trackedVariable;
             if (flagged) {
               context.report({ node, messageId: "noRawStoredJson" });
             }

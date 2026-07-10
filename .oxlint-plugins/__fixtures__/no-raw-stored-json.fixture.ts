@@ -67,6 +67,25 @@ export const viaSessionVariable = () => {
   return JSON.parse(raw);
 };
 
+// MUST flag: a nested callback closes over a storage value declared by the
+// component/helper that created it.
+export const viaEnclosingFunctionVariable = () => {
+  const raw = localStorage.getItem("k");
+  return () => {
+    // oxlint-disable-next-line no-raw-stored-json/no-raw-stored-json
+    return JSON.parse(raw ?? "null");
+  };
+};
+
+// Allowed: an inner declaration shadows the storage-sourced outer value.
+export const shadowedEnclosingVariable = () => {
+  const raw = localStorage.getItem("k");
+  return () => {
+    const raw = sseEventData;
+    return JSON.parse(raw);
+  };
+};
+
 // Allowed — the sanctioned helper, not JSON.parse.
 export const viaHelper = () =>
   readStoredJson(localStorage.getItem("k"), schema);
