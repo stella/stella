@@ -95,7 +95,7 @@ describe("loadOrgAIConfig", () => {
       throw new Error("invalid config");
     });
 
-    expect(
+    await expect(
       decryptOrgAIConfigRowOrThrow({
         decrypt,
         organizationId,
