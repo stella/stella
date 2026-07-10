@@ -1,6 +1,6 @@
 import "./chat-editor.css";
 import { useCallback, useRef } from "react";
-import type { ReactNode } from "react";
+import type { KeyboardEvent, ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -14,7 +14,12 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
-import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
+import {
+  ComposerPlusMenu,
+  type ComposerContextMenuProps,
+  type ComposerModelsMenuProps,
+  type ComposerPlusMenuHandle,
+} from "@/components/chat/composer-plus-menu";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -55,15 +60,34 @@ type ChatInputSurfaceProps = {
    */
   dock?: ReactNode;
   /**
-   * When provided, the (+) menu gains a "Models" item. Omit on surfaces
-   * without a model selector.
+   * When provided, the (+) menu gains a Models submenu. Omit on surfaces
+   * without a model picker.
    */
-  onOpenModelSelector?: (() => void) | undefined;
+  models?: ComposerModelsMenuProps | undefined;
   /**
-   * When provided, the (+) menu gains an "MCP servers" item. Omit on
+   * When provided, the (+) menu gains a Skills submenu, wired to this
+   * surface's own editor. Omit on surfaces without skill insertion
+   * (e.g. `activeOrganizationId` is unavailable).
+   */
+  skillsOrganizationId?: string | undefined;
+  /**
+   * When provided, the (+) menu gains a Context submenu (mention a matter
+   * or one of its files), wired to this surface's own editor. Omit on
+   * surfaces without mention insertion.
+   */
+  context?: Omit<ComposerContextMenuProps, "editor"> | undefined;
+  /**
+   * When provided, the (+) menu gains an MCP Servers submenu. Omit on
    * surfaces that don't navigate to the tools catalogue.
    */
-  onOpenMcpServers?: (() => void) | undefined;
+  mcpOrganizationId?: string | undefined;
+};
+
+const hasBlockingCharacterShortcutModifier = (
+  event: KeyboardEvent<HTMLElement>,
+) => {
+  const isAltGraph = event.getModifierState("AltGraph");
+  return event.metaKey || (!isAltGraph && (event.altKey || event.ctrlKey));
 };
 
 export const ChatInputSurface = ({
@@ -78,11 +102,14 @@ export const ChatInputSurface = ({
   onStop,
   anonymized = false,
   dock,
-  onOpenModelSelector,
-  onOpenMcpServers,
+  models,
+  skillsOrganizationId,
+  context,
+  mcpOrganizationId,
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
+  const plusMenuRef = useRef<ComposerPlusMenuHandle>(null);
   const {
     attachments,
     canSubmit,
@@ -177,7 +204,44 @@ export const ChatInputSurface = ({
         <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
         <div
           className="chat-editor relative min-w-0 overflow-hidden ps-3 pe-3 pt-2 pb-1"
-          onKeyDown={(event) => event.stopPropagation()}
+          onKeyDown={(event) => {
+            // "/" in an empty composer, on a surface with a Skills submenu,
+            // opens the (+) menu at Skills instead of typing the character —
+            // the composer (+) menu replaces the old slash popover here (see
+            // `disableSlashSuggestion` on `useChatEditor`). Modifier
+            // combinations and IME composition fall through untouched; AltGr
+            // is allowed because some layouts emit printable characters with
+            // Ctrl+Alt set.
+            if (
+              skillsOrganizationId !== undefined &&
+              isBlank &&
+              event.key === "/" &&
+              !event.nativeEvent.isComposing &&
+              !hasBlockingCharacterShortcutModifier(event)
+            ) {
+              event.preventDefault();
+              plusMenuRef.current?.openSkills();
+            }
+            // "@" in an empty composer, on a surface with a Context submenu,
+            // opens the (+) menu at Context the same way. Shift is
+            // deliberately NOT excluded: many keyboard layouts (e.g. US
+            // QWERTY) only produce "@" with Shift held, so requiring its
+            // absence would make this unreachable there. A non-empty
+            // composer keeps the existing "@" mention suggestion popover
+            // (`ChatMention` in chat-editor-provider.tsx) untouched — this
+            // only intercepts the empty-composer entry point.
+            if (
+              context !== undefined &&
+              isBlank &&
+              event.key === "@" &&
+              !event.nativeEvent.isComposing &&
+              !hasBlockingCharacterShortcutModifier(event)
+            ) {
+              event.preventDefault();
+              plusMenuRef.current?.openContext();
+            }
+            event.stopPropagation();
+          }}
           role="presentation"
         >
           <PromptEditorContent
@@ -205,10 +269,30 @@ export const ChatInputSurface = ({
         </div>
         <div className="flex items-center justify-end gap-0.5 px-1.5 pb-1.5">
           <ComposerPlusMenu
+            context={
+              context
+                ? {
+                    activeOrganizationId: context.activeOrganizationId,
+                    editor,
+                    threadRef: context.threadRef,
+                  }
+                : undefined
+            }
             disabled={inputDisabled}
+            mcp={
+              mcpOrganizationId
+                ? { activeOrganizationId: mcpOrganizationId }
+                : undefined
+            }
+            models={models}
             onOpenFilePicker={openFilePicker}
-            onOpenMcpServers={onOpenMcpServers}
-            onOpenModelSelector={onOpenModelSelector}
+            onProgrammaticMenuClose={focus}
+            ref={plusMenuRef}
+            skills={
+              skillsOrganizationId
+                ? { activeOrganizationId: skillsOrganizationId, editor }
+                : undefined
+            }
             triggerClassName="me-auto"
           />
           <input

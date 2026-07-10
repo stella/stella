@@ -381,9 +381,21 @@ type Messages = {
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
     "composerMenu": {
+      "context": "Context";
       "mcpServers": "MCP servers";
       "models": "Models";
+      "noFiles": "No files in this matter";
+      "noMatters": "No matters available";
+      "noMcpServers": "No MCP servers available";
+      "noSkills": "No skills available";
       "open": "Open attachments and tools menu";
+      "openMcpSettings": "Open MCP Settings";
+      "openSkills": "Open Skills";
+      "referenceMatter": "Reference this matter";
+      "searchFiles": "Search files";
+      "searchMatters": "Search matters";
+      "searchMcpServers": "Search MCP servers...";
+      "searchSkills": "Search skills";
     };
     "contextMeter": {
       "attachments": "Attached documents";

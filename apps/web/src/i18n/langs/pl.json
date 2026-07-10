@@ -378,9 +378,21 @@
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
     "composerMenu": {
+      "context": "Kontekst",
       "mcpServers": "Serwery MCP",
       "models": "Modele",
-      "open": "Otwórz menu załączników i narzędzi"
+      "noFiles": "Brak plików w tej sprawie",
+      "noMatters": "Brak dostępnych spraw",
+      "noMcpServers": "Brak dostępnych serwerów MCP",
+      "noSkills": "Brak dostępnych umiejętności",
+      "open": "Otwórz menu załączników i narzędzi",
+      "openMcpSettings": "Otwórz ustawienia MCP",
+      "openSkills": "Otwórz umiejętności",
+      "referenceMatter": "Odwołaj się do tej sprawy",
+      "searchFiles": "Szukaj plików",
+      "searchMatters": "Szukaj spraw",
+      "searchMcpServers": "Szukaj serwerów MCP...",
+      "searchSkills": "Szukaj umiejętności"
     },
     "contextMeter": {
       "attachments": "Załączone dokumenty",

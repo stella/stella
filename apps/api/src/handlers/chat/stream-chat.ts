@@ -118,6 +118,12 @@ type StreamChatFinishEvent = {
 
 type StreamChatProps = {
   abortSignal: AbortSignal;
+  /**
+   * Explicit chat model override for this turn: the dev-only
+   * `body.devModelId`, or (in prod) a validated per-thread selection
+   * already resolved by `resolveEffectiveChatModelId`. Undefined falls
+   * through to the org/instance chat-role default.
+   */
   devModelId?: string | undefined;
   latestMessageId: string;
   messages: ChatMessage[];

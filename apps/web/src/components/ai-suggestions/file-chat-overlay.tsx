@@ -1686,7 +1686,7 @@ const FileChatOverlayInner = ({
           dock={
             <ChatComposerDock
               data={data}
-              onNewThread={startNewThread}
+              onNewThread={hasMessages ? startNewThread : null}
               leadingContext={
                 // The matter control is a real picker on every surface, so
                 // the user can widen or narrow the file chat's context just

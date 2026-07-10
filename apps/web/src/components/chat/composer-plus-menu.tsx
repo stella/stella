@@ -1,41 +1,211 @@
-import { CpuIcon, PaperclipIcon, PlusIcon, ServerIcon } from "lucide-react";
+import { useImperativeHandle, useMemo, useRef, useState } from "react";
+import type { Ref } from "react";
+
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
+import type { Editor } from "@tiptap/core";
+import { Result } from "better-result";
+import {
+  AtSignIcon,
+  BookOpenIcon,
+  CpuIcon,
+  PaperclipIcon,
+  PlusIcon,
+  SearchIcon,
+  ServerIcon,
+} from "lucide-react";
+import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/components/input-group";
+import {
   Menu,
+  MenuCheckboxItem,
   MenuItem,
   MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
+
+import { PROVIDER_LABELS } from "@/components/ai-config-role-models.logic";
+import {
+  buildChatSlashItems,
+  commandShortcutRowsFromSkillPages,
+} from "@/components/chat-editor-slash-items";
+import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import {
+  buildEntityMentionOption,
+  buildWorkspaceMentionOptions,
+  CHAT_MENTION_ENTITY_RESULT_LIMIT,
+  CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  getMentionViewScope,
+  insertChatMention,
+} from "@/components/chat-mention-helpers";
+import { MentionIcon } from "@/components/chat-mention-list";
+import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
+import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
+import type { SlashItem } from "@/components/chat/prompt-slash-extension";
+import { MatterIcon } from "@/components/matter-icon";
+import { api } from "@/lib/api";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { toSafeId } from "@/lib/safe-id";
+import { modelOptionsOptions } from "@/routes/_protected.chat/-queries";
+import {
+  knowledgeKeys,
+  mcpConnectionsOptions,
+  mcpConnectorsOptions,
+  skillsOptions,
+} from "@/routes/_protected.knowledge/-queries";
+import { useEntitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
+import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+
+const PROVIDER_LABEL_FALLBACKS: Readonly<Partial<Record<string, string>>> =
+  PROVIDER_LABELS;
+
+/** Enables and drives the Models submenu. Omit on surfaces without a model
+ *  picker (the API expects a per-thread `PATCH .../model` target). */
+export type ComposerModelsMenuProps = {
+  activeOrganizationId: string;
+  threadRef: ChatThreadRef;
+  /** Current per-thread override ("provider::modelId"), or null when the
+   *  thread uses the org default. */
+  selectedModel: string | null;
+  /** Persist the chosen model (see `useChatModelSelection`). Fire-and-forget
+   *  here: the caller's own send path is what awaits the outcome via
+   *  `awaitPendingSelection`, not this submenu. */
+  selectModel: (model: string | null) => void;
+};
+
+/** Enables and drives the Skills submenu. Reuses the same data source and
+ *  chip content as the composer's `/` slash menu. */
+export type ComposerSkillsMenuProps = {
+  activeOrganizationId: string;
+  editor: Editor | null;
+};
+
+/** Enables and drives the Context submenu: reference a matter, or a file
+ *  inside one, as a mention chip. Reuses the same matter/entity data
+ *  sources and the same mention-chip shape as the "@" suggestion popover. */
+export type ComposerContextMenuProps = {
+  activeOrganizationId: string;
+  editor: Editor | null;
+  /** Scopes an inserted file/matter mention's `sourceWorkspaceId`: omitted
+   *  when the referenced matter is already the thread's own workspace,
+   *  mirroring the "@" popover's cross-matter bookkeeping. */
+  threadRef: ChatThreadRef;
+};
 
 type ComposerPlusMenuProps = {
   disabled: boolean;
   onOpenFilePicker: () => void;
-  onOpenModelSelector?: (() => void) | undefined;
-  onOpenMcpServers?: (() => void) | undefined;
+  models?: ComposerModelsMenuProps | undefined;
+  skills?: ComposerSkillsMenuProps | undefined;
+  /** Enables the Context submenu (mention a matter or one of its files);
+   *  omit on surfaces without a mention-insertion target. */
+  context?: ComposerContextMenuProps | undefined;
+  /** Enables the MCP Servers submenu; omit on surfaces without a tools
+   *  catalogue link. */
+  mcp?: { activeOrganizationId: string } | undefined;
   /** Positioning for the trigger button, differing per slot: absolute on the
    *  empty placeholder line, `me-auto` at the start of the bottom action row. */
   triggerClassName?: string | undefined;
+  /**
+   * Fired when the menu closes (Escape, outside click, or a selection) after
+   * having been opened programmatically via the imperative handle's
+   * `openSkills()`/`openContext()` — the "/" and "@" triggers on chat
+   * surfaces with a Skills/Context submenu. Never fired for a menu opened
+   * through the ordinary (+) click/hover path. Lets the caller return focus
+   * to the editor instead of Base UI's default post-close focus target (the
+   * trigger button).
+   */
+  onProgrammaticMenuClose?: (() => void) | undefined;
+  ref?: Ref<ComposerPlusMenuHandle>;
+};
+
+/** Imperative handle exposing the "/" and "@" trigger entry points: opens
+ *  the (+) menu with the Skills or Context submenu already open and its
+ *  search input focused, without requiring a real hover/click sequence. */
+export type ComposerPlusMenuHandle = {
+  openSkills: () => void;
+  openContext: () => void;
 };
 
 // The composer's (+) affordance: a single Menu rendered into whichever slot the
 // composer state calls for. A circular, filled button (not a bare ghost icon)
-// carrying the attach / models / MCP actions. Shared by every chat surface (main
-// chat, inspector side chat, file-chat overlay) so the affordance can never
-// drift; Models and MCP items appear only when the surface passes a callback.
+// carrying attach / models / skills / MCP actions, the latter three as
+// hover-opening submenus (Cursor's (+) pattern). Shared by every chat surface
+// so the affordance can never drift; each submenu appears only when the
+// surface passes the matching prop. The three submenus' list queries are
+// gated on the root menu's open state, so opening (+) — not mounting the
+// composer — is what triggers the fetches.
 export const ComposerPlusMenu = ({
   disabled,
   onOpenFilePicker,
-  onOpenModelSelector,
-  onOpenMcpServers,
+  models,
+  skills,
+  context,
+  mcp,
   triggerClassName,
+  onProgrammaticMenuClose,
+  ref,
 }: ComposerPlusMenuProps) => {
   const t = useTranslations();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [skillsSubmenuOpen, setSkillsSubmenuOpen] = useState(false);
+  const [contextSubmenuOpen, setContextSubmenuOpen] = useState(false);
+  // Set only by `openSkills()`/`openContext()` below; consulted (and
+  // cleared) the next time the root menu closes, so only a "/" or "@"
+  // triggered open reroutes focus back to the editor on close — an
+  // ordinary (+) click/Escape still falls back to Base UI's default
+  // (return focus to the trigger button).
+  const openedProgrammaticallyRef = useRef(false);
+
+  useImperativeHandle(ref, () => ({
+    openSkills: () => {
+      openedProgrammaticallyRef.current = true;
+      setMenuOpen(true);
+      setSkillsSubmenuOpen(true);
+    },
+    openContext: () => {
+      openedProgrammaticallyRef.current = true;
+      setMenuOpen(true);
+      setContextSubmenuOpen(true);
+    },
+  }));
+
+  const handleMenuOpenChange = (open: boolean) => {
+    setMenuOpen(open);
+    if (open) {
+      return;
+    }
+    setSkillsSubmenuOpen(false);
+    setContextSubmenuOpen(false);
+    if (openedProgrammaticallyRef.current) {
+      openedProgrammaticallyRef.current = false;
+      onProgrammaticMenuClose?.();
+    }
+  };
 
   return (
-    <Menu>
+    <Menu onOpenChange={handleMenuOpenChange} open={menuOpen}>
       <MenuTrigger
         aria-label={t("chat.composerMenu.open")}
         disabled={disabled}
@@ -58,19 +228,743 @@ export const ComposerPlusMenu = ({
           <PaperclipIcon />
           {t("chat.attachFile")}
         </MenuItem>
-        {onOpenModelSelector && (
-          <MenuItem onClick={onOpenModelSelector}>
-            <CpuIcon />
-            {t("chat.composerMenu.models")}
-          </MenuItem>
+        {models && <ComposerModelsSubmenu enabled={menuOpen} models={models} />}
+        {skills && (
+          <ComposerSkillsSubmenu
+            enabled={menuOpen}
+            onOpenChange={setSkillsSubmenuOpen}
+            open={skillsSubmenuOpen}
+            skills={skills}
+          />
         )}
-        {onOpenMcpServers && (
-          <MenuItem onClick={onOpenMcpServers}>
-            <ServerIcon />
-            {t("chat.composerMenu.mcpServers")}
-          </MenuItem>
+        {context && (
+          <ComposerContextSubmenu
+            context={context}
+            enabled={menuOpen}
+            onOpenChange={setContextSubmenuOpen}
+            open={contextSubmenuOpen}
+          />
         )}
+        {mcp && <ComposerMcpSubmenu enabled={menuOpen} mcp={mcp} />}
       </MenuPopup>
     </Menu>
+  );
+};
+
+// Base UI's Menu intercepts keystrokes for typeahead and arrow-key
+// navigation, which would hijack typing in a nested search input. Every
+// submenu's search field stops propagation for all keys except the ones
+// the menu still needs: Escape to close, Up/Down to move the highlight,
+// Enter to activate the highlighted item.
+const MENU_NAV_KEYS = new Set(["Escape", "ArrowDown", "ArrowUp", "Enter"]);
+
+type ComposerSubmenuSearchProps = {
+  onChange: (value: string) => void;
+  placeholder: string;
+  ref: React.RefObject<HTMLInputElement | null>;
+  value: string;
+};
+
+const ComposerSubmenuSearch = ({
+  onChange,
+  placeholder,
+  ref,
+  value,
+}: ComposerSubmenuSearchProps) => (
+  <div className="px-2 pt-1.5 pb-2">
+    <InputGroup>
+      <InputGroupAddon>
+        <SearchIcon />
+      </InputGroupAddon>
+      <InputGroupInput
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+        onKeyDown={(event) => {
+          if (!MENU_NAV_KEYS.has(event.key)) {
+            event.stopPropagation();
+          }
+        }}
+        placeholder={placeholder}
+        ref={ref}
+        size="sm"
+        value={value}
+      />
+    </InputGroup>
+  </div>
+);
+
+const ComposerSubmenuEmpty = ({ children }: { children: React.ReactNode }) => (
+  <p className="text-muted-foreground px-2.5 py-2 text-xs">{children}</p>
+);
+
+/** Deferred focus: Base UI's own focus-trap logic runs first when a
+ *  submenu opens, so a plain `autoFocus` on the input loses the race. */
+const focusSearchOnOpen = (ref: React.RefObject<HTMLInputElement | null>) => {
+  setTimeout(() => ref.current?.focus(), 0);
+};
+
+const ComposerModelsSubmenu = ({
+  enabled,
+  models,
+}: {
+  enabled: boolean;
+  models: ComposerModelsMenuProps;
+}) => {
+  const t = useTranslations();
+  const { activeOrganizationId, selectedModel, selectModel } = models;
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const { data, isPending: isLoadingModels } = useQuery({
+    ...modelOptionsOptions(activeOrganizationId),
+    enabled,
+  });
+
+  const rows = useMemo(() => {
+    const allRows = [
+      { value: "", label: t("chat.modelSelector.defaultLabel") },
+    ];
+    if (data) {
+      for (const option of data.options) {
+        allRows.push({
+          value: option.value,
+          label: `${PROVIDER_LABEL_FALLBACKS[option.provider] ?? option.provider} · ${option.modelId}`,
+        });
+      }
+    }
+    const query = search.trim().toLowerCase();
+    if (!query) {
+      return allRows;
+    }
+    return allRows.filter((row) => row.label.toLowerCase().includes(query));
+  }, [data, search, t]);
+
+  const handleSelect = (value: string) => {
+    const model = value === "" ? null : value;
+    if (model === selectedModel) {
+      return;
+    }
+    selectModel(model);
+  };
+
+  return (
+    <MenuSub
+      onOpenChange={(open) => {
+        if (open) {
+          focusSearchOnOpen(searchRef);
+        } else {
+          setSearch("");
+        }
+      }}
+    >
+      <MenuSubTrigger>
+        <CpuIcon />
+        {t("chat.composerMenu.models")}
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-64">
+        <ComposerSubmenuSearch
+          onChange={setSearch}
+          // Reuses the AI-config role-model picker's placeholder (same
+          // wording, same purpose) instead of adding a duplicate key.
+          placeholder={t("organization.aiConfig.modelIdPlaceholder")}
+          ref={searchRef}
+          value={search}
+        />
+        {isLoadingModels ? (
+          <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+        ) : (
+          <MenuRadioGroup value={selectedModel ?? ""}>
+            {rows.map((row) => (
+              <MenuRadioItem
+                // `minmax(0,1fr)` lets the label cell shrink so `truncate`
+                // applies; the default `1fr` track sizes to the longest model
+                // id and forces horizontal overflow (same fix as the matters
+                // picker's TRUNCATING_ITEM_CLASS).
+                className="grid-cols-[1rem_minmax(0,1fr)]"
+                key={row.value || "default"}
+                onClick={() => {
+                  handleSelect(row.value);
+                }}
+                value={row.value}
+              >
+                {/* `block`: the radio item's own children wrapper is inline,
+                    and `truncate`'s overflow clipping is inert on inline
+                    elements. */}
+                <span className="block truncate">{row.label}</span>
+              </MenuRadioItem>
+            ))}
+          </MenuRadioGroup>
+        )}
+      </MenuSubPopup>
+    </MenuSub>
+  );
+};
+
+const itemName = (item: SlashItem): string => {
+  if (item.kind === "prompt") {
+    return item.prompt.name;
+  }
+  if (item.kind === "skill") {
+    return item.skill.name;
+  }
+  return item.command.name;
+};
+
+const itemKey = (item: SlashItem): string => {
+  if (item.kind === "prompt") {
+    return `prompt-${item.prompt.id}`;
+  }
+  if (item.kind === "skill") {
+    return `skill-${item.skill.id}`;
+  }
+  return `command-${item.command.id}`;
+};
+
+/** Secondary, muted line under an item's name — mirrors the `/`-suggestion
+ *  list's row shape (prompt body / skill description) so both surfaces
+ *  read as one consistent picker. This submenu's items never include
+ *  reserved commands (`buildChatSlashItems` is called without
+ *  `includeReservedCommands`), so the command branch is unreachable here
+ *  but kept for exhaustiveness with `SlashItem`. */
+const itemSecondary = (item: SlashItem): string => {
+  if (item.kind === "prompt") {
+    return item.prompt.body;
+  }
+  if (item.kind === "skill") {
+    return item.skill.description;
+  }
+  return item.command.command;
+};
+
+const ComposerSkillsSubmenu = ({
+  enabled,
+  onOpenChange,
+  open,
+  skills,
+}: {
+  enabled: boolean;
+  /** Controlled open state so the "/" trigger can force this specific
+   *  submenu open alongside the root menu (see `ComposerPlusMenuHandle`). */
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+  skills: ComposerSkillsMenuProps;
+}) => {
+  const t = useTranslations();
+  const navigate = useNavigate();
+  const { activeOrganizationId, editor } = skills;
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isPending: isLoadingSkills,
+  } = useInfiniteQuery({
+    ...skillsOptions(activeOrganizationId),
+    enabled,
+  });
+
+  const shortcutRows = useMemo(
+    () => commandShortcutRowsFromSkillPages(data?.pages),
+    [data?.pages],
+  );
+  // `includeReservedCommands` defaults to false, so `/new` and `/model`
+  // never appear here — only saved prompts and enabled skills.
+  const items = useMemo(
+    () =>
+      buildChatSlashItems({ shortcuts: shortcutRows, skillPages: data?.pages }),
+    [shortcutRows, data?.pages],
+  );
+
+  const query = search.trim().toLowerCase();
+  const filteredItems = query
+    ? items.filter((item) => itemName(item).toLowerCase().includes(query))
+    : items;
+
+  const handleSelect = (item: SlashItem) => {
+    if (!editor || editor.isDestroyed) {
+      return;
+    }
+    insertPastedTextChip(editor, slashItemChipAttrs(item));
+  };
+
+  let skillItemsContent: React.ReactNode;
+  if (isLoadingSkills) {
+    skillItemsContent = (
+      <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+    );
+  } else if (filteredItems.length === 0) {
+    skillItemsContent = (
+      <ComposerSubmenuEmpty>
+        {t("chat.composerMenu.noSkills")}
+      </ComposerSubmenuEmpty>
+    );
+  } else {
+    skillItemsContent = filteredItems.map((item) => (
+      <MenuItem
+        key={itemKey(item)}
+        onClick={() => {
+          handleSelect(item);
+        }}
+      >
+        <BookOpenIcon className="self-start" />
+        <span className="min-w-0 flex-1">
+          <BidiText as="span" className="block truncate text-sm">
+            {itemName(item)}
+          </BidiText>
+          <BidiText
+            as="span"
+            className="text-muted-foreground block truncate text-xs"
+          >
+            {itemSecondary(item)}
+          </BidiText>
+        </span>
+      </MenuItem>
+    ));
+  }
+
+  return (
+    <MenuSub
+      onOpenChange={(nextOpen) => {
+        onOpenChange(nextOpen);
+        if (nextOpen) {
+          focusSearchOnOpen(searchRef);
+        } else {
+          setSearch("");
+        }
+      }}
+      open={open}
+    >
+      <MenuSubTrigger>
+        <BookOpenIcon />
+        {/* Reuses the chat landing page's "Skills" section label (same
+            value) instead of adding a duplicate key. */}
+        {t("chat.landing.prompts")}
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-72">
+        <ComposerSubmenuSearch
+          onChange={setSearch}
+          placeholder={t("chat.composerMenu.searchSkills")}
+          ref={searchRef}
+          value={search}
+        />
+        {skillItemsContent}
+        {hasNextPage && (
+          <MenuItem
+            disabled={isFetchingNextPage}
+            onClick={() => {
+              void fetchNextPage();
+            }}
+          >
+            {isFetchingNextPage ? t("common.loading") : t("common.loadMore")}
+          </MenuItem>
+        )}
+        <MenuSeparator />
+        <MenuItem
+          onClick={() => {
+            void navigate({
+              to: "/knowledge/tools",
+              search: { kind: "skill" },
+            });
+          }}
+        >
+          {t("chat.composerMenu.openSkills")}
+        </MenuItem>
+      </MenuSubPopup>
+    </MenuSub>
+  );
+};
+
+type ContextMatter = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
+// Top level of the Context submenu: search-filtered matters, each a nested
+// hover-opening submenu (see `ComposerContextMatterSub`) rather than a
+// selectable leaf — picking a matter row's own mention happens one level
+// down, alongside its files, so the same click target isn't overloaded with
+// "open the submenu" and "insert a mention" at once. Kept to one kind
+// (files) for now; other referenceable kinds (tasks, etc.) would slot in
+// next to `ComposerContextMatterSub`'s file list without changing this
+// level's shape.
+const ComposerContextSubmenu = ({
+  context,
+  enabled,
+  onOpenChange,
+  open,
+}: {
+  context: ComposerContextMenuProps;
+  enabled: boolean;
+  /** Controlled open state so the "@" trigger can force this specific
+   *  submenu open alongside the root menu (see `ComposerPlusMenuHandle`). */
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
+}) => {
+  const t = useTranslations();
+  const { activeOrganizationId, editor, threadRef } = context;
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  // Same navigation list `ChatMatterPicker` and the "@" popover's workspace
+  // mentions read from — no dedicated endpoint for this submenu.
+  const { data } = useQuery({
+    ...workspacesNavigationOptions(activeOrganizationId),
+    enabled,
+  });
+  const matters: ContextMatter[] = data ? data.workspaces : [];
+
+  const query = search.trim().toLowerCase();
+  const filteredMatters = query
+    ? matters.filter((matter) => matter.name.toLowerCase().includes(query))
+    : matters;
+
+  return (
+    <MenuSub
+      onOpenChange={(nextOpen) => {
+        onOpenChange(nextOpen);
+        if (nextOpen) {
+          focusSearchOnOpen(searchRef);
+        } else {
+          setSearch("");
+        }
+      }}
+      open={open}
+    >
+      <MenuSubTrigger>
+        <AtSignIcon />
+        {t("chat.composerMenu.context")}
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-72">
+        <ComposerSubmenuSearch
+          onChange={setSearch}
+          placeholder={t("chat.composerMenu.searchMatters")}
+          ref={searchRef}
+          value={search}
+        />
+        {filteredMatters.length === 0 ? (
+          <ComposerSubmenuEmpty>
+            {t("chat.composerMenu.noMatters")}
+          </ComposerSubmenuEmpty>
+        ) : (
+          filteredMatters.map((matter) => (
+            <ComposerContextMatterSub
+              editor={editor}
+              key={matter.id}
+              matter={matter}
+              threadRef={threadRef}
+            />
+          ))
+        )}
+      </MenuSubPopup>
+    </MenuSub>
+  );
+};
+
+// One matter's nested submenu: a leading row to mention the matter itself
+// (selecting the parent row only opens this submenu, so the matter-level
+// mention needs its own target), then the matter's files — fetched lazily,
+// only once this specific submenu opens, and scoped to the matter's first
+// view exactly like the "@" popover's workspace drill-down
+// (`loadWorkspaceEntities` in chat-editor-provider.tsx).
+const ComposerContextMatterSub = ({
+  editor,
+  matter,
+  threadRef,
+}: {
+  editor: Editor | null;
+  matter: ContextMatter;
+  threadRef: ChatThreadRef;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  const { data: views, isPending: isLoadingViews } = useQuery({
+    ...viewsOptions(matter.id),
+    enabled: open,
+  });
+  const activeView = views?.at(0) ?? null;
+  const { filters, sorts } = useMemo(
+    () => getMentionViewScope(activeView?.layout),
+    [activeView?.layout],
+  );
+  // Same 150ms settle window as the "@" popover's entity search
+  // (`debouncedSearchEntities` in chat-editor-provider.tsx), so typing here
+  // produces the same request cadence instead of a query per keystroke.
+  const [debouncedSearch] = useDebounce(
+    search.trim(),
+    CHAT_MENTION_SEARCH_DEBOUNCE_MS,
+  );
+  const entitiesKey = useMemo(
+    () => ({
+      workspaceId: matter.id,
+      filters,
+      sorts,
+      ...(debouncedSearch && { search: debouncedSearch }),
+      pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+    }),
+    [debouncedSearch, filters, matter.id, sorts],
+  );
+  const { data: entitiesData } = useQuery({
+    ...useEntitiesOptions(entitiesKey),
+    enabled: open && views !== undefined,
+  });
+
+  // Cross-matter bookkeeping mirrors `fetchWorkspaceEntities`: only stamp a
+  // `sourceWorkspaceId` when the file's matter differs from the thread's own
+  // workspace, so a same-matter mention stays byte-identical to one typed
+  // via "@" in that matter's own chat.
+  const sourceWorkspaceId =
+    threadRef.scope === "workspace" && threadRef.workspaceId === matter.id
+      ? undefined
+      : matter.id;
+  const fileOptions = useMemo<ChatMentionOption[]>(() => {
+    if (!entitiesData) {
+      return [];
+    }
+    return entitiesData.entities.map((entity) =>
+      buildEntityMentionOption({ entity, sourceWorkspaceId }),
+    );
+  }, [entitiesData, sourceWorkspaceId]);
+  const matterMentionOption = useMemo<ChatMentionOption | undefined>(
+    () =>
+      buildWorkspaceMentionOptions({
+        workspaces: [{ id: matter.id, name: matter.name }],
+        firstViewIdsByWorkspaceId: undefined,
+      }).at(0),
+    [matter.id, matter.name],
+  );
+
+  const handleSelect = (option: ChatMentionOption) => {
+    if (!editor || editor.isDestroyed) {
+      return;
+    }
+    insertChatMention(editor, option);
+  };
+
+  const renderFileOptions = () => {
+    if (isLoadingViews || !entitiesData) {
+      return <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>;
+    }
+    if (fileOptions.length === 0) {
+      return (
+        <ComposerSubmenuEmpty>
+          {t("chat.composerMenu.noFiles")}
+        </ComposerSubmenuEmpty>
+      );
+    }
+    return fileOptions.map((option) => (
+      <MenuItem
+        key={option.id}
+        onClick={() => {
+          handleSelect(option);
+        }}
+      >
+        <MentionIcon
+          category={option.category}
+          id={option.id}
+          kind={option.kind}
+          mimeType={option.mimeType}
+        />
+        <BidiText as="span" className="min-w-0 flex-1 truncate">
+          {option.label}
+        </BidiText>
+      </MenuItem>
+    ));
+  };
+
+  return (
+    <MenuSub
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (nextOpen) {
+          focusSearchOnOpen(searchRef);
+        } else {
+          setSearch("");
+        }
+      }}
+    >
+      <MenuSubTrigger>
+        <MatterIcon
+          className="size-3.5 shrink-0"
+          matter={{ id: matter.id, color: matter.color }}
+        />
+        <BidiText as="span" className="min-w-0 flex-1 truncate">
+          {matter.name}
+        </BidiText>
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-72">
+        <ComposerSubmenuSearch
+          onChange={setSearch}
+          placeholder={t("chat.composerMenu.searchFiles")}
+          ref={searchRef}
+          value={search}
+        />
+        {matterMentionOption && (
+          <MenuItem
+            onClick={() => {
+              handleSelect(matterMentionOption);
+            }}
+          >
+            <MatterIcon
+              className="size-3.5 shrink-0"
+              matter={{ id: matter.id, color: matter.color }}
+            />
+            <span className="min-w-0 flex-1">
+              <BidiText as="span" className="block truncate text-sm">
+                {matter.name}
+              </BidiText>
+              <BidiText
+                as="span"
+                className="text-muted-foreground block truncate text-xs"
+              >
+                {t("chat.composerMenu.referenceMatter")}
+              </BidiText>
+            </span>
+          </MenuItem>
+        )}
+        <MenuSeparator />
+        {renderFileOptions()}
+      </MenuSubPopup>
+    </MenuSub>
+  );
+};
+
+const ComposerMcpSubmenu = ({
+  enabled,
+  mcp,
+}: {
+  enabled: boolean;
+  mcp: { activeOrganizationId: string };
+}) => {
+  const t = useTranslations();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { activeOrganizationId } = mcp;
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+  const { data: connectorsData, isPending: isLoadingConnectors } = useQuery({
+    ...mcpConnectorsOptions(activeOrganizationId),
+    enabled,
+  });
+  const { data: connectionsData, isPending: isLoadingConnections } = useQuery({
+    ...mcpConnectionsOptions(activeOrganizationId),
+    enabled,
+  });
+
+  const connectionBySlug = useMemo(() => {
+    const map = new Map<
+      string,
+      NonNullable<typeof connectionsData>["connections"][number]
+    >();
+    if (connectionsData) {
+      for (const connection of connectionsData.connections) {
+        map.set(connection.connectorSlug, connection);
+      }
+    }
+    return map;
+  }, [connectionsData]);
+
+  const query = search.trim().toLowerCase();
+  const connectors = connectorsData ? connectorsData.connectors : [];
+  const rows = query
+    ? connectors.filter((connector) =>
+        connector.displayName.toLowerCase().includes(query),
+      )
+    : connectors;
+
+  const openMcpSettings = () => {
+    void navigate({ to: "/knowledge/tools", search: { kind: "mcp" } });
+  };
+
+  const handleToggle = async (connectionId: string, nextEnabled: boolean) => {
+    const result = await Result.tryPromise(
+      async () =>
+        await api.mcp
+          .connections({
+            connectionId: toSafeId<"mcpUserConnection">(connectionId),
+          })
+          .patch({ enabled: nextEnabled, queryKey: ["mcp"] }),
+    );
+    if (Result.isError(result) || result.value.error) {
+      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+      return;
+    }
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.mcp.connections(activeOrganizationId),
+    });
+  };
+
+  let mcpRowsContent: React.ReactNode;
+  if (isLoadingConnectors || isLoadingConnections) {
+    mcpRowsContent = (
+      <ComposerSubmenuEmpty>{t("common.loading")}</ComposerSubmenuEmpty>
+    );
+  } else if (rows.length === 0) {
+    mcpRowsContent = (
+      <ComposerSubmenuEmpty>
+        {t("chat.composerMenu.noMcpServers")}
+      </ComposerSubmenuEmpty>
+    );
+  } else {
+    mcpRowsContent = rows.map((connector) => {
+      const connection = connectionBySlug.get(connector.slug);
+      if (!connection) {
+        return (
+          <MenuItem key={connector.id} onClick={openMcpSettings}>
+            <BidiText as="span" className="truncate">
+              {connector.displayName}
+            </BidiText>
+          </MenuItem>
+        );
+      }
+      return (
+        <MenuCheckboxItem
+          checked={connection.enabled}
+          closeOnClick={false}
+          key={connector.id}
+          onClick={() => {
+            void handleToggle(connection.id, !connection.enabled);
+          }}
+        >
+          <BidiText as="span" className="truncate">
+            {connector.displayName}
+          </BidiText>
+        </MenuCheckboxItem>
+      );
+    });
+  }
+
+  return (
+    <MenuSub
+      onOpenChange={(open) => {
+        if (open) {
+          focusSearchOnOpen(searchRef);
+        } else {
+          setSearch("");
+        }
+      }}
+    >
+      <MenuSubTrigger>
+        <ServerIcon />
+        {t("chat.composerMenu.mcpServers")}
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-64">
+        <ComposerSubmenuSearch
+          onChange={setSearch}
+          placeholder={t("chat.composerMenu.searchMcpServers")}
+          ref={searchRef}
+          value={search}
+        />
+        {mcpRowsContent}
+        <MenuSeparator />
+        <MenuItem onClick={openMcpSettings}>
+          {t("chat.composerMenu.openMcpSettings")}
+        </MenuItem>
+      </MenuSubPopup>
+    </MenuSub>
   );
 };

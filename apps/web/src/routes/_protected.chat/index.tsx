@@ -2,6 +2,7 @@ import { useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import {
+  queryOptions,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -13,6 +14,7 @@ import {
   Link,
   useNavigate,
 } from "@tanstack/react-router";
+import { Result } from "better-result";
 import {
   HistoryIcon,
   MessageSquareIcon,
@@ -57,10 +59,12 @@ import { formatRelativeTime } from "@/lib/relative-time";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { useChatModelSelection } from "@/routes/_protected.chat/-hooks/use-chat-model-selection";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
   acquireChatRuntime,
+  applyChatModelChange,
   chatThreadOptions,
   groupedChatThreadsOptions,
   invalidateGroupedChatThreads,
@@ -95,7 +99,11 @@ function ChatIndex() {
     scope: "global",
     threadId: draftThreadId,
   };
-  const controller = useChatEditor({ reservedCommands: true, threadRef });
+  const controller = useChatEditor({
+    disableSlashSuggestion: true,
+    reservedCommands: true,
+    threadRef,
+  });
   const prompts = useSavedPrompts();
   const pinnedOrder = usePinnedStore((s) => s.pinnedOrder);
   const canCreateMatter = usePermissions({ workspace: ["create"] });
@@ -123,14 +131,14 @@ function ChatIndex() {
   // We deliberately don't reuse `chatThreadOptions` here because that
   // helper instantiates a stateful `Chat<>` inside its queryFn on
   // every miss; doing so on the chat-home render path froze the
-  // tab. We only need `webSearchAvailable` + `webSearchEnabled`,
-  // so a plain GET against the messages endpoint is enough.
+  // tab. We only need `webSearchAvailable` + `webSearchEnabled` +
+  // `model`, so a plain GET against the messages endpoint is enough.
   // Key shape mirrors `chatKeys.thread` up to position 4 so
   // `invalidateChatThread({ queryClient, threadRef })` (fired by
   // <ChatWebSearchToggle> on every PATCH) refetches us. Without
   // that match the toggle would flip server-side but the local
   // `webSearchEnabled` shown by this query would stay stale.
-  const { data: chatDraftMeta } = useQuery({
+  const draftMetaOptions = queryOptions({
     queryKey: [
       "chat",
       activeOrganizationId,
@@ -150,8 +158,29 @@ function ChatIndex() {
       return {
         webSearchAvailable: response.data.webSearchAvailable,
         webSearchEnabled: response.data.webSearchEnabled,
+        model: response.data.model,
+        // The draft's cache-stable context floor (system prompt + tools), so
+        // the hero meter shows the honest baseline instead of 0% before send.
+        context: response.data.context,
       };
     },
+  });
+  const { data: chatDraftMeta } = useQuery(draftMetaOptions);
+
+  // Persists the composer's Models submenu selection and gates the
+  // route-handoff send below on the outcome (see `onSubmit`) so a send can
+  // never race a just-changed model onto the thread's previous one. Same
+  // hook `ChatThreadPage` uses; keeps both surfaces' sequencing identical.
+  const modelSelection = useChatModelSelection({
+    onPersisted: (model) => {
+      applyChatModelChange({
+        model,
+        queryClient,
+        queryKey: draftMetaOptions.queryKey,
+        threadId: toSafeId<"chatThread">(draftThreadId),
+      });
+    },
+    threadRef,
   });
 
   // Mirror the per-thread seeding from ChatThreadPage: if the user
@@ -348,26 +377,27 @@ function ChatIndex() {
             <ChatInputSurface
               anonymized={anonymized}
               autoFocus
+              context={{ activeOrganizationId, threadRef }}
               controller={controller}
               variant="large"
-              onOpenMcpServers={() => {
-                void navigate({
-                  to: "/knowledge/tools",
-                  search: { kind: "mcp" },
-                });
+              mcpOrganizationId={activeOrganizationId}
+              models={{
+                activeOrganizationId,
+                threadRef,
+                selectedModel: chatDraftMeta?.model ?? null,
+                selectModel: modelSelection.selectModel,
               }}
-              onOpenModelSelector={() => {
-                useModelSelectorStore.getState().open();
-              }}
+              skillsOrganizationId={activeOrganizationId}
               dock={
                 <ChatComposerDock
                   data={{
                     webSearchAvailable:
                       chatDraftMeta?.webSearchAvailable ?? false,
                     webSearchEnabled: chatDraftMeta?.webSearchEnabled ?? false,
-                    // No thread yet, so no context estimate: the meter
-                    // stays hidden until the first send creates the row.
-                    context: null,
+                    // The draft carries the same cache-stable floor its first
+                    // send will pay, so the meter shows the honest baseline
+                    // (~system prompt + tools) rather than 0% until send.
+                    context: chatDraftMeta?.context ?? null,
                   }}
                   leadingContext={
                     <ChatMatterPicker
@@ -396,6 +426,19 @@ function ChatIndex() {
                 }
 
                 if (!(await ensureAIAvailable())) {
+                  return;
+                }
+                // A model just picked in the (+) menu may still be
+                // mid-PATCH: wait for it to settle so the route-handoff
+                // send below can never race onto the thread's previous
+                // model, which is worst here since a brand-new draft
+                // thread has no persisted model until this PATCH lands. On
+                // failure the hook has already toasted; abort instead of
+                // sending with a model that may not match what the server
+                // has persisted.
+                if (
+                  Result.isError(await modelSelection.awaitPendingSelection())
+                ) {
                   return;
                 }
                 // Build the request payload and fetch the pure thread data

@@ -378,9 +378,21 @@
     "caseLawGreeting": "اسأل عن هذا القرار — نصّه الكامل متاح هنا.",
     "chatAbout": "تحدّث عن هذا",
     "composerMenu": {
+      "context": "السياق",
       "mcpServers": "خوادم MCP",
       "models": "النماذج",
-      "open": "فتح قائمة المرفقات والأدوات"
+      "noFiles": "لا توجد مستندات في هذا الملف",
+      "noMatters": "لا تتوفر ملفات",
+      "noMcpServers": "لا تتوفر خوادم MCP",
+      "noSkills": "لا تتوفر مهارات",
+      "open": "فتح قائمة المرفقات والأدوات",
+      "openMcpSettings": "فتح إعدادات MCP",
+      "openSkills": "فتح المهارات",
+      "referenceMatter": "الإشارة إلى هذا الملف",
+      "searchFiles": "البحث في المستندات",
+      "searchMatters": "البحث في الملفات",
+      "searchMcpServers": "البحث في خوادم MCP...",
+      "searchSkills": "البحث في المهارات"
     },
     "contextMeter": {
       "attachments": "المستندات المرفقة",

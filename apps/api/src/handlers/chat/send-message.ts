@@ -120,6 +120,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -367,6 +368,18 @@ const sendMessage = createSafeRootHandler(
       }),
     );
 
+    // The thread's persisted chat-model override wins over the org/instance
+    // default, but the dev-only body override still wins over everything
+    // (matches `assertDevModelOverride` above). Re-validated here (not just
+    // at write time in update-thread-model.ts) so a provider key removal or
+    // a catalog bump that drops the model falls back to the org default
+    // silently instead of failing the send.
+    const chatModelOverride = resolveEffectiveChatModelId({
+      devModelId: body.devModelId,
+      threadChatModel: thread.data.chatModel,
+      orgAIConfig,
+    });
+
     // For an existing thread, accept a non-empty body update as
     // "user changed scope, persist it"; an omitted/empty body keeps
     // the stored value so re-sends from cached transports don't
@@ -556,7 +569,7 @@ const sendMessage = createSafeRootHandler(
     const messagesForContextResult = await compactMessagesForContext({
       abortSignal: createMeteredAIAbortSignal(),
       boundary: thirdPartyBoundary,
-      devModelId: body.devModelId,
+      chatModelOverride,
       messages: messagesForContextInput,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
@@ -888,7 +901,7 @@ const sendMessage = createSafeRootHandler(
                         CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS,
                       ),
                       boundary: thirdPartyBoundary,
-                      devModelId: body.devModelId,
+                      chatModelOverride,
                       messages: messagesAfterAssistantPersist,
                       organizationId: session.activeOrganizationId,
                       orgAIConfig,
@@ -920,7 +933,7 @@ const sendMessage = createSafeRootHandler(
               },
               orgAIConfig,
               organizationId: session.activeOrganizationId,
-              devModelId: body.devModelId,
+              devModelId: chatModelOverride,
               promptCacheKey: chatContext.promptCacheKey,
               promptCachingEnabled,
               resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
@@ -964,7 +977,8 @@ const sendMessage = createSafeRootHandler(
 export default sendMessage;
 
 type ChatCompactionModelProps = {
-  devModelId: string | undefined;
+  /** Effective chat model override for this turn; see `resolveEffectiveChatModelId`. */
+  chatModelOverride: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
 };
@@ -1023,7 +1037,7 @@ const selectMessagesForContextInput = async ({
 const compactMessagesForContext = async ({
   abortSignal,
   boundary,
-  devModelId,
+  chatModelOverride,
   messages,
   organizationId,
   orgAIConfig,
@@ -1055,7 +1069,7 @@ const compactMessagesForContext = async ({
   });
 
   const { triggerTokens, preserveTokens } = resolveChatCompactionBudget({
-    devModelId,
+    chatModelOverride,
     orgAIConfig,
     organizationId,
   });
@@ -1065,7 +1079,7 @@ const compactMessagesForContext = async ({
     aiAnalytics,
     boundary,
     messages,
-    modelId: devModelId,
+    modelId: chatModelOverride,
     onSummaryError: (error) => {
       captureError(error, {
         threadId,
@@ -1124,7 +1138,7 @@ type ScheduleChatCompactionCheckpointProps = ChatCompactionModelProps & {
 const scheduleChatCompactionCheckpoint = ({
   abortSignal,
   boundary,
-  devModelId,
+  chatModelOverride,
   messages,
   organizationId,
   orgAIConfig,
@@ -1132,7 +1146,7 @@ const scheduleChatCompactionCheckpoint = ({
   threadId,
 }: ScheduleChatCompactionCheckpointProps): void => {
   const { triggerTokens, preserveTokens } = resolveChatCompactionBudget({
-    devModelId,
+    chatModelOverride,
     orgAIConfig,
     organizationId,
   });
@@ -1148,7 +1162,7 @@ const scheduleChatCompactionCheckpoint = ({
   void runChatCompactionCheckpoint({
     abortSignal,
     boundary,
-    devModelId,
+    chatModelOverride,
     organizationId,
     orgAIConfig,
     preserveTokens,
@@ -1175,7 +1189,7 @@ type RunChatCompactionCheckpointProps = ChatCompactionModelProps & {
 const runChatCompactionCheckpoint = async ({
   abortSignal,
   boundary,
-  devModelId,
+  chatModelOverride,
   organizationId,
   orgAIConfig,
   preserveTokens,
@@ -1221,7 +1235,7 @@ const runChatCompactionCheckpoint = async ({
     boundary,
     dataWorkspaceIds: dataScopeResult.value.dataWorkspaceIds,
     messages: historyResult.value,
-    modelId: devModelId,
+    modelId: chatModelOverride,
     onSummaryError: (error) => {
       captureError(error, {
         threadId,
@@ -1317,6 +1331,7 @@ type ThreadRecord = {
   contextMatterIds: SafeId<"workspace">[];
   dataWorkspaceIds: SafeId<"workspace">[];
   webSearchEnabled: boolean;
+  chatModel: string | null;
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
@@ -1372,6 +1387,7 @@ const loadThread = async ({
       contextMatterIds: SafeId<"workspace">[];
       dataWorkspaceIds: SafeId<"workspace">[];
       webSearchEnabled: boolean;
+      chatModel: string | null;
     };
 
     const lookup = async () =>
@@ -1388,6 +1404,7 @@ const loadThread = async ({
             contextMatterIds: true,
             dataWorkspaceIds: true,
             webSearchEnabled: true,
+            chatModel: true,
           },
         }),
       );
@@ -1418,6 +1435,7 @@ const loadThread = async ({
           contextMatterIds: existing.contextMatterIds,
           dataWorkspaceIds: existing.dataWorkspaceIds,
           webSearchEnabled: existing.webSearchEnabled,
+          chatModel: existing.chatModel,
           messages: [],
         },
       });
@@ -1541,6 +1559,7 @@ const loadThread = async ({
         contextMatterIds: initialContextMatterIds,
         dataWorkspaceIds: initialDataWorkspaceIds,
         webSearchEnabled: false,
+        chatModel: null,
         messages: [],
       },
     });

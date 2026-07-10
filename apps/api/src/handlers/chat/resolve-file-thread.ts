@@ -24,6 +24,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -69,6 +70,7 @@ type FileThreadLookupInput = {
  * lookup that would have run anyway.
  */
 type ThreadMetadata = {
+  chatModel: string | null;
   contextMatterIds: SafeId<"workspace">[];
   usedAnonymization: boolean;
   webSearchEnabled: boolean;
@@ -89,6 +91,7 @@ type ResolveFileThreadMessagePage = {
   lastActivityAt: string | null;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
+  model: string | null;
   context: ThreadContextUsage | null;
 };
 
@@ -116,6 +119,7 @@ const emptyMessagePage = (
   lastActivityAt: null,
   webSearchAvailable,
   webSearchEnabled: false,
+  model: null,
   context: null,
 });
 
@@ -185,6 +189,7 @@ const loadResolvedThreadMessagePage = async ({
   organizationId,
   orgAIConfig,
   contextMatterIds,
+  chatModel,
   usedAnonymization,
   webSearchAvailable,
   webSearchEnabled,
@@ -212,7 +217,18 @@ const loadResolvedThreadMessagePage = async ({
       subagents: areSubagentToolsRegistered({ delegationDepth: 0 }),
     },
   });
+  // Mirrors `get-messages.ts`'s context-usage estimate: without the
+  // thread's model override, the budget falls back to the org's chat-role
+  // default context window even when the thread is pinned to a model with
+  // a different one, so the estimate (and its compaction trigger) can be
+  // wrong for the model this thread will actually send with.
+  const chatModelOverride = resolveEffectiveChatModelId({
+    devModelId: undefined,
+    threadChatModel: chatModel,
+    orgAIConfig,
+  });
   const { triggerTokens } = resolveChatCompactionBudget({
+    chatModelOverride,
     orgAIConfig,
     organizationId,
   });
@@ -242,6 +258,7 @@ const loadResolvedThreadMessagePage = async ({
     lastActivityAt: page.lastActivityAt,
     webSearchAvailable,
     webSearchEnabled,
+    model: chatModel,
     context,
   };
 };
@@ -260,6 +277,7 @@ const findFileChatThread = async (
     await tx
       .select({
         chatThreadId: fileChatThreads.chatThreadId,
+        chatModel: chatThreads.chatModel,
         contextMatterIds: chatThreads.contextMatterIds,
         usedAnonymization: chatThreads.usedAnonymization,
         webSearchEnabled: chatThreads.webSearchEnabled,
@@ -286,6 +304,7 @@ const findFieldKeyedChatThread = async (
     await tx
       .select({
         id: chatThreads.id,
+        chatModel: chatThreads.chatModel,
         contextMatterIds: chatThreads.contextMatterIds,
         usedAnonymization: chatThreads.usedAnonymization,
         webSearchEnabled: chatThreads.webSearchEnabled,
@@ -417,6 +436,7 @@ const createFileChatThread = async (
       organizationId,
       orgAIConfig,
       webSearchAvailable,
+      chatModel: fieldKeyedThread.chatModel,
       contextMatterIds: fieldKeyedThread.contextMatterIds,
       usedAnonymization: fieldKeyedThread.usedAnonymization,
       webSearchEnabled: fieldKeyedThread.webSearchEnabled,
@@ -506,6 +526,7 @@ const resolveFileThread = createSafeHandler(
           organizationId: input.organizationId,
           orgAIConfig,
           webSearchAvailable,
+          chatModel: existing.chatModel,
           contextMatterIds: existing.contextMatterIds,
           usedAnonymization: existing.usedAnonymization,
           webSearchEnabled: existing.webSearchEnabled,
@@ -553,6 +574,7 @@ const resolveFileThread = createSafeHandler(
             organizationId: input.organizationId,
             orgAIConfig,
             webSearchAvailable,
+            chatModel: found.chatModel,
             contextMatterIds: found.contextMatterIds,
             usedAnonymization: found.usedAnonymization,
             webSearchEnabled: found.webSearchEnabled,

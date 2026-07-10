@@ -154,9 +154,9 @@ describe("chat tool schemas", () => {
         safeDb: unusedSafeDb,
         skills: [
           {
-            description: "Analyze legal texts.",
-            name: "legal-interpretation",
-            version: "3.0",
+            description: "Run a custom legal workflow.",
+            name: "custom-legal-workflow",
+            version: "1.0",
           },
         ],
         userId,

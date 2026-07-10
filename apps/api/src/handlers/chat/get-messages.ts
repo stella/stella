@@ -14,9 +14,11 @@ import {
   areSubagentToolsRegistered,
   isWebSearchAvailable,
 } from "@/api/handlers/chat/tools/chat-tools";
+import type { ChatMessage } from "@/api/handlers/chat/types";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
@@ -60,6 +62,55 @@ const getMessages = createSafeRootHandler(
       workspaceId,
     });
 
+    // The next-send context estimate the meter renders, built for every
+    // response — an existing thread, a brand-new empty one, or a draft that
+    // has no row yet. With no messages and no summary the estimate collapses
+    // to the honest cache-stable floor (system prompt + tools) the very first
+    // send will pay, so the meter never shows a misleading 0% that jumps on
+    // send. Mirrors the send path: `webResearch` steers the core rules through
+    // the same gate, and the trigger denominator resolves the same model the
+    // next send would use.
+    const buildNextSendContext = ({
+      messages,
+      summary,
+      threadChatModel,
+      webResearch,
+    }: {
+      messages: readonly ChatMessage[];
+      summary: {
+        summarizedMessageCount: number;
+        summaryMarkdown: string;
+      } | null;
+      threadChatModel: string | null;
+      webResearch: boolean;
+    }): ThreadContextUsage => {
+      const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
+        toolAvailability: {
+          templateAuthoring: false,
+          webResearch,
+          folioAgentDocTools: false,
+          subagents: areSubagentToolsRegistered({ delegationDepth: 0 }),
+        },
+      });
+      const chatModelOverride = resolveEffectiveChatModelId({
+        devModelId: undefined,
+        threadChatModel,
+        orgAIConfig,
+      });
+      const { triggerTokens } = resolveChatCompactionBudget({
+        chatModelOverride,
+        orgAIConfig,
+        organizationId: session.activeOrganizationId,
+      });
+      return computeThreadContextUsage({
+        messages,
+        promptTokens,
+        toolTokens,
+        triggerTokens,
+        summary,
+      });
+    };
+
     // One shared scoped transaction for the whole read-only sequence below:
     // the thread lookup, org settings (jurisdictions, tool overrides, and
     // web-search BYOK keys in one widened select), the most-recent message
@@ -80,6 +131,7 @@ const getMessages = createSafeRootHandler(
             contextMatterIds: true,
             webSearchEnabled: true,
             usedAnonymization: true,
+            chatModel: true,
           },
         });
 
@@ -181,7 +233,17 @@ const getMessages = createSafeRootHandler(
           lastActivityAt: null,
           webSearchAvailable: reads.webSearchAvailable,
           webSearchEnabled: false,
-          context: null,
+          model: null,
+          // A not-yet-created draft still carries the cache-stable floor its
+          // first send will pay. Web search is off (`webSearchEnabled: false`)
+          // and the model defaults (`threadChatModel: null`) until the draft
+          // opts in or picks a model, exactly as the first send would resolve.
+          context: buildNextSendContext({
+            messages: [],
+            summary: null,
+            threadChatModel: null,
+            webResearch: false,
+          }),
         });
       }
 
@@ -205,46 +267,28 @@ const getMessages = createSafeRootHandler(
     const { thread, webSearchAvailable, page, checkpoint, windowedMessages } =
       reads;
 
-    // Null for a fresh, empty thread (nothing to meter yet); the frontend
-    // renders nothing. Keeping the value nullable also unifies this branch with
-    // the missing-thread branch (context: null) into one response type.
-    const hasContext = windowedMessages.length > 0 || checkpoint !== null;
-    // The meter's cache-stable prefix estimate mirrors the send path's stable
-    // prompt: web research steers the core rules through the same two gates the
-    // send path applies (provider availability and the thread's opt-in), and
-    // (unlike template studio) the standalone read path never carries
-    // template-authoring tools. The trigger denominator resolves the same chat
-    // model the next send would use.
-    const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
-      toolAvailability: {
-        templateAuthoring: false,
-        webResearch: webSearchAvailable && thread.webSearchEnabled,
-        folioAgentDocTools: false,
-        subagents: areSubagentToolsRegistered({ delegationDepth: 0 }),
-      },
+    // Estimated for every thread, empty ones included: with no messages and no
+    // summary the estimate is just the cache-stable floor, so the meter is
+    // honest from the first render instead of reading 0% until the first send.
+    // Web research steers the core rules through the same two gates the send
+    // path applies (provider availability and the thread's opt-in), and (unlike
+    // template studio) the standalone read path never carries template-authoring
+    // tools. The trigger denominator resolves the same model the next send uses.
+    const context = buildNextSendContext({
+      messages: windowedMessages.map((message) => ({
+        id: message.id,
+        role: message.role,
+        parts: message.content.data,
+      })),
+      summary: checkpoint
+        ? {
+            summarizedMessageCount: checkpoint.summarizedMessageCount,
+            summaryMarkdown: checkpoint.summaryMarkdown,
+          }
+        : null,
+      threadChatModel: thread.chatModel,
+      webResearch: webSearchAvailable && thread.webSearchEnabled,
     });
-    const { triggerTokens } = resolveChatCompactionBudget({
-      orgAIConfig,
-      organizationId: session.activeOrganizationId,
-    });
-    const context: ThreadContextUsage | null = hasContext
-      ? computeThreadContextUsage({
-          messages: windowedMessages.map((message) => ({
-            id: message.id,
-            role: message.role,
-            parts: message.content.data,
-          })),
-          promptTokens,
-          toolTokens,
-          triggerTokens,
-          summary: checkpoint
-            ? {
-                summarizedMessageCount: checkpoint.summarizedMessageCount,
-                summaryMarkdown: checkpoint.summaryMarkdown,
-              }
-            : null,
-        })
-      : null;
 
     return Result.ok({
       messages: page.messages,
@@ -253,6 +297,7 @@ const getMessages = createSafeRootHandler(
       lastActivityAt: page.lastActivityAt,
       webSearchAvailable,
       webSearchEnabled: thread.webSearchEnabled,
+      model: thread.chatModel,
       context,
     });
   },

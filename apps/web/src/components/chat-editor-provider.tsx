@@ -38,6 +38,7 @@ import {
   CHAT_MENTION_ENTITY_RESULT_LIMIT,
   CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   getMentionViewScope,
+  insertChatMention,
 } from "@/components/chat-mention-helpers";
 import { shouldChipPaste } from "@/components/chat-pasted-text";
 import {
@@ -508,6 +509,7 @@ export const useChatComposerWiring = ({
 };
 
 export const useChatEditor = ({
+  disableSlashSuggestion = false,
   onDraftStart,
   placeholder,
   reservedCommands = false,
@@ -515,6 +517,13 @@ export const useChatEditor = ({
   threadRef,
   suggestedFollowupPrompt,
 }: {
+  /**
+   * Suppress the `/`-triggered `PromptSlash` popover only for an empty
+   * composer. Chat surfaces with a Skills submenu route that blank-composer
+   * shortcut to the (+) menu instead, while still keeping slash suggestions
+   * after existing text.
+   */
+  disableSlashSuggestion?: boolean | undefined;
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   /**
@@ -915,6 +924,13 @@ export const useChatEditor = ({
     [],
   );
 
+  const promptSlashExtension = PromptSlash.configure({
+    // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
+    suggestion: createPromptSlashSuggestion(() => slashItemsRef.current, {
+      suppressEmptyTrigger: disableSlashSuggestion,
+    }),
+  });
+
   const editor = useEditor({
     autofocus: false,
     content: draftDoc,
@@ -952,10 +968,7 @@ export const useChatEditor = ({
         ),
         deleteTriggerWithBackspace: true,
       }),
-      PromptSlash.configure({
-        // eslint-disable-next-line react/react-compiler -- ref read deferred into the slash-suggestion callback (invoked out-of-render), not read during render
-        suggestion: createPromptSlashSuggestion(() => slashItemsRef.current),
-      }),
+      promptSlashExtension,
       PastedText,
     ],
     onCreate: ({ editor: nextEditor }) => {
@@ -1176,22 +1189,7 @@ export const useChatEditor = ({
       }
 
       markDraftStarted();
-      editor
-        .chain()
-        .focus()
-        .insertContent({
-          type: "mention",
-          attrs: {
-            id: mention.id,
-            label: mention.label,
-            category: mention.category,
-            kind: mention.kind,
-            mimeType: mention.mimeType,
-            sourceWorkspaceId: mention.sourceWorkspaceId,
-          },
-        })
-        .insertContent(" ")
-        .run();
+      insertChatMention(editor, mention);
     },
     [editor, markDraftStarted],
   );

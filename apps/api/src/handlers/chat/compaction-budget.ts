@@ -16,6 +16,7 @@ import {
 } from "@/api/handlers/chat/compaction";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
+import { decodeChatModelSelection } from "@/api/lib/chat-model-selection";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 
 export type ChatCompactionBudget = {
@@ -24,8 +25,13 @@ export type ChatCompactionBudget = {
 };
 
 type ResolveChatCompactionBudgetOptions = {
-  /** Dev-only model override (`body.devModelId`); absent on the read path. */
-  devModelId?: string | undefined;
+  /**
+   * Effective chat model override for this turn/read — the dev override
+   * (`body.devModelId`) or a validated thread-level selection, already
+   * resolved by `resolveEffectiveChatModelId`. Absent when neither applies
+   * (org/instance chat-role default).
+   */
+  chatModelOverride?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
 };
@@ -55,12 +61,14 @@ const resolveChatContextWindowTokens = (
 };
 
 const resolveChatModelId = ({
-  devModelId,
+  chatModelOverride,
   orgAIConfig,
   organizationId,
 }: ResolveChatCompactionBudgetOptions): string | undefined => {
-  if (devModelId) {
-    return devModelId;
+  if (chatModelOverride) {
+    return (
+      decodeChatModelSelection(chatModelOverride)?.modelId ?? chatModelOverride
+    );
   }
 
   try {

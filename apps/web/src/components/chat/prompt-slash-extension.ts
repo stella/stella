@@ -1,10 +1,12 @@
-import { Extension } from "@tiptap/core";
+import { Extension, isNodeEmpty } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { ReactRenderer } from "@tiptap/react";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
+import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import { PromptSlashList } from "@/components/chat/prompt-slash-list";
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
 import type { ReservedChatCommand } from "@/lib/reserved-chat-commands";
@@ -25,46 +27,44 @@ export type SlashItem =
   | { kind: "skill"; skill: SlashSkill }
   | { kind: "command"; command: ReservedChatCommand };
 
+/**
+ * Build the pasted-text chip attrs a slash item inserts. Shared by the
+ * `/`-triggered suggestion (which replaces the typed trigger range) and the
+ * composer (+) menu's Skills submenu (which inserts at the cursor with no
+ * range to replace) so both surfaces produce the identical chip.
+ */
+export const slashItemChipAttrs = (item: SlashItem): PastedTextAttrs => {
+  if (item.kind === "command") {
+    return {
+      label: item.command.name,
+      source: "command",
+      text: item.command.command,
+    };
+  }
+
+  if (item.kind === "prompt") {
+    return {
+      label: item.prompt.name,
+      source: "prompt",
+      text: item.prompt.body,
+    };
+  }
+
+  return {
+    label: item.skill.name,
+    source: "skill",
+    text: item.skill.slug,
+  };
+};
+
 const insertSlashItem = (
   editor: Editor,
   range: { from: number; to: number },
   item: SlashItem,
 ) => {
-  if (item.kind === "command") {
-    insertPastedTextChip(
-      editor,
-      {
-        label: item.command.name,
-        source: "command",
-        text: item.command.command,
-      },
-      { replaceRange: range },
-    );
-    return;
-  }
-
-  if (item.kind === "prompt") {
-    insertPastedTextChip(
-      editor,
-      {
-        label: item.prompt.name,
-        source: "prompt",
-        text: item.prompt.body,
-      },
-      { replaceRange: range },
-    );
-    return;
-  }
-
-  insertPastedTextChip(
-    editor,
-    {
-      label: item.skill.name,
-      source: "skill",
-      text: item.skill.slug,
-    },
-    { replaceRange: range },
-  );
+  insertPastedTextChip(editor, slashItemChipAttrs(item), {
+    replaceRange: range,
+  });
 };
 
 const PLUGIN_NAME = "promptSlash";
@@ -141,15 +141,36 @@ const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
 };
 
 /**
+ * Whether the document has any real content before `to` -- mirrors
+ * `editor.isEmpty` (the outer composer's own emptiness gate in
+ * chat-input-surface.tsx), which treats an atom node (a mention or
+ * pasted-text chip) as content, same as TipTap's own `isNodeEmpty`. A
+ * `textBetween` + `.trim()` check instead reduces every chip to its
+ * leaf-text placeholder ("\n"), which trims away to "" -- so a chip-only
+ * composer read as empty and "/" right after a chip fell through to a
+ * literal character instead of opening the suggestion. Exported for
+ * testing.
+ */
+export const hasContentBefore = (doc: ProseMirrorNode, to: number): boolean =>
+  !isNodeEmpty(doc.cut(0, to));
+
+/**
  * Build the Suggestion config used by `PromptSlash`. `getItems`
  * is read on every keystroke so the host can mix prompts and skills
  * (and any future kinds) without re-creating the extension.
  */
+type CreatePromptSlashSuggestionOptions = {
+  suppressEmptyTrigger?: boolean | undefined;
+};
+
 export const createPromptSlashSuggestion = (
   getItems: () => SlashItem[],
+  options?: CreatePromptSlashSuggestionOptions,
 ): Omit<SuggestionOptions<SlashItem, SlashItem>, "editor"> => ({
   char: "/",
   allowSpaces: false,
+  allow: ({ range, state }) =>
+    !options?.suppressEmptyTrigger || hasContentBefore(state.doc, range.from),
   items: ({ query }) => filterItems(getItems(), query),
 
   command: ({ editor, range, props }) => {

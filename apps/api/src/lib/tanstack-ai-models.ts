@@ -884,7 +884,14 @@ const getCachedFactory = (
   return factory;
 };
 
-const getActiveProvider = (): AIProvider => resolveProvider();
+/**
+ * The single instance-level provider this deployment resolves to (env
+ * `AI_PROVIDER` or the first credentialed provider in
+ * `INSTANCE_PROVIDER_PREFERENCE`). Exported for callers that need to
+ * validate a selection against the active instance provider when no
+ * org BYOK config exists (e.g. per-thread chat model selection).
+ */
+export const getActiveProvider = (): AIProvider => resolveProvider();
 
 const getInstanceFactory = (): TanStackTextAdapterFactory =>
   createTanStackTextAdapterFactory({

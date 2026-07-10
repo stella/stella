@@ -1287,7 +1287,7 @@ const TemplateStudioChatInner = ({
           dock={
             <ChatComposerDock
               data={data}
-              onNewThread={startNewThread}
+              onNewThread={hasMessages ? startNewThread : null}
               threadRef={threadRef}
             />
           }

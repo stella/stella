@@ -84,6 +84,17 @@ export const chatThreads = p.pgTable(
      */
     webSearchEnabled: p.boolean("web_search_enabled").notNull().default(false),
     /**
+     * Per-thread chat-role model override, encoded as
+     * `"<provider>::<modelId>"` (same encoding as the org AI config's
+     * dev model selector). Null means "use the org's chat-role
+     * default." The value is validated against the org's configured
+     * providers and the model catalog at write time, and re-validated
+     * at send time so a provider key removal or a catalog bump that
+     * drops the model falls back to the org default instead of
+     * failing the send.
+     */
+    chatModel: p.text("chat_model"),
+    /**
      * Cached "where you left off" recap, shown as subtle grey text
      * below the last message when the user reopens this thread after
      * a gap (see RECAP_STALENESS_THRESHOLD_MS). Derived from the

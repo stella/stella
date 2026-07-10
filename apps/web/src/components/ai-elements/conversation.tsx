@@ -5,6 +5,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/components/button";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
@@ -45,11 +46,19 @@ export const ConversationContent = ({
   const { scrollRef, contentRef } = useStickToBottomContext();
 
   return (
-    <div
-      ref={scrollRef}
-      className="size-full overflow-y-auto"
-      style={{ scrollbarGutter: "stable both-edges" }}
-    >
+    // A real scrollbar element (not the browser's native overlay one) so it
+    // can win a stacking fight against a docked composer's glass veil that
+    // floats over the bottom of the transcript (`DockedComposer` renders its
+    // bar stack at z-50) — the native overlay scrollbar painted under
+    // `overflow-y-auto` alone renders behind that veil instead of on top of
+    // it. `scrollRef`/`contentRef` bind to the real scrolling viewport
+    // element exactly as they did on the plain div, so stick-to-bottom
+    // tracking is unaffected. On a surface that isolates the transcript's
+    // own stacking context (the main /chat page, so sticky headers and the
+    // scroll button can't leak above the fade/composer — see
+    // `chat-thread-page.tsx`), this scrollbar stays trapped inside that
+    // context exactly like the native one did: no behavior change there.
+    <ScrollArea scrollbarClassName="z-[60]" viewportRef={scrollRef}>
       <div
         className={cn("flex flex-col gap-8 p-3", className)}
         {...props}
@@ -57,7 +66,7 @@ export const ConversationContent = ({
       >
         {children}
       </div>
-    </div>
+    </ScrollArea>
   );
 };
 

@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     // `chatThreadOptions` never builds a `ChatRuntime` from it — the
     // component builds that separately, from its own live getters, via
     // `useChatThreadRuntime`. See that factory's docs.
-    const options = chatThreadOptions({
+    const threadQueryOptions = chatThreadOptions({
       activeOrganizationId: context.user.activeOrganizationId,
       key: {
         scope: "global",
@@ -39,10 +39,13 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
     // awaited refetch would replace the seed with the server's (possibly
     // empty) set before the page's matter picker ever saw it. The loader
     // only fills a cold cache.
-    if (context.queryClient.getQueryData(options.queryKey) !== undefined) {
+    if (
+      context.queryClient.getQueryData(threadQueryOptions.queryKey) !==
+      undefined
+    ) {
       return;
     }
-    await ensureRouteQueryData(context.queryClient, options);
+    await ensureRouteQueryData(context.queryClient, threadQueryOptions);
   },
 });
 

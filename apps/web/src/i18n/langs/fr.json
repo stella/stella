@@ -378,9 +378,21 @@
     "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
     "chatAbout": "Insérer dans le chat IA",
     "composerMenu": {
+      "context": "Contexte",
       "mcpServers": "Serveurs MCP",
       "models": "Modèles",
-      "open": "Ouvrir le menu des pièces jointes et des outils"
+      "noFiles": "Aucun fichier dans ce dossier",
+      "noMatters": "Aucun dossier disponible",
+      "noMcpServers": "Aucun serveur MCP disponible",
+      "noSkills": "Aucune compétence disponible",
+      "open": "Ouvrir le menu des pièces jointes et des outils",
+      "openMcpSettings": "Ouvrir les paramètres MCP",
+      "openSkills": "Ouvrir les compétences",
+      "referenceMatter": "Référencer ce dossier",
+      "searchFiles": "Rechercher des fichiers",
+      "searchMatters": "Rechercher des dossiers",
+      "searchMcpServers": "Rechercher des serveurs MCP...",
+      "searchSkills": "Rechercher des compétences"
     },
     "contextMeter": {
       "attachments": "Documents joints",
