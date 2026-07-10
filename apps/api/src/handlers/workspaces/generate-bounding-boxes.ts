@@ -56,6 +56,9 @@ const generateBoundingBoxes = createSafeHandler(
 
     const generateFn = isMockAI() ? generateBBoxesMock : generateBBoxes;
     const boxes: BoundingBox[] = [];
+    if (preparedData.pageNumbers.length === 0) {
+      return Result.ok({ boxes });
+    }
 
     for (const pageNumber of preparedData.pageNumbers) {
       // oxlint-disable-next-line no-await-in-loop -- pages processed sequentially to bound concurrent AI calls and accumulate boxes in page order
@@ -94,23 +97,23 @@ const generateBoundingBoxes = createSafeHandler(
       }
 
       boxes.push(...pageBoxesResult.value);
-
-      yield* Result.await(
-        safeDb(async (tx) => {
-          // audit: skip — background OCR pipeline persisting computed
-          // bounding boxes; derived AI output, not a user mutation.
-          await tx
-            .update(justifications)
-            .set({
-              boundingBoxes: {
-                version: 1,
-                boxes,
-              },
-            })
-            .where(eq(justifications.id, justificationId));
-        }),
-      );
     }
+
+    yield* Result.await(
+      safeDb(async (tx) => {
+        // audit: skip — background OCR pipeline persisting computed bounding
+        // boxes; derived AI output, not a user mutation.
+        await tx
+          .update(justifications)
+          .set({
+            boundingBoxes: {
+              version: 1,
+              boxes,
+            },
+          })
+          .where(eq(justifications.id, justificationId));
+      }),
+    );
 
     return Result.ok({ boxes });
   },

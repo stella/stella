@@ -1346,7 +1346,8 @@ export default defineConfig({
     },
     {
       // no-db-await-in-loop flags an `await db...` / `await tx...` /
-      // `await safeDb(...)` lexically inside a loop body or a
+      // `await safeDb(...)` or `yield* Result.await(safeDb(...))` lexically
+      // inside a loop body, plus a
       // `Promise.all(items.map(...))` fan-out — the N+1 antipattern. Scoped
       // to backend source, where `db`/`tx`/`safeDb` are Drizzle handles;
       // test files intentionally exercise unbatched loops in fixtures/mocks
