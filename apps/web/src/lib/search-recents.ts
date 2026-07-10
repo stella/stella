@@ -1,4 +1,7 @@
+import * as v from "valibot";
+
 import { getStorageKey } from "@/consts";
+import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 const RECENT_SEARCHES_KEY = getStorageKey("search-recent-searches");
 const RECENT_FILES_KEY = getStorageKey("search-recent-files");
@@ -51,6 +54,11 @@ const isRecentFile = (value: unknown): value is RecentFile =>
     typeof value["mimeType"] === "string") &&
   typeof value["openedAt"] === "string";
 
+// Top-level shape only: each item is validated individually below via
+// `isItem`, so one malformed entry drops just that entry rather than the
+// whole list.
+const JsonArraySchema = v.array(v.unknown());
+
 const readList = <T>(
   key: string,
   isItem: (value: unknown) => value is T,
@@ -62,11 +70,8 @@ const readList = <T>(
 
   try {
     const raw = storage.getItem(key);
-    if (!raw) {
-      return [];
-    }
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isItem) : [];
+    const parsed = readStoredJson(raw, JsonArraySchema);
+    return parsed ? parsed.filter(isItem) : [];
   } catch {
     return [];
   }
@@ -81,11 +86,7 @@ const writeList = (
     return;
   }
 
-  try {
-    storage.setItem(key, JSON.stringify(items));
-  } catch {
-    // localStorage can be unavailable or full; recents are best-effort UI state.
-  }
+  writeStoredJson(storage, key, items);
 };
 
 export const readRecentSearches = (

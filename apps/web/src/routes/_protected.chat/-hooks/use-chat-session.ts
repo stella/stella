@@ -13,6 +13,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
+import * as v from "valibot";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -47,6 +48,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { internalToolErrorMessage, toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import {
   fetchOlderMessages,
   isChatMessageStartError,
@@ -971,6 +973,10 @@ const readStoredApprovedTools = (
   return new Set(stored.filter(isToolApprovalGrant));
 };
 
+// Top-level shape only: elements are filtered to strings below, so one
+// non-string entry drops just that entry rather than the whole list.
+const JsonArraySchema = v.array(v.unknown());
+
 const readStoredStrings = (
   key: string,
   scope: "local" | "session" = "local",
@@ -981,20 +987,10 @@ const readStoredStrings = (
   }
 
   const raw = storage.getItem(key);
-  if (!raw) {
-    return [];
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed)) {
-      return [];
-    }
-
-    return parsed.filter((value): value is string => typeof value === "string");
-  } catch {
-    return [];
-  }
+  const parsed = readStoredJson(raw, JsonArraySchema);
+  return parsed
+    ? parsed.filter((value): value is string => typeof value === "string")
+    : [];
 };
 
 const writeStoredApprovedTools = (
@@ -1007,7 +1003,7 @@ const writeStoredApprovedTools = (
     return;
   }
 
-  storage.setItem(key, JSON.stringify([...tools]));
+  writeStoredJson(storage, key, [...tools]);
 };
 
 const writeStoredApprovedStrings = (
@@ -1019,7 +1015,7 @@ const writeStoredApprovedStrings = (
     return;
   }
 
-  storage.setItem(key, JSON.stringify([...values]));
+  writeStoredJson(storage, key, [...values]);
 };
 
 const getAlwaysApprovalKey = ({

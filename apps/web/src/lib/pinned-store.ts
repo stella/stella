@@ -1,24 +1,27 @@
+import * as v from "valibot";
 import { create } from "zustand";
 
+import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
+
 const PINNED_LS_PREFIX = "sidebar_pinned_";
+
+const PinnedIdsSchema = v.array(v.string());
 
 const readFromStorage = (userId: string): string[] => {
   try {
     const raw = localStorage.getItem(PINNED_LS_PREFIX + userId);
-    if (raw) {
-      const parsed: unknown = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.every((v) => typeof v === "string")) {
-        return parsed;
-      }
+    const stored = readStoredJson(raw, PinnedIdsSchema);
+    if (stored === null) {
+      return [];
     }
-    return [];
+    return stored;
   } catch {
     return [];
   }
 };
 
 const writeToStorage = (userId: string, ids: readonly string[]) => {
-  localStorage.setItem(PINNED_LS_PREFIX + userId, JSON.stringify(ids));
+  writeStoredJson(localStorage, PINNED_LS_PREFIX + userId, ids);
 };
 
 type PinnedStore = {
@@ -46,7 +49,7 @@ export const usePinnedStore = create<PinnedStore>((set, get) => ({
     const { userId, pinnedOrder } = get();
     let next: string[];
     if (pinnedOrder.includes(id)) {
-      next = pinnedOrder.filter((v) => v !== id);
+      next = pinnedOrder.filter((pinnedId) => pinnedId !== id);
     } else {
       next = [...pinnedOrder, id];
     }
