@@ -1,3 +1,5 @@
+import { compareByLocale } from "@/lib/collation";
+
 type ExistingWorkspace = {
   client?: { id: string } | null;
   members: {
@@ -191,10 +193,12 @@ export const compareMembersByCollaboratorStats = ({
   a,
   b,
   collaboratorStats,
+  locale,
 }: {
   a: OrganizationMember;
   b: OrganizationMember;
   collaboratorStats: Map<string, CollaboratorStats>;
+  locale: string;
 }) => {
   const aStats =
     collaboratorStats.get(a.userId) ?? createEmptyCollaboratorStats();
@@ -217,5 +221,5 @@ export const compareMembersByCollaboratorStats = ({
     return bStats.lastActivityMs - aStats.lastActivityMs;
   }
 
-  return a.user.name.localeCompare(b.user.name);
+  return compareByLocale(locale)(a.user.name, b.user.name);
 };

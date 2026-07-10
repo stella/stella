@@ -376,6 +376,7 @@ export default defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
+    "./.oxlint-plugins/require-cached-collator.ts",
   ],
 
   overrides: [
@@ -1945,6 +1946,29 @@ export default defineConfig({
             name: "Bun",
             message:
               "@stll/cli is published to npm and must run under plain Node; use node:* APIs (node:fs/promises, node:crypto, node:http, node:child_process) instead of the Bun global.",
+          },
+        ],
+      },
+    },
+    {
+      // Bare localeCompare is locale-nondeterministic (runtime default) and
+      // rebuilds ICU tailoring per call; route through the cached collation
+      // helper. Scoped to apps/web and apps/api (packages/folio is
+      // upstream-synced and excluded); the helper files themselves own the
+      // one legitimate bare call.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "apps/api/src/**/*.ts",
+        ".oxlint-plugins/__fixtures__/require-cached-collator.fixture.ts",
+      ],
+      rules: {
+        "require-cached-collator/require-cached-collator": [
+          "error",
+          {
+            allowedFiles: [
+              "apps/web/src/lib/collation.ts",
+              "apps/api/src/lib/collation.ts",
+            ],
           },
         ],
       },

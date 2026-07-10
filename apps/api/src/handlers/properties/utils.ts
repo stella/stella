@@ -45,6 +45,7 @@ const normalizeDeps = (prop: PropertyForComparison): PropertyForComparison => {
     tool: {
       ...prop.tool,
       dependencies: prop.tool.dependencies.toSorted((a, b) =>
+        // oxlint-disable-next-line require-cached-collator/require-cached-collator -- dependsOnPropertyId is an internal id, sorted for determinism, not display text
         a.dependsOnPropertyId.localeCompare(b.dependsOnPropertyId),
       ),
     },

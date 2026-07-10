@@ -1122,6 +1122,7 @@ const mergeActiveSkillMetadata = ({
   );
   if (activeSkillIndex === -1) {
     return [...skillMetadata, activeMetadata].toSorted((a, b) =>
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- `name` here is the skill's machine tool name (toolName), not the user-facing displayName
       a.name.localeCompare(b.name),
     );
   }

@@ -71,6 +71,7 @@ export const toParsedBundledSkillResources = (
     });
   }
 
+  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- file path, sorted for deterministic manifest layout, not display text
   return Result.ok(resources.toSorted((a, b) => a.path.localeCompare(b.path)));
 };
 

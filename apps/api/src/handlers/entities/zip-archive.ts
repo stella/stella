@@ -17,10 +17,14 @@ type BuildArchivePathsArgs = {
   nodes: readonly ArchiveNode[];
 };
 
+// Deterministic archive entry order (id/name fields as stable sort keys, not
+// linguistic sorting) so the same subtree always streams identically.
+/* oxlint-disable require-cached-collator/require-cached-collator -- deterministic id/path ordering for ZIP entry order, not display text */
 const compareArchiveNode = (a: ArchiveNode, b: ArchiveNode): number =>
   a.parentId.localeCompare(b.parentId) ||
   sanitizeFilename(a.name).localeCompare(sanitizeFilename(b.name)) ||
   a.id.localeCompare(b.id);
+/* oxlint-enable require-cached-collator/require-cached-collator */
 
 const uniqueSegment = (seen: Set<string>, segment: string): string => {
   if (!seen.has(segment)) {

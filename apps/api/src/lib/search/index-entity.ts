@@ -103,6 +103,7 @@ const buildSearchDocument = async (
 
   // Sort by propertyId for deterministic title extraction
   const sortedFields = [...version.fields].toSorted((a, b) =>
+    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- propertyId is an internal id, sorted for determinism, not display text
     a.propertyId.localeCompare(b.propertyId),
   );
 

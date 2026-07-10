@@ -16,7 +16,7 @@ import {
   LoaderCircleIcon,
   XIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { diffWordSegments } from "@stll/folio-react";
 import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio-react";
@@ -54,6 +54,7 @@ import type {
   ReviewSuggestionPreview,
 } from "@/components/ai-suggestions/review-store";
 import { authClient } from "@/lib/auth";
+import { compareByLocale } from "@/lib/collation";
 import { toAuthClientError } from "@/lib/errors";
 import { sessionOptions } from "@/routes/-queries";
 import {
@@ -139,6 +140,7 @@ export const ReviewPanelImpl = ({
 }: ReviewPanelProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const locale = useLocale();
   const severityLabels = useSeverityLabels();
 
   // The selector must return a stable reference for the same
@@ -218,6 +220,7 @@ export const ReviewPanelImpl = ({
       list.push(item);
       buckets.set(item.area, list);
     }
+    const compareArea = compareByLocale(locale);
     const sortedKeys = [...buckets.keys()].toSorted((a, b) => {
       if (a === REVIEW_UNSPECIFIED_AREA) {
         return 1;
@@ -225,7 +228,7 @@ export const ReviewPanelImpl = ({
       if (b === REVIEW_UNSPECIFIED_AREA) {
         return -1;
       }
-      return a.localeCompare(b);
+      return compareArea(a, b);
     });
     return sortedKeys.map((area) => {
       const items = buckets.get(area) ?? [];

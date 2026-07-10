@@ -143,6 +143,7 @@ describe("compareMembersByCollaboratorStats", () => {
         a,
         b,
         collaboratorStats,
+        locale: "en",
       }),
     );
 

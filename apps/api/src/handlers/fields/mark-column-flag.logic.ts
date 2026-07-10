@@ -54,6 +54,7 @@ export const sortColumnFlagTargetsForLocking = (
   targets: readonly ColumnFlagTarget[],
 ) =>
   targets.toSorted((a, b) =>
+    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- entityVersionId order fixes a deterministic lock-acquisition order (deadlock avoidance), not display text
     a.entityVersionId.localeCompare(b.entityVersionId),
   );
 

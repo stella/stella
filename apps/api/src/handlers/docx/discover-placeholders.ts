@@ -82,7 +82,10 @@ export const discoverPlaceholders = async (
     scanParagraphs(slimdom.parseXmlDocument(xml), counts);
   }
 
-  return [...counts.entries()]
-    .toSorted(([a], [b]) => a.localeCompare(b))
-    .map(([name, count]) => ({ name, count }));
+  return (
+    [...counts.entries()]
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- placeholder name is a template merge-field path, not display text
+      .toSorted(([a], [b]) => a.localeCompare(b))
+      .map(([name, count]) => ({ name, count }))
+  );
 };

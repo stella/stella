@@ -1,3 +1,4 @@
+import { compareByLocale } from "@/lib/collation";
 import type {
   MattersSortKey,
   Workspace,
@@ -7,6 +8,7 @@ import { PERSONAL_GROUP_ID } from "@/routes/_protected.workspaces/-types";
 
 export const getUniqueClientsFromWorkspace = (
   workspaces: readonly Workspace[],
+  locale: string,
 ): { id: string; displayName: string }[] => {
   const map = new Map<string, { id: string; displayName: string }>();
   for (const ws of workspaces) {
@@ -14,13 +16,15 @@ export const getUniqueClientsFromWorkspace = (
       map.set(ws.client.id, ws.client);
     }
   }
+  const compareDisplayName = compareByLocale(locale);
   return Array.from(map.values()).toSorted((a, b) =>
-    a.displayName.localeCompare(b.displayName),
+    compareDisplayName(a.displayName, b.displayName),
   );
 };
 
 export const groupByClient = (
   workspaces: readonly Workspace[],
+  locale: string,
 ): WorkspaceGroup[] => {
   const clientGroups = new Map<
     string,
@@ -50,8 +54,9 @@ export const groupByClient = (
     group.workspaces.push(ws);
   }
 
+  const compareClientName = compareByLocale(locale);
   const sortedClientGroups = [...clientGroups.values()].toSorted((a, b) =>
-    a.clientName.localeCompare(b.clientName),
+    compareClientName(a.clientName, b.clientName),
   );
 
   if (personalWorkspaces.length === 0) {
@@ -72,12 +77,13 @@ export const compareWorkspacesByKey = (
   a: Workspace,
   b: Workspace,
   key: MattersSortKey,
+  locale: string,
 ): number => {
   switch (key) {
     case "name":
-      return a.name.localeCompare(b.name);
+      return compareByLocale(locale)(a.name, b.name);
     case "reference":
-      return a.reference.localeCompare(b.reference);
+      return compareByLocale(locale)(a.reference, b.reference);
     case "entityCount":
       return a.entityCount - b.entityCount;
     case "lastActivityAt":
@@ -88,7 +94,8 @@ export const compareWorkspacesByKey = (
     case "createdAt":
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     case "clientName":
-      return (a.client?.displayName ?? "").localeCompare(
+      return compareByLocale(locale)(
+        a.client?.displayName ?? "",
         b.client?.displayName ?? "",
       );
     default:

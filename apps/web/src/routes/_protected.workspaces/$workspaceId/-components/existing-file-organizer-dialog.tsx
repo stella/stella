@@ -41,6 +41,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { compareByLocale } from "@/lib/collation";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
@@ -409,6 +410,7 @@ export const ExistingFileOrganizerDialog = ({
         workspaceId,
         rows: rowsSnapshot,
         existingFolders: existingFoldersSnapshot,
+        locale,
       });
 
       for (const row of rowsSnapshot) {
@@ -964,7 +966,8 @@ const OrganizerTreePreview = ({
   onRenameFolder,
 }: OrganizerTreePreviewProps) => {
   const t = useTranslations();
-  const root = useMemo(() => buildOrganizerTree(rows), [rows]);
+  const locale = useI18nStore((s) => s.loadedLang);
+  const root = useMemo(() => buildOrganizerTree(rows, locale), [rows, locale]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRootOver, setIsRootOver] = useState(false);
   const handleMoveFile = useEffectEvent(onMoveFile);
@@ -1424,6 +1427,7 @@ const countFilesInFolder = (folder: FolderPreviewNode): number => {
 
 const buildOrganizerTree = (
   rows: readonly ExistingOrganizerRow[],
+  locale: string,
 ): FolderPreviewNode => {
   const root = createFolderNode("", "");
 
@@ -1453,7 +1457,7 @@ const buildOrganizerTree = (
     current.rows.push(row);
   }
 
-  sortFolderNode(root);
+  sortFolderNode(root, locale);
   return root;
 };
 
@@ -1464,13 +1468,14 @@ const createFolderNode = (name: string, path: string): FolderPreviewNode => ({
   rows: [],
 });
 
-const sortFolderNode = (node: FolderPreviewNode): void => {
+const sortFolderNode = (node: FolderPreviewNode, locale: string): void => {
+  const compareText = compareByLocale(locale);
   node.children = new Map(
-    [...node.children.entries()].sort(([a], [b]) => a.localeCompare(b)),
+    [...node.children.entries()].sort(([a], [b]) => compareText(a, b)),
   );
-  node.rows.sort((a, b) => a.suggestedName.localeCompare(b.suggestedName));
+  node.rows.sort((a, b) => compareText(a.suggestedName, b.suggestedName));
   for (const child of node.children.values()) {
-    sortFolderNode(child);
+    sortFolderNode(child, locale);
   }
 };
 
@@ -1478,6 +1483,7 @@ type EnsureFoldersOptions = {
   workspaceId: string;
   rows: readonly FileNameSuggestion[];
   existingFolders: readonly ExistingImportFolder[];
+  locale: string;
 };
 
 // Folder paths returned from the AI and seen on the dialog rows are
@@ -1490,6 +1496,7 @@ const ensureFolders = async ({
   workspaceId,
   rows,
   existingFolders,
+  locale,
 }: EnsureFoldersOptions): Promise<Map<string, string | null>> => {
   const folderIds = new Map<string, string | null>([["", null]]);
   const knownFolders = new Map<string, string>();
@@ -1500,7 +1507,7 @@ const ensureFolders = async ({
 
   const folderPaths = [
     ...new Set(rows.map((row) => normalizeFolderPath(row.folderPath))),
-  ].sort((a, b) => a.localeCompare(b));
+  ].sort(compareByLocale(locale));
 
   for (const folderPath of folderPaths) {
     let currentParentId: string | null = null;

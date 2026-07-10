@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { compareByLocale } from "@/lib/collation";
+
 import { DEEPL_TARGET_LANGUAGES } from "./languages";
 
 const DOCUMENTED_DEEPL_TARGET_CODES = [
@@ -56,8 +58,6 @@ describe("DeepL target language picker data", () => {
       (language) => language.englishName,
     );
 
-    expect(displayNames).toEqual(
-      [...displayNames].sort((a, b) => a.localeCompare(b, "en")),
-    );
+    expect(displayNames).toEqual([...displayNames].sort(compareByLocale("en")));
   });
 });

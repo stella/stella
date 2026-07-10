@@ -5,6 +5,8 @@ import fc from "fast-check";
 import type { ConditionNode } from "@stll/conditions";
 import { propertyConfig } from "@stll/property-testing";
 
+import { compareByLocale } from "@/api/lib/collation";
+
 import {
   applyFilters,
   applySorts,
@@ -459,6 +461,9 @@ describe("applySorts (in-memory)", () => {
 
           const sorted = applySorts(items, [{ propertyId: "p1", desc: false }]);
           const extracted = sorted.map((item) => item.fields[0]?.content.value);
+          // applySorts defaults to "en" when no locale is given; compare with
+          // the same collator so this checks the actual invariant it upholds.
+          const compareText = compareByLocale("en");
 
           for (const [index, value] of extracted.entries()) {
             if (value === undefined) {
@@ -468,7 +473,7 @@ describe("applySorts (in-memory)", () => {
             if (next === undefined) {
               continue;
             }
-            expect(value.localeCompare(next)).toBeLessThanOrEqual(0);
+            expect(compareText(value, next)).toBeLessThanOrEqual(0);
           }
         },
       ),

@@ -578,6 +578,7 @@ export const discoverTemplate = async (
 
   // Build DiscoveredPlaceholder[] (backward-compat)
   const placeholders: DiscoveredPlaceholder[] = [...placeholderCounts.entries()]
+    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- placeholder name is a template merge-field path (e.g. "client.name"), not display text
     .toSorted(([a], [b]) => a.localeCompare(b))
     .map(([name, count]) => ({ name, count }));
 
@@ -618,6 +619,7 @@ export const discoverTemplate = async (
   }
 
   // Sort fields alphabetically
+  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- field path is a template merge-field path, not display text
   discoveredFields.sort((a, b) => a.path.localeCompare(b.path));
 
   return {

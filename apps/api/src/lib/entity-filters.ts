@@ -16,6 +16,7 @@ import {
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import { compareByLocale } from "@/api/lib/collation";
 import { typedPgArray } from "@/api/lib/search/sql";
 
 // -- Types --
@@ -278,10 +279,17 @@ export const applyFilters = <T extends FilterableEntity>(
 export const applySorts = <T extends FilterableEntity>(
   items: T[],
   sorts: ViewSort[],
+  // Property values are user-entered text (as opposed to e.g. an id), so
+  // sorting them needs the viewer's locale, not codepoint order. Callers pass
+  // the request locale (extractLangFromRequest); default "en" only covers
+  // call sites (tests, scripts) that have none to give.
+  locale = "en",
 ): T[] => {
   if (sorts.length === 0) {
     return items;
   }
+
+  const compareText = compareByLocale(locale);
 
   return [...items].toSorted((a, b) => {
     for (const sort of sorts) {
@@ -291,9 +299,9 @@ export const applySorts = <T extends FilterableEntity>(
 
       // Numeric ordering whenever the property is numeric on at least one
       // side. Comparing only when BOTH sides are int dropped to a string
-      // localeCompare the moment a row was missing the field or held a
-      // legacy non-int value, so 10 sorted before 9. Rows without a numeric
-      // value bucket to the end, independent of sort direction.
+      // compare the moment a row was missing the field or held a legacy
+      // non-int value, so 10 sorted before 9. Rows without a numeric value
+      // bucket to the end, independent of sort direction.
       if (fieldA?.content.type === "int" || fieldB?.content.type === "int") {
         const numA = numericContentValue(fieldA?.content);
         const numB = numericContentValue(fieldB?.content);
@@ -315,7 +323,7 @@ export const applySorts = <T extends FilterableEntity>(
 
       const valueA = getFieldValue(fieldA?.content);
       const valueB = getFieldValue(fieldB?.content);
-      const cmp = valueA.localeCompare(valueB) * dir;
+      const cmp = compareText(valueA, valueB) * dir;
 
       if (cmp !== 0) {
         return cmp;

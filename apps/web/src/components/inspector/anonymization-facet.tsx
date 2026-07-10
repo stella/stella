@@ -25,7 +25,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -57,6 +57,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { compareByLocale } from "@/lib/collation";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -196,6 +197,7 @@ export const AnonymizationFacet = ({
 }: AnonymizationFacetProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const locale = useLocale();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
@@ -539,10 +541,11 @@ export const AnonymizationFacet = ({
     for (const entry of allowlistEntries ?? []) {
       push(entry.label, entry.canonical, 0, true);
     }
+    const compareText = compareByLocale(locale);
     for (const list of groups.values()) {
-      list.sort((a, b) => a.canonical.localeCompare(b.canonical));
+      list.sort((a, b) => compareText(a.canonical, b.canonical));
     }
-    return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+    return [...groups.entries()].sort(([a], [b]) => compareText(a, b));
   })();
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),

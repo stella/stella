@@ -313,6 +313,7 @@ const collectResources = ({
     });
   }
 
+  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- file path, sorted for deterministic archive layout, not display text
   return resources.toSorted((a, b) => a.path.localeCompare(b.path));
 };
 

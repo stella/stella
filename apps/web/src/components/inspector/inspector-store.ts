@@ -681,6 +681,7 @@ const compareInspectorBroadcastClocks = (
     return left.updatedAt - right.updatedAt;
   }
 
+  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- senderId is an opaque per-tab id (distributed-clock tiebreak), not locale-sensitive display text
   return left.senderId.localeCompare(right.senderId);
 };
 

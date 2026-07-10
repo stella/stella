@@ -8,7 +8,7 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import {
   EU_MEMBER_STATES,
@@ -38,6 +38,7 @@ import {
 } from "@/components/catalogue/catalogue-row";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import type { ContextMenuAction } from "@/components/context-menu";
+import { compareByLocale } from "@/lib/collation";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   createCatalogueAutoSelectionPlan,
@@ -88,6 +89,7 @@ export const CatalogueStep = ({
   unavailableNativeToolBackendSlugs,
 }: CatalogueStepProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const [query, setQuery] = useState("");
   const [filterQuery, setFilterQuery] = useState("");
   // Multi-select jurisdiction chips. Pre-populated from the user's
@@ -139,6 +141,7 @@ export const CatalogueStep = ({
     const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
     return key ? t(key) : entry.displayName;
   };
+  const compareLocalizedName = compareByLocale(locale);
 
   const recommendedEntries = selectableEntries
     .filter(
@@ -146,7 +149,7 @@ export const CatalogueStep = ({
         recommendedSet.has(entry.slug) && !pinnedSlugSet.has(entry.slug),
     )
     .sort((left, right) =>
-      localizedName(left).localeCompare(localizedName(right)),
+      compareLocalizedName(localizedName(left), localizedName(right)),
     );
 
   const otherEntries = selectableEntries.filter(
@@ -185,7 +188,7 @@ export const CatalogueStep = ({
   const filteredEntries = [...recommendedEntries, ...otherEntries]
     .filter(matchesSearch)
     .sort((left, right) =>
-      localizedName(left).localeCompare(localizedName(right)),
+      compareLocalizedName(localizedName(left), localizedName(right)),
     );
 
   const allJurisdictionCodes = (() => {

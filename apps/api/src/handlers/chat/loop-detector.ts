@@ -447,9 +447,14 @@ const stableStringify = (
   }
 
   const serializedEntries: string[] = [];
-  for (const [key, entryValue] of Object.entries(value).sort(
-    ([left], [right]) => left.localeCompare(right),
-  )) {
+  // Canonical key order for hashing: plain codepoint comparison, not
+  // localeCompare. This must be bit-identical across environments
+  // regardless of runtime/ICU locale, which a locale-aware collator does
+  // not guarantee.
+  const orderedKeys = Object.entries(value).sort(([left], [right]) =>
+    left < right ? -1 : Number(left > right),
+  );
+  for (const [key, entryValue] of orderedKeys) {
     serializedEntries.push(
       `${JSON.stringify(key)}:${stableStringify(entryValue, seen)}`,
     );

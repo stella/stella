@@ -178,6 +178,7 @@ describe("capability dispatch <-> catalog parity", () => {
     const dispatchIds = Object.keys(CAPABILITY_DISPATCH).sort();
     const catalogIds = capabilityCatalog
       .map((entry) => entry.id)
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- capability ids are ASCII kebab-case identifiers matched against Object.keys(...).sort() codepoint order, not display text
       .sort((a, b) => a.localeCompare(b));
     expect(dispatchIds).toEqual(catalogIds);
   });
@@ -220,6 +221,7 @@ describe("list_capabilities", () => {
     // Keyset by id: page two starts strictly after page one's last id.
     const lastOfFirst = payload.items.at(-1)?.id ?? "";
     expect(
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- keyset cursor ordering check against a capability id, not display text
       secondPayload.items[0]?.id.localeCompare(lastOfFirst),
     ).toBeGreaterThan(0);
   });

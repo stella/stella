@@ -227,6 +227,7 @@ const downloadZipHandler = async function* ({
   });
   rawFiles.sort(
     (a, b) =>
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- deterministic archive entry order (path/id), not display text
       a.rawPath.localeCompare(b.rawPath) || a.fileId.localeCompare(b.fileId),
   );
 

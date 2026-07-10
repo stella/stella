@@ -10,7 +10,7 @@ import {
   UserIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -195,6 +195,7 @@ const CreateMatterDialogBody = ({
   draftClient,
 }: CreateMatterDialogBodyProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const navigate = useNavigate();
   const currentUser = routeApi.useRouteContext({
     select: (ctx) => ctx.user,
@@ -355,6 +356,7 @@ const CreateMatterDialogBody = ({
         a,
         b,
         collaboratorStats,
+        locale,
       }),
     );
   const filteredMembers = (() => {

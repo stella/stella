@@ -113,6 +113,7 @@ const resolveSkillToolPrecedence = (
     });
   }
 
+  // oxlint-disable-next-line require-cached-collator/require-cached-collator -- exposedName is the MCP tool registry's machine identifier, not display text
   return skills.toSorted((a, b) => a.exposedName.localeCompare(b.exposedName));
 };
 

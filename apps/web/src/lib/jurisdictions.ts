@@ -1,5 +1,6 @@
 import { type CountryCode, isCountryCode } from "@stll/country-codes";
 
+import { compareByLocale } from "@/lib/collation";
 import { COUNTRY_CENTROIDS, COUNTRY_CODES } from "@/lib/country-centroids";
 
 export { COUNTRY_CODES };
@@ -61,11 +62,12 @@ const LOCALE_REGION_PATTERN = /[-_](?<region>[A-Za-z]{2})\b/u;
 
 export const createCountryOptions = (locale: string): CountryOption[] => {
   const names = new Intl.DisplayNames([locale], { type: "region" });
+  const compareName = compareByLocale(locale);
 
   return COUNTRY_CODES.map((code) => ({
     code,
     name: names.of(code) ?? code,
-  })).sort((a, b) => a.name.localeCompare(b.name, locale));
+  })).sort((a, b) => compareName(a.name, b.name));
 };
 
 export const countryName = (

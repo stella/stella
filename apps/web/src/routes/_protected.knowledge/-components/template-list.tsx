@@ -70,6 +70,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { compareByLocale } from "@/lib/collation";
 import { DOCX_MIME, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -140,6 +141,7 @@ export const TemplateList = ({
 }: TemplateListProps) => {
   const t = useTranslations();
   const format = useFormatter();
+  const lang = useI18nStore((s) => s.lang);
   const canCreateTemplate = usePermissions({ template: ["create"] });
   const assignCategory = useAssignTemplateCategory();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -255,7 +257,7 @@ export const TemplateList = ({
 
   const allTags = [
     ...new Set(templates.flatMap((template) => template.tags ?? [])),
-  ].sort((a, b) => a.localeCompare(b));
+  ].sort(compareByLocale(lang));
 
   const visibleTemplates = tagFilter
     ? templates.filter((template) => template.tags?.includes(tagFilter))
@@ -1289,7 +1291,7 @@ const TemplateLanguagesField = ({
       code: language.code,
       label: languageDisplayName(language.code, lang),
     }))
-    .sort((a, b) => a.label.localeCompare(b.label, lang));
+    .sort((a, b) => compareByLocale(lang)(a.label, b.label));
 
   const atLimit = languages.length >= MAX_TEMPLATE_LANGUAGES;
 

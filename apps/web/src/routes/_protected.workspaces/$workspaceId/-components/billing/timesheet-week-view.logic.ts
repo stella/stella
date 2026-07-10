@@ -19,6 +19,7 @@ const sortedCurrencyAmounts = (
 ): CurrencyAmount[] =>
   [...byCurrency.entries()]
     .map(([currency, amount]) => ({ currency, amount }))
+    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- ISO 4217 currency codes are fixed ASCII codes, not locale-sensitive display text
     .sort((a, b) => a.currency.localeCompare(b.currency));
 
 /**
