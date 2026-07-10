@@ -362,7 +362,6 @@ export default defineConfig({
     "./.oxlint-plugins/no-public-law-browser-globals.ts",
     "./.oxlint-plugins/no-raw-public-law-seo.ts",
     "./.oxlint-plugins/public-case-law-db-boundary.ts",
-    "./.oxlint-plugins/folio-layer-boundaries.ts",
     "./.oxlint-plugins/require-contained-handler.ts",
     "./.oxlint-plugins/suppression-hygiene.ts",
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
@@ -573,56 +572,6 @@ export default defineConfig({
       },
     },
     {
-      // Legacy DOCX/editor code has parser and layout state machines that need
-      // dedicated extraction passes. Keep the rule visible without blocking
-      // this guardrail rollout on a broad folio rewrite.
-      files: ["packages/folio/src/**/*.{ts,tsx}"],
-      rules: { "sonarjs/cognitive-complexity": ["error", 200] },
-    },
-    {
-      // Folio render-pipeline layer boundaries. The painter is downstream of
-      // the engine and bridge and must not import upstream concerns; the
-      // bridge and engine must not pull from the painter. See
-      // `.oxlint-plugins/folio-layer-boundaries.ts` and the matching test at
-      // `packages/folio/src/core/__tests__/layer-boundaries.test.ts`.
-      files: [
-        "packages/folio/src/core/layout-bridge/**/*.{ts,tsx}",
-        "packages/folio/src/core/layout-engine/**/*.{ts,tsx}",
-        "packages/folio/src/core/layout-painter/**/*.{ts,tsx}",
-      ],
-      rules: {
-        "folio-layer-boundaries/no-upstream-import": "error",
-      },
-    },
-    {
-      // Folio core is the headless, framework-neutral core. Forbid React,
-      // react-dom, and @stll/ui (type-only imports included) anywhere under
-      // core/, so adapters (React today; Vue / a Tauri shell / a Rust core
-      // tomorrow) can all sit on one shared core. See
-      // `.oxlint-plugins/folio-layer-boundaries.ts` and the matching test at
-      // `packages/folio/src/core/__tests__/react-free-core.test.ts`.
-      files: ["packages/folio/src/core/**/*.{ts,tsx}"],
-      rules: {
-        "folio-layer-boundaries/no-react-in-core": "error",
-      },
-    },
-    {
-      // Folio model seam (Seam 2). The model type layer is pure data — the
-      // behavior-free lingua franca the engine, painter, bridge, ProseMirror
-      // integration, and adapters all sit on. Forbid it from importing
-      // ProseMirror, DOM render, React, @stll/ui, or engine behavior. See
-      // `.oxlint-plugins/folio-layer-boundaries.ts` and the matching test at
-      // `packages/folio/src/core/__tests__/model-purity.test.ts`.
-      files: [
-        "packages/folio/src/core/types/**/*.ts",
-        "packages/folio/src/core/layout-engine/types.ts",
-        "packages/folio/src/core/layout-engine/measure/measureTypes.ts",
-      ],
-      rules: {
-        "folio-layer-boundaries/model-is-pure-data": "error",
-      },
-    },
-    {
       // Drizzle schema files are guarded by check-migrations.sh, which
       // requires a new migration on any byte-level change. Keep regex
       // flags off here so adding the rule globally doesn't force an
@@ -640,8 +589,6 @@ export default defineConfig({
         "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
         "apps/api/src/lib/markdown/html-to-markdown.ts",
         "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx",
-        "packages/folio/src/core/utils/clipboard.ts",
-        "packages/folio/src/core/utils/fontResolver.ts",
       ],
       rules: { "require-unicode-regexp": "off" },
     },
@@ -678,11 +625,7 @@ export default defineConfig({
       rules: { "sonarjs/cognitive-complexity": ["error", 40] },
     },
     {
-      files: [
-        "apps/web/src/**/*.{ts,tsx}",
-        "packages/ui/src/**/*.{ts,tsx}",
-        "packages/folio/src/**/*.{ts,tsx}",
-      ],
+      files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
       rules: {
         "no-raw-colors/no-raw-colors": "error",
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
@@ -1140,37 +1083,6 @@ export default defineConfig({
       rules: { "no-raw-colors/no-raw-colors": "off" },
     },
     {
-      // Color pickers, style galleries, and font pickers legitimately render
-      // inline color values as visual previews — not theme-dependent chrome.
-      files: [
-        "packages/folio/src/**/TableStyleGallery.tsx",
-        "packages/folio/src/**/TableBorderPicker.tsx",
-        "packages/folio/src/**/TableBorderWidthPicker.tsx",
-        "packages/folio/src/**/InsertSymbolDialog.tsx",
-        "packages/folio/src/**/FontSizePicker.tsx",
-        "packages/folio/src/**/IconGridDropdown.tsx",
-        "packages/folio/src/**/TableOptionsDropdown.tsx",
-        "packages/folio/src/**/TableMoreDropdown.tsx",
-        "packages/folio/src/**/TableMergeButton.tsx",
-        "packages/folio/src/**/TableGridPicker.tsx",
-        "packages/folio/src/**/ShapeGallery.tsx",
-        "packages/folio/src/**/FootnotePropertiesDialog.tsx",
-      ],
-      rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
-    },
-    {
-      // OOXML color data: palette presets, hex-to-name mappings, table style
-      // definitions, and standard color arrays. These are document-format
-      // constants, not theme-dependent CSS.
-      files: [
-        "packages/folio/src/**/toolbarUtils.ts",
-        "packages/folio/src/**/table-styles.ts",
-        "packages/folio/src/**/colorResolver.ts",
-        "packages/folio/src/**/FormattingBar.tsx",
-      ],
-      rules: { "no-inline-style-colors/no-inline-style-colors": "off" },
-    },
-    {
       files: ["packages/ui/src/**/button.tsx"],
       rules: {
         "no-raw-colors/no-raw-colors": "off",
@@ -1508,174 +1420,6 @@ export default defineConfig({
       },
     },
     {
-      // ProseMirror's node.attrs and mark.attrs are typed as
-      // { readonly [attr: string]: any } — a library FFI boundary.
-      // toDOM and parseDOM callbacks must cast attrs to their typed shapes,
-      // and NodeSpec/MarkSpec do not support generic type parameters.
-      // Extension commands also read attrs via the same any-typed API.
-      files: [
-        "packages/folio/src/core/prosemirror/extensions/**/*.ts",
-        "packages/folio/src/core/prosemirror/extensions/**/*.tsx",
-      ],
-      rules: {
-        "typescript/no-unsafe-type-assertion": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/strict-boolean-expressions": "off",
-
-        "typescript/prefer-nullish-coalescing": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/no-unnecessary-type-assertion": "off",
-        "typescript/no-unsafe-return": "off",
-
-        "eslint/no-eq-null": "off",
-        "eslint/eqeqeq": "off",
-        "no-useless-assignment": "off",
-        "typescript/consistent-return": "off",
-      },
-    },
-    {
-      // Folio React components and hooks interact directly with ProseMirror
-      // state (node.attrs typed as any), OOXML data structures, and DOM APIs
-      // requiring HTMLElement subtype casts. Same FFI boundary as extensions.
-      files: [
-        "packages/folio/src/components/**/*.ts",
-        "packages/folio/src/components/**/*.tsx",
-        "packages/folio/src/hooks/**/*.ts",
-        "packages/folio/src/hooks/**/*.tsx",
-        "packages/folio/src/*.ts",
-        "packages/folio/src/*.tsx",
-      ],
-      rules: {
-        "typescript/no-unsafe-type-assertion": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/strict-boolean-expressions": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/no-unnecessary-type-assertion": "off",
-        "typescript/prefer-nullish-coalescing": "off",
-
-        "eslint/no-eq-null": "off",
-        "eslint/eqeqeq": "off",
-        "no-useless-assignment": "off",
-        "typescript/consistent-return": "off",
-
-        "typescript/no-unsafe-return": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-argument": "off",
-
-        "typescript/no-deprecated": "off",
-        "typescript/promise-function-async": "off",
-      },
-    },
-    {
-      // Folio layout bridge, layout painter, layout engine, prosemirror commands,
-      // prosemirror conversion, prosemirror plugins, paged-editor,
-      // managers, and utils all work with ProseMirror's any-typed node.attrs and
-      // DOM APIs that return HTMLElement subtypes requiring narrowing casts.
-      files: [
-        "packages/folio/src/core/layout-bridge/**/*.ts",
-        "packages/folio/src/core/layout-bridge/**/*.tsx",
-        "packages/folio/src/core/layout-painter/**/*.ts",
-        "packages/folio/src/core/layout-painter/**/*.tsx",
-        "packages/folio/src/core/layout-engine/**/*.ts",
-        "packages/folio/src/core/layout-engine/**/*.tsx",
-        "packages/folio/src/core/__tests__/**/*.ts",
-        "packages/folio/src/core/__tests__/**/*.tsx",
-        "packages/folio/src/core/prosemirror/conversion/**/*.ts",
-        "packages/folio/src/core/prosemirror/conversion/**/*.tsx",
-        "packages/folio/src/core/prosemirror/commands/**/*.ts",
-        "packages/folio/src/core/prosemirror/commands/**/*.tsx",
-        "packages/folio/src/core/prosemirror/plugins/**/*.ts",
-        "packages/folio/src/core/prosemirror/plugins/**/*.tsx",
-        "packages/folio/src/core/prosemirror/*.ts",
-        "packages/folio/src/core/prosemirror/*.tsx",
-        "packages/folio/src/core/prosemirror/**/*.ts",
-        "packages/folio/src/core/prosemirror/**/*.tsx",
-        "packages/folio/src/core/managers/**/*.ts",
-        "packages/folio/src/core/managers/**/*.tsx",
-        "packages/folio/src/core/utils/**/*.ts",
-        "packages/folio/src/core/utils/**/*.tsx",
-        "packages/folio/src/core/types/**/*.ts",
-        "packages/folio/src/paged-editor/**/*.ts",
-        "packages/folio/src/paged-editor/**/*.tsx",
-      ],
-      rules: {
-        "typescript/no-unsafe-type-assertion": "off",
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/strict-boolean-expressions": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/no-unnecessary-type-assertion": "off",
-        "typescript/prefer-nullish-coalescing": "off",
-
-        "eslint/no-eq-null": "off",
-        "eslint/eqeqeq": "off",
-        "no-useless-assignment": "off",
-        "typescript/consistent-return": "off",
-
-        "typescript/no-unsafe-return": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-argument": "off",
-
-        "typescript/no-deprecated": "off",
-        "typescript/promise-function-async": "off",
-      },
-    },
-    {
-      // OOXML parsers and serializers operate on fast-xml-parser node trees,
-      // slimdom nodes, and JSZip entries — all FFI boundaries that surface as
-      // any/Record<string, unknown>. OOXML attribute-string narrowing is now
-      // handled by Valibot picklists in parserEnums.ts (see narrowEnum), so
-      // typescript/no-unsafe-type-assertion is enforced here; only true FFI
-      // boundary files keep the rule off via the override below.
-      files: [
-        "packages/folio/src/core/docx/**/*.ts",
-        "packages/folio/src/core/docx/**/*.tsx",
-      ],
-      rules: {
-        "typescript/no-unsafe-assignment": "off",
-        "typescript/no-unsafe-member-access": "off",
-        "typescript/strict-boolean-expressions": "off",
-        "typescript/no-non-null-assertion": "off",
-        "typescript/no-unnecessary-type-assertion": "off",
-        "typescript/prefer-nullish-coalescing": "off",
-        "eslint/no-eq-null": "off",
-        "eslint/eqeqeq": "off",
-        "no-useless-assignment": "off",
-
-        "typescript/promise-function-async": "off",
-
-        "unicorn/no-array-for-each": "off",
-        "typescript/no-unnecessary-type-conversion": "off",
-        "typescript/no-duplicate-type-constituents": "off",
-
-        "eslint/no-control-regex": "off",
-        "typescript/no-deprecated": "off",
-        "typescript/consistent-return": "off",
-        "typescript/no-unsafe-return": "off",
-        "typescript/no-unsafe-call": "off",
-        "typescript/no-unsafe-argument": "off",
-
-        "unicorn/prefer-string-starts-ends-with": "off",
-        "typescript/prefer-string-starts-ends-with": "off",
-      },
-    },
-    {
-      // FFI-boundary files: fast-xml-parser returns Record<string, unknown>
-      // node trees and JSZip exposes _data via an undocumented internal
-      // property. The casts at this boundary widen library output back to the
-      // shape we know the library produces and cannot be replaced with
-      // structural narrowing without giving up the FFI entirely.
-      files: [
-        "packages/folio/src/core/docx/xmlParser.ts",
-        "packages/folio/src/core/docx/unzip.ts",
-      ],
-      rules: {
-        "typescript/no-unsafe-type-assertion": "off",
-      },
-    },
-    {
       // @stll/business-registries subpath types resolve as error in
       // type-aware linting because the workspace package dist isn't
       // always available during local lint runs.
@@ -1972,16 +1716,6 @@ export default defineConfig({
         "typescript/no-unsafe-argument": "off",
         "typescript/no-unsafe-return": "off",
         "typescript/strict-boolean-expressions": "off",
-      },
-    },
-    {
-      // Folio docx test fixtures cast XmlElement subtrees and ProseMirror
-      // mark.attrs values (typed as `any` at the library boundary) into the
-      // shapes the helpers need. Keep no-unsafe-type-assertion off only here
-      // so the rule stays live for product code in packages/folio/src/core/docx.
-      files: ["packages/folio/src/core/docx/__tests__/**/*.{ts,tsx}"],
-      rules: {
-        "typescript/no-unsafe-type-assertion": "off",
       },
     },
     {
