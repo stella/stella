@@ -256,7 +256,11 @@ export const ComposerPlusMenu = ({
 // submenu's search field stops propagation for all keys except the ones
 // the menu still needs: Escape to close, Up/Down to move the highlight,
 // Enter to activate the highlighted item.
-const MENU_NAV_KEYS = ["Escape", "ArrowDown", "ArrowUp", "Enter"];
+const isMenuNavigationKey = (key: string): boolean =>
+  key === "Escape" ||
+  key === "ArrowDown" ||
+  key === "ArrowUp" ||
+  key === "Enter";
 
 type ComposerSubmenuSearchProps = {
   onChange: (value: string) => void;
@@ -281,7 +285,7 @@ const ComposerSubmenuSearch = ({
           onChange(event.target.value);
         }}
         onKeyDown={(event) => {
-          if (!MENU_NAV_KEYS.includes(event.key)) {
+          if (!isMenuNavigationKey(event.key)) {
             event.stopPropagation();
           }
         }}
