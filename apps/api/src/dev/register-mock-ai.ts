@@ -26,7 +26,7 @@ const MOCK_REPLY =
 // reply as many small delayed chunks instead of one instant chunk, giving an
 // e2e spec a real streaming window to hold open (e.g. to type into the
 // composer while a response is still arriving).
-const E2E_SLOW_STREAM_MARKER = "[e2e:slow-stream]";
+const E2E_SLOW_STREAM_MARKER = "Stream slowly please";
 
 const SLOW_STREAM_REPLY =
   "This mock reply streams back in many small pieces instead of arriving all " +
@@ -41,7 +41,7 @@ const SLOW_STREAM_CHUNKS = SLOW_STREAM_REPLY.match(/\S+\s*/gu) ?? [
   SLOW_STREAM_REPLY,
 ];
 
-const SLOW_STREAM_CHUNK_DELAY_MS = 50;
+const SLOW_STREAM_CHUNK_DELAY_MS = 100;
 
 const mockUsage: TokenUsage = {
   promptTokens: 1,

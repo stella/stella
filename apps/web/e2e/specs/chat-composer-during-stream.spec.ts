@@ -3,10 +3,10 @@ import { expect, test } from "../helpers/test";
 // Marker recognized by the mock AI adapter (apps/api/src/dev/register-mock-ai.ts,
 // E2E_SLOW_STREAM_MARKER) — grep either file to find the other. It cannot be
 // imported here: this spec runs in apps/web and has no dependency on apps/api.
-// When the latest user message contains it, the mock streams its reply as ~60
-// delayed chunks (~3s total) instead of one instant chunk, giving this spec a
+// When the latest user message contains it, the mock streams its reply as ~50
+// delayed chunks (~5s total) instead of one instant chunk, giving this spec a
 // real window to type into the composer while a response is still streaming.
-const SLOW_STREAM_MARKER = "[e2e:slow-stream]";
+const SLOW_STREAM_MARKER = "Stream slowly please";
 
 // The seeded e2e user (test@stella.dev) is an org owner whose org has NO
 // usage_entitlements row — the dark-launch default every production org
@@ -35,7 +35,7 @@ test("composer draft survives typing while a response is streaming", async ({
   // timeout on a fresh CI runner (see playwright.config.ts).
   await expect(composer).toBeVisible({ timeout: 30_000 });
 
-  const messageText = `Stream slowly please ${SLOW_STREAM_MARKER}`;
+  const messageText = SLOW_STREAM_MARKER;
   await composer.click();
   await composer.pressSequentially(messageText);
 
@@ -51,8 +51,14 @@ test("composer draft survives typing while a response is streaming", async ({
     { timeout: 30_000 },
   );
 
-  // The mock reply streams for ~3s once the marker is recognized (see
-  // register-mock-ai.ts). Type into the composer immediately, overlapping
+  // Wait for the action button to enter its streaming state. This proves the
+  // mock marker survived the server's message preparation before the typing
+  // assertion starts.
+  const stopButton = page.getByRole("button", { name: "Stop response" });
+  await expect(stopButton).toBeVisible({ timeout: 30_000 });
+
+  // The mock reply streams for ~5s once the marker is recognized (see
+  // register-mock-ai.ts). Type into the composer, overlapping
   // the assistant message's re-renders as chunks keep arriving — a
   // regression that re-runs the whole composer subtree on every stream
   // chunk (or worse, loops it) would either drop keystrokes or throw
@@ -61,13 +67,11 @@ test("composer draft survives typing while a response is streaming", async ({
   // fails this test on its own — no explicit assertion needed for that class
   // of bug.
   //
-  // Known soft spot: on an extremely slow cold run the stream could finish
-  // before typing begins here, which degrades this spec back to a
-  // non-overlapping smoke test rather than breaking it outright. The ~3s
-  // window is sized to make that unlikely on a normal CI runner.
   const draftText = "Draft typed while assistant is replying";
   await composer.click();
   await composer.pressSequentially(draftText, { delay: 30 });
+  await expect(composer).toContainText(draftText);
+  await expect(stopButton).toBeVisible();
 
   const transcript = page.getByRole("log");
   // "Retry" appears on the latest assistant message only once the stream

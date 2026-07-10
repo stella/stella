@@ -199,7 +199,9 @@ export const ChatThreadPage = ({
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
-    onError: usageLimit.handle,
+    onError: (nextError) => {
+      usageLimit.handle(nextError);
+    },
     threadRef,
     workspaceId,
   });
