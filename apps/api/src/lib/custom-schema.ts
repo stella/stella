@@ -41,5 +41,8 @@ export const tDefaultVarchar = t.String({
   maxLength: 256,
 });
 
+export const tPaginationLimit = (maximum: number) =>
+  t.Integer({ minimum: 1, maximum });
+
 export const workspaceParams = <T extends TProperties>(extra: T) =>
   t.Object({ workspaceId: tSafeId("workspace"), ...extra });

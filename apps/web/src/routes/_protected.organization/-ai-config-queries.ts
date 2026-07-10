@@ -24,6 +24,11 @@ export const aiConfigKeys = {
 
 type AIConfigOptionsInput = QueryOptionsInput<OrganizationAIConfigKey>;
 type AIAvailabilityOptionsInput = QueryOptionsInput<OrganizationAIConfigKey>;
+type GetAIConfig = (typeof api)["organization-settings"]["ai-config"]["get"];
+
+export type OrganizationAIConfig = NonNullable<
+  Awaited<ReturnType<GetAIConfig>>["data"]
+>;
 
 export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
   queryOptions({

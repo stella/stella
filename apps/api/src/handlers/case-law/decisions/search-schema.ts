@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tPaginationLimit, tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 export const searchDecisionsBodySchema = t.Object({
@@ -8,12 +8,7 @@ export const searchDecisionsBodySchema = t.Object({
     minLength: 1,
     maxLength: LIMITS.searchQueryMaxLength,
   }),
-  limit: t.Optional(
-    t.Number({
-      minimum: 1,
-      maximum: LIMITS.caseLawSearchPageSizeMax,
-    }),
-  ),
+  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(t.String()),
   court: t.Optional(t.String({ maxLength: 512 })),
   country: t.Optional(t.String({ maxLength: 3 })),

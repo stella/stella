@@ -2,22 +2,41 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import type { QueryOptionsInput } from "@/lib/react-query";
+
+type OrganizationAnonymizationBlacklistKey = {
+  organizationId: string;
+};
 
 export const organizationAnonymizationBlacklistKeys = {
   all: ["organization-settings", "anonymization-blacklist"] as const,
+  byOrganization: ({
+    organizationId,
+  }: OrganizationAnonymizationBlacklistKey) => [
+    ...organizationAnonymizationBlacklistKeys.all,
+    organizationId,
+  ],
 };
 
-export const organizationAnonymizationBlacklistOptions = queryOptions({
-  queryKey: organizationAnonymizationBlacklistKeys.all,
-  queryFn: async ({ signal }) => {
-    const response = await api["organization-settings"][
-      "anonymization-blacklist"
-    ].get({ fetch: { signal } });
+type OrganizationAnonymizationBlacklistOptionsInput =
+  QueryOptionsInput<OrganizationAnonymizationBlacklistKey>;
 
-    if (response.error) {
-      throw toAPIError(response.error);
-    }
+export const organizationAnonymizationBlacklistOptions = ({
+  organizationId,
+}: OrganizationAnonymizationBlacklistOptionsInput) =>
+  queryOptions({
+    queryKey: organizationAnonymizationBlacklistKeys.byOrganization({
+      organizationId,
+    }),
+    queryFn: async ({ signal }) => {
+      const response = await api["organization-settings"][
+        "anonymization-blacklist"
+      ].get({ fetch: { signal } });
 
-    return response.data;
-  },
-});
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+  });
