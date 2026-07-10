@@ -703,6 +703,7 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new Response("file bytes"),
+      access: "read",
     });
     expect(mappedError(mapped).code).toBe("feature_disabled");
   });
@@ -716,13 +717,21 @@ describe("invoke_capability file-response gate (fix-6)", () => {
       ["Blob", new Blob(["bytes"])],
     ];
     for (const [label, value] of binaries) {
-      const mapped = mapHandlerResult({ id: "x.y", result: value });
+      const mapped = mapHandlerResult({
+        id: "x.y",
+        result: value,
+        access: "read",
+      });
       expect(mappedError(mapped).code, label).toBe("feature_disabled");
     }
   });
 
   test("(layer b) mapHandlerResult passes a plain payload through", () => {
-    const mapped = mapHandlerResult({ id: "x.y", result: { ok: true } });
+    const mapped = mapHandlerResult({
+      id: "x.y",
+      result: { ok: true },
+      access: "read",
+    });
     expect(mapped).toEqual({
       egress: "structured",
       payload: { ok: true },
@@ -730,9 +739,9 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     });
   });
 
-  test("(layer b) a success payload carries the request receipt under meta", () => {
+  test("(layer b) a WRITE success payload carries the request receipt under meta", () => {
     const mapped = runWithRequestId("req_invoke", () =>
-      mapHandlerResult({ id: "x.y", result: { ok: true } }),
+      mapHandlerResult({ id: "x.y", result: { ok: true }, access: "write" }),
     );
     expect(mapped).toEqual({
       egress: "structured",
@@ -741,10 +750,22 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     });
   });
 
+  test("(layer b) a READ success payload carries NO receipt (deterministic for caching)", () => {
+    const mapped = runWithRequestId("req_invoke", () =>
+      mapHandlerResult({ id: "x.y", result: { ok: true }, access: "read" }),
+    );
+    expect(mapped).toEqual({
+      egress: "structured",
+      payload: { ok: true },
+      textFields: [],
+    });
+  });
+
   test("(layer b) mapHandlerResult maps a status response onto the envelope", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
+      access: "read",
     });
     expect(mappedError(mapped).code).toBe("not_found");
   });
@@ -1040,6 +1061,7 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(409, {
         message: "Decision already linked to this matter",
       }),
+      access: "write",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("conflict");
@@ -1052,6 +1074,7 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(422, {
         message: "dateFrom must precede dateTo",
       }),
+      access: "read",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("validation_error");
@@ -1062,6 +1085,7 @@ describe("status-to-envelope mapping", () => {
     const mapped = mapHandlerResult({
       id: "x.y",
       result: new ElysiaCustomStatusResponse(401, { message: "Unauthorized" }),
+      access: "read",
     });
     expect(mappedError(mapped).code).toBe("permission_denied");
   });
@@ -1072,6 +1096,7 @@ describe("status-to-envelope mapping", () => {
       result: new ElysiaCustomStatusResponse(502, {
         message: "upstream gotenberg at 10.0.3.7 refused",
       }),
+      access: "read",
     });
     const error = mappedError(mapped);
     expect(error.code).toBe("internal_error");
