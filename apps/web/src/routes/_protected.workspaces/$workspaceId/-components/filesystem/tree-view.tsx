@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import {
@@ -56,6 +57,7 @@ import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { toSafeId } from "@/lib/safe-id";
+import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import { isFileDisplayable } from "@/lib/types";
 import type {
   ViewLayout,
@@ -234,30 +236,27 @@ type ColumnWidthsApi = {
   setWidth: (id: string, width: number) => void;
 };
 
+// Top-level shape only: each value is checked for finite-number below, so
+// one non-numeric entry drops just that column rather than the whole map.
+const ColumnWidthsRecordSchema = v.record(v.string(), v.unknown());
+
 const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
   const [widths, setWidths] = useState<Record<string, number>>(() => {
     if (typeof window === "undefined") {
       return {};
     }
-    try {
-      const raw = window.localStorage.getItem(storageKey);
-      if (!raw) {
-        return {};
-      }
-      const parsed: unknown = JSON.parse(raw);
-      if (parsed === null || typeof parsed !== "object") {
-        return {};
-      }
-      const result: Record<string, number> = {};
-      for (const [key, value] of Object.entries(parsed)) {
-        if (typeof value === "number" && Number.isFinite(value)) {
-          result[key] = value;
-        }
-      }
-      return result;
-    } catch {
+    const raw = window.localStorage.getItem(storageKey);
+    const parsed = readStoredJson(raw, ColumnWidthsRecordSchema);
+    if (!parsed) {
       return {};
     }
+    const result: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        result[key] = value;
+      }
+    }
+    return result;
   });
 
   const setWidth = useCallback(
@@ -271,11 +270,7 @@ const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
           return prev;
         }
         const next = { ...prev, [id]: clamped };
-        try {
-          window.localStorage.setItem(storageKey, JSON.stringify(next));
-        } catch {
-          // Ignore quota / unavailable storage.
-        }
+        writeStoredJson(window.localStorage, storageKey, next);
         return next;
       });
     },

@@ -384,6 +384,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-query-signal.ts",
     "./.oxlint-plugins/require-stable-snapshot.ts",
     "./.oxlint-plugins/require-use-shallow.ts",
+    "./.oxlint-plugins/no-raw-stored-json.ts",
   ],
 
   overrides: [
@@ -669,6 +670,19 @@ export default defineConfig({
       ],
       rules: {
         "no-document-cookie/no-document-cookie": "error",
+      },
+    },
+    {
+      // Persisted-storage reads: scoped to apps/web, the only surface that
+      // reads localStorage/sessionStorage. The helper module itself is the
+      // one place a raw JSON.parse on a persisted string is intentional.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-stored-json.fixture.ts",
+      ],
+      excludeFiles: ["apps/web/src/lib/stored-json.ts"],
+      rules: {
+        "no-raw-stored-json/no-raw-stored-json": "error",
       },
     },
     {
