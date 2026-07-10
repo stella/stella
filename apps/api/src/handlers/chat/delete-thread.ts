@@ -81,7 +81,7 @@ const deleteThread = createSafeRootHandler(
         conditions.push(gt(userFiles.id, lastFileId));
       }
       // SAFETY: sequential keyset pagination keeps each cleanup page bounded; the next page depends on this cursor.
-      // eslint-disable-next-line no-db-await-in-loop
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
       const files = yield* Result.await(
         safeDb((tx) =>
           tx
@@ -128,7 +128,7 @@ const deleteThread = createSafeRootHandler(
       }
 
       // SAFETY: storage deletion must succeed before the corresponding bounded page of rows is removed.
-      // eslint-disable-next-line no-db-await-in-loop
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
       yield* Result.await(
         // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
         safeDb((tx) => {
