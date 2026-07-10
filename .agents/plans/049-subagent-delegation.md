@@ -20,13 +20,16 @@ existing flat `parts[]` transcript.
   the org's available catalog / BYOK config, so a subagent cannot pick a model
   the org isn't entitled to); otherwise `role: "fast"`. Both honor BYOK +
   mock-AI through the shared resolver.
-- **Subagents can perform writes; approvals bubble up to the user** (unless the
-  user is in "yolo" / auto-approve mode). See the Approval Architecture section —
-  this is the load-bearing design choice and is still open.
+- **Subagents can perform writes under a single upfront delegation grant**
+  (unless the user is in "yolo" / auto-approve mode): the user approves the
+  `spawn_subagents` call once, then every subagent runs its scoped writes
+  under that grant with no further per-write prompt. See the Approval
+  Architecture section — **locked as Option A**.
 - **Metering: new `"subagent"` usage action type.** Clean billing separation of
   delegated spend from the parent `chat` turn.
-- **Build Phase 1 + Phase 2 together**: the tool + nested loop, plus
-  `metadata.agent` identity and a dedicated subagent tool-call card.
+- **Build Phase 1 + Phase 2 together**: the tool + nested loop, plus a
+  dedicated subagent tool-call card. `metadata.agent` identity is deferred
+  (see Scope below).
 
 ## Design Decisions (settled)
 
@@ -132,12 +135,14 @@ approval queue UI. Out of scope here.
   `chat()` call.
 - `apps/api/src/lib/usage/*` — add the `subagent` action type + its unit/credit
   mapping.
-- `apps/api/src/handlers/chat/types.ts` — add optional
-  `agent?: { id; model; role }` to `ChatMessageMetadata` (JSONB envelope,
-  additive, no migration).
-- Frontend — `metadata.agent` part predicates + a dedicated subagent tool-call
-  card under `apps/web/src/.../-components` / `components/chat/`.
+- Frontend — `apps/web/src/components/chat/spawn-subagents-card.tsx`, a
+  dedicated `spawn_subagents` tool-call card (task list + per-subagent model
+  badge + results/errors), driven entirely by the tool's own input/output —
+  no `metadata.agent` dependency.
 - System prompt — short delegation section, gated on tool registration.
+- **Not built this pass:** `ChatMessageMetadata.agent` and any
+  `metadata.agent` part predicates — deferred with the rest of Option B (see
+  Scope above); subagents have no writer for that field yet.
 
 **DB schema changes:** none required for the transcript. `metadata.agent` is
 additive JSONB. The `subagent` usage action type touches the usage enum/config,
