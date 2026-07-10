@@ -1,4 +1,4 @@
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -21,7 +21,23 @@ export const workspacesKeys = {
     ...workspacesKeys.byId(workspaceId),
     "overview",
   ],
+  activity: (activeOrganizationId: string, key: WorkspaceActivityKey) => [
+    ...workspacesKeys.byId(key.workspaceId),
+    "activity",
+    activeOrganizationId,
+  ],
 };
+
+type WorkspaceActivityKey = {
+  workspaceId: string;
+};
+
+type WorkspaceActivityOptions = {
+  activeOrganizationId: string;
+  key: WorkspaceActivityKey;
+};
+
+const WORKSPACE_ACTIVITY_PAGE_SIZE = 3;
 
 const readWorkspaces = async (signal?: AbortSignal) => {
   const response = await api.workspaces.get(
@@ -83,6 +99,31 @@ export const workspaceOptions = (workspaceId: string) =>
 
       return response.data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+export const workspaceActivityOptions = ({
+  activeOrganizationId,
+  key,
+}: WorkspaceActivityOptions) =>
+  infiniteQueryOptions({
+    queryKey: workspacesKeys.activity(activeOrganizationId, key),
+    queryFn: async ({ pageParam, signal }) => {
+      const response = await api
+        .workspaces({ workspaceId: key.workspaceId })
+        .activity.get({
+          fetch: { signal },
+          query: { cursor: pageParam, limit: WORKSPACE_ACTIVITY_PAGE_SIZE },
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    initialPageParam: undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 

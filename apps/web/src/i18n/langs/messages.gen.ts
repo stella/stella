@@ -1861,6 +1861,7 @@ type Messages = {
     "knowledge": "Knowledge";
     "myTodos": "My tasks";
     "pinned": "Pinned";
+    "recentMatters": "Recent matters";
     "recents": "Recents";
     "search": "Search";
     "shortcutCategories": {
