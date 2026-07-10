@@ -16,6 +16,7 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { DAY_IN_MS } from "@/api/lib/time";
 
 type AuthorizedDesktopEditSession = {
   fileName: string;
@@ -44,10 +45,9 @@ type DesktopEditSessionAuthorizationResult =
     };
 
 /** Session tokens expire after 24 hours. Each checkpoint extends by this amount.
- *  Fixed-duration TTL, not calendar math — the ratchet flags this ms literal
- *  (scripts/ratchet.ts, `raw-date-parsing`) but converting it to `addDays`
- *  would make expiry drift by an hour across a DST transition. */
-export const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+ *  Fixed-duration TTL, not calendar math — `addDays` would make expiry drift
+ *  by an hour across a DST transition. */
+export const SESSION_TOKEN_TTL_MS = DAY_IN_MS;
 
 export const computeTokenExpiresAt = () =>
   new Date(Date.now() + SESSION_TOKEN_TTL_MS);

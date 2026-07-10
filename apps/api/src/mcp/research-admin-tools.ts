@@ -477,7 +477,7 @@ const ISO_DATE_INPUT = v.pipe(
   v.string(),
   v.minLength(1),
   v.check(
-    (value) => !Number.isNaN(Date.parse(value)),
+    (value) => !Number.isNaN(new Date(value).getTime()),
     "must be an ISO date or date-time",
   ),
 );

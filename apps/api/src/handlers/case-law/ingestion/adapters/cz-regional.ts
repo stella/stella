@@ -27,6 +27,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import { captureError } from "@/api/lib/analytics";
+import { addDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
@@ -506,8 +507,7 @@ const todayIso = (): string =>
   new Date().toISOString().split("T")[0] ?? "1970-01-01";
 
 const defaultDate = (): string =>
-  new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0] ??
-  "1970-01-01";
+  addDays(new Date(), -30).toISOString().split("T")[0] ?? "1970-01-01";
 
 export const czRegionalAdapter: SourceAdapter = {
   key: ADAPTER_KEYS.CZ_REGIONAL,

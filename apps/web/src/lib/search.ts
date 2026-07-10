@@ -9,16 +9,17 @@ import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
+import { DAY_IN_MS } from "@/lib/time";
 import { stripUndefined } from "@/lib/utils";
 
 export const TIME_PRESETS = ["day", "week", "month", "year"] as const;
 export type TimePreset = (typeof TIME_PRESETS)[number];
 
 const TIME_PRESET_DURATIONS_MS = {
-  day: 86_400_000,
-  week: 7 * 86_400_000,
-  month: 30 * 86_400_000,
-  year: 365 * 86_400_000,
+  day: DAY_IN_MS,
+  week: 7 * DAY_IN_MS,
+  month: 30 * DAY_IN_MS,
+  year: 365 * DAY_IN_MS,
 } as const satisfies Record<TimePreset, number>;
 
 /**

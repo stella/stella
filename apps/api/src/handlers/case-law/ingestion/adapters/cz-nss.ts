@@ -16,6 +16,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
+import { addDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -744,9 +745,7 @@ const fetchResultPage = async (
 /** Parse cursor string "YYYY-MM-DD:page" or null. */
 const parseCursor = (cursor: string | null): { date: string; page: number } => {
   if (!cursor) {
-    const lookback = new Date(
-      Date.now() - DEFAULT_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
-    );
+    const lookback = addDays(new Date(), -DEFAULT_LOOKBACK_DAYS);
     const iso = lookback.toISOString().split("T")[0];
     return { date: iso ?? "1970-01-01", page: 0 };
   }

@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/lib/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import { addDays } from "@/lib/dates";
 import {
   formatDecimalHours,
   formatMinutes,
@@ -252,10 +253,4 @@ const getDaysInRange = (start: string, end: string): string[] => {
     current = addDays(current, 1);
   }
   return days;
-};
-
-const addDays = (date: Date, days: number): Date => {
-  const next = new Date(date);
-  next.setDate(next.getDate() + days);
-  return next;
 };

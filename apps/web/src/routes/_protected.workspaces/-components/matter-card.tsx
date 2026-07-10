@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import { DAY_IN_MS } from "@/lib/time";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
@@ -30,8 +31,6 @@ type OverviewData = NonNullable<
     >
   >
 >;
-
-const DAY_MS = 86_400_000;
 
 type MatterCardProps = {
   workspace: Workspace;
@@ -223,10 +222,10 @@ export const MatterCard = ({
 /** Color-code recency: today = foreground, this week = muted, older = faded. */
 const getRecencyClass = (date: Date | string): string => {
   const age = Date.now() - new Date(date).getTime();
-  if (age < DAY_MS) {
+  if (age < DAY_IN_MS) {
     return "text-foreground text-xs";
   }
-  if (age < 7 * DAY_MS) {
+  if (age < 7 * DAY_IN_MS) {
     return "text-muted-foreground text-xs";
   }
   return "text-foreground-subtle text-xs";
@@ -260,10 +259,10 @@ const getDeadlineInfo = (deadline: string | null): DeadlineInfo | null => {
       urgency: "overdue",
     };
   }
-  if (diff < 2 * DAY_MS) {
+  if (diff < 2 * DAY_IN_MS) {
     return { label, className: "text-warning font-medium", urgency: "soon" };
   }
-  if (diff < 7 * DAY_MS) {
+  if (diff < 7 * DAY_IN_MS) {
     return { label, className: "text-foreground", urgency: "thisWeek" };
   }
   return { label, className: "text-muted-foreground", urgency: "later" };

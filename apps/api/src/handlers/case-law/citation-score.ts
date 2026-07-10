@@ -14,6 +14,10 @@ import type {
   CourtWeightEntry,
   CourtWeightMap,
 } from "@/api/handlers/case-law/court-weights";
+import { DAY_IN_MS } from "@/api/lib/time";
+
+/** Average (Julian) year, used for citation-age decay. A duration. */
+const MS_PER_YEAR = 365.25 * DAY_IN_MS;
 
 // -- Legacy fallback tiers -----------------------------------------------
 
@@ -111,8 +115,7 @@ export const recencyFactor = (
 
   const d = typeof citingDate === "string" ? new Date(citingDate) : citingDate;
 
-  const yearsAgo =
-    (now.getTime() - d.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  const yearsAgo = (now.getTime() - d.getTime()) / MS_PER_YEAR;
 
   return 1 / (1 + Math.max(yearsAgo, 0));
 };
@@ -167,10 +170,7 @@ export const citationScore = (
   if (decisionDate !== null) {
     const d =
       typeof decisionDate === "string" ? new Date(decisionDate) : decisionDate;
-    yearsOld = Math.max(
-      (now.getTime() - d.getTime()) / (365.25 * 24 * 60 * 60 * 1000),
-      1,
-    );
+    yearsOld = Math.max((now.getTime() - d.getTime()) / MS_PER_YEAR, 1);
   }
 
   return Math.log(1 + wSum / yearsOld);

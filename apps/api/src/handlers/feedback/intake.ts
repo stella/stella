@@ -41,6 +41,7 @@ import {
   isTransactionalEmailConfigured,
   sendFeedbackEmail,
 } from "@/api/lib/email";
+import { DAY_IN_MS } from "@/api/lib/time";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";
 
@@ -62,10 +63,9 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const UNKNOWN_IP_KEY = "unknown";
 
 // Content dedup window: an identical report inside a day is a resend, not new
-// signal. Fixed-duration TTL, not calendar math — the ratchet flags this ms
-// literal (scripts/ratchet.ts, `raw-date-parsing`) but converting it to
-// `addDays` would make the window drift across a DST transition.
-const DEDUP_TTL_MS = 24 * 60 * 60 * 1000;
+// signal. Fixed-duration TTL, not calendar math — `addDays` would make the
+// window drift across a DST transition.
+const DEDUP_TTL_MS = DAY_IN_MS;
 
 const INTAKE_FOOTER =
   "---\n_Received via the stella feedback intake (agent-assisted, sanitized server-side)._";
