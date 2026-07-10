@@ -2148,7 +2148,7 @@ export const invalidateChatThreadAcrossScopes = async ({
  * return. Shared by every composer surface with a Models submenu so the
  * cache-update + invalidation pairing can't drift between them again.
  */
-export const applyChatModelChange = <TData extends { model: string | null }>({
+export const applyChatModelChange = ({
   model,
   queryClient,
   queryKey,
@@ -2156,7 +2156,7 @@ export const applyChatModelChange = <TData extends { model: string | null }>({
 }: {
   model: string | null;
   queryClient: QueryClient;
-  queryKey: DataTag<QueryKey, TData>;
+  queryKey: DataTag<QueryKey, { model: string | null }, Error>;
   threadId: ChatThreadId;
 }): void => {
   queryClient.setQueryData(queryKey, (prev) =>

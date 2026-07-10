@@ -209,7 +209,8 @@ describe("applyChatModelChange", () => {
       threadId,
     });
 
-    expect(queryClient.getQueryData(globalKey)).toEqual({
+    const updated: unknown = queryClient.getQueryData(globalKey);
+    expect(updated).toEqual({
       model: "anthropic::claude-x",
       other: "keep",
     });
@@ -231,7 +232,8 @@ describe("applyChatModelChange", () => {
       threadId,
     });
 
-    expect(queryClient.getQueryData(key)).toBeUndefined();
+    const untouched: unknown = queryClient.getQueryData(key);
+    expect(untouched).toBeUndefined();
   });
 });
 
