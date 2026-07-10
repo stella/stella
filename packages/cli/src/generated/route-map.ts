@@ -57199,6 +57199,7 @@ export const generatedRouteMap: RouteNode = {
                       },
                     },
                     propertyIds: {
+                      maxItems: 20,
                       type: "array",
                       items: {
                         minLength: 36,
