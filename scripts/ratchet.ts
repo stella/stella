@@ -123,9 +123,17 @@ const findUnescapedQuote = (
 // state across lines. Returns the remaining code (literal contents replaced
 // by a single space, so word boundaries around the literal still hold) plus
 // the state to pass into the next line.
+//
+// `keepDelimiters` blanks only the INTERIOR of the literal, leaving the
+// opening/closing quote characters in place (`"foo"` -> `" "` rather than
+// ` `). Most counters don't need this — the quote chars are noise — but
+// `countRawDateParsing` matches on the opening quote itself
+// (`new Date("`), which a full blank would erase along with the rest of
+// the string it's trying to detect.
 const stripStringLiterals = (
   raw: string,
   state: LiteralScanState,
+  keepDelimiters = false,
 ): { code: string; state: LiteralScanState } => {
   let out = "";
   let i = 0;
@@ -135,7 +143,7 @@ const stripStringLiterals = (
     if (close === -1) {
       return { code: out, state };
     }
-    out += BLANKED_LITERAL;
+    out += keepDelimiters ? `${BLANKED_LITERAL}\`` : BLANKED_LITERAL;
     i = close + 1;
   }
 
@@ -152,7 +160,9 @@ const stripStringLiterals = (
         }
         break;
       }
-      out += BLANKED_LITERAL;
+      out += keepDelimiters
+        ? `${ch}${BLANKED_LITERAL}${raw[close]}`
+        : BLANKED_LITERAL;
       i = close + 1;
       continue;
     }
@@ -171,8 +181,13 @@ const stripStringLiterals = (
 const stripLine = (
   raw: string,
   state: LiteralScanState,
+  keepDelimiters = false,
 ): { code: string; state: LiteralScanState } => {
-  const { code, state: nextState } = stripStringLiterals(raw, state);
+  const { code, state: nextState } = stripStringLiterals(
+    raw,
+    state,
+    keepDelimiters,
+  );
   return { code: code.replace(LINE_COMMENT_TAIL, ""), state: nextState };
 };
 
@@ -251,6 +266,55 @@ const countDirectErrorMessageDisplay = (content: string): number => {
 // one barrel (presence metric).
 const countPresence = (): number => 1;
 
+// Raw date/timezone footguns: `new Date("YYYY-MM-DD")` parses as UTC
+// midnight (an off-by-one day once rendered west of UTC), `Date.parse(...)`
+// of a non-ISO string is engine-dependent, and day-length millisecond
+// arithmetic used for CALENDAR math (`24 * 60 * 60 * 1000`,
+// `86_400_000`/`86400000`) breaks across a DST transition (the clocks-change
+// day is 23 or 25 hours, not 24). Use `parseIsoDateLocal` / `addDays` from
+// `apps/{api,web}/src/lib/dates.ts` for calendar/date-boundary work instead.
+//
+// NOT a footgun: the same millisecond literal used as a fixed-duration span
+// (a TTL, a timeout, a "how many ms have elapsed" comparison) rather than a
+// calendar offset. `Date.now() + 24 * 60 * 60 * 1000` for a token that must
+// expire exactly 86,400,000ms after issuance is correct — converting it to
+// `addDays` would make the expiry drift by an hour across a DST transition,
+// which is the opposite of what this ratchet wants. This counter can't tell
+// the two apart lexically (that requires understanding whether the result
+// feeds a calendar boundary or a raw duration comparison), so it flags both;
+// treat a flagged fixed-duration constant as a false positive to leave alone,
+// not a violation to "fix" into calendar arithmetic.
+//
+// Line-based, like the counters above, and (like `countAsCasts`) runs
+// through `stripLine` so a `//` sitting inside an earlier string on the same
+// line (e.g. a URL) can't truncate the line before a later real match.
+// Unlike the other counters, it passes `keepDelimiters: true` — the string
+// quote characters themselves are part of what `RAW_DATE_STRING_ARG` matches
+// (`new Date("`), so only the literal's interior is blanked, not the quotes.
+const RAW_DATE_STRING_ARG = /\bnew\s+Date\(\s*["`]/gu;
+const DATE_PARSE_CALL = /\bDate\.parse\(/gu;
+const DAY_MS_ARITHMETIC_EXPR = /24\s*\*\s*60\s*\*\s*60\s*\*\s*1000\b/gu;
+const DAY_MS_LITERAL = /\b86_400_000\b|\b86400000\b/gu;
+const KEEP_QUOTE_DELIMITERS = true;
+
+const countRawDateParsing = (content: string): number => {
+  let total = 0;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code, state } = stripLine(raw, literalState, KEEP_QUOTE_DELIMITERS);
+    literalState = state;
+    if (COMMENT_LINE.test(code)) {
+      continue;
+    }
+    total += (code.match(RAW_DATE_STRING_ARG) ?? []).length;
+    total += (code.match(DATE_PARSE_CALL) ?? []).length;
+    total += (code.match(DAY_MS_ARITHMETIC_EXPR) ?? []).length;
+    total += (code.match(DAY_MS_LITERAL) ?? []).length;
+  }
+  return total;
+};
+
 // --- Metric table -----------------------------------------------------------
 
 type FileCounter = (content: string) => number;
@@ -305,6 +369,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       file.includes("apps/web/src/routes/dev/") ||
       file.startsWith("apps/web/src/workers/"),
     count: countDirectErrorMessageDisplay,
+  },
+  {
+    id: "raw-date-parsing",
+    description:
+      'string-literal date parsing (`new Date("...")`, `new Date(`...`)`, `Date.parse(...)`) and day-length ms arithmetic used for CALENDAR math (`24 * 60 * 60 * 1000`, `86_400_000`/`86400000`) in app source (excl. tests/gen); prefer `parseIsoDateLocal`/`addDays` from apps/{api,web}/src/lib/dates.ts for date-boundary work. The same ms literal used as a fixed-duration TTL/timeout (not a calendar offset) is correct as-is and must NOT be converted to calendar-day arithmetic — that would introduce DST drift. The counter cannot distinguish the two lexically, so it flags both; a flagged fixed-duration constant is a known false positive, not a violation.',
+    include: APP_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countRawDateParsing,
   },
 ];
 
@@ -568,6 +640,28 @@ const SELF_TEST_DIRECT_ERROR = `${DIRECT_ERROR_FIXTURE_LINES.join("\n")}\n`;
 // string literal, and comment are excluded.
 const EXPECTED_DIRECT_ERROR = 4;
 
+const RAW_DATE_FIXTURE_LINES = [
+  'const a = new Date("2024-01-01");',
+  "const b = new Date(`2024-01-01`);",
+  "const c = Date.parse(rawInput);",
+  "const d = now.getTime() + 24 * 60 * 60 * 1000;",
+  "const e = now.getTime() + 86_400_000;",
+  "const f = now.getTime() + 86400000;",
+  "const g = new Date(); // no-arg constructor is safe, must not count",
+  "const h = new Date(year, month - 1, day); // date-parts ctor is safe",
+  "const i = new Date(existingDate); // copying a Date instance is safe",
+  '// new Date("2024-01-01") mentioned in a comment must not count',
+  "const j = parseIsoDateLocal(iso); // helper call is safe",
+  'const withUrl = "see http://example.com for details"; const k = new Date("2024-01-01"); // "//" earlier in the line must not hide this real match',
+];
+const SELF_TEST_RAW_DATE = `${RAW_DATE_FIXTURE_LINES.join("\n")}\n`;
+// Expected: a(1) + b(1) + c(1) + d(1) + e(1) + f(1) + k(1) = 7. The no-arg/
+// parts/copy Date constructors, the safe helper call, and the comment
+// mention are all excluded. `k` proves the earlier `http://` string (with
+// its own `//`) does not truncate the line before the real `new Date(...)`
+// call further along it — the false-negative class `stripLine` fixes.
+const EXPECTED_RAW_DATE = 7;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -588,6 +682,7 @@ const runSelfTest = (): number => {
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
+    writeFixture(root, "apps/api/src/raw-date.ts", SELF_TEST_RAW_DATE);
     // Excluded companions: these must NOT be counted.
     writeFixture(
       root,
@@ -595,6 +690,7 @@ const runSelfTest = (): number => {
       "const z = value as Widget;\n",
     );
     writeFixture(root, "apps/web/src/types.gen.ts", "const g = x as Y;\n");
+    writeFixture(root, "apps/api/src/raw-date.test.ts", SELF_TEST_RAW_DATE);
 
     const snapshot = scanAll(root);
 
@@ -630,6 +726,16 @@ const runSelfTest = (): number => {
       failures.push(
         `direct-error-message-display counted ${directErrorMetric.count}, expected ${EXPECTED_DIRECT_ERROR}`,
       );
+    }
+
+    const rawDateMetric = snapshot["raw-date-parsing"];
+    if (rawDateMetric.count !== EXPECTED_RAW_DATE) {
+      failures.push(
+        `raw-date-parsing counted ${rawDateMetric.count}, expected ${EXPECTED_RAW_DATE}`,
+      );
+    }
+    if ("apps/api/src/raw-date.test.ts" in rawDateMetric.files) {
+      failures.push("raw-date-parsing did not exclude a .test.ts file");
     }
 
     // Diff behavior: equal passes, a rise regresses, a fall is a drop.

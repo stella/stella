@@ -30,7 +30,10 @@ import { reportExports } from "@/api/db/schema";
 /** A `running` row this old lost its worker to a hard death. */
 const STUCK_RUNNING_MS = 30 * 60 * 1000;
 /** A `queued` row this old lost its job to queue data loss; anything younger
- *  may simply be backlogged and must be left for the worker. */
+ *  may simply be backlogged and must be left for the worker.
+ *  Fixed-duration threshold, not calendar math — the ratchet flags this ms
+ *  literal (scripts/ratchet.ts, `raw-date-parsing`) but converting it to
+ *  `addDays` would make the threshold drift across a DST transition. */
 const STUCK_QUEUED_MS = 24 * 60 * 60 * 1000;
 const STUCK_EXPORT_ERROR =
   "Report export did not complete in time and was marked failed. Please try again.";

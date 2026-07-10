@@ -62,7 +62,9 @@ const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 const UNKNOWN_IP_KEY = "unknown";
 
 // Content dedup window: an identical report inside a day is a resend, not new
-// signal.
+// signal. Fixed-duration TTL, not calendar math — the ratchet flags this ms
+// literal (scripts/ratchet.ts, `raw-date-parsing`) but converting it to
+// `addDays` would make the window drift across a DST transition.
 const DEDUP_TTL_MS = 24 * 60 * 60 * 1000;
 
 const INTAKE_FOOTER =

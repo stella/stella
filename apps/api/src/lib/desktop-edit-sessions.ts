@@ -43,7 +43,10 @@ type DesktopEditSessionAuthorizationResult =
       status: "permission-revoked";
     };
 
-/** Session tokens expire after 24 hours. Each checkpoint extends by this amount. */
+/** Session tokens expire after 24 hours. Each checkpoint extends by this amount.
+ *  Fixed-duration TTL, not calendar math — the ratchet flags this ms literal
+ *  (scripts/ratchet.ts, `raw-date-parsing`) but converting it to `addDays`
+ *  would make expiry drift by an hour across a DST transition. */
 export const SESSION_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
 
 export const computeTokenExpiresAt = () =>
