@@ -926,6 +926,7 @@
     "scopeAdminRead": "Číst protokol auditu vaší organizace",
     "scopeAdminWrite": "Spravovat členy a nastavení organizace",
     "scopeBillingWrite": "Vytvoření, úprava a smazání vašich časových záznamů",
+    "scopeChat": "Čtení a správa vašich chatů a zpráv",
     "scopeDocumentsWrite": "Vytvoření, úprava a smazání vašich dokumentů",
     "scopeExternalMcps": "Použití vašich připojených integrací",
     "scopeFeedback": "Odeslat zpětnou vazbu k produktu správcům stelly",

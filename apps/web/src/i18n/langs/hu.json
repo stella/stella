@@ -926,6 +926,7 @@
     "scopeAdminRead": "A szervezet auditnaplójának olvasása",
     "scopeAdminWrite": "A szervezet tagjainak és beállításainak kezelése",
     "scopeBillingWrite": "Időbejegyzések létrehozása, szerkesztése és törlése",
+    "scopeChat": "Chatek és üzenetek olvasása és kezelése",
     "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
     "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
     "scopeFeedback": "Termékvisszajelzés küldése a stella karbantartóinak",

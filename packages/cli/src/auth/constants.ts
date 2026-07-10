@@ -77,6 +77,7 @@ export const CLI_KNOWN_SCOPES = [
   "stella:templates",
   "stella:documents_write",
   "stella:matters_write",
+  "stella:chat",
   "stella:knowledge_write",
   "stella:billing_write",
   "stella:admin_read",

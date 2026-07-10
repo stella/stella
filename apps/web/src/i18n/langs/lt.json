@@ -926,6 +926,7 @@
     "scopeAdminRead": "Skaityti jūsų organizacijos audito žurnalą",
     "scopeAdminWrite": "Tvarkyti organizacijos narius ir nustatymus",
     "scopeBillingWrite": "Kurti, redaguoti ir ištrinti jūsų laiko įrašus",
+    "scopeChat": "Skaityti ir tvarkyti jūsų pokalbius ir žinutes",
     "scopeDocumentsWrite": "Kurti, redaguoti ir ištrinti jūsų dokumentus",
     "scopeExternalMcps": "Naudoti jūsų prijungtus išorinius įrankius",
     "scopeFeedback": "Siųsti produkto atsiliepimus stella prižiūrėtojams",

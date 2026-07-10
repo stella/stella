@@ -926,6 +926,7 @@
     "scopeAdminRead": "قراءة سجل تدقيق مؤسستك",
     "scopeAdminWrite": "إدارة أعضاء المؤسسة وإعداداتها",
     "scopeBillingWrite": "إنشاء إدخالات الوقت الخاصة بك وتعديلها وحذفها",
+    "scopeChat": "قراءة محادثاتك ورسائلك وإدارتها",
     "scopeDocumentsWrite": "إنشاء مستنداتك وتعديلها وحذفها",
     "scopeExternalMcps": "استخدام تكاملاتك المتصلة",
     "scopeFeedback": "إرسال ملاحظات حول المنتج إلى مشرفي stella",

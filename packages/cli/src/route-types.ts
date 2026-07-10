@@ -12,6 +12,7 @@ export type JsonSchema = Record<string, unknown>;
 export type ToolScope =
   | "read"
   | "matters_write"
+  | "chat"
   | "documents_write"
   | "knowledge_write"
   | "search"

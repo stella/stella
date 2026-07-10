@@ -181,6 +181,16 @@ describe("capability dispatch <-> catalog parity", () => {
       .sort((a, b) => a.localeCompare(b));
     expect(dispatchIds).toEqual(catalogIds);
   });
+
+  test("chat capabilities carry the dedicated stella:chat scope", () => {
+    const chatEntries = capabilityCatalog.filter((entry) =>
+      entry.id.startsWith("chat."),
+    );
+    expect(chatEntries.length).toBeGreaterThan(0);
+    for (const entry of chatEntries) {
+      expect(entry.scope, entry.id).toBe("stella:chat");
+    }
+  });
 });
 
 // --- list_capabilities -------------------------------------------------------
