@@ -115,7 +115,16 @@ test("repeated navigation does not grow the JS heap unboundedly", async ({
 });
 
 const runNavigationCycle = async (page: Page) => {
-  for (const route of CYCLE_ROUTES) {
+  for (const [routeIndex, route] of CYCLE_ROUTES.entries()) {
+    const currentRouteRoot = page.locator("main > :last-child");
+    const marker = `heap-canary-${routeIndex}`;
+    // Mark the Outlet-owned root (the shell's banners/header are earlier
+    // siblings). Its removal proves the previous route unmounted; URL changes
+    // alone can happen before a cold route chunk or loader has mounted.
+    // eslint-disable-next-line no-await-in-loop -- each marker belongs to the route being left in this sequential navigation cycle
+    await currentRouteRoot.evaluate((element, value) => {
+      element.setAttribute("data-heap-canary-route-root", value);
+    }, marker);
     // Scoped to the sidebar shell (apps/web/src/components/sidebar.tsx,
     // data-slot="sidebar") so this never accidentally matches a same-named
     // breadcrumb link rendered inside route content.
@@ -131,6 +140,10 @@ const runNavigationCycle = async (page: Page) => {
     await link.click();
     // eslint-disable-next-line no-await-in-loop -- see above
     await page.waitForURL((url) => url.pathname === route, { timeout: 30_000 });
+    // eslint-disable-next-line no-await-in-loop -- see above
+    await expect(
+      page.locator(`[data-heap-canary-route-root="${marker}"]`),
+    ).toHaveCount(0, { timeout: 30_000 });
     // eslint-disable-next-line no-await-in-loop -- see above
     await page.waitForTimeout(ROUTE_SETTLE_MS);
   }
