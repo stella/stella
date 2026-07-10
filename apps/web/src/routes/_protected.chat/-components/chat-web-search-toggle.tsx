@@ -55,6 +55,9 @@ export const ChatWebSearchToggle = ({
   };
 
   const { mutate } = useMutation({
+    scope: {
+      id: `chat-web-search-toggle:${threadRef.scope}:${threadRef.threadId}`,
+    },
     mutationFn: async (nextEnabled: boolean) => {
       const response = await api.chat
         .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
@@ -79,7 +82,10 @@ export const ChatWebSearchToggle = ({
       await queryClient.cancelQueries(filters);
       const previous = queryClient.getQueriesData(filters);
       queryClient.setQueriesData(filters, (old) =>
-        old && typeof old === "object" && "webSearchEnabled" in old
+        old !== undefined &&
+        old !== null &&
+        typeof old === "object" &&
+        "webSearchEnabled" in old
           ? { ...old, webSearchEnabled: nextEnabled }
           : old,
       );
