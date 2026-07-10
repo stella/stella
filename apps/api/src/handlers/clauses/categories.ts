@@ -240,8 +240,21 @@ export const updateCategoryHandler = async function* ({
       );
     }
 
-    // Walk the ancestor chain to reject a reparent that would create a cycle
-    // (mirrors the template category handler).
+    const categoryParents = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.clauseCategories.findMany({
+          where: { organizationId: { eq: organizationId } },
+          columns: { id: true, parentId: true },
+          limit: LIMITS.clauseCategoriesCount,
+        }),
+      ),
+    );
+    const parentIdByCategoryId = new Map(
+      categoryParents.map((category) => [category.id, category.parentId]),
+    );
+
+    // Walk the already-bounded organization category set in memory to reject
+    // a reparent that would create a cycle.
     const visited = new Set<SafeId<"clauseCategory">>([categoryId]);
     let checkId: SafeId<"clauseCategory"> | null = parentId;
     while (checkId) {
@@ -254,21 +267,7 @@ export const updateCategoryHandler = async function* ({
         );
       }
       visited.add(checkId);
-      const currentId: SafeId<"clauseCategory"> = checkId;
-      const ancestor:
-        | { parentId: SafeId<"clauseCategory"> | null }
-        | undefined = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.clauseCategories.findFirst({
-            where: {
-              id: { eq: currentId },
-              organizationId: { eq: organizationId },
-            },
-            columns: { parentId: true },
-          }),
-        ),
-      );
-      checkId = ancestor?.parentId ?? null;
+      checkId = parentIdByCategoryId.get(checkId) ?? null;
     }
   }
 
