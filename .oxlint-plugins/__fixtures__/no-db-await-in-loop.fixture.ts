@@ -64,7 +64,10 @@ export const forOfLoopResultAwaitSafeDb = async function* () {
   for (const item of items) {
     // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: safe handlers await DB results through delegated Result generators
     yield* Result.await(
-      safeDb((scopedTx: typeof tx) => scopedTx.insert(itemsTable).values(item)),
+      safeDb(async (scopedTx: typeof tx) => {
+        const inserted = await scopedTx.insert(itemsTable).values(item);
+        return inserted;
+      }),
     );
   }
 };
@@ -114,11 +117,13 @@ export const resultAwaitPromiseAllMapFanOut = async function* () {
   // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: safe handlers may delegate a Promise.all fan-out through Result.await
   yield* Result.await(
     Promise.all(
-      items.map((item) =>
-        safeDb((scopedTx: typeof tx) =>
-          scopedTx.insert(itemsTable).values(item),
-        ),
-      ),
+      items.map(async (item) => {
+        const inserted = await safeDb(async (scopedTx: typeof tx) => {
+          const result = await scopedTx.insert(itemsTable).values(item);
+          return result;
+        });
+        return inserted;
+      }),
     ),
   );
 };
@@ -132,9 +137,13 @@ export const singleAwaitOutsideLoop = async () => {
 
 export const singleResultAwaitOutsideLoop = async function* () {
   yield* Result.await(
-    safeDb((scopedTx: typeof tx) =>
-      scopedTx.select().from(itemsTable).where(items[0]?.id),
-    ),
+    safeDb(async (scopedTx: typeof tx) => {
+      const selected = await scopedTx
+        .select()
+        .from(itemsTable)
+        .where(items[0]?.id);
+      return selected;
+    }),
   );
 };
 
