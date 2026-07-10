@@ -3,6 +3,7 @@ import type { MouseEvent } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useShallow } from "zustand/react/shallow";
 
+import { getOverlayRectKey } from "@/lib/anonymize/overlay-rects";
 import { getEntityColor } from "@/lib/anonymize/ui-constants";
 import { useOverlayRects } from "@/lib/anonymize/use-overlay-rects";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
@@ -68,6 +69,7 @@ export const PageAnonymization = ({
           .at(0)?.i;
 
         return rects.map((rect, i) => {
+          const rectKey = getOverlayRectKey({ entityId: entity.id, rect });
           const isScrollTarget =
             variant === "fullscreen" &&
             scrollTo?.target?.kind === "anonymizeEntity" &&
@@ -127,8 +129,7 @@ export const PageAnonymization = ({
             return (
               <button
                 className="absolute rounded-xs opacity-50 hover:opacity-70"
-                // eslint-disable-next-line react/no-array-index-key -- rects is a read-only set of detected-entity bounding boxes recomputed on every render; overlays are non-interactive (parent-provided onClick) with no per-item state.
-                key={`${entity.id}-${i}`}
+                key={rectKey}
                 onClick={handlePeekClick}
                 style={commonStyle}
                 type="button"
@@ -139,8 +140,7 @@ export const PageAnonymization = ({
           return (
             <div
               className="absolute rounded-xs opacity-50"
-              // eslint-disable-next-line react/no-array-index-key -- rects is a read-only set of detected-entity bounding boxes recomputed on every render; overlays are non-interactive with no per-item state.
-              key={`${entity.id}-${i}`}
+              key={rectKey}
               ref={(el) => {
                 if (isScrollTarget && i === topRectIndex && el !== null) {
                   el.scrollIntoView({

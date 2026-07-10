@@ -1,6 +1,10 @@
 import { describe, expect, it } from "bun:test";
 
-import { mapEntityToSpanSlices, mergeAdjacentRects } from "./overlay-rects";
+import {
+  getOverlayRectKey,
+  mapEntityToSpanSlices,
+  mergeAdjacentRects,
+} from "./overlay-rects";
 import type { OverlayRect } from "./overlay-rects";
 import type { CharSpan } from "./pdf-coords";
 
@@ -19,6 +23,31 @@ const makeSpan = (start: number, end: number, pageIndex = 0): CharSpan => ({
     height: 12,
     fontSize: 12,
   },
+});
+
+describe("getOverlayRectKey", () => {
+  const rect = { left: 10, top: 20, width: 50, height: 12 };
+
+  it("is stable when rectangle order changes", () => {
+    const otherRect = { left: 10, top: 40, width: 50, height: 12 };
+    const before = [rect, otherRect].map((value) =>
+      getOverlayRectKey({ entityId: 7, rect: value }),
+    );
+    const after = [otherRect, rect].map((value) =>
+      getOverlayRectKey({ entityId: 7, rect: value }),
+    );
+
+    expect(after.toSorted()).toEqual(before.toSorted());
+  });
+
+  it("distinguishes entities and rectangle geometry", () => {
+    const key = getOverlayRectKey({ entityId: 7, rect });
+
+    expect(getOverlayRectKey({ entityId: 8, rect })).not.toBe(key);
+    expect(
+      getOverlayRectKey({ entityId: 7, rect: { ...rect, top: 21 } }),
+    ).not.toBe(key);
+  });
 });
 
 // ── mapEntityToSpanSlices ────────────────────────────
