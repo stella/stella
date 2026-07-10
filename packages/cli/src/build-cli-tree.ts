@@ -106,7 +106,10 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
     }
   }
 
-  if (spec.destructive) {
+  // A destructive leaf gets --yes for its upfront prompt; a confirm-passthrough
+  // leaf (per-target destructiveness, e.g. `capability invoke`) gets it so the
+  // caller can pre-approve the server's confirmation_required gate.
+  if (spec.destructive || spec.confirmPassthrough === true) {
     flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
       "Skip the destructive-op confirmation prompt",
       false,

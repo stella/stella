@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -8,6 +9,8 @@ import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
 import { timeEntries } from "@/api/db/schema";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeCSV } from "@/api/lib/csv";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -146,3 +149,30 @@ export const exportCsvHandler = async ({
 
   return csvRows.join("\n");
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "billing_admin" },
+  query: exportCsvQuerySchema,
+} satisfies HandlerConfig;
+
+const exportCsv = createSafeHandler(
+  config,
+  async function* ({ query, scopedDb, session, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await exportCsvHandler({
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            query,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default exportCsv;

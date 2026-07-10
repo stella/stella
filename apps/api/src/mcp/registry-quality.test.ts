@@ -36,8 +36,13 @@ type SurfaceMode = (typeof SURFACES)[number]["mode"];
 // default bumped 40 -> 41 for the write-only `send_feedback` tool (agent-filed
 // bug/feature/docs reports). It is excluded from the anonymized surface (a
 // write tool), so the anonymized ceiling is unchanged.
+// default bumped 41 -> 44 for the three capability meta-tools (plan 049 phase 2:
+// list_capabilities, describe_capability, invoke_capability). All three are
+// excluded from the anonymized surface (two read-only meta-reads that expose a
+// dynamic tenant payload, one write), so the anonymized ceiling is unchanged. 45
+// remains the hard product ceiling; this sits one below it.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 41,
+  default: 44,
   anonymized: 21,
 };
 
@@ -45,8 +50,11 @@ const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
 // `toMcpTools`). Measured after plan 047: default 45_339 chars (~11.3k tokens),
 // anonymized 19_472 chars (~4.9k tokens). Ceilings sit ~10-15% above so organic
 // growth fits but a surface-size jump must be a deliberate constant bump.
+// default bumped 51_000 -> 54_000 for the three capability meta-tools (plan 049
+// phase 2): measured 51_580 chars. The anonymized surface is unchanged (all
+// three are excluded from it).
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 51_000,
+  default: 54_000,
   anonymized: 22_000,
 };
 

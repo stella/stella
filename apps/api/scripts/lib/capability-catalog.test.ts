@@ -7,6 +7,8 @@ import {
   countCapabilityDispositions,
   deriveCapabilityId,
   deriveDomain,
+  deriveHandlerImportPath,
+  detectContextFidelityFeatures,
   finalIdSegment,
   findInlineCapabilityMismatches,
   findStaleAccessOverrides,
@@ -15,6 +17,12 @@ import {
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
+  returnsInlineFileResponse,
+  scanContextFidelity,
+  scanFileResponseReturns,
+  scanRouteHookGuards,
+  schemaContainsBinaryFormat,
+  serializeDispatchModule,
   serializeCatalog,
 } from "./capability-catalog";
 
@@ -606,5 +614,479 @@ describe("resolveScope", () => {
         unmappedDomains: new Set(),
       }),
     ).toEqual({ status: "unmapped" });
+  });
+});
+
+describe("deriveHandlerImportPath", () => {
+  test("maps a handler file path to the @/api module alias", () => {
+    expect(
+      deriveHandlerImportPath("apps/api/src/handlers/time-entries/create.ts"),
+    ).toBe("@/api/handlers/time-entries/create");
+  });
+
+  test("panics on a path outside apps/api/src", () => {
+    expect(() => deriveHandlerImportPath("packages/cli/src/x.ts")).toThrow();
+  });
+});
+
+describe("serializeDispatchModule", () => {
+  test("emits an async lazy import thunk per record, named export threaded", () => {
+    const out = serializeDispatchModule([
+      {
+        id: "time-entries.create",
+        importPath: "@/api/handlers/time-entries/create",
+        exportName: undefined,
+      },
+      {
+        id: "views.export.readViewExport",
+        importPath: "@/api/handlers/views/export",
+        exportName: "readViewExport",
+      },
+    ]);
+    expect(out).toContain(
+      '"time-entries.create": { load: async () => await import("@/api/handlers/time-entries/create") },',
+    );
+    expect(out).toContain(
+      '"views.export.readViewExport": { load: async () => await import("@/api/handlers/views/export"), exportName: "readViewExport" },',
+    );
+    expect(out).toContain("export const CAPABILITY_DISPATCH");
+    expect(out.endsWith("\n")).toBe(true);
+  });
+
+  // Code-sanitization guard: every interpolated value must match its strict
+  // pattern or the serializer throws, so a crafted handler path or export name
+  // can never alter the generated module's code structure.
+  test("rejects an id outside the strict pattern", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: 'evil"; process.exit(1); //',
+          importPath: "@/api/handlers/x/y",
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe id/u);
+    expect(() =>
+      serializeDispatchModule([
+        { id: "a b", importPath: "@/api/handlers/x/y", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe id/u);
+  });
+
+  test("rejects an import path outside the @/api alias or with unsafe characters", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y",
+          importPath: '@/api/handlers/x") as never; //',
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe import path/u);
+    expect(() =>
+      serializeDispatchModule([
+        { id: "x.y", importPath: "node:child_process", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe import path/u);
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y",
+          importPath: "@/api/handlers/X/Upper",
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe import path/u);
+  });
+
+  test("rejects an export name that is not a plain identifier", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y.z",
+          importPath: "@/api/handlers/x/y",
+          exportName: 'a"] ?? evil["b',
+        },
+      ]),
+    ).toThrow(/unsafe export name/u);
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y.z",
+          importPath: "@/api/handlers/x/y",
+          exportName: "1startsWithDigit",
+        },
+      ]),
+    ).toThrow(/unsafe export name/u);
+  });
+});
+
+describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
+  test("rebuilds id, import path, and export name from validated segments", () => {
+    // A valid record round-trips byte-identically: the rebuilt value equals the
+    // input, so the sanitized flow does not change the committed artifact.
+    const out = serializeDispatchModule([
+      {
+        id: "case-law.ingestion.status",
+        importPath: "@/api/handlers/case-law/ingestion/status",
+        exportName: undefined,
+      },
+    ]);
+    expect(out).toContain(
+      '"case-law.ingestion.status": { load: async () => await import("@/api/handlers/case-law/ingestion/status") },',
+    );
+  });
+
+  test("rejects an id segment outside the allowlist", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y z",
+          importPath: "@/api/handlers/x/y",
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe id/u);
+  });
+
+  test("rejects an import-path segment outside the allowlist", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y",
+          importPath: "@/api/handlers/x/UPPER",
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe import path/u);
+  });
+
+  test("rejects dots-only import-path segments (path traversal shape)", () => {
+    for (const importPath of [
+      "@/api/handlers/../secrets",
+      "@/api/handlers/./x",
+      "@/api/handlers/.../x",
+      "@/api/..",
+      "@/api/handlers/.hidden",
+      "@/api/handlers/trailing.",
+    ]) {
+      expect(
+        () =>
+          serializeDispatchModule([
+            { id: "x.y", importPath, exportName: undefined },
+          ]),
+        importPath,
+      ).toThrow(/unsafe import path/u);
+    }
+    // Interior dots stay legal (file extensions never appear, but versioned
+    // names like `v1.2` would): only dot-anchored/dots-only segments fail.
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y",
+          importPath: "@/api/handlers/x/v1.2",
+          exportName: undefined,
+        },
+      ]),
+    ).not.toThrow();
+  });
+
+  test("a dots-only id cannot slip through (split on dots leaves empty segments)", () => {
+    expect(() =>
+      serializeDispatchModule([
+        { id: "..", importPath: "@/api/handlers/x/y", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe id/u);
+    expect(() =>
+      serializeDispatchModule([
+        { id: "a..b", importPath: "@/api/handlers/x/y", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe id/u);
+  });
+});
+
+describe("schemaContainsBinaryFormat", () => {
+  test("detects a t.File-shaped field (format: binary) at any depth", () => {
+    // Exactly how t.File({ maxSize }) serializes.
+    const file = {
+      default: "File",
+      maxSize: "50m",
+      type: "string",
+      format: "binary",
+    };
+    expect(schemaContainsBinaryFormat(file)).toBe(true);
+    expect(
+      schemaContainsBinaryFormat({
+        body: { type: "object", properties: { upload: file } },
+      }),
+    ).toBe(true);
+  });
+
+  test("detects t.Files (array items with format: binary)", () => {
+    // Exactly how t.Files() serializes.
+    expect(
+      schemaContainsBinaryFormat({
+        elysiaMeta: "Files",
+        type: "array",
+        items: { default: "Files", type: "string", format: "binary" },
+      }),
+    ).toBe(true);
+  });
+
+  test("detects binary inside union branches (anyOf)", () => {
+    expect(
+      schemaContainsBinaryFormat({
+        anyOf: [{ type: "string" }, { type: "string", format: "binary" }],
+      }),
+    ).toBe(true);
+  });
+
+  test("is false for plain schemas and other string formats", () => {
+    expect(
+      schemaContainsBinaryFormat({
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          when: { type: "string", format: "date-time" },
+        },
+      }),
+    ).toBe(false);
+    expect(schemaContainsBinaryFormat(undefined)).toBe(false);
+    expect(schemaContainsBinaryFormat("binary")).toBe(false);
+    // A field merely NAMED format is not a binary marker.
+    expect(
+      schemaContainsBinaryFormat({
+        properties: { format: { type: "string" } },
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("returnsInlineFileResponse", () => {
+  test("detects an inline Result.ok(new Response(...)) success return", () => {
+    expect(
+      returnsInlineFileResponse("return Result.ok(new Response(body, {}));"),
+    ).toBe(true);
+    expect(
+      returnsInlineFileResponse("return Result.ok(\n    new Response(zip));"),
+    ).toBe(true);
+  });
+
+  test("detects inline binary success returns (Uint8Array, Blob)", () => {
+    expect(
+      returnsInlineFileResponse("return Result.ok(new Uint8Array(buffer));"),
+    ).toBe(true);
+    expect(
+      returnsInlineFileResponse("return Result.ok(new Blob([bytes]));"),
+    ).toBe(true);
+  });
+
+  test("does not match a Response returned via an intermediate variable", () => {
+    expect(returnsInlineFileResponse("return Result.ok(result);")).toBe(false);
+  });
+
+  test("does not match an error-only Response", () => {
+    expect(
+      returnsInlineFileResponse(
+        "return new Response(JSON.stringify({ error }), { status: 400 });",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("scanFileResponseReturns", () => {
+  test("flags an unflagged inline file-response handler", () => {
+    const scan = scanFileResponseReturns({
+      entries: [
+        { id: "a.export", source: "return Result.ok(new Response(csv));" },
+        { id: "b.read", source: "return Result.ok({ ok: true });" },
+      ],
+      flaggedIds: new Set(),
+    });
+    expect(scan.violations).toEqual(["a.export"]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("a flagged inline handler is not a violation", () => {
+    const scan = scanFileResponseReturns({
+      entries: [
+        { id: "a.export", source: "return Result.ok(new Response(x));" },
+      ],
+      flaggedIds: new Set(["a.export"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("keeps a flagged variable-returned Response honest via the stale signal", () => {
+    // templates.fill-shaped: returns a Response via a helper, so the inline
+    // detector misses it, but it still constructs a Response, so not stale.
+    const scan = scanFileResponseReturns({
+      entries: [
+        {
+          id: "templates.fill",
+          source: "const r = new Response(pdf);\nreturn Result.ok(result);",
+        },
+      ],
+      flaggedIds: new Set(["templates.fill"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("keeps a flagged helper-built binary payload honest via the stale signal", () => {
+    // time-entries.export-pdf-shaped: the bytes come back from a helper typed
+    // Uint8Array, invisible to the inline detector, but the Uint8Array mention
+    // keeps the flag non-stale.
+    const scan = scanFileResponseReturns({
+      entries: [
+        {
+          id: "time-entries.export-pdf",
+          source:
+            "const buildMinimalPdf = (lines: readonly string[]): Uint8Array => enc.encode(pdf);\nreturn Result.ok(response);",
+        },
+      ],
+      flaggedIds: new Set(["time-entries.export-pdf"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("flags a stale entry whose handler no longer constructs a Response", () => {
+    const scan = scanFileResponseReturns({
+      entries: [{ id: "a.export", source: "return Result.ok({ url });" }],
+      flaggedIds: new Set(["a.export"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual(["a.export"]);
+  });
+
+  test("flags a flagged id that is no longer a catalog entry", () => {
+    const scan = scanFileResponseReturns({
+      entries: [],
+      flaggedIds: new Set(["gone.export"]),
+    });
+    expect(scan.staleFlags).toEqual(["gone.export"]);
+  });
+});
+
+describe("scanRouteHookGuards", () => {
+  const hookedRoute = `
+import getStatus from "@/api/handlers/case-law/ingestion/status";
+import listLinks from "@/api/handlers/case-law/matter-links/list";
+const adminRoute = new Elysia({ prefix: "/case/admin" })
+  .use(authMacro)
+  .onBeforeHandle(({ memberRole, set }) => {
+    if (!ADMIN_BYPASS_ROLES.includes(memberRole.role)) {
+      set.status = 403;
+      return { error: "Forbidden" };
+    }
+    return undefined;
+  })
+  .get("/ingestion/status", getStatus.handler, {});
+const openRoute = new Elysia({ prefix: "/case" })
+  .get("/links", listLinks.handler, {});
+`;
+
+  test("flags a capability mounted under a route hook when unwaived", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
+      capabilityIds: new Set([
+        "case-law.ingestion.status",
+        "case-law.matter-links.list",
+      ]),
+      waivedIds: new Set(),
+    });
+    expect(scan.violations).toEqual([
+      { routeFile: "case-law/routes.ts", id: "case-law.ingestion.status" },
+    ]);
+    expect(scan.staleWaivers).toEqual([]);
+  });
+
+  test("a waived hook-guarded capability is not a violation", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
+      capabilityIds: new Set(["case-law.ingestion.status"]),
+      waivedIds: new Set(["case-law.ingestion.status"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleWaivers).toEqual([]);
+  });
+
+  test("a handler mounted only under a non-hooked instance is not flagged", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
+      capabilityIds: new Set(["case-law.matter-links.list"]),
+      waivedIds: new Set(),
+    });
+    expect(scan.violations).toEqual([]);
+  });
+
+  test("resolves a named-export handler mount to its capability id", () => {
+    const source = `
+import { readEntitySummariesCount } from "@/api/handlers/entities/read-summaries";
+const r = new Elysia()
+  .beforeHandle(() => undefined)
+  .get("/count", readEntitySummariesCount.handler, {});
+`;
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "entities/routes.ts", source }],
+      capabilityIds: new Set([
+        "entities.read-summaries.readEntitySummariesCount",
+      ]),
+      waivedIds: new Set(),
+    });
+    expect(scan.violations).toEqual([
+      {
+        routeFile: "entities/routes.ts",
+        id: "entities.read-summaries.readEntitySummariesCount",
+      },
+    ]);
+  });
+
+  test("reports a stale waiver no longer mounted under any hook", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
+      capabilityIds: new Set(["case-law.ingestion.status"]),
+      waivedIds: new Set(["case-law.ingestion.status", "gone.capability"]),
+    });
+    expect(scan.staleWaivers).toEqual(["gone.capability"]);
+  });
+});
+
+describe("context-fidelity scan", () => {
+  test("detects destructured set/redirect/cookie usage", () => {
+    expect(
+      detectContextFidelityFeatures("const { set } = ctx; set.status = 201;"),
+    ).toEqual(["set.status"]);
+    expect(detectContextFidelityFeatures("return redirect('/x');")).toEqual([
+      "redirect()",
+    ]);
+    expect(detectContextFidelityFeatures("const rows = new Set();")).toEqual(
+      [],
+    );
+  });
+
+  test("flags a tripped-but-unwaived capability and stale waivers", () => {
+    const scan = scanContextFidelity({
+      entries: [
+        { id: "a.set", source: "set.headers['x'] = '1';" },
+        { id: "b.clean", source: "return Result.ok({});" },
+      ],
+      waivedIds: new Set(["b.clean"]),
+    });
+    expect(scan.violations).toEqual([
+      { id: "a.set", features: ["set.headers"] },
+    ]);
+    expect(scan.staleWaivers).toEqual(["b.clean"]);
+  });
+
+  test("a waived tripped capability is not a violation", () => {
+    const scan = scanContextFidelity({
+      entries: [{ id: "a.set", source: "set.status = 200;" }],
+      waivedIds: new Set(["a.set"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleWaivers).toEqual([]);
   });
 });

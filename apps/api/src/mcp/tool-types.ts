@@ -141,6 +141,14 @@ export type McpCliToolAnnotation = {
     subcommands: Record<string, McpCliDiscriminatorSubcommand>;
   };
   flagRename?: Record<string, string>;
+  /**
+   * The tool is not destructive itself but gates SOME calls behind its `confirm`
+   * arg (per-target destructiveness, e.g. `invoke_capability` where the invoked
+   * capability's catalog flag decides). The CLI leaf then accepts `--yes`
+   * (injecting `confirm: true` upfront) and, on a `confirmation_required`
+   * envelope at a TTY, prompts and retries once with `confirm: true`.
+   */
+  confirmPassthrough?: true;
 };
 
 export type McpCliToolAnnotationMap<

@@ -2052,5 +2052,108 @@
       },
       "required": ["kind", "title", "body"]
     }
+  },
+  {
+    "cli": {
+      "command": ["capability", "list"],
+      "scope": "read",
+      "itemsKey": "items"
+    },
+    "name": "list_capabilities",
+    "description": "List the automatable capabilities beyond the curated tools: every safe backend operation (CRUD, exports, processing triggers) reachable through invoke_capability. Paginated; filter by domain (the id prefix, e.g. \"time-entries\") or access (read/write). Each item gives the capability id, a one-line summary, and the OAuth scope it needs. Use describe_capability for the full input schema.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "type": "string",
+          "description": "Filter to one capability domain: the id prefix before the first dot (e.g. \"time-entries\", \"invoices\")."
+        },
+        "access": {
+          "type": "string",
+          "enum": ["all", "read", "write"],
+          "description": "Filter by access level."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque pagination cursor from a previous page; omit for the first page."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum capabilities to return.",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["capability", "describe"],
+      "scope": "read"
+    },
+    "name": "describe_capability",
+    "description": "Describe one capability in full: its live input JSON Schema (body/params/query), required OAuth scope, member permissions, whether it is destructive, its handler kind (workspace/root), and its disposition. Call this before invoke_capability to learn exactly what input to pass.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "type": "string",
+          "description": "Capability id to describe, as returned by list_capabilities (e.g. \"time-entries.create\")."
+        }
+      },
+      "required": ["capability"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["capability", "invoke"],
+      "scope": "read",
+      "confirmPassthrough": true
+    },
+    "name": "invoke_capability",
+    "description": "Invoke one capability by id (from list_capabilities/describe_capability). Pass its input under { body, params, query }; workspace-scoped capabilities take the target workspace as input.params.workspaceId. Real authority is enforced per capability: the session must hold the capability's scope and your member role its permissions. Set validateOnly: true to check input without running it; destructive capabilities require confirm: true after human approval.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "type": "string",
+          "description": "Capability id to invoke, as returned by list_capabilities."
+        },
+        "input": {
+          "type": "object",
+          "description": "The capability's input, split into the parts its schema declares.",
+          "properties": {
+            "body": {
+              "type": "object",
+              "description": "Request body fields, per the capability's body schema.",
+              "additionalProperties": true
+            },
+            "params": {
+              "type": "object",
+              "description": "Path parameters; workspace-scoped capabilities require workspaceId here.",
+              "additionalProperties": true
+            },
+            "query": {
+              "type": "object",
+              "description": "Query parameters, per the capability's query schema.",
+              "additionalProperties": true
+            }
+          },
+          "additionalProperties": false
+        },
+        "validateOnly": {
+          "type": "boolean",
+          "description": "When true, validate the input against the capability schema and return without executing."
+        },
+        "confirm": {
+          "type": "boolean",
+          "description": "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action."
+        }
+      },
+      "required": ["capability"],
+      "additionalProperties": false
+    }
   }
 ]

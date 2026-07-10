@@ -60,9 +60,9 @@ const flagFor = (spec: LeafCommandSpec, flag: string): FlagSpec | undefined =>
 const tree = generateRouteMap(snapshotListings, TOOL_ANNOTATIONS);
 
 describe("generateRouteMap: structure", () => {
-  test("produces 41 leaf commands and excludes the compat shims", () => {
+  test("produces 44 leaf commands and excludes the compat shims", () => {
     const paths = leafPaths(tree);
-    expect(paths).toHaveLength(41);
+    expect(paths).toHaveLength(44);
     expect(paths).not.toContain("search");
     expect(paths).not.toContain("fetch");
     // The excluded compat tools never surface anywhere in the tree.

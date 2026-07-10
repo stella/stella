@@ -41,6 +41,10 @@ const EXIT_CODE_DESCRIPTIONS = {
   featureDisabled: "feature disabled for this organization",
   notFound: "resource not found",
   aborted: "confirmation aborted (a destructive op was declined)",
+  permissionDenied:
+    "permission denied (member role lacks the required permission)",
+  usageLimited: "usage entitlement exceeded",
+  conflict: "conflict with current state (duplicate or concurrent change)",
 } satisfies Record<keyof typeof EXIT_CODES, string>;
 
 type CommandRow = {

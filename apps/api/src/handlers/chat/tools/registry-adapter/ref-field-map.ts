@@ -525,6 +525,25 @@ export const READ_TOOL_REF_FIELD_MAP = {
     // means the backstop never runs against this tool's output at all.
     passthroughIdPaths: ["items[].workspaceId", "items[].resourceId"],
   },
+
+  // --- Capability meta-tools: not projected to chat -------------------------
+  // The generic capability surface (list/describe/invoke) is reached over the
+  // MCP/CLI transport, never from chat: chat has its own curated tool set and
+  // the generic path cannot prove per-capability ref safety. Kept off the chat
+  // surface (`chatProjectable: false`); the entries exist only to satisfy the
+  // typecheck-forced completeness guard.
+  list_capabilities: {
+    chatProjectable: false,
+    inputRefs: [],
+    outputRefs: [],
+    passthroughIdPaths: [],
+  },
+  describe_capability: {
+    chatProjectable: false,
+    inputRefs: [],
+    outputRefs: [],
+    passthroughIdPaths: [],
+  },
 } as const satisfies Record<RegistryReadToolName, RegistryRefFieldMapEntry>;
 
 /**
@@ -762,6 +781,19 @@ export const WRITE_TOOL_REF_FIELD_MAP = {
   // so it never enters `ProjectedWriteToolName` or the chat tool-policy map. The
   // entry exists only to satisfy the typecheck-forced completeness guard.
   send_feedback: {
+    chatProjectable: false,
+    inputRefs: [],
+    outputRefs: [],
+    passthroughIdPaths: [],
+  },
+
+  // --- Capability meta-tool: not projected to chat --------------------------
+  // `invoke_capability` runs an arbitrary catalog capability over the MCP/CLI
+  // transport; its authority is enforced per capability inside the handler, and
+  // it is never dispatched from chat. Kept off the chat write projection
+  // (`chatProjectable: false`, like `fill_template`/`send_feedback`); the entry
+  // exists only for the typecheck-forced completeness guard.
+  invoke_capability: {
     chatProjectable: false,
     inputRefs: [],
     outputRefs: [],

@@ -874,6 +874,60 @@ describe("destructive confirm injection (S4)", () => {
       confirm: true,
     });
   });
+
+  test("capability invoke --yes injects confirm: true (confirm passthrough)", async () => {
+    // invoke_capability's leaf is non-destructive (destructiveness is
+    // per-invoked-capability), but its confirmPassthrough annotation registers
+    // --yes and injects the confirm gate upfront.
+    const server = startMockServer(() => ({ toolPayload: { ok: true } }));
+    const result = await runCli({
+      args: [
+        "capability",
+        "invoke",
+        "--capability",
+        "clauses.categories-delete",
+        "--yes",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(0);
+    expect(server.requests.at(0)?.params.name).toBe("invoke_capability");
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      capability: "clauses.categories-delete",
+      confirm: true,
+    });
+  });
+
+  test("capability invoke without --yes off a TTY exits 7 on confirmation_required", async () => {
+    const server = startMockServer(() => ({
+      toolPayload: {
+        error: {
+          code: "confirmation_required",
+          message: "This capability is irreversible",
+        },
+      },
+      isError: true,
+    }));
+    const result = await runCli({
+      args: [
+        "capability",
+        "invoke",
+        "--capability",
+        "clauses.categories-delete",
+      ],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(7);
+    // No prompt and no retry off a TTY: exactly one server call, without confirm.
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests.at(0)?.params.arguments).toEqual({
+      capability: "clauses.categories-delete",
+    });
+  });
 });
 
 describe("feedback two-phase handshake (S4)", () => {

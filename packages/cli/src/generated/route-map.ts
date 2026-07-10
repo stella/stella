@@ -3602,5 +3602,177 @@ export const generatedRouteMap: RouteNode = {
         },
       },
     },
+    capability: {
+      kind: "route",
+      children: {
+        list: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["capability", "list"],
+            toolName: "list_capabilities",
+            flags: [
+              {
+                flag: "--domain",
+                prop: "domain",
+                kind: "string",
+                repeatable: false,
+                required: false,
+              },
+              {
+                flag: "--access",
+                prop: "access",
+                kind: "enum",
+                enum: ["all", "read", "write"],
+                repeatable: false,
+                required: false,
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            windowedText: false,
+            itemsKey: "items",
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              properties: {
+                domain: {
+                  type: "string",
+                  description:
+                    'Filter to one capability domain: the id prefix before the first dot (e.g. "time-entries", "invoices").',
+                },
+                access: {
+                  type: "string",
+                  enum: ["all", "read", "write"],
+                  description: "Filter by access level.",
+                },
+                cursor: {
+                  type: "string",
+                  description:
+                    "Opaque pagination cursor from a previous page; omit for the first page.",
+                },
+                limit: {
+                  type: "integer",
+                  description: "Maximum capabilities to return.",
+                  minimum: 1,
+                  maximum: 100,
+                },
+              },
+              additionalProperties: false,
+            },
+          },
+        },
+        describe: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["capability", "describe"],
+            toolName: "describe_capability",
+            flags: [
+              {
+                flag: "--capability",
+                prop: "capability",
+                kind: "string",
+                repeatable: false,
+                required: true,
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            windowedText: false,
+            destructive: false,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              properties: {
+                capability: {
+                  type: "string",
+                  description:
+                    'Capability id to describe, as returned by list_capabilities (e.g. "time-entries.create").',
+                },
+              },
+              required: ["capability"],
+              additionalProperties: false,
+            },
+          },
+        },
+        invoke: {
+          kind: "leaf",
+          spec: {
+            commandPath: ["capability", "invoke"],
+            toolName: "invoke_capability",
+            flags: [
+              {
+                flag: "--capability",
+                prop: "capability",
+                kind: "string",
+                repeatable: false,
+                required: true,
+              },
+              {
+                flag: "--validate-only",
+                prop: "validateOnly",
+                kind: "boolean",
+                repeatable: false,
+                required: false,
+              },
+            ],
+            inputOnly: ["input"],
+            paginated: false,
+            windowedText: false,
+            destructive: false,
+            confirmPassthrough: true,
+            scope: "read",
+            inputSchema: {
+              type: "object",
+              properties: {
+                capability: {
+                  type: "string",
+                  description:
+                    "Capability id to invoke, as returned by list_capabilities.",
+                },
+                input: {
+                  type: "object",
+                  description:
+                    "The capability's input, split into the parts its schema declares.",
+                  properties: {
+                    body: {
+                      type: "object",
+                      description:
+                        "Request body fields, per the capability's body schema.",
+                      additionalProperties: true,
+                    },
+                    params: {
+                      type: "object",
+                      description:
+                        "Path parameters; workspace-scoped capabilities require workspaceId here.",
+                      additionalProperties: true,
+                    },
+                    query: {
+                      type: "object",
+                      description:
+                        "Query parameters, per the capability's query schema.",
+                      additionalProperties: true,
+                    },
+                  },
+                  additionalProperties: false,
+                },
+                validateOnly: {
+                  type: "boolean",
+                  description:
+                    "When true, validate the input against the capability schema and return without executing.",
+                },
+                confirm: {
+                  type: "boolean",
+                  description:
+                    "Must be true to run a destructive capability. Set it only after a human user approved the irreversible action.",
+                },
+              },
+              required: ["capability"],
+              additionalProperties: false,
+            },
+          },
+        },
+      },
+    },
   },
 };

@@ -67,16 +67,19 @@ the active session; `stella auth logout` clears it.
 
 ## Exit codes
 
-| Code | Meaning                                                     |
-| ---- | ----------------------------------------------------------- |
-| 0    | success                                                     |
-| 1    | unexpected internal error                                   |
-| 2    | usage or input validation error                             |
-| 3    | authentication required or failed (run `stella auth login`) |
-| 4    | server or tool error                                        |
-| 5    | feature disabled for this organization                      |
-| 6    | resource not found                                          |
-| 7    | confirmation aborted (a destructive op was declined)        |
+| Code | Meaning                                                       |
+| ---- | ------------------------------------------------------------- |
+| 0    | success                                                       |
+| 1    | unexpected internal error                                     |
+| 2    | usage or input validation error                               |
+| 3    | authentication required or failed (run `stella auth login`)   |
+| 4    | server or tool error                                          |
+| 5    | feature disabled for this organization                        |
+| 6    | resource not found                                            |
+| 7    | confirmation aborted (a destructive op was declined)          |
+| 8    | permission denied (member role lacks the required permission) |
+| 9    | usage entitlement exceeded                                    |
+| 10   | conflict with current state (duplicate or concurrent change)  |
 
 The exit code lines up with the tool-error `code`: `validation_error` -> 2,
 `missing_scope` -> 3, `feature_disabled` -> 5, `not_found` -> 6,
@@ -109,6 +112,9 @@ requires (request it at `stella auth login --scopes`).
 | Domain       | Command                                 | Access          | Notes                                 |
 | ------------ | --------------------------------------- | --------------- | ------------------------------------- |
 | audit-log    | `stella audit-log list`                 | admin_read      | paginated                             |
+| capability   | `stella capability describe`            | read            |                                       |
+| capability   | `stella capability invoke`              | read            |                                       |
+| capability   | `stella capability list`                | read            | paginated                             |
 | case-law     | `stella case-law read`                  | read            | paginated; windowed text              |
 | case-law     | `stella case-law search`                | search          | paginated                             |
 | clause       | `stella clause delete`                  | knowledge_write | destructive (needs `--yes` off a TTY) |

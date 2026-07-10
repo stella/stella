@@ -23,10 +23,10 @@ import infosoudLookup from "@/api/handlers/workspaces/infosoud-lookup";
 import readWorkspaces from "@/api/handlers/workspaces/read";
 import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
 import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
-import { readJustificationsHandler } from "@/api/handlers/workspaces/read-justifications";
+import readJustifications from "@/api/handlers/workspaces/read-justifications";
 import readWorkspaceNavigation from "@/api/handlers/workspaces/read-navigation";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
-import { readWorkflowHandler } from "@/api/handlers/workspaces/read-workflow-status";
+import readWorkflow from "@/api/handlers/workspaces/read-workflow-status";
 import workflowTargetCount from "@/api/handlers/workspaces/read-workflow-target-count";
 import unarchiveWorkspace from "@/api/handlers/workspaces/unarchive";
 import updateActiveWorkspace from "@/api/handlers/workspaces/update-active";
@@ -43,7 +43,6 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
-import { LIMITS } from "@/api/lib/limits";
 
 const readWorkspace = createSafeHandler(
   {
@@ -58,47 +57,6 @@ const readWorkspace = createSafeHandler(
             workspaceId,
             organizationId: session.activeOrganizationId,
             scopedDb,
-          }),
-      ),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-const readWorkflow = createSafeHandler(
-  {
-    permissions: { workspace: ["read"] },
-    mcp: { type: "capability", reason: "workflow_orchestration" },
-  } satisfies HandlerConfig,
-  async function* ({ workspaceId }) {
-    const response = yield* Result.await(
-      Result.tryPromise(async () => await readWorkflowHandler(workspaceId)),
-    );
-
-    return Result.ok(response);
-  },
-);
-
-const readJustifications = createSafeHandler(
-  {
-    permissions: { workspace: ["read"] },
-    mcp: { type: "capability", reason: "workflow_orchestration" },
-    body: t.Object({
-      entityIds: t.Array(tSafeId("entity"), {
-        minItems: 1,
-        maxItems: LIMITS.entitiesPageSizeMax,
-      }),
-    }),
-  } satisfies HandlerConfig,
-  async function* ({ body: { entityIds }, scopedDb, workspaceId }) {
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readJustificationsHandler({
-            workspaceId,
-            scopedDb,
-            entityIds,
           }),
       ),
     );

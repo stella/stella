@@ -1,4 +1,8 @@
+import { Result } from "better-result";
+
 import type { ScopedDb } from "@/api/db";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -34,3 +38,27 @@ export const listMatterLinksHandler = async ({
 
   return { links };
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "legal_corpus_admin" },
+} satisfies HandlerConfig;
+
+const listMatterLinks = createSafeHandler(
+  config,
+  async function* ({ scopedDb, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await listMatterLinksHandler({
+            workspaceId,
+            scopedDb,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default listMatterLinks;

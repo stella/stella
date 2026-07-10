@@ -442,6 +442,7 @@ const leafSpecsForTool = ({
   const scope = annotation ? scopeOf(annotation) : undefined;
   const itemsKey = annotation?.itemsKey;
   const windowedText = annotation?.windowedText === true;
+  const confirmPassthrough = annotation?.confirmPassthrough;
   const mode = resolvePaginationMode(properties, annotation);
   const paginated = mode !== "none";
 
@@ -504,6 +505,7 @@ const leafSpecsForTool = ({
         windowedText,
         ...(itemsKey === undefined ? {} : { itemsKey }),
         destructive: sub?.destructive === true || destructiveHint,
+        ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
         ...(scope === undefined ? {} : { scope }),
         inputSchema: schema,
       });
@@ -528,6 +530,7 @@ const leafSpecsForTool = ({
       windowedText,
       ...(itemsKey === undefined ? {} : { itemsKey }),
       destructive: destructiveHint,
+      ...(confirmPassthrough === undefined ? {} : { confirmPassthrough }),
       ...(scope === undefined ? {} : { scope }),
       inputSchema: schema,
     },

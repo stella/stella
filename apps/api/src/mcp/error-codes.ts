@@ -17,6 +17,28 @@ export const MCP_ERROR_CODES = [
   "not_found",
   /** A destructive operation needs `confirm: true` after human approval. */
   "confirmation_required",
+  /**
+   * The caller is authenticated and holds the required scope, but the member
+   * role lacks permission for the operation (or workspace access was denied).
+   * Maps a backing handler's 401/403 through the generic capability path; the
+   * CLI keys exit code 8 off it.
+   */
+  "permission_denied",
+  /**
+   * The operation would exceed the organization's usage entitlement (a backing
+   * handler's 402). Distinct from `rate_limited` (a transient window) and
+   * `permission_denied` (an authorization gap): retrying without freeing usage
+   * will not succeed. The CLI keys exit code 9 off it.
+   */
+  "usage_limited",
+  /**
+   * The request is valid but conflicts with current state (a backing handler's
+   * 409): duplicate link, name already taken, concurrent edit. Distinct from
+   * `validation_error` (the input itself is well-formed) and `not_found`; the
+   * handler's message names the conflicting resource. The CLI keys exit code
+   * 10 off it.
+   */
+  "conflict",
   /** The caller exceeded a rate limit; retry after the window. */
   "rate_limited",
   /** No tool with the given name is exposed on this surface. */

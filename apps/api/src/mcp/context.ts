@@ -27,8 +27,30 @@ export type McpRequestContext = {
    * "active".
    */
   accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
+  /**
+   * Every accessible (non-deleting) workspace with its status. The generic
+   * capability path (`invoke_capability`) needs this to build the
+   * `accessibleWorkspaces` field the safe-handler context carries; existing
+   * tools resolve access through `accessibleWorkspaceIdSet` /
+   * `accessibleWorkspaceStatusById` and do not read it.
+   */
+  accessibleWorkspaces: AccessibleWorkspace[];
+  /**
+   * OAuth scopes granted to this session (the access token's `scope` claim).
+   * `invoke_capability` gates each capability on its catalog scope against this
+   * list; the session-authed chat projection has no OAuth scopes and passes an
+   * empty list (it never dispatches the generic path).
+   */
+  grantedScopes: readonly string[];
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
+  /**
+   * The originating gateway HTTP request. Present on the MCP transport path
+   * (set by `resolveMcpSessionContext`); absent on the session-authed chat
+   * projection, which never dispatches the generic capability path. Only
+   * `invoke_capability` reads it (to synthesize a safe-handler context).
+   */
+  request?: Request;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
@@ -77,8 +99,11 @@ export const resolveMcpSessionContext = async (
     accessibleWorkspaceStatusById: new Map(
       usableWorkspaces.map((workspace) => [workspace.id, workspace.status]),
     ),
+    accessibleWorkspaces: usableWorkspaces,
+    grantedScopes: session.scopes,
     memberRole,
     organizationId,
+    request,
     recordAuditEvent: createAuditRecorder({
       organizationId,
       request,

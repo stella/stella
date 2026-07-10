@@ -4,6 +4,7 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import { captureError } from "@/api/lib/analytics";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
+import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeMcpEgress } from "@/api/mcp/egress";
@@ -63,6 +64,10 @@ const REGISTRY_WRITE_TOOL_HANDLERS = {
   // tool. `send_feedback` runs its own approval handshake and is served through
   // MCP/CLI, not the chat write projection.
   send_feedback: FEEDBACK_TOOL_HANDLERS.send_feedback,
+  // Non-projectable (`chatProjectable: false`): invoke_capability runs an
+  // arbitrary catalog capability over MCP/CLI, never from chat; the orchestrator
+  // refuses it before dispatch. Wired only to keep this map exhaustive.
+  invoke_capability: CAPABILITY_TOOL_HANDLERS.invoke_capability,
 } satisfies Record<RegistryWriteToolName, McpToolHandler>;
 
 export type RunRegistryWriteToolProps = {

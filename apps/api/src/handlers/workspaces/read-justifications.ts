@@ -1,5 +1,6 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
+import { t } from "elysia";
 
 import type { ScopedDb } from "@/api/db";
 import {
@@ -8,7 +9,10 @@ import {
   fields,
   justifications,
 } from "@/api/db/schema";
+import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 type ReadJustificationsHandlerProps = {
@@ -61,3 +65,34 @@ export const readJustificationsHandler = async ({
       ),
   );
 };
+
+const config = {
+  permissions: { workspace: ["read"] },
+  mcp: { type: "capability", reason: "workflow_orchestration" },
+  body: t.Object({
+    entityIds: t.Array(tSafeId("entity"), {
+      minItems: 1,
+      maxItems: LIMITS.entitiesPageSizeMax,
+    }),
+  }),
+} satisfies HandlerConfig;
+
+const readJustifications = createSafeHandler(
+  config,
+  async function* ({ body: { entityIds }, scopedDb, workspaceId }) {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () =>
+          await readJustificationsHandler({
+            workspaceId,
+            scopedDb,
+            entityIds,
+          }),
+      ),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default readJustifications;

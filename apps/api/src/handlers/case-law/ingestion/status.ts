@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { count, desc, gte, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db";
@@ -7,6 +8,8 @@ import {
   caseLawIngestionFailures,
   caseLawSources,
 } from "@/api/db/schema";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 type SourceStatus = {
   adapterKey: string;
@@ -172,3 +175,27 @@ export const getIngestionStatus = async (
     };
   });
 };
+
+const config = {
+  // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
+  // by owner/admin (see `packages/permissions`), matching the admin/owner gate
+  // this route used to carry as a route-level `onBeforeHandle`. Declaring it in
+  // the handler config means the safe-handler wrapper enforces it for BOTH the
+  // REST route and the generic `invoke_capability` path, so neither bypasses the
+  // gate. Keep this as the single source of the role check for this endpoint.
+  permissions: { auditLog: ["read"] },
+  mcp: { type: "capability", reason: "legal_corpus_admin" },
+} satisfies HandlerConfig;
+
+const getCaseLawIngestionStatus = createSafeRootHandler(
+  config,
+  async function* ({ scopedDb }) {
+    const response = yield* Result.await(
+      Result.tryPromise(async () => await getIngestionStatus(scopedDb)),
+    );
+
+    return Result.ok(response);
+  },
+);
+
+export default getCaseLawIngestionStatus;
