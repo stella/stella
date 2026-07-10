@@ -361,9 +361,13 @@ describe("offset cursor codec", () => {
       fc.property(
         fc.maxSafeInteger().filter((offset) => offset >= 0),
         (offset) => {
-          expect(decodeOffsetCursor(encodeOffsetCursor(offset), 1, 20)).toBe(
-            offset,
-          );
+          expect(
+            decodeOffsetCursor({
+              cursor: encodeOffsetCursor(offset),
+              firstPage: 1,
+              legacyPageSize: 20,
+            }),
+          ).toBe(offset);
         },
       ),
       propertyConfig({ numRuns: 500 }),
@@ -377,7 +381,11 @@ describe("offset cursor codec", () => {
         fc.constantFrom("a", ".0", " ", "+", "-", "_"),
         (offset, suffix) => {
           expect(
-            decodeOffsetCursor(`${encodeOffsetCursor(offset)}${suffix}`, 1, 20),
+            decodeOffsetCursor({
+              cursor: `${encodeOffsetCursor(offset)}${suffix}`,
+              firstPage: 1,
+              legacyPageSize: 20,
+            }),
           ).toBeNull();
         },
       ),

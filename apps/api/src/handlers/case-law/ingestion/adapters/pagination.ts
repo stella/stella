@@ -124,11 +124,17 @@ const parseCanonicalNonNegativeSafeInteger = (value: string): number | null => {
   return Number.isSafeInteger(parsed) ? parsed : null;
 };
 
-export const decodeOffsetCursor = (
-  cursor: string | null,
-  firstPage: number,
-  legacyPageSize: number,
-): number | null => {
+type DecodeOffsetCursorParams = {
+  cursor: string | null;
+  firstPage: number;
+  legacyPageSize: number;
+};
+
+export const decodeOffsetCursor = ({
+  cursor,
+  firstPage,
+  legacyPageSize,
+}: DecodeOffsetCursorParams): number | null => {
   if (cursor === null) {
     return 0;
   }
@@ -160,11 +166,11 @@ export const createPagePaginatedFetch = <TResponse>(
   ): Promise<Result<SyncPage, AdapterFetchError>> =>
     await Result.tryPromise({
       try: async () => {
-        const offset = decodeOffsetCursor(
+        const offset = decodeOffsetCursor({
           cursor,
           firstPage,
-          opts.legacyPageSize ?? opts.pageSize,
-        );
+          legacyPageSize: opts.legacyPageSize ?? opts.pageSize,
+        });
 
         if (offset === null) {
           throw new AdapterFetchError({
