@@ -24,7 +24,12 @@ import { expect, test } from "../helpers/test";
 // (apps/web/src/components/workspace-primary-nav.ts) and route to distinct,
 // already-authenticated top-level pages, giving variety of mounted
 // components without needing route-specific fixtures.
-const CYCLE_LINK_NAMES = ["Matters", "Knowledge", "Contacts", "Chat"] as const;
+const CYCLE_ROUTES = [
+  "/workspaces",
+  "/knowledge",
+  "/contacts",
+  "/chat",
+] as const;
 
 const NAVIGATION_CYCLES = 5;
 const ROUTE_SETTLE_MS = 500;
@@ -105,18 +110,18 @@ test("repeated navigation does not grow the JS heap unboundedly", async ({
 
   expect(
     deltaBytes,
-    `JS heap grew ${formatMiB(deltaBytes)} across ${NAVIGATION_CYCLES - 1} repeats of the same ${CYCLE_LINK_NAMES.length}-route cycle (budget ${formatMiB(HEAP_GROWTH_BUDGET_BYTES)}). This usually means a module-level registry (Map/Set/array) is accumulating an entry per navigation with no eviction path — see scripts/ratchet.ts's module-level-mutable-maps "grows-per-entity" bucket for known offenders.`,
+    `JS heap grew ${formatMiB(deltaBytes)} across ${NAVIGATION_CYCLES - 1} repeats of the same ${CYCLE_ROUTES.length}-route cycle (budget ${formatMiB(HEAP_GROWTH_BUDGET_BYTES)}). This usually means a module-level registry (Map/Set/array) is accumulating an entry per navigation with no eviction path — see scripts/ratchet.ts's module-level-mutable-maps "grows-per-entity" bucket for known offenders.`,
   ).toBeLessThan(HEAP_GROWTH_BUDGET_BYTES);
 });
 
 const runNavigationCycle = async (page: Page) => {
-  for (const linkName of CYCLE_LINK_NAMES) {
+  for (const route of CYCLE_ROUTES) {
     // Scoped to the sidebar shell (apps/web/src/components/sidebar.tsx,
     // data-slot="sidebar") so this never accidentally matches a same-named
     // breadcrumb link rendered inside route content.
     const link = page
       .locator('[data-slot="sidebar"]')
-      .getByRole("link", { name: linkName, exact: true });
+      .locator(`a[href="${route}"]`);
     // Sidebar chrome can briefly render a loading skeleton across a route
     // transition (recents/pinned data refetching); an explicit visibility
     // wait survives that instead of racing click()'s shorter action timeout.
@@ -125,9 +130,7 @@ const runNavigationCycle = async (page: Page) => {
     // eslint-disable-next-line no-await-in-loop -- see above
     await link.click();
     // eslint-disable-next-line no-await-in-loop -- see above
-    await expect(page.locator("main").first()).toBeVisible({
-      timeout: 30_000,
-    });
+    await page.waitForURL((url) => url.pathname === route, { timeout: 30_000 });
     // eslint-disable-next-line no-await-in-loop -- see above
     await page.waitForTimeout(ROUTE_SETTLE_MS);
   }
