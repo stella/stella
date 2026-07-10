@@ -40,6 +40,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   getTanStackTextModelForRole,
@@ -189,17 +190,19 @@ ${decisionText}`;
   }
 };
 
+type GenerateAnalysisResponse = {
+  status: "done" | "error" | "generating";
+  analysis?: PersistedDecisionAnalysis;
+  error?: string;
+};
+
 export const generateAnalysis = async (
   decisionId: SafeId<"caseLawDecision">,
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
   orgAIConfig: OrgAIConfig | null,
   promptCachingEnabled: boolean,
-): Promise<{
-  status: "done" | "error" | "generating";
-  analysis?: PersistedDecisionAnalysis;
-  error?: string;
-}> => {
+): Promise<Result<GenerateAnalysisResponse, HandlerError>> => {
   // audit: skip — background AI analysis output
   const decision = await scopedDb((tx) =>
     tx.query.caseLawDecisions.findFirst({
@@ -217,31 +220,46 @@ export const generateAnalysis = async (
   );
 
   if (!decision) {
-    return { status: "error", error: "Decision not found" };
+    return Result.ok({ status: "error", error: "Decision not found" });
   }
 
   const analysis = parsePersistedDecisionAnalysis(decision.analysis);
 
   // Return cached analysis (complete or partial with progress)
   if (isAnalysisInProgress(analysis)) {
-    return { status: "generating", analysis };
+    return Result.ok({ status: "generating", analysis });
   }
 
   if (isDecisionAnalysis(analysis)) {
-    return { status: "done", analysis };
+    return Result.ok({ status: "done", analysis });
   }
 
   // Concurrent generation guard for the lightweight sentinel without a tree.
   if (isAnalysisGenerating(analysis)) {
     const startedAt = new Date(analysis.startedAt).getTime();
     if (Date.now() - startedAt < SENTINEL_STALE_MS) {
-      return { status: "generating" };
+      return Result.ok({ status: "generating" });
     }
+  }
+
+  // AI availability is checked only on the path that actually invokes the
+  // model: the cached/in-flight reads above must stay accessible when the
+  // fast role is unavailable (a pre-existing bug ran this check before them,
+  // locking finished analyses behind AI configuration).
+  const available = requireTanStackAIAvailableForRole({
+    orgConfig: orgAIConfig,
+    role: "fast",
+  });
+  if (Result.isError(available)) {
+    return Result.err(available.error);
   }
 
   // Check AST
   if (!hasUsableAst(decision.documentAst)) {
-    return { status: "error", error: "Decision has no parseable AST" };
+    return Result.ok({
+      status: "error",
+      error: "Decision has no parseable AST",
+    });
   }
 
   // hasUsableAst narrows to DocumentAst.
@@ -267,7 +285,7 @@ export const generateAnalysis = async (
 
   // Another request won the race — return generating
   if (!updated) {
-    return { status: "generating" };
+    return Result.ok({ status: "generating" });
   }
 
   // Fire-and-forget generation
@@ -280,7 +298,7 @@ export const generateAnalysis = async (
     promptCachingEnabled,
   );
 
-  return { status: "generating" };
+  return Result.ok({ status: "generating" });
 };
 
 const config = {
@@ -298,11 +316,9 @@ const generateDecisionAnalysis = createSafeRootHandler(
     orgAIConfig,
     promptCachingEnabled,
   }) {
-    yield* requireTanStackAIAvailableForRole({
-      orgConfig: orgAIConfig,
-      role: "fast",
-    });
-
+    // AI availability is enforced inside generateAnalysis, after its cached
+    // and in-flight branches, so finished analyses stay readable when the
+    // fast model role is unavailable.
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -316,7 +332,7 @@ const generateDecisionAnalysis = createSafeRootHandler(
       ),
     );
 
-    return Result.ok(response);
+    return response;
   },
 );
 
