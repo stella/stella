@@ -88,9 +88,10 @@ export type ComposerModelsMenuProps = {
   /** Current per-thread override ("provider::modelId"), or null when the
    *  thread uses the org default. */
   selectedModel: string | null;
-  /** Called after a successful PATCH so the caller can update its cached
-   *  thread data or draft meta. */
-  onModelChange: (model: string | null) => void;
+  /** Persist the chosen model (see `useChatModelSelection`). Fire-and-forget
+   *  here: the caller's own send path is what awaits the outcome via
+   *  `awaitPendingSelection`, not this submenu. */
+  selectModel: (model: string | null) => void;
 };
 
 /** Enables and drives the Skills submenu. Reuses the same data source and
@@ -311,8 +312,7 @@ const ComposerModelsSubmenu = ({
   models: ComposerModelsMenuProps;
 }) => {
   const t = useTranslations();
-  const { activeOrganizationId, threadRef, selectedModel, onModelChange } =
-    models;
+  const { activeOrganizationId, selectedModel, selectModel } = models;
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const { data, isPending: isLoadingModels } = useQuery({
@@ -339,32 +339,12 @@ const ComposerModelsSubmenu = ({
     return allRows.filter((row) => row.label.toLowerCase().includes(query));
   }, [data, search, t]);
 
-  const handleSelect = async (value: string) => {
+  const handleSelect = (value: string) => {
     const model = value === "" ? null : value;
     if (model === selectedModel) {
       return;
     }
-    const result = await Result.tryPromise(
-      async () =>
-        await api.chat
-          .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
-          .model.patch(
-            { model },
-            {
-              query:
-                threadRef.scope === "workspace"
-                  ? {
-                      workspaceId: toSafeId<"workspace">(threadRef.workspaceId),
-                    }
-                  : {},
-            },
-          ),
-    );
-    if (Result.isError(result) || result.value.error) {
-      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
-      return;
-    }
-    onModelChange(model);
+    selectModel(model);
   };
 
   return (
@@ -403,7 +383,7 @@ const ComposerModelsSubmenu = ({
                 className="grid-cols-[1rem_minmax(0,1fr)]"
                 key={row.value || "default"}
                 onClick={() => {
-                  void handleSelect(row.value);
+                  handleSelect(row.value);
                 }}
                 value={row.value}
               >

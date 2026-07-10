@@ -6,7 +6,7 @@ import type {
   UIMessage,
 } from "@tanstack/ai-client";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
-import type { QueryClient } from "@tanstack/react-query";
+import type { DataTag, QueryClient, QueryKey } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
@@ -2137,3 +2137,30 @@ export const invalidateChatThreadAcrossScopes = async ({
     predicate: (query) =>
       matchesChatThreadAcrossScopes(query.queryKey, threadId),
   });
+
+/**
+ * Apply a persisted model-selection change to one query's cache entry, then
+ * invalidate the thread across scopes so any other cached view (inspector
+ * tab, other scope) picks it up too. `queryKey` must come from a
+ * `queryOptions()` call (its data type is inferred from the key's tag), so
+ * this only accepts a cache entry shaped like `{ model }` -- exactly what
+ * `chatThreadOptions` and the draft `/chat` composer's own meta query
+ * return. Shared by every composer surface with a Models submenu so the
+ * cache-update + invalidation pairing can't drift between them again.
+ */
+export const applyChatModelChange = <TData extends { model: string | null }>({
+  model,
+  queryClient,
+  queryKey,
+  threadId,
+}: {
+  model: string | null;
+  queryClient: QueryClient;
+  queryKey: DataTag<QueryKey, TData>;
+  threadId: ChatThreadId;
+}): void => {
+  queryClient.setQueryData(queryKey, (prev) =>
+    prev ? { ...prev, model } : prev,
+  );
+  void invalidateChatThreadAcrossScopes({ queryClient, threadId });
+};

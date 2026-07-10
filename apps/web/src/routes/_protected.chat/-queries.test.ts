@@ -1,4 +1,8 @@
-import { QueryClient, replaceEqualDeep } from "@tanstack/react-query";
+import {
+  QueryClient,
+  queryOptions,
+  replaceEqualDeep,
+} from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -9,6 +13,7 @@ import { toSafeId, type SafeId } from "@/lib/safe-id";
 import {
   __resetChatRequestStateForTests,
   acquireChatRuntime,
+  applyChatModelChange,
   buildSendRequestBody,
   chatKeys,
   chatThreadOptions,
@@ -169,6 +174,64 @@ describe("matchesChatThreadAcrossScopes", () => {
         threadId,
       ),
     ).toBe(false);
+  });
+});
+
+describe("applyChatModelChange", () => {
+  const threadId = toChatThreadId("thread-A");
+
+  // Mirrors how `chatThreadOptions`/the draft `/chat` composer's meta query
+  // build their own tagged query keys, so `applyChatModelChange`'s
+  // `setQueryData` call infers its data type the same way it does for the
+  // real callers instead of needing a cast here.
+  const buildKey = (scope: "global" | "workspace") =>
+    queryOptions({
+      queryKey: chatKeys.thread(
+        "org_test",
+        scope === "global"
+          ? { scope: "global", threadId }
+          : { scope: "workspace", threadId, workspaceId: "ws-1" },
+      ),
+      queryFn: async () => ({ model: null as string | null, other: "keep" }),
+    }).queryKey;
+
+  test("updates the cache entry's model and invalidates the thread across scopes", () => {
+    const queryClient = new QueryClient();
+    const globalKey = buildKey("global");
+    const workspaceKey = buildKey("workspace");
+    queryClient.setQueryData(globalKey, { model: null, other: "keep" });
+    queryClient.setQueryData(workspaceKey, { model: null, other: "keep" });
+
+    applyChatModelChange({
+      model: "anthropic::claude-x",
+      queryClient,
+      queryKey: globalKey,
+      threadId,
+    });
+
+    expect(queryClient.getQueryData(globalKey)).toEqual({
+      model: "anthropic::claude-x",
+      other: "keep",
+    });
+    // Every cached entry for the thread is invalidated, not just the one
+    // whose cache this call touched directly -- the whole point of routing
+    // every composer surface through this one helper.
+    expect(queryClient.getQueryState(globalKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(workspaceKey)?.isInvalidated).toBe(true);
+  });
+
+  test("leaves a missing cache entry untouched", () => {
+    const queryClient = new QueryClient();
+    const key = buildKey("global");
+
+    applyChatModelChange({
+      model: "anthropic::claude-x",
+      queryClient,
+      queryKey: key,
+      threadId,
+    });
+
+    expect(queryClient.getQueryData(key)).toBeUndefined();
   });
 });
 

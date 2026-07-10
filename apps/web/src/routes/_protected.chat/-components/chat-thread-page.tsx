@@ -13,6 +13,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { getRouteApi, Link, useNavigate } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -60,11 +61,13 @@ import { roleOptions } from "@/routes/-queries";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { useChatModelSelection } from "@/routes/_protected.chat/-hooks/use-chat-model-selection";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/routes/_protected.chat/-hooks/use-chat-thread-runtime";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
+  applyChatModelChange,
   chatThreadOptions,
   chatThreadSuggestedPromptsOptions,
   invalidateChatThreadAcrossScopes,
@@ -347,6 +350,21 @@ export const ChatThreadPage = ({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  // Persists the composer's Models submenu selection and gates message
+  // submit on the outcome (see `onSubmit` below) so a send can never race
+  // a just-changed model onto the old, stale one.
+  const modelSelection = useChatModelSelection({
+    onPersisted: (model) => {
+      applyChatModelChange({
+        model,
+        queryClient,
+        queryKey: threadQueryOptions.queryKey,
+        threadId: toSafeId<"chatThread">(threadRef.threadId),
+      });
+    },
+    threadRef,
+  });
+
   // "Move to side" — re-host this thread inside the inspector
   // tab. Workspace-scoped chats land on the matter so the pane
   // sits next to its matter content; global chats land on /chat
@@ -600,16 +618,7 @@ export const ChatThreadPage = ({
                     activeOrganizationId,
                     threadRef,
                     selectedModel: data.model,
-                    onModelChange: (model) => {
-                      queryClient.setQueryData(
-                        threadQueryOptions.queryKey,
-                        (prev) => (prev ? { ...prev, model } : prev),
-                      );
-                      void invalidateChatThreadAcrossScopes({
-                        queryClient,
-                        threadId: toSafeId<"chatThread">(threadRef.threadId),
-                      });
-                    },
+                    selectModel: modelSelection.selectModel,
                   }}
                   skillsOrganizationId={activeOrganizationId}
                   dock={
@@ -661,6 +670,19 @@ export const ChatThreadPage = ({
                     }
 
                     if (!(await ensureAIAvailable())) {
+                      return;
+                    }
+                    // A model just picked in the (+) menu may still be
+                    // mid-PATCH: wait for it to settle so the send can
+                    // never race onto the thread's previous model. On
+                    // failure the hook has already toasted; abort instead
+                    // of sending with a model that may not match what the
+                    // server has persisted.
+                    if (
+                      Result.isError(
+                        await modelSelection.awaitPendingSelection(),
+                      )
+                    ) {
                       return;
                     }
                     await sendMessage(await buildChatRequestMessage(draft));
