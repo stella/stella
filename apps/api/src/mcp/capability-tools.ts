@@ -8,6 +8,7 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -340,10 +341,26 @@ const mapStatusResponse = (
   return structuredErrorResult({ code, message });
 };
 
+/**
+ * Attach the request receipt to a successful capability payload. The id lands in
+ * a top-level `meta.requestId` sibling of the handler's own fields, never mixed
+ * into the handler's data: it cannot collide with a domain field, and the
+ * pagination fields (`items`/`nextCursor`) the CLI and `--all` read stay at the
+ * top level. A non-object payload (or no active request) carries no receipt.
+ */
+const withRequestReceipt = (payload: unknown): unknown => {
+  const requestId = getCurrentRequestId();
+  if (requestId === undefined || !isRecord(payload)) {
+    return payload;
+  }
+  const existingMeta = isRecord(payload["meta"]) ? payload["meta"] : {};
+  return { ...payload, meta: { ...existingMeta, requestId } };
+};
+
 /** Serialize a successful capability payload through the standard egress path. */
 const successEgress = (payload: unknown): McpEgressPlan => ({
   egress: "structured",
-  payload,
+  payload: withRequestReceipt(payload),
   textFields: [],
 });
 

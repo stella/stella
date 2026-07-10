@@ -11,6 +11,7 @@ type RecordedCall = { name: string; args: Record<string, unknown> };
 type ServerResponse =
   | { kind: "echo" }
   | { kind: "confirm-gate" }
+  | { kind: "receipt"; requestId: string }
   | { kind: "pages"; pages: readonly Record<string, unknown>[] };
 
 /**
@@ -59,6 +60,9 @@ const startServer = (response: ServerResponse) => {
             isError: true,
           },
         });
+      }
+      if (response.kind === "receipt") {
+        return text({ ok: true, meta: { requestId: response.requestId } });
       }
       if (response.kind === "pages") {
         const page = response.pages[pageIndex] ?? {
@@ -148,6 +152,7 @@ const capSpec = (
   overrides: Partial<CapabilityLeafSpec> & { capabilityId: string },
 ): CapabilityLeafSpec => ({
   commandPath: ["x", "y"],
+  access: "read",
   flags: [],
   inputOnly: [],
   paginated: false,
@@ -549,5 +554,37 @@ describe("runCapabilityCommand: output contract", () => {
     // A clean single page: JSON payload on stdout, nothing on stderr.
     expect(tty.stdoutText()).toContain('"items"');
     expect(tty.stderrText()).toBe("");
+  });
+});
+
+describe("runCapabilityCommand: request-id receipt", () => {
+  test("a write surfaces the request id on stderr, not stdout", async () => {
+    const server = startServer({ kind: "receipt", requestId: "req_write123" });
+    const spec = capSpec({ capabilityId: "a.create", access: "write" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
+    server.stop();
+    // The human-readable receipt line goes to stderr; stdout stays pure result
+    // (which still carries the id inside the payload's meta, on its own).
+    expect(tty.stderrText()).toContain("request id: req_write123");
+    expect(tty.stdoutText()).not.toContain("request id:");
+    expect(tty.exitCode()).toBeUndefined();
+  });
+
+  test("a read does not surface the request id", async () => {
+    const server = startServer({ kind: "receipt", requestId: "req_read123" });
+    const spec = capSpec({ capabilityId: "a.get", access: "read" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
+    server.stop();
+    expect(tty.stderrText()).not.toContain("request id:");
   });
 });

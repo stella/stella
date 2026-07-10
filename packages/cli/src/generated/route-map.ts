@@ -558,6 +558,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["case-law", "analysis", "generate"],
                 capabilityId: "case-law.analysis.generate",
+                access: "read",
                 flags: [
                   {
                     kind: "string",
@@ -605,6 +606,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["case-law", "ingestion", "status"],
                 capabilityId: "case-law.ingestion.status",
+                access: "read",
                 flags: [],
                 inputOnly: [],
                 paginated: false,
@@ -628,6 +630,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["case-law", "matter-links", "create"],
                 capabilityId: "case-law.matter-links.create",
+                access: "write",
                 flags: [
                   {
                     flag: "--workspace",
@@ -700,6 +703,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["case-law", "matter-links", "delete"],
                 capabilityId: "case-law.matter-links.delete",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -758,6 +762,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["case-law", "matter-links", "list"],
                 capabilityId: "case-law.matter-links.list",
+                access: "read",
                 flags: [
                   {
                     flag: "--workspace",
@@ -3451,6 +3456,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["usage", "get-entitlement"],
             capabilityId: "usage.get-entitlement",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -3656,6 +3662,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["legislation", "boe-get-law"],
             capabilityId: "legislation.boe-get-law",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -3753,6 +3760,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["legislation", "boe-law-structure"],
             capabilityId: "legislation.boe-law-structure",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -3792,6 +3800,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["legislation", "boe-related-laws"],
             capabilityId: "legislation.boe-related-laws",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -3860,6 +3869,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["legislation", "boe-search"],
             capabilityId: "legislation.boe-search",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -4004,6 +4014,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["legislation", "boe-text-block"],
             capabilityId: "legislation.boe-text-block",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -4057,6 +4068,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["legislation", "borme-summary"],
             capabilityId: "legislation.borme-summary",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -4096,6 +4108,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["legislation", "read-by-id"],
             capabilityId: "legislation.read-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -4532,6 +4545,7 @@ export const generatedRouteMap: RouteNode = {
                     ],
                     capabilityId:
                       "entities.read-summaries.readEntitySummariesCount",
+                    access: "read",
                     flags: [
                       {
                         flag: "--workspace",
@@ -4581,6 +4595,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["capability", "legislation", "search"],
                 capabilityId: "legislation.search",
+                access: "read",
                 flags: [
                   {
                     kind: "string",
@@ -4732,6 +4747,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["audit-logs", "read"],
             capabilityId: "audit-logs.read",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -4878,6 +4894,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["billing-codes", "create"],
             capabilityId: "billing-codes.create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -4991,6 +5008,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["billing-codes", "delete"],
             capabilityId: "billing-codes.delete",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -5051,6 +5069,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["billing-codes", "read"],
             capabilityId: "billing-codes.read",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -5140,6 +5159,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["billing-codes", "update"],
             capabilityId: "billing-codes.update",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -5259,6 +5279,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["catalogue", "install-skill"],
             capabilityId: "catalogue.install-skill",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5310,6 +5331,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["catalogue", "list-catalogue"],
             capabilityId: "catalogue.list-catalogue",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -5332,6 +5354,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "delete-thread"],
             capabilityId: "chat.delete-thread",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5395,6 +5418,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "get-messages"],
             capabilityId: "chat.get-messages",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5470,6 +5494,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "get-older-messages"],
             capabilityId: "chat.get-older-messages",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5546,6 +5571,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "get-threads"],
             capabilityId: "chat.get-threads",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: true,
@@ -5592,6 +5618,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "rename-thread"],
             capabilityId: "chat.rename-thread",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5675,6 +5702,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "update-thread"],
             capabilityId: "chat.update-thread",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5761,6 +5789,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "categories-create"],
             capabilityId: "clauses.categories-create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5830,6 +5859,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "categories-delete"],
             capabilityId: "clauses.categories-delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5872,6 +5902,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "categories-list"],
             capabilityId: "clauses.categories-list",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -5890,6 +5921,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "categories-update"],
             capabilityId: "clauses.categories-update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -5992,6 +6024,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "create"],
             capabilityId: "clauses.create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -6197,6 +6230,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "delete"],
             capabilityId: "clauses.delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -6239,6 +6273,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "read-by-id"],
             capabilityId: "clauses.read-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -6281,6 +6316,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "read-list"],
             capabilityId: "clauses.read-list",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -6356,6 +6392,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "read-version"],
             capabilityId: "clauses.read-version",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -6414,6 +6451,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "rewrite"],
             capabilityId: "clauses.rewrite",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -6582,6 +6620,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "template-slot-preview"],
             capabilityId: "clauses.template-slot-preview",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -6624,6 +6663,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "update"],
             capabilityId: "clauses.update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -6873,6 +6913,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "variants-create"],
             capabilityId: "clauses.variants-create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -7039,6 +7080,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "variants-delete"],
             capabilityId: "clauses.variants-delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -7097,6 +7139,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "variants-list"],
             capabilityId: "clauses.variants-list",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -7139,6 +7182,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "variants-update"],
             capabilityId: "clauses.variants-update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -7334,6 +7378,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "versions-diff"],
             capabilityId: "clauses.versions-diff",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -7392,6 +7437,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "versions-restore"],
             capabilityId: "clauses.versions-restore",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -7450,6 +7496,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["clauses", "versions-summarize"],
             capabilityId: "clauses.versions-summarize",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -7513,6 +7560,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "business-registries-lookup"],
             capabilityId: "contacts.business-registries-lookup",
+            access: "read",
             flags: [
               {
                 kind: "enum",
@@ -7590,6 +7638,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "create"],
             capabilityId: "contacts.create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -8156,6 +8205,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "delete-by-id"],
             capabilityId: "contacts.delete-by-id",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -8198,6 +8248,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "read"],
             capabilityId: "contacts.read",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -8257,6 +8308,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "read-by-id"],
             capabilityId: "contacts.read-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -8299,6 +8351,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "search"],
             capabilityId: "contacts.search",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -8350,6 +8403,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["contacts", "update-by-id"],
             capabilityId: "contacts.update-by-id",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -8941,6 +8995,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["document-types", "create"],
             capabilityId: "document-types.create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -8981,6 +9036,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["document-types", "delete-by-id"],
             capabilityId: "document-types.delete-by-id",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -9023,6 +9079,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["document-types", "read-list"],
             capabilityId: "document-types.read-list",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -9041,6 +9098,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["document-types", "reorder"],
             capabilityId: "document-types.reorder",
+            access: "write",
             flags: [
               {
                 kind: "string-array",
@@ -9087,6 +9145,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["document-types", "update-by-id"],
             capabilityId: "document-types.update-by-id",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -9154,6 +9213,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "clip"],
             capabilityId: "entities.clip",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -9278,6 +9338,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "compare-versions"],
             capabilityId: "entities.compare-versions",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -9390,6 +9451,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "copy-to-workspace"],
             capabilityId: "entities.copy-to-workspace",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -9498,6 +9560,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "create"],
             capabilityId: "entities.create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -9586,6 +9649,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "create-from-legal-source"],
             capabilityId: "entities.create-from-legal-source",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -9657,6 +9721,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "delete"],
             capabilityId: "entities.delete",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -9722,6 +9787,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "delete-version"],
             capabilityId: "entities.delete-version",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -9796,6 +9862,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "duplicate"],
             capabilityId: "entities.duplicate",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -9856,6 +9923,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "list-files"],
             capabilityId: "entities.list-files",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -9921,6 +9989,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "list-folders"],
             capabilityId: "entities.list-folders",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -9986,6 +10055,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "move"],
             capabilityId: "entities.move",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -10061,6 +10131,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "organize-suggestions"],
             capabilityId: "entities.organize-suggestions",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -10181,6 +10252,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "read"],
             capabilityId: "entities.read",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -13378,6 +13450,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "read-by-id"],
             capabilityId: "entities.read-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -13436,6 +13509,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "read-filesystem-tree"],
             capabilityId: "entities.read-filesystem-tree",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -16581,6 +16655,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "read-summaries"],
             capabilityId: "entities.read-summaries",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -16645,6 +16720,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "read-version-by-id"],
             capabilityId: "entities.read-version-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -16719,6 +16795,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "read-versions"],
             capabilityId: "entities.read-versions",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -16794,6 +16871,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "read-window"],
             capabilityId: "entities.read-window",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -19991,6 +20069,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "rename"],
             capabilityId: "entities.rename",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -20065,6 +20144,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "restore-version"],
             capabilityId: "entities.restore-version",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -20139,6 +20219,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "translate"],
             capabilityId: "entities.translate",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -20251,6 +20332,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "update-version-description"],
             capabilityId: "entities.update-version-description",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -20342,6 +20424,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "update-version-label"],
             capabilityId: "entities.update-version-label",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -20433,6 +20516,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "version-diff"],
             capabilityId: "entities.version-diff",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -20507,6 +20591,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["entities", "version-summarize"],
             capabilityId: "entities.version-summarize",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -20586,6 +20671,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["expenses", "create"],
             capabilityId: "expenses.create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -20796,6 +20882,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["expenses", "delete"],
             capabilityId: "expenses.delete",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -20856,6 +20943,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["expenses", "read"],
             capabilityId: "expenses.read",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -21033,6 +21121,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["expenses", "update"],
             capabilityId: "expenses.update",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -21255,6 +21344,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["fields", "mark-column-flag"],
             capabilityId: "fields.mark-column-flag",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -24443,6 +24533,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["fields", "update-cell-metadata"],
             capabilityId: "fields.update-cell-metadata",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -24567,6 +24658,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["fields", "upsert-by-id"],
             capabilityId: "fields.upsert-by-id",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -24814,6 +24906,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["invoices", "add-entries"],
             capabilityId: "invoices.add-entries",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -24919,6 +25012,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["invoices", "create"],
             capabilityId: "invoices.create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -25066,6 +25160,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["invoices", "delete"],
             capabilityId: "invoices.delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -25124,6 +25219,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["invoices", "read"],
             capabilityId: "invoices.read",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -25189,6 +25285,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["invoices", "read-by-id"],
             capabilityId: "invoices.read-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -25247,6 +25344,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["invoices", "remove-entries"],
             capabilityId: "invoices.remove-entries",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -25352,6 +25450,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["invoices", "transition"],
             capabilityId: "invoices.transition",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -25443,6 +25542,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["invoices", "update"],
             capabilityId: "invoices.update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -25588,6 +25688,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["organization-settings", "preview"],
             capabilityId: "organization-settings.preview",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -25644,6 +25745,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["organization-settings", "read"],
             capabilityId: "organization-settings.read",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -25662,6 +25764,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["organization-settings", "read-ai-availability"],
             capabilityId: "organization-settings.read-ai-availability",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -25683,6 +25786,7 @@ export const generatedRouteMap: RouteNode = {
               "read-anonymization-blacklist",
             ],
             capabilityId: "organization-settings.read-anonymization-blacklist",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -25701,6 +25805,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["organization-settings", "read-deepl-availability"],
             capabilityId: "organization-settings.read-deepl-availability",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -25719,6 +25824,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["organization-settings", "update"],
             capabilityId: "organization-settings.update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -25790,6 +25896,7 @@ export const generatedRouteMap: RouteNode = {
             ],
             capabilityId:
               "organization-settings.update-anonymization-blacklist",
+            access: "write",
             flags: [],
             inputOnly: ["body.entries"],
             paginated: false,
@@ -25850,6 +25957,7 @@ export const generatedRouteMap: RouteNode = {
               "update-practice-jurisdictions",
             ],
             capabilityId: "organization-settings.update-practice-jurisdictions",
+            access: "write",
             flags: [],
             inputOnly: ["body.practiceJurisdictions"],
             paginated: false,
@@ -25899,6 +26007,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "approve"],
             capabilityId: "playbooks.approve",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -25941,6 +26050,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "auto-run"],
             capabilityId: "playbooks.auto-run",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -25983,6 +26093,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "create"],
             capabilityId: "playbooks.create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -30220,6 +30331,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "delete-by-id"],
             capabilityId: "playbooks.delete-by-id",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -30262,6 +30374,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "from-starter"],
             capabilityId: "playbooks.from-starter",
+            access: "write",
             flags: [
               {
                 kind: "enum",
@@ -30303,6 +30416,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "list-starters"],
             capabilityId: "playbooks.list-starters",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -30321,6 +30435,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "list-versions"],
             capabilityId: "playbooks.list-versions",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -30384,6 +30499,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "read-by-id"],
             capabilityId: "playbooks.read-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -30426,6 +30542,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "read-list"],
             capabilityId: "playbooks.read-list",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: true,
@@ -30472,6 +30589,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "restore-version"],
             capabilityId: "playbooks.restore-version",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -30528,6 +30646,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "review"],
             capabilityId: "playbooks.review",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -30624,6 +30743,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "run"],
             capabilityId: "playbooks.run",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -30682,6 +30802,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["playbooks", "update-by-id"],
             capabilityId: "playbooks.update-by-id",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -34946,6 +35067,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "create"],
             capabilityId: "properties.create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -38295,6 +38417,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "create-batch"],
             capabilityId: "properties.create-batch",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -41737,6 +41860,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "delete-by-id"],
             capabilityId: "properties.delete-by-id",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -41795,6 +41919,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "preview"],
             capabilityId: "properties.preview",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -41932,6 +42057,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "read"],
             capabilityId: "properties.read",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -41970,6 +42096,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "suggest-prompt"],
             capabilityId: "properties.suggest-prompt",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -42079,6 +42206,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "update-by-id"],
             capabilityId: "properties.update-by-id",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -45728,6 +45856,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "create"],
             capabilityId: "rates.create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -45812,6 +45941,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "delete"],
             capabilityId: "rates.delete",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -45872,6 +46002,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "entries-create"],
             capabilityId: "rates.entries-create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -45988,6 +46119,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "entries-delete"],
             capabilityId: "rates.entries-delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -46068,6 +46200,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "entries-read"],
             capabilityId: "rates.entries-read",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -46153,6 +46286,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "entries-update"],
             capabilityId: "rates.entries-update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -46272,6 +46406,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "read"],
             capabilityId: "rates.read",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -46337,6 +46472,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "resolve"],
             capabilityId: "rates.resolve",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -46408,6 +46544,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["rates", "update"],
             capabilityId: "rates.update",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -46513,6 +46650,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["reports", "clone-builtin"],
             capabilityId: "reports.clone-builtin",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -46574,6 +46712,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["reports", "export-view"],
             capabilityId: "reports.export-view",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -46709,6 +46848,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["reports", "list-templates"],
             capabilityId: "reports.list-templates",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -46751,6 +46891,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["reports", "read-export"],
             capabilityId: "reports.read-export",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -46814,6 +46955,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "create"],
             capabilityId: "skills.create",
+            access: "write",
             flags: [
               {
                 kind: "enum",
@@ -46910,6 +47052,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "delete"],
             capabilityId: "skills.delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -46951,6 +47094,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "from-blueprint"],
             capabilityId: "skills.from-blueprint",
+            access: "write",
             flags: [
               {
                 kind: "enum",
@@ -47016,6 +47160,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "generate-draft"],
             capabilityId: "skills.generate-draft",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -47113,6 +47258,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "get"],
             capabilityId: "skills.get",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -47154,6 +47300,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "import-url"],
             capabilityId: "skills.import-url",
+            access: "write",
             flags: [
               {
                 kind: "enum",
@@ -47208,6 +47355,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "list"],
             capabilityId: "skills.list",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: true,
@@ -47253,6 +47401,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "list-commands"],
             capabilityId: "skills.list-commands",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -47273,6 +47422,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["skills", "resources", "create"],
                 capabilityId: "skills.resources.create",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -47375,6 +47525,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["skills", "resources", "delete"],
                 capabilityId: "skills.resources.delete",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -47436,6 +47587,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["skills", "resources", "rename"],
                 capabilityId: "skills.resources.rename",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -47511,6 +47663,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["skills", "resources", "rewrite"],
                 capabilityId: "skills.resources.rewrite",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -47586,6 +47739,7 @@ export const generatedRouteMap: RouteNode = {
               spec: {
                 commandPath: ["skills", "resources", "update"],
                 capabilityId: "skills.resources.update",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -47662,6 +47816,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "seed"],
             capabilityId: "skills.seed",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -47679,6 +47834,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "update"],
             capabilityId: "skills.update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -47807,6 +47963,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "assignees-add"],
             capabilityId: "tasks.assignees-add",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -47895,6 +48052,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "assignees-remove"],
             capabilityId: "tasks.assignees-remove",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -47969,6 +48127,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "calendar"],
             capabilityId: "tasks.calendar",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -51127,6 +51286,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "create"],
             capabilityId: "tasks.create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -51552,6 +51712,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "entity-links-create"],
             capabilityId: "tasks.entity-links-create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -51642,6 +51803,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "entity-links-delete"],
             capabilityId: "tasks.entity-links-delete",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -51702,6 +51864,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "entity-links-read"],
             capabilityId: "tasks.entity-links-read",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -51760,6 +51923,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "read-by-id"],
             capabilityId: "tasks.read-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -51818,6 +51982,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["tasks", "update"],
             capabilityId: "tasks.update",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -52245,6 +52410,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["template-recipes", "create"],
             capabilityId: "template-recipes.create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52299,6 +52465,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["template-recipes", "delete"],
             capabilityId: "template-recipes.delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52341,6 +52508,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["template-recipes", "list"],
             capabilityId: "template-recipes.list",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -52364,6 +52532,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "categories-create"],
             capabilityId: "templates.categories-create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52433,6 +52602,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "categories-delete"],
             capabilityId: "templates.categories-delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52475,6 +52645,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "categories-list"],
             capabilityId: "templates.categories-list",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -52493,6 +52664,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "categories-update"],
             capabilityId: "templates.categories-update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52595,6 +52767,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "check"],
             capabilityId: "templates.check",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -52637,6 +52810,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "clause-slots"],
             capabilityId: "templates.clause-slots",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -52679,6 +52853,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "clauses-link"],
             capabilityId: "templates.clauses-link",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52772,6 +52947,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "clauses-list"],
             capabilityId: "templates.clauses-list",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -52814,6 +52990,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "clauses-slot-update"],
             capabilityId: "templates.clauses-slot-update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52890,6 +53067,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "clauses-sync"],
             capabilityId: "templates.clauses-sync",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52948,6 +53126,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "clauses-sync-all"],
             capabilityId: "templates.clauses-sync-all",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -52990,6 +53169,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "clauses-unlink"],
             capabilityId: "templates.clauses-unlink",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -53048,6 +53228,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "create-blank"],
             capabilityId: "templates.create-blank",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -53104,6 +53285,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "delete"],
             capabilityId: "templates.delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -53146,6 +53328,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "fill-preview"],
             capabilityId: "templates.fill-preview",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -53206,6 +53389,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "fill-to-workspace"],
             capabilityId: "templates.fill-to-workspace",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -53421,6 +53605,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "get"],
             capabilityId: "templates.get",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -53463,6 +53648,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "list"],
             capabilityId: "templates.list",
+            access: "read",
             flags: [],
             inputOnly: ["query.categoryId"],
             paginated: false,
@@ -53502,6 +53688,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "lookup-preview"],
             capabilityId: "templates.lookup-preview",
+            access: "read",
             flags: [
               {
                 kind: "enum",
@@ -53590,6 +53777,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "preview"],
             capabilityId: "templates.preview",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -53632,6 +53820,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "suggest-fields"],
             capabilityId: "templates.suggest-fields",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -53684,6 +53873,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "update"],
             capabilityId: "templates.update",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -53835,6 +54025,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "versions-diff"],
             capabilityId: "templates.versions-diff",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -53893,6 +54084,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "versions-get"],
             capabilityId: "templates.versions-get",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -53951,6 +54143,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "versions-list"],
             capabilityId: "templates.versions-list",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -54019,6 +54212,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["templates", "versions-summarize"],
             capabilityId: "templates.versions-summarize",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -54082,6 +54276,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "batch-delete"],
             capabilityId: "time-entries.batch-delete",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -54147,6 +54342,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "batch-update"],
             capabilityId: "time-entries.batch-update",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -54237,6 +54433,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "create"],
             capabilityId: "time-entries.create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -54429,6 +54626,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "delete-by-id"],
             capabilityId: "time-entries.delete-by-id",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -54489,6 +54687,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "export-csv"],
             capabilityId: "time-entries.export-csv",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -54589,6 +54788,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "export-ledes"],
             capabilityId: "time-entries.export-ledes",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -54689,6 +54889,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "read"],
             capabilityId: "time-entries.read",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -54864,6 +55065,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "read-by-id"],
             capabilityId: "time-entries.read-by-id",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -54922,6 +55124,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "split"],
             capabilityId: "time-entries.split",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -55016,6 +55219,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "timer-start"],
             capabilityId: "time-entries.timer-start",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -55136,6 +55340,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "timer-stop"],
             capabilityId: "time-entries.timer-stop",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -55174,6 +55379,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["time-entries", "update-by-id"],
             capabilityId: "time-entries.update-by-id",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -55403,6 +55609,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["view-templates", "create"],
             capabilityId: "view-templates.create",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -55416,6 +55623,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["view-templates", "delete"],
             capabilityId: "view-templates.delete",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -55470,6 +55678,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["view-templates", "list"],
             capabilityId: "view-templates.list",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -55513,6 +55722,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["views", "convert"],
             capabilityId: "views.convert",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -55606,6 +55816,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["views", "create"],
             capabilityId: "views.create",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -55619,6 +55830,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["views", "delete"],
             capabilityId: "views.delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -55677,6 +55889,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["views", "read"],
             capabilityId: "views.read",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -55715,6 +55928,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["views", "reorder"],
             capabilityId: "views.reorder",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -55779,6 +55993,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["views", "update"],
             capabilityId: "views.update",
+            access: "write",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -55805,6 +56020,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "workspaces.anonymization-allowlist.createWorkspaceAnonymizationAllowlistEntry",
+                access: "write",
                 flags: [
                   {
                     flag: "--workspace",
@@ -55913,6 +56129,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "workspaces.anonymization-allowlist.deleteWorkspaceAnonymizationAllowlistEntry",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -55976,6 +56193,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "workspaces.anonymization-allowlist.readWorkspaceAnonymizationAllowlist",
+                access: "read",
                 flags: [
                   {
                     flag: "--workspace",
@@ -56045,6 +56263,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "workspaces.anonymization-terms.createWorkspaceAnonymizationTerms",
+                access: "write",
                 flags: [
                   {
                     flag: "--workspace",
@@ -56124,6 +56343,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "workspaces.anonymization-terms.deleteWorkspaceAnonymizationTerm",
+                access: "write",
                 flags: [
                   {
                     kind: "string",
@@ -56187,6 +56407,7 @@ export const generatedRouteMap: RouteNode = {
                 ],
                 capabilityId:
                   "workspaces.anonymization-terms.readWorkspaceAnonymizationTerms",
+                access: "read",
                 flags: [
                   {
                     flag: "--workspace",
@@ -56227,6 +56448,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "archive"],
             capabilityId: "workspaces.archive",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -56265,6 +56487,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "cell-retry"],
             capabilityId: "workspaces.cell-retry",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -56341,6 +56564,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "create"],
             capabilityId: "workspaces.create",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -56444,6 +56668,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "delete-by-id"],
             capabilityId: "workspaces.delete-by-id",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -56482,6 +56707,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "duplicate"],
             capabilityId: "workspaces.duplicate",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -56538,6 +56764,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "read"],
             capabilityId: "workspaces.read",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -56556,6 +56783,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "read-justifications"],
             capabilityId: "workspaces.read-justifications",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -56621,6 +56849,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "read-workflow-status"],
             capabilityId: "workspaces.read-workflow-status",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -56659,6 +56888,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "read-workflow-target-count"],
             capabilityId: "workspaces.read-workflow-target-count",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -56721,6 +56951,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "unarchive"],
             capabilityId: "workspaces.unarchive",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -56759,6 +56990,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "update-by-id"],
             capabilityId: "workspaces.update-by-id",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -56908,6 +57140,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "workflow-start"],
             capabilityId: "workspaces.workflow-start",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -57020,6 +57253,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "workspace-contacts-create"],
             capabilityId: "workspaces.workspace-contacts-create",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -57139,6 +57373,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "workspace-contacts-delete"],
             capabilityId: "workspaces.workspace-contacts-delete",
+            access: "write",
             flags: [
               {
                 kind: "string",
@@ -57197,6 +57432,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "workspace-members-add"],
             capabilityId: "workspaces.workspace-members-add",
+            access: "write",
             flags: [
               {
                 flag: "--workspace",
@@ -57255,6 +57491,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "workspace-members-remove"],
             capabilityId: "workspaces.workspace-members-remove",
+            access: "write",
             flags: [
               {
                 kind: "string",

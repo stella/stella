@@ -109,7 +109,7 @@ describe("list_audit_log", () => {
       args: { resource_id: "matter_1" },
       context: createContext("owner"),
     });
-    expect(errorText(result)).toBe(
+    expect(errorMessage(result)).toBe(
       "resourceType is required when resourceId is provided",
     );
   });

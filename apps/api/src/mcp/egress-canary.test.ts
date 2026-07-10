@@ -3,7 +3,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type { McpRequestContext } from "@/api/mcp/context";
-import type { McpEgressPlan } from "@/api/mcp/tool-types";
+import { isMcpEgressPlan, type McpEgressPlan } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -1433,11 +1433,22 @@ describe("MCP anonymization canary corpus", () => {
       context,
     });
 
-    expect(response).toEqual({
-      content: [
-        { type: "text", text: "Clause body has an unrecognized format" },
-      ],
-      isError: true,
+    if (isMcpEgressPlan(response)) {
+      throw new Error("Expected a finished error result, not an egress plan");
+    }
+    expect(response.isError).toBe(true);
+    const item = response.content.at(0);
+    if (!item || item.type !== "text") {
+      throw new Error("Expected a text MCP response");
+    }
+    expect(JSON.parse(item.text)).toEqual({
+      error: {
+        code: "validation_error",
+        message: "Clause body has an unrecognized format",
+        issues: [
+          { path: "body", message: "Clause body has an unrecognized format" },
+        ],
+      },
     });
     // Belt-and-braces: the handler returned a finished error result (never
     // reaching finalizeMcpEgress), so the anonymizer must never have run.

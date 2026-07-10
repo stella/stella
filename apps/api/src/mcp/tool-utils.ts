@@ -8,6 +8,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
@@ -142,12 +143,15 @@ export const MCP_INTERNAL_ERROR_HINT =
 
 /**
  * Structured tool-error envelope. The single text content is
- * `{"error":{"code","message","hint?","issues?","retryable?"}}`; `isError` is
- * set so MCP clients still treat it as a failure. Undefined
+ * `{"error":{"code","message","hint?","issues?","retryable?","requestId?"}}`;
+ * `isError` is set so MCP clients still treat it as a failure. Undefined
  * `hint`/`issues`/`retryable` are omitted so the serialized shape stays minimal
  * (an empty `issues` array is treated as absent). Agents branch on `code`;
  * `hint` tells them the next step; `issues` pinpoints the failing fields on a
- * `validation_error`. The companion CLI keys its exit codes off `error.code`.
+ * `validation_error`. `requestId` is the receipt of the active request (when one
+ * is scoped) so a caller can quote the failing server-side action back to an
+ * operator. The companion CLI keys its exit codes off `error.code` and renders
+ * the receipt dimly.
  */
 export const structuredErrorResult = ({
   code,
@@ -168,6 +172,7 @@ export const structuredErrorResult = ({
     hint?: string;
     issues?: readonly McpValidationIssue[];
     retryable?: boolean;
+    requestId?: string;
   } = { code, message };
   if (hint !== undefined) {
     error.hint = hint;
@@ -177,6 +182,10 @@ export const structuredErrorResult = ({
   }
   if (retryable !== undefined) {
     error.retryable = retryable;
+  }
+  const requestId = getCurrentRequestId();
+  if (requestId !== undefined) {
+    error.requestId = requestId;
   }
 
   return {

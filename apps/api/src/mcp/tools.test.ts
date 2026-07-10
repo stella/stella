@@ -1069,15 +1069,18 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "search_case_law",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Invalid parameter: date_from. Expected an ISO date in YYYY-MM-DD format",
-        },
-      ],
-      isError: true,
-    });
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe(
+      "Invalid parameter: date_from. Expected an ISO date in YYYY-MM-DD format",
+    );
+    expect(error["issues"]).toEqual([
+      {
+        path: "date_from",
+        message:
+          "Invalid parameter: date_from. Expected an ISO date in YYYY-MM-DD format",
+      },
+    ]);
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
@@ -1091,15 +1094,17 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "search_case_law",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Invalid parameter: source_id. Expected a UUID",
-        },
-      ],
-      isError: true,
-    });
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe(
+      "Invalid parameter: source_id. Expected a UUID",
+    );
+    expect(error["issues"]).toEqual([
+      {
+        path: "source_id",
+        message: "Invalid parameter: source_id. Expected a UUID",
+      },
+    ]);
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
@@ -1324,7 +1329,8 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "search_across_matters",
     });
 
-    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
     expect(searchProviderSearchMock).not.toHaveBeenCalled();
   });
 
@@ -1846,15 +1852,18 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "list_matters",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "status, limit, and cursor apply when listing matters; omit matter_id to list",
-        },
-      ],
-      isError: true,
-    });
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe(
+      "status, limit, and cursor apply when listing matters; omit matter_id to list",
+    );
+    expect(error["issues"]).toEqual([
+      {
+        path: "matter_id",
+        message:
+          "status, limit, and cursor apply when listing matters; omit matter_id to list",
+      },
+    ]);
   });
 
   // read_document's default branch returns the version history. Each version's

@@ -435,14 +435,17 @@ type ErrorIssue = {
 
 /**
  * The structured tool-error envelope:
- * `{ error: { code, message, hint?, issues? } }`. `issues` is only present on a
- * `validation_error` and pinpoints the offending fields.
+ * `{ error: { code, message, hint?, issues?, requestId? } }`. `issues` is only
+ * present on a `validation_error` and pinpoints the offending fields;
+ * `requestId` is the server-side receipt for the failing action, rendered dimly
+ * so an operator can correlate it with server logs.
  */
 type ErrorEnvelope = {
   code: string;
   message: string;
   hint: string | undefined;
   issues: readonly ErrorIssue[];
+  requestId: string | undefined;
 };
 
 /**
@@ -492,12 +495,40 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     return null;
   }
   const hint = error["hint"];
+  const requestId = error["requestId"];
   return {
     code,
     message,
     hint: typeof hint === "string" ? hint : undefined,
     issues: parseErrorIssues(error),
+    requestId: typeof requestId === "string" ? requestId : undefined,
   };
+};
+
+const RECEIPT_DIM = "\u001B[2m";
+const RECEIPT_RESET = "\u001B[0m";
+
+/**
+ * The `request id: …` receipt line, dimmed on a TTY and plain on a pipe (so an
+ * agent capturing stderr reads a clean, greppable line). Shared by the error
+ * path (after the envelope) and the capability write path (after a mutation).
+ */
+export const requestIdLine = (requestId: string, isTTY: boolean): string =>
+  isTTY
+    ? `${RECEIPT_DIM}request id: ${requestId}${RECEIPT_RESET}\n`
+    : `request id: ${requestId}\n`;
+
+/** Read the `meta.requestId` receipt off a success payload, if present. */
+export const readRequestReceipt = (payload: unknown): string | undefined => {
+  if (!isRecord(payload)) {
+    return undefined;
+  }
+  const meta = payload["meta"];
+  if (!isRecord(meta)) {
+    return undefined;
+  }
+  const requestId = meta["requestId"];
+  return typeof requestId === "string" ? requestId : undefined;
 };
 
 /**
@@ -825,6 +856,11 @@ export const renderToolError = ({
     }
     if (envelope.hint !== undefined) {
       writers.stderr(`hint: ${envelope.hint}\n`);
+    }
+    if (envelope.requestId !== undefined) {
+      writers.stderr(
+        requestIdLine(envelope.requestId, context.process.stderr.isTTY),
+      );
     }
   } else {
     writers.stderr(`${result.content.at(0)?.text ?? "Tool error"}\n`);

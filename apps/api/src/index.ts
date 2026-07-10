@@ -88,7 +88,9 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   getRequestContext,
+  getRequestId,
   initRequestContext,
+  REQUEST_ID_HEADER,
 } from "@/api/lib/observability/request-context";
 import {
   InMemoryRateLimitContext,
@@ -196,6 +198,10 @@ const buildRequestLogAttributes = ({
     attributes["error.type"] = errorType;
   }
 
+  if (reqCtx?.requestId) {
+    attributes["request.id"] = reqCtx.requestId;
+  }
+
   if (reqCtx?.posthogDistinctId) {
     attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
   }
@@ -232,6 +238,16 @@ const api = new Elysia()
         : undefined;
 
     initRequestContext(request, sessionId);
+
+    // Stamp the receipt on every response from the central header point, next
+    // to the security headers, so REST callers always get an `x-request-id`
+    // they can quote back (the MCP envelope + invoke payloads carry the same id
+    // through the ambient store). Set in `onRequest` so it survives error
+    // responses too, exactly like `setSecurityHeaders`.
+    const requestId = getRequestId(request);
+    if (requestId !== undefined) {
+      set.headers[REQUEST_ID_HEADER] = requestId;
+    }
   })
   .use(
     cors({

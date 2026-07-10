@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
+import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import {
   buildCaseLawDecisionAppUrl,
@@ -410,6 +411,28 @@ describe("structuredErrorResult", () => {
     );
 
     expect(text).not.toContain("issues");
+  });
+
+  test("carries the active request receipt under error.requestId", () => {
+    const parsed = runWithRequestId("req_envelope", () =>
+      JSON.parse(
+        errorText(
+          structuredErrorResult({ code: "not_found", message: "gone" }),
+        ),
+      ),
+    );
+
+    expect(parsed).toEqual({
+      error: { code: "not_found", message: "gone", requestId: "req_envelope" },
+    });
+  });
+
+  test("omits requestId when no request is active", () => {
+    const text = errorText(
+      structuredErrorResult({ code: "not_found", message: "gone" }),
+    );
+
+    expect(text).not.toContain("requestId");
   });
 });
 

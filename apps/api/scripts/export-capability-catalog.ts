@@ -56,6 +56,7 @@ import {
   scanRouteHookGuards,
   schemaContainsBinaryFormat,
   serializeCatalog,
+  serializeCoverageDoc,
   serializeDispatchModule,
 } from "./lib/capability-catalog";
 import {
@@ -83,6 +84,14 @@ const CLI_CATALOG_PATH = path.resolve(
 const DISPATCH_PATH = path.resolve(
   REPO_ROOT,
   "apps/api/src/mcp/generated/capability-dispatch.ts",
+);
+
+// Generated capability-coverage table: one section per domain plus the
+// permanent internal-waiver summary, drift-guarded alongside the JSON/dispatch
+// artifacts above (see `serializeCoverageDoc`).
+const COVERAGE_DOC_PATH = path.resolve(
+  REPO_ROOT,
+  "docs/capability-coverage.md",
 );
 
 const OXFMT_BIN = path.resolve(REPO_ROOT, "node_modules/.bin/oxfmt");
@@ -544,6 +553,13 @@ type BuildResult = {
   errors: string[];
   /** Capability ids whose input schema was omitted for exceeding the byte cap. */
   truncatedSchemas: string[];
+  /**
+   * Tally of `internal`-disposition endpoints by their `reason`: permanent
+   * reviewed waivers (auth/token plumbing, transport mechanics, ...) that never
+   * enter the catalog. Fed to `serializeCoverageDoc` for the doc's "Waived
+   * internal handlers" summary.
+   */
+  internalWaiverCounts: Record<string, number>;
 };
 
 /** Covering-tool name for a tool/covered exposure; undefined otherwise. */
@@ -815,6 +831,18 @@ const buildCatalog = async (): Promise<BuildResult> => {
       `inline capability endpoints in ${id}: ${inlineCount} inline \`capability\` disposition(s) but ${allowed} allowlisted. Inline endpoints cannot be projected into the catalog; refactor them into \`{ config, handler }\` endpoint modules (or, for the pre-existing pinned gaps only, update INLINE_CAPABILITY_ALLOWLIST)`,
     );
   }
+  // Permanent `internal` waivers, tallied by reason for the coverage doc's
+  // summary section. These endpoints never enter `entries` (the main loop
+  // below only admits tool/covered/capability dispositions).
+  const internalWaiverCounts: Record<string, number> = {};
+  for (const endpoint of endpoints) {
+    if (endpoint.exposure.type !== "internal") {
+      continue;
+    }
+    const { reason } = endpoint.exposure;
+    internalWaiverCounts[reason] = (internalWaiverCounts[reason] ?? 0) + 1;
+  }
+
   const discoveredFiles = new Set(files.map(({ id }) => id));
   for (const id of Object.keys(INLINE_CAPABILITY_ALLOWLIST)) {
     if (!discoveredFiles.has(id)) {
@@ -1067,7 +1095,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
   entries.sort((a, b) => a.id.localeCompare(b.id));
   dispatchRecords.sort((a, b) => a.id.localeCompare(b.id));
   truncatedSchemas.sort((a, b) => a.localeCompare(b));
-  return { entries, dispatchRecords, errors, truncatedSchemas };
+  return {
+    entries,
+    dispatchRecords,
+    errors,
+    truncatedSchemas,
+    internalWaiverCounts,
+  };
 };
 
 const printErrors = (errors: readonly string[]): void => {
@@ -1162,8 +1196,13 @@ const parseCommitted = async (): Promise<unknown[] | null> => {
 
 const main = async (): Promise<number> => {
   const checkMode = process.argv.includes("--check");
-  const { entries, dispatchRecords, errors, truncatedSchemas } =
-    await buildCatalog();
+  const {
+    entries,
+    dispatchRecords,
+    errors,
+    truncatedSchemas,
+    internalWaiverCounts,
+  } = await buildCatalog();
 
   if (errors.length > 0) {
     printErrors(errors);
@@ -1180,13 +1219,15 @@ const main = async (): Promise<number> => {
   const dispatchSerialized = await formatGeneratedModule(
     serializeDispatchModule(dispatchRecords),
   );
+  const doc = serializeCoverageDoc({ entries, internalWaiverCounts });
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);
     await Bun.write(CLI_CATALOG_PATH, serialized);
     await Bun.write(DISPATCH_PATH, dispatchSerialized);
+    await Bun.write(COVERAGE_DOC_PATH, doc);
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}, ${CLI_CATALOG_PATH}, and ${DISPATCH_PATH}\n`,
+      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}, ${CLI_CATALOG_PATH}, ${DISPATCH_PATH}, and ${COVERAGE_DOC_PATH}\n`,
     );
     return 0;
   }
@@ -1200,13 +1241,17 @@ const main = async (): Promise<number> => {
   const committedDispatch = await Bun.file(DISPATCH_PATH)
     .text()
     .catch(() => null);
+  const committedDoc = await Bun.file(COVERAGE_DOC_PATH)
+    .text()
+    .catch(() => null);
   if (
     committedText === serialized &&
     committedCliText === serialized &&
-    committedDispatch === dispatchSerialized
+    committedDispatch === dispatchSerialized &&
+    committedDoc === doc
   ) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capabilities, catalog (API + CLI copies) and dispatch module are up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capabilities, catalog (API + CLI copies), dispatch module, and coverage doc are up to date.`,
     );
     return 0;
   }
@@ -1220,6 +1265,12 @@ const main = async (): Promise<number> => {
   if (committedDispatch !== dispatchSerialized) {
     console.error(
       "\nexport-capability-catalog: committed capability-dispatch.ts is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
+    );
+  }
+
+  if (committedDoc !== doc) {
+    console.error(
+      "\nexport-capability-catalog: docs/capability-coverage.md is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
     );
   }
 

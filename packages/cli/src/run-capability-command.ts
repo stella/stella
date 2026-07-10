@@ -29,7 +29,9 @@ import {
   parsePayload,
   readAllStdin,
   readOutputFormat,
+  readRequestReceipt,
   renderToolError,
+  requestIdLine,
   RESERVED_FLAG_KEYS,
   reservedFlagUsageError,
   scopeGranted,
@@ -180,6 +182,17 @@ const renderCapabilityResult = ({
   });
   if (hint !== null) {
     writers.stderr(`${hint}\n`);
+  }
+
+  // Surface the server's request-id receipt for a mutation only: a write is an
+  // action an operator may need to reference, a read is not. The id rides the
+  // success payload's `meta.requestId` (stdout stays pure result; the receipt
+  // goes to stderr).
+  if (spec.access === "write") {
+    const requestId = readRequestReceipt(payload);
+    if (requestId !== undefined) {
+      writers.stderr(requestIdLine(requestId, context.process.stderr.isTTY));
+    }
   }
 };
 

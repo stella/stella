@@ -852,7 +852,12 @@ const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
   if (parsed.output.cursor !== undefined) {
     boundary = decodeEntityPageCursor(parsed.output.cursor);
     if (boundary === null) {
-      return errorResult("Invalid cursor");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid cursor",
+        issues: [{ path: "cursor", message: "Invalid cursor" }],
+        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+      });
     }
   }
 
@@ -976,7 +981,12 @@ const loadVersionHistory = async ({
   if (cursor !== undefined) {
     boundary = decodeVersionsPageCursor(cursor);
     if (boundary === null) {
-      return errorResult("Invalid cursor");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid cursor",
+        issues: [{ path: "cursor", message: "Invalid cursor" }],
+        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+      });
     }
   }
 
@@ -1736,7 +1746,12 @@ const handleListPropertiesTool: McpToolHandler = async ({ args, context }) => {
   if (parsed.output.cursor !== undefined) {
     boundary = decodePropertyPageCursor(parsed.output.cursor);
     if (boundary === null) {
-      return errorResult("Invalid cursor");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid cursor",
+        issues: [{ path: "cursor", message: "Invalid cursor" }],
+        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+      });
     }
   }
   const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;

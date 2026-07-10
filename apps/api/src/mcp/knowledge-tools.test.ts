@@ -197,9 +197,17 @@ describe("MCP knowledge tools", () => {
     }
     expect(response.isError).toBe(true);
     const message = response.content.at(0);
-    expect(message?.type === "text" ? message.text : "").toBe(
-      "Clause body has an unrecognized format",
-    );
+    const parsed =
+      message?.type === "text" ? JSON.parse(message.text) : undefined;
+    expect(parsed).toEqual({
+      error: {
+        code: "validation_error",
+        message: "Clause body has an unrecognized format",
+        issues: [
+          { path: "body", message: "Clause body has an unrecognized format" },
+        ],
+      },
+    });
     // The malformed body must never reach the payload, anonymized or not.
     expect(JSON.stringify(response)).not.toContain("SECRET_UNREDACTED_MARKER");
   });

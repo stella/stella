@@ -2,6 +2,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { runWithRequestId } from "@/api/lib/observability/request-context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -725,6 +726,17 @@ describe("invoke_capability file-response gate (fix-6)", () => {
     expect(mapped).toEqual({
       egress: "structured",
       payload: { ok: true },
+      textFields: [],
+    });
+  });
+
+  test("(layer b) a success payload carries the request receipt under meta", () => {
+    const mapped = runWithRequestId("req_invoke", () =>
+      mapHandlerResult({ id: "x.y", result: { ok: true } }),
+    );
+    expect(mapped).toEqual({
+      egress: "structured",
+      payload: { ok: true, meta: { requestId: "req_invoke" } },
       textFields: [],
     });
   });

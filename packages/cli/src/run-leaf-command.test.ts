@@ -8,7 +8,10 @@ import {
   approvalReRunHint,
   buildArgsFromFlags,
   classifyToolError,
+  errorEnvelope,
   flagKey,
+  readRequestReceipt,
+  requestIdLine,
   reservedFlagUsageError,
   runLeafCommand,
 } from "./run-leaf-command.js";
@@ -456,5 +459,42 @@ describe("confirm passthrough (capability invoke)", () => {
     expect(server.calls).toHaveLength(1);
     expect(tty.exitCode()).toBe(EXIT_CODES.aborted);
     expect(tty.stderrText()).toContain("--yes is required");
+  });
+});
+
+describe("request-id receipt helpers", () => {
+  test("errorEnvelope parses error.requestId when present", () => {
+    const envelope = errorEnvelope({
+      error: { code: "not_found", message: "gone", requestId: "req_abc" },
+    });
+    expect(envelope?.requestId).toBe("req_abc");
+  });
+
+  test("errorEnvelope tolerates a missing/non-string requestId", () => {
+    expect(
+      errorEnvelope({ error: { code: "not_found", message: "gone" } })
+        ?.requestId,
+    ).toBeUndefined();
+    expect(
+      errorEnvelope({
+        error: { code: "not_found", message: "gone", requestId: 7 },
+      })?.requestId,
+    ).toBeUndefined();
+  });
+
+  test("requestIdLine dims on a TTY and stays plain on a pipe", () => {
+    expect(requestIdLine("req_abc", false)).toBe("request id: req_abc\n");
+    const tty = requestIdLine("req_abc", true);
+    expect(tty).toContain("request id: req_abc");
+    expect(tty).not.toBe("request id: req_abc\n");
+  });
+
+  test("readRequestReceipt reads meta.requestId, else undefined", () => {
+    expect(readRequestReceipt({ ok: true, meta: { requestId: "req_x" } })).toBe(
+      "req_x",
+    );
+    expect(readRequestReceipt({ ok: true })).toBeUndefined();
+    expect(readRequestReceipt({ meta: { requestId: 1 } })).toBeUndefined();
+    expect(readRequestReceipt("nope")).toBeUndefined();
   });
 });
