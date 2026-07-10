@@ -1,12 +1,4 @@
-import {
-  startTransition,
-  useEffect,
-  useEffectEvent,
-  useId,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { startTransition, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 
@@ -43,7 +35,6 @@ type PDFViewportProps = {
   buffer: ArrayBuffer;
   page?: number | undefined;
   onPageChanged?: ((page: number) => void) | undefined;
-  onPageCountChanged?: ((count: number) => void) | undefined;
   password?: string | undefined;
   scaleOffset?: number | undefined;
   invertColors?: boolean | undefined;
@@ -116,7 +107,6 @@ const PDFViewerContent = ({
   document,
   page,
   onPageChanged,
-  onPageCountChanged,
   scaleOffset = 0,
   invertColors,
   className,
@@ -164,15 +154,6 @@ const PDFViewerContent = ({
     pageIds,
     lastReportedPageRef,
   });
-
-  const onPageCountChangedEvent = useEffectEvent((count: number) => {
-    onPageCountChanged?.(count);
-  });
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- notify the parent when the derived page count changes. The mutation lives in the zustand PDF store (out of this file), so there is no local setter to fold this into; keep until the store can emit the count itself.
-  useEffect(() => {
-    onPageCountChangedEvent(pageIds.length);
-  }, [pageIds.length]);
 
   const pdfContentRef = useMemo(
     () => composeRefs(containerRef, fitToWidthRef, pageVisibilityRef),

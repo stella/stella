@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
@@ -57,6 +57,7 @@ import type {
   TimeFilter,
 } from "@/components/search-filters.logic";
 import { UserAvatar } from "@/components/user-avatar";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import {
   isPublicLawPreviewEnabled,
@@ -365,19 +366,26 @@ export const SearchDialog = ({
   });
   const virtualHits = hitVirtualizer.getVirtualItems();
 
-  // Refresh the recents snapshot from localStorage each time the dialog opens.
-  // The recents are also locally mutated by the result/search handlers, so this
-  // is a triggered read of an external store into shared state, not pure derived
-  // state: a render-time read would re-read on every render and clobber those
-  // local mutations.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- read localStorage recents into locally-mutated state on the open transition; render-time read would clobber in-session mutations
-  useEffect(() => {
-    if (!open) {
-      return;
+  // Refresh the recents snapshot from localStorage on the open transition (and
+  // if the scope changes while open). The recents are also locally mutated by
+  // the result/search handlers below, so this is guarded against the last-seen
+  // key rather than read unconditionally: an unguarded render-time read would
+  // re-run on every render and clobber those in-session mutations. SearchDialog
+  // itself never unmounts (both call sites render it unconditionally and
+  // control visibility via `open`), so there is no mount to hang this off of.
+  const recentsSnapshotKey = open
+    ? `${searchRecentsScope.organizationId}:${searchRecentsScope.userId}`
+    : null;
+  const [lastRecentsSnapshotKey, setLastRecentsSnapshotKey] = useState<
+    string | null
+  >(null);
+  if (recentsSnapshotKey !== lastRecentsSnapshotKey) {
+    setLastRecentsSnapshotKey(recentsSnapshotKey);
+    if (recentsSnapshotKey) {
+      setRecentSearches(readRecentSearches(searchRecentsScope));
+      setRecentFiles(readRecentFiles(searchRecentsScope));
     }
-    setRecentSearches(readRecentSearches(searchRecentsScope));
-    setRecentFiles(readRecentFiles(searchRecentsScope));
-  }, [open, searchRecentsScope]);
+  }
 
   const searchFilterParams = {
     workspaceIds: filters.workspaceIds,
@@ -735,17 +743,22 @@ export const SearchDialog = ({
   // debounced `searchQuery` updates asynchronously (no handler to co-locate
   // with) and the filter setters fan out across ~7 handlers, so there is no
   // single trigger site to relay the reset into.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset on debounced searchQuery/filter changes; no single event site (debounced query updates post-commit, filters set in many handlers)
-  useEffect(() => {
-    summarizeSearchMutation.reset();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset is the stable mutation method needed here
+  // The mutation observer is an external system, not render state, so
+  // resetting it belongs in a committed effect keyed on those values
+  // rather than during render (which can re-run for renders React discards
+  // and would double-fire under strict mode). `reset` is a stable
+  // function reference from the mutation observer, so listing it alongside
+  // `resetKey` still only fires this once per real search change.
+  const resetSummarizeSearch = summarizeSearchMutation.reset;
+  useExternalSyncEffect(() => {
+    resetSummarizeSearch();
   }, [
     filterEditorIdsKey,
     filterMimeTypesKey,
     filterTypesKey,
     filterWorkspaceIdsKey,
     filters.time,
-    summarizeSearchMutation.reset,
+    resetSummarizeSearch,
     searchQuery,
   ]);
 

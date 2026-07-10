@@ -112,6 +112,36 @@ effect only when the component does not own the node/ref API yet, or when the
 work is truly "push a changing React value into an already-attached external
 system."
 
+## Feedback loops on imperative-editor boundaries
+
+Any state write triggered by an external editor or subscription callback
+(tiptap `onUpdate`, folio dispatch, store subscriptions) must be a no-op when
+nothing semantically changed. Otherwise write → re-render → editor re-emits →
+write sustains itself until React throws "Maximum update depth exceeded"; the
+loop typically only ignites under a re-render storm (e.g. response streaming),
+so it survives casual testing.
+
+The no-op guard's comparator must be **identity-based**, not structural. Track
+the exact object you last handed to (or received from) the editor — a
+`WeakSet`/ref identity latch, as in `shouldApplyStoredDraftToEditor` in
+`chat-editor-provider.tsx`. `JSON.stringify` or shallow equality is not
+sufficient on an editor boundary: imperative editors serialize non-canonically
+(`getJSON`/`setContent` round-trips are not idempotent — attrs appear, empty
+`content: []` comes and goes), so a semantic no-op reads as a change and the
+loop walks straight through a structural guard. Do not "simplify" an identity
+latch into a structural comparison.
+
+## Context values: never fold volatile state into a stable API
+
+A context value memoized as a stable API must not carry any field that changes
+at runtime (version counters, monotonic bump values, `activeX` keys). One
+volatile field gives the whole context a new identity on every bump, so every
+consumer re-renders and its registration effects re-fire — and if registering
+bumps the counter, that is a self-sustaining loop (damped normally, explosive
+under load). Split volatile values into their own context, or expose them via
+ref + subscribe; the stable-API context's fields must be referentially
+permanent for the provider's lifetime.
+
 ## useLayoutEffect
 
 Not covered by the ban (it has legitimate pre-paint imperative uses), but the

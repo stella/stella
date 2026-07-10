@@ -359,5 +359,43 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx": 1,
       "apps/web/src/routes/onboarding/-components/onboarding-catalogue-setup.logic.ts": 1
     }
+  },
+  "raw-use-effect-suppressions": {
+    "count": 46,
+    "files": {
+      "apps/web/src/components/app-sidebar.tsx": 1,
+      "apps/web/src/components/authenticated-case-law-workspace.tsx": 1,
+      "apps/web/src/components/chat-editor-provider.tsx": 2,
+      "apps/web/src/components/chat/ask-user-card.tsx": 1,
+      "apps/web/src/components/chat/tool-approval-card.tsx": 2,
+      "apps/web/src/components/inspector/anonymization-facet.tsx": 2,
+      "apps/web/src/components/inspector/chat-tab-panel.tsx": 2,
+      "apps/web/src/components/inspector/document-ai-source-bar.tsx": 2,
+      "apps/web/src/components/inspector/external-reference-panel.tsx": 1,
+      "apps/web/src/components/inspector/file-tab-panel.tsx": 1,
+      "apps/web/src/components/inspector/inspector-panel.tsx": 3,
+      "apps/web/src/components/inspector/suggestions-facet.tsx": 1,
+      "apps/web/src/components/inspector/use-file-tab-rename.ts": 1,
+      "apps/web/src/components/inspector/versions-facet.tsx": 1,
+      "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx": 1,
+      "apps/web/src/components/require-ai-key.tsx": 1,
+      "apps/web/src/components/shortcut-hints-overlay.tsx": 1,
+      "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx": 1,
+      "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx": 2,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 1,
+      "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx": 2,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/index.tsx": 1,
+      "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx": 1,
+      "apps/web/src/routes/onboarding/-components/steps/ai-step.tsx": 3,
+      "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx": 1
+    }
   }
 }

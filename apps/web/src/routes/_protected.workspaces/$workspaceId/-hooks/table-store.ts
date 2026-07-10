@@ -127,6 +127,16 @@ type TableStore = {
    */
   selectedEntities: Record<string, WorkspaceEntity[]>;
   setSelectedEntities: (viewId: string, entities: WorkspaceEntity[]) => void;
+  /**
+   * Union of every group section's loaded row ids for a grouped table view,
+   * synced by the grouped layout so a section's "select all" can preserve
+   * selections in other sections (they share one row selection) without
+   * resurrecting ids that dropped out of every section. Read imperatively
+   * (`useTableStore.getState()`) from the click handler rather than
+   * subscribed, so publishing a growing union never re-renders the table.
+   */
+  preservableRowIds: Record<string, string[]>;
+  setPreservableRowIds: (viewId: string, rowIds: string[]) => void;
   pruneStaleViews: (activeViewIds: string[]) => void;
 };
 
@@ -137,6 +147,7 @@ export const useTableStore = create<TableStore>()(
       contentMode: {},
       rowSelection: {},
       selectedEntities: {},
+      preservableRowIds: {},
 
       setContentMode: (viewId, mode) => {
         set((state) => {
@@ -167,6 +178,12 @@ export const useTableStore = create<TableStore>()(
             return;
           }
           state.selectedEntities[viewId] = entities;
+        });
+      },
+
+      setPreservableRowIds: (viewId, rowIds) => {
+        set((state) => {
+          state.preservableRowIds[viewId] = rowIds;
         });
       },
 
@@ -201,6 +218,13 @@ export const useTableStore = create<TableStore>()(
             }
           }
           state.selectedEntities = prunedSelectedEntities;
+          const prunedPreservableRowIds: Record<string, string[]> = {};
+          for (const [vid, rowIds] of Object.entries(state.preservableRowIds)) {
+            if (active.has(vid)) {
+              prunedPreservableRowIds[vid] = rowIds;
+            }
+          }
+          state.preservableRowIds = prunedPreservableRowIds;
         });
       },
     })),
