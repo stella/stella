@@ -25,7 +25,12 @@
 //   - An array literal: `() => [a, b]`.
 //   - A call to a known fresh-reference producer: `Object.assign(...)`,
 //     `Array.from(...)`, or a `.map`/`.filter`/`.slice`/`.concat`/`.flat`/
-//     `.flatMap` member call.
+//     `.flatMap` member call. The `.map`/`.filter`/... group is flagged
+//     regardless of the receiver's shape — a bare identifier
+//     (`store.map(...)`), a nested member expression
+//     (`store.items.map(...)`), or another call (`getStore().map(...)`);
+//     `Object.assign`/`Array.from` still require the literal global
+//     identifier since they are matched by fully-qualified name.
 
 import { getImportedName, isIdentifier, unwrapExpression } from "./utils.ts";
 
@@ -55,21 +60,27 @@ const isFreshReferenceCall = (node) => {
   const callee = node.callee;
 
   if (
-    callee.type === "MemberExpression" &&
-    callee.computed === false &&
-    isIdentifier(callee.object) &&
-    isIdentifier(callee.property)
+    callee.type !== "MemberExpression" ||
+    callee.computed !== false ||
+    !isIdentifier(callee.property)
   ) {
+    return false;
+  }
+
+  // Object.assign(...) / Array.from(...): matched by fully-qualified name,
+  // so the receiver must be the literal identifier, not an arbitrary
+  // expression.
+  if (isIdentifier(callee.object)) {
     const staticName = `${callee.object.name}.${callee.property.name}`;
     if (FRESH_REFERENCE_STATIC_CALLS.has(staticName)) {
       return true;
     }
-    if (FRESH_REFERENCE_MEMBER_METHODS.has(callee.property.name)) {
-      return true;
-    }
   }
 
-  return false;
+  // .map/.filter/...: a fresh reference regardless of the receiver shape —
+  // an identifier (`store.map(...)`), a nested member expression
+  // (`store.items.map(...)`), or another call (`getStore().map(...)`).
+  return FRESH_REFERENCE_MEMBER_METHODS.has(callee.property.name);
 };
 
 const isFreshReferenceExpression = (node) => {

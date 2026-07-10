@@ -19,6 +19,7 @@ const cachedList = [1, 2, 3];
 const getCachedSnapshot = () => cachedSnapshot;
 const items = [1, 2, 3];
 const baseSnapshot: { value: number } = { value: 0 };
+const store = { items: [1, 2, 3] };
 
 function FixtureComponent() {
   // getSnapshot returns a fresh object literal — MUST flag.
@@ -52,6 +53,12 @@ function FixtureComponent() {
     Object.assign(baseSnapshot, cachedSnapshot),
   );
 
+  // getSnapshot returns a `.map()` call on a nested member expression
+  // (`store.items`, not a bare identifier) — still a fresh-reference
+  // producer — MUST flag.
+  // oxlint-disable-next-line require-stable-snapshot/require-stable-snapshot
+  useSyncExternalStore(subscribe, () => store.items.map((item) => item * 2));
+
   // Aliased named import, fresh array literal — MUST flag.
   // oxlint-disable-next-line require-stable-snapshot/require-stable-snapshot
   useRenamedSyncExternalStore(subscribe, () => [1]);
@@ -83,6 +90,11 @@ function FixtureComponent() {
 
   // Inline getSnapshot calling a non-fresh-reference-producing method.
   useSyncExternalStore(subscribe, () => items.includes(1));
+
+  // Near-miss of the case above: a non-fresh-reference-producing method
+  // called on a nested member expression receiver — the method name filter
+  // still applies even though the receiver is no longer a bare identifier.
+  useSyncExternalStore(subscribe, () => store.items.includes(1));
 
   // Block body returning a cached identifier from every branch.
   useSyncExternalStore(subscribe, () => {
