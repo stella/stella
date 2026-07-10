@@ -40,11 +40,11 @@ export const SelfhostUpdateBanner = () => {
     staleTime: DAY_IN_MS,
     refetchInterval: DAY_IN_MS,
     retry: false,
-    queryFn: async (): Promise<Release | null> => {
+    queryFn: async ({ signal }): Promise<Release | null> => {
       try {
         const response = await fetch(RELEASES_API_URL, {
           headers: { Accept: "application/vnd.github+json" },
-          signal: AbortSignal.timeout(8000),
+          signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
         });
         if (!response.ok) {
           return null;

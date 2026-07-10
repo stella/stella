@@ -85,11 +85,11 @@ export const ExportReportControl = ({
 
   const { data: status } = useQuery({
     queryKey: ["report-export", workspaceId, active?.exportId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .reports({ exportId: toSafeId<"reportExport">(active?.exportId ?? "") })
-        .get();
+        .get({ fetch: { signal } });
       if (response.error) {
         throw toAPIError(response.error);
       }
@@ -286,10 +286,10 @@ const ExportReportDialogBody = ({
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["report-templates", workspaceId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .reports.templates.get();
+        .reports.templates.get({ fetch: { signal } });
       if (response.error) {
         throw toAPIError(response.error);
       }

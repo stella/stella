@@ -198,8 +198,10 @@ function ProfilePageBody() {
     refetch: refetchPendingTasks,
   } = useQuery({
     queryKey: ["me", "delete", "pending-tasks"],
-    queryFn: async () => {
-      const res = await api.me.delete["pending-tasks"].get();
+    queryFn: async ({ signal }) => {
+      const res = await api.me.delete["pending-tasks"].get({
+        fetch: { signal },
+      });
       if (res.error) {
         throw toAPIError(res.error);
       }

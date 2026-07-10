@@ -32,10 +32,10 @@ export const ApiVersionMismatchBanner = () => {
     refetchInterval: FIVE_MIN_MS,
     refetchIntervalInBackground: false,
     retry: false,
-    queryFn: async (): Promise<string | null> => {
+    queryFn: async ({ signal }): Promise<string | null> => {
       const response = await fetch(`${env.VITE_API_URL}/health`, {
         cache: "no-store",
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
       });
       if (!response.ok) {
         return null;

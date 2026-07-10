@@ -59,16 +59,19 @@ export const useTemplateFillSchema = (
       presignedUrl,
       fileName,
     ],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (presignedUrl === undefined || fileName === undefined) {
         panic("template fill: saved template document is unavailable");
       }
       const res = await fetch(presignedUrl, {
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
       });
       const blob = await res.blob();
       const file = new File([blob], fileName, { type: DOCX_MIME });
-      const response = await api.templates.discover.post({ file });
+      const response = await api.templates.discover.post(
+        { file },
+        { fetch: { signal } },
+      );
       if (response.error) {
         throw toAPIError(response.error);
       }

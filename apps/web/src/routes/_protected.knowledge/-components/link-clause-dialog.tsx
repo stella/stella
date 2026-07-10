@@ -186,13 +186,13 @@ export const LinkClauseDialog = ({
   // Variants of the currently selected clause, offered at link time.
   const { data: variantsResult } = useQuery({
     queryKey: ["clause-variants", selectedClauseId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       if (!selectedClauseId) {
         return { variants: [] };
       }
       const response = await api
         .clauses({ clauseId: toSafeId<"clause">(selectedClauseId) })
-        .variants.get();
+        .variants.get({ fetch: { signal } });
       if (response.error) {
         throw toAPIError(response.error);
       }

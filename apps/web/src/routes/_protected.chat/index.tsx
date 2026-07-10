@@ -148,10 +148,13 @@ function ChatIndex() {
       "draftMeta",
     ] as const,
     staleTime: Number.POSITIVE_INFINITY,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await api.chat
         .threads({ threadId: toSafeId<"chatThread">(draftThreadId) })
-        .messages.get({ query: { allowMissingThread: true } });
+        .messages.get({
+          query: { allowMissingThread: true },
+          fetch: { signal },
+        });
       if (response.error) {
         throw toAPIError(response.error);
       }
