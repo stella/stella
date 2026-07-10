@@ -117,11 +117,13 @@ export const resultAwaitPromiseAllMapFanOut = async function* () {
   // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: safe handlers may delegate a Promise.all fan-out through Result.await
   yield* Result.await(
     Promise.all(
-      items.map(async (item) =>
-        safeDb(async (scopedTx: typeof tx) => {
-          const result = await scopedTx.insert(itemsTable).values(item);
-          return result;
-        }),
+      items.map(
+        // oxlint-disable-next-line typescript/promise-function-async -- fixture: the awaitless callback proves Result.await fan-out detection does not depend on an inner AwaitExpression
+        (item) =>
+          safeDb(async (scopedTx: typeof tx) => {
+            const result = await scopedTx.insert(itemsTable).values(item);
+            return result;
+          }),
       ),
     ),
   );
