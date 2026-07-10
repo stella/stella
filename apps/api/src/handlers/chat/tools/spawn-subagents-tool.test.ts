@@ -330,9 +330,20 @@ describe("createSpawnSubagentsTool — abort propagation", () => {
     try {
       const execute = buildTool();
 
-      await expect(
-        execute({ subagents: [{ task: "finishes" }, { task: "aborts" }] }, {}),
-      ).rejects.toThrow(abortError);
+      const outcome = await Result.tryPromise(
+        async () =>
+          await execute(
+            { subagents: [{ task: "finishes" }, { task: "aborts" }] },
+            {},
+          ),
+      );
+
+      // The whole tool call must reject with the AbortError — a resolved
+      // Result here would mean partial results were reported as success.
+      expect(Result.isError(outcome)).toBe(true);
+      if (Result.isError(outcome)) {
+        expect(outcome.error.cause).toBe(abortError);
+      }
     } finally {
       env.USAGE_ENFORCEMENT_ENABLED = previousEnforcement;
     }
