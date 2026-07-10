@@ -1,4 +1,5 @@
 import { getFormatter } from "@/i18n/i18n-store";
+import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 // NOTE: cents / 100 assumes a 2-decimal minor unit, which is wrong for
 // currencies with a different exponent (KWD has 3, JPY has 0). Fixing that is
@@ -57,6 +58,20 @@ const formatCurrency = ({
   fallback: string;
 }): string => {
   try {
+    const isIndianOrg =
+      useWorkspaceStore.getState().primaryJurisdictionCountryCode === "IN";
+
+    if (isIndianOrg) {
+      return new Intl.NumberFormat("en-IN", {
+        style: "currency",
+        currency,
+        minimumFractionDigits,
+        ...(maximumFractionDigits === undefined
+          ? {}
+          : { maximumFractionDigits }),
+      }).format(amount);
+    }
+
     return getFormatter().number(amount, {
       style: "currency",
       currency,

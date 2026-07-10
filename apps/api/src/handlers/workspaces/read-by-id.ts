@@ -15,8 +15,8 @@ export const readWorkspaceHandler = async ({
   workspaceId,
   organizationId,
 }: ReadWorkspaceHandlerProps) => {
-  const result = await scopedDb((tx) =>
-    tx.query.workspaces.findFirst({
+  const data = await scopedDb(async (tx) => {
+    const ws = await tx.query.workspaces.findFirst({
       where: {
         id: { eq: workspaceId },
       },
@@ -30,16 +30,40 @@ export const readWorkspaceHandler = async ({
           },
         },
       },
-    }),
-  );
+    });
 
-  if (!result) {
+    if (!ws) {
+      return null;
+    }
+
+    const orgSettings = await tx.query.organizationSettings.findFirst({
+      where: {
+        organizationId: { eq: organizationId },
+      },
+    });
+
+    return { ws, orgSettings };
+  });
+
+  if (!data) {
     return status(404);
   }
+
+  const { ws: result, orgSettings } = data;
 
   if (result.organizationId !== organizationId) {
     return status(403);
   }
 
-  return { ...result, limits: LIMITS };
+  const primaryJurisdiction = orgSettings?.practiceJurisdictions.find(
+    (j) => j.isPrimary,
+  );
+  const primaryJurisdictionCountryCode =
+    primaryJurisdiction?.countryCode ?? null;
+
+  return {
+    ...result,
+    limits: LIMITS,
+    primaryJurisdictionCountryCode,
+  };
 };
