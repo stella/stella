@@ -97,14 +97,16 @@ export const synthesizeCapabilityContext = async ({
     session: { activeOrganizationId: context.organizationId },
     scopedDb: context.scopedDb,
     safeDb: context.safeDb,
-    getActiveWorkspaceIds: () =>
-      Promise.resolve(context.accessibleWorkspaceIds),
-    getAccessibleWorkspaces: () =>
-      Promise.resolve(context.accessibleWorkspaces),
-    getWorkspaceAccess: (targetWorkspaceId) => {
+    getActiveWorkspaceIds: async () =>
+      await Promise.resolve(context.accessibleWorkspaceIds),
+    getAccessibleWorkspaces: async () =>
+      await Promise.resolve(context.accessibleWorkspaces),
+    getWorkspaceAccess: async (targetWorkspaceId) => {
       const status =
         context.accessibleWorkspaceStatusById.get(targetWorkspaceId);
-      return Promise.resolve(status ? { id: targetWorkspaceId, status } : null);
+      return await Promise.resolve(
+        status ? { id: targetWorkspaceId, status } : null,
+      );
     },
     memberRole: { role: context.memberRole },
     orgAIConfig,

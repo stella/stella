@@ -354,17 +354,13 @@ const createWorkspaceContext = ({
 
   return {
     createAuditRecorder: () => noopAuditRecorder,
-    getActiveWorkspaceIds: () => Promise.resolve(activeWorkspaceIds),
-    getAccessibleWorkspaces: () =>
-      Promise.resolve(
-        activeWorkspaceIds.map((id) => ({ id, status: "active" as const })),
-      ),
-    getWorkspaceAccess: (targetWorkspaceId) =>
-      Promise.resolve(
-        activeWorkspaceIds.includes(targetWorkspaceId)
-          ? { id: targetWorkspaceId, status: "active" }
-          : null,
-      ),
+    getActiveWorkspaceIds: async () => activeWorkspaceIds,
+    getAccessibleWorkspaces: async () =>
+      activeWorkspaceIds.map((id) => ({ id, status: "active" as const })),
+    getWorkspaceAccess: async (targetWorkspaceId) =>
+      activeWorkspaceIds.includes(targetWorkspaceId)
+        ? { id: targetWorkspaceId, status: "active" }
+        : null,
     memberRole: { role: "owner" },
     orgAIConfig: null,
     promptCachingEnabled: false,

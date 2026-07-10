@@ -32,11 +32,14 @@ describe("workflow start handler", () => {
 
     const result = await workflowStart.handler(
       asTestRaw<WorkflowStartCtx>({
-        getActiveWorkspaceIds: () => Promise.resolve([workspaceId]),
-        getAccessibleWorkspaces: () =>
-          Promise.resolve([{ id: workspaceId, status: "active" }]),
-        getWorkspaceAccess: () =>
-          Promise.resolve({ id: workspaceId, status: "active" }),
+        getActiveWorkspaceIds: async () => [workspaceId],
+        getAccessibleWorkspaces: async () => [
+          { id: workspaceId, status: "active" },
+        ],
+        getWorkspaceAccess: async () => ({
+          id: workspaceId,
+          status: "active",
+        }),
         body,
         createAuditRecorder: () => async () => undefined,
         memberRole: { role: "owner" },

@@ -10,24 +10,30 @@ const workspaceId = toSafeId<"workspace">(
 
 describe("resolveChatScope", () => {
   test("global scope does not resolve workspace access", async () => {
-    const getWorkspaceAccess = mock(() => Promise.resolve(null));
+    const getWorkspaceAccess = mock(async () => null);
 
-    const result = await Result.gen(() =>
-      resolveChatScope({ getWorkspaceAccess }),
-    );
+    const result = await Result.gen(async function* () {
+      const scope = yield* resolveChatScope({ getWorkspaceAccess });
+      return Result.ok(scope);
+    });
 
     expect(result).toEqual(Result.ok({ scope: "global" }));
     expect(getWorkspaceAccess).not.toHaveBeenCalled();
   });
 
   test("resolves only the requested workspace and keeps archived reads", async () => {
-    const getWorkspaceAccess = mock(() =>
-      Promise.resolve({ id: workspaceId, status: "archived" as const }),
-    );
+    const getWorkspaceAccess = mock(async () => ({
+      id: workspaceId,
+      status: "archived" as const,
+    }));
 
-    const result = await Result.gen(() =>
-      resolveChatScope({ getWorkspaceAccess, workspaceId }),
-    );
+    const result = await Result.gen(async function* () {
+      const scope = yield* resolveChatScope({
+        getWorkspaceAccess,
+        workspaceId,
+      });
+      return Result.ok(scope);
+    });
 
     expect(result).toEqual(Result.ok({ scope: "workspace", workspaceId }));
     expect(getWorkspaceAccess).toHaveBeenCalledTimes(1);
@@ -35,19 +41,23 @@ describe("resolveChatScope", () => {
   });
 
   test("rejects deleting and inaccessible workspaces", async () => {
-    const deleting = await Result.gen(() =>
-      resolveChatScope({
-        getWorkspaceAccess: () =>
-          Promise.resolve({ id: workspaceId, status: "deleting" }),
+    const deleting = await Result.gen(async function* () {
+      const scope = yield* resolveChatScope({
+        getWorkspaceAccess: async () => ({
+          id: workspaceId,
+          status: "deleting",
+        }),
         workspaceId,
-      }),
-    );
-    const inaccessible = await Result.gen(() =>
-      resolveChatScope({
-        getWorkspaceAccess: () => Promise.resolve(null),
+      });
+      return Result.ok(scope);
+    });
+    const inaccessible = await Result.gen(async function* () {
+      const scope = yield* resolveChatScope({
+        getWorkspaceAccess: async () => null,
         workspaceId,
-      }),
-    );
+      });
+      return Result.ok(scope);
+    });
 
     expect(Result.isError(deleting)).toBe(true);
     expect(Result.isError(inaccessible)).toBe(true);

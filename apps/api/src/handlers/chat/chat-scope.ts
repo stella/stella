@@ -16,7 +16,7 @@ export const resolveChatScope = async function* ({
   workspaceId,
 }: ResolveChatScopeProps) {
   if (!workspaceId) {
-    return Result.ok({ scope: "global" } as const);
+    return { scope: "global" } as const;
   }
 
   const workspace = yield* Result.await(
@@ -24,7 +24,7 @@ export const resolveChatScope = async function* ({
   );
 
   if (!workspace || workspace.status === "deleting") {
-    return Result.err(
+    return yield* Result.err(
       new HandlerError({
         status: 404,
         message: "Workspace not found",
@@ -32,8 +32,8 @@ export const resolveChatScope = async function* ({
     );
   }
 
-  return Result.ok({
+  return {
     scope: "workspace",
     workspaceId: workspace.id,
-  } as const);
+  } as const;
 };

@@ -232,10 +232,8 @@ const createContext = ({
     },
     request: sourceRecorderBindings.request,
     route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
-    getWorkspaceAccess: (workspaceId) =>
-      Promise.resolve(
-        workspaceId === targetWorkspaceIdArg ? resolvedTargetWorkspace : null,
-      ),
+    getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+      workspaceId === targetWorkspaceIdArg ? resolvedTargetWorkspace : null,
     safeDb,
     recordAuditEvent: createAuditRecorder(sourceRecorderBindings),
     createAuditRecorder: createBoundAuditRecorder,

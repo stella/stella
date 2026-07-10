@@ -854,22 +854,23 @@ const resolveValidateAuth = async (
   const safeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
-  const getAccessibleWorkspaces = (): Promise<AccessibleWorkspace[]> => {
-    accessibleWorkspacesPromise ??= scopedDb((tx) =>
-      tx
-        .select({ id: workspaces.id, status: workspaces.status })
-        .from(workspaces)
-        .where(eq(workspaces.organizationId, activeOrganizationId)),
+  const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
+    accessibleWorkspacesPromise ??= scopedDb(
+      async (tx) =>
+        await tx
+          .select({ id: workspaces.id, status: workspaces.status })
+          .from(workspaces)
+          .where(eq(workspaces.organizationId, activeOrganizationId)),
     );
-    return accessibleWorkspacesPromise;
+    return await accessibleWorkspacesPromise;
   };
 
   let activeWorkspaceIdsPromise: Promise<SafeId<"workspace">[]> | null = null;
-  const getActiveWorkspaceIds = (): Promise<SafeId<"workspace">[]> => {
+  const getActiveWorkspaceIds = async (): Promise<SafeId<"workspace">[]> => {
     activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) =>
       items.filter((item) => item.status !== "deleting").map((item) => item.id),
     );
-    return activeWorkspaceIdsPromise;
+    return await activeWorkspaceIdsPromise;
   };
 
   const workspaceAccessPromises = new Map<
@@ -882,27 +883,28 @@ const resolveValidateAuth = async (
       Promise.resolve(authorization.workspace),
     );
   }
-  const getWorkspaceAccess = (
+  const getWorkspaceAccess = async (
     workspaceId: SafeId<"workspace">,
   ): Promise<AccessibleWorkspace | null> => {
     let accessPromise = workspaceAccessPromises.get(workspaceId);
     if (!accessPromise) {
-      accessPromise = scopedDb((tx) =>
-        tx
-          .select({ id: workspaces.id, status: workspaces.status })
-          .from(workspaces)
-          .where(
-            and(
-              eq(workspaces.id, workspaceId),
-              eq(workspaces.organizationId, activeOrganizationId),
-            ),
-          )
-          .limit(1)
-          .then((rows) => rows.at(0) ?? null),
+      accessPromise = scopedDb(
+        async (tx) =>
+          await tx
+            .select({ id: workspaces.id, status: workspaces.status })
+            .from(workspaces)
+            .where(
+              and(
+                eq(workspaces.id, workspaceId),
+                eq(workspaces.organizationId, activeOrganizationId),
+              ),
+            )
+            .limit(1)
+            .then((rows) => rows.at(0) ?? null),
       );
       workspaceAccessPromises.set(workspaceId, accessPromise);
     }
-    return accessPromise;
+    return await accessPromise;
   };
 
   const recorderBindings = {

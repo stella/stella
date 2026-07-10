@@ -216,11 +216,11 @@ const createContext = ({
   const safeDb = createSafeDb(testDb, [workspaceId], organizationId, userId);
 
   return {
-    getActiveWorkspaceIds: () => Promise.resolve([workspaceId]),
-    getAccessibleWorkspaces: () =>
-      Promise.resolve([{ id: workspaceId, status: "active" }]),
-    getWorkspaceAccess: () =>
-      Promise.resolve({ id: workspaceId, status: "active" }),
+    getActiveWorkspaceIds: async () => [workspaceId],
+    getAccessibleWorkspaces: async () => [
+      { id: workspaceId, status: "active" },
+    ],
+    getWorkspaceAccess: async () => ({ id: workspaceId, status: "active" }),
     body,
     createAuditRecorder: () => async () => undefined,
     memberRole: { role: "owner" },
