@@ -261,7 +261,7 @@ const countPresence = (): number => 1;
 // a declaration indented under a function/hook is scoped to that call, not
 // the module.
 const MODULE_MUTABLE_COLLECTION =
-  /^(?:export\s+)?(?:const|let)\s+\w+\s*(?::[^=]+)?=\s*new\s+(?:Map|Set)\b/u;
+  /^(?:export\s+)?(?:const|let)\s+\w+\s*(?::.+?)?=\s*new\s+(?:Map|Set)\b/u;
 
 const countModuleLevelMutableCollections = (content: string): number => {
   let total = 0;
@@ -336,7 +336,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countDirectErrorMessageDisplay,
   },
   {
-    id: "module-level-mutable-maps",
+    id: "module-level-mutable-collections",
     description:
       "module-scope `new Map(`/`new Set(` assignments in web source (per-thread/entity registries that never evict); WeakMap/WeakSet excluded (GC-safe by construction)",
     include: ["apps/web/src/**/*.{ts,tsx}"],
@@ -610,6 +610,7 @@ const MODULE_COLLECTION_FIXTURE_LINES = [
   "export const exportedRegistry = new Map<string, number>();",
   "let mutableCounter = new Set<string>();",
   'const typed: ReadonlySet<string> = new Set(["a"]);',
+  "const withArrowType: Map<string, () => void> = new Map();",
   "const multiline = new Map<",
   "  string,",
   "  number",
@@ -624,10 +625,11 @@ const MODULE_COLLECTION_FIXTURE_LINES = [
 ];
 const SELF_TEST_MODULE_COLLECTIONS = `${MODULE_COLLECTION_FIXTURE_LINES.join("\n")}\n`;
 // Expected: frozenSet(1) + exportedRegistry(1) + mutableCounter(1) + typed(1)
-// + multiline(1, counted on its opening line even though `new Map<` spans to
-// a later `>()`) = 5. WeakMap/WeakSet, the indented (function-scoped)
+// + withArrowType(1) + multiline(1, counted on its opening line even though
+// `new Map<` spans to a later `>()`) = 6. WeakMap/WeakSet, the indented
+// (function-scoped)
 // declaration, and the commented-out line are all excluded.
-const EXPECTED_MODULE_COLLECTIONS = 5;
+const EXPECTED_MODULE_COLLECTIONS = 6;
 
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
@@ -698,10 +700,11 @@ const runSelfTest = (): number => {
       );
     }
 
-    const moduleCollectionsMetric = snapshot["module-level-mutable-maps"];
+    const moduleCollectionsMetric =
+      snapshot["module-level-mutable-collections"];
     if (moduleCollectionsMetric.count !== EXPECTED_MODULE_COLLECTIONS) {
       failures.push(
-        `module-level-mutable-maps counted ${moduleCollectionsMetric.count}, expected ${EXPECTED_MODULE_COLLECTIONS}`,
+        `module-level-mutable-collections counted ${moduleCollectionsMetric.count}, expected ${EXPECTED_MODULE_COLLECTIONS}`,
       );
     }
 

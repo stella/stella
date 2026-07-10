@@ -312,7 +312,7 @@
       "apps/web/src/routes/consent.tsx": 1
     }
   },
-  "module-level-mutable-maps": {
+  "module-level-mutable-collections": {
     "count": 57,
     "files": {
       "apps/web/src/components/ai-config-role-models.logic.ts": 2,
