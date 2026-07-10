@@ -358,7 +358,7 @@ const smokeRouteTarget = async ({
     // last step is browserErrors.assertEmpty), so the manifest reflects the
     // fully-rendered route. Stored under the template it received; redirect
     // targets already arrive as "<template> target".
-    results.set(route.template, summarizeCapture(network.capture()));
+    results.set(route.template, summarizeCapture(await network.capture()));
   } finally {
     detachNetwork();
     detachPage();

@@ -8,6 +8,7 @@ import {
   diffNetworkBaseline,
   mergeNetworkBaseline,
   normalizeApiPath,
+  responseSizeAllowance,
   waterfallDepth,
 } from "../helpers/network";
 
@@ -101,12 +102,16 @@ const metrics = (
     requests.map((request) => [request, 1]),
   ),
   missingDbQueryCounts: Record<string, number> = {},
+  responseSizes: Record<string, number> = {},
+  missingResponseSizeCounts: Record<string, number> = {},
 ): RouteNetworkMetrics => ({
   requests: [...requests].sort(),
   requestCounts,
   depth,
   dbQueries,
   missingDbQueryCounts,
+  responseSizes,
+  missingResponseSizeCounts,
 });
 
 test.describe("diffNetworkBaseline", () => {
@@ -331,6 +336,106 @@ test.describe("diffNetworkBaseline", () => {
     );
     expect(problems).toEqual([]);
   });
+
+  const sizeBaseline: NetworkBaseline = {
+    "/contacts": {
+      depth: 2,
+      requests: ["GET /v1/contacts"],
+      responseSizes: { "GET /v1/contacts": 1024 },
+    },
+  };
+  const sizeMetrics = (bytes: number, missing: Record<string, number> = {}) =>
+    metrics(
+      ["GET /v1/contacts"],
+      2,
+      {},
+      undefined,
+      {},
+      { "GET /v1/contacts": bytes },
+      missing,
+    );
+
+  test("a grown response size beyond the allowance is a problem", () => {
+    // responseSizeAllowance(1024) = ceil(1024 * 1.2) = 1229.
+    const { problems } = diffNetworkBaseline(
+      sizeBaseline,
+      new Map([["/contacts", sizeMetrics(1300)]]),
+    );
+    expect(problems.some((p) => p.includes("Response payload grew"))).toBe(
+      true,
+    );
+  });
+
+  test("response-size growth within the +20% allowance passes", () => {
+    expect(responseSizeAllowance(1024)).toBe(1229);
+    const { problems } = diffNetworkBaseline(
+      sizeBaseline,
+      new Map([["/contacts", sizeMetrics(1200)]]),
+    );
+    expect(problems).toEqual([]);
+  });
+
+  test("a smaller response size passes silently", () => {
+    const { problems } = diffNetworkBaseline(
+      sizeBaseline,
+      new Map([["/contacts", sizeMetrics(10)]]),
+    );
+    expect(problems).toEqual([]);
+  });
+
+  test("a response size for a key without a budget is not a problem", () => {
+    const { problems } = diffNetworkBaseline(
+      sizeBaseline,
+      new Map([
+        [
+          "/contacts",
+          metrics(
+            ["GET /v1/contacts"],
+            2,
+            {},
+            undefined,
+            {},
+            { "GET /v1/contacts": 1024, "GET /health": 50 },
+          ),
+        ],
+      ]),
+    );
+    expect(problems).toEqual([]);
+  });
+
+  test("a missing response size for a budgeted key is a problem", () => {
+    const { problems } = diffNetworkBaseline(
+      sizeBaseline,
+      new Map([
+        [
+          "/contacts",
+          metrics(
+            ["GET /v1/contacts"],
+            2,
+            {},
+            undefined,
+            {},
+            {},
+            { "GET /v1/contacts": 1 },
+          ),
+        ],
+      ]),
+    );
+    expect(problems.some((p) => p.includes("Response size missing"))).toBe(
+      true,
+    );
+  });
+
+  test("a request without a measured size is not a missing response-size count", () => {
+    // Mirrors "a request without a response is not a missing db-query count":
+    // no measurement attempt (e.g. a streamed response, excluded entirely by
+    // network.ts's isStreamedResponse) is not the same as a failed one.
+    const { problems } = diffNetworkBaseline(
+      sizeBaseline,
+      new Map([["/contacts", metrics(["GET /v1/contacts"], 2)]]),
+    );
+    expect(problems).toEqual([]);
+  });
 });
 
 test.describe("mergeNetworkBaseline", () => {
@@ -345,6 +450,7 @@ test.describe("mergeNetworkBaseline", () => {
         requests: ["GET /v1/contacts"],
         requestCounts: { "GET /v1/contacts": 1 },
         dbQueries: {},
+        responseSizes: {},
       },
     });
   });
@@ -366,6 +472,7 @@ test.describe("mergeNetworkBaseline", () => {
           "GET /v1/views/:id": 1,
         },
         dbQueries: {},
+        responseSizes: {},
       },
     });
   });
@@ -412,6 +519,60 @@ test.describe("mergeNetworkBaseline", () => {
     expect(merged["/contacts"]?.dbQueries).toEqual({
       "GET /health": 0,
       "GET /v1/contacts": 5,
+    });
+  });
+
+  test("response sizes merge to the per-key max, rounded up to the next KiB", () => {
+    const existing: NetworkBaseline = {
+      "/contacts": {
+        depth: 2,
+        requests: ["GET /v1/contacts"],
+        responseSizes: { "GET /v1/contacts": 2048, "GET /health": 1024 },
+      },
+    };
+    const merged = mergeNetworkBaseline(
+      existing,
+      new Map([
+        [
+          "/contacts",
+          metrics(
+            ["GET /v1/contacts"],
+            2,
+            {},
+            undefined,
+            {},
+            { "GET /v1/contacts": 3000 },
+          ),
+        ],
+      ]),
+    );
+    expect(merged["/contacts"]?.responseSizes).toEqual({
+      "GET /health": 1024,
+      // 3000 raw bytes rounds up to 3072 (3 KiB), same width as the writer
+      // rounds a brand-new measurement to.
+      "GET /v1/contacts": 3072,
+    });
+  });
+
+  test("a brand-new response size is rounded up to the next KiB", () => {
+    const merged = mergeNetworkBaseline(
+      null,
+      new Map([
+        [
+          "/contacts",
+          metrics(
+            ["GET /v1/contacts"],
+            2,
+            {},
+            undefined,
+            {},
+            { "GET /v1/contacts": 1 },
+          ),
+        ],
+      ]),
+    );
+    expect(merged["/contacts"]?.responseSizes).toEqual({
+      "GET /v1/contacts": 1024,
     });
   });
 

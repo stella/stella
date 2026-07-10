@@ -18,6 +18,14 @@ const TRACKED_RESOURCE_TYPES = new Set(["fetch", "xhr", "eventsource"]);
 // an N+1 regression fail per route+endpoint, not just per HTTP fan-out.
 const DB_QUERIES_HEADER = "x-db-queries";
 
+// The API sends real-time channels (chat streaming, workspace events, the
+// autocomplete stream) as `text/event-stream` connections that stay open for
+// the life of the page instead of returning a fixed payload. Their "size" is
+// unbounded by design, so the response-size dimension excludes them entirely
+// rather than budgeting a snapshot of however many bytes happened to have
+// streamed by the time the `response` event fired.
+const STREAMED_RESPONSE_CONTENT_TYPE = "text/event-stream";
+
 const BASELINE_PATH = path.resolve(
   import.meta.dirname,
   "../network-baseline.json",
@@ -36,13 +44,22 @@ export type NetworkCapture = {
     pathname: string;
     dbQueries: number | null;
     dbQueryHeaderMissing: boolean;
+    // Response body size in bytes; null for a streamed response (excluded by
+    // content-type, see STREAMED_RESPONSE_CONTENT_TYPE) or one whose body
+    // Playwright never resolved (see responseBytesUnavailable).
+    responseBytes: number | null;
+    // True only when Playwright saw a non-streamed response and reading its
+    // body failed (e.g. aborted/redirected mid-navigation).
+    responseBytesUnavailable: boolean;
   }[];
   intervals: { start: number; end: number }[];
 };
 
 export type NetworkCollector = {
   trackPage: (page: Page) => () => void;
-  capture: () => NetworkCapture;
+  // Async: waits for in-flight response-body reads so response sizes are
+  // populated before the caller summarizes the capture.
+  capture: () => Promise<NetworkCapture>;
 };
 
 type NetworkCollectorOptions = {
@@ -60,6 +77,10 @@ type NetworkRecord = {
   // True only when Playwright saw a response and that response did not expose
   // the dev/test query-count header.
   dbQueryHeaderMissing: boolean;
+  // Response body length in bytes; null until the async body read resolves,
+  // and permanently null for a streamed (SSE) response.
+  responseBytes: number | null;
+  responseBytesUnavailable: boolean;
 };
 
 const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
@@ -69,12 +90,36 @@ const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
   return new URL(request.url()).origin === apiOrigin;
 };
 
+const isStreamedResponse = (response: Response): boolean =>
+  (response.headers()["content-type"] ?? "")
+    .toLowerCase()
+    .includes(STREAMED_RESPONSE_CONTENT_TYPE);
+
+// Playwright's body() rejects for a response that never finishes (aborted or
+// redirected mid-navigation); that is a legitimate outcome here, not a bug in
+// the collector, so it is caught and recorded rather than left to reject the
+// whole route walk.
+const readResponseBytes = async (
+  response: Response,
+  record: NetworkRecord,
+): Promise<void> => {
+  try {
+    const body = await response.body();
+    record.responseBytes = body.length;
+  } catch {
+    record.responseBytesUnavailable = true;
+  }
+};
+
 export const createNetworkCollector = (
   options: NetworkCollectorOptions = {},
 ): NetworkCollector => {
   const apiOrigin = options.apiOrigin ?? new URL(DEFAULT_API_URL).origin;
   const records: NetworkRecord[] = [];
   const byRequest = new Map<Request, NetworkRecord>();
+  // Body reads are async (Playwright must finish downloading the response),
+  // so capture() awaits these before reading responseBytes off the records.
+  const pendingBodyReads: Promise<void>[] = [];
 
   return {
     trackPage: (page) => {
@@ -89,6 +134,8 @@ export const createNetworkCollector = (
           end: null,
           dbQueries: null,
           dbQueryHeaderMissing: false,
+          responseBytes: null,
+          responseBytesUnavailable: false,
         };
         records.push(record);
         byRequest.set(request, record);
@@ -109,9 +156,14 @@ export const createNetworkCollector = (
         const header = response.headers()[DB_QUERIES_HEADER];
         if (header !== undefined) {
           record.dbQueries = Number(header);
+        } else {
+          record.dbQueryHeaderMissing = true;
+        }
+
+        if (isStreamedResponse(response)) {
           return;
         }
-        record.dbQueryHeaderMissing = true;
+        pendingBodyReads.push(readResponseBytes(response, record));
       };
 
       page.on("request", onRequest);
@@ -127,17 +179,27 @@ export const createNetworkCollector = (
       };
     },
 
-    capture: () => {
+    capture: async () => {
+      await Promise.all(pendingBodyReads);
       // A still-pending request can only be the tail of a chain (nothing waited
       // on its response yet), so closing it at "now" never inflates the depth.
       const now = Date.now();
       return {
         requests: records.map(
-          ({ method, pathname, dbQueries, dbQueryHeaderMissing }) => ({
+          ({
             method,
             pathname,
             dbQueries,
             dbQueryHeaderMissing,
+            responseBytes,
+            responseBytesUnavailable,
+          }) => ({
+            method,
+            pathname,
+            dbQueries,
+            dbQueryHeaderMissing,
+            responseBytes,
+            responseBytesUnavailable,
           }),
         ),
         intervals: records.map(({ start, end }) => ({
@@ -220,6 +282,11 @@ export type RouteNetworkMetrics = {
   dbQueries: Record<string, number>;
   // Per request key, how many completed responses omitted `x-db-queries`.
   missingDbQueryCounts: Record<string, number>;
+  // Per request key, the max response body size (bytes) observed this run.
+  // Streamed (SSE) responses and keys whose body never resolved are absent.
+  responseSizes: Record<string, number>;
+  // Per request key, how many non-streamed responses failed to yield a body.
+  missingResponseSizeCounts: Record<string, number>;
 };
 
 export type NetworkBaselineEntry = {
@@ -229,6 +296,9 @@ export type NetworkBaselineEntry = {
   requestCounts?: Record<string, number>;
   // Optional so baselines written before the counter existed still parse.
   dbQueries?: Record<string, number>;
+  // Optional so baselines written before the response-size dimension existed
+  // still parse. Bytes, rounded up to the next KiB by the writer.
+  responseSizes?: Record<string, number>;
 };
 
 export type NetworkBaseline = Record<string, NetworkBaselineEntry>;
@@ -238,6 +308,8 @@ export const summarizeCapture = (
 ): RouteNetworkMetrics => {
   const dbQueries: Record<string, number> = {};
   const missingDbQueryCounts: Record<string, number> = {};
+  const responseSizes: Record<string, number> = {};
+  const missingResponseSizeCounts: Record<string, number> = {};
   const requestCounts: Record<string, number> = {};
   for (const request of capture.requests) {
     const key = requestKey(request);
@@ -245,10 +317,22 @@ export const summarizeCapture = (
     if (request.dbQueryHeaderMissing) {
       missingDbQueryCounts[key] = (missingDbQueryCounts[key] ?? 0) + 1;
     }
-    if (request.dbQueries === null || Number.isNaN(request.dbQueries)) {
-      continue;
+    if (request.dbQueries !== null && !Number.isNaN(request.dbQueries)) {
+      dbQueries[key] = Math.max(dbQueries[key] ?? 0, request.dbQueries);
     }
-    dbQueries[key] = Math.max(dbQueries[key] ?? 0, request.dbQueries);
+    if (request.responseBytesUnavailable) {
+      missingResponseSizeCounts[key] =
+        (missingResponseSizeCounts[key] ?? 0) + 1;
+    }
+    if (
+      request.responseBytes !== null &&
+      !Number.isNaN(request.responseBytes)
+    ) {
+      responseSizes[key] = Math.max(
+        responseSizes[key] ?? 0,
+        request.responseBytes,
+      );
+    }
   }
   return {
     requests: Object.keys(requestCounts).sort(),
@@ -259,6 +343,14 @@ export const summarizeCapture = (
     dbQueries,
     missingDbQueryCounts: Object.fromEntries(
       Object.entries(missingDbQueryCounts).sort(([a], [b]) =>
+        a.localeCompare(b),
+      ),
+    ),
+    responseSizes: Object.fromEntries(
+      Object.entries(responseSizes).sort(([a], [b]) => a.localeCompare(b)),
+    ),
+    missingResponseSizeCounts: Object.fromEntries(
+      Object.entries(missingResponseSizeCounts).sort(([a], [b]) =>
         a.localeCompare(b),
       ),
     ),
@@ -393,6 +485,46 @@ const pushDbQueryProblems = ({
   }
 };
 
+const pushResponseSizeProblems = ({
+  route,
+  entry,
+  metrics,
+  problems,
+}: {
+  route: string;
+  entry: NetworkBaselineEntry;
+  metrics: RouteNetworkMetrics;
+  problems: string[];
+}) => {
+  const baselineSizes = entry.responseSizes ?? {};
+  for (const key of Object.keys(baselineSizes)) {
+    if (metrics.missingResponseSizeCounts[key] === undefined) {
+      continue;
+    }
+    problems.push(
+      `Response size missing on ${route}: ${key}\n` +
+        `  This request has a committed response-size budget, but Playwright\n` +
+        `  could not read the response body (aborted or redirected mid-\n` +
+        `  navigation is the usual cause). Re-run the suite; if it persists,\n` +
+        `  investigate before trusting this route's payload-size budget.`,
+    );
+  }
+  for (const [key, observed] of Object.entries(metrics.responseSizes)) {
+    const budget = baselineSizes[key];
+    if (budget === undefined || observed <= responseSizeAllowance(budget)) {
+      continue;
+    }
+    problems.push(
+      `Response payload grew on ${route}: ${key} ran ${formatBytes(budget)} -> ${formatBytes(observed)}\n` +
+        `  The endpoint now returns more bytes for the same page — the classic\n` +
+        `  cause is a handler returning full rows instead of the minimal\n` +
+        `  projection callers actually use ("Return minimal data" in\n` +
+        `  AGENTS.md). Trim the response shape or, if the extra payload is\n` +
+        `  genuinely required, ${WRITE_HINT}.`,
+    );
+  }
+};
+
 const pushImprovementNotices = ({
   route,
   entry,
@@ -428,6 +560,27 @@ const pushImprovementNotices = ({
 // without masking the failure mode it exists for.
 export const dbQueryAllowance = (budget: number): number =>
   budget + Math.max(2, Math.ceil(budget * 0.15));
+
+// Response bodies wobble run to run: generated ids, timestamps, and
+// locale-formatted numbers all shift byte counts by a few percent without
+// signaling a real regression. +20% headroom absorbs that jitter while still
+// catching an endpoint that starts returning full rows instead of the
+// minimal projection the repo convention requires.
+const RESPONSE_SIZE_ALLOWANCE_MULTIPLIER = 1.2;
+
+export const responseSizeAllowance = (budgetBytes: number): number =>
+  Math.ceil(budgetBytes * RESPONSE_SIZE_ALLOWANCE_MULTIPLIER);
+
+const BYTES_PER_KIB = 1024;
+
+// Budgets are stored rounded up to the next KiB so a one-byte jitter in a
+// freshly written baseline does not immediately eat into the +20% allowance
+// above it.
+const roundUpToKiB = (bytes: number): number =>
+  Math.ceil(bytes / BYTES_PER_KIB) * BYTES_PER_KIB;
+
+const formatBytes = (bytes: number): string =>
+  `${(bytes / BYTES_PER_KIB).toFixed(1)} KiB`;
 
 const requestCountBudget = (
   entry: NetworkBaselineEntry,
@@ -477,6 +630,9 @@ export const diffNetworkBaseline = (
     // hits, timing) and re-noticing it every run would be noise; tightening
     // happens via a deliberate rewrite.
     pushDbQueryProblems({ route, entry, metrics, problems });
+    // Same one-directional policy as DB-query budgets: a smaller payload is
+    // never a failure, only a growth beyond the allowance is.
+    pushResponseSizeProblems({ route, entry, metrics, problems });
     pushImprovementNotices({ route, entry, metrics, notices });
   }
 
@@ -525,7 +681,9 @@ const isNetworkBaselineEntry = (
     isStringArray(value["requests"]) &&
     (value["requestCounts"] === undefined ||
       isNumberRecord(value["requestCounts"])) &&
-    (value["dbQueries"] === undefined || isNumberRecord(value["dbQueries"]))
+    (value["dbQueries"] === undefined || isNumberRecord(value["dbQueries"])) &&
+    (value["responseSizes"] === undefined ||
+      isNumberRecord(value["responseSizes"]))
   );
 };
 
@@ -567,6 +725,15 @@ export const mergeNetworkBaseline = (
         dbQueries[key] = Math.max(dbQueries[key] ?? 0, count);
       }
     }
+    const responseSizes: Record<string, number> = {};
+    for (const source of [
+      previous?.responseSizes ?? {},
+      metrics.responseSizes,
+    ]) {
+      for (const [key, bytes] of Object.entries(source)) {
+        responseSizes[key] = Math.max(responseSizes[key] ?? 0, bytes);
+      }
+    }
     merged[route] = {
       depth: Math.max(metrics.depth, previous?.depth ?? 0),
       requests: [...new Set([...metrics.requests, ...previousRequests])].sort(),
@@ -575,6 +742,13 @@ export const mergeNetworkBaseline = (
       ),
       dbQueries: Object.fromEntries(
         Object.entries(dbQueries).sort(([a], [b]) => a.localeCompare(b)),
+      ),
+      // Rounded up to the next KiB here (the writer), not at measurement time,
+      // so the raw max observed across write runs is what gets rounded once.
+      responseSizes: Object.fromEntries(
+        Object.entries(responseSizes)
+          .map(([key, bytes]) => [key, roundUpToKiB(bytes)] as const)
+          .sort(([a], [b]) => a.localeCompare(b)),
       ),
     };
   }
