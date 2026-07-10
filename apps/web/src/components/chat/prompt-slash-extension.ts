@@ -1,5 +1,6 @@
-import { Extension } from "@tiptap/core";
+import { Extension, isNodeEmpty } from "@tiptap/core";
 import type { Editor } from "@tiptap/core";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { ReactRenderer } from "@tiptap/react";
 import { Suggestion } from "@tiptap/suggestion";
 import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
@@ -140,6 +141,20 @@ const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
 };
 
 /**
+ * Whether the document has any real content before `to` -- mirrors
+ * `editor.isEmpty` (the outer composer's own emptiness gate in
+ * chat-input-surface.tsx), which treats an atom node (a mention or
+ * pasted-text chip) as content, same as TipTap's own `isNodeEmpty`. A
+ * `textBetween` + `.trim()` check instead reduces every chip to its
+ * leaf-text placeholder ("\n"), which trims away to "" -- so a chip-only
+ * composer read as empty and "/" right after a chip fell through to a
+ * literal character instead of opening the suggestion. Exported for
+ * testing.
+ */
+export const hasContentBefore = (doc: ProseMirrorNode, to: number): boolean =>
+  !isNodeEmpty(doc.cut(0, to));
+
+/**
  * Build the Suggestion config used by `PromptSlash`. `getItems`
  * is read on every keystroke so the host can mix prompts and skills
  * (and any future kinds) without re-creating the extension.
@@ -154,12 +169,8 @@ export const createPromptSlashSuggestion = (
 ): Omit<SuggestionOptions<SlashItem, SlashItem>, "editor"> => ({
   char: "/",
   allowSpaces: false,
-  allow: ({ range, state }) => {
-    if (!options?.suppressEmptyTrigger) {
-      return true;
-    }
-    return state.doc.textBetween(0, range.from, "\n", "\n").trim() !== "";
-  },
+  allow: ({ range, state }) =>
+    !options?.suppressEmptyTrigger || hasContentBefore(state.doc, range.from),
   items: ({ query }) => filterItems(getItems(), query),
 
   command: ({ editor, range, props }) => {
