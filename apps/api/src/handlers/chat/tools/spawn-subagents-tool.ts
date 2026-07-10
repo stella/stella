@@ -1,7 +1,9 @@
 import { toolDefinition } from "@tanstack/ai";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db";
+import { env } from "@/api/env";
 import { createChatTextPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
@@ -13,7 +15,10 @@ import { runSubagent } from "@/api/lib/tanstack-ai-agent";
 import {
   getTanStackTextModelInfoForRole,
   isAllowedBYOKModelForRole,
+  resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
+import { assertUsageAvailable } from "@/api/lib/usage";
+import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 
 export const SPAWN_SUBAGENTS_TOOL_NAME = "spawn_subagents";
 
@@ -177,6 +182,83 @@ export const resolveValidatedSubagentModelId = ({
   return subModel === modelInfo.modelId ? subModel : undefined;
 };
 
+type SubagentBatchPreflightResult =
+  | { ok: true }
+  | { ok: false; message: string };
+
+type PreflightSubagentBatchUsageArgs = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  fastModelInfo: SubagentModelInfo;
+  subtaskCount: number;
+};
+
+/**
+ * Batch-level usage pre-flight for the whole `spawn_subagents` call.
+ *
+ * `recordUsageEvent({ actionType: "subagent" })` (see `runSubagent` /
+ * `createTanStackAIAnalyticsCallbacks`) deliberately never checks balance —
+ * that's the pre-flight's job, same split as everywhere else in the usage
+ * ledger. The route-level `requiresUsage` pre-flight only covers the single
+ * parent `chat` unit; without a check here, a single tool call could
+ * dispatch up to `MAX_SUBAGENTS_PER_CALL` metered model runs against an org
+ * that is already at (or over) its cap.
+ *
+ * Mirrors `resolveMeteringContext` in `api-handlers.ts`: same BYOK
+ * detection (`keySource === "byok"` zeroes the unit cost — the org's own
+ * key pays, not the platform), same `resolveEffectiveServiceTierForProvider`
+ * call, same `computeUsageUnitCost` inputs. The one difference is the `*
+ * subtaskCount` multiplier, since this single tool call fans out into that
+ * many separate metered subagent runs.
+ */
+const preflightSubagentBatchUsage = async ({
+  safeDb,
+  organizationId,
+  fastModelInfo,
+  subtaskCount,
+}: PreflightSubagentBatchUsageArgs): Promise<SubagentBatchPreflightResult> => {
+  if (!env.USAGE_ENFORCEMENT_ENABLED) {
+    return { ok: true };
+  }
+
+  const serviceTier = resolveEffectiveServiceTierForProvider({
+    provider: fastModelInfo.provider,
+    region: fastModelInfo.region,
+    serviceTier: "standard",
+  });
+  const isByok = fastModelInfo.keySource === "byok";
+  const unitCost = computeUsageUnitCost({
+    actionType: "subagent",
+    serviceTier,
+    isByok,
+  });
+  const required = unitCost * subtaskCount;
+  if (required <= 0) {
+    return { ok: true };
+  }
+
+  const checkResult = await safeDb(
+    async (tx) => await assertUsageAvailable({ tx, organizationId, required }),
+  );
+
+  // A DB failure during pre-flight is treated the same as insufficient
+  // balance: fail closed rather than let a billing check we couldn't run
+  // wave the batch through.
+  if (Result.isError(checkResult)) {
+    return {
+      ok: false,
+      message: "Unable to verify usage availability; try again.",
+    };
+  }
+
+  const check = checkResult.value;
+  if (check.ok) {
+    return { ok: true };
+  }
+
+  return { ok: false, message: check.error.message };
+};
+
 type CreateSpawnSubagentsToolProps = {
   /** Lazily builds the (already depth+1, already projected) subagent toolset. */
   buildSubagentToolset: () => ChatToolMap;
@@ -218,6 +300,24 @@ export const createSpawnSubagentsTool = (
       props.orgAIConfig,
       { organizationId: props.organizationId },
     );
+
+    // Whole-batch pre-flight: dispatches nothing (no provider calls, no
+    // usage events) when the org cannot afford every subtask in this call.
+    const batchPreflight = await preflightSubagentBatchUsage({
+      fastModelInfo,
+      organizationId: props.organizationId,
+      safeDb: props.safeDb,
+      subtaskCount: subagents.length,
+    });
+    if (!batchPreflight.ok) {
+      return {
+        results: subagents.map((_sub, index) => ({
+          index,
+          status: "failed" as const,
+          error: batchPreflight.message,
+        })),
+      };
+    }
 
     const runOneSubagent = async (sub: SubagentSpec, index: number) => {
       try {
