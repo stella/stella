@@ -4,6 +4,7 @@ import { hydrateRoot } from "react-dom/client";
 import { CancelledError } from "@tanstack/react-query";
 import { StartClient } from "@tanstack/react-start/client";
 
+import { RenderStormCanary } from "@/components/render-storm-canary";
 import { initializeI18n } from "@/i18n/i18n-store";
 import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
@@ -13,7 +14,9 @@ const hydrate = () => {
     hydrateRoot(
       document,
       <StrictMode>
-        <StartClient />
+        <RenderStormCanary>
+          <StartClient />
+        </RenderStormCanary>
       </StrictMode>,
       {
         onCaughtError: (error) => {
