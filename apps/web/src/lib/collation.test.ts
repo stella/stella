@@ -10,6 +10,16 @@ describe("getCollator", () => {
   test("returns a distinct instance per distinct locale", () => {
     expect(getCollator("cs")).not.toBe(getCollator("sk"));
   });
+
+  test("evicts the least recently used locale when the cache is full", () => {
+    const original = getCollator("en-x-cache-origin");
+
+    for (let index = 0; index < 16; index += 1) {
+      getCollator(`en-x-cache-${String(index)}`);
+    }
+
+    expect(getCollator("en-x-cache-origin")).not.toBe(original);
+  });
 });
 
 describe("compareByLocale", () => {

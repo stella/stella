@@ -1,4 +1,38 @@
-const collators = new Map<string, Intl.Collator>();
+class BoundedLruCache<TKey, TValue> {
+  readonly #entries = new Map<TKey, TValue>();
+  readonly #limit: number;
+
+  constructor(limit: number) {
+    this.#limit = limit;
+  }
+
+  get(key: TKey): TValue | undefined {
+    const value = this.#entries.get(key);
+    if (value === undefined) {
+      return undefined;
+    }
+    this.#entries.delete(key);
+    this.#entries.set(key, value);
+    return value;
+  }
+
+  set(key: TKey, value: TValue): void {
+    this.#entries.set(key, value);
+    if (this.#entries.size <= this.#limit) {
+      return;
+    }
+    const oldestKey = this.#entries.keys().next();
+    if (!oldestKey.done) {
+      this.#entries.delete(oldestKey.value);
+    }
+  }
+}
+
+const COLLATOR_CACHE_LIMIT = 16;
+
+const collatorCache = new BoundedLruCache<string, Intl.Collator>(
+  COLLATOR_CACHE_LIMIT,
+);
 
 /**
  * `Intl.Collator` for `locale`, cached per locale.
@@ -18,12 +52,12 @@ const collators = new Map<string, Intl.Collator>();
  * when the runtime doesn't already default to "cs"/"sk").
  */
 export const getCollator = (locale: string): Intl.Collator => {
-  const cached = collators.get(locale);
+  const cached = collatorCache.get(locale);
   if (cached) {
     return cached;
   }
   const collator = new Intl.Collator(locale);
-  collators.set(locale, collator);
+  collatorCache.set(locale, collator);
   return collator;
 };
 

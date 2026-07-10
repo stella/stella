@@ -251,6 +251,35 @@ const countDirectErrorMessageDisplay = (content: string): number => {
 // one barrel (presence metric).
 const countPresence = (): number => 1;
 
+// A module-scope `const`/`let` assigned `new Map(...)`/`new Set(...)`, i.e. a
+// mutable collection that lives for the lifetime of the module (a tab can
+// keep it open for days), never anchored to a component lifecycle. `\b`
+// after `Map`/`Set` deliberately does NOT match `WeakMap`/`WeakSet` — those
+// are GC-safe by construction (keys drop out once nothing else references
+// them) and are excluded from this metric on purpose. The `^` anchor (no
+// leading whitespace) is the "module scope, not inside a function" heuristic:
+// a declaration indented under a function/hook is scoped to that call, not
+// the module.
+const MODULE_MUTABLE_COLLECTION =
+  /^(?:export\s+)?(?:const|let)\s+\w+\s*(?::.+?)?=\s*new\s+(?:Map|Set)\b/u;
+
+const countModuleLevelMutableCollections = (content: string): number => {
+  let total = 0;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code, state } = stripLine(raw, literalState);
+    literalState = state;
+    if (COMMENT_LINE.test(code)) {
+      continue;
+    }
+    if (MODULE_MUTABLE_COLLECTION.test(code)) {
+      total += 1;
+    }
+  }
+  return total;
+};
+
 // --- Metric table -----------------------------------------------------------
 
 type FileCounter = (content: string) => number;
@@ -305,6 +334,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       file.includes("apps/web/src/routes/dev/") ||
       file.startsWith("apps/web/src/workers/"),
     count: countDirectErrorMessageDisplay,
+  },
+  {
+    id: "module-level-mutable-collections",
+    description:
+      "module-scope `new Map(`/`new Set(` assignments in web source (per-thread/entity registries that never evict); WeakMap/WeakSet excluded (GC-safe by construction)",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countModuleLevelMutableCollections,
   },
 ];
 
@@ -568,6 +605,32 @@ const SELF_TEST_DIRECT_ERROR = `${DIRECT_ERROR_FIXTURE_LINES.join("\n")}\n`;
 // string literal, and comment are excluded.
 const EXPECTED_DIRECT_ERROR = 4;
 
+const MODULE_COLLECTION_FIXTURE_LINES = [
+  "const frozenSet = new Set([1, 2, 3]);",
+  "export const exportedRegistry = new Map<string, number>();",
+  "let mutableCounter = new Set<string>();",
+  'const typed: ReadonlySet<string> = new Set(["a"]);',
+  "const withArrowType: Map<string, () => void> = new Map();",
+  "const multiline = new Map<",
+  "  string,",
+  "  number",
+  ">();",
+  "const weakOk = new WeakMap<object, number>();",
+  "const weakSetOk = new WeakSet<object>();",
+  "function useLocalCache() {",
+  "  const indented = new Map<string, number>();",
+  "  return indented;",
+  "}",
+  "// const commentedOut = new Map();",
+];
+const SELF_TEST_MODULE_COLLECTIONS = `${MODULE_COLLECTION_FIXTURE_LINES.join("\n")}\n`;
+// Expected: frozenSet(1) + exportedRegistry(1) + mutableCounter(1) + typed(1)
+// + withArrowType(1) + multiline(1, counted on its opening line even though
+// `new Map<` spans to a later `>()`) = 6. WeakMap/WeakSet, the indented
+// (function-scoped)
+// declaration, and the commented-out line are all excluded.
+const EXPECTED_MODULE_COLLECTIONS = 6;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -585,6 +648,11 @@ const runSelfTest = (): number => {
       root,
       "apps/web/src/error-display.tsx",
       SELF_TEST_DIRECT_ERROR,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/module-collections.ts",
+      SELF_TEST_MODULE_COLLECTIONS,
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
@@ -629,6 +697,14 @@ const runSelfTest = (): number => {
     if (directErrorMetric.count !== EXPECTED_DIRECT_ERROR) {
       failures.push(
         `direct-error-message-display counted ${directErrorMetric.count}, expected ${EXPECTED_DIRECT_ERROR}`,
+      );
+    }
+
+    const moduleCollectionsMetric =
+      snapshot["module-level-mutable-collections"];
+    if (moduleCollectionsMetric.count !== EXPECTED_MODULE_COLLECTIONS) {
+      failures.push(
+        `module-level-mutable-collections counted ${moduleCollectionsMetric.count}, expected ${EXPECTED_MODULE_COLLECTIONS}`,
       );
     }
 
