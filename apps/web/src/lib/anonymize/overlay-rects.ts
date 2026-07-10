@@ -7,6 +7,17 @@ export type OverlayRect = {
   height: number;
 };
 
+type OverlayRectKeyInput = {
+  entityId: number;
+  rect: OverlayRect;
+};
+
+export const getOverlayRectKey = ({
+  entityId,
+  rect,
+}: OverlayRectKeyInput): string =>
+  `${entityId}:${rect.left}:${rect.top}:${rect.width}:${rect.height}`;
+
 type SpanSlice = {
   spanIndex: number;
   localStart: number;

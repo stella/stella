@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
 
+import { panic } from "better-result";
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -43,6 +44,17 @@ export const InlineOptionEditor = ({
 }: InlineOptionEditorProps) => {
   const t = useTranslations();
   const [draft, setDraft] = useState("");
+  const editorId = useId();
+  const nextRowId = useRef(options.length);
+  const [rowIds, setRowIds] = useState(() =>
+    options.map((_, index) => `${editorId}-${index}`),
+  );
+
+  const allocateRowId = () => {
+    const rowId = `${editorId}-${nextRowId.current}`;
+    nextRowId.current += 1;
+    return rowId;
+  };
 
   const addFromDraft = () => {
     const value = draft.trim();
@@ -53,6 +65,8 @@ export const InlineOptionEditor = ({
       setDraft("");
       return;
     }
+    const rowId = allocateRowId();
+    setRowIds((current) => [...current, rowId]);
     pushOption({ value, color: colorAt(options.length) });
     setDraft("");
   };
@@ -65,6 +79,11 @@ export const InlineOptionEditor = ({
     replaceOptionAt(index, { ...existing, value });
   };
 
+  const removeAt = (index: number) => {
+    setRowIds((current) => current.filter((_, rowIndex) => rowIndex !== index));
+    removeOptionAt(index);
+  };
+
   return (
     <div className="bg-muted/64 flex flex-col gap-2 rounded-[9px] border p-3">
       <div className="flex items-center gap-1.5">
@@ -75,18 +94,24 @@ export const InlineOptionEditor = ({
 
       {options.length > 0 && (
         <ul className="flex flex-col gap-1">
-          {options.map((option, index) => (
-            <OptionRow
-              index={index}
-              key={`${option.value}-${index}`}
-              onPickColor={(color) =>
-                replaceOptionAt(index, { ...option, color })
-              }
-              onRemove={() => removeOptionAt(index)}
-              onRename={(next) => renameAt(index, next)}
-              option={option}
-            />
-          ))}
+          {options.map((option, index) => {
+            const rowId = rowIds.at(index);
+            if (!rowId) {
+              return panic("Missing inline option editor row identity");
+            }
+
+            return (
+              <OptionRow
+                key={rowId}
+                onPickColor={(color) =>
+                  replaceOptionAt(index, { ...option, color })
+                }
+                onRemove={() => removeAt(index)}
+                onRename={(next) => renameAt(index, next)}
+                option={option}
+              />
+            );
+          })}
         </ul>
       )}
 
@@ -129,7 +154,6 @@ export const InlineOptionEditor = ({
 
 type OptionRowProps = {
   option: WorkspacePropertyOption;
-  index: number;
   onPickColor: (color: OptionColor) => void;
   onRemove: () => void;
   onRename: (next: string) => void;

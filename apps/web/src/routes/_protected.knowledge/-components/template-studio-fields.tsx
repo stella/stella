@@ -422,11 +422,11 @@ export const FieldNavigator = ({
   return (
     <div className="px-4 py-3">
       <ul className="flex flex-col">
-        {dedupeOutlineFields(outline).map((item, index) => (
+        {dedupeOutlineFields(outline).map((item) => (
           <OutlineRow
             count={item.count}
             fields={fields}
-            key={index}
+            key={item.node.from}
             node={item.node}
           />
         ))}
@@ -791,11 +791,11 @@ const OutlineGroupRow = ({
       </div>
       {hasChildren && open ? (
         <ul className="border-border ms-2 flex flex-col border-s ps-2">
-          {dedupeOutlineFields(node.children).map((item, index) => (
+          {dedupeOutlineFields(node.children).map((item) => (
             <OutlineRow
               count={item.count}
               fields={fields}
-              key={index}
+              key={item.node.from}
               node={item.node}
             />
           ))}

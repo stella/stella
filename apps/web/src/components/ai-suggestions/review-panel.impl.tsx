@@ -955,6 +955,7 @@ const RedlinePreview = ({
     runs.map((run, index) => (
       <span
         className={className}
+        // eslint-disable-next-line react/no-array-index-key -- runs is a read-only preview recomputed fresh from the AI suggestion on every render (whole-list replace); spans are non-interactive with no per-item state.
         key={`${index}-${run.text}`}
         style={previewRunStyle(run, compact)}
       >
@@ -980,10 +981,15 @@ const RedlinePreview = ({
     }
     return segments.map((seg, i) => {
       if (seg.type === "equal") {
+        // eslint-disable-next-line react/no-array-index-key -- segments is a read-only word-diff recomputed fresh from `before`/`after` on every render (whole-list replace); spans are non-interactive with no per-item state.
         return <span key={i}>{seg.text}</span>;
       }
       return (
-        <span className={seg.type === "del" ? delCls : insCls} key={i}>
+        <span
+          className={seg.type === "del" ? delCls : insCls}
+          // eslint-disable-next-line react/no-array-index-key -- segments is a read-only word-diff recomputed fresh from `before`/`after` on every render (whole-list replace); spans are non-interactive with no per-item state.
+          key={i}
+        >
           {seg.text}
         </span>
       );

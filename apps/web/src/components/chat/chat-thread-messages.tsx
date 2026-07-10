@@ -237,6 +237,7 @@ export const ChatThreadMessages = ({
             {message.parts.map((part, partIndex) =>
               part.type === "text" ? (
                 <UserMessageText
+                  // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); partIndex only disambiguates multiple text parts within this single, already message.id-scoped message.
                   key={`${message.id}-user-text-${partIndex}`}
                   restorationPairs={getFollowingAssistantRestorations(
                     messages,
@@ -264,8 +265,9 @@ export const ChatThreadMessages = ({
       {stickyUserMessages
         ? buildMessageTurns(messages).map((turn, turnIndex) => {
             if (turn.type === "orphan") {
+              const orphanFirstMessageId = turn.body.at(0)?.message.id;
               return (
-                <Fragment key={`orphan-${turnIndex}`}>
+                <Fragment key={orphanFirstMessageId ?? `orphan-${turnIndex}`}>
                   {turn.body.map((item) =>
                     renderMessageNode(item.message, item.index),
                   )}
@@ -532,6 +534,7 @@ const StickyUserTurn = ({
               {headerMessage.parts.map((part, partIndex) =>
                 part.type === "text" ? (
                   <UserMessageText
+                    // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); partIndex only disambiguates multiple text parts within this single, already message.id-scoped message.
                     key={`${headerMessage.id}-user-text-${partIndex}`}
                     restorationPairs={restorationPairs}
                     text={normalizeUserMessageTextForDisplay(part.content)}
@@ -1210,6 +1213,7 @@ const AssistantMessageParts = ({
                       status: "expanded",
                     }
               }
+              // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
               key={`${message.id}-thinking-${index}`}
               reasoningTokenCount={
                 index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1224,6 +1228,7 @@ const AssistantMessageParts = ({
           return (
             <AssistantTextPart
               components={streamdownComponents}
+              // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
               key={`${message.id}-text-${index}`}
               restorationPairs={restorationPairs}
               text={part.content}
