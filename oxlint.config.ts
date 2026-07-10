@@ -781,7 +781,6 @@ export default defineConfig({
       rules: {
         // Direct useEffect is banned; route external-system sync through
         // useMountEffect / useExternalSyncEffect. See /conventions-use-effect.
-        // Upstream-synced packages/folio is intentionally exempt.
         "no-raw-use-effect/no-raw-use-effect": [
           "error",
           { allowedFiles: ["apps/web/src/hooks/use-effect.ts"] },
@@ -1706,8 +1705,8 @@ export default defineConfig({
         "security-guards/no-unscoped-user-query": "off",
         "vitest/no-focused-tests": "error",
         "vitest/prefer-importing-vitest-globals": "off",
-        // bun:test globals (describe/test/expect/it/…) resolve as `error` type
-        // when test files are excluded from the main tsconfig (packages/folio).
+        // bun:test globals (describe/test/expect/it/…) can resolve as `error`
+        // when test files are excluded from a package's main tsconfig.
         // Suppressing unsafe rules for test files avoids false positives that
         // would require modifying every test or adding a separate tsconfig.
         "typescript/no-unsafe-call": "off",
@@ -1740,9 +1739,8 @@ export default defineConfig({
     {
       // Bare localeCompare is locale-nondeterministic (runtime default) and
       // rebuilds ICU tailoring per call; route through the cached collation
-      // helper. Scoped to apps/web and apps/api (packages/folio is
-      // upstream-synced and excluded); the helper files themselves own the
-      // one legitimate bare call.
+      // helper. Scoped to apps/web and apps/api; the helper files themselves
+      // own the one legitimate bare call.
       files: [
         "apps/web/src/**/*.{ts,tsx}",
         "apps/api/src/**/*.ts",
