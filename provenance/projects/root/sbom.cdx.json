@@ -4896,6 +4896,9 @@
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#4"
           },
           {
+            "location": "apps/api/src/mcp/capability-tools.ts#1"
+          },
+          {
             "location": "apps/api/src/mcp/egress.ts#1"
           },
           {
@@ -6747,10 +6750,16 @@
             "location": "apps/api/src/lib/views-schema.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/capability-tools.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/properties/create-schema.ts#1"
           },
           {
             "location": "apps/api/src/handlers/properties/preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-tools.ts#3"
           }
         ]
       },
@@ -9754,7 +9763,7 @@
             "location": "apps/web/src/routes/auth/route.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/consent.tsx#4"
+            "location": "apps/web/src/routes/consent.tsx#9"
           },
           {
             "location": "apps/web/src/routes/dev.tsx#3"
@@ -12945,6 +12954,12 @@
             "location": "apps/api/scripts/exact-mirror-guard.ts#35"
           },
           {
+            "location": "apps/api/scripts/export-capability-catalog.ts#33"
+          },
+          {
+            "location": "apps/api/scripts/lib/capability-catalog.ts#12"
+          },
+          {
             "location": "apps/api/scripts/mcp-coverage-guard.ts#45"
           },
           {
@@ -13011,6 +13026,9 @@
             "location": "apps/api/src/handlers/billing-codes/update.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/corpus-index.ts#1"
           },
           {
@@ -13050,13 +13068,22 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/case-law/ingestion/status.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/matter-links/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/matter-links/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/matter-links/list.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
           },
           {
             "location": "apps/api/src/handlers/case-law/public-routes.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/routes.ts#1"
           },
           {
             "location": "apps/api/src/handlers/catalogue/bundled-skill-resources.ts#1"
@@ -13572,10 +13599,13 @@
             "location": "apps/api/src/handlers/legislation/corpus-index.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/corpus-routes.ts#1"
+            "location": "apps/api/src/handlers/legislation/ingestion.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/ingestion.ts#1"
+            "location": "apps/api/src/handlers/legislation/read-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search.ts#1"
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/connect.ts#1"
@@ -14034,13 +14064,19 @@
             "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/time-entries/export-csv.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/time-entries/read-by-id.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/read.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/time-entries/routes.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/split.ts#1"
@@ -14176,6 +14212,9 @@
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-overview.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-workflow-status.ts#1"
           },
           {
             "location": "apps/api/src/handlers/workspaces/read-workflow-target-count.ts#1"
@@ -14394,6 +14433,9 @@
             "location": "apps/api/src/mcp/billing-tools.ts#1"
           },
           {
+            "location": "apps/api/src/mcp/capability-tools.ts#4"
+          },
+          {
             "location": "apps/api/src/mcp/compat-tools.ts#1"
           },
           {
@@ -14461,6 +14503,9 @@
           },
           {
             "location": "apps/web/src/hooks/use-stick-to-bottom.ts#4"
+          },
+          {
+            "location": "apps/web/src/lib/auth.ts#10"
           },
           {
             "location": "apps/web/src/lib/dev-otp.ts#1"
@@ -15691,7 +15736,7 @@
             "location": "apps/api/src/handlers/billing-codes/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
           },
           {
             "location": "apps/api/src/handlers/case-law/citation-authority.ts#1"
@@ -15748,13 +15793,13 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/ingestion/status.ts#1"
+            "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/matter-links/create.ts#1"
+            "location": "apps/api/src/handlers/case-law/matter-links/create.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/matter-links/delete.ts#1"
+            "location": "apps/api/src/handlers/case-law/matter-links/delete.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/classifier.ts#12"
@@ -16114,7 +16159,7 @@
             "location": "apps/api/src/handlers/legislation/ingestion.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/read-by-id.ts#1"
+            "location": "apps/api/src/handlers/legislation/read-by-id.ts#2"
           },
           {
             "location": "apps/api/src/handlers/legislation/redistribution.ts#1"
@@ -16123,10 +16168,10 @@
             "location": "apps/api/src/handlers/legislation/search-index.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/search.ts#1"
+            "location": "apps/api/src/handlers/legislation/search.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/search.ts#2"
+            "location": "apps/api/src/handlers/legislation/search.ts#3"
           },
           {
             "location": "apps/api/src/handlers/mcp-connectors/connect.ts#2"
@@ -16357,13 +16402,13 @@
             "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-csv.ts#1"
+            "location": "apps/api/src/handlers/time-entries/export-csv.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#1"
+            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#1"
+            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#2"
           },
           {
             "location": "apps/api/src/handlers/time-entries/read-by-id.ts#2"
@@ -16936,6 +16981,9 @@
             "location": "apps/api/src/handlers/billing-codes/update.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#11"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/decisions/list.ts#3"
           },
           {
@@ -16960,19 +17008,19 @@
             "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/case-law/matter-links/create.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/case-law/matter-links/create.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/matter-links/delete.ts#2"
+            "location": "apps/api/src/handlers/case-law/matter-links/create.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/matter-links/delete.ts#3"
           },
           {
             "location": "apps/api/src/handlers/case-law/public-routes.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/routes.ts#2"
+            "location": "apps/api/src/handlers/case-law/routes.ts#1"
           },
           {
             "location": "apps/api/src/handlers/catalogue/install-skill.ts#2"
@@ -17425,19 +17473,19 @@
             "location": "apps/api/src/handlers/legislation/borme-summary.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/legislation/corpus-routes.ts#2"
+            "location": "apps/api/src/handlers/legislation/corpus-routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/read-by-id.ts#2"
+            "location": "apps/api/src/handlers/legislation/read-by-id.ts#3"
           },
           {
             "location": "apps/api/src/handlers/legislation/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/legislation/search.ts#3"
+            "location": "apps/api/src/handlers/legislation/search.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/legislation/search.ts#4"
+            "location": "apps/api/src/handlers/legislation/search.ts#5"
           },
           {
             "location": "apps/api/src/handlers/mcp/routes-core.ts#1"
@@ -17866,28 +17914,28 @@
             "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-csv.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/time-entries/export-csv.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#2"
+            "location": "apps/api/src/handlers/time-entries/export-csv.ts#4"
           },
           {
             "location": "apps/api/src/handlers/time-entries/export-ledes.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#2"
+            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#4"
           },
           {
             "location": "apps/api/src/handlers/time-entries/export-pdf.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/time-entries/read.ts#13"
           },
           {
-            "location": "apps/api/src/handlers/time-entries/routes.ts#2"
+            "location": "apps/api/src/handlers/time-entries/routes.ts#1"
           },
           {
             "location": "apps/api/src/handlers/time-entries/split.ts#3"
@@ -17998,6 +18046,9 @@
             "location": "apps/api/src/handlers/workspaces/read-by-id.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/read-justifications.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/read-workflow-target-count.ts#2"
           },
           {
@@ -18056,6 +18107,9 @@
           },
           {
             "location": "apps/api/src/lib/views-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/capability-tools.ts#5"
           }
         ]
       },
@@ -23055,7 +23109,7 @@
             "location": "apps/web/src/routes/auth/route.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/consent.tsx#5"
+            "location": "apps/web/src/routes/consent.tsx#10"
           },
           {
             "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#17"
@@ -23313,7 +23367,7 @@
             "location": "apps/api/src/env.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#12"
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#11"
@@ -23472,6 +23526,9 @@
             "location": "apps/api/src/mcp/template-tools.ts#3"
           },
           {
+            "location": "apps/api/src/mcp/tool-utils.ts#3"
+          },
+          {
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
           },
           {
@@ -23613,7 +23670,7 @@
             "location": "apps/web/src/routes/auth/otp.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/consent.tsx#6"
+            "location": "apps/web/src/routes/consent.tsx#11"
           },
           {
             "location": "apps/web/src/routes/law/-case-detail.tsx#5"
@@ -23703,7 +23760,7 @@
             "location": "apps/api/src/env.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#12"
           },
           {
             "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#11"
@@ -23862,6 +23919,9 @@
             "location": "apps/api/src/mcp/template-tools.ts#3"
           },
           {
+            "location": "apps/api/src/mcp/tool-utils.ts#3"
+          },
+          {
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
           },
           {
@@ -24003,7 +24063,7 @@
             "location": "apps/web/src/routes/auth/otp.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/consent.tsx#6"
+            "location": "apps/web/src/routes/consent.tsx#11"
           },
           {
             "location": "apps/web/src/routes/law/-case-detail.tsx#5"
