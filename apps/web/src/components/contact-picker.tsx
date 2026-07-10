@@ -2,6 +2,7 @@ import { useState } from "react";
 import type * as React from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
@@ -16,8 +17,7 @@ import {
   ComboboxPopup,
 } from "@stll/ui/components/combobox";
 
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { contactPickerSearchOptions } from "@/components/contact-picker-queries";
 
 type ContactResult = {
   id: string;
@@ -52,22 +52,6 @@ type ContactPickerProps = {
   inputRef?: React.Ref<HTMLInputElement>;
 };
 
-const searchContacts = async (q: string, type?: "person" | "organization") => {
-  if (!q) {
-    return [];
-  }
-
-  const response = await api.contacts.search.get({
-    query: { q, ...(type !== undefined && { type }) },
-  });
-
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data.items;
-};
-
 export const ContactPicker = ({
   onSelect,
   onCreate,
@@ -78,6 +62,10 @@ export const ContactPicker = ({
   inputRef,
 }: ContactPickerProps) => {
   const t = useTranslations();
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
 
@@ -87,8 +75,11 @@ export const ContactPicker = ({
   );
 
   const { data: results = [] } = useQuery({
-    queryKey: ["contacts", "search", debouncedQuery, type],
-    queryFn: async () => await searchContacts(debouncedQuery, type),
+    ...contactPickerSearchOptions({
+      organizationId: activeOrganizationId,
+      q: debouncedQuery,
+      type,
+    }),
     enabled: debouncedQuery.length > 0,
   });
 

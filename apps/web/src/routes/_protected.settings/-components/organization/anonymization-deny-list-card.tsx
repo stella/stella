@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouteContext } from "@tanstack/react-router";
 import { Trash2, UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -257,7 +258,15 @@ export const AnonymizationDenyListCard = () => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const blacklistQuery = useQuery(organizationAnonymizationBlacklistOptions);
+  const activeOrganizationId = useRouteContext({
+    from: "/_protected",
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const blacklistQuery = useQuery(
+    organizationAnonymizationBlacklistOptions({
+      organizationId: activeOrganizationId,
+    }),
+  );
   // Replace the org-wide deny list. Endpoint performs a full
   // upsert: rows missing from the request are deleted, present
   // rows are upserted (keyed on lowercased canonical). Callers
@@ -281,7 +290,9 @@ export const AnonymizationDenyListCard = () => {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
-        queryKey: organizationAnonymizationBlacklistKeys.all,
+        queryKey: organizationAnonymizationBlacklistKeys.byOrganization({
+          organizationId: activeOrganizationId,
+        }),
       });
     },
     onError: (error) => {
@@ -293,11 +304,12 @@ export const AnonymizationDenyListCard = () => {
   const [pendingCanonical, setPendingCanonical] = useState("");
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
 
-  const entries = blacklistQuery.data?.entries ?? [];
+  const entries = blacklistQuery.data?.entries;
+  const renderedEntries = entries ?? [];
 
   const submitTerm = async () => {
     const canonical = pendingCanonical.trim();
-    if (canonical.length === 0) {
+    if (canonical.length === 0 || entries === undefined) {
       return;
     }
     const next = dedupeByCanonical([
@@ -328,6 +340,10 @@ export const AnonymizationDenyListCard = () => {
   };
 
   const removeEntry = (canonical: string) => {
+    if (entries === undefined) {
+      return;
+    }
+
     const next = entries
       .filter((entry) => entry.canonical !== canonical)
       .map((entry) => ({
@@ -351,6 +367,10 @@ export const AnonymizationDenyListCard = () => {
 
   const handleImportFile = async (file: File) => {
     const text = await file.text();
+    if (entries === undefined) {
+      return;
+    }
+
     const parsed = parseImport(text, file.name, pendingLabel);
     if (!parsed || parsed.length === 0) {
       stellaToast.add({
@@ -444,6 +464,7 @@ export const AnonymizationDenyListCard = () => {
               <AddTermSubmitButton
                 disabled={
                   pendingCanonical.trim().length === 0 ||
+                  entries === undefined ||
                   updateMutation.isPending
                 }
                 label={t("common.add")}
@@ -451,6 +472,7 @@ export const AnonymizationDenyListCard = () => {
             </div>
             <div className="flex items-center gap-2">
               <Button
+                disabled={entries === undefined || updateMutation.isPending}
                 onClick={() => fileInputRef.current?.click()}
                 size="sm"
                 type="button"
@@ -482,7 +504,7 @@ export const AnonymizationDenyListCard = () => {
           <div className="flex flex-col gap-1">
             <div className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
               {t("settings.organization.anonymization.entriesHeading", {
-                count: String(entries.length),
+                count: String(renderedEntries.length),
               })}
             </div>
             {blacklistQuery.isLoading && (
@@ -490,12 +512,12 @@ export const AnonymizationDenyListCard = () => {
                 {t("common.loading")}
               </div>
             )}
-            {!blacklistQuery.isLoading && entries.length === 0 && (
+            {!blacklistQuery.isLoading && renderedEntries.length === 0 && (
               <div className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-xs">
                 {t("settings.organization.anonymization.emptyState")}
               </div>
             )}
-            {entries.map((entry) => (
+            {renderedEntries.map((entry) => (
               <div
                 className="hover:bg-muted/50 flex items-center justify-between gap-2 rounded-md border px-3 py-2"
                 key={entry.id}

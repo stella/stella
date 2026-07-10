@@ -7,7 +7,7 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { isUuid, tSafeId } from "@/api/lib/custom-schema";
+import { isUuid, tPaginationLimit, tSafeId } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,
   pgTimestampCursorBoundary,
@@ -17,12 +17,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 
 export const listDecisionsQuerySchema = t.Object({
-  limit: t.Optional(
-    t.Number({
-      minimum: 1,
-      maximum: LIMITS.caseLawSearchPageSizeMax,
-    }),
-  ),
+  limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(t.String()),
   court: t.Optional(t.String({ maxLength: 512 })),
   country: t.Optional(t.String({ maxLength: 3 })),

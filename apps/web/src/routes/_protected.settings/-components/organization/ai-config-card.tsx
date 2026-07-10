@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
@@ -38,14 +38,9 @@ import {
   aiConfigKeys,
   aiConfigOptions,
 } from "@/routes/_protected.organization/-ai-config-queries";
+import type { OrganizationAIConfig } from "@/routes/_protected.organization/-ai-config-queries";
 
 export const AIConfigCard = () => {
-  const t = useTranslations("organization");
-  const tCommon = useTranslations("common");
-  const tSuccess = useTranslations("success");
-  const tErrors = useTranslations("errors");
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -54,12 +49,38 @@ export const AIConfigCard = () => {
     aiConfigOptions({ organizationId: activeOrganizationId }),
   );
 
+  if (!config) {
+    return null;
+  }
+
+  return (
+    <AIConfigForm
+      config={config}
+      key={activeOrganizationId}
+      organizationId={activeOrganizationId}
+    />
+  );
+};
+
+type AIConfigFormProps = {
+  config: OrganizationAIConfig;
+  organizationId: string;
+};
+
+const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
+  const t = useTranslations("organization");
+  const tCommon = useTranslations("common");
+  const tSuccess = useTranslations("success");
+  const tErrors = useTranslations("errors");
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+
   const initialProviders =
-    config?.configured && config.providers.length > 0
+    config.configured && config.providers.length > 0
       ? providerDraftsFromStoredProviders(config.providers)
       : [createProviderCredentialDraft()];
   const initialProviderValues = getProviderValues(initialProviders);
-  const initialRoleModels = config?.configured
+  const initialRoleModels = config.configured
     ? roleModelsFromOverrideModels({
         overrideModels: config.overrideModels,
         providers: initialProviderValues,
@@ -70,30 +91,6 @@ export const AIConfigCard = () => {
     useState<ProviderCredentialDraft[]>(initialProviders);
   const [roleModels, setRoleModels] =
     useState<RoleModelSelections>(initialRoleModels);
-
-  // Seed editable form state once the config query resolves
-  // (useState initializers only run once). Intentionally depends
-  // only on `configured`, not full `config`, so a refetch does not
-  // overwrite in-flight user edits. Not pure derived state:
-  // setProviders/setRoleModels are also driven by the editor and the
-  // save/delete mutations, so it cannot be computed in render. Keep.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- seed-form-from-async-config that must not clobber user edits; setters used elsewhere. Keep.
-  useEffect(() => {
-    if (!config?.configured) {
-      return;
-    }
-    const nextProviders = providerDraftsFromStoredProviders(config.providers);
-    const providerValues = getProviderValues(nextProviders);
-    // eslint-disable-next-line react/react-compiler -- seeds editable form state from the async config query without clobbering in-flight user edits; setters are also driven by the editor and save/delete mutations, so this is not pure derived state
-    setProviders(nextProviders);
-    setRoleModels(
-      roleModelsFromOverrideModels({
-        overrideModels: config.overrideModels,
-        providers: providerValues,
-      }),
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally depends only on `configured` (see comment above); the full `config` identity would overwrite user edits on every refetch.
-  }, [config?.configured]);
 
   const updateProviders = (nextProviders: ProviderCredentialDraft[]) => {
     const providerValues = getProviderValues(nextProviders);
@@ -137,25 +134,25 @@ export const AIConfigCard = () => {
       return response.data;
     },
     onSuccess: async (data) => {
-      setProviders(providerDraftsFromStoredProviders(data.providers));
-      queryClient.setQueryData(
-        aiConfigKeys.availability({ organizationId: activeOrganizationId }),
-        {
-          available: true,
-          instanceProvisioned: config?.instanceProvisioned ?? false,
-          orgConfigured: true,
-        },
+      const nextProviders = providerDraftsFromStoredProviders(data.providers);
+      setProviders(nextProviders);
+      setRoleModels(
+        roleModelsFromOverrideModels({
+          overrideModels: data.overrideModels,
+          providers: getProviderValues(nextProviders),
+        }),
       );
+      queryClient.setQueryData(aiConfigKeys.availability({ organizationId }), {
+        available: true,
+        instanceProvisioned: config.instanceProvisioned,
+        orgConfigured: true,
+      });
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.byOrganization({
-            organizationId: activeOrganizationId,
-          }),
+          queryKey: aiConfigKeys.byOrganization({ organizationId }),
         }),
         queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.availability({
-            organizationId: activeOrganizationId,
-          }),
+          queryKey: aiConfigKeys.availability({ organizationId }),
         }),
       ]);
       stellaToast.add({
@@ -185,24 +182,17 @@ export const AIConfigCard = () => {
       const nextProviders = [createProviderCredentialDraft()];
       setProviders(nextProviders);
       setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
-      queryClient.setQueryData(
-        aiConfigKeys.availability({ organizationId: activeOrganizationId }),
-        {
-          available: config?.instanceProvisioned ?? false,
-          instanceProvisioned: config?.instanceProvisioned ?? false,
-          orgConfigured: false,
-        },
-      );
+      queryClient.setQueryData(aiConfigKeys.availability({ organizationId }), {
+        available: config.instanceProvisioned,
+        instanceProvisioned: config.instanceProvisioned,
+        orgConfigured: false,
+      });
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.byOrganization({
-            organizationId: activeOrganizationId,
-          }),
+          queryKey: aiConfigKeys.byOrganization({ organizationId }),
         }),
         queryClient.invalidateQueries({
-          queryKey: aiConfigKeys.availability({
-            organizationId: activeOrganizationId,
-          }),
+          queryKey: aiConfigKeys.availability({ organizationId }),
         }),
       ]);
       stellaToast.add({
@@ -227,7 +217,7 @@ export const AIConfigCard = () => {
 
   return (
     <div className="flex flex-col gap-4">
-      {config?.configured && (
+      {config.configured && (
         <div className="flex items-center justify-between gap-2">
           <div className="bg-muted flex flex-wrap items-center gap-2 rounded border px-3 py-2">
             <span className="text-muted-foreground text-xs">
@@ -294,7 +284,7 @@ export const AIConfigCard = () => {
         onClick={() => saveMutation.mutate()}
         size="sm"
       >
-        {config?.configured ? tCommon("saveChanges") : t("aiConfig.configure")}
+        {config.configured ? tCommon("saveChanges") : t("aiConfig.configure")}
       </Button>
     </div>
   );

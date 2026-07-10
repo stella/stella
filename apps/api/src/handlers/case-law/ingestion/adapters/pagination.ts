@@ -110,25 +110,48 @@ type PagePaginationOptions<TResponse> = {
 /** Max retries for transient 5xx / timeout errors before skipping. */
 const SERVER_ERROR_RETRIES = 2;
 const OFFSET_CURSOR_PREFIX = "offset:";
+const CANONICAL_NON_NEGATIVE_INTEGER_PATTERN = /^(?:0|[1-9]\d*)$/u;
 
-const encodeOffsetCursor = (offset: number): string =>
+export const encodeOffsetCursor = (offset: number): string =>
   `${OFFSET_CURSOR_PREFIX}${offset}`;
 
-const parseOffsetCursor = (
-  cursor: string | null,
-  firstPage: number,
-  legacyPageSize: number,
-): number => {
-  if (!cursor) {
+const parseCanonicalNonNegativeSafeInteger = (value: string): number | null => {
+  if (!CANONICAL_NON_NEGATIVE_INTEGER_PATTERN.test(value)) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+};
+
+type DecodeOffsetCursorParams = {
+  cursor: string | null;
+  firstPage: number;
+  legacyPageSize: number;
+};
+
+export const decodeOffsetCursor = ({
+  cursor,
+  firstPage,
+  legacyPageSize,
+}: DecodeOffsetCursorParams): number | null => {
+  if (cursor === null) {
     return 0;
   }
 
   if (cursor.startsWith(OFFSET_CURSOR_PREFIX)) {
-    return Number.parseInt(cursor.slice(OFFSET_CURSOR_PREFIX.length), 10);
+    return parseCanonicalNonNegativeSafeInteger(
+      cursor.slice(OFFSET_CURSOR_PREFIX.length),
+    );
   }
 
-  const legacyPage = Number.parseInt(cursor, 10);
-  return (legacyPage - firstPage) * legacyPageSize;
+  const legacyPage = parseCanonicalNonNegativeSafeInteger(cursor);
+  if (legacyPage === null) {
+    return null;
+  }
+
+  const offset = (legacyPage - firstPage) * legacyPageSize;
+  return Number.isSafeInteger(offset) && offset >= 0 ? offset : null;
 };
 
 export const createPagePaginatedFetch = <TResponse>(
@@ -143,13 +166,13 @@ export const createPagePaginatedFetch = <TResponse>(
   ): Promise<Result<SyncPage, AdapterFetchError>> =>
     await Result.tryPromise({
       try: async () => {
-        const offset = parseOffsetCursor(
+        const offset = decodeOffsetCursor({
           cursor,
           firstPage,
-          opts.legacyPageSize ?? opts.pageSize,
-        );
+          legacyPageSize: opts.legacyPageSize ?? opts.pageSize,
+        });
 
-        if (Number.isNaN(offset) || offset < 0) {
+        if (offset === null) {
           throw new AdapterFetchError({
             message: `${opts.adapterKey}: invalid cursor`,
             adapterKey: opts.adapterKey,

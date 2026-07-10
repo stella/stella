@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import type {
   EmptyAst,
@@ -6,7 +9,11 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
-import { createPagePaginatedFetch } from "./pagination";
+import {
+  createPagePaginatedFetch,
+  decodeOffsetCursor,
+  encodeOffsetCursor,
+} from "./pagination";
 import { mockFetchWithFixtures, saveFixture } from "./test-utils";
 
 const FIXTURE_NAME = "pagination-test.json";
@@ -186,8 +193,20 @@ describe("createPagePaginatedFetch", () => {
 
   test("returns error for invalid cursor", async () => {
     const fetchPage = createTestFetch();
-    const result = await fetchPage("not-a-number", {});
-    expect(result.isErr()).toBe(true);
+    for (const cursor of [
+      "not-a-number",
+      "offset:12garbage",
+      "3garbage",
+      "offset:1.9",
+      "offset: 1",
+      "offset:+1",
+      "offset:01",
+      "offset:9007199254740992",
+    ]) {
+      // oxlint-disable-next-line no-await-in-loop -- every malformed persisted cursor must be rejected independently
+      const result = await fetchPage(cursor, {});
+      expect(result.isErr()).toBe(true);
+    }
   });
 
   test("supports zero-indexed pages", async () => {
@@ -333,5 +352,44 @@ describe("createPagePaginatedFetch", () => {
     expect(page.decisions[0]?.caseNumber).toBe("CASE-1");
     expect(page.decisions.at(-1)?.caseNumber).toBe("CASE-3");
     expect(page.nextCursor).toBe("offset:3");
+  });
+});
+
+describe("offset cursor codec", () => {
+  test("INVARIANT: every encoded safe offset decodes exactly", () => {
+    fc.assert(
+      fc.property(
+        fc.maxSafeInteger().filter((offset) => offset >= 0),
+        (offset) => {
+          expect(
+            decodeOffsetCursor({
+              cursor: encodeOffsetCursor(offset),
+              firstPage: 1,
+              legacyPageSize: 20,
+            }),
+          ).toBe(offset);
+        },
+      ),
+      propertyConfig({ numRuns: 500 }),
+    );
+  });
+
+  test("INVARIANT: suffixing a canonical cursor with non-digits is rejected", () => {
+    fc.assert(
+      fc.property(
+        fc.maxSafeInteger().filter((offset) => offset >= 0),
+        fc.constantFrom("a", ".0", " ", "+", "-", "_"),
+        (offset, suffix) => {
+          expect(
+            decodeOffsetCursor({
+              cursor: `${encodeOffsetCursor(offset)}${suffix}`,
+              firstPage: 1,
+              legacyPageSize: 20,
+            }),
+          ).toBeNull();
+        },
+      ),
+      propertyConfig({ numRuns: 500 }),
+    );
   });
 });
