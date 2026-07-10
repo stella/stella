@@ -575,32 +575,59 @@ const describeCapabilityHandler = async ({
 
 type InvokeInput = { body: unknown; params: unknown; query: unknown };
 
-const readInvokeInput = (
-  raw: unknown,
-): { ok: true; value: InvokeInput } | { ok: false; result: CallToolResult } => {
-  if (raw === undefined) {
-    return {
-      ok: true,
-      value: { body: undefined, params: undefined, query: undefined },
-    };
+const INVOKE_BOOLEAN_ARGS = ["validateOnly", "confirm"] as const;
+const INVOKE_INPUT_PARTS = ["body", "params", "query"] as const;
+
+/**
+ * Strict shape check for invoke_capability's OWN arguments. The MCP transport
+ * does not enforce the advertised JSON Schema on tool args, so a hand-built
+ * request can mistype a flag — and `validateOnly: "true"` silently read as
+ * `false` would EXECUTE a capability the caller intended as a dry run
+ * (fail-open into execution). Every mistyped argument is therefore refused
+ * with a named issue: booleans must be JSON booleans, `input` and its
+ * body/params/query parts must be objects. Never coerce, never ignore.
+ */
+const invokeArgIssues = (
+  args: Record<string, unknown>,
+): McpValidationIssue[] => {
+  const issues: McpValidationIssue[] = [];
+  for (const key of INVOKE_BOOLEAN_ARGS) {
+    const value = args[key];
+    if (value !== undefined && typeof value !== "boolean") {
+      issues.push({
+        path: key,
+        message: `Expected a JSON boolean, got ${typeof value}`,
+      });
+    }
   }
+  const input = args["input"];
+  if (input !== undefined) {
+    if (isRecord(input)) {
+      for (const part of INVOKE_INPUT_PARTS) {
+        const value = input[part];
+        if (value !== undefined && !isRecord(value)) {
+          issues.push({
+            path: `input.${part}`,
+            message: `Expected an object, got ${typeof value}`,
+          });
+        }
+      }
+    } else {
+      issues.push({ path: "input", message: "Expected an object" });
+    }
+  }
+  return issues;
+};
+
+/** Split the (already shape-validated) `input` arg into its three parts. */
+const readInvokeInput = (raw: unknown): InvokeInput => {
   if (!isRecord(raw)) {
-    return {
-      ok: false,
-      result: structuredErrorResult({
-        code: "validation_error",
-        message: "Parameter input must be an object",
-        issues: [{ path: "input", message: "Expected an object" }],
-      }),
-    };
+    return { body: undefined, params: undefined, query: undefined };
   }
   return {
-    ok: true,
-    value: {
-      body: raw["body"],
-      params: raw["params"],
-      query: raw["query"],
-    },
+    body: raw["body"],
+    params: raw["params"],
+    query: raw["query"],
   };
 };
 
@@ -674,6 +701,21 @@ const invokeCapabilityHandler = async ({
   if (typeof id !== "string") {
     return id;
   }
+
+  // 0. The meta-tool's own argument shapes, before ANY gate: the transport
+  // does not enforce the advertised JSON Schema, and a mistyped flag must
+  // never be silently read as false (`validateOnly: "true"` would otherwise
+  // fail open into executing a request that intended a dry run).
+  const argIssues = invokeArgIssues(args);
+  if (argIssues.length > 0) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "invoke_capability arguments failed validation",
+      issues: argIssues,
+      hint: "Fix the argument types named in issues[]: boolean flags must be JSON booleans (not strings), input and its body/params/query must be objects.",
+    });
+  }
+
   const entry = CATALOG_BY_ID.get(id);
 
   // 1. Unknown id -> not_found with a closest-id hint.
@@ -746,10 +788,9 @@ const invokeCapabilityHandler = async ({
     });
   }
 
-  const parsedInput = readInvokeInput(args["input"]);
-  if (!parsedInput.ok) {
-    return parsedInput.result;
-  }
+  // Shapes were strictly validated up front (gate 0), so these reads are safe:
+  // validateOnly/confirm are real booleans (or absent), input parts are objects.
+  const input = readInvokeInput(args["input"]);
   const validateOnly = args["validateOnly"] === true;
 
   try {
@@ -757,7 +798,7 @@ const invokeCapabilityHandler = async ({
       context,
       entry,
       id,
-      input: parsedInput.value,
+      input,
       validateOnly,
     });
   } catch (error) {

@@ -830,6 +830,79 @@ const mappedError = (
   return asTestRaw<{ error: ErrorEnvelope }>(JSON.parse(item.text)).error;
 };
 
+// --- meta-tool argument shape validation (fail-closed dry runs) ---------------
+
+describe("invoke_capability argument shape validation", () => {
+  test('validateOnly: "true" (string) -> validation_error, capability NOT executed', async () => {
+    // The transport does not enforce the advertised JSON Schema; a mistyped
+    // dry-run flag silently read as false would EXECUTE the capability.
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "clauses.categories-create",
+        input: { body: { name: "Dry run intended" } },
+        validateOnly: "true",
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string }[]>(error.issues);
+    expect(issues.some((i) => i.path === "validateOnly")).toBe(true);
+    // Refused before any dispatch: the org-settings loader never ran.
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test('confirm: "yes" (string) -> validation_error, not confirmation_required', async () => {
+    const result = await handleMcpToolCall({
+      args: { capability: "clauses.categories-delete", confirm: "yes" },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string }[]>(error.issues);
+    expect(issues.some((i) => i.path === "confirm")).toBe(true);
+  });
+
+  test("non-object input -> validation_error", async () => {
+    const result = await handleMcpToolCall({
+      args: { capability: "clauses.categories-create", input: "not-an-object" },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string }[]>(error.issues);
+    expect(issues.some((i) => i.path === "input")).toBe(true);
+  });
+
+  test("non-object input parts -> validation_error naming each part", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "clauses.categories-create",
+        input: { body: "text body", params: 7 },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    const issues = asTestRaw<{ path: string }[]>(error.issues);
+    expect(issues.some((i) => i.path === "input.body")).toBe(true);
+    expect(issues.some((i) => i.path === "input.params")).toBe(true);
+  });
+
+  test("sibling meta-tools already reject mistyped args (no coercion)", async () => {
+    // list_capabilities limit must be a JSON integer, not a numeric string.
+    const list = await call("list_capabilities", { limit: "5" });
+    expect(errorEnvelope(list).code).toBe("validation_error");
+    // describe_capability's capability must be a string.
+    const described = await call("describe_capability", { capability: 42 });
+    expect(errorEnvelope(described).code).toBe("validation_error");
+  });
+});
+
 // --- Elysia-boundary input normalization (Value.Clean parity) ----------------
 
 describe("invoke_capability input normalization", () => {
