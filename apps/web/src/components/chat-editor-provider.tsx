@@ -191,9 +191,15 @@ export type ChatEditorController = {
   ) => Promise<void>;
 };
 
+// The stable manager API: every field is a `useCallback`, so the whole value
+// keeps one identity for the provider's lifetime. `extensionVersion` — the one
+// value that changes as registrations come and go — deliberately lives in a
+// SEPARATE context (`ChatEditorExtensionVersionContext`) rather than here.
+// Folding it in would rebuild this value on every register/unregister and
+// re-render every consumer of the API (including the mention-registration
+// hooks, whose effects would then re-register and bump the version again — an
+// update loop that trips React's max-update-depth guard under load).
 type ChatEditorManagerContextValue = {
-  activeThreadKey: string | null;
-  extensionVersion: number;
   focusThread: (threadRef: ChatThreadRef) => void;
   getMentionItems: () => Promise<ChatMentionOption[]>;
   getPluginRegistrations: () => ChatInputPluginRegistration[];
@@ -211,6 +217,12 @@ type ChatEditorManagerContextValue = {
 
 const ChatEditorManagerContext =
   createContext<ChatEditorManagerContextValue | null>(null);
+
+// Carries only the registration version counter. Bumped on every
+// register/unregister and consumed solely by the editor's plugin-sync effect
+// (via `useChatEditorExtensionVersion`), so a bump re-renders that one
+// subscriber instead of every holder of the manager API.
+const ChatEditorExtensionVersionContext = createContext<number>(0);
 
 const isSuggestionPluginState = (
   value: unknown,
@@ -242,7 +254,6 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const registrationsRef = useRef(new Map<string, RegisteredExtension>());
   const activeEditorRef = useRef<ActiveChatEditorHandle | null>(null);
   const [extensionVersion, setExtensionVersion] = useState(0);
-  const [activeThreadKey, setActiveThreadKey] = useState<string | null>(null);
 
   const getMentionItems = useCallback(async () => {
     const items: ChatMentionOption[] = [];
@@ -335,7 +346,6 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
 
   const registerActiveEditor = useCallback((handle: ActiveChatEditorHandle) => {
     activeEditorRef.current = handle;
-    setActiveThreadKey(handle.threadKey);
 
     return () => {
       if (activeEditorRef.current?.threadKey !== handle.threadKey) {
@@ -343,9 +353,6 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       }
 
       activeEditorRef.current = null;
-      setActiveThreadKey((current) =>
-        current === handle.threadKey ? null : current,
-      );
     };
   }, []);
 
@@ -377,8 +384,6 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
 
   const contextValue = useMemo<ChatEditorManagerContextValue>(
     () => ({
-      activeThreadKey,
-      extensionVersion,
       focusThread,
       getMentionItems,
       getPluginRegistrations,
@@ -388,8 +393,6 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       searchMentionItems,
     }),
     [
-      activeThreadKey,
-      extensionVersion,
       focusThread,
       getMentionItems,
       getPluginRegistrations,
@@ -402,7 +405,9 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
 
   return (
     <ChatEditorManagerContext value={contextValue}>
-      {children}
+      <ChatEditorExtensionVersionContext value={extensionVersion}>
+        {children}
+      </ChatEditorExtensionVersionContext>
     </ChatEditorManagerContext>
   );
 };
@@ -428,6 +433,12 @@ export const useChatEditorManager = () => {
 
   return context;
 };
+
+// Subscribes only to the registration version, so the editor's plugin-sync
+// effect re-runs when extensions change without dragging the whole manager API
+// into the volatile-value subscription (see `ChatEditorExtensionVersionContext`).
+const useChatEditorExtensionVersion = () =>
+  use(ChatEditorExtensionVersionContext);
 
 type UseChatComposerWiringOptions = {
   controller: ChatEditorController;
@@ -559,12 +570,12 @@ export const useChatEditor = ({
   sentMessageHistoryHtmlRef.current = sentMessageHistoryHtml ?? [];
   const threadKey = getChatThreadKey(threadRef);
   const {
-    extensionVersion,
     getMentionItems,
     getPluginRegistrations,
     registerActiveEditor,
     searchMentionItems,
   } = useChatEditorManager();
+  const extensionVersion = useChatEditorExtensionVersion();
   const draft = useChatDraftStore(
     (state) => state.draftsByThreadKey[threadKey] ?? null,
   );

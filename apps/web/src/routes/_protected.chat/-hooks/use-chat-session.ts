@@ -33,7 +33,7 @@ import {
   isApprovalToolName,
   isExternalMcpToolName,
   isToolApprovalGrant,
-  sanitizeHydratedRunningToolCalls,
+  sanitizeRunningToolCalls,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -273,7 +273,7 @@ export const useChatSession = ({
     // the live turn — so rewriting their dead running tool-call parts is
     // unconditionally safe. `current` is NOT sanitized: its tail may be a
     // live streaming turn.
-    const prepend = sanitizeHydratedRunningToolCalls(older.messages).filter(
+    const prepend = sanitizeRunningToolCalls(older.messages).filter(
       (message) => !existingIds.has(message.id),
     );
     if (prepend.length > 0) {

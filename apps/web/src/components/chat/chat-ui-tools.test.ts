@@ -13,7 +13,7 @@ import {
   isPublicOfficialChatToolName,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
-  sanitizeHydratedRunningToolCalls,
+  sanitizeRunningToolCalls,
   selectUnresolvedFolioAgentDocToolCallParts,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
@@ -673,7 +673,7 @@ describe("isChatTurnInFlight", () => {
   });
 });
 
-describe("sanitizeHydratedRunningToolCalls", () => {
+describe("sanitizeRunningToolCalls", () => {
   const runningToolPart = {
     arguments: JSON.stringify({ query: "consumer credit" }),
     id: "tool-call-1",
@@ -688,7 +688,7 @@ describe("sanitizeHydratedRunningToolCalls", () => {
       { id: "message-1", parts: [runningToolPart], role: "assistant" },
     ];
 
-    const sanitized = sanitizeHydratedRunningToolCalls(messages);
+    const sanitized = sanitizeRunningToolCalls(messages);
     const part = sanitized[0]?.parts[0];
     if (part?.type !== "tool-call") {
       throw new Error("Expected a tool-call part");
@@ -711,7 +711,7 @@ describe("sanitizeHydratedRunningToolCalls", () => {
       },
     ];
 
-    const sanitized = sanitizeHydratedRunningToolCalls(messages);
+    const sanitized = sanitizeRunningToolCalls(messages);
     const part = sanitized[0]?.parts[0];
     if (part?.type !== "tool-call") {
       throw new Error("Expected a tool-call part");
@@ -741,7 +741,7 @@ describe("sanitizeHydratedRunningToolCalls", () => {
     ];
 
     // Long-lived by design: the message keeps its reference (no change).
-    expect(sanitizeHydratedRunningToolCalls(messages)[0]).toBe(messages[0]);
+    expect(sanitizeRunningToolCalls(messages)[0]).toBe(messages[0]);
   });
 
   test("leaves an approval-requested tool call untouched", () => {
@@ -763,7 +763,7 @@ describe("sanitizeHydratedRunningToolCalls", () => {
       },
     ];
 
-    expect(sanitizeHydratedRunningToolCalls(messages)[0]).toBe(messages[0]);
+    expect(sanitizeRunningToolCalls(messages)[0]).toBe(messages[0]);
   });
 
   test("leaves a completed tool call untouched", () => {
@@ -785,11 +785,11 @@ describe("sanitizeHydratedRunningToolCalls", () => {
       },
     ];
 
-    expect(sanitizeHydratedRunningToolCalls(messages)[0]).toBe(messages[0]);
+    expect(sanitizeRunningToolCalls(messages)[0]).toBe(messages[0]);
   });
 
   test("is a no-op for an empty thread or a user-last transcript", () => {
-    expect(sanitizeHydratedRunningToolCalls([])).toEqual([]);
+    expect(sanitizeRunningToolCalls([])).toEqual([]);
 
     const messages: PersistedChatMessage[] = [
       {
@@ -804,7 +804,7 @@ describe("sanitizeHydratedRunningToolCalls", () => {
       },
     ];
 
-    const sanitized = sanitizeHydratedRunningToolCalls(messages);
+    const sanitized = sanitizeRunningToolCalls(messages);
     // Nothing running anywhere: every message keeps its reference.
     expect(sanitized[0]).toBe(messages[0]);
     expect(sanitized[1]).toBe(messages[1]);
