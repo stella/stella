@@ -124,7 +124,7 @@ const createPropertiesBatch = createSafeHandler(
           const { content, tool, dependencies, role } = built;
           const initialStatus = tool.type === "ai-model" ? "stale" : "fresh";
 
-          // oxlint-disable-next-line no-await-in-loop -- sequential property inserts in one transaction; each row's id feeds its dependency rows and audit event
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential property inserts in one transaction; each row's id feeds its dependency rows and audit event
           const [inserted] = await tx
             .insert(properties)
             .values({
@@ -146,7 +146,7 @@ const createPropertiesBatch = createSafeHandler(
           }
 
           if (dependencies.length > 0) {
-            // oxlint-disable-next-line no-await-in-loop -- dependency rows reference the property id just inserted above in this iteration
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- dependency rows reference the property id just inserted above in this iteration
             await tx.insert(propertyDependencies).values(
               dependencies.map(({ dependsOnPropertyId, condition }) => ({
                 workspaceId,

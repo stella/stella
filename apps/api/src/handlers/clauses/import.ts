@@ -168,7 +168,7 @@ const importHandler = async function* ({
           categoryId = await findOrCreateCategory(tx, item.categoryName);
         }
 
-        // oxlint-disable-next-line no-await-in-loop -- sequential clause inserts in one transaction preserve insertion order
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential clause inserts in one transaction preserve insertion order
         await tx.insert(clauses).values({
           id: clauseId,
           organizationId,
@@ -183,7 +183,7 @@ const importHandler = async function* ({
           createdBy: userId,
         });
 
-        // oxlint-disable-next-line no-await-in-loop -- sequential version inserts in one transaction preserve insertion order
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential version inserts in one transaction preserve insertion order
         await tx.insert(clauseVersions).values({
           id: versionId,
           organizationId,
@@ -205,7 +205,7 @@ const importHandler = async function* ({
           );
         }
         for (const [variantIndex, variant] of variants.entries()) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential variant inserts in one transaction preserve sortOrder/insertion order
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential variant inserts in one transaction preserve sortOrder/insertion order
           await tx.insert(clauseVariants).values({
             id: createSafeId<"clauseVariant">(),
             organizationId,

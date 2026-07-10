@@ -416,7 +416,7 @@ export const backfillLegislationCorpusIndex = async (
         // when the row was already pending) and bumps updatedAt, and an
         // unconditional write would mask that refresh so the stale index
         // document would never be retried.
-        // oxlint-disable-next-line no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
         const marked = await tx
           .update(legislationDocuments)
           .set({

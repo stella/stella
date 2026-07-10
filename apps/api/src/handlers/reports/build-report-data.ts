@@ -566,7 +566,7 @@ export const buildReportData = async ({
               index,
               index + JUSTIFICATION_FIELD_ID_BATCH,
             );
-            // oxlint-disable-next-line no-await-in-loop -- sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
             const batchRows = await tx.query.justifications.findMany({
               where: {
                 workspaceId: { eq: workspaceId },

@@ -306,7 +306,7 @@ export const resolveTemplateProperties = async ({
   }
 
   for (const templateProperty of templatePropertiesToCreate) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential inserts preserve column order and feed the source-id mapping
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential inserts preserve column order and feed the source-id mapping
     const [inserted] = await tx
       .insert(properties)
       .values({
