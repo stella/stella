@@ -156,6 +156,9 @@ function ChatIndex() {
         webSearchAvailable: response.data.webSearchAvailable,
         webSearchEnabled: response.data.webSearchEnabled,
         model: response.data.model,
+        // The draft's cache-stable context floor (system prompt + tools), so
+        // the hero meter shows the honest baseline instead of 0% before send.
+        context: response.data.context,
       };
     },
   });
@@ -376,9 +379,10 @@ function ChatIndex() {
                     webSearchAvailable:
                       chatDraftMeta?.webSearchAvailable ?? false,
                     webSearchEnabled: chatDraftMeta?.webSearchEnabled ?? false,
-                    // No thread yet, so no context estimate: the meter
-                    // stays hidden until the first send creates the row.
-                    context: null,
+                    // The draft carries the same cache-stable floor its first
+                    // send will pay, so the meter shows the honest baseline
+                    // (~system prompt + tools) rather than 0% until send.
+                    context: chatDraftMeta?.context ?? null,
                   }}
                   leadingContext={
                     <ChatMatterPicker
