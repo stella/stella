@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { addDays, isIsoDateString, parseIsoDateLocal } from "./dates";
+import {
+  addDays,
+  addUtcDays,
+  isIsoDateString,
+  parseIsoDateLocal,
+} from "./dates";
 
 // Date's local-time methods read `process.env.TZ` on every call in Bun (and
 // Node), so flipping it around a test reproduces the exact footgun in a
@@ -116,5 +121,15 @@ describe("addDays", () => {
     expect(prev.getFullYear()).toBe(2023);
     expect(prev.getMonth()).toBe(11);
     expect(prev.getDate()).toBe(31);
+  });
+});
+
+describe("addUtcDays", () => {
+  test("preserves the UTC time while crossing a month boundary", () => {
+    const start = new Date("2026-03-31T23:30:00.000Z");
+
+    expect(addUtcDays(start, -30).toISOString()).toBe(
+      "2026-03-01T23:30:00.000Z",
+    );
   });
 });
