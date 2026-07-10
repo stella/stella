@@ -109,9 +109,13 @@ export const createRenderStormMonitor = (
   // reporting it immediately.
   let lastErrorEmittedAt = Number.NEGATIVE_INFINITY;
 
-  const closeWindow = (now: number) => {
+  const closeWindow = (now: number, startedAt: number) => {
+    const elapsedMs = now - startedAt;
+    const commitsPerSecond = Math.round(
+      (commitsInWindow / elapsedMs) * RENDER_STORM_WINDOW_MS,
+    );
     const result = evaluateStormWindow(
-      commitsInWindow,
+      commitsPerSecond,
       RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND,
       consecutiveStormWindows,
     );
@@ -122,7 +126,7 @@ export const createRenderStormMonitor = (
     if (result.isStorm && canEmit) {
       lastErrorEmittedAt = now;
       emitStorm({
-        commitsPerSecond: commitsInWindow,
+        commitsPerSecond,
         phaseCounts: phaseCountsInWindow,
       });
     }
@@ -143,7 +147,7 @@ export const createRenderStormMonitor = (
     if (windowStart === undefined) {
       windowStart = commitTime;
     } else if (commitTime - windowStart >= RENDER_STORM_WINDOW_MS) {
-      closeWindow(commitTime);
+      closeWindow(commitTime, windowStart);
     }
 
     commitsInWindow += 1;

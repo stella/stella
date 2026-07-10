@@ -84,7 +84,7 @@ describe("createRenderStormMonitor", () => {
       time = (window + 1) * RENDER_STORM_WINDOW_MS;
     }
     // One more commit far enough ahead to force the last window closed.
-    monitor.onRender("app", PHASE, 1, 1, time, time + RENDER_STORM_WINDOW_MS);
+    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
 
     expect(emitted.length).toBeGreaterThanOrEqual(1);
     expect(emitted[0]?.commitsPerSecond).toBeGreaterThan(
@@ -108,7 +108,7 @@ describe("createRenderStormMonitor", () => {
       }
       time = (window + 1) * RENDER_STORM_WINDOW_MS;
     }
-    monitor.onRender("app", PHASE, 1, 1, time, time + RENDER_STORM_WINDOW_MS);
+    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
 
     // 10 windows spanning ~10s at the rate limit boundary should emit far
     // fewer than once per window.
@@ -131,9 +131,39 @@ describe("createRenderStormMonitor", () => {
       }
       time = (window + 1) * RENDER_STORM_WINDOW_MS;
     }
-    monitor.onRender("app", PHASE, 1, 1, time, time + RENDER_STORM_WINDOW_MS);
+    monitor.onRender("app", PHASE, 1, 1, time, time + 1);
 
     expect(emitted.length).toBeGreaterThanOrEqual(1);
     expect(emitted[0]?.phaseCounts["nested-update"]).toBeGreaterThan(0);
+  });
+
+  it("does not treat bursts separated by idle time as sustained throughput", () => {
+    const emitted: unknown[] = [];
+    const monitor = createRenderStormMonitor((details) => {
+      emitted.push(details);
+    });
+
+    const commitsPerBurst = RENDER_STORM_THRESHOLD_COMMITS_PER_SECOND + 20;
+    for (let commit = 0; commit < commitsPerBurst; commit += 1) {
+      monitor.onRender("app", PHASE, 1, 1, commit, commit);
+    }
+
+    const afterFirstIdle = 30_000;
+    monitor.onRender("app", PHASE, 1, 1, afterFirstIdle, afterFirstIdle);
+    for (let commit = 1; commit < commitsPerBurst; commit += 1) {
+      monitor.onRender(
+        "app",
+        PHASE,
+        1,
+        1,
+        afterFirstIdle + commit,
+        afterFirstIdle + commit,
+      );
+    }
+
+    const afterSecondIdle = 60_000;
+    monitor.onRender("app", PHASE, 1, 1, afterSecondIdle, afterSecondIdle);
+
+    expect(emitted).toEqual([]);
   });
 });
