@@ -2,13 +2,14 @@
 //
 // Each `oxlint-disable-next-line` below intentionally suppresses a case the
 // rule MUST flag (a DB call awaited inside a loop body, or a fan-out via
-// `Promise.all(items.map(...))`). If the rule regresses, the matching
-// disable goes unused and `--report-unused-disable-directives-severity=error`
-// fails CI. The cases WITHOUT a `no-db-await-in-loop` disable must NOT be
-// flagged by it; a false positive there fails the same run. (Some flagged
-// cases also carry an unrelated `no-await-in-loop` disable — the generic
-// built-in rule already fires on any await-in-loop; that is expected and
-// out of scope here.)
+// `Promise.all(items.map(...))` / `Promise.allSettled(items.map(...))`,
+// inline or via a named callback resolved to its local definition, awaited
+// or not). If the rule regresses, the matching disable goes unused and
+// `--report-unused-disable-directives-severity=error` fails CI. The cases
+// WITHOUT a `no-db-await-in-loop` disable must NOT be flagged by it; a false
+// positive there fails the same run. (Some flagged cases also carry an
+// unrelated `no-await-in-loop` disable — the generic built-in rule already
+// fires on any await-in-loop; that is expected and out of scope here.)
 
 declare const db: {
   select: (columns?: unknown) => {
@@ -28,6 +29,7 @@ declare const itemsTable: unknown;
 declare const idColumn: unknown;
 declare const inArray: (col: unknown, values: unknown[]) => unknown;
 declare function doInMemoryWork(item: unknown): void;
+declare function doInMemoryWorkAsync(item: unknown): Promise<void>;
 
 // --- Cases the rule MUST flag ---
 
@@ -58,6 +60,38 @@ export const promiseAllMapFanOut = async () => {
   await Promise.all(
     items.map(async (item) => {
       // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise the rule
+      await tx.select().from(itemsTable).where(item.id);
+    }),
+  );
+};
+
+// A `.map()` callback passed by name (not inline) still fans out one DB
+// call per item; the rule resolves `indexRow` to its local `const`
+// definition in the same lexical scope. The flag lands on the outer
+// `Promise.all(...)` await, not the inner one inside `indexRow` -- the
+// inner await is never itself lexically inside a loop or an inline
+// `.map()` callback, so it is not independently flagged.
+export const promiseAllMapNamedCallback = async () => {
+  const indexRow = async (item: { id: string }): Promise<number> => {
+    await tx.insert(itemsTable).values(item);
+    return 1;
+  };
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: named callback resolved to its local definition to exercise the rule
+  await Promise.all(items.map(indexRow));
+};
+
+// A `.map()` callback that returns a DB call without `await`ing it still
+// issues one query per item once `Promise.all` awaits the whole array.
+export const promiseAllMapAwaitlessFanOut = async () => {
+  // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, typescript/promise-function-async -- fixture: bare (non-awaited) DB call returned from the `.map()` callback to exercise the rule; `async` would only trip require-await since there is nothing to await
+  await Promise.all(items.map((item) => tx.insert(itemsTable).values(item)));
+};
+
+// `Promise.allSettled` fans out exactly like `Promise.all`.
+export const promiseAllSettledMapFanOut = async () => {
+  await Promise.allSettled(
+    items.map(async (item) => {
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop -- fixture: intentionally unbatched to exercise Promise.allSettled detection
       await tx.select().from(itemsTable).where(item.id);
     }),
   );
@@ -112,4 +146,35 @@ export const makeFetcherPerIteration = () => {
     };
     void fetcher;
   }
+};
+
+// A named `.map()` callback resolved to its local definition, but that
+// definition has no DB call inside it at all -- in-memory work only.
+export const promiseAllMapNamedCallbackNoDbCall = async () => {
+  const summarize = async (item: { id: string }): Promise<string> => {
+    await doInMemoryWorkAsync(item);
+    return item.id;
+  };
+  await Promise.all(items.map(summarize));
+};
+
+// A `.map()` callback with no DB call -- an ordinary in-memory transform
+// fanned out through Promise.all.
+export const promiseAllMapAwaitlessNoDbCall = async () => {
+  await Promise.all(
+    items.map(async (item) => {
+      await doInMemoryWorkAsync(item);
+      return item.id;
+    }),
+  );
+};
+
+// `Promise.allSettled` fan-out with no DB call inside the callback.
+export const promiseAllSettledMapNoDbCall = async () => {
+  await Promise.allSettled(
+    items.map(async (item) => {
+      await doInMemoryWorkAsync(item);
+      return item.id;
+    }),
+  );
 };
