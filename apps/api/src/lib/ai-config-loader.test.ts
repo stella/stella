@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { Result } from "better-result";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   decryptOrgAIConfigRow,
@@ -7,6 +9,7 @@ import {
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 const decryptedAIConfig: OrgAIConfig = {
   providers: [
@@ -95,13 +98,19 @@ describe("loadOrgAIConfig", () => {
       throw new Error("invalid config");
     });
 
-    await expect(
-      decryptOrgAIConfigRowOrThrow({
-        decrypt,
-        organizationId,
-        row: { aiConfigEncrypted: "\\x0a0b", aiConfigIv: "\\x0102" },
-      }),
-    ).rejects.toThrow("Stored organization AI configuration is invalid");
+    const outcome = await Result.tryPromise(
+      async () =>
+        await decryptOrgAIConfigRowOrThrow({
+          decrypt,
+          organizationId,
+          row: { aiConfigEncrypted: "\\x0a0b", aiConfigIv: "\\x0102" },
+        }),
+    );
+
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(outcome.error.cause).toBeInstanceOf(ConfigurationError);
+    }
   });
 });
 
