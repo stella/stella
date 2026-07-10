@@ -23,6 +23,7 @@ import {
   getApprovalToolName,
   isDestructiveChatToolName,
   isExternalMcpToolName,
+  isNonPersistentGrantChatToolName,
   isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
   isToolApprovedByGrant,
@@ -32,6 +33,7 @@ import type {
   ApprovalToolPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
+import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
 import {
   buildRegistryWriteSummaryRows,
   getReadableInputRows,
@@ -339,7 +341,9 @@ export const ToolApprovalCard = ({
   // a stored grant can never auto-approve a delete.
   const isDestructive = isDestructiveChatToolName(name);
   const canAllowInConversation =
-    name !== "apply-active-docx-edits" && !isDestructive;
+    name !== "apply-active-docx-edits" &&
+    !isDestructive &&
+    !isNonPersistentGrantChatToolName(name);
   const canAlwaysAllow = canAllowInConversation;
   const isPublicOfficialApproval = isPublicOfficialChatToolName(name);
   /**
@@ -390,6 +394,10 @@ export const ToolApprovalCard = ({
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-approve once the incoming `part` prop reaches approval-requested and a prior grant/allow (from context) covers it. The trigger is an external prop/context transition, not a local setter, so there is no call site to fold this into. Keep.
   useEffect(() => {
     if (
+      // Delegation must be reviewed each call: never let a stored grant
+      // auto-approve it, even if one somehow exists (the grant buttons are
+      // also hidden for this tool — belt and suspenders).
+      isNonPersistentGrantChatToolName(name) ||
       !isApprovalRequested ||
       isBlocked ||
       autoApproveRef.current ||
@@ -521,6 +529,14 @@ export const ToolApprovalCard = ({
         part.state !== "input-streaming" &&
         part.input !== undefined && (
           <ActiveDocxEditSummary input={part.input} />
+        )}
+      {part.name === "spawn_subagents" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <SpawnSubagentsSubtaskList
+            isAwaitingApproval={isApprovalRequested}
+            subagents={part.input.subagents}
+          />
         )}
       {isExternalMcpApproval &&
         part.state !== "input-streaming" &&

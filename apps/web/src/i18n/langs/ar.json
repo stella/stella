@@ -498,6 +498,9 @@
       }
     },
     "sources": "المصادر:",
+    "spawnSubagents": {
+      "failed": "فشل"
+    },
     "stopResponse": "إيقاف",
     "stopped": "متوقف",
     "suggestionSeverity": {
@@ -578,6 +581,7 @@
       "search-chat-history": "البحث في سجلّ المحادثة",
       "set_field_value": "تعيين قيمة الحقل",
       "set_practice_jurisdictions": "ضبط الولايات القضائية للممارسة",
+      "spawn_subagents": "تفويض المهام إلى وكلاء فرعيين",
       "suggest_template_fields": "اقتراح حقول القالب",
       "unknown": "استخدام أداة",
       "update-entity-fields": "تحديث البيانات الوصفية",

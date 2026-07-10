@@ -43,8 +43,8 @@ import {
 } from "@/api/handlers/chat/compaction";
 import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import {
+  computeAssistantTurnWorkspaceIds,
   expandThreadDataScope,
-  extractAssistantWorkspaceIds,
   extractIncomingMessageWorkspaceIds,
   extractThreadDataWorkspaceIds,
 } from "@/api/handlers/chat/data-scope";
@@ -82,6 +82,7 @@ import {
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import {
+  areSubagentToolsRegistered,
   areTemplateAuthoringToolsRegistered,
   areWebResearchToolsRegistered,
   getChatTools,
@@ -91,7 +92,12 @@ import {
   buildExternalMcpSystemHint,
   loadExternalMcpToolsForUser,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
-import { restrictChatToolsToScope } from "@/api/handlers/chat/tools/tool-scope";
+import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
+import {
+  type ChatToolScope,
+  restrictChatToolsToScope,
+  scopeAllowsTool,
+} from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMessage,
   PersistableChatMessage,
@@ -151,6 +157,19 @@ const assertDevModelOverride = (
   }
   return validateTanStackDevModelOverride(devModelId, orgAIConfig);
 };
+
+/**
+ * Whether the delegation tool is offered on this turn: only at the top level,
+ * and only when the turn's scope (if any) allows `spawn_subagents`. Kept as a
+ * top-level helper so the streaming handler stays within its cognitive-
+ * complexity budget.
+ */
+const areSubagentToolsAvailableForTurn = (
+  toolScope: ChatToolScope | undefined,
+): boolean =>
+  areSubagentToolsRegistered({ delegationDepth: 0 }) &&
+  (toolScope === undefined ||
+    scopeAllowsTool(toolScope, SPAWN_SUBAGENTS_TOOL_NAME));
 
 const config = {
   permissions: { chat: ["create"] },
@@ -292,11 +311,17 @@ const sendMessage = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       memberRole: memberRole.role,
       orgAIConfig,
+      requestWorkspaceId: workspaceId,
       refRegistry,
       safeDb,
       scopedDb,
       threadId: body.threadId,
       userId: user.id,
+      // Schema validation only; this tool set's `spawn_subagents` never
+      // executes, so a raw (non-anonymizing) boundary is correct here —
+      // the real per-request boundary is created below and threaded
+      // into the streaming tool set instead.
+      thirdPartyBoundary: { type: "raw" },
       // Schema validation runs against the user's full accessible
       // set; per-tool scope checks happen at execute time below.
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -583,6 +608,11 @@ const sendMessage = createSafeRootHandler(
           disabledNativeToolSlugs,
         }),
         folioAgentDocTools: hasActiveDocxFileClient,
+        // Only at the top level of a turn, and only when the turn's scope (if
+        // any) allows spawn_subagents — a restricted scope (e.g.
+        // suggest-template-fields) drops the tool from the streaming set, so
+        // the prompt must not steer the model toward a tool it was never handed.
+        subagents: areSubagentToolsAvailableForTurn(body.toolScope),
       },
       userContext: body.userContext,
       userId: user.id,
@@ -678,10 +708,12 @@ const sendMessage = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       memberRole: memberRole.role,
       orgAIConfig,
+      requestWorkspaceId: workspaceId,
       refRegistry,
       safeDb,
       scopedDb,
       threadId: body.threadId,
+      thirdPartyBoundary,
       excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
       userId: user.id,
       toolWorkspaceIds: resolveToolWorkspaceIds({
@@ -739,6 +771,19 @@ const sendMessage = createSafeRootHandler(
               });
             }
 
+            // Snapshot the refs the registry already holds before streaming.
+            // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
+            // resolved during prompt construction; folding the WHOLE registry
+            // into thread scope at onFinish would over-broaden it to pinned-
+            // but-never-read matters, which could make the thread unreadable
+            // after that matter's access is revoked even though its content was
+            // never persisted. Only the delta minted DURING the stream (a
+            // matter/entity a tool or subagent actually read) should widen
+            // `data_workspace_ids`.
+            const workspaceIdsBeforeStream = new Set(
+              refRegistry.getRegisteredWorkspaceIds(),
+            );
+
             const chatResponse = await streamChat({
               abortSignal: createMeteredAIAbortSignal(),
               messages: chatContext.hydratedMessages,
@@ -790,10 +835,17 @@ const sendMessage = createSafeRootHandler(
                 // hallucinated or stale UUID from the model never
                 // lands in `data_workspace_ids`. An out-of-set ID
                 // would fail the RLS subset check on every later
-                // persist, silently breaking the thread.
-                const assistantWorkspaceIds = extractAssistantWorkspaceIds(
-                  resolvedResponseMessage.parts,
-                ).filter((id) => accessibleSet.has(id));
+                // persist, silently breaking the thread. Also union in the
+                // workspaces the ref registry resolved DURING this stream —
+                // see `computeAssistantTurnWorkspaceIds`'s docstring for why
+                // that delta matters for subagent reads.
+                const assistantWorkspaceIds = computeAssistantTurnWorkspaceIds({
+                  responseParts: resolvedResponseMessage.parts,
+                  workspaceIdsBeforeStream,
+                  registeredWorkspaceIdsAfterStream:
+                    refRegistry.getRegisteredWorkspaceIds(),
+                  accessibleWorkspaceIds: accessibleSet,
+                });
                 const expandResult = await expandThreadDataScope({
                   currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
                   newWorkspaceIds: assistantWorkspaceIds,

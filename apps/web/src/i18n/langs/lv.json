@@ -498,6 +498,9 @@
       }
     },
     "sources": "Avoti:",
+    "spawnSubagents": {
+      "failed": "Neizdevās"
+    },
     "stopResponse": "Apturēt",
     "stopped": "Apturēts",
     "suggestionSeverity": {
@@ -578,6 +581,7 @@
       "search-chat-history": "Meklē tērzēšanas vēsturē",
       "set_field_value": "Iestatīt lauka vērtību",
       "set_practice_jurisdictions": "Iestatīt prakses jurisdikcijas",
+      "spawn_subagents": "Deleģēšana apakšaģentiem",
       "suggest_template_fields": "Iesaka veidnes laukus",
       "unknown": "Rīka izmantošana",
       "update-entity-fields": "Metadatu atjaunināšana",

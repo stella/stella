@@ -166,6 +166,54 @@ const collectTextRefWorkspaceIds = (
   }
 };
 
+type ComputeAssistantTurnWorkspaceIdsInput = {
+  // The just-finished assistant message's parts (structural
+  // `workspaceId`/`matterRef` fields plus resolved `#stella-*` text refs).
+  responseParts: readonly unknown[];
+  // Every workspace id the shared ref registry had already registered
+  // before this turn's stream started (prompt-time pins, prior-turn
+  // history refs). Excluded from the delta below so those don't fold
+  // into scope on every later turn.
+  workspaceIdsBeforeStream: ReadonlySet<SafeId<"workspace">>;
+  // The registry's current registered-workspace snapshot, taken after the
+  // stream finished.
+  registeredWorkspaceIdsAfterStream: readonly SafeId<"workspace">[];
+  // Only ids the caller can currently access widen scope — guards against
+  // a hallucinated or stale UUID (from the model, or a workspace the
+  // caller lost access to mid-turn) ever landing in `data_workspace_ids`.
+  accessibleWorkspaceIds: ReadonlySet<string>;
+};
+
+// Computes the workspace ids to fold into `chat_threads.data_workspace_ids`
+// once an assistant turn finishes. Two complementary sources feed it:
+//
+//   1. Structural/text-ref ids embedded in the assistant's own response
+//      parts (`extractAssistantWorkspaceIds`).
+//   2. The ref-registry delta: matter/entity refs resolved DURING the
+//      stream (by a tool, or by a subagent's nested tool loop) that were
+//      not already registered before the stream started. A subagent can
+//      read workspace-scoped content and only return a free-form text
+//      summary — the structural scan in (1) never sees that read, but the
+//      shared registry (passed into the subagent's own toolset) still
+//      holds the resolved ref, so the delta here catches it.
+//
+// Both are intersected with `accessibleWorkspaceIds` so an out-of-set id
+// never reaches the thread row (see `expandThreadDataScope`'s caller).
+export const computeAssistantTurnWorkspaceIds = ({
+  responseParts,
+  workspaceIdsBeforeStream,
+  registeredWorkspaceIdsAfterStream,
+  accessibleWorkspaceIds,
+}: ComputeAssistantTurnWorkspaceIdsInput): SafeId<"workspace">[] => {
+  const candidateIds = [
+    ...extractAssistantWorkspaceIds(responseParts),
+    ...registeredWorkspaceIdsAfterStream.filter(
+      (id) => !workspaceIdsBeforeStream.has(id),
+    ),
+  ];
+  return candidateIds.filter((id) => accessibleWorkspaceIds.has(id));
+};
+
 type ExpandThreadDataScopeInput = {
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;

@@ -498,6 +498,9 @@
       }
     },
     "sources": "Quellen:",
+    "spawnSubagents": {
+      "failed": "Fehlgeschlagen"
+    },
     "stopResponse": "Stoppen",
     "stopped": "Gestoppt",
     "suggestionSeverity": {
@@ -578,6 +581,7 @@
       "search-chat-history": "Chatverlauf durchsuchen",
       "set_field_value": "Feldwert festlegen",
       "set_practice_jurisdictions": "Jurisdiktionen festlegen",
+      "spawn_subagents": "Delegation an Subagenten",
       "suggest_template_fields": "Vorlagenfelder werden vorgeschlagen",
       "unknown": "Werkzeug verwenden",
       "update-entity-fields": "Metadaten aktualisieren",

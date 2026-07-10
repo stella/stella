@@ -25,6 +25,18 @@ const CHAT_TOOL_SCOPE_ALLOWLISTS = {
 } as const satisfies Record<ChatToolScope, ReadonlySet<string>>;
 
 /**
+ * Whether `toolName` is on `scope`'s allowlist. Prompt construction
+ * uses this to gate scope-restricted prompt flags (e.g. `subagents`)
+ * on the same allowlist `restrictChatToolsToScope` enforces on the
+ * streaming tool set, so the model is never steered toward a tool it
+ * wasn't actually handed.
+ */
+export const scopeAllowsTool = (
+  scope: ChatToolScope,
+  toolName: string,
+): boolean => CHAT_TOOL_SCOPE_ALLOWLISTS[scope].has(toolName);
+
+/**
  * Narrow a turn's registered tools to the scope's allowlist. Applied
  * to the streaming tool set only; message validation keeps the broad
  * set so previously persisted tool parts still pass schema checks.

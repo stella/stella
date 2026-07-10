@@ -9,6 +9,10 @@ export const ACTION_WEIGHTS = {
   // System-initiated background enrichment; recorded for accounting
   // but never pre-flight-checked (no user is waiting on it).
   background: 1,
+  // Delegated subagent work runs on the cheap "fast" model tier, so it
+  // mirrors chat/background rather than the heavier document-analysis
+  // action types.
+  subagent: 1,
 } as const satisfies Record<UsageActionType, number>;
 
 /** Service-tier multiplier for immediate, queued, and batch work. */

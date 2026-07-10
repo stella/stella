@@ -140,6 +140,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   save_time_entry: "chat.tool.save_time_entry",
   set_field_value: "chat.tool.set_field_value",
   set_practice_jurisdictions: "chat.tool.set_practice_jurisdictions",
+  spawn_subagents: "chat.tool.spawn_subagents",
   suggest_template_fields: "chat.tool.suggest_template_fields",
   "load-skill": "chat.tool.load-skill",
   read_changes: "chat.tool.read_changes",
@@ -250,6 +251,16 @@ const DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX = "delete_";
  */
 export const isDestructiveChatToolName = (toolName: string): boolean =>
   toolName.startsWith(DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX);
+
+/**
+ * Chat tools that may only ever be approved once or denied — never granted
+ * "allow in conversation" or "always allow". Delegation (`spawn_subagents`)
+ * kicks off a whole subagent write-loop per call, so unlike a single
+ * mutation it must be reviewed every time rather than covered by a stored
+ * grant.
+ */
+export const isNonPersistentGrantChatToolName = (toolName: string): boolean =>
+  toolName === "spawn_subagents";
 
 /**
  * Chat tools whose approval card renders the shared registry-write summary

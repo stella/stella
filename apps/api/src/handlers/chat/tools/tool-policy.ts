@@ -65,6 +65,18 @@ const chatToolPolicies = new WeakMap<ChatTool, ChatToolPolicy>();
 export const getChatToolPolicy = (toolDefinition: ChatTool): ChatToolPolicy =>
   chatToolPolicies.get(toolDefinition) ?? CHAT_TOOL_POLICIES.internal;
 
+/**
+ * Copy `from`'s recorded policy onto `to`. The policy WeakMap is keyed by tool
+ * object identity, so a cloned tool (e.g. the subagent projection spreads a
+ * tool to strip its approval gate) is unknown to it and `getChatToolPolicy`
+ * would fall back to `internal`. That is unsafe under anonymization: a public
+ * tool wrongly treated as internal has its inputs de-anonymized before execute,
+ * leaking real values to an external provider. Preserve the original policy.
+ */
+export const copyChatToolPolicy = (from: ChatTool, to: ChatTool): void => {
+  chatToolPolicies.set(to, getChatToolPolicy(from));
+};
+
 export const applyChatToolPolicy = <TTool extends ChatTool>(
   toolDefinition: TTool,
   policyKind: ChatToolPolicyKind,

@@ -498,6 +498,9 @@
       }
     },
     "sources": "Zdroje:",
+    "spawnSubagents": {
+      "failed": "Zlyhalo"
+    },
     "stopResponse": "Zastaviť",
     "stopped": "Zastavené",
     "suggestionSeverity": {
@@ -578,6 +581,7 @@
       "search-chat-history": "Prehľadávanie histórie chatu",
       "set_field_value": "Nastaviť hodnotu poľa",
       "set_practice_jurisdictions": "Nastaviť jurisdikcie",
+      "spawn_subagents": "Delegovanie na čiastkových agentov",
       "suggest_template_fields": "Navrhujem polia vzoru",
       "unknown": "Používanie nástroja",
       "update-entity-fields": "Aktualizácia metadát",

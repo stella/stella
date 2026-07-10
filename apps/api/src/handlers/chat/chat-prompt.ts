@@ -92,12 +92,18 @@ export type ChatToolAvailability = {
    * Studio never sets this, so its prompt never mentions these tools.
    */
   folioAgentDocTools: boolean;
+  /**
+   * `spawn_subagents` is registered for this turn (see
+   * `areSubagentToolsRegistered` in chat-tools.ts).
+   */
+  subagents: boolean;
 };
 
 const DEFAULT_CHAT_TOOL_AVAILABILITY = {
   templateAuthoring: true,
   webResearch: true,
   folioAgentDocTools: true,
+  subagents: false,
 } as const satisfies ChatToolAvailability;
 
 // EXTERNAL-FACT SOURCING has two shapes: with web research the model
@@ -111,8 +117,12 @@ const EXTERNAL_FACT_SOURCING_WITH_WEB =
 const EXTERNAL_FACT_SOURCING_NO_WEB =
   "EXTERNAL-FACT SOURCING: Ground factual answers in a matching skill when one fits — the skill catalog is in this prompt; `load-skill` before applying it. Web research is not enabled for this thread, so when no skill fits, answer from your own knowledge and explicitly flag that no external source was available in this conversation (the user can enable web search to add one). Never use `execute_typescript` for external research — its `external_*` functions read stella's internal workspace data only.";
 
+const SUBAGENT_DELEGATION_SECTION =
+  "DELEGATION: When a task splits into independent pieces (no piece depends on another's result), call `spawn_subagents` to run them in parallel instead of doing them one by one yourself. Subagents are cheaper and read/write workspace data under the single approval already granted to `spawn_subagents` — do not ask the user to approve each subagent separately. Prefer this whenever breadth or parallelism would speed up the task.";
+
 const buildCoreRuleSections = ({
   webResearch,
+  subagents,
 }: ChatToolAvailability): readonly string[] => [
   "You are an AI inside stella, a legal workspace. Answer directly; skip greetings and persona. For complex or ambiguous tasks, call `ask-user` to gather requirements before acting.",
   "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `execute_typescript`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic. EXCEPTION: `load-skill` may immediately precede `ask-user` in the same turn so the clarifying questions can be informed by the skill's methodology.",
@@ -128,6 +138,7 @@ const buildCoreRuleSections = ({
   "CITATIONS: When a tool returns a stable URL, cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
   "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
   "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
+  ...(subagents ? [SUBAGENT_DELEGATION_SECTION] : []),
 ];
 
 export type UserContext = IncomingUserContext;

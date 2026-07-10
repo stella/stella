@@ -39,6 +39,7 @@ const FULL_TOOL_AVAILABILITY = {
   templateAuthoring: true,
   webResearch: true,
   folioAgentDocTools: true,
+  subagents: false,
 } as const satisfies ChatToolAvailability;
 const SKILL_METADATA = [
   {
@@ -471,7 +472,12 @@ describe("chat prompt builders", () => {
           ],
         },
       },
-      { templateAuthoring: false, webResearch: true, folioAgentDocTools: true },
+      {
+        templateAuthoring: false,
+        webResearch: true,
+        folioAgentDocTools: true,
+        subagents: false,
+      },
     );
 
     // A `template: ["use"]`-only role (e.g. intern) never has
@@ -587,10 +593,30 @@ describe("system prompt tool-reference guard", () => {
   };
 
   const AVAILABILITY_MATRIX: readonly ChatToolAvailability[] = [
-    { templateAuthoring: true, webResearch: true, folioAgentDocTools: true },
-    { templateAuthoring: true, webResearch: false, folioAgentDocTools: true },
-    { templateAuthoring: false, webResearch: true, folioAgentDocTools: true },
-    { templateAuthoring: false, webResearch: false, folioAgentDocTools: true },
+    {
+      templateAuthoring: true,
+      webResearch: true,
+      folioAgentDocTools: true,
+      subagents: false,
+    },
+    {
+      templateAuthoring: true,
+      webResearch: false,
+      folioAgentDocTools: true,
+      subagents: false,
+    },
+    {
+      templateAuthoring: false,
+      webResearch: true,
+      folioAgentDocTools: true,
+      subagents: false,
+    },
+    {
+      templateAuthoring: false,
+      webResearch: false,
+      folioAgentDocTools: true,
+      subagents: false,
+    },
   ];
 
   test("every tool named in the prompt is registered for that config", () => {
@@ -630,6 +656,7 @@ describe("system prompt tool-reference guard", () => {
       templateAuthoring: true,
       webResearch: false,
       folioAgentDocTools: true,
+      subagents: false,
     })) {
       expect(prompt).not.toContain(WEB_SEARCH_TOOL_NAME);
       expect(prompt).not.toContain(FETCH_URL_TOOL_NAME);
@@ -651,6 +678,7 @@ describe("system prompt tool-reference guard", () => {
       templateAuthoring: false,
       webResearch: true,
       folioAgentDocTools: true,
+      subagents: false,
     })) {
       expect(prompt).not.toContain(TEMPLATE_AUTHORING_TOOL_NAME);
     }
