@@ -33,6 +33,17 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/skills": 6,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/chat/threads/:id/messages": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/skills": 4096,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/chat/$threadId": {
@@ -78,6 +89,20 @@
       "GET /v1/skills": 6,
       "GET /v1/usage/entitlement": 6,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/chat/threads/:id/messages": 1024,
+      "GET /v1/chat/threads/:id/title": 1024,
+      "GET /v1/mcp/connectors": 5120,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/skills": 4096,
+      "GET /v1/usage/entitlement": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/chat/new": {
@@ -123,6 +148,20 @@
       "GET /v1/skills": 6,
       "GET /v1/usage/entitlement": 6,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/chat/threads/:id/messages": 1024,
+      "GET /v1/chat/threads/:id/title": 1024,
+      "GET /v1/mcp/connectors": 5120,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/skills": 4096,
+      "GET /v1/usage/entitlement": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/chat/workspaces/$workspaceId/$threadId": {
@@ -171,6 +210,21 @@
       "GET /v1/usage/entitlement": 6,
       "GET /v1/views/:id": 8,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/chat/threads/:id/messages": 1024,
+      "GET /v1/chat/threads/:id/title": 1024,
+      "GET /v1/mcp/connectors": 5120,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/skills": 4096,
+      "GET /v1/usage/entitlement": 1024,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/chat/workspaces/$workspaceId/new": {
@@ -219,6 +273,21 @@
       "GET /v1/usage/entitlement": 6,
       "GET /v1/views/:id": 8,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/chat/threads/:id/messages": 1024,
+      "GET /v1/chat/threads/:id/title": 1024,
+      "GET /v1/mcp/connectors": 5120,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/skills": 4096,
+      "GET /v1/usage/entitlement": 1024,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/contacts": {
@@ -255,6 +324,17 @@
       "GET /v1/mcp/connectors": 8,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/contacts": 10240,
+      "GET /v1/mcp/connectors": 5120,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/contacts/$contactId": {
@@ -291,6 +371,17 @@
       "GET /v1/contacts/:id": 9,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/get-full-organization": 3072,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/contacts/:id": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/dev/autocomplete": {
@@ -321,6 +412,15 @@
       "GET /v1/chat/threads": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/knowledge": {
@@ -351,6 +451,15 @@
       "GET /v1/chat/threads": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/knowledge/clauses": {
@@ -387,6 +496,17 @@
       "GET /v1/clauses": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/clause-categories": 2048,
+      "GET /v1/clauses": 9216,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/knowledge/mcp target": {
@@ -426,6 +546,18 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/skills/seed": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/catalogue": 71680,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/skills/seed": 1024
     }
   },
   "/knowledge/playbooks": {
@@ -459,6 +591,16 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/playbooks": 6,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/playbooks": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/knowledge/prompts target": {
@@ -498,6 +640,18 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/skills/seed": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/catalogue": 71680,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/skills/seed": 1024
     }
   },
   "/knowledge/skills target": {
@@ -537,6 +691,18 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/skills/seed": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/catalogue": 71680,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/skills/seed": 1024
     }
   },
   "/knowledge/templates": {
@@ -573,6 +739,17 @@
       "GET /v1/template-categories": 6,
       "GET /v1/templates": 6,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/template-categories": 1024,
+      "GET /v1/templates": 4096,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/knowledge/tools": {
@@ -612,6 +789,18 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/skills/seed": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/catalogue": 71680,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/skills/seed": 1024
     }
   },
   "/settings target": {
@@ -645,6 +834,16 @@
       "GET /v1/chat/threads": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/list-sessions": 3072,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/account/beta": {
@@ -675,6 +874,15 @@
       "GET /v1/chat/threads": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/account/connections": {
@@ -708,6 +916,16 @@
       "GET /v1/me/oauth-connections": 3,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/me/oauth-connections": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/account/desktop": {
@@ -738,6 +956,15 @@
       "GET /v1/chat/threads": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/account/profile": {
@@ -771,6 +998,16 @@
       "GET /v1/chat/threads": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/list-sessions": 3072,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/organization target": {
@@ -807,6 +1044,17 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/get-full-organization": 3072,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/organization/ai": {
@@ -849,6 +1097,19 @@
       "GET /v1/organization-settings/deepl-config": 6,
       "GET /v1/organization-settings/web-search-config": 6,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/organization-settings/ai-config": 1024,
+      "GET /v1/organization-settings/deepl-config": 1024,
+      "GET /v1/organization-settings/web-search-config": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/organization/anonymization": {
@@ -882,6 +1143,16 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/organization-settings/anonymization-blacklist": 6,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/organization-settings/anonymization-blacklist": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/organization/catalogue target": {
@@ -921,6 +1192,18 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/skills/seed": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/catalogue": 71680,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/skills/seed": 1024
     }
   },
   "/settings/organization/document-types": {
@@ -954,6 +1237,16 @@
       "GET /v1/document-types": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/document-types": 3072,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/organization/matter-numbering": {
@@ -990,6 +1283,17 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/organization-settings/preview": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/organization-settings/preview": 1024
     }
   },
   "/settings/organization/members": {
@@ -1026,6 +1330,17 @@
       "GET /v1/organization-settings": 6,
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/get-full-organization": 3072,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/settings/organization/usage": {
@@ -1059,6 +1374,16 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/usage/entitlement": 6,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/usage/entitlement": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/todos": {
@@ -1095,6 +1420,17 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces": 10,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/my-tasks": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces": 87040,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/workspaces": {
@@ -1128,6 +1464,16 @@
       "GET /v1/organization-settings/ai-availability": 4,
       "GET /v1/workspaces": 10,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces": 87040,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/workspaces/$workspaceId target": {
@@ -1188,6 +1534,24 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/get-full-organization": 3072,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/properties/:id": 1024,
+      "GET /v1/time-entries/:id": 1024,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/:id": 6144,
+      "GET /v1/workspaces/:id/members": 1024,
+      "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/workflow": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/workspaces/$workspaceId/$viewId": {
@@ -1248,6 +1612,24 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/get-full-organization": 3072,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/properties/:id": 1024,
+      "GET /v1/time-entries/:id": 1024,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/:id": 6144,
+      "GET /v1/workspaces/:id/members": 1024,
+      "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/workflow": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/workspaces/$workspaceId/$viewId/document": {
@@ -1326,6 +1708,30 @@
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/chat/workspaces/:id/file-thread": 13,
       "POST /v1/workspaces/:id/justifications/query": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/entities/:id/entity/:id": 1024,
+      "GET /v1/entities/:id/entity/:id/versions": 1024,
+      "GET /v1/files/:id/url/:id": 1024,
+      "GET /v1/mcp/connectors": 5120,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/organization-settings/deepl": 1024,
+      "GET /v1/properties/:id": 1024,
+      "GET /v1/skills": 4096,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/:id": 6144,
+      "GET /v1/workspaces/:id/anonymization-terms": 1024,
+      "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/workflow": 1024,
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/chat/workspaces/:id/file-thread": 1024,
+      "POST /v1/workspaces/:id/justifications/query": 1024
     }
   },
   "/workspaces/$workspaceId/entities/$entityId": {
@@ -1403,6 +1809,30 @@
       "GET /v1/workspaces/navigation": 6,
       "POST /v1/chat/workspaces/:id/file-thread": 13,
       "POST /v1/workspaces/:id/justifications/query": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/entities/:id/entity/:id": 1024,
+      "GET /v1/entities/:id/entity/:id/versions": 1024,
+      "GET /v1/files/:id/url/:id": 1024,
+      "GET /v1/mcp/connectors": 5120,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/organization-settings/deepl": 1024,
+      "GET /v1/properties/:id": 1024,
+      "GET /v1/skills": 4096,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/:id": 6144,
+      "GET /v1/workspaces/:id/anonymization-terms": 1024,
+      "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/workflow": 1024,
+      "GET /v1/workspaces/navigation": 20480,
+      "POST /v1/chat/workspaces/:id/file-thread": 1024,
+      "POST /v1/workspaces/:id/justifications/query": 1024
     }
   },
   "/workspaces/$workspaceId/expenses": {
@@ -1459,6 +1889,23 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/entities/:id/summaries": 1024,
+      "GET /v1/expenses/:id": 1024,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/properties/:id": 1024,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/:id": 6144,
+      "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/workflow": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/workspaces/$workspaceId/invoices": {
@@ -1512,6 +1959,22 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/invoices/:id": 1024,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/properties/:id": 1024,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/:id": 6144,
+      "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/workflow": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   },
   "/workspaces/$workspaceId/timesheets target": {
@@ -1571,6 +2034,24 @@
       "GET /v1/workspaces/:id/overview": 7,
       "GET /v1/workspaces/:id/workflow": 4,
       "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/get-full-organization": 3072,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings": 1024,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/properties/:id": 1024,
+      "GET /v1/time-entries/:id": 1024,
+      "GET /v1/views/:id": 1024,
+      "GET /v1/workspaces/:id": 6144,
+      "GET /v1/workspaces/:id/members": 1024,
+      "GET /v1/workspaces/:id/overview": 1024,
+      "GET /v1/workspaces/:id/workflow": 1024,
+      "GET /v1/workspaces/navigation": 20480
     }
   }
 }
