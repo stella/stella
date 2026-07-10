@@ -13,6 +13,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import packageJson from "../package.json" with { type: "json" };
+import {
+  type CapabilityCatalogEntry,
+  insertCapabilities,
+} from "./generate-capability-tree.js";
 import { generateResourceTree } from "./generate-resource-tree.js";
 import { generateRouteMap } from "./generate-route-map.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
@@ -25,6 +29,10 @@ import type {
 
 const snapshotUrl = new URL(
   "generated/registry-snapshot.json",
+  import.meta.url,
+);
+const catalogUrl = new URL(
+  "generated/capability-catalog.json",
   import.meta.url,
 );
 const outputUrl = new URL("generated/route-map.ts", import.meta.url);
@@ -198,7 +206,94 @@ for (const tool of snapshot.output) {
   toolAnnotations[tool.name] = projectToolAnnotation(tool.cli);
 }
 
-const routeMap = generateRouteMap(listings, toolAnnotations);
+const curatedRouteMap = generateRouteMap(listings, toolAnnotations);
+
+// Project the committed capability-catalog snapshot into leaf commands and merge
+// them into the SAME curated tree (spec 049 Phase 3). The catalog is trusted,
+// committed data (owned by the api-side exporter), validated here only to the
+// fields the CLI codegen consumes so a malformed snapshot fails loudly.
+const jsonSchemaSchema = v.record(v.string(), v.unknown());
+const catalogEntrySchema = v.looseObject({
+  id: v.string(),
+  handlerKind: v.picklist(["workspace", "root", "session"]),
+  access: v.picklist(["read", "write"]),
+  destructive: v.boolean(),
+  scope: v.string(),
+  requiresFileInput: v.optional(v.boolean()),
+  returnsFileResponse: v.optional(v.boolean()),
+  inputSchemaTruncated: v.optional(v.boolean()),
+  inputSchema: v.optional(
+    v.looseObject({
+      body: v.optional(jsonSchemaSchema),
+      params: v.optional(jsonSchemaSchema),
+      query: v.optional(jsonSchemaSchema),
+    }),
+  ),
+});
+const catalogParse = v.safeParse(
+  v.array(catalogEntrySchema),
+  JSON.parse(await readFile(catalogUrl, "utf-8")),
+);
+if (!catalogParse.success) {
+  panic("capability-catalog.json does not match the expected entry shape");
+}
+// Project valibot output (with `| undefined` widening on optionals) to the
+// generator's entry shape, dropping absent optionals so `exactOptionalPropertyTypes`
+// stays satisfied.
+const catalogEntries: CapabilityCatalogEntry[] = catalogParse.output.map(
+  (entry) => {
+    const projected: CapabilityCatalogEntry = {
+      id: entry.id,
+      handlerKind: entry.handlerKind,
+      access: entry.access,
+      destructive: entry.destructive,
+      scope: entry.scope,
+    };
+    if (entry.requiresFileInput !== undefined) {
+      projected.requiresFileInput = entry.requiresFileInput;
+    }
+    if (entry.returnsFileResponse !== undefined) {
+      projected.returnsFileResponse = entry.returnsFileResponse;
+    }
+    if (entry.inputSchemaTruncated !== undefined) {
+      projected.inputSchemaTruncated = entry.inputSchemaTruncated;
+    }
+    if (entry.inputSchema !== undefined) {
+      const parts: NonNullable<CapabilityCatalogEntry["inputSchema"]> = {};
+      if (entry.inputSchema.body !== undefined) {
+        parts.body = entry.inputSchema.body;
+      }
+      if (entry.inputSchema.params !== undefined) {
+        parts.params = entry.inputSchema.params;
+      }
+      if (entry.inputSchema.query !== undefined) {
+        parts.query = entry.inputSchema.query;
+      }
+      projected.inputSchema = parts;
+    }
+    return projected;
+  },
+);
+
+const { tree: routeMap, stats: capabilityStats } = insertCapabilities({
+  tree: curatedRouteMap,
+  entries: catalogEntries,
+});
+process.stderr.write(
+  `Capability tree: ${capabilityStats.generated} leaves generated, ${capabilityStats.suppressed} suppressed (file input/output), ${capabilityStats.collisionFallbacks.length} collision fallback(s), ${capabilityStats.flagCollisions.length} flag collision(s)\n`,
+);
+if (capabilityStats.collisionFallbacks.length > 0) {
+  process.stderr.write(
+    `  collision fallbacks -> capability <domain> <action>: ${capabilityStats.collisionFallbacks.join(", ")}\n`,
+  );
+}
+if (capabilityStats.flagCollisions.length > 0) {
+  process.stderr.write(
+    `  flag collisions (part-prefixed): ${capabilityStats.flagCollisions
+      .map(({ id, flag }) => `${id}:${flag}`)
+      .join(", ")}\n`,
+  );
+}
 
 // Emit the TanStack Intent agent skill from the same registry inputs, into the
 // spec-mandated `skills/<name>/SKILL.md` at the package root. Committing it means
@@ -208,7 +303,12 @@ const skillUrl = new URL(`../skills/${SKILL_NAME}/SKILL.md`, import.meta.url);
 await mkdir(new URL(`../skills/${SKILL_NAME}/`, import.meta.url), {
   recursive: true,
 });
-await writeFile(skillUrl, generateCliSkill(listings, toolAnnotations));
+await writeFile(
+  skillUrl,
+  generateCliSkill(listings, toolAnnotations, {
+    commandCount: capabilityStats.generated,
+  }),
+);
 process.stderr.write(`Wrote ${skillUrl.pathname}\n`);
 
 const annotationHeader = `// GENERATED by \`bun run codegen\`. Do not edit by hand.

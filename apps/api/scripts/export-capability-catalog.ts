@@ -71,6 +71,15 @@ const CATALOG_PATH = path.resolve(
   "apps/api/src/mcp/generated/capability-catalog.json",
 );
 
+// The CLI codegen consumes a byte-identical snapshot of the catalog beside its
+// tool-registry snapshot, so `@stll/cli` never imports `apps/api`. This exporter
+// owns both copies; `--check` compares each, so the CLI copy cannot drift from
+// the API copy.
+const CLI_CATALOG_PATH = path.resolve(
+  REPO_ROOT,
+  "packages/cli/src/generated/capability-catalog.json",
+);
+
 const DISPATCH_PATH = path.resolve(
   REPO_ROOT,
   "apps/api/src/mcp/generated/capability-dispatch.ts",
@@ -1174,9 +1183,10 @@ const main = async (): Promise<number> => {
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);
+    await Bun.write(CLI_CATALOG_PATH, serialized);
     await Bun.write(DISPATCH_PATH, dispatchSerialized);
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH} and ${DISPATCH_PATH}\n`,
+      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}, ${CLI_CATALOG_PATH}, and ${DISPATCH_PATH}\n`,
     );
     return 0;
   }
@@ -1184,17 +1194,27 @@ const main = async (): Promise<number> => {
   const committedText = await Bun.file(CATALOG_PATH)
     .text()
     .catch(() => null);
+  const committedCliText = await Bun.file(CLI_CATALOG_PATH)
+    .text()
+    .catch(() => null);
   const committedDispatch = await Bun.file(DISPATCH_PATH)
     .text()
     .catch(() => null);
   if (
     committedText === serialized &&
+    committedCliText === serialized &&
     committedDispatch === dispatchSerialized
   ) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capabilities, catalog and dispatch module are up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capabilities, catalog (API + CLI copies) and dispatch module are up to date.`,
     );
     return 0;
+  }
+
+  if (committedCliText !== serialized) {
+    console.error(
+      "\nexport-capability-catalog: committed CLI capability-catalog.json is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
+    );
   }
 
   if (committedDispatch !== dispatchSerialized) {

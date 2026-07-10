@@ -42,6 +42,12 @@ const collectLeafPaths = (
     lines.push(`${path.join(" ")}\t(${node.spec.toolName})`);
     return;
   }
+  if (node.kind === "capability-leaf") {
+    lines.push(
+      `${path.join(" ")}\t(invoke_capability: ${node.spec.capabilityId})`,
+    );
+    return;
+  }
   for (const [name, child] of Object.entries(node.children)) {
     collectLeafPaths(child, [...path, name], lines);
   }

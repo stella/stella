@@ -36,6 +36,44 @@ describe("selectFormat (S4)", () => {
       "table",
     );
   });
+
+  test("--output jsonl is honored on and off a TTY", () => {
+    expect(selectFormat({ flags: { output: "jsonl" }, isTTY: true })).toBe(
+      "jsonl",
+    );
+    expect(selectFormat({ flags: { output: "jsonl" }, isTTY: false })).toBe(
+      "jsonl",
+    );
+  });
+});
+
+describe("renderResult: jsonl (spec 049 §3)", () => {
+  test("a page emits one item per line to stdout, nothing extra on stderr", () => {
+    const { out, err, writers } = capture();
+    const plan = buildRenderPlan({
+      payload: { items: [{ id: 1 }, { id: 2 }], nextCursor: null },
+      itemsKey: "items",
+      windowedText: false,
+      singleReadActive: false,
+      columns: undefined,
+    });
+    renderResult({ plan, format: "jsonl", writers, allActive: false });
+    expect(out.join("")).toBe('{"id":1}\n{"id":2}\n');
+    expect(err.join("")).toBe("");
+  });
+
+  test("a single object emits exactly one line", () => {
+    const { out, writers } = capture();
+    const plan = buildRenderPlan({
+      payload: { ok: true },
+      itemsKey: undefined,
+      windowedText: false,
+      singleReadActive: false,
+      columns: undefined,
+    });
+    renderResult({ plan, format: "jsonl", writers, allActive: false });
+    expect(out.join("")).toBe('{"ok":true}\n');
+  });
 });
 
 describe("buildRenderPlan (S4)", () => {

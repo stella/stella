@@ -29,6 +29,7 @@ import {
 } from "./mcp-constants.js";
 import {
   buildRenderPlan,
+  jsonlLine,
   renderResult,
   selectFormat,
   type OutputFormat,
@@ -52,6 +53,10 @@ export const RESERVED_FLAG_KEYS = {
   limit: "limit",
   all: "all",
   yes: "yes",
+  /** Never prompt; fail closed where a prompt would be needed (spec 049 §3). */
+  noInput: "noInput",
+  /** Capability leaves only: validate server-side without executing (validateOnly). */
+  dryRun: "dryRun",
 } as const;
 
 type LeafFlags = Record<string, unknown>;
@@ -85,13 +90,13 @@ export const writersFor = (context: Context): Writers => ({
   },
 });
 
-const setExit = (context: Context, code: ExitCode): void => {
+export const setExit = (context: Context, code: ExitCode): void => {
   context.process.exitCode = code;
 };
 
 // Read all of stdin to a string (the `@-` / `--input -` escape hatch). Consumes
 // `process.stdin` to EOF so the published CLI runs under plain Node.
-const readAllStdin = async (): Promise<string> =>
+export const readAllStdin = async (): Promise<string> =>
   await readStreamText(process.stdin);
 
 /** Apply gh-style `@file`/`@-`/`@@` sugar to a string flag value (spec S3). */
@@ -118,7 +123,7 @@ const resolveStringValue = async (
   return Result.ok(raw);
 };
 
-const setPath = (
+export const setPath = (
   target: Record<string, unknown>,
   path: string,
   value: unknown,
@@ -218,7 +223,7 @@ const coerceArrayFlag = (
 };
 
 /** Coerce one parsed flag value to its JSON tool-arg value (spec S3). */
-const coerceFlagValue = async (
+export const coerceFlagValue = async (
   flagSpec: FlagSpec,
   value: unknown,
 ): Promise<Result<unknown, string>> => {
@@ -339,7 +344,7 @@ const buildArgsFromInput = async ({
   return parsed.value;
 };
 
-const scopeGranted = ({
+export const scopeGranted = ({
   token,
   scope,
 }: {
@@ -354,7 +359,7 @@ const scopeGranted = ({
   return claims.scope.split(/\s+/u).includes(`stella:${scope}`);
 };
 
-const confirmDestructive = async ({
+export const confirmDestructive = async ({
   context,
   flags,
   writers,
@@ -367,6 +372,14 @@ const confirmDestructive = async ({
 }): Promise<"proceed" | "aborted"> => {
   if (flags[RESERVED_FLAG_KEYS.yes] === true) {
     return "proceed";
+  }
+  // --no-input never prompts and fails closed: a destructive op (or a
+  // confirm-required retry) needs --yes when prompting is disabled (spec 049 §3).
+  if (flags[RESERVED_FLAG_KEYS.noInput] === true) {
+    writers.stderr(
+      `refusing to prompt '${label}' with --no-input; --yes is required\n`,
+    );
+    return "aborted";
   }
   if (!context.process.stdin.isTTY) {
     writers.stderr("refusing destructive op without --yes on non-TTY\n");
@@ -386,7 +399,7 @@ const confirmDestructive = async ({
   return answer === "y" || answer === "yes" ? "proceed" : "aborted";
 };
 
-const mapClientErrorExit = (error: McpClientError): ExitCode => {
+export const mapClientErrorExit = (error: McpClientError): ExitCode => {
   if (error.kind === "http") {
     if (error.httpStatus === 401) {
       return EXIT_CODES.auth;
@@ -408,7 +421,7 @@ const mapClientErrorExit = (error: McpClientError): ExitCode => {
   return EXIT_CODES.server;
 };
 
-const parsePayload = (result: CallToolResult): unknown => {
+export const parsePayload = (result: CallToolResult): unknown => {
   const text = result.content.at(0)?.text ?? "";
   const parsed = Result.try((): unknown => JSON.parse(text));
   return Result.isOk(parsed) ? parsed.value : undefined;
@@ -465,7 +478,7 @@ const parseErrorIssues = (error: Record<string, unknown>): ErrorIssue[] => {
  * legacy plain-text or bare-`{code}` error so the caller falls back to today's
  * behavior.
  */
-const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
+export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
   if (!isRecord(payload)) {
     return null;
   }
@@ -567,7 +580,10 @@ export const readOutputFormat = (
   const output = flags[RESERVED_FLAG_KEYS.output];
   return selectFormat({
     flags: {
-      output: output === "json" || output === "table" ? output : undefined,
+      output:
+        output === "json" || output === "table" || output === "jsonl"
+          ? output
+          : undefined,
       json: flags[RESERVED_FLAG_KEYS.json] === true,
       table: flags[RESERVED_FLAG_KEYS.table] === true,
     },
@@ -582,17 +598,36 @@ type AllOutcome = {
   count: number;
 };
 
-/** Follow `nextCursor` under `--all`, concatenating items/text within ceilings. */
-const followAll = async ({
-  spec,
+/**
+ * Follow `nextCursor` under `--all`, concatenating items/text within ceilings.
+ * With a `stream` callback (JSONL mode, spec 049 §3) each item is emitted as it
+ * is fetched and NOT accumulated, so memory stays bounded independent of page
+ * count; the ceilings and truncation semantics are unchanged. Callers that
+ * stream ignore `payload` and read `count`/`truncated`/`lastCursor`.
+ */
+export const followAll = async ({
+  windowedText,
+  itemsKey,
   baseArgs,
   serverUrl,
   token,
+  toolName,
+  cursorInto,
+  stream,
 }: {
-  spec: LeafCommandSpec;
+  windowedText: boolean;
+  itemsKey: string | undefined;
   baseArgs: Record<string, unknown>;
   serverUrl: string;
   token: string;
+  /** The tool to call each page (the curated tool, or `invoke_capability`). */
+  toolName: string;
+  /** Merge a cursor into the base args for the next page (part-aware for capabilities). */
+  cursorInto: (
+    base: Record<string, unknown>,
+    cursor: string,
+  ) => Record<string, unknown>;
+  stream?: (item: unknown) => void;
 }): Promise<Result<AllOutcome, McpClientError>> => {
   const items: unknown[] = [];
   let text = "";
@@ -600,19 +635,15 @@ const followAll = async ({
   let cursor: string | null = null;
   let pages = 0;
   let bytes = 0;
+  let streamedCount = 0;
   let truncated = false;
 
   do {
-    const args = { ...baseArgs, ...(cursor === null ? {} : { cursor }) };
+    const args = cursor === null ? baseArgs : cursorInto(baseArgs, cursor);
     // eslint-disable-next-line no-await-in-loop -- each page's cursor comes from the previous response
-    const call = await callTool({
-      serverUrl,
-      token,
-      name: spec.toolName,
-      args,
-    });
+    const call = await callTool({ serverUrl, token, name: toolName, args });
     if (Result.isError(call)) {
-      return call;
+      return Result.err(call.error);
     }
     const payload = parsePayload(call.value);
     if (pages === 0 && isRecord(payload)) {
@@ -620,21 +651,29 @@ const followAll = async ({
     }
     pages += 1;
 
-    if (spec.windowedText) {
+    if (windowedText) {
       const chunk = stringField(payload, "text") ?? "";
       bytes += Buffer.byteLength(chunk);
       text += chunk;
-    } else if (spec.itemsKey !== undefined) {
-      const pageItems = arrayField(payload, spec.itemsKey);
+    } else if (itemsKey !== undefined) {
+      const pageItems = arrayField(payload, itemsKey);
       bytes += Buffer.byteLength(JSON.stringify(pageItems));
-      items.push(...pageItems);
+      if (stream !== undefined) {
+        for (const item of pageItems) {
+          stream(item);
+        }
+        streamedCount += pageItems.length;
+      } else {
+        items.push(...pageItems);
+      }
     }
 
     cursor = stringField(payload, "nextCursor");
 
+    const collected = stream === undefined ? items.length : streamedCount;
     if (
       pages >= MAX_ALL_PAGES ||
-      items.length >= MAX_ALL_ITEMS ||
+      collected >= MAX_ALL_ITEMS ||
       bytes >= MAX_ALL_BYTES
     ) {
       truncated = cursor !== null;
@@ -642,16 +681,129 @@ const followAll = async ({
     }
   } while (cursor !== null);
 
-  const mergedPayload = spec.windowedText
+  const mergedPayload = windowedText
     ? { text, nextCursor: null }
-    : { ...firstPayload, [spec.itemsKey ?? "items"]: items, nextCursor: null };
+    : { ...firstPayload, [itemsKey ?? "items"]: items, nextCursor: null };
 
+  const itemCount = stream === undefined ? items.length : streamedCount;
+  const count = windowedText ? Buffer.byteLength(text) : itemCount;
   return Result.ok({
     payload: mergedPayload,
     truncated,
     lastCursor: cursor,
-    count: spec.windowedText ? Buffer.byteLength(text) : items.length,
+    count,
   });
+};
+
+/**
+ * Follow `--all` and render the outcome (spec S4 + 049 §3). Shared by both
+ * executors: under JSONL it streams items to stdout as fetched; otherwise it
+ * accumulates and renders one merged payload. The truncation notice always goes
+ * to stderr. `cursorInto` lets a capability thread the cursor into its input
+ * part; a curated leaf merges it at the top level.
+ */
+export const streamOrRenderAllPages = async ({
+  context,
+  writers,
+  format,
+  windowedText,
+  itemsKey,
+  baseArgs,
+  serverUrl,
+  token,
+  toolName,
+  cursorInto,
+}: {
+  context: Context;
+  writers: Writers;
+  format: OutputFormat;
+  windowedText: boolean;
+  itemsKey: string | undefined;
+  baseArgs: Record<string, unknown>;
+  serverUrl: string;
+  token: string;
+  toolName: string;
+  cursorInto: (
+    base: Record<string, unknown>,
+    cursor: string,
+  ) => Record<string, unknown>;
+}): Promise<void> => {
+  const streaming = format === "jsonl" && !windowedText;
+  const outcome = await followAll({
+    windowedText,
+    itemsKey,
+    baseArgs,
+    serverUrl,
+    token,
+    toolName,
+    cursorInto,
+    ...(streaming
+      ? {
+          stream: (item: unknown) => {
+            writers.stdout(jsonlLine(item));
+          },
+        }
+      : {}),
+  });
+  if (Result.isError(outcome)) {
+    writers.stderr(`${outcome.error.message}\n`);
+    setExit(context, mapClientErrorExit(outcome.error));
+    return;
+  }
+  if (!streaming) {
+    const plan = buildRenderPlan({
+      payload: outcome.value.payload,
+      itemsKey,
+      windowedText,
+      singleReadActive: false,
+      columns: undefined,
+    });
+    renderResult({ plan, format, writers, allActive: true });
+  }
+  if (outcome.value.truncated) {
+    writers.stderr(
+      `--all truncated at ${outcome.value.count} items/pages; resume with --cursor ${outcome.value.lastCursor}\n`,
+    );
+  }
+};
+
+/**
+ * Render a tool `isError` result (spec S4). Shared by curated and capability
+ * leaves: results never touch stdout on an error path. A structured envelope
+ * renders as agent-readable `error:` / issue / `hint:` lines on stderr; a legacy
+ * plain-text error falls back to the raw content. Sets the exit class from the
+ * envelope code.
+ */
+export const renderToolError = ({
+  context,
+  result,
+  writers,
+}: {
+  context: Context;
+  result: CallToolResult;
+  writers: Writers;
+}): void => {
+  const errorPayload = parsePayload(result);
+  const envelope = errorEnvelope(errorPayload);
+  if (envelope !== null) {
+    writers.stderr(`error: ${envelope.message}\n`);
+    // Field-level validation issues follow the summary, one indented line each,
+    // so an agent can map a failure back to the offending field. A root issue
+    // (empty path) renders its message without a bare `: ` prefix.
+    for (const issue of envelope.issues) {
+      writers.stderr(
+        issue.path === ""
+          ? `  ${issue.message}\n`
+          : `  ${issue.path}: ${issue.message}\n`,
+      );
+    }
+    if (envelope.hint !== undefined) {
+      writers.stderr(`hint: ${envelope.hint}\n`);
+    }
+  } else {
+    writers.stderr(`${result.content.at(0)?.text ?? "Tool error"}\n`);
+  }
+  setExit(context, classifyToolError(errorPayload));
 };
 
 const renderCallResult = ({
@@ -668,31 +820,7 @@ const renderCallResult = ({
   writers: Writers;
 }): void => {
   if (result.isError) {
-    const errorPayload = parsePayload(result);
-    // A structured envelope renders as plain, agent-readable stderr lines
-    // (`error: <message>`, then `hint: <hint>` when present) rather than a raw
-    // JSON dump. stderr always stays human/agent text: even with --output json
-    // the error never goes to stdout, so a scripted stdout stays clean.
-    const envelope = errorEnvelope(errorPayload);
-    if (envelope !== null) {
-      writers.stderr(`error: ${envelope.message}\n`);
-      // Field-level validation issues follow the summary, one indented line
-      // each, so an agent can map a failure back to the offending field. A
-      // root issue (empty path) renders its message without a bare `: ` prefix.
-      for (const issue of envelope.issues) {
-        writers.stderr(
-          issue.path === ""
-            ? `  ${issue.message}\n`
-            : `  ${issue.path}: ${issue.message}\n`,
-        );
-      }
-      if (envelope.hint !== undefined) {
-        writers.stderr(`hint: ${envelope.hint}\n`);
-      }
-    } else {
-      writers.stderr(`${result.content.at(0)?.text ?? "Tool error"}\n`);
-    }
-    setExit(context, classifyToolError(errorPayload));
+    renderToolError({ context, result, writers });
     return;
   }
   const payload = parsePayload(result);
@@ -815,25 +943,18 @@ export const runLeafCommand = async ({
   }
 
   if (allActive) {
-    const outcome = await followAll({ spec, baseArgs: args, serverUrl, token });
-    if (Result.isError(outcome)) {
-      writers.stderr(`${outcome.error.message}\n`);
-      setExit(context, mapClientErrorExit(outcome.error));
-      return;
-    }
-    const plan = buildRenderPlan({
-      payload: outcome.value.payload,
-      itemsKey: spec.itemsKey,
+    await streamOrRenderAllPages({
+      context,
+      writers,
+      format,
       windowedText: spec.windowedText,
-      singleReadActive: false,
-      columns: undefined,
+      itemsKey: spec.itemsKey,
+      baseArgs: args,
+      serverUrl,
+      token,
+      toolName: spec.toolName,
+      cursorInto: (base, cursor) => ({ ...base, cursor }),
     });
-    renderResult({ plan, format, writers, allActive: true });
-    if (outcome.value.truncated) {
-      writers.stderr(
-        `--all truncated at ${outcome.value.count} items/pages; resume with --cursor ${outcome.value.lastCursor}\n`,
-      );
-    }
     return;
   }
 

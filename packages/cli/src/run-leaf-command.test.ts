@@ -418,4 +418,23 @@ describe("confirm passthrough (capability invoke)", () => {
     expect(server.calls).toHaveLength(1);
     expect(tty.exitCode()).toBe(EXIT_CODES.aborted);
   });
+
+  test("--no-input never prompts at a TTY: fails closed (exit 7, --yes required)", async () => {
+    const server = startConfirmGateServer();
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "y\n",
+      isTTY: true,
+    });
+    await runLeafCommand({
+      context: tty.context,
+      flags: { capability: "clauses.categories-delete", noInput: true },
+      spec: INVOKE_SPEC,
+    });
+    server.stop();
+    // Only the initial call; the confirmation prompt is refused, not answered.
+    expect(server.calls).toHaveLength(1);
+    expect(tty.exitCode()).toBe(EXIT_CODES.aborted);
+    expect(tty.stderrText()).toContain("--yes is required");
+  });
 });

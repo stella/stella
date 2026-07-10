@@ -72,13 +72,13 @@ export class RouteGenerationError extends CliBaseError<"RouteGenerationError"> {
 }
 
 /** snake_case or camelCase segment -> kebab-case. */
-const kebabCase = (segment: string): string =>
+export const kebabCase = (segment: string): string =>
   segment
     .replace(/_/gu, "-")
     .replace(/(?<lower>[a-z0-9])(?<upper>[A-Z])/gu, "$<lower>-$<upper>")
     .toLowerCase();
 
-type PropSchema = Record<string, unknown>;
+export type PropSchema = Record<string, unknown>;
 
 type TypeInfo = {
   base: string | undefined;
@@ -120,7 +120,7 @@ const boundFields = (schema: PropSchema): { min?: number; max?: number } => {
 };
 
 /** Result of classifying one prop's schema into a CLI surface (spec S3). */
-type PropClassification =
+export type PropClassification =
   | { kind: "flag"; spec: Omit<FlagSpec, "required"> }
   | {
       kind: "dot-path";
@@ -238,7 +238,10 @@ const classifyObject = (
   return { kind: "dot-path", children };
 };
 
-const classifyProp = (prop: string, schema: PropSchema): PropClassification => {
+export const classifyProp = (
+  prop: string,
+  schema: PropSchema,
+): PropClassification => {
   const { base, nullable } = typeInfo(schema);
   const values = enumValues(schema);
 
