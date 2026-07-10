@@ -8,8 +8,10 @@ import {
   hasApprovalResponseAwaitingModelStep,
   hasApprovedActiveDocxEditAwaitingClientOutput,
   hasRunningToolCallInLatestAssistantMessage,
+  isApprovalOnceChatToolName,
   isApprovalPart,
   isChatTurnInFlight,
+  isExternalInputChatToolName,
   isPublicOfficialChatToolName,
   isToolApprovedByGrant,
   isUnresolvedFolioAgentDocToolCallPart,
@@ -82,6 +84,13 @@ describe("isApprovalPart", () => {
     // tools — they only render in chat history.
     expect(isPublicOfficialChatToolName("ares_lookup_company")).toBe(false);
     expect(isPublicOfficialChatToolName("ares_search_companies")).toBe(false);
+  });
+
+  test("identifies built-in tools whose external request needs a preview", () => {
+    expect(isExternalInputChatToolName("web_search")).toBe(true);
+    expect(isExternalInputChatToolName("fetch_url")).toBe(true);
+    expect(isExternalInputChatToolName("boe_search_legislation")).toBe(true);
+    expect(isExternalInputChatToolName("boe_get_law")).toBe(false);
   });
 
   test("treats active DOCX edit tools as approval parts", () => {
@@ -174,6 +183,11 @@ describe("isApprovalPart", () => {
 });
 
 describe("tool approval grants", () => {
+  test("keeps organization management approvals per call", () => {
+    expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
+    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
+  });
+
   test("treats external MCP approvals as connector-level grants", () => {
     const grants = new Set([
       getToolApprovalGrant("mcp__salvia__search_decisions"),

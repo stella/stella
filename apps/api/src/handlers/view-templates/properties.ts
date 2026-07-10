@@ -67,10 +67,14 @@ export const collectTemplateProperties = ({
     { dependsOnSourceId: string; condition: ConditionNode | null }[]
   >();
   for (const dep of dependencies) {
+    const parsed = parseStoredCondition(dep.condition, dep.dependsOnPropertyId);
+    if (parsed.status === "invalid") {
+      continue;
+    }
     const list = dependenciesByPropertyId.get(dep.propertyId) ?? [];
     list.push({
       dependsOnSourceId: dep.dependsOnPropertyId,
-      condition: parseStoredCondition(dep.condition),
+      condition: parsed.condition,
     });
     dependenciesByPropertyId.set(dep.propertyId, list);
   }

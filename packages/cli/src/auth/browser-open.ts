@@ -6,14 +6,14 @@ import { spawn } from "node:child_process";
 
 const OPEN_TIMEOUT_MS = 5000;
 
-const openCommandFor = (
+export const openCommandFor = (
   platform: NodeJS.Platform,
 ): readonly string[] | undefined => {
   if (platform === "darwin") {
     return ["open"];
   }
   if (platform === "win32") {
-    return ["cmd", "/c", "start", ""];
+    return ["explorer.exe"];
   }
   return ["xdg-open"];
 };

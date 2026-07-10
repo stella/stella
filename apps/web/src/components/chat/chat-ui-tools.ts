@@ -62,10 +62,13 @@ type PublicOfficialToolName = Extract<
   | "boe_get_law"
   | "boe_get_law_block"
   | "boe_get_law_structure"
-  | "boe_search_legislation"
   | "borme_get_summary"
   | "business_registry_lookup"
   | "infosoud_lookup_case"
+>;
+type ExternalInputToolName = Extract<
+  BuiltInApprovalToolName,
+  "boe_search_legislation" | "fetch_url" | "web_search"
 >;
 const RUNNING_TOOL_STATES = {
   "awaiting-input": true,
@@ -188,15 +191,25 @@ const PUBLIC_OFFICIAL_CHAT_TOOL_NAMES = {
   boe_get_law: true,
   boe_get_law_block: true,
   boe_get_law_structure: true,
-  boe_search_legislation: true,
   borme_get_summary: true,
   business_registry_lookup: true,
   infosoud_lookup_case: true,
 } as const satisfies Record<PublicOfficialToolName, true>;
 
+const EXTERNAL_INPUT_CHAT_TOOL_NAMES = {
+  boe_search_legislation: true,
+  fetch_url: true,
+  web_search: true,
+} as const satisfies Record<ExternalInputToolName, true>;
+
 export const isExternalMcpToolName = (
   toolName: string,
 ): toolName is `mcp__${string}` => toolName.startsWith("mcp__");
+
+export const isExternalInputChatToolName = (
+  toolName: ApprovalToolName,
+): toolName is ExternalInputToolName =>
+  toolName in EXTERNAL_INPUT_CHAT_TOOL_NAMES;
 
 export const getExternalMcpConnectorSlugFromToolName = (
   toolName: `mcp__${string}`,
@@ -237,6 +250,9 @@ export const isPublicOfficialChatToolName = (
 
 /** Prefix marking a destructive (irreversible delete) registry write tool. */
 const DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX = "delete_";
+const APPROVAL_ONCE_CHAT_TOOL_NAMES = {
+  manage_organization: true,
+} as const satisfies Partial<Record<ApprovalToolName, true>>;
 
 /**
  * Whether a chat tool is destructive (an irreversible delete). Destructive
@@ -251,6 +267,10 @@ const DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX = "delete_";
  */
 export const isDestructiveChatToolName = (toolName: string): boolean =>
   toolName.startsWith(DESTRUCTIVE_CHAT_TOOL_NAME_PREFIX);
+
+export const isApprovalOnceChatToolName = (toolName: ApprovalToolName) =>
+  isDestructiveChatToolName(toolName) ||
+  toolName in APPROVAL_ONCE_CHAT_TOOL_NAMES;
 
 /**
  * Chat tools that may only ever be approved once or denied — never granted

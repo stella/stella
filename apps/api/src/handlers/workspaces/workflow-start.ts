@@ -5,6 +5,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { isDeferredServiceTierAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 
@@ -14,7 +15,9 @@ const config = {
   body: t.Object({
     entityIds: t.Optional(t.Array(tSafeId("entity"))),
     entityIdsOrder: t.Optional(t.Array(tSafeId("entity"))),
-    propertyIds: t.Optional(t.Array(tSafeId("property"))),
+    propertyIds: t.Optional(
+      t.Array(tSafeId("property"), { maxItems: LIMITS.propertiesCount }),
+    ),
     serviceTier: t.Optional(
       t.Union([t.Literal("standard"), t.Literal("flex")]),
     ),

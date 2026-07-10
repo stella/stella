@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import {
-  ArrowRightIcon,
   CheckIcon,
   GlobeIcon,
   LoaderIcon,
@@ -13,7 +12,6 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
@@ -21,7 +19,8 @@ import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
   getChatToolTitleKey,
   getApprovalToolName,
-  isDestructiveChatToolName,
+  isApprovalOnceChatToolName,
+  isExternalInputChatToolName,
   isExternalMcpToolName,
   isNonPersistentGrantChatToolName,
   isPublicOfficialChatToolName,
@@ -42,7 +41,6 @@ import {
 import { sanitizeHref } from "@/lib/sanitize-href";
 import type { WorkspaceProperty } from "@/lib/types";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   emptyColor,
@@ -50,45 +48,8 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument" +
-  ".wordprocessingml.document";
-
 type UpdateEntityFieldsInput = ChatUITools["update-entity-fields"]["input"];
 type ActiveDocxEditInput = ChatUITools["apply-active-docx-edits"]["input"];
-
-/** Guess a mime type from a file name extension. */
-const mimeFromName = (name: string): string => {
-  const ext = name.split(".").pop()?.toLowerCase();
-
-  if (!ext) {
-    return "application/octet-stream";
-  }
-
-  switch (ext) {
-    case "pdf":
-      return "application/pdf";
-    case "doc":
-      return "application/msword";
-    case "docx":
-      return DOCX_MIME;
-    case "xls":
-      return "application/vnd.ms-excel";
-    case "xlsx":
-      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    case "csv":
-      return "text/csv";
-    case "png":
-      return "image/png";
-    case "jpg":
-    case "jpeg":
-      return "image/jpeg";
-    case "txt":
-      return "text/plain";
-    default:
-      return "application/octet-stream";
-  }
-};
 
 const getApprovalId = (part: ApprovalToolPart): string | null => {
   switch (part.state) {
@@ -149,10 +110,7 @@ type UpdateSummaryProps = {
 const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
   const t = useTranslations();
   const qc = useQueryClient();
-  const propName = input.propertyName ?? t("chat.toolCall.field");
-  const entityName = input.entityName;
   const newVal = input.value;
-  const oldVal = input.oldValue;
 
   // Look up the property from cache for colors.
   let property: WorkspaceProperty | undefined;
@@ -164,6 +122,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
       property = cached.find((p) => p.id === input.propertyId);
     }
   }
+  const propName = property?.name ?? input.propertyId;
 
   const isSelect =
     property?.content.type === "single-select" ||
@@ -172,57 +131,26 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
   let displayNew: string | null = null;
   if (Array.isArray(newVal)) {
     displayNew = newVal.join(", ");
+  } else if (typeof newVal === "string") {
+    displayNew = newVal;
   } else if (newVal !== null) {
     displayNew = JSON.stringify(newVal);
   }
 
   return (
     <div className="border-border/50 flex flex-col gap-1.5 border-t px-3 py-2">
+      <code className="text-muted-foreground text-xs break-all">
+        {input.entityId}
+      </code>
       {/* Property change */}
       <div className="flex items-center gap-1.5 text-xs">
         <span className="text-muted-foreground">{propName}:</span>
         {isSelect ? (
-          <>
-            {oldVal && (
-              <>
-                <SelectBadge property={property} value={oldVal} />
-                <DirectionalIcon
-                  className="text-muted-foreground size-3 shrink-0"
-                  icon={ArrowRightIcon}
-                />
-              </>
-            )}
-            <SelectBadge property={property} value={displayNew} />
-          </>
+          <SelectBadge property={property} value={displayNew} />
         ) : (
-          <span className="font-medium">
-            {oldVal && (
-              <>
-                <span className="text-muted-foreground line-through">
-                  {oldVal}
-                </span>
-                {" → "}
-              </>
-            )}
-            {displayNew ?? t("common.empty")}
-          </span>
+          <span className="font-medium">{displayNew ?? t("common.empty")}</span>
         )}
       </div>
-
-      {/* Entity name with icon */}
-      {entityName && (
-        <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-          <DocumentIcon
-            className="size-3.5 shrink-0"
-            mimeType={
-              entityName.includes(".")
-                ? mimeFromName(entityName)
-                : "application/octet-stream"
-            }
-          />
-          <span className="truncate">{entityName}</span>
-        </div>
-      )}
     </div>
   );
 };
@@ -336,13 +264,14 @@ export const ToolApprovalCard = ({
     isApprovalResponded || (responded && isApprovalRequested);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;
   const isExternalMcpApproval = isExternalMcpToolName(name);
-  // Destructive (delete_*) writes are irreversible, so they may only be
-  // approved once or denied: no "allow in conversation", no "always allow", so
-  // a stored grant can never auto-approve a delete.
-  const isDestructive = isDestructiveChatToolName(name);
+  const showsExternalInput =
+    isExternalMcpApproval || isExternalInputChatToolName(name);
+  // High-impact writes may only be approved once or denied: no persistent
+  // grant can auto-approve a later call.
+  const isApprovalOnce = isApprovalOnceChatToolName(name);
   const canAllowInConversation =
     name !== "apply-active-docx-edits" &&
-    !isDestructive &&
+    !isApprovalOnce &&
     !isNonPersistentGrantChatToolName(name);
   const canAlwaysAllow = canAllowInConversation;
   const isPublicOfficialApproval = isPublicOfficialChatToolName(name);
@@ -356,8 +285,8 @@ export const ToolApprovalCard = ({
   const externalMcpProviderName = getExternalMcpProviderName(name);
   const label = externalMcpProviderName ?? t(getChatToolTitleKey(name));
   const externalMcpConnectorSlug = getExternalMcpConnectorSlug(name);
-  const externalMcpInput =
-    isExternalMcpApproval && part.state !== "input-streaming"
+  const externalInput =
+    showsExternalInput && part.state !== "input-streaming"
       ? getApprovalPartInput(part)
       : undefined;
   const { data: mcpConnectorsData } = useQuery({
@@ -538,20 +467,18 @@ export const ToolApprovalCard = ({
             subagents={part.input.subagents}
           />
         )}
-      {isExternalMcpApproval &&
+      {showsExternalInput &&
         part.state !== "input-streaming" &&
-        externalMcpInput !== undefined && (
+        externalInput !== undefined && (
           <ExternalMcpInputSummary
-            input={externalMcpInput}
+            input={externalInput}
             isAwaitingDecision={
               isApprovalRequested &&
               !isProcessing &&
               !isBlocked &&
               !isPublicOfficialApproval
             }
-            providerName={
-              externalMcpProviderName ?? t("knowledge.sections.mcp.title")
-            }
+            providerName={externalMcpProviderName ?? label}
           />
         )}
       {isRegistryWriteSummaryToolName(name) &&

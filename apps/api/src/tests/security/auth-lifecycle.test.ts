@@ -49,7 +49,7 @@ describe("organization member auth lifecycle", () => {
 });
 
 describe("self-host auth bootstrap lifecycle", () => {
-  test("password sign-up is guarded by the self-host bootstrap hook", () => {
+  test("bootstrap enrollment is the only first-user auth path", () => {
     const authSource = readSecurityFixture("../../lib/auth.ts");
     const selfhostAuthSource = readSecurityFixture(
       "../../lib/selfhost-auth.ts",
@@ -59,6 +59,7 @@ describe("self-host auth bootstrap lifecycle", () => {
     expect(authSource).toContain('"/sign-in/email": AUTH_RATE_LIMITS.signIn');
     expect(authSource).toContain("isSelfhostLocalPasswordAuthEnabled()");
     expect(authSource).toContain("assertSelfhostBootstrapSignUp(ctx.body)");
+    expect(authSource).toContain("assertSelfhostEmailOtpAllowed(ctx.path)");
     expect(authSource).toContain("NEW_SESSION_SECURITY_PATHS");
     expect(authSource).toContain("SIGN_IN_EMAIL_PATH");
     expect(authSource).toContain("isTransactionalEmailConfigured()");

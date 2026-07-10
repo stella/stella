@@ -21,10 +21,25 @@ const streamdownPlugins = { cjk, math, mermaid };
 // the model actually saw (`[PERSON_1]`, …).
 const ANON_TAG_ALLOWED: { "stll-anon": string[] } = { "stll-anon": ["ph"] };
 
+export const messageComponents = {
+  img: (props: unknown) => {
+    if (
+      typeof props !== "object" ||
+      props === null ||
+      !("alt" in props) ||
+      typeof props.alt !== "string"
+    ) {
+      return <span />;
+    }
+    return <span>{props.alt}</span>;
+  },
+} satisfies NonNullable<MessageResponseProps["components"]>;
+
 export const MessageResponseImpl = memo(
   ({
     className,
     allowedTags,
+    components,
     rehypePlugins,
     ...props
   }: MessageResponseProps) => (
@@ -53,6 +68,11 @@ export const MessageResponseImpl = memo(
       )}
       plugins={streamdownPlugins}
       allowedTags={{ ...ANON_TAG_ALLOWED, ...allowedTags }}
+      components={{
+        ...messageComponents,
+        ...components,
+        img: components?.img ?? messageComponents.img,
+      }}
       {...(rehypePlugins ? { rehypePlugins } : {})}
       {...props}
     />

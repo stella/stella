@@ -138,11 +138,22 @@ export const getExecutionPlanData = async (
   );
 
   const edges: PropertyDependency[] = propertiesResult.flatMap((property) =>
-    property.dependencies.map((dep) => ({
-      propertyId: property.id,
-      dependsOnPropertyId: dep.dependsOnPropertyId,
-      condition: parseStoredCondition(dep.condition),
-    })),
+    property.dependencies.flatMap((dep) => {
+      const parsed = parseStoredCondition(
+        dep.condition,
+        dep.dependsOnPropertyId,
+      );
+      if (parsed.status === "invalid") {
+        return [];
+      }
+      return [
+        {
+          propertyId: property.id,
+          dependsOnPropertyId: dep.dependsOnPropertyId,
+          condition: parsed.condition,
+        },
+      ];
+    }),
   );
 
   return { properties: allProperties, dependencies: edges };

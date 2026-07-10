@@ -12,7 +12,7 @@ import {
 } from "@/api/lib/auth-paths";
 import { isTransactionalEmailConfigured } from "@/api/lib/email";
 import {
-  isSelfhostBootstrapAvailable,
+  isSelfhostFirstUserRequired,
   isSelfhostLocalPasswordAuthEnabled,
 } from "@/api/lib/selfhost-auth";
 
@@ -80,9 +80,13 @@ export const authMetadataRoute = new Elysia()
 
 export const authCapabilitiesRoute = new Elysia({
   prefix: "/auth",
-}).get("/capabilities", async () => ({
-  emailOtp: isTransactionalEmailConfigured(),
-  localPassword: isSelfhostLocalPasswordAuthEnabled(),
-  bootstrap: await isSelfhostBootstrapAvailable(),
-  social: getSocialAuthCapabilities(),
-}));
+}).get("/capabilities", async () => {
+  const firstUserRequired = await isSelfhostFirstUserRequired();
+  const bootstrap = firstUserRequired && !!env.SELFHOST_BOOTSTRAP_TOKEN;
+  return {
+    emailOtp: isTransactionalEmailConfigured() && !firstUserRequired,
+    localPassword: isSelfhostLocalPasswordAuthEnabled(),
+    bootstrap,
+    social: getSocialAuthCapabilities(),
+  };
+});

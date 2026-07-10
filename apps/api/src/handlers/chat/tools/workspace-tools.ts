@@ -182,24 +182,6 @@ export const createWorkspaceTools = ({
             v.union([v.string(), v.number(), v.array(v.string()), v.null_()]),
             v.description("New value for the field"),
           ),
-          entityName: v.optional(
-            v.pipe(
-              v.string(),
-              v.description("Entity name (for display in approval)"),
-            ),
-          ),
-          propertyName: v.optional(
-            v.pipe(
-              v.string(),
-              v.description("Property name (for display in approval)"),
-            ),
-          ),
-          oldValue: v.optional(
-            v.pipe(
-              v.string(),
-              v.description("Current value before the change"),
-            ),
-          ),
         }),
       ),
       outputSchema: toTanStackToolSchema(updateEntityFieldsOutputSchema),

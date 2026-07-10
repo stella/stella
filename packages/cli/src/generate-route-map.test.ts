@@ -77,10 +77,9 @@ describe("generateRouteMap: structure", () => {
     expect(send?.toolName).toBe("send_feedback");
     expect(send?.scope).toBe("feedback");
     expect(send?.destructive).toBe(false);
-    // The two-phase handshake flag is a normal string value flag.
-    expect(flagFor(send ?? errorSpec(), "--confirmation-token")?.kind).toBe(
-      "string",
-    );
+    expect(
+      flagFor(send ?? errorSpec(), "--confirmation-token"),
+    ).toBeUndefined();
   });
 
   test("destructive tools hide the boolean `confirm` gate from generated flags", () => {

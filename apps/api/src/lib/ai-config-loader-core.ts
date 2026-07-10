@@ -1,6 +1,7 @@
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 
 export type OrgAIConfigRow = {
   aiConfigEncrypted: string | null | undefined;
@@ -46,7 +47,10 @@ export const decryptOrgAIConfigRow = async ({
       organizationId,
       source: "loadOrgAIConfig",
     });
-    return null;
+    throw new ConfigurationError({
+      message: "Stored organization AI configuration is invalid",
+      cause: error,
+    });
   }
 };
 

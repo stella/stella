@@ -115,6 +115,17 @@ const arrayFields: FieldMeta[] = [
 ];
 
 describe("resolveAiFields — array-scoped (per-item) fields", () => {
+  test("ignores paths with reserved object segments", async () => {
+    const original = Object.hasOwn(Object.prototype, "draft");
+    await resolveAiFields({
+      values: { contracts: [{ name: "Alpha" }] },
+      fields: [{ path: "contracts.__proto__.draft", aiPrompt: "Draft a note" }],
+      generate: async () => "NOTE",
+    });
+
+    expect(Object.hasOwn(Object.prototype, "draft")).toBe(original);
+  });
+
   test("drafts once per row and injects at the remainder path on each row", async () => {
     const seenNames: string[] = [];
     const result = await resolveAiFields({

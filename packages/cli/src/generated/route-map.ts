@@ -4302,14 +4302,7 @@ export const generatedRouteMap: RouteNode = {
                 flag: "--channel",
                 prop: "channel",
                 kind: "enum",
-                enum: ["github", "email", "stella"],
-                repeatable: false,
-                required: false,
-              },
-              {
-                flag: "--confirmation-token",
-                prop: "confirmation_token",
-                kind: "string",
+                enum: ["github"],
                 repeatable: false,
                 required: false,
               },
@@ -4342,14 +4335,9 @@ export const generatedRouteMap: RouteNode = {
                 },
                 channel: {
                   type: "string",
-                  enum: ["github", "email", "stella"],
+                  enum: ["github"],
                   description:
-                    "Delivery channel. github (default) returns a prefilled issue URL the human submits under their own GitHub account (strongly preferred). email and stella are fallbacks for humans without a GitHub account and each need a confirmation-token handshake: email sends to this server's configured maintainer inbox; stella forwards to the hosted stella intake (use when there is no GitHub account and no local email is configured).",
-                },
-                confirmation_token: {
-                  type: "string",
-                  description:
-                    "email/stella channels only: the confirmation_token from a prior approval_required response. Send it on the second call, with the same kind/title/body, only after the human approved the content.",
+                    "Delivery channel. github returns a prefilled issue URL the human submits under their own GitHub account.",
                 },
               },
               required: ["kind", "title", "body"],

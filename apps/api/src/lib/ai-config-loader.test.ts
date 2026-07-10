@@ -56,6 +56,20 @@ describe("loadOrgAIConfig", () => {
       Buffer.from([1, 2]),
     );
   });
+
+  test("does not replace an invalid stored configuration with defaults", async () => {
+    const decrypt = mock(async () => {
+      throw new Error("invalid config");
+    });
+
+    expect(
+      decryptOrgAIConfigRow({
+        decrypt,
+        organizationId,
+        row: { aiConfigEncrypted: "\\x0a0b", aiConfigIv: "\\x0102" },
+      }),
+    ).rejects.toThrow("Stored organization AI configuration is invalid");
+  });
 });
 
 describe("loadPromptCachingPreference", () => {

@@ -930,21 +930,16 @@ describe("destructive confirm injection (S4)", () => {
   });
 });
 
-describe("feedback two-phase handshake (S4)", () => {
-  test("phase-1 approval_required renders the confirmation_token", async () => {
-    // Off a TTY (piped stdout) the phase-1 single object renders as JSON on
-    // stdout with the token; the TTY-only re-run affordance is covered by the
-    // approvalReRunHint unit test.
+describe("feedback submission (S4)", () => {
+  test("returns the manual submission details", async () => {
     const server = startMockServer(() => ({
       toolPayload: {
-        channel: "email",
-        status: "approval_required",
+        channel: "github",
         sanitized_title: "Bug: crash",
         sanitized_body: "Steps ...",
         redactions: 0,
-        confirmation_token: "tok-abc",
-        expires_in_minutes: 15,
-        next_step: "Show the human and re-run with the token.",
+        issue_url: "https://github.com/stella/stella/issues/new",
+        next_step: "Open the URL and submit.",
       },
     }));
     const result = await runCli({
@@ -957,8 +952,6 @@ describe("feedback two-phase handshake (S4)", () => {
         "Bug: crash",
         "--body",
         "Steps ...",
-        "--channel",
-        "email",
       ],
       url: server.url,
       token: makeToken(["feedback"]),
@@ -967,44 +960,13 @@ describe("feedback two-phase handshake (S4)", () => {
     expect(result.exitCode).toBe(0);
     expect(server.requests.at(0)?.params.name).toBe("send_feedback");
     const payload = JSON.parse(result.stdout);
-    expect(payload.status).toBe("approval_required");
-    expect(payload.confirmation_token).toBe("tok-abc");
-  });
-
-  test("phase-2 with --confirmation-token forwards the token to the server", async () => {
-    const server = startMockServer(() => ({
-      toolPayload: {
-        channel: "email",
-        status: "sent",
-        next_step: "Tell the human it was emailed.",
-      },
-    }));
-    const result = await runCli({
-      args: [
-        "feedback",
-        "send",
-        "--kind",
-        "bug",
-        "--title",
-        "Bug: crash",
-        "--body",
-        "Steps ...",
-        "--channel",
-        "email",
-        "--confirmation-token",
-        "tok-abc",
-      ],
-      url: server.url,
-      token: makeToken(["feedback"]),
-    });
-    server.stop();
-    expect(result.exitCode).toBe(0);
+    expect(payload.issue_url).toBe(
+      "https://github.com/stella/stella/issues/new",
+    );
     expect(server.requests.at(0)?.params.arguments).toEqual({
       kind: "bug",
       title: "Bug: crash",
       body: "Steps ...",
-      channel: "email",
-      confirmation_token: "tok-abc",
     });
   });
 });
