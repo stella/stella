@@ -760,6 +760,49 @@ describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
       ]),
     ).toThrow(/unsafe import path/u);
   });
+
+  test("rejects dots-only import-path segments (path traversal shape)", () => {
+    for (const importPath of [
+      "@/api/handlers/../secrets",
+      "@/api/handlers/./x",
+      "@/api/handlers/.../x",
+      "@/api/..",
+      "@/api/handlers/.hidden",
+      "@/api/handlers/trailing.",
+    ]) {
+      expect(
+        () =>
+          serializeDispatchModule([
+            { id: "x.y", importPath, exportName: undefined },
+          ]),
+        importPath,
+      ).toThrow(/unsafe import path/u);
+    }
+    // Interior dots stay legal (file extensions never appear, but versioned
+    // names like `v1.2` would): only dot-anchored/dots-only segments fail.
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y",
+          importPath: "@/api/handlers/x/v1.2",
+          exportName: undefined,
+        },
+      ]),
+    ).not.toThrow();
+  });
+
+  test("a dots-only id cannot slip through (split on dots leaves empty segments)", () => {
+    expect(() =>
+      serializeDispatchModule([
+        { id: "..", importPath: "@/api/handlers/x/y", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe id/u);
+    expect(() =>
+      serializeDispatchModule([
+        { id: "a..b", importPath: "@/api/handlers/x/y", exportName: undefined },
+      ]),
+    ).toThrow(/unsafe id/u);
+  });
 });
 
 describe("schemaContainsBinaryFormat", () => {

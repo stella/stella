@@ -373,12 +373,17 @@ export type CapabilityDispatchRecord = {
  * generated module's structure.
  *
  * - id: dot-joined path segments plus an optional camelCase export-name segment
- *   (e.g. `entities.read-summaries.readEntitySummariesCount`).
- * - import path: the fixed `@/api/` alias prefix plus lowercase path segments.
- * - export name: a single plain TS identifier.
+ *   (e.g. `entities.read-summaries.readEntitySummariesCount`); segments allow
+ *   no dots at all (the id is split ON dots, so an empty segment already
+ *   fails), which structurally rules out `.`/`..` shapes.
+ * - import path: the fixed `@/api/` alias prefix plus lowercase path segments;
+ *   a segment must start and end with an alphanumeric, so a dots-only segment
+ *   (`.`, `..`, `...` — the path-traversal shape) can never round-trip into the
+ *   emitted `import(...)` specifier.
+ * - export name: a single plain TS identifier (no dots representable).
  */
 const DISPATCH_ID_SEGMENT_PATTERN = /^[a-zA-Z0-9-]+$/u;
-const DISPATCH_IMPORT_SEGMENT_PATTERN = /^[a-z0-9.-]+$/u;
+const DISPATCH_IMPORT_SEGMENT_PATTERN = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/u;
 const DISPATCH_EXPORT_NAME_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/u;
 const DISPATCH_IMPORT_PREFIX = "@/api/";
 

@@ -388,6 +388,24 @@ describe("invoke_capability workspace resolution", () => {
     expect(errorEnvelope(result).code).toBe("not_found");
   });
 
+  test("archived workspace on a READ capability -> not_found (REST parity)", async () => {
+    // validateWorkspaceAccess (lib/auth.ts) 404s ANY non-active workspace,
+    // reads included; the generic path must be no weaker.
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: { params: { workspaceId: "ws_arch" } },
+      },
+      context: createContext({
+        workspaceIds: ["ws_arch"],
+        archivedWorkspaceIds: ["ws_arch"],
+      }),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("not_found");
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
   test("archived workspace on a write capability -> not_found", async () => {
     const result = await handleMcpToolCall({
       args: {
@@ -811,6 +829,50 @@ const mappedError = (
   }
   return asTestRaw<{ error: ErrorEnvelope }>(JSON.parse(item.text)).error;
 };
+
+// --- Elysia-boundary input normalization (Value.Clean parity) ----------------
+
+describe("invoke_capability input normalization", () => {
+  test("unknown keys on a closed schema are stripped, not rejected (REST parity)", async () => {
+    // tasks.calendar's body schema is additionalProperties: false; the Elysia
+    // boundary CLEANS unknown keys before validation (verified empirically),
+    // so the generic path must accept-and-strip too, not reject.
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "tasks.calendar",
+        input: {
+          params: { workspaceId: "ws_1" },
+          body: {
+            dateFrom: "2026-01-01T00:00:00.000Z",
+            dateTo: "2026-01-31T00:00:00.000Z",
+            datePropertyIds: ["prop_1"],
+            unknownExtra: "would fail additionalProperties:false without Clean",
+          },
+        },
+        validateOnly: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(
+      parseToolPayload<{ valid: boolean; capability: string }>(result),
+    ).toEqual({ valid: true, capability: "tasks.calendar" });
+  });
+
+  test("workspaceId still resolves when the config params schema omits it", async () => {
+    // The route macro owns workspaceId at REST; Clean must not break the
+    // resolution for configs that do not declare it (raw-params read).
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: { params: { workspaceId: "ws_1" } },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(parseToolPayload<string>(result)).toContain("Date,");
+  });
+});
 
 // --- deployment feature gates -------------------------------------------------
 

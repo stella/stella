@@ -36,7 +36,6 @@ import os from "node:os";
 import path from "node:path";
 
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
-import type { McpToolFeatureFlag } from "../src/mcp/tool-types";
 import {
   type AccessClassification,
   type CapabilityDispatchRecord,
@@ -361,12 +360,14 @@ const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
  * they are deliberately NOT applied here: invoke stays exactly as gated as the
  * REST + static-tool surface, no stricter.
  *
- * Guards: a stale domain (no catalog entries) fails the export; a domain whose
+ * Guards: every value must be a FEATURE_* key of the API env (checked at
+ * export time against the real env object); a stale domain (no catalog
+ * entries) fails the export; a domain whose
  * covering tools carry a feature but that is absent here (or that names a
  * different feature than an entry inherits) fails the export, so a new gated
  * tool family cannot leave its sibling capabilities un-gated.
  */
-const DOMAIN_FEATURE: Record<string, McpToolFeatureFlag> = {
+const DOMAIN_FEATURE: Record<string, string> = {
   "billing-codes": "FEATURE_TIME_BILLING",
   "case-law": "FEATURE_PUBLIC_LAW",
   expenses: "FEATURE_TIME_BILLING",
@@ -404,7 +405,7 @@ type CapabilityEntry = {
    * `feature` (tool/covered dispositions) else the DOMAIN_FEATURE table.
    * Consulted by list_capabilities/describe/invoke (see capability-feature.ts).
    */
-  feature?: McpToolFeatureFlag;
+  feature?: string;
   permissions?: unknown;
   /**
    * Absent when the schema exceeded MAX_CAPABILITY_SCHEMA_BYTES (see
@@ -558,7 +559,7 @@ type BuildCatalogEntryOptions = {
   inputSchema: CapabilityInputSchema;
   capped: ReturnType<typeof capInputSchema>;
   exposure: ParsedExposure;
-  feature: McpToolFeatureFlag | undefined;
+  feature: string | undefined;
 };
 
 /**
@@ -621,7 +622,7 @@ const collectClassGuardErrors = ({
   entries: readonly CapabilityEntry[];
   entrySources: readonly { id: string; source: string }[];
   routeFiles: readonly { id: string; source: string }[];
-  toolFeatureByName: ReadonlyMap<string, McpToolFeatureFlag>;
+  toolFeatureByName: ReadonlyMap<string, string>;
 }): string[] => {
   const errors: string[] = [];
   const capabilityIdSet = new Set(entries.map((entry) => entry.id));
@@ -693,7 +694,7 @@ const collectClassGuardErrors = ({
       );
     }
   }
-  const inheritedByDomain = new Map<string, Set<McpToolFeatureFlag>>();
+  const inheritedByDomain = new Map<string, Set<string>>();
   const capabilityDispositionDomains = new Set<string>();
   for (const entry of entries) {
     const domain = deriveDomain(entry.id);
@@ -748,11 +749,23 @@ const buildCatalog = async (): Promise<BuildResult> => {
   );
   // Covering-tool feature flags: a tool/covered entry inherits its covering
   // tool's deployment gate mechanically (see DOMAIN_FEATURE for the rest).
-  const toolFeatureByName = new Map<string, McpToolFeatureFlag>(
+  const toolFeatureByName = new Map<string, string>(
     DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((tool) =>
       tool.feature === undefined ? [] : [[tool.name, tool.feature] as const],
     ),
   );
+  // DOMAIN_FEATURE values are plain strings (the McpToolFeatureFlag key-of-env
+  // type collapses outside the app tsconfig), so validate every flag against
+  // the REAL deployment env at export time: a typo'd or removed flag fails the
+  // build here instead of silently fail-closing every entry at runtime.
+  const { env } = await import("../src/env");
+  for (const [domain, flag] of Object.entries(DOMAIN_FEATURE)) {
+    if (!flag.startsWith("FEATURE_") || !Object.hasOwn(env, flag)) {
+      errors.push(
+        `DOMAIN_FEATURE["${domain}"] names "${flag}", which is not a FEATURE_* key of the API env; fix the flag name`,
+      );
+    }
+  }
 
   const kindsByFile = new Map(files.map((file) => [file.id, file.kinds]));
   const sourceByFile = new Map(files.map((file) => [file.id, file.source]));

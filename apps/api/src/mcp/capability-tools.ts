@@ -227,11 +227,18 @@ type PartValidation =
 
 /**
  * Validate one input part (`body`/`params`/`query`) against the live handler
- * config's TypeBox schema, filling defaults and coercing exactly as the Elysia
- * route boundary would before it hands the value to the handler. A missing
- * schema means the handler ignores that part, so the raw value passes through.
- * Issue paths are prefixed with the part name so an agent sees `body.matterId`,
- * not a bare `matterId` it cannot place.
+ * config's TypeBox schema, mirroring what the Elysia route boundary hands the
+ * handler: Default -> Convert -> Clean -> Check. The Clean step matches
+ * Elysia's default input normalization, verified empirically on this repo's
+ * Elysia (1.4.29): unknown keys on a schema'd part are STRIPPED before
+ * validation — for closed (`additionalProperties: false`) schemas too, which
+ * are cleaned-then-accepted at REST, never rejected. Without Clean this path
+ * would both leak undeclared keys through to handlers (mass-assignment shape)
+ * and reject closed-schema payloads REST accepts. A missing schema means the
+ * part is not normalized at REST either (Elysia only normalizes schema'd
+ * parts), so the raw value passes through. Issue paths are prefixed with the
+ * part name so an agent sees `body.matterId`, not a bare `matterId` it cannot
+ * place.
  */
 const validatePart = (
   part: "body" | "params" | "query",
@@ -246,10 +253,11 @@ const validatePart = (
   const base = value === undefined ? {} : structuredClone(value);
   const withDefaults = Value.Default(schema, base);
   const coerced = Value.Convert(schema, withDefaults);
-  if (Value.Check(schema, coerced)) {
-    return { ok: true, value: coerced };
+  const cleaned = Value.Clean(schema, coerced);
+  if (Value.Check(schema, cleaned)) {
+    return { ok: true, value: cleaned };
   }
-  const issues = [...Value.Errors(schema, coerced)].map((error) => {
+  const issues = [...Value.Errors(schema, cleaned)].map((error) => {
     const dot = typeboxPathToDot(error.path);
     return {
       path: dot.length > 0 ? `${part}.${dot}` : part,
@@ -634,22 +642,21 @@ const resolveCapabilityWorkspace = ({
       result: notFoundResult("Workspace not found or not accessible"),
     };
   }
-  // Mirror `validateWorkspaceAccess`: a write/destructive capability 404s an
-  // archived workspace; a read capability may run against it (read-only).
-  // Capabilities flagged `allowsArchivedWorkspace` (their REST route uses
-  // `validateWorkspaceAccessIncludingArchived`, e.g. unarchive) run against an
-  // archived — but not deleting — workspace, so they skip this gate. Deleting
-  // workspaces never enter `accessibleWorkspaceStatusById`, so this branch only
-  // ever sees active/archived.
+  // Mirror `validateWorkspaceAccess` exactly (lib/auth.ts): the REST macro
+  // 404s ANY non-active workspace — reads included — so the generic path must
+  // be no weaker. Only capabilities flagged `allowsArchivedWorkspace` (their
+  // REST route uses `validateWorkspaceAccessIncludingArchived`, e.g.
+  // unarchive) run against an archived — but not deleting — workspace.
+  // Deleting workspaces never enter `accessibleWorkspaceStatusById`, so this
+  // branch only ever sees active/archived.
   if (
-    entry.access === "write" &&
     entry.allowsArchivedWorkspace !== true &&
     getWorkspaceStatus({ context, workspaceId: rawId }) !== "active"
   ) {
     return {
       ok: false,
       result: notFoundResult(
-        "Workspace is archived; unarchive it before running a write capability",
+        "Workspace is archived; unarchive it before invoking capabilities against it",
       ),
     };
   }
@@ -821,11 +828,14 @@ const executeInvoke = async ({
   const endpoint = loaded.endpoint;
 
   const isWorkspace = entry.handlerKind === "workspace";
-  // 6. Input validation against the live TypeBox schemas. A workspace-scoped
-  // capability takes its workspace as `input.params.workspaceId`: some configs
-  // declare it in their own params schema (validated here), the rest inherit it
-  // from the route macro (absent from the config schema, so it rides through as
-  // an allowed extra property — the schemas do not close `additionalProperties`).
+  // 6. Input validation against the live TypeBox schemas (Default -> Convert ->
+  // Clean -> Check, mirroring the Elysia boundary; see validatePart). A
+  // workspace-scoped capability takes its workspace as
+  // `input.params.workspaceId`; at REST that param belongs to the route macro's
+  // schema, not the handler config's, so it is resolved from the RAW params
+  // below (Clean would strip it from configs that do not declare it) and
+  // re-merged into the params the handler receives, exactly like the macro's
+  // merged schema.
   const validations = [
     validatePart("body", endpoint.config.body, input.body),
     validatePart("params", endpoint.config.params, input.params),
@@ -849,22 +859,34 @@ const executeInvoke = async ({
   const validatedParams = paramsResult.ok ? paramsResult.value : undefined;
   const validatedQuery = queryResult.ok ? queryResult.value : undefined;
 
-  // 7. Workspace resolution (workspace kind only), from the VALIDATED params so
-  // schema defaults/coercion are respected. This runs BEFORE the validateOnly
-  // return so `validateOnly: true` mirrors a real invoke: a missing/inaccessible/
-  // archived workspace fails here with the same envelope it would at execution,
-  // rather than validateOnly reporting a spurious `{ valid: true }`.
+  // 7. Workspace resolution (workspace kind only), from the RAW input params
+  // (route-macro parity: REST validates the path param independently of the
+  // handler config schema). Runs BEFORE the validateOnly return so
+  // `validateOnly: true` mirrors a real invoke: a missing/inaccessible/archived
+  // workspace fails here with the same envelope it would at execution, rather
+  // than validateOnly reporting a spurious `{ valid: true }`.
   let workspaceId: SafeId<"workspace"> | undefined;
+  let handlerParams = validatedParams;
   if (isWorkspace) {
     const resolved = resolveCapabilityWorkspace({
       context,
       entry,
-      params: validatedParams,
+      params: input.params,
     });
     if (!resolved.ok) {
       return resolved.result;
     }
     workspaceId = resolved.workspaceId;
+    // The handler's params mirror REST's merged macro+config schema: the
+    // config-declared (cleaned) fields plus workspaceId. Without a config
+    // params schema the macro's schema is all there is, so params is exactly
+    // { workspaceId }.
+    handlerParams = {
+      ...(isRecord(validatedParams) && endpoint.config.params !== undefined
+        ? validatedParams
+        : {}),
+      workspaceId: resolved.workspaceId,
+    };
   }
 
   if (validateOnly) {
@@ -920,7 +942,7 @@ const executeInvoke = async ({
     context,
     input: {
       body: validatedBody,
-      params: validatedParams,
+      params: handlerParams,
       query: validatedQuery,
     },
     request,
