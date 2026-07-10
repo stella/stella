@@ -10,7 +10,11 @@ const PinnedIdsSchema = v.array(v.string());
 const readFromStorage = (userId: string): string[] => {
   try {
     const raw = localStorage.getItem(PINNED_LS_PREFIX + userId);
-    return readStoredJson(raw, PinnedIdsSchema) ?? [];
+    const stored = readStoredJson(raw, PinnedIdsSchema);
+    if (stored === null) {
+      return [];
+    }
+    return stored;
   } catch {
     return [];
   }
