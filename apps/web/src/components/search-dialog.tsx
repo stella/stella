@@ -57,6 +57,7 @@ import type {
   TimeFilter,
 } from "@/components/search-filters.logic";
 import { UserAvatar } from "@/components/user-avatar";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
@@ -394,6 +395,11 @@ export const SearchDialog = ({
   };
 
   const analytics = useAnalytics();
+  // summarizeSearchEndpoint (POST /search/summary) and the follow-up
+  // "Ask about these results" chat (POST /search/summary/chat) both
+  // require chat:create; hide the AI summary control for roles that
+  // lack it instead of surfacing a 403 on click.
+  const canSummarizeSearch = usePermissions({ chat: ["create"] });
 
   const summarizeSearchMutation = useMutation({
     mutationFn: async (params: SearchAISummaryParams) => {
@@ -979,24 +985,26 @@ export const SearchDialog = ({
                       count: totalCount,
                     })}
                   </p>
-                  <SearchSummaryItem
-                    isOpeningChat={createSummaryChatMutation.isPending}
-                    onCitationClick={(citationId) => {
-                      const hit = allHits.find(
-                        (item) => item.id === citationId,
-                      );
-                      if (hit) {
-                        void handleResultClick(hit);
-                      }
-                    }}
-                    onClick={() => {
-                      handleSummarizeResults();
-                    }}
-                    onOpenChat={() => {
-                      handleOpenSummaryChat();
-                    }}
-                    summarizeMutation={summarizeSearchMutation}
-                  />
+                  {canSummarizeSearch && (
+                    <SearchSummaryItem
+                      isOpeningChat={createSummaryChatMutation.isPending}
+                      onCitationClick={(citationId) => {
+                        const hit = allHits.find(
+                          (item) => item.id === citationId,
+                        );
+                        if (hit) {
+                          void handleResultClick(hit);
+                        }
+                      }}
+                      onClick={() => {
+                        handleSummarizeResults();
+                      }}
+                      onOpenChat={() => {
+                        handleOpenSummaryChat();
+                      }}
+                      summarizeMutation={summarizeSearchMutation}
+                    />
+                  )}
                   <div
                     className="relative"
                     style={{ height: `${hitVirtualizer.getTotalSize()}px` }}
