@@ -133,6 +133,12 @@ export type CapabilityFlagSpec = FlagSpec & {
 export type CapabilityLeafSpec = {
   commandPath: readonly string[];
   capabilityId: string;
+  /**
+   * Read vs. write, from the catalog entry. The executor surfaces the server's
+   * request-id receipt on stderr only for a `write` (a mutation an operator may
+   * need to reference), never for a read.
+   */
+  access: "read" | "write";
   flags: readonly CapabilityFlagSpec[];
   /** Part-qualified property paths reachable only through `--input` (spec S3). */
   inputOnly: readonly string[];

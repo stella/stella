@@ -52,6 +52,7 @@ import {
   isToolErrorResult,
   parseOptionalCursor,
   stringProp,
+  structuredErrorResult,
   textResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -475,9 +476,19 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
   // list-only cursor does not apply, so reject the mixed request up front.
   if (args["template_id"] !== undefined) {
     if (args["cursor"] !== undefined) {
-      return errorResult(
-        "cursor applies when listing templates; omit template_id to list",
-      );
+      return structuredErrorResult({
+        code: "validation_error",
+        message:
+          "cursor applies when listing templates; omit template_id to list",
+        issues: [
+          {
+            path: "cursor",
+            message:
+              "cursor applies when listing templates; omit template_id to list",
+          },
+        ],
+        hint: "Omit 'template_id' to list templates with 'cursor', or omit 'cursor' when requesting a single template_id.",
+      });
     }
     return await describeTemplateDetail({ args, context });
   }
@@ -498,7 +509,12 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
   if (cursor !== undefined) {
     const decoded = decodeTemplatePageCursor(cursor);
     if (decoded === null) {
-      return errorResult("Invalid cursor");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid cursor",
+        issues: [{ path: "cursor", message: "Invalid cursor" }],
+        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+      });
     }
     boundaryId = decoded;
   }
@@ -829,11 +845,19 @@ const createTemplateFromDocx = async ({
   if (fields !== undefined) {
     const overlay = validateFieldsOverlay(fields);
     if (!overlay.ok) {
-      return errorResult(
-        `Invalid field config at fields[${overlay.index}]: not a valid ` +
+      return structuredErrorResult({
+        code: "validation_error",
+        message:
+          `Invalid field config at fields[${overlay.index}]: not a valid ` +
           "field configuration (check input type, lookup, and that formula is " +
           "not combined with aiPrompt/aiAdapt/lookup/parts).",
-      );
+        issues: [
+          {
+            path: `fields.${overlay.index}`,
+            message: "Not a valid field configuration",
+          },
+        ],
+      });
     }
     clientManifest = { fields: overlay.fields };
   }
@@ -842,10 +866,27 @@ const createTemplateFromDocx = async ({
   // base64 silently drops invalid characters; an empty decode means the input
   // was not valid base64 at all.
   if (buffer.byteLength === 0) {
-    return errorResult("Invalid input: docx_base64 is not valid base64");
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid input: docx_base64 is not valid base64",
+      issues: [
+        { path: "docx_base64", message: "docx_base64 is not valid base64" },
+      ],
+      hint: "Base64-encode the raw DOCX bytes and pass the result as 'docx_base64'.",
+    });
   }
   if (buffer.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
-    return errorResult("DOCX exceeds the maximum allowed size");
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "DOCX exceeds the maximum allowed size",
+      issues: [
+        {
+          path: "docx_base64",
+          message: "DOCX exceeds the maximum allowed size",
+        },
+      ],
+      hint: `Upload a DOCX no larger than ${FILE_SIZE_LIMIT_BYTES.document} bytes.`,
+    });
   }
 
   const validation = await validateDocxBuffer(
@@ -855,7 +896,12 @@ const createTemplateFromDocx = async ({
     ),
   );
   if (!validation.valid) {
-    return errorResult(`Invalid DOCX file: ${validation.error}`);
+    return structuredErrorResult({
+      code: "validation_error",
+      message: `Invalid DOCX file: ${validation.error}`,
+      issues: [{ path: "docx_base64", message: validation.error }],
+      hint: "Ensure 'docx_base64' decodes to a valid, uncorrupted .docx file.",
+    });
   }
 
   const created = await Result.gen(() =>
@@ -901,11 +947,19 @@ const configureExistingTemplate = async ({
 
   const overlay = validateFieldsOverlay(fields);
   if (!overlay.ok) {
-    return errorResult(
-      `Invalid field config at fields[${overlay.index}]: not a valid field ` +
+    return structuredErrorResult({
+      code: "validation_error",
+      message:
+        `Invalid field config at fields[${overlay.index}]: not a valid field ` +
         "configuration (check input type, lookup, and that formula is not " +
         "combined with aiPrompt/aiAdapt/lookup/parts).",
-    );
+      issues: [
+        {
+          path: `fields.${overlay.index}`,
+          message: "Not a valid field configuration",
+        },
+      ],
+    });
   }
 
   const templateId = brandPersistedTemplateId(rawTemplateId);

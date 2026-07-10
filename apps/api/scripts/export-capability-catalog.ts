@@ -35,6 +35,15 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+// Pure CLI generator modules (constants, classes, pure functions; no env, no
+// I/O at import time), imported relatively because `@stll/cli`'s exports map
+// only exposes its bin entry. The coverage doc computes each capability's REAL
+// generated command path through the same `buildCliRouteTree` codegen uses, so
+// collision fallbacks (curated command wins, capability relocates under
+// `stella capability <domain> <action>`) are never hand-replicated here.
+import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
+import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
+import type { RouteNode } from "../../../packages/cli/src/route-types";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import {
   type AccessClassification,
@@ -56,6 +65,7 @@ import {
   scanRouteHookGuards,
   schemaContainsBinaryFormat,
   serializeCatalog,
+  serializeCoverageDoc,
   serializeDispatchModule,
 } from "./lib/capability-catalog";
 import {
@@ -83,6 +93,14 @@ const CLI_CATALOG_PATH = path.resolve(
 const DISPATCH_PATH = path.resolve(
   REPO_ROOT,
   "apps/api/src/mcp/generated/capability-dispatch.ts",
+);
+
+// Generated capability-coverage table: one section per domain plus the
+// permanent internal-waiver summary, drift-guarded alongside the JSON/dispatch
+// artifacts above (see `serializeCoverageDoc`).
+const COVERAGE_DOC_PATH = path.resolve(
+  REPO_ROOT,
+  "docs/capability-coverage.md",
 );
 
 const OXFMT_BIN = path.resolve(REPO_ROOT, "node_modules/.bin/oxfmt");
@@ -232,13 +250,20 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
 const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
 
 /**
- * Access classification for capabilities whose permission verbs cannot be
- * mechanically classified (verbs outside read/list/view/create/update/delete/
- * manage/write), or permissionless handlers whose name is not get/list/read.
- * Each entry is a reviewed decision; an unclassifiable handler absent here fails
- * the export. Kept tight by a stale-entry check (an id that no longer needs an
- * override fails).
+ * Access classification pins, each a reviewed decision. An override WINS over
+ * the mechanical derivation, and is required in two cases:
+ *  - unclassifiable permission verbs (outside read/list/view/create/update/
+ *    delete/manage/write) or a permissionless handler whose name is not
+ *    get/list/read: the export fails until pinned;
+ *  - a read misclassified as write because its AUTHORIZING verb is a write on
+ *    the parent resource (no read verb exists for it): pin it back to read so
+ *    the catalog's `access` reflects what the handler does, not what consent
+ *    gates it. `access` feeds the doc, `list_capabilities` filters/labels, and
+ *    the CLI's write-receipt line; scope/permission enforcement is untouched.
+ * Kept tight by a stale-entry check: a pin that resolves identically to the
+ * derivation (so it changes nothing) fails the export.
  *
+ * Unclassifiable-verb / permissionless pins:
  * - `playbooks.run`: `playbook:["apply"]` — running a playbook produces a run
  *   record; treat as a (non-destructive) write.
  * - `playbooks.auto-run`: `playbook:["apply"]` — materializes playbook-run
@@ -254,6 +279,25 @@ const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
  *   only, no persistence, so read.
  * - `templates.fill-to-workspace`: `template:["use"], entity:["create"]` —
  *   creates a workspace entity, so write.
+ *
+ * Read-repins (write-verb-gated reads; sweep of read-shaped ids with
+ * access: write, each handler verified to persist nothing):
+ * - `chat.get-messages` / `chat.get-older-messages` / `chat.get-threads`:
+ *   `chat:["create"]` (the only chat verb) gates pure thread/message reads.
+ * - `organization-settings.preview`: `organizationSettings:["update"]` gates a
+ *   matter-number-pattern preview that only reads existing references.
+ * - `organization-settings.read-anonymization-blacklist`:
+ *   `organizationSettings:["update"]` gates a pure blacklist read (admin-only
+ *   visibility, no mutation).
+ * - `properties.preview`: `property:["create"]` gates an AI dry-run over
+ *   documents that returns computed values without persisting them (usage is
+ *   metered by the framework, same as `templates.fill-preview`).
+ * - `skills.get` / `skills.list` / `skills.list-commands`: `chat:["create"]`
+ *   gates pure skill-catalog reads.
+ * - `usage.get-entitlement`: `organizationSettings:["update"]` gates a pure
+ *   entitlement/remaining-units read (the Phase 1 judgment call, now pinned).
+ * - `workspaces.read-workflow-target-count`: `workspace:["update"]` gates a
+ *   pure count read used before running a workflow.
  */
 const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
   "playbooks.run": { access: "write", destructive: false },
@@ -265,6 +309,23 @@ const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
   "templates.fill-preview": { access: "read", destructive: false },
   "templates.prefill": { access: "read", destructive: false },
   "templates.fill-to-workspace": { access: "write", destructive: false },
+  "chat.get-messages": { access: "read", destructive: false },
+  "chat.get-older-messages": { access: "read", destructive: false },
+  "chat.get-threads": { access: "read", destructive: false },
+  "organization-settings.preview": { access: "read", destructive: false },
+  "organization-settings.read-anonymization-blacklist": {
+    access: "read",
+    destructive: false,
+  },
+  "properties.preview": { access: "read", destructive: false },
+  "skills.get": { access: "read", destructive: false },
+  "skills.list": { access: "read", destructive: false },
+  "skills.list-commands": { access: "read", destructive: false },
+  "usage.get-entitlement": { access: "read", destructive: false },
+  "workspaces.read-workflow-target-count": {
+    access: "read",
+    destructive: false,
+  },
 };
 
 /**
@@ -544,6 +605,13 @@ type BuildResult = {
   errors: string[];
   /** Capability ids whose input schema was omitted for exceeding the byte cap. */
   truncatedSchemas: string[];
+  /**
+   * Tally of `internal`-disposition endpoints by their `reason`: permanent
+   * reviewed waivers (auth/token plumbing, transport mechanics, ...) that never
+   * enter the catalog. Fed to `serializeCoverageDoc` for the doc's "Waived
+   * internal handlers" summary.
+   */
+  internalWaiverCounts: Record<string, number>;
 };
 
 /** Covering-tool name for a tool/covered exposure; undefined otherwise. */
@@ -815,6 +883,18 @@ const buildCatalog = async (): Promise<BuildResult> => {
       `inline capability endpoints in ${id}: ${inlineCount} inline \`capability\` disposition(s) but ${allowed} allowlisted. Inline endpoints cannot be projected into the catalog; refactor them into \`{ config, handler }\` endpoint modules (or, for the pre-existing pinned gaps only, update INLINE_CAPABILITY_ALLOWLIST)`,
     );
   }
+  // Permanent `internal` waivers, tallied by reason for the coverage doc's
+  // summary section. These endpoints never enter `entries` (the main loop
+  // below only admits tool/covered/capability dispositions).
+  const internalWaiverCounts: Record<string, number> = {};
+  for (const endpoint of endpoints) {
+    if (endpoint.exposure.type !== "internal") {
+      continue;
+    }
+    const { reason } = endpoint.exposure;
+    internalWaiverCounts[reason] = (internalWaiverCounts[reason] ?? 0) + 1;
+  }
+
   const discoveredFiles = new Set(files.map(({ id }) => id));
   for (const id of Object.keys(INLINE_CAPABILITY_ALLOWLIST)) {
     if (!discoveredFiles.has(id)) {
@@ -879,14 +959,23 @@ const buildCatalog = async (): Promise<BuildResult> => {
       optOutUses.add(id);
     }
     if (accessResolution.status === "resolved" && id in ACCESS_OVERRIDES) {
-      // Only counts as "used" when the override was actually consulted — a
-      // classifiable handler ignores its override, so it stays reportable.
-      const classifiable =
-        hasPermissions &&
-        verbs.length > 0 &&
-        resolveAccess({ id, verbs, hasPermissions, overrides: {} }).status ===
-          "resolved";
-      if (!classifiable) {
+      // An override counts as "used" only when it CHANGED the outcome: the
+      // derivation without it either fails (unclassifiable/permissionless) or
+      // resolves to a different classification (a read-repin over a
+      // write-verb-gated read). A pin the derivation resolves identically
+      // without is stale clutter and stays reportable.
+      const withoutOverride = resolveAccess({
+        id,
+        verbs,
+        hasPermissions,
+        overrides: {},
+        destructiveNameOptOuts: DESTRUCTIVE_NAME_OPT_OUTS,
+      });
+      const changedOutcome =
+        withoutOverride.status !== "resolved" ||
+        withoutOverride.access !== accessResolution.access ||
+        withoutOverride.destructive !== accessResolution.destructive;
+      if (changedOutcome) {
         accessOverrideUses.push(id);
       }
     }
@@ -1067,7 +1156,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
   entries.sort((a, b) => a.id.localeCompare(b.id));
   dispatchRecords.sort((a, b) => a.id.localeCompare(b.id));
   truncatedSchemas.sort((a, b) => a.localeCompare(b));
-  return { entries, dispatchRecords, errors, truncatedSchemas };
+  return {
+    entries,
+    dispatchRecords,
+    errors,
+    truncatedSchemas,
+    internalWaiverCounts,
+  };
 };
 
 const printErrors = (errors: readonly string[]): void => {
@@ -1160,10 +1255,99 @@ const parseCommitted = async (): Promise<unknown[] | null> => {
   return Array.isArray(parsed.value) ? parsed.value : null;
 };
 
+/** Collect every capability leaf's real command path from the generated tree. */
+const collectCapabilityCommandPaths = (
+  node: RouteNode,
+  into: Map<string, readonly string[]>,
+): void => {
+  if (node.kind === "capability-leaf") {
+    into.set(node.spec.capabilityId, node.spec.commandPath);
+    return;
+  }
+  if (node.kind === "route") {
+    for (const child of Object.values(node.children)) {
+      collectCapabilityCommandPaths(child, into);
+    }
+  }
+};
+
+type CliCommandPathsResult = {
+  cliCommandPathById: Map<string, readonly string[]>;
+  errors: string[];
+};
+
+/**
+ * The REAL generated CLI command path per capability id, for the coverage doc:
+ * run the CLI's own `buildCliRouteTree` over the same inputs codegen consumes —
+ * the live tool registry (the source `registry-snapshot.json` is projected
+ * from) plus the just-serialized catalog, revalidated through the CLI's own
+ * `parseCapabilityCatalog` so both sides see the identical projection. Curated
+ * commands win collisions and a colliding capability relocates under
+ * `stella capability <domain> <action>`, exactly as in the shipped CLI.
+ * Registry imports stay dynamic so the env is seeded before the module graph
+ * validates it (same ordering as buildCatalog).
+ */
+const computeCliCommandPaths = async (
+  serializedCatalog: string,
+): Promise<CliCommandPathsResult> => {
+  const errors: string[] = [];
+  const cliCommandPathById = new Map<string, readonly string[]>();
+
+  const cliEntries = parseCapabilityCatalog(JSON.parse(serializedCatalog));
+  if (cliEntries === null) {
+    errors.push(
+      "coverage doc: the generated catalog failed the CLI's parseCapabilityCatalog validation; fix the exporter/loader mismatch",
+    );
+    return { cliCommandPathById, errors };
+  }
+
+  const { DEFAULT_MCP_TOOL_DEFINITIONS } =
+    await import("../src/mcp/static-tool-definitions");
+  const { DEFAULT_MCP_CLI_ANNOTATIONS } =
+    await import("../src/mcp/static-cli-metadata");
+  const listings = DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => {
+    const listing: {
+      name: string;
+      description: string;
+      inputSchema: Record<string, unknown>;
+      annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+    } = {
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema,
+    };
+    if (tool.annotations !== undefined) {
+      listing.annotations = tool.annotations;
+    }
+    return listing;
+  });
+
+  const built = Result.try(() =>
+    buildCliRouteTree({
+      listings,
+      annotations: DEFAULT_MCP_CLI_ANNOTATIONS,
+      entries: cliEntries,
+    }),
+  );
+  if (Result.isError(built)) {
+    errors.push(
+      `coverage doc: buildCliRouteTree failed: ${built.error instanceof Error ? built.error.message : String(built.error)}`,
+    );
+    return { cliCommandPathById, errors };
+  }
+  collectCapabilityCommandPaths(built.value.tree, cliCommandPathById);
+  return { cliCommandPathById, errors };
+};
+
 const main = async (): Promise<number> => {
   const checkMode = process.argv.includes("--check");
-  const { entries, dispatchRecords, errors, truncatedSchemas } =
-    await buildCatalog();
+  const {
+    entries,
+    dispatchRecords,
+    errors,
+    truncatedSchemas,
+    internalWaiverCounts,
+  } = await buildCatalog();
 
   if (errors.length > 0) {
     printErrors(errors);
@@ -1181,12 +1365,41 @@ const main = async (): Promise<number> => {
     serializeDispatchModule(dispatchRecords),
   );
 
+  const { cliCommandPathById, errors: pathErrors } =
+    await computeCliCommandPaths(serialized);
+  // Every non-file capability-disposition entry must have a generated command
+  // path; a miss means the CLI tree and the catalog disagree, which must fail
+  // the export rather than ship a doc row with a wrong or absent invocation.
+  for (const entry of entries) {
+    if (
+      entry.mcp.type === "capability" &&
+      entry.requiresFileInput !== true &&
+      entry.returnsFileResponse !== true &&
+      !cliCommandPathById.has(entry.id)
+    ) {
+      pathErrors.push(
+        `coverage doc: capability "${entry.id}" has no generated CLI command path (missing from the built route tree)`,
+      );
+    }
+  }
+  if (pathErrors.length > 0) {
+    printErrors(pathErrors);
+    return 1;
+  }
+
+  const doc = serializeCoverageDoc({
+    entries,
+    cliCommandPathById,
+    internalWaiverCounts,
+  });
+
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);
     await Bun.write(CLI_CATALOG_PATH, serialized);
     await Bun.write(DISPATCH_PATH, dispatchSerialized);
+    await Bun.write(COVERAGE_DOC_PATH, doc);
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}, ${CLI_CATALOG_PATH}, and ${DISPATCH_PATH}\n`,
+      `export-capability-catalog: wrote ${entries.length} capabilities to ${CATALOG_PATH}, ${CLI_CATALOG_PATH}, ${DISPATCH_PATH}, and ${COVERAGE_DOC_PATH}\n`,
     );
     return 0;
   }
@@ -1200,13 +1413,17 @@ const main = async (): Promise<number> => {
   const committedDispatch = await Bun.file(DISPATCH_PATH)
     .text()
     .catch(() => null);
+  const committedDoc = await Bun.file(COVERAGE_DOC_PATH)
+    .text()
+    .catch(() => null);
   if (
     committedText === serialized &&
     committedCliText === serialized &&
-    committedDispatch === dispatchSerialized
+    committedDispatch === dispatchSerialized &&
+    committedDoc === doc
   ) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capabilities, catalog (API + CLI copies) and dispatch module are up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capabilities, catalog (API + CLI copies), dispatch module, and coverage doc are up to date.`,
     );
     return 0;
   }
@@ -1220,6 +1437,12 @@ const main = async (): Promise<number> => {
   if (committedDispatch !== dispatchSerialized) {
     console.error(
       "\nexport-capability-catalog: committed capability-dispatch.ts is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
+    );
+  }
+
+  if (committedDoc !== doc) {
+    console.error(
+      "\nexport-capability-catalog: docs/capability-coverage.md is out of date. Regenerate with:\n  bun --env-file=apps/api/.env apps/api/scripts/export-capability-catalog.ts",
     );
   }
 

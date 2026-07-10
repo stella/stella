@@ -539,7 +539,11 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
   // Replicate every rejection the backing read applies before querying.
   const invalid = validateAuditLogFilter(filter);
   if (invalid !== null) {
-    return errorResult(invalid);
+    return structuredErrorResult({
+      code: "validation_error",
+      message: invalid,
+      issues: [{ path: "", message: invalid }],
+    });
   }
 
   const page = await Result.gen(() =>

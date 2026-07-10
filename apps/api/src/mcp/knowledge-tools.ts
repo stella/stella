@@ -51,6 +51,7 @@ import {
   intProp,
   nullableStringProp,
   stringProp,
+  structuredErrorResult,
   textResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -810,7 +811,13 @@ const readClauseDetail = async ({
     // Fail-closed (P7): a malformed version body aborts before any push runs,
     // exactly the Wave 4 fix — kept as inline control flow, unchanged.
     if (!isClauseBody(version.body)) {
-      return errorResult("Clause body has an unrecognized format");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Clause body has an unrecognized format",
+        issues: [
+          { path: "body", message: "Clause body has an unrecognized format" },
+        ],
+      });
     }
     const textFields = runTextFieldSpecs(
       [
@@ -846,7 +853,13 @@ const readClauseDetail = async ({
   // Fail-closed (P7): kept as inline control flow, unchanged, at the same
   // point relative to the pushes above and below.
   if (!isClauseBody(clause.body)) {
-    return errorResult("Clause body has an unrecognized format");
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Clause body has an unrecognized format",
+      issues: [
+        { path: "body", message: "Clause body has an unrecognized format" },
+      ],
+    });
   }
   textFields.push(
     ...runTextFieldSpecs(
@@ -868,7 +881,13 @@ const readClauseDetail = async ({
     );
     // Fail-closed (P7): kept inline inside the variant loop, unchanged.
     if (!isClauseBody(variant.body)) {
-      return errorResult("Clause body has an unrecognized format");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Clause body has an unrecognized format",
+        issues: [
+          { path: "body", message: "Clause body has an unrecognized format" },
+        ],
+      });
     }
     textFields.push(
       ...runTextFieldSpecs(
@@ -1081,9 +1100,13 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
   let clauseBody: ClauseBody | undefined;
   if (input.body !== undefined) {
     if (!isClauseBody(input.body)) {
-      return errorResult(
-        "Invalid input: body must be a non-empty paragraph array",
-      );
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid input: body must be a non-empty paragraph array",
+        issues: [
+          { path: "body", message: "Expected a non-empty paragraph array" },
+        ],
+      });
     }
     clauseBody = input.body;
   }
@@ -1101,10 +1124,24 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
     // string | undefined.
     const { title } = input;
     if (title === undefined) {
-      return errorResult("title is required to create a clause");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "title is required to create a clause",
+        issues: [
+          { path: "title", message: "title is required to create a clause" },
+        ],
+        hint: "Provide 'title' when clause_id is omitted (create mode).",
+      });
     }
     if (clauseBody === undefined) {
-      return errorResult("body is required to create a clause");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "body is required to create a clause",
+        issues: [
+          { path: "body", message: "body is required to create a clause" },
+        ],
+        hint: "Provide 'body' when clause_id is omitted (create mode).",
+      });
     }
     const created = await Result.gen(() =>
       createClauseHandler({

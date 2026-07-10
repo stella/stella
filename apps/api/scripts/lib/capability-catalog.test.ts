@@ -22,8 +22,9 @@ import {
   scanFileResponseReturns,
   scanRouteHookGuards,
   schemaContainsBinaryFormat,
-  serializeDispatchModule,
   serializeCatalog,
+  serializeCoverageDoc,
+  serializeDispatchModule,
 } from "./capability-catalog";
 
 describe("deriveCapabilityId", () => {
@@ -117,13 +118,39 @@ describe("resolveAccess", () => {
     "playbooks.run": { access: "write", destructive: false },
   } as const;
 
-  test("derives from classifiable verbs and ignores the override", () => {
+  test("derives from classifiable verbs when no override is pinned", () => {
     expect(
       resolveAccess({
         id: "entities.delete-by-id",
         verbs: ["delete"],
         hasPermissions: true,
         overrides: {},
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: true });
+  });
+
+  test("an explicit override wins over classifiable verbs (read re-pin)", () => {
+    expect(
+      resolveAccess({
+        id: "usage.get-entitlement",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {
+          "usage.get-entitlement": { access: "read", destructive: false },
+        },
+      }),
+    ).toEqual({ status: "resolved", access: "read", destructive: false });
+  });
+
+  test("a re-pin cannot drop the destructive-name escalation", () => {
+    expect(
+      resolveAccess({
+        id: "things.delete-by-id",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {
+          "things.delete-by-id": { access: "write", destructive: false },
+        },
       }),
     ).toEqual({ status: "resolved", access: "write", destructive: true });
   });
@@ -1051,6 +1078,148 @@ const r = new Elysia()
       waivedIds: new Set(["case-law.ingestion.status", "gone.capability"]),
     });
     expect(scan.staleWaivers).toEqual(["gone.capability"]);
+  });
+});
+
+describe("serializeCoverageDoc", () => {
+  const entries = [
+    {
+      id: "time-entries.create",
+      access: "write" as const,
+      destructive: false,
+      scope: "stella:billing_write",
+      feature: "FEATURE_TIME_BILLING",
+      mcp: { type: "tool" as const, name: "save_time_entry" },
+    },
+    {
+      id: "time-entries.delete",
+      access: "write" as const,
+      destructive: true,
+      scope: "stella:billing_write",
+      feature: "FEATURE_TIME_BILLING",
+      mcp: { type: "covered" as const, by: "save_time_entry" },
+    },
+    {
+      id: "time-entries.export-pdf",
+      access: "read" as const,
+      destructive: false,
+      scope: "stella:billing_write",
+      feature: "FEATURE_TIME_BILLING",
+      returnsFileResponse: true as const,
+      mcp: { type: "capability" as const, reason: "billing_admin" },
+    },
+    {
+      id: "entities.readSummariesCount",
+      access: "read" as const,
+      destructive: false,
+      scope: "stella:matters_write",
+      mcp: { type: "capability" as const, reason: "workflow_orchestration" },
+    },
+  ];
+
+  const internalWaiverCounts = {
+    search_ui: 3,
+    auth_plumbing: 1,
+  };
+
+  // The REAL generated command path per capability id, as buildCliRouteTree
+  // would produce it. `entities.readSummariesCount` is deliberately given a
+  // collision-fallback path (relocated under `capability …`) to prove the doc
+  // renders the map's path, never an id-derived guess.
+  const cliCommandPathById = new Map<string, readonly string[]>([
+    [
+      "entities.readSummariesCount",
+      ["capability", "entities", "read-summaries-count"],
+    ],
+  ]);
+
+  const render = (input?: {
+    entries?: typeof entries;
+    internalWaiverCounts?: Record<string, number>;
+  }): string =>
+    serializeCoverageDoc({
+      entries: input?.entries ?? entries,
+      cliCommandPathById,
+      internalWaiverCounts: input?.internalWaiverCounts ?? internalWaiverCounts,
+    });
+
+  test("renders one alphabetically sorted section per domain with id-sorted rows", () => {
+    const doc = render();
+    const entitiesIndex = doc.indexOf("## entities");
+    const timeEntriesIndex = doc.indexOf("## time-entries");
+    expect(entitiesIndex).toBeGreaterThan(-1);
+    expect(timeEntriesIndex).toBeGreaterThan(-1);
+    expect(entitiesIndex).toBeLessThan(timeEntriesIndex);
+
+    const createIndex = doc.indexOf("`time-entries.create`");
+    const deleteIndex = doc.indexOf("`time-entries.delete`");
+    const exportIndex = doc.indexOf("`time-entries.export-pdf`");
+    expect(createIndex).toBeLessThan(deleteIndex);
+    expect(deleteIndex).toBeLessThan(exportIndex);
+  });
+
+  test("renders access as read/write/write,destructive and defaults feature to an em dash", () => {
+    const doc = render();
+    expect(doc).toContain(
+      "| `time-entries.create` | write | stella:billing_write | FEATURE_TIME_BILLING | curated tool `save_time_entry` |",
+    );
+    expect(doc).toContain(
+      "| `time-entries.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | covered by `save_time_entry` |",
+    );
+  });
+
+  test("renders the generated (collision-aware) command path, not an id-derived one", () => {
+    const doc = render();
+    expect(doc).toContain(
+      "| `entities.readSummariesCount` | read | stella:matters_write | — | generic invoke → `stella capability entities read-summaries-count` |",
+    );
+    // The naive id-derived path must not appear anywhere.
+    expect(doc).not.toContain("`stella entities read-summaries-count`");
+  });
+
+  test("panics when a non-file capability entry has no generated command path", () => {
+    expect(() =>
+      serializeCoverageDoc({
+        entries,
+        cliCommandPathById: new Map(),
+        internalWaiverCounts,
+      }),
+    ).toThrow(/no generated CLI command path/u);
+  });
+
+  test("flags file-input/file-response capability entries as describe-only instead of a CLI path", () => {
+    const doc = render();
+    expect(doc).toContain(
+      "| `time-entries.export-pdf` | read | stella:billing_write | FEATURE_TIME_BILLING | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |",
+    );
+  });
+
+  test("renders the waived-internal-handlers section sorted by reason with a total", () => {
+    const doc = render();
+    const section = doc.slice(doc.indexOf("## Waived internal handlers"));
+    const authIndex = section.indexOf("| auth_plumbing | 1 |");
+    const searchIndex = section.indexOf("| search_ui | 3 |");
+    expect(authIndex).toBeGreaterThan(-1);
+    expect(searchIndex).toBeGreaterThan(-1);
+    expect(authIndex).toBeLessThan(searchIndex);
+    expect(section).toContain("Total: 4");
+  });
+
+  test("is stable across calls given the same input (deterministic, single trailing newline)", () => {
+    const first = render();
+    const second = render({ entries: [...entries].toReversed() });
+    expect(first).toBe(second);
+    expect(first.endsWith("\n")).toBe(true);
+    expect(first.endsWith("\n\n")).toBe(false);
+  });
+
+  test("empty inputs still render a generated-file header and an empty waiver total", () => {
+    const doc = render({ entries: [], internalWaiverCounts: {} });
+    expect(doc).toContain(
+      "GENERATED by apps/api/scripts/export-capability-catalog.ts",
+    );
+    expect(doc).toContain("## Waived internal handlers");
+    expect(doc).toContain("Total: 0");
   });
 });
 

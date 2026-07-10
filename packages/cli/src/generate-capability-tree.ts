@@ -350,6 +350,7 @@ export const deriveCapabilityLeaf = (
       spec: {
         commandPath,
         capabilityId: entry.id,
+        access: entry.access,
         flags: [],
         inputOnly: [],
         paginated: paginationPart !== undefined,
@@ -408,6 +409,7 @@ export const deriveCapabilityLeaf = (
     spec: {
       commandPath,
       capabilityId: entry.id,
+      access: entry.access,
       flags,
       inputOnly,
       paginated: paginationPart !== undefined,

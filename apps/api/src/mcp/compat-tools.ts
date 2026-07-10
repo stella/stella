@@ -26,6 +26,7 @@ import {
   parseOptionalCursor,
   parseRequiredString,
   stringProp,
+  structuredErrorResult,
 } from "@/api/mcp/tool-utils";
 
 type CompatToolName = "fetch" | "search";
@@ -304,7 +305,12 @@ const handleCompatSearchTool: McpToolHandler = async ({ args, context }) => {
   // provider treats a malformed cursor as no cursor and silently returns the
   // first page, which would duplicate hits or loop a paginating client.
   if (cursor !== undefined && decodeCursor(cursor) === null) {
-    return errorResult("Invalid cursor");
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid cursor",
+      issues: [{ path: "cursor", message: "Invalid cursor" }],
+      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+    });
   }
 
   // Request exactly the page size and pass the provider cursor through so

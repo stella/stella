@@ -909,6 +909,10 @@ const logAndCaptureSafeError = ({
     }
   }
 
+  if (reqCtx?.requestId) {
+    attributes["request.id"] = reqCtx.requestId;
+  }
+
   if (reqCtx?.posthogDistinctId) {
     attributes["posthogDistinctId"] = reqCtx.posthogDistinctId;
   }

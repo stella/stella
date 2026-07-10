@@ -68,6 +68,7 @@ import {
   parseRequiredString,
   resolveWindowBounds,
   stringProp,
+  structuredErrorResult,
   textResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -731,9 +732,19 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
       args["limit"] !== undefined ||
       args["cursor"] !== undefined
     ) {
-      return errorResult(
-        "status, limit, and cursor apply when listing matters; omit matter_id to list",
-      );
+      return structuredErrorResult({
+        code: "validation_error",
+        message:
+          "status, limit, and cursor apply when listing matters; omit matter_id to list",
+        issues: [
+          {
+            path: "matter_id",
+            message:
+              "status, limit, and cursor apply when listing matters; omit matter_id to list",
+          },
+        ],
+        hint: "Omit 'matter_id' to list matters with 'status'/'limit'/'cursor', or pass only 'matter_id' to read one matter's overview.",
+      });
     }
     return await readMatterOverview({ args, context });
   }
@@ -766,7 +777,12 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
   if (cursor !== undefined) {
     const decoded = decodeMatterPageCursor(cursor);
     if (decoded === null) {
-      return errorResult("Invalid cursor");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid cursor",
+        issues: [{ path: "cursor", message: "Invalid cursor" }],
+        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+      });
     }
     boundaryId = decoded;
   }
@@ -977,7 +993,12 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
   // provider treats a malformed cursor as no cursor and silently returns the
   // first page, which would duplicate hits or loop a paginating client.
   if (cursor !== undefined && decodeCursor(cursor) === null) {
-    return errorResult("Invalid cursor");
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid cursor",
+      issues: [{ path: "cursor", message: "Invalid cursor" }],
+      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+    });
   }
 
   const result = await getSearchProvider().search({
@@ -1027,12 +1048,21 @@ const parseOptionalStringArg = ({
     return undefined;
   }
   if (typeof value !== "string") {
-    return errorResult(`Invalid parameter: ${key}. Expected a string`);
+    const message = `Invalid parameter: ${key}. Expected a string`;
+    return structuredErrorResult({
+      code: "validation_error",
+      message,
+      issues: [{ path: key, message }],
+    });
   }
   if (maxLength !== undefined && value.length > maxLength) {
-    return errorResult(
-      `Parameter ${key} exceeds maximum length of ${maxLength}`,
-    );
+    const message = `Parameter ${key} exceeds maximum length of ${maxLength}`;
+    return structuredErrorResult({
+      code: "validation_error",
+      message,
+      issues: [{ path: key, message }],
+      hint: `Shorten '${key}' to at most ${maxLength} characters.`,
+    });
   }
   return value;
 };
@@ -1049,18 +1079,26 @@ const parseOptionalDateArg = ({
     return value;
   }
   if (!ISO_DATE_PATTERN.test(value)) {
-    return errorResult(
-      `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`,
-    );
+    const message = `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`;
+    return structuredErrorResult({
+      code: "validation_error",
+      message,
+      issues: [{ path: key, message }],
+      hint: `Set '${key}' to a calendar date formatted as YYYY-MM-DD.`,
+    });
   }
   const parsed = new Date(value);
   if (
     Number.isNaN(parsed.getTime()) ||
     parsed.toISOString().slice(0, 10) !== value
   ) {
-    return errorResult(
-      `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`,
-    );
+    const message = `Invalid parameter: ${key}. Expected an ISO date in YYYY-MM-DD format`;
+    return structuredErrorResult({
+      code: "validation_error",
+      message,
+      issues: [{ path: key, message }],
+      hint: `Set '${key}' to a calendar date formatted as YYYY-MM-DD.`,
+    });
   }
   return value;
 };
@@ -1291,7 +1329,16 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
     return sourceId;
   }
   if (sourceId !== undefined && !isUuid(sourceId)) {
-    return errorResult("Invalid parameter: source_id. Expected a UUID");
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid parameter: source_id. Expected a UUID",
+      issues: [
+        {
+          path: "source_id",
+          message: "Invalid parameter: source_id. Expected a UUID",
+        },
+      ],
+    });
   }
   const dateFrom = parseOptionalDateArg({ args, key: "date_from" });
   if (isToolErrorResult(dateFrom)) {
@@ -1405,7 +1452,12 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   }
   const offsets = decodeDecisionCursor(cursor);
   if (offsets === null) {
-    return errorResult("Invalid cursor");
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid cursor",
+      issues: [{ path: "cursor", message: "Invalid cursor" }],
+      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+    });
   }
 
   const result = await readDecisionHandler(

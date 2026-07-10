@@ -11,6 +11,7 @@ type RecordedCall = { name: string; args: Record<string, unknown> };
 type ServerResponse =
   | { kind: "echo" }
   | { kind: "confirm-gate" }
+  | { kind: "receipt"; requestId: string }
   | { kind: "pages"; pages: readonly Record<string, unknown>[] };
 
 /**
@@ -59,6 +60,9 @@ const startServer = (response: ServerResponse) => {
             isError: true,
           },
         });
+      }
+      if (response.kind === "receipt") {
+        return text({ ok: true, meta: { requestId: response.requestId } });
       }
       if (response.kind === "pages") {
         const page = response.pages[pageIndex] ?? {
@@ -148,6 +152,7 @@ const capSpec = (
   overrides: Partial<CapabilityLeafSpec> & { capabilityId: string },
 ): CapabilityLeafSpec => ({
   commandPath: ["x", "y"],
+  access: "read",
   flags: [],
   inputOnly: [],
   paginated: false,
@@ -549,5 +554,58 @@ describe("runCapabilityCommand: output contract", () => {
     // A clean single page: JSON payload on stdout, nothing on stderr.
     expect(tty.stdoutText()).toContain('"items"');
     expect(tty.stderrText()).toBe("");
+  });
+});
+
+describe("runCapabilityCommand: request-id receipt", () => {
+  const WRITE_ID = "req_ab12cd34ef567890ab12cd34ef567890";
+  const READ_ID = "req_fedcba9876543210fedcba9876543210";
+  // An untrusted server smuggling ANSI escape sequences into the receipt.
+  const ANSI_ID = "req_\u001B]0;pwned\u0007\u001B[31mabcdef0123456789";
+
+  test("a write surfaces the request id on stderr, not stdout", async () => {
+    const server = startServer({ kind: "receipt", requestId: WRITE_ID });
+    const spec = capSpec({ capabilityId: "a.create", access: "write" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
+    server.stop();
+    // The human-readable receipt line goes to stderr; stdout stays pure result
+    // (which still carries the id inside the payload's meta, on its own).
+    expect(tty.stderrText()).toContain(`request id: ${WRITE_ID}`);
+    expect(tty.stdoutText()).not.toContain("request id:");
+    expect(tty.exitCode()).toBeUndefined();
+  });
+
+  test("a read does not surface the request id", async () => {
+    const server = startServer({ kind: "receipt", requestId: READ_ID });
+    const spec = capSpec({ capabilityId: "a.get", access: "read" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
+    server.stop();
+    expect(tty.stderrText()).not.toContain("request id:");
+  });
+
+  test("an ANSI-laced receipt from the server is dropped, never rendered", async () => {
+    const server = startServer({ kind: "receipt", requestId: ANSI_ID });
+    const spec = capSpec({ capabilityId: "a.create", access: "write" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
+    server.stop();
+    // The malformed id must not reach the terminal in any form: no receipt
+    // line at all (drop, don't sanitize) and no escape byte on stderr.
+    expect(tty.stderrText()).not.toContain("request id:");
+    expect(tty.stderrText()).not.toContain("\u001B");
   });
 });

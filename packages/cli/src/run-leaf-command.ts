@@ -435,14 +435,17 @@ type ErrorIssue = {
 
 /**
  * The structured tool-error envelope:
- * `{ error: { code, message, hint?, issues? } }`. `issues` is only present on a
- * `validation_error` and pinpoints the offending fields.
+ * `{ error: { code, message, hint?, issues?, requestId? } }`. `issues` is only
+ * present on a `validation_error` and pinpoints the offending fields;
+ * `requestId` is the server-side receipt for the failing action, rendered dimly
+ * so an operator can correlate it with server logs.
  */
 type ErrorEnvelope = {
   code: string;
   message: string;
   hint: string | undefined;
   issues: readonly ErrorIssue[];
+  requestId: string | undefined;
 };
 
 /**
@@ -497,7 +500,51 @@ export const errorEnvelope = (payload: unknown): ErrorEnvelope | null => {
     message,
     hint: typeof hint === "string" ? hint : undefined,
     issues: parseErrorIssues(error),
+    requestId: parseRequestId(error["requestId"]),
   };
+};
+
+/**
+ * The server mints receipts as `req_` + 32 lowercase-hex chars
+ * (apps/api/src/lib/observability/request-context.ts); the range is kept
+ * tolerant so a future longer/shorter hex tail still renders. Anything else —
+ * in particular a value smuggling ANSI escape sequences from a compromised or
+ * untrusted server — is DROPPED entirely, never printed to the terminal.
+ */
+const REQUEST_ID_SHAPE = /^req_[0-9a-f]{16,64}$/u;
+
+/** A well-formed receipt id, or `undefined` (drop, don't sanitize) otherwise. */
+const parseRequestId = (value: unknown): string | undefined =>
+  typeof value === "string" && REQUEST_ID_SHAPE.test(value) ? value : undefined;
+
+const RECEIPT_DIM = "\u001B[2m";
+const RECEIPT_RESET = "\u001B[0m";
+
+/**
+ * The `request id: …` receipt line, dimmed on a TTY and plain on a pipe (so an
+ * agent capturing stderr reads a clean, greppable line). Shared by the error
+ * path (after the envelope) and the capability write path (after a mutation).
+ * Callers only receive ids that passed {@link parseRequestId}, so the value is
+ * terminal-safe by construction.
+ */
+export const requestIdLine = (requestId: string, isTTY: boolean): string =>
+  isTTY
+    ? `${RECEIPT_DIM}request id: ${requestId}${RECEIPT_RESET}\n`
+    : `request id: ${requestId}\n`;
+
+/**
+ * Read the `meta.requestId` receipt off a success payload, if present and
+ * well-formed (see {@link parseRequestId}; a malformed id is dropped).
+ */
+export const readRequestReceipt = (payload: unknown): string | undefined => {
+  if (!isRecord(payload)) {
+    return undefined;
+  }
+  const meta = payload["meta"];
+  if (!isRecord(meta)) {
+    return undefined;
+  }
+  return parseRequestId(meta["requestId"]);
 };
 
 /**
@@ -825,6 +872,11 @@ export const renderToolError = ({
     }
     if (envelope.hint !== undefined) {
       writers.stderr(`hint: ${envelope.hint}\n`);
+    }
+    if (envelope.requestId !== undefined) {
+      writers.stderr(
+        requestIdLine(envelope.requestId, context.process.stderr.isTTY),
+      );
     }
   } else {
     writers.stderr(`${result.content.at(0)?.text ?? "Tool error"}\n`);

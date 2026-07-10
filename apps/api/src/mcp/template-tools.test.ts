@@ -573,7 +573,11 @@ describe("MCP template tools", () => {
       toolName: "save_template",
     });
 
-    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["issues"]).toEqual([
+      { path: "docx_base64", message: expect.any(String) },
+    ]);
     expect(createStoredTemplateMock).not.toHaveBeenCalled();
   });
 
@@ -800,15 +804,19 @@ describe("MCP template tools", () => {
       toolName: "list_templates",
     });
 
-    expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "cursor applies when listing templates; omit template_id to list",
-        },
-      ],
-      isError: true,
-    });
+    expect(result.isError).toBe(true);
+    const error = validationEnvelope(result);
+    expect(error["code"]).toBe("validation_error");
+    expect(error["message"]).toBe(
+      "cursor applies when listing templates; omit template_id to list",
+    );
+    expect(error["issues"]).toEqual([
+      {
+        path: "cursor",
+        message:
+          "cursor applies when listing templates; omit template_id to list",
+      },
+    ]);
     expect(describeStoredTemplateMock).not.toHaveBeenCalled();
   });
 

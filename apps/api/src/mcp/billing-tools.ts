@@ -52,6 +52,7 @@ import {
   notFoundResult,
   nullableStringProp,
   stringProp,
+  structuredErrorResult,
   textResult,
   validationErrorResult,
 } from "@/api/mcp/tool-utils";
@@ -787,7 +788,12 @@ const handleListTimeEntriesTool: McpToolHandler = async ({ args, context }) => {
   if (input.cursor !== undefined) {
     boundary = decodeTimeEntryPageCursor(input.cursor);
     if (boundary === null) {
-      return errorResult("Invalid cursor");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid cursor",
+        issues: [{ path: "cursor", message: "Invalid cursor" }],
+        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+      });
     }
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
@@ -1399,7 +1405,12 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
   if (input.cursor !== undefined) {
     boundary = decodeInvoicePageCursor(input.cursor);
     if (boundary === null) {
-      return errorResult("Invalid cursor");
+      return structuredErrorResult({
+        code: "validation_error",
+        message: "Invalid cursor",
+        issues: [{ path: "cursor", message: "Invalid cursor" }],
+        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+      });
     }
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
