@@ -280,6 +280,26 @@ const countModuleLevelMutableCollections = (content: string): number => {
   return total;
 };
 
+// A disable directive for the no-raw-use-effect rule. Literal-stripping first
+// keeps a directive spelled inside a string (docs, rule messages) from
+// counting; the directive itself is a `//` comment and survives the strip.
+const RAW_USE_EFFECT_DISABLE =
+  /\/\/\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b[^\n]*no-raw-use-effect\/no-raw-use-effect/u;
+
+const countRawUseEffectSuppressions = (content: string): number => {
+  let total = 0;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code, state } = stripStringLiterals(raw, literalState);
+    literalState = state;
+    if (RAW_USE_EFFECT_DISABLE.test(code)) {
+      total += 1;
+    }
+  }
+  return total;
+};
+
 // --- Metric table -----------------------------------------------------------
 
 type FileCounter = (content: string) => number;
@@ -342,6 +362,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: ["apps/web/src/**/*.{ts,tsx}"],
     exclude: isExcludedSource,
     count: countModuleLevelMutableCollections,
+  },
+  {
+    id: "raw-use-effect-suppressions",
+    description:
+      "no-raw-use-effect disable directives in apps/web/src (each is a reviewed exception; new effects use the wrappers or a better primitive — see /conventions-use-effect)",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countRawUseEffectSuppressions,
   },
 ];
 
@@ -631,6 +659,20 @@ const SELF_TEST_MODULE_COLLECTIONS = `${MODULE_COLLECTION_FIXTURE_LINES.join("\n
 // declaration, and the commented-out line are all excluded.
 const EXPECTED_MODULE_COLLECTIONS = 6;
 
+const SUPPRESSION_FIXTURE_LINES = [
+  "// eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reason one",
+  "useEffect(() => {}, []);",
+  "  // oxlint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reason two",
+  "useEffect(() => {}, []);",
+  'const doc = "// eslint-disable-next-line no-raw-use-effect/no-raw-use-effect"; // directive in a string must not count',
+  "// the no-raw-use-effect/no-raw-use-effect rule is discussed here without a disable directive",
+  "// eslint-disable-next-line react-hooks/exhaustive-deps -- other-rule directive must not count",
+];
+const SELF_TEST_SUPPRESSIONS = `${SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
+// Expected: the two disable directives; the string-literal copy, the prose
+// comment without a disable, and the other-rule directive are excluded.
+const EXPECTED_SUPPRESSIONS = 2;
+
 const writeFixture = (root: string, rel: string, content: string): void => {
   const full = path.join(root, rel);
   mkdirSync(path.dirname(full), { recursive: true });
@@ -653,6 +695,11 @@ const runSelfTest = (): number => {
       root,
       "apps/web/src/module-collections.ts",
       SELF_TEST_MODULE_COLLECTIONS,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/effect-suppressions.tsx",
+      SELF_TEST_SUPPRESSIONS,
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
@@ -705,6 +752,13 @@ const runSelfTest = (): number => {
     if (moduleCollectionsMetric.count !== EXPECTED_MODULE_COLLECTIONS) {
       failures.push(
         `module-level-mutable-collections counted ${moduleCollectionsMetric.count}, expected ${EXPECTED_MODULE_COLLECTIONS}`,
+      );
+    }
+
+    const suppressionMetric = snapshot["raw-use-effect-suppressions"];
+    if (suppressionMetric.count !== EXPECTED_SUPPRESSIONS) {
+      failures.push(
+        `raw-use-effect-suppressions counted ${suppressionMetric.count}, expected ${EXPECTED_SUPPRESSIONS}`,
       );
     }
 
