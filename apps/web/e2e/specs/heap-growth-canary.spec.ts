@@ -24,11 +24,19 @@ import { expect, test } from "../helpers/test";
 // (apps/web/src/components/workspace-primary-nav.ts) and route to distinct,
 // already-authenticated top-level pages, giving variety of mounted
 // components without needing route-specific fixtures.
+const CHAT_READY_SELECTOR = "main > :last-child .chat-editor .ProseMirror";
+
 const CYCLE_ROUTES = [
-  "/workspaces",
-  "/knowledge",
-  "/contacts",
-  "/chat",
+  { path: "/workspaces", readySelector: "main > :last-child input" },
+  {
+    path: "/knowledge",
+    readySelector: 'main > :last-child a[href="/knowledge/clauses"]',
+  },
+  { path: "/contacts", readySelector: "main > :last-child input" },
+  {
+    path: "/chat",
+    readySelector: CHAT_READY_SELECTOR,
+  },
 ] as const;
 
 const NAVIGATION_CYCLES = 5;
@@ -81,7 +89,9 @@ test("repeated navigation does not grow the JS heap unboundedly", async ({
   // Single full navigation to enter the app; every navigation after this
   // point is a client-side sidebar link click (see the module comment above).
   await page.goto("/chat", { waitUntil: "domcontentloaded" });
-  await expect(page.locator("main").first()).toBeVisible({ timeout: 30_000 });
+  await expect(page.locator(CHAT_READY_SELECTOR)).toBeVisible({
+    timeout: 30_000,
+  });
   await page.waitForTimeout(ROUTE_SETTLE_MS);
 
   const heapSnapshots: number[] = [];
@@ -130,7 +140,7 @@ const runNavigationCycle = async (page: Page) => {
     // breadcrumb link rendered inside route content.
     const link = page
       .locator('[data-slot="sidebar"]')
-      .locator(`a[href="${route}"]`);
+      .locator(`a[href="${route.path}"]`);
     // Sidebar chrome can briefly render a loading skeleton across a route
     // transition (recents/pinned data refetching); an explicit visibility
     // wait survives that instead of racing click()'s shorter action timeout.
@@ -139,11 +149,17 @@ const runNavigationCycle = async (page: Page) => {
     // eslint-disable-next-line no-await-in-loop -- see above
     await link.click();
     // eslint-disable-next-line no-await-in-loop -- see above
-    await page.waitForURL((url) => url.pathname === route, { timeout: 30_000 });
+    await page.waitForURL((url) => url.pathname === route.path, {
+      timeout: 30_000,
+    });
     // eslint-disable-next-line no-await-in-loop -- see above
     await expect(
       page.locator(`[data-heap-canary-route-root="${marker}"]`),
     ).toHaveCount(0, { timeout: 30_000 });
+    // eslint-disable-next-line no-await-in-loop -- route-specific content proves the destination mounted before the next navigation can replace it
+    await expect(page.locator(route.readySelector)).toBeVisible({
+      timeout: 30_000,
+    });
     // eslint-disable-next-line no-await-in-loop -- see above
     await page.waitForTimeout(ROUTE_SETTLE_MS);
   }
