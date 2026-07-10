@@ -73,7 +73,7 @@ export const MCP_ALLOWED_HEADERS = [
 // one stderr hint. Bump this line when publishing a new @stll/cli. The header
 // name is mirrored (by design, no shared module) in
 // `packages/cli/src/cli-version-nudge.ts`.
-export const STELLA_CLI_LATEST_VERSION = "0.1.2";
+export const STELLA_CLI_LATEST_VERSION = "0.2.0";
 export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 
 export const MCP_EXPOSE_HEADERS = [

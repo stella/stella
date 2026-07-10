@@ -3,4 +3,4 @@
 // The running CLI's own version, baked in at codegen time so the update nudge
 // (spec 051 addendum) never reads package.json from the published dist.
 
-export const CLI_VERSION = "0.1.2";
+export const CLI_VERSION = "0.2.0";
