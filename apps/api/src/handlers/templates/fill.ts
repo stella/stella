@@ -19,6 +19,7 @@ import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData, type TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
+import { isTemplateOutputValid } from "@/api/handlers/templates/validate-template-output";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
@@ -348,6 +349,20 @@ export const fillHandler = async ({
   // PDF conversion via Gotenberg
   if (format === "pdf") {
     const docxBytes = new Uint8Array(result.buffer);
+    if (
+      !(await isTemplateOutputValid({
+        buffer: docxBytes,
+        fileName: sanitizeFilename(file.name),
+      }))
+    ) {
+      return new Response(
+        JSON.stringify({ error: "Template output invalid" }),
+        {
+          status: 422,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
     const pdfResult = await convertToPdf(
       docxBytes.buffer.slice(
         docxBytes.byteOffset,

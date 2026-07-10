@@ -5,6 +5,11 @@ import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 
 const SIGN_UP_EMAIL_PATH = "/sign-up/email";
+const EMAIL_OTP_PATHS = new Set([
+  "/sign-in/email-otp",
+  "/email-otp/send-verification-otp",
+  "/email-otp/verify-email",
+]);
 const BOOTSTRAP_ERROR_MESSAGE = "Self-host bootstrap is not available.";
 
 type BootstrapBody = Record<string, unknown>;
@@ -36,10 +41,8 @@ export const isBootstrapTokenMatch = ({
   return timingSafeEqual(candidateHash, expectedHash);
 };
 
-export const isSelfhostBootstrapAvailable = async () =>
-  isSelfhostLocalPasswordAuthEnabled() &&
-  !!env.SELFHOST_BOOTSTRAP_TOKEN &&
-  !(await hasAnyAuthUsers());
+export const isSelfhostFirstUserRequired = async () =>
+  isSelfhostLocalPasswordAuthEnabled() && !(await hasAnyAuthUsers());
 
 const readBootstrapToken = (body: unknown): string | null => {
   if (!isBootstrapBody(body)) {
@@ -79,3 +82,13 @@ export const assertSelfhostBootstrapSignUp = async (body: unknown) => {
 
 export const shouldHandleSelfhostBootstrapPath = (path: string) =>
   path === SIGN_UP_EMAIL_PATH;
+
+export const assertSelfhostEmailOtpAllowed = async (path: string) => {
+  if (!EMAIL_OTP_PATHS.has(path) || !(await isSelfhostFirstUserRequired())) {
+    return;
+  }
+
+  throw new APIError("BAD_REQUEST", {
+    message: BOOTSTRAP_ERROR_MESSAGE,
+  });
+};

@@ -399,6 +399,48 @@ const inlineIdealItems = (
     return ideal?.source === "inline" ? [ideal] : [];
   });
 
+type NegotiationTextItem = {
+  value: string | undefined;
+  apply: (value: string) => void;
+};
+
+const negotiationScalarItems = (
+  positions: readonly Position[],
+  key: "escalation" | "rationale",
+): readonly NegotiationTextItem[] =>
+  gradedPositions(positions).flatMap((position) => {
+    const negotiation = position.negotiation;
+    if (negotiation === undefined) {
+      return [];
+    }
+
+    return [
+      {
+        value: negotiation[key],
+        apply: (value: string) => {
+          negotiation[key] = value;
+        },
+      },
+    ];
+  });
+
+const negotiationTalkingPointItems = (
+  positions: readonly Position[],
+): readonly NegotiationTextItem[] =>
+  gradedPositions(positions).flatMap((position) => {
+    const talkingPoints = position.negotiation?.talkingPoints;
+    if (talkingPoints === undefined) {
+      return [];
+    }
+
+    return talkingPoints.map((value, index) => ({
+      value,
+      apply: (next: string) => {
+        talkingPoints[index] = next;
+      },
+    }));
+  });
+
 type PlaybookDetailPayload = {
   playbook: {
     name: string;
@@ -471,6 +513,36 @@ const playbookDetailTextFieldSpecs = (
     read: (item) => item.guidance,
     apply: (item, value) => {
       item.guidance = value;
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].negotiation.rationale",
+    items: (payload) =>
+      negotiationScalarItems(payload.playbook.positions.items, "rationale"),
+    scope: () => organizationId,
+    read: (item) => item.value,
+    apply: (item, value) => {
+      item.apply(value);
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].negotiation.talkingPoints[]",
+    items: (payload) =>
+      negotiationTalkingPointItems(payload.playbook.positions.items),
+    scope: () => organizationId,
+    read: (item) => item.value,
+    apply: (item, value) => {
+      item.apply(value);
+    },
+  }),
+  defineTextFieldSpec({
+    path: "playbook.positions.items[].negotiation.escalation",
+    items: (payload) =>
+      negotiationScalarItems(payload.playbook.positions.items, "escalation"),
+    scope: () => organizationId,
+    read: (item) => item.value,
+    apply: (item, value) => {
+      item.apply(value);
     },
   }),
   defineTextFieldSpec({
@@ -839,7 +911,7 @@ const readClauseDetail = async ({
   if (Result.isError(result)) {
     return errorResult(result.error.message);
   }
-  const clause = result.value;
+  const clause = { ...result.value, metadata: undefined };
   // title/description/usageNotes are queued unconditionally, matching the
   // original handler: if the body guard below fails, this response (and these
   // fields) is discarded via the early error return before it ever reaches a

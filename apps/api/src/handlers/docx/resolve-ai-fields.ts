@@ -19,7 +19,7 @@
  * `registerItemPatchValues` picks it up natively with no loop-engine change.
  */
 
-import { resolvePath } from "@stll/template-conditions";
+import { isSafeFieldPath, resolvePath } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -65,6 +65,7 @@ export const resolveAiFields = async ({
     (field) =>
       field.aiPrompt !== undefined &&
       field.aiPrompt !== "" &&
+      isSafeFieldPath(field.path) &&
       field.inputType !== "boolean",
   );
   if (generate === undefined || aiFields.length === 0) {

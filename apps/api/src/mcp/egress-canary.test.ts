@@ -1320,6 +1320,7 @@ describe("MCP anonymization canary corpus", () => {
     const bodySeed = mkSeed(tool, 7);
     const variantLabelSeed = mkSeed(tool, 8);
     const variantBodySeed = mkSeed(tool, 9);
+    const metadataSeed = mkSeed(tool, 10);
     const tx = {
       query: {
         clauses: {
@@ -1331,7 +1332,7 @@ describe("MCP anonymization canary corpus", () => {
             usageNotes: usageNotesSeed,
             language: "en",
             body: [{ text: bodySeed }],
-            metadata: null,
+            metadata: { notes: metadataSeed },
             currentVersion: 1,
             createdBy: "user_1",
             createdAt: new Date("2026-01-01"),
@@ -1367,6 +1368,7 @@ describe("MCP anonymization canary corpus", () => {
       variantBodySeed,
     ];
     expectNoSeedLeak(result, seeds);
+    expectNoSeedLeak(result, [metadataSeed]);
     expectSeedsQueuedForAnonymization(seeds);
   });
 
@@ -1484,7 +1486,7 @@ describe("MCP anonymization canary corpus", () => {
     expectSeedsQueuedForAnonymization(seeds);
   });
 
-  test("list_playbooks (detail) anonymizes name, description, and position issue/question/guidance and tier fields", async () => {
+  test("list_playbooks (detail) anonymizes all authored position text", async () => {
     const tool = "list_playbooks";
     const nameSeed = mkSeed(tool, 2);
     const descriptionSeed = mkSeed(tool, 3);
@@ -1497,6 +1499,9 @@ describe("MCP anonymization canary corpus", () => {
     const fallbackLabelSeed = mkSeed(tool, 10);
     const notAcceptableRuleSeed = mkSeed(tool, 11);
     const derivedQuestionSeed = mkSeed(tool, 12);
+    const rationaleSeed = mkSeed(tool, 13);
+    const talkingPointSeed = mkSeed(tool, 14);
+    const escalationSeed = mkSeed(tool, 15);
     const tx = {
       query: {
         playbookDefinitions: {
@@ -1517,6 +1522,11 @@ describe("MCP anonymization canary corpus", () => {
                   issue: issueSeed,
                   severity: "high",
                   guidance: guidanceSeed,
+                  negotiation: {
+                    rationale: rationaleSeed,
+                    talkingPoints: [talkingPointSeed],
+                    escalation: escalationSeed,
+                  },
                   enabled: true,
                   ask: {
                     mode: "manual",
@@ -1601,6 +1611,9 @@ describe("MCP anonymization canary corpus", () => {
       fallbackLabelSeed,
       notAcceptableRuleSeed,
       derivedQuestionSeed,
+      rationaleSeed,
+      talkingPointSeed,
+      escalationSeed,
     ];
     expectNoSeedLeak(result, seeds);
     expectSeedsQueuedForAnonymization(seeds);

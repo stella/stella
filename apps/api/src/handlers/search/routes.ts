@@ -102,7 +102,7 @@ const refineSearchEndpoint = createSafeRootHandler(
 
 const summarizeSearchEndpoint = createSafeRootHandler(
   {
-    permissions: { workspace: ["read"] },
+    permissions: { chat: ["create"], workspace: ["read"] },
     mcp: { type: "internal", reason: "search_ui" },
     body: summarizeSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },

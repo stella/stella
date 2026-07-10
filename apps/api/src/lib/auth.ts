@@ -55,6 +55,7 @@ import {
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
+  assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
@@ -449,6 +450,7 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        await assertSelfhostEmailOtpAllowed(ctx.path);
         if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
           return;
         }

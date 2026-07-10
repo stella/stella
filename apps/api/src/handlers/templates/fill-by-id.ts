@@ -26,6 +26,7 @@ import { isTemplateData } from "@/api/handlers/docx/types";
 import type { RichPatchValue } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { recordTemplateUse } from "@/api/handlers/templates/record-use";
+import { isTemplateOutputValid } from "@/api/handlers/templates/validate-template-output";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -362,6 +363,16 @@ const fillByIdHandler = async function* ({
   // PDF conversion via Gotenberg
   if (format === "pdf") {
     const docxBytes = new Uint8Array(result.buffer);
+    if (
+      !(await isTemplateOutputValid({
+        buffer: docxBytes,
+        fileName: baseName,
+      }))
+    ) {
+      return Result.err(
+        new HandlerError({ status: 422, message: "Template output invalid" }),
+      );
+    }
     const pdfResult = await convertToPdf(
       docxBytes.buffer.slice(
         docxBytes.byteOffset,

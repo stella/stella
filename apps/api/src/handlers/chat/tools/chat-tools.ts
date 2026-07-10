@@ -334,7 +334,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   boe_get_law: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law_block: CHAT_TOOL_POLICY_KIND.publicOfficial,
   boe_get_law_structure: CHAT_TOOL_POLICY_KIND.publicOfficial,
-  boe_search_legislation: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  boe_search_legislation: CHAT_TOOL_POLICY_KIND.external,
   borme_get_summary: CHAT_TOOL_POLICY_KIND.publicOfficial,
   [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
   // Server-executed, read-only version diff: resolves version ids to DOCX
@@ -353,12 +353,9 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // and executes without per-call approval.
   execute_typescript: CHAT_TOOL_POLICY_KIND.internal,
   [EXPAND_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
-  // Per-thread `webSearchEnabled` already gates the tools; an
-  // additional per-call approval would double-gate and block
-  // streaming until the user clicks Allow. Classify alongside the
-  // official-registry lookups so the model executes immediately
-  // once the toggle is on.
-  [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  // Per-thread `webSearchEnabled` controls availability. Individual calls use
+  // the external-service policy because their inputs can contain free text.
+  [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.external,
   [FIND_TEXT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   // folio-agents live-editor read tools: read-only, auto-run against the file
   // overlay's editor bridge (same class as read_document / find_text).
@@ -383,7 +380,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
-  [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  [WEB_SEARCH_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.external,
   // Registry write projections: every projected `access: "write"` tool is a
   // per-call mutation, so it maps to `mutation` (needsApproval). The
   // `Record<BuiltInChatToolPolicyName, ...>` satisfies below forces a policy

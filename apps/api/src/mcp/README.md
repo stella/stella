@@ -123,54 +123,20 @@ deterministic set of regex passes redacts emails, ids/UUIDs, JWT/secret blobs,
 non-allowlisted URLs (only queryless, fragmentless `github.com/stella/stella`,
 `stella.legal`, and `api.stll.app/public/feedback` URLs survive), and IP
 literals. Tenant-entity-name anonymization is deliberately not run here: it is
-workspace-bound and heavy, and feedback is org-scoped free text, so regex plus
-human approval is the accepted baseline.
-
-Three channels, all human-gated. Preference order is github, then email, then
-stella:
-
-- **github (preferred, default):** returns a prefilled `issues/new` URL (label
-  `agent-feedback`) and an equivalent `gh issue create` command. Nothing is
-  published until the human opens the URL (or runs the command) and submits
-  under their own GitHub account, so approval is intrinsic and no server-side
-  token is needed. An oversized body is truncated in the URL with a
-  paste-the-rest marker; the full sanitized body is always returned separately.
-  This is the only path that files a public issue.
-- **email (fallback):** a two-call confirmation-token handshake
-  (`feedback-token.ts`, HMAC over the sanitized content + a 15-minute expiry,
-  keyed by `BETTER_AUTH_SECRET`). The first call returns the sanitized content
-  and a token; a second call echoing the same content plus the token sends the
-  email via `sendFeedbackEmail` to `FEEDBACK_EMAIL_TO`. When that env var is
-  unset the channel refuses with `feature_disabled`. The email carries the
-  sanitized title/body plus a private reporter block (userId, organizationId,
-  and, best-effort, the user's email) that is never part of the public issue.
-- **stella (last resort):** for a human with no GitHub account on a server with
-  no maintainer inbox. Same confirmation-token handshake as email (the token
-  hash covers channel/kind/title/body, so a token minted for one channel cannot
-  be replayed against another); on phase two the
-  sanitized payload is POSTed to the hosted intake at `FEEDBACK_INTAKE_URL`
-  (default `https://api.stll.app/public/feedback`, overridable for self-hosting).
-  The intake response is mapped back onto the error envelope: success →
-  `{ status: "sent", delivered }`; intake 429 → `rate_limited`; 409 →
-  `validation_error` (duplicate); a network failure → retryable `internal_error`.
-  No user identity leaves the server on this path — only a `source`
-  `{ instance }` descriptor.
-
-The two delivering channels (email and stella phase two) are additionally
-rate-limited per organization: at most five deliveries per hour (reusing the
-intake's `consumeCounter` under a distinct bucket), returning a retryable
-`rate_limited` past the cap. Phase-1 previews and the github channel are never
-counted.
+workspace-bound and heavy, and feedback is org-scoped free text. The tool
+returns a prefilled `issues/new` URL (label
+`agent-feedback`) and an equivalent `gh issue create` command. Nothing is
+published until the human opens the URL (or runs the command) and submits
+under their own GitHub account, so approval is intrinsic and no server-side
+token is needed. An oversized body is truncated in the URL with a
+paste-the-rest marker; the full sanitized body is always returned separately.
 
 ## Public feedback intake
 
-The upstream receiver for the stella channel is a public, unauthenticated
-endpoint, `POST /public/feedback` (`handlers/feedback/`), that runs on Stella's
-hosted API. It exists so feedback can reach the maintainer even when the human
-has no GitHub account and the forwarding server has no email configured. It is
-NOT a backing endpoint for the `send_feedback` tool (the tool calls it over
-plain HTTP like any other client), so it carries no `mcp` disposition and is
-mounted outside the auth macro alongside the other public routes in `index.ts`.
+The separate public, unauthenticated `POST /public/feedback` endpoint
+(`handlers/feedback/`) is not a backing endpoint for `send_feedback`. It carries
+no `mcp` disposition and is mounted outside the auth macro alongside the other
+public routes in `index.ts`.
 
 The body is a strict Elysia schema (`kind`, `title` 1..200, `body` 1..8000, an
 optional `source` `{ instance?, version? }`; unknown keys and oversize are
