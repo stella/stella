@@ -382,6 +382,8 @@ export default defineConfig({
     "./.oxlint-plugins/no-db-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
     "./.oxlint-plugins/require-query-signal.ts",
+    "./.oxlint-plugins/require-stable-snapshot.ts",
+    "./.oxlint-plugins/require-use-shallow.ts",
   ],
 
   overrides: [
@@ -444,6 +446,16 @@ export default defineConfig({
     {
       files: [".oxlint-plugins/__fixtures__/no-ref-mirror.fixture.tsx"],
       rules: { "no-ref-mirror/no-ref-mirror": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/require-use-shallow.fixture.tsx"],
+      rules: { "require-use-shallow/require-use-shallow": "error" },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-stable-snapshot.fixture.tsx",
+      ],
+      rules: { "require-stable-snapshot/require-stable-snapshot": "error" },
     },
     {
       files: [".oxlint-plugins/__fixtures__/require-escape-like.fixture.ts"],
@@ -856,6 +868,13 @@ export default defineConfig({
             ],
           },
         ],
+        // A Zustand selector returning a fresh object/array literal fails
+        // Object.is every render; under Zustand v5 that can loop into
+        // "Maximum update depth exceeded". Wrap the selector in useShallow.
+        "require-use-shallow/require-use-shallow": "error",
+        // A useSyncExternalStore snapshot that never stabilizes trips
+        // React's getSnapshot-cache warning and can loop the same way.
+        "require-stable-snapshot/require-stable-snapshot": "error",
         "no-restricted-imports": [
           "error",
           {
