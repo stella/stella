@@ -1,5 +1,6 @@
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
+import { DAY_IN_MS } from "@/lib/time";
 import type {
   WorkspaceEntity,
   WorkspaceField,
@@ -130,7 +131,7 @@ export const getFirstFile = (entity: WorkspaceEntity) => {
 
 const MINUTE = 60_000;
 const HOUR = 3_600_000;
-const DAY = 86_400_000;
+const DAY = DAY_IN_MS;
 
 export const formatRelativeTime = (
   isoString: string | null | undefined,

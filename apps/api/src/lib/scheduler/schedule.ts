@@ -4,8 +4,8 @@ import type {
   SchedulerDailySchedule,
   SchedulerSchedule,
 } from "@/api/db/schema";
+import { DAY_IN_MS } from "@/api/lib/time";
 
-const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
 
 type LocalDateTime = {
@@ -125,8 +125,8 @@ const zonedDateTimeToUtc = (
   // skipping the run. Gaps now roll forward to the next valid instant;
   // overlaps (fall-back) take the first occurrence.
   const naiveMs = localAsUtcMs(localDateTime);
-  const guessBefore = naiveMs - getOffsetMs(naiveMs - ONE_DAY_MS, timeZone);
-  const guessAfter = naiveMs - getOffsetMs(naiveMs + ONE_DAY_MS, timeZone);
+  const guessBefore = naiveMs - getOffsetMs(naiveMs - DAY_IN_MS, timeZone);
+  const guessAfter = naiveMs - getOffsetMs(naiveMs + DAY_IN_MS, timeZone);
 
   const mapsBack = (utcMs: number): boolean =>
     localAsUtcMs(getLocalDateTime(new Date(utcMs), timeZone)) === naiveMs;
@@ -160,7 +160,7 @@ const addLocalDays = (
   localDateTime: LocalDateTime,
   days: number,
 ): LocalDateTime => {
-  const shifted = new Date(localAsUtcMs(localDateTime) + days * ONE_DAY_MS);
+  const shifted = new Date(localAsUtcMs(localDateTime) + days * DAY_IN_MS);
 
   return {
     year: shifted.getUTCFullYear(),

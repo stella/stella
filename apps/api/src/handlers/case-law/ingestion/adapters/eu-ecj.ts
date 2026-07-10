@@ -355,8 +355,7 @@ export const euEcjAdapter: SourceAdapter = {
         // Null cursor defaults to 7 days ago (used by health
         // checks). Historical backfill is triggered by setting
         // the DB cursor to "1952-01-01" after deploy.
-        const dateFrom =
-          cursor ?? toIsoDate(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
+        const dateFrom = cursor ?? addDays(toIsoDate(new Date()), -7);
         const dateTo = dateFrom;
 
         // 1. Query SPARQL for decisions on this date

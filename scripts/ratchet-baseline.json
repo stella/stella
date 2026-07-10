@@ -311,36 +311,5 @@
       "apps/web/src/routes/auth/organization.tsx": 2,
       "apps/web/src/routes/consent.tsx": 1
     }
-  },
-  "raw-date-parsing": {
-    "count": 41,
-    "files": {
-      "apps/api/src/handlers/case-law/citation-score.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-nss.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/adapters/cz-regional.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 2,
-      "apps/api/src/handlers/case-law/ingestion/status.ts": 1,
-      "apps/api/src/handlers/entities/query-entities.ts": 1,
-      "apps/api/src/handlers/expenses/create.ts": 2,
-      "apps/api/src/handlers/feedback/intake.ts": 1,
-      "apps/api/src/handlers/tasks/calendar.ts": 2,
-      "apps/api/src/handlers/time-entries/create.ts": 2,
-      "apps/api/src/lib/desktop-edit-sessions.ts": 1,
-      "apps/api/src/lib/pagination.ts": 1,
-      "apps/api/src/lib/report-export-recovery.ts": 1,
-      "apps/api/src/lib/scheduler/schedule.ts": 1,
-      "apps/api/src/mcp/research-admin-tools.ts": 1,
-      "apps/web/src/components/search-dialog.tsx": 2,
-      "apps/web/src/components/selfhost-update-banner.tsx": 1,
-      "apps/web/src/lib/desktop-bridge.ts": 2,
-      "apps/web/src/lib/search.ts": 4,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.tsx": 3,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.logic.ts": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts": 2,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic.ts": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-utils.ts": 1,
-      "apps/web/src/routes/_protected.workspaces/-components/matter-card.tsx": 3
-    }
   }
 }

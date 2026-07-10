@@ -66,3 +66,10 @@ export const addDays = (date: Date, n: number): Date => {
   result.setDate(result.getDate() + n);
   return result;
 };
+
+/** Add calendar days using UTC fields, for UTC-backed date cursors. */
+export const addUtcDays = (date: Date, n: number): Date => {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + n);
+  return result;
+};

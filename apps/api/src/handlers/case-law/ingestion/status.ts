@@ -10,6 +10,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { DAY_IN_MS } from "@/api/lib/time";
 
 type SourceStatus = {
   adapterKey: string;
@@ -42,7 +43,7 @@ export const getIngestionStatus = async (
   scopedDb: ScopedDb,
 ): Promise<IngestionStatus> => {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const oneDayAgo = new Date(Date.now() - DAY_IN_MS);
 
   return await scopedDb(async (db) => {
     const sources = await db
