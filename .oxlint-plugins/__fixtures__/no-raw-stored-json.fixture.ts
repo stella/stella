@@ -71,10 +71,11 @@ export const viaSessionVariable = () => {
 // component/helper that created it.
 export const viaEnclosingFunctionVariable = () => {
   const raw = localStorage.getItem("k");
-  return () => 
+  // oxlint-disable-next-line arrow-body-style -- A block keeps the rule-under-test suppression directly attached to JSON.parse.
+  return () => {
     // oxlint-disable-next-line no-raw-stored-json/no-raw-stored-json
-    JSON.parse(raw ?? "null")
-  ;
+    return JSON.parse(raw ?? "null");
+  };
 };
 
 // Allowed: an inner declaration shadows the storage-sourced outer value.
