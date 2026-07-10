@@ -1,30 +1,38 @@
+class BoundedLruCache<TKey, TValue> {
+  readonly #entries = new Map<TKey, TValue>();
+  readonly #limit: number;
+
+  constructor(limit: number) {
+    this.#limit = limit;
+  }
+
+  get(key: TKey): TValue | undefined {
+    const value = this.#entries.get(key);
+    if (value === undefined) {
+      return undefined;
+    }
+    this.#entries.delete(key);
+    this.#entries.set(key, value);
+    return value;
+  }
+
+  set(key: TKey, value: TValue): void {
+    this.#entries.set(key, value);
+    if (this.#entries.size <= this.#limit) {
+      return;
+    }
+    const oldestKey = this.#entries.keys().next();
+    if (!oldestKey.done) {
+      this.#entries.delete(oldestKey.value);
+    }
+  }
+}
+
 const COLLATOR_CACHE_LIMIT = 16;
 
-const collatorCache = (() => {
-  const collators = new Map<string, Intl.Collator>();
-
-  return {
-    get: (locale: string): Intl.Collator | undefined => {
-      const collator = collators.get(locale);
-      if (!collator) {
-        return undefined;
-      }
-      collators.delete(locale);
-      collators.set(locale, collator);
-      return collator;
-    },
-    set: (locale: string, collator: Intl.Collator): void => {
-      collators.set(locale, collator);
-      if (collators.size <= COLLATOR_CACHE_LIMIT) {
-        return;
-      }
-      const oldestLocale = collators.keys().next();
-      if (!oldestLocale.done) {
-        collators.delete(oldestLocale.value);
-      }
-    },
-  };
-})();
+const collatorCache = new BoundedLruCache<string, Intl.Collator>(
+  COLLATOR_CACHE_LIMIT,
+);
 
 /**
  * `Intl.Collator` for `locale`, cached per locale.
