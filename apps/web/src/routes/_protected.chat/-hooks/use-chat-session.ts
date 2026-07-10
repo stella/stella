@@ -70,6 +70,18 @@ type UseChatSessionOptions = {
   getSendMode?: (() => ChatSendMode) | undefined;
   /** Cursor for the first older page, seeded from the thread fetch. */
   initialOlderCursor: string | null;
+  /**
+   * Invoked once, at the moment `error` transitions from unset (or from a
+   * different error) into a new error — never again for the same error
+   * instance on subsequent renders. `error` never arrives pre-set from a
+   * cache/hydration path (a freshly seeded or re-seeded runtime always
+   * starts with `error: undefined`), so there is no mount case to cover
+   * here — only the live transition matters. Callers whose handler isn't
+   * referentially stable across renders (e.g. a fresh closure per render)
+   * should wrap it in `useEffectEvent` before passing it in, so this
+   * hook's effect doesn't re-run for reasons unrelated to `error` itself.
+   */
+  onError?: ((error: Error) => void) | undefined;
   threadRef: ChatThreadRef;
   workspaceId?: string | undefined;
 };
@@ -149,6 +161,7 @@ export const useChatSession = ({
   conversationId,
   getSendMode,
   initialOlderCursor,
+  onError,
   threadRef,
   workspaceId,
 }: UseChatSessionOptions) => {
@@ -170,6 +183,9 @@ export const useChatSession = ({
     chat.getSnapshot,
   );
   const { error, sessionGenerating, status } = snapshot;
+  // Latch for the error-transition effect below: `undefined` means "no
+  // error has been notified yet" for the current error-free stretch.
+  const lastHandledErrorRef = useRef<Error | undefined>(undefined);
   // TanStack only populates a tool-call part's raw `arguments`; its
   // typed `input` is filled here, once, as messages leave the runtime
   // for the UI, so every consumer reads a parsed `input` the same way
@@ -740,6 +756,24 @@ export const useChatSession = ({
   useExternalSyncEffect(() => {
     queueRef.current = queuedMessages;
   }, [queuedMessages]);
+
+  // Notify `onError` exactly once per new error instance. TanStack keeps
+  // the same Error reference alive across renders until the turn is
+  // retried or cleared, so a ref latch (not `useState`) distinguishes "the
+  // same failed turn is still showing" from "a fresh failure just landed."
+  // Without the latch, an unrelated re-render (e.g. `onError`'s own
+  // identity changing) would re-notify for an error already handled.
+  useExternalSyncEffect(() => {
+    if (!error) {
+      lastHandledErrorRef.current = undefined;
+      return;
+    }
+    if (lastHandledErrorRef.current === error) {
+      return;
+    }
+    lastHandledErrorRef.current = error;
+    onError?.(error);
+  }, [error, onError]);
 
   useExternalSyncEffect(() => {
     conversationIdRef.current = conversationId;

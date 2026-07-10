@@ -99,7 +99,7 @@ type WorkspaceTableProps = {
   // Union of every section's row ids, so a grouped section's select-all keeps
   // selections in other sections (they share one selection) while still dropping
   // stale ids. Omitted by the flat table.
-  selectAllPreservableRowIdsRef?: RefObject<string[]>;
+  selectAllPreservableRowIds?: () => string[];
 };
 
 // A grouped section virtualizes against a shared ancestor scroll it does not
@@ -122,7 +122,7 @@ export const WorkspaceTable = ({
   stickyColumnHeader = true,
   fillHeight = true,
   outerScrollRef,
-  selectAllPreservableRowIdsRef,
+  selectAllPreservableRowIds,
 }: WorkspaceTableProps) => {
   const inlineFlow = outerScrollRef !== undefined;
   const t = useTranslations();
@@ -224,9 +224,9 @@ export const WorkspaceTable = ({
     rowSelection: table.state.rowSelection,
   });
   const handleToggleSelectAll = useCallback(() => {
-    // Read the latest cross-group row-id union at click time from the ref, so
-    // this table never re-renders as that union grows during load.
-    const preservableRowIds = selectAllPreservableRowIdsRef?.current;
+    // Read the latest cross-group row-id union at click time from the
+    // getter, so this table never re-renders as that union grows during load.
+    const preservableRowIds = selectAllPreservableRowIds?.();
     table.setRowSelection(
       getNextSelectAllRowSelection({
         selectableRowIds,
@@ -234,7 +234,7 @@ export const WorkspaceTable = ({
         ...(preservableRowIds && { preservableRowIds }),
       }),
     );
-  }, [selectableRowIds, selectAllPreservableRowIdsRef, table]);
+  }, [selectableRowIds, selectAllPreservableRowIds, table]);
 
   const rowLabels = useMemo(() => {
     // Compute logical row labels that account for collapsed

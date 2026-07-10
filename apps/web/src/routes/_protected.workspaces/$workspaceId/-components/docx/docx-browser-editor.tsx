@@ -5,7 +5,7 @@
 
 import {
   useCallback,
-  useEffect,
+  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -1284,10 +1284,42 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     void handleFinalize();
   }, [handleFinalize, handleUnlock, isUnlocked]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- wires imperative action handles into parent-provided refs/map (a registry relay), not external-system sync; consider an imperative handle / ref callback
-  useEffect(() => {
-    const actionsMap = actionsMapRef?.current;
-    const actions: DocxBrowserEditorActions = {
+  // Registers this render's action handles into the parent-provided ref
+  // and/or keyed map. Wrapped in useCallback (stable unless actionsKey /
+  // actionsMapRef / actionsRef change) so useImperativeHandle only
+  // re-attaches for those changes or for its own dep list below.
+  const registerActions = useCallback(
+    (actions: DocxBrowserEditorActions | null) => {
+      if (!actions) {
+        return undefined;
+      }
+      const actionsMap = actionsMapRef?.current;
+      if (actionsRef) {
+        actionsRef.current = actions;
+      }
+      if (actionsMap && actionsKey) {
+        actionsMap.set(actionsKey, actions);
+      }
+
+      return () => {
+        if (actionsRef?.current === actions) {
+          actionsRef.current = null;
+        }
+        if (
+          actionsMap &&
+          actionsKey &&
+          actionsMap.get(actionsKey) === actions
+        ) {
+          actionsMap.delete(actionsKey);
+        }
+      };
+    },
+    [actionsKey, actionsMapRef, actionsRef],
+  );
+
+  useImperativeHandle(
+    registerActions,
+    () => ({
       cancel: handleCancel,
       finalize: () => {
         if (isCollaborativeEditing || state.status === "editing") {
@@ -1301,34 +1333,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       unlock: () => {
         void requestEditMode();
       },
-    };
-
-    if (actionsRef) {
-      actionsRef.current = actions;
-    }
-    if (actionsMap && actionsKey) {
-      actionsMap.set(actionsKey, actions);
-    }
-
-    return () => {
-      if (actionsRef?.current === actions) {
-        actionsRef.current = null;
-      }
-      if (actionsMap && actionsKey && actionsMap.get(actionsKey) === actions) {
-        actionsMap.delete(actionsKey);
-      }
-    };
-  }, [
-    actionsKey,
-    actionsMapRef,
-    actionsRef,
-    flushPendingChanges,
-    handleCancel,
-    handleFinalize,
-    isCollaborativeEditing,
-    requestEditMode,
-    state.status,
-  ]);
+    }),
+    [
+      flushPendingChanges,
+      handleCancel,
+      handleFinalize,
+      isCollaborativeEditing,
+      requestEditMode,
+      state.status,
+    ],
+  );
 
   // Hold the last editing buffer so the editor doesn't swap to the
   // preview buffer during the save transition (`state` becomes

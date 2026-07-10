@@ -1,7 +1,7 @@
 import {
   type RefObject,
   useCallback,
-  useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -276,13 +276,9 @@ export const GroupedTableLayout = ({
   // The cross-group row-id union grows as each group's first page lands, so
   // passing it as a prop re-renders every section on every group load (each
   // rebuilding its table). Sections only read it inside the "select all"
-  // handler, never during render, so mirror it into a ref: the prop stays
-  // referentially stable and the per-load re-render fan-out disappears.
-  const allRowIdsRef = useRef(allRowIds);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mirroring a render value into a ref for event-time reads; not external-system sync nor mount-only, so neither wrapper applies
-  useEffect(() => {
-    allRowIdsRef.current = allRowIds;
-  }, [allRowIds]);
+  // handler, never during render, so pass a stable getter instead: the prop
+  // stays referentially stable and the per-load re-render fan-out disappears.
+  const getAllRowIds = useEffectEvent(() => allRowIds);
 
   if (groupByPropertyId === null || isUnsupportedGrouping) {
     return (
@@ -345,7 +341,7 @@ export const GroupedTableLayout = ({
             optionValues={optionValues}
             outerScrollRef={scrollRef}
             reportGroupTreeData={reportGroupTreeData}
-            selectAllPreservableRowIdsRef={allRowIdsRef}
+            selectAllPreservableRowIds={getAllRowIds}
             sumProperties={sumProperties}
             tableState={tableState}
             view={view}
@@ -491,7 +487,7 @@ type GroupSectionProps = {
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
   reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
-  selectAllPreservableRowIdsRef: RefObject<string[]>;
+  selectAllPreservableRowIds: () => string[];
 };
 
 const GroupSection = ({
@@ -509,7 +505,7 @@ const GroupSection = ({
   tableState,
   outerScrollRef,
   reportGroupTreeData,
-  selectAllPreservableRowIdsRef,
+  selectAllPreservableRowIds,
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -680,7 +676,7 @@ const GroupSection = ({
                 }
               }}
               outerScrollRef={outerScrollRef}
-              selectAllPreservableRowIdsRef={selectAllPreservableRowIdsRef}
+              selectAllPreservableRowIds={selectAllPreservableRowIds}
               showAddRow={false}
               stickyColumnHeader={false}
               table={table}

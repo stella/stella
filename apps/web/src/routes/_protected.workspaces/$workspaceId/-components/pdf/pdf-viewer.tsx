@@ -4,6 +4,7 @@ import { produce } from "immer";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { StellaMark } from "@/components/stella-mark";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -28,6 +29,15 @@ const FullscreenPdfViewer = () => {
   const pageNumber = routeApi.useSearch({ select: (s) => s.pdfPage ?? 1 });
   const setPdfPageCount = useWorkspaceStore((s) => s.setPdfPageCount);
   const scaleOffset = useWorkspaceStore((s) => s.pdfViewer.scaleOffset);
+  const pageCount = usePDFStore((s) => s.pages.size);
+
+  // The page count lives in the PDF store (scoped to this document), but the
+  // toolbar that displays it (PdfViewerControls) can render outside the
+  // PDFProvider tree, so it reads from the workspace store instead. Push the
+  // count across on change.
+  useExternalSyncEffect(() => {
+    setPdfPageCount(pageCount);
+  }, [pageCount, setPdfPageCount]);
 
   const { data: file } = useSuspenseQuery(
     fileOptions({
@@ -80,7 +90,6 @@ const FullscreenPdfViewer = () => {
         fileId={fieldId}
         invertColors={isImageOrigin ? false : undefined}
         onPageChanged={handlePageChanged}
-        onPageCountChanged={setPdfPageCount}
         page={pageNumber}
         scaleOffset={scaleOffset}
         renderPage={(props) => (

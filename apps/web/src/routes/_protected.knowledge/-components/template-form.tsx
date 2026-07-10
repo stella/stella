@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -1580,10 +1580,6 @@ export const TemplateForm = ({
   const [clauseOverrides, setClauseOverrides] = useState<
     Record<string, ClauseBody>
   >({});
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- relays the live form values to a parent callback prop on every change; setValues is driven by many field handlers so this cannot be folded into a single one, lift the values to the parent
-  useEffect(() => {
-    onValuesChange?.(values);
-  }, [values, onValuesChange]);
   const [loading, setLoading] = useState(false);
   const [touched, setTouched] = useState<TouchedFields>({});
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -1669,10 +1665,20 @@ export const TemplateForm = ({
     [fields],
   );
 
-  const handleChange = useCallback((path: string, value: unknown) => {
-    valuesRef.current = { ...valuesRef.current, [path]: value };
-    setValues((prev) => ({ ...prev, [path]: value }));
-  }, []);
+  // Sole writer of `values`: merges the change, updates state, and relays
+  // the resulting snapshot to the parent in the same tick (no post-commit
+  // effect). The ref update stays synchronous with `setValues` so validation
+  // reads the latest values inside ordinary event handlers, per the ref-mirror
+  // exemption above.
+  const handleChange = useCallback(
+    (path: string, value: unknown) => {
+      const next = { ...valuesRef.current, [path]: value };
+      valuesRef.current = next;
+      setValues(next);
+      onValuesChange?.(next);
+    },
+    [onValuesChange],
+  );
 
   /** Drop a field's prefill badge once its value is cleared (empty string,
    *  unchecked boolean, or every composite part blank). Edits keep it. */

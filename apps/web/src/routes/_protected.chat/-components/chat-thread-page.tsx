@@ -154,6 +154,29 @@ export const ChatThreadPage = ({
     setContextMatterIds(data.contextMatterIds);
   }, [data.contextMatterIds, seededForThreadId, threadRef.threadId]);
 
+  // Surface a 402 usage-limit response from the metered
+  // chat handler as a usage-state modal instead of an inline
+  // stack trace. `useQuery` (not Suspense) keeps the chat shell
+  // rendering while the entitlement state loads.
+  const { data: usageEntitlementData } = useQuery({
+    ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
+    enabled: canManageOrganization,
+  });
+  const usageLimit = useUsageLimit({
+    hasHostedEntitlement:
+      usageEntitlementData?.entitlement?.source === "hosted",
+  });
+  const handleUsageLimit = usageLimit.handle;
+  // `handleUsageLimit` is a fresh closure every render (useUsageLimit does
+  // not memoize it). useChatSession's error-transition latch only cares
+  // about `error` changing, not `onError`'s identity, so wrap it in an
+  // Effect Event: a stable reference that always calls the latest
+  // `handleUsageLimit` without forcing useChatSession's internal effect to
+  // re-run on every render of this component.
+  const openUsageLimitModal = useEffectEvent((usageLimitError: Error) => {
+    handleUsageLimit(usageLimitError);
+  });
+
   const {
     error,
     messages,
@@ -186,40 +209,10 @@ export const ChatThreadPage = ({
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    onError: openUsageLimitModal,
     threadRef,
     workspaceId,
   });
-
-  // Surface a 402 usage-limit response from the metered
-  // chat handler as a usage-state modal instead of an inline
-  // stack trace. `useQuery` (not Suspense) keeps the chat shell
-  // rendering while the entitlement state loads.
-  const { data: usageEntitlementData } = useQuery({
-    ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
-    enabled: canManageOrganization,
-  });
-  const usageLimit = useUsageLimit({
-    hasHostedEntitlement:
-      usageEntitlementData?.entitlement?.source === "hosted",
-  });
-  const handleUsageLimit = usageLimit.handle;
-  // Fire only on the *transition* into a new error. Without this,
-  // dismissing the modal would re-trigger the open on the next
-  // render (the error reference persists in useChat until the
-  // user retries).
-  const lastHandledErrorRef = useRef<unknown>(null);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- open the usage-limit modal on the transition into a new error. `error` is owned by useChatSession (useChat) and has no setter here; folding this in would require threading the handler into that hook (outside this batch). Keep.
-  useEffect(() => {
-    if (!error) {
-      lastHandledErrorRef.current = null;
-      return;
-    }
-    if (lastHandledErrorRef.current === error) {
-      return;
-    }
-    lastHandledErrorRef.current = error;
-    handleUsageLimit(error);
-  }, [error, handleUsageLimit]);
 
   const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
 
