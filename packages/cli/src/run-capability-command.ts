@@ -31,6 +31,7 @@ import {
   readOutputFormat,
   renderToolError,
   RESERVED_FLAG_KEYS,
+  reservedFlagUsageError,
   scopeGranted,
   setExit,
   setPath,
@@ -197,7 +198,10 @@ type CapabilityRetryOptions = {
 /**
  * Confirm-passthrough prompt-and-retry: a call WITHOUT `confirm` that comes back
  * `confirmation_required` prompts (on a TTY, unless `--no-input`) and retries
- * once with `confirm: true`. Returns true when it fully handled the command.
+ * once with `confirm: true`. Returns true when it fully handled the command. A
+ * declined/refused prompt is terminal (one stderr `aborted` line, exit 7): the
+ * original envelope is NOT rendered on top of the abort, matching the pre-call
+ * destructive abort flow.
  */
 const maybeConfirmRetry = async ({
   args,
@@ -228,7 +232,9 @@ const maybeConfirmRetry = async ({
     label: spec.commandPath.join(" "),
   });
   if (outcome !== "proceed") {
-    return false;
+    writers.stderr("aborted\n");
+    setExit(context, EXIT_CODES.aborted);
+    return true;
   }
   const retry = await callTool({
     serverUrl,
@@ -267,6 +273,15 @@ export const runCapabilityCommand = async ({
   if (serverUrl === undefined || token === undefined) {
     writers.stderr("Not signed in. Run 'stella auth login' to authenticate.\n");
     setExit(context, EXIT_CODES.auth);
+    return;
+  }
+
+  // Reserved flag VALUES fail loudly (exit 2) instead of being silently
+  // dropped from the request (e.g. `--limit abc`), same as the curated executor.
+  const reservedUsage = reservedFlagUsageError(flags);
+  if (reservedUsage !== null) {
+    writers.stderr(`${reservedUsage}\n`);
+    setExit(context, EXIT_CODES.validation);
     return;
   }
 
@@ -311,15 +326,20 @@ export const runCapabilityCommand = async ({
   const paginationPart = spec.paginationPart;
 
   // Reserved pagination flags map into the capability's pagination part
-  // (`input.query.cursor` / `input.body.limit`, etc.).
+  // (`input.query.cursor` / `input.body.limit`, etc.). Values were validated
+  // up front (`reservedFlagUsageError`), so a present `--limit` always parses.
   if (spec.paginated && paginationPart !== undefined) {
     const cursorFlag = flags[RESERVED_FLAG_KEYS.cursor];
     const limitFlag = flags[RESERVED_FLAG_KEYS.limit];
     if (!allActive && typeof cursorFlag === "string") {
       setPath(input, `${paginationPart}.cursor`, cursorFlag);
     }
-    if (typeof limitFlag === "string" && /^-?\d+$/u.test(limitFlag.trim())) {
-      setPath(input, `${paginationPart}.limit`, Number.parseInt(limitFlag, 10));
+    if (typeof limitFlag === "string") {
+      setPath(
+        input,
+        `${paginationPart}.limit`,
+        Number.parseInt(limitFlag.trim(), 10),
+      );
     }
   }
 

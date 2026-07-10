@@ -125,6 +125,60 @@ describe("deriveCapabilityLeaf: flags", () => {
     expect(flagByCli(spec, "--version")).toBeUndefined();
     expect(flagByCli(spec, "--body-version")?.partPath).toBe("version");
   });
+
+  test("a part-prefixed flag colliding with another part's natural name prefixes both", () => {
+    // query.version -> reserved -> --query-version; body.queryVersion would
+    // naturally kebab to --query-version too. Global uniqueness must prefix
+    // the body candidate as well, never ship two flags with one name.
+    const { spec } = deriveCapabilityLeaf(
+      entry({
+        id: "a.b",
+        handlerKind: "root",
+        inputSchema: {
+          query: objectSchema({ version: { type: "string" } }),
+          body: objectSchema({ queryVersion: { type: "string" } }),
+        },
+      }),
+    );
+    const names = spec.flags.map((f) => f.flag);
+    expect(new Set(names).size).toBe(names.length);
+    expect(flagByCli(spec, "--query-version")?.part).toBe("query");
+    expect(flagByCli(spec, "--body-query-version")?.part).toBe("body");
+  });
+
+  test("a prop colliding with the synthetic --workspace is part-prefixed", () => {
+    const { spec } = deriveCapabilityLeaf(
+      entry({
+        id: "a.b",
+        handlerKind: "workspace",
+        inputSchema: { body: objectSchema({ workspace: { type: "string" } }) },
+      }),
+    );
+    const workspaceFlags = spec.flags.filter((f) => f.flag === "--workspace");
+    expect(workspaceFlags).toHaveLength(1);
+    expect(workspaceFlags[0]?.partPath).toBe("workspaceId");
+    expect(flagByCli(spec, "--body-workspace")?.partPath).toBe("workspace");
+  });
+
+  test("an irresolvable duplicate fails generation naming the capability", () => {
+    // body.fooBar and body.foo_bar both kebab to --foo-bar, and their prefixed
+    // forms (--body-foo-bar) still collide: generation must fail, not ship an
+    // ambiguous flag surface.
+    expect(() =>
+      deriveCapabilityLeaf(
+        entry({
+          id: "a.irresolvable",
+          handlerKind: "root",
+          inputSchema: {
+            body: objectSchema({
+              fooBar: { type: "string" },
+              foo_bar: { type: "string" },
+            }),
+          },
+        }),
+      ),
+    ).toThrow(/a\.irresolvable.*--body-foo-bar/u);
+  });
 });
 
 describe("deriveCapabilityLeaf: workspace flag", () => {

@@ -13,12 +13,9 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
 import packageJson from "../package.json" with { type: "json" };
-import {
-  type CapabilityCatalogEntry,
-  insertCapabilities,
-} from "./generate-capability-tree.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
+import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { generateResourceTree } from "./generate-resource-tree.js";
-import { generateRouteMap } from "./generate-route-map.js";
 import { generateCliSkill, SKILL_NAME } from "./generate-skill.js";
 import type { ResourceListing } from "./resource-types.js";
 import type {
@@ -206,77 +203,21 @@ for (const tool of snapshot.output) {
   toolAnnotations[tool.name] = projectToolAnnotation(tool.cli);
 }
 
-const curatedRouteMap = generateRouteMap(listings, toolAnnotations);
-
-// Project the committed capability-catalog snapshot into leaf commands and merge
-// them into the SAME curated tree (spec 049 Phase 3). The catalog is trusted,
-// committed data (owned by the api-side exporter), validated here only to the
-// fields the CLI codegen consumes so a malformed snapshot fails loudly.
-const jsonSchemaSchema = v.record(v.string(), v.unknown());
-const catalogEntrySchema = v.looseObject({
-  id: v.string(),
-  handlerKind: v.picklist(["workspace", "root", "session"]),
-  access: v.picklist(["read", "write"]),
-  destructive: v.boolean(),
-  scope: v.string(),
-  requiresFileInput: v.optional(v.boolean()),
-  returnsFileResponse: v.optional(v.boolean()),
-  inputSchemaTruncated: v.optional(v.boolean()),
-  inputSchema: v.optional(
-    v.looseObject({
-      body: v.optional(jsonSchemaSchema),
-      params: v.optional(jsonSchemaSchema),
-      query: v.optional(jsonSchemaSchema),
-    }),
-  ),
-});
-const catalogParse = v.safeParse(
-  v.array(catalogEntrySchema),
+// Project the committed capability-catalog snapshot into leaf commands and
+// merge them into the SAME curated tree (spec 049 Phase 3), through the ONE
+// shared `buildCliRouteTree` the runtime registry-refresh path also uses. The
+// catalog is trusted, committed data (owned by the api-side exporter),
+// validated to the fields the CLI consumes so a malformed snapshot fails loudly.
+const catalogEntries = parseCapabilityCatalog(
   JSON.parse(await readFile(catalogUrl, "utf-8")),
 );
-if (!catalogParse.success) {
+if (catalogEntries === null) {
   panic("capability-catalog.json does not match the expected entry shape");
 }
-// Project valibot output (with `| undefined` widening on optionals) to the
-// generator's entry shape, dropping absent optionals so `exactOptionalPropertyTypes`
-// stays satisfied.
-const catalogEntries: CapabilityCatalogEntry[] = catalogParse.output.map(
-  (entry) => {
-    const projected: CapabilityCatalogEntry = {
-      id: entry.id,
-      handlerKind: entry.handlerKind,
-      access: entry.access,
-      destructive: entry.destructive,
-      scope: entry.scope,
-    };
-    if (entry.requiresFileInput !== undefined) {
-      projected.requiresFileInput = entry.requiresFileInput;
-    }
-    if (entry.returnsFileResponse !== undefined) {
-      projected.returnsFileResponse = entry.returnsFileResponse;
-    }
-    if (entry.inputSchemaTruncated !== undefined) {
-      projected.inputSchemaTruncated = entry.inputSchemaTruncated;
-    }
-    if (entry.inputSchema !== undefined) {
-      const parts: NonNullable<CapabilityCatalogEntry["inputSchema"]> = {};
-      if (entry.inputSchema.body !== undefined) {
-        parts.body = entry.inputSchema.body;
-      }
-      if (entry.inputSchema.params !== undefined) {
-        parts.params = entry.inputSchema.params;
-      }
-      if (entry.inputSchema.query !== undefined) {
-        parts.query = entry.inputSchema.query;
-      }
-      projected.inputSchema = parts;
-    }
-    return projected;
-  },
-);
 
-const { tree: routeMap, stats: capabilityStats } = insertCapabilities({
-  tree: curatedRouteMap,
+const { tree: routeMap, stats: capabilityStats } = buildCliRouteTree({
+  listings,
+  annotations: toolAnnotations,
   entries: catalogEntries,
 });
 process.stderr.write(

@@ -377,6 +377,94 @@ describe("runCapabilityCommand: confirm gates", () => {
     expect(tty.exitCode()).toBe(EXIT_CODES.aborted);
     expect(tty.stderrText()).toContain("--yes is required");
   });
+
+  test("a declined confirm-retry prompt is terminal: exit 7, aborted line, no envelope", async () => {
+    const server = startServer({ kind: "confirm-gate" });
+    const spec = capSpec({ capabilityId: "a.risky" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "n\n",
+      isTTY: true,
+    });
+    await runCapabilityCommand({ context: tty.context, flags: {}, spec });
+    server.stop();
+    expect(server.calls).toHaveLength(1);
+    expect(tty.exitCode()).toBe(EXIT_CODES.aborted);
+    expect(tty.stderrText()).toContain("aborted");
+    // The original confirmation_required envelope is NOT rendered on top, and
+    // no result reaches stdout (only the interactive prompt echo).
+    expect(tty.stderrText()).not.toContain("error:");
+    expect(tty.stdoutText()).not.toContain("done");
+  });
+});
+
+describe("runCapabilityCommand: reserved flag values", () => {
+  test("--limit abc is a usage error (exit 2), no server call", async () => {
+    const server = startServer({ kind: "echo" });
+    const spec = capSpec({
+      capabilityId: "a.list",
+      paginated: true,
+      paginationPart: "query",
+      itemsKey: "items",
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { limit: "abc" },
+      spec,
+    });
+    server.stop();
+    expect(server.calls).toHaveLength(0);
+    expect(tty.exitCode()).toBe(EXIT_CODES.validation);
+    expect(tty.stderrText()).toContain("--limit");
+  });
+
+  test("an unknown --output value is a usage error (exit 2), no server call", async () => {
+    const server = startServer({ kind: "echo" });
+    const spec = capSpec({ capabilityId: "a.b" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { output: "yaml" },
+      spec,
+    });
+    server.stop();
+    expect(server.calls).toHaveLength(0);
+    expect(tty.exitCode()).toBe(EXIT_CODES.validation);
+    expect(tty.stderrText()).toContain("--output");
+  });
+
+  test("a valid --limit threads into the pagination part", async () => {
+    const server = startServer({ kind: "echo" });
+    const spec = capSpec({
+      capabilityId: "a.list",
+      paginated: true,
+      paginationPart: "query",
+      itemsKey: "items",
+    });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { limit: "25" },
+      spec,
+    });
+    server.stop();
+    expect(lastInvoke(server.calls)["input"]).toEqual({
+      query: { limit: 25 },
+    });
+  });
 });
 
 describe("runCapabilityCommand: output contract", () => {

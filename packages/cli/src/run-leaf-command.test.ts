@@ -9,6 +9,7 @@ import {
   buildArgsFromFlags,
   classifyToolError,
   flagKey,
+  reservedFlagUsageError,
   runLeafCommand,
 } from "./run-leaf-command.js";
 
@@ -216,6 +217,23 @@ describe("approvalReRunHint: two-phase handshake affordance", () => {
   });
 });
 
+describe("reservedFlagUsageError (spec 049 review)", () => {
+  test("a non-integer --limit is a usage error naming the flag", () => {
+    expect(reservedFlagUsageError({ limit: "abc" })).toContain("--limit");
+    expect(reservedFlagUsageError({ limit: "-3" })).toContain("--limit");
+    expect(reservedFlagUsageError({ limit: "0" })).toContain("--limit");
+    expect(reservedFlagUsageError({ limit: "25" })).toBeNull();
+  });
+
+  test("an unknown --output value is a usage error naming the flag", () => {
+    expect(reservedFlagUsageError({ output: "yaml" })).toContain("--output");
+    expect(reservedFlagUsageError({ output: "json" })).toBeNull();
+    expect(reservedFlagUsageError({ output: "table" })).toBeNull();
+    expect(reservedFlagUsageError({ output: "jsonl" })).toBeNull();
+    expect(reservedFlagUsageError({})).toBeNull();
+  });
+});
+
 // --- confirm passthrough: prompt-and-retry on confirmation_required ----------
 
 const CONFIRMATION_REQUIRED_BODY = {
@@ -384,7 +402,7 @@ describe("confirm passthrough (capability invoke)", () => {
     expect(tty.stdoutText()).toContain("done");
   });
 
-  test("a declined prompt exits 7 without retrying", async () => {
+  test("a declined prompt is terminal: exit 7, one aborted line, no envelope render", async () => {
     const server = startConfirmGateServer();
     const tty = makeTtyContext({
       serverUrl: server.url,
@@ -399,7 +417,9 @@ describe("confirm passthrough (capability invoke)", () => {
     server.stop();
     expect(server.calls).toHaveLength(1);
     expect(tty.exitCode()).toBe(EXIT_CODES.aborted);
-    expect(tty.stderrText()).toContain("error:");
+    expect(tty.stderrText()).toContain("aborted");
+    // The original confirmation_required envelope is NOT rendered on top.
+    expect(tty.stderrText()).not.toContain("error:");
   });
 
   test("non-TTY without --yes keeps today's behavior: exit 7, no prompt, no retry", async () => {

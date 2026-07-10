@@ -591,6 +591,32 @@ export const readOutputFormat = (
   });
 };
 
+/**
+ * Validate the hand-parsed reserved flag VALUES (`--output`, `--limit`) up
+ * front, so a mistyped value is a loud usage error (exit 2) instead of being
+ * silently dropped from the request. Shared by both executors; returns the
+ * stderr message naming the flag, or `null` when everything parses.
+ */
+export const reservedFlagUsageError = (flags: LeafFlags): string | null => {
+  const output = flags[RESERVED_FLAG_KEYS.output];
+  if (
+    typeof output === "string" &&
+    output !== "json" &&
+    output !== "table" &&
+    output !== "jsonl"
+  ) {
+    return `--output must be one of: json, table, jsonl (got "${output}")`;
+  }
+  const limit = flags[RESERVED_FLAG_KEYS.limit];
+  if (typeof limit === "string") {
+    const trimmed = limit.trim();
+    if (!/^\d+$/u.test(trimmed) || Number.parseInt(trimmed, 10) < 1) {
+      return `--limit expects a positive integer (got "${limit}")`;
+    }
+  }
+  return null;
+};
+
 type AllOutcome = {
   payload: unknown;
   truncated: boolean;
@@ -868,6 +894,15 @@ export const runLeafCommand = async ({
     return;
   }
 
+  // Reserved flag VALUES fail loudly (exit 2) instead of being silently
+  // dropped from the request (e.g. `--limit abc`).
+  const reservedUsage = reservedFlagUsageError(flags);
+  if (reservedUsage !== null) {
+    writers.stderr(`${reservedUsage}\n`);
+    setExit(context, EXIT_CODES.validation);
+    return;
+  }
+
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
   let args: Record<string, unknown>;
   if (typeof inputRaw === "string") {
@@ -933,12 +968,14 @@ export const runLeafCommand = async ({
   const allActive = spec.paginated && flags[RESERVED_FLAG_KEYS.all] === true;
 
   // Reserved pagination flags map onto the tool's cursor/limit args (spec S3).
+  // Values were validated up front (`reservedFlagUsageError`), so a present
+  // `--limit` always parses.
   const cursorFlag = flags[RESERVED_FLAG_KEYS.cursor];
   const limitFlag = flags[RESERVED_FLAG_KEYS.limit];
   if (!allActive && typeof cursorFlag === "string") {
     args["cursor"] = cursorFlag;
   }
-  if (typeof limitFlag === "string" && /^-?\d+$/u.test(limitFlag.trim())) {
+  if (typeof limitFlag === "string") {
     args["limit"] = Number.parseInt(limitFlag.trim(), 10);
   }
 
@@ -1051,9 +1088,11 @@ type ConfirmRetryOptions = {
  * back `confirmation_required` on a confirm-passthrough leaf and stdin is a
  * TTY, ask the human exactly like the destructive prompt and retry ONCE with
  * `confirm: true`. Returns true when it fully handled the command (rendered a
- * retry result or a retry transport error); false lets the caller render the
- * original envelope, so a declined prompt and every non-TTY call keep today's
- * behavior (exit 7).
+ * retry result, a retry transport error, or a terminal abort); false lets the
+ * caller render the original envelope, so every non-TTY call keeps today's
+ * behavior (exit 7). A declined/refused prompt is terminal — one stderr
+ * `aborted` line, exit 7, no envelope render on top — matching the pre-call
+ * destructive abort flow and the capability executor.
  */
 const maybeConfirmRetry = async ({
   args,
@@ -1085,7 +1124,9 @@ const maybeConfirmRetry = async ({
     label: spec.commandPath.join(" "),
   });
   if (outcome !== "proceed") {
-    return false;
+    writers.stderr("aborted\n");
+    setExit(context, EXIT_CODES.aborted);
+    return true;
   }
   const retry = await callTool({
     serverUrl,

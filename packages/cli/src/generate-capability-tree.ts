@@ -14,6 +14,7 @@
 import { RESERVED_FLAGS, RESERVED_TOP_LEVEL_NAMES } from "./annotations.js";
 import {
   classifyProp,
+  generateRouteMap,
   kebabCase,
   type PropSchema,
   RouteGenerationError,
@@ -24,7 +25,9 @@ import type {
   CapabilityPart,
   FlagSpec,
   JsonSchema,
+  RegistryToolListing,
   RouteNode,
+  ToolAnnotation,
   ToolScope,
 } from "./route-types.js";
 
@@ -199,40 +202,92 @@ type BuiltFlags = {
 
 /**
  * Resolve candidate flags across parts into `CapabilityFlagSpec`s. A flag name
- * that is reserved, or shared by more than one candidate, is part-prefixed on
- * every offending candidate (`--query-version`), and its `prop` (the stricli
- * flag identity) is part-qualified so the identity stays unique too.
+ * that is reserved, taken (the synthetic `--workspace`), or shared by more than
+ * one candidate is part-prefixed on every offending candidate
+ * (`--query-version`), and its `prop` (the stricli flag identity) is
+ * part-qualified so the identity stays unique too. Uniqueness is then enforced
+ * GLOBALLY over the final names: a prefixed flag colliding with another
+ * candidate's natural name (e.g. `query.version` -> `--query-version` vs
+ * `body.queryVersion` -> `--query-version`) prefixes that candidate too, and an
+ * irresolvable duplicate fails generation with the capability id and flag, so
+ * an ambiguous flag surface can never ship.
  */
-const resolveFlags = (candidates: readonly Candidate[]): BuiltFlags => {
-  const byBaseFlag = new Map<string, Candidate[]>();
+const resolveFlags = ({
+  capabilityId,
+  candidates,
+  takenNames,
+}: {
+  capabilityId: string;
+  candidates: readonly Candidate[];
+  /** Names owned outside the candidates (the synthetic `--workspace`). */
+  takenNames: ReadonlySet<string>;
+}): BuiltFlags => {
+  const byBaseFlag = new Map<string, number>();
   for (const candidate of candidates) {
-    const group = byBaseFlag.get(candidate.baseFlag) ?? [];
-    group.push(candidate);
-    byBaseFlag.set(candidate.baseFlag, group);
+    byBaseFlag.set(
+      candidate.baseFlag,
+      (byBaseFlag.get(candidate.baseFlag) ?? 0) + 1,
+    );
   }
+  const resolved = candidates.map((candidate) => ({
+    candidate,
+    prefixed:
+      RESERVED_FLAGS.has(candidate.baseFlag) ||
+      takenNames.has(candidate.baseFlag) ||
+      (byBaseFlag.get(candidate.baseFlag) ?? 0) > 1,
+  }));
+  const finalName = (entry: (typeof resolved)[number]): string =>
+    entry.prefixed
+      ? prefixedFlag(entry.candidate.part, entry.candidate.partPath)
+      : entry.candidate.baseFlag;
+
+  // Global-uniqueness fixpoint: any final-name group of size > 1 (or hitting a
+  // taken name) prefixes all of its unprefixed members. Prefixing only flips
+  // false -> true, so the loop terminates.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const groups = new Map<string, (typeof resolved)[number][]>();
+    for (const entry of resolved) {
+      const name = finalName(entry);
+      const group = groups.get(name) ?? [];
+      group.push(entry);
+      groups.set(name, group);
+    }
+    for (const [name, group] of groups) {
+      if (group.length <= 1 && !takenNames.has(name)) {
+        continue;
+      }
+      for (const entry of group) {
+        if (!entry.prefixed) {
+          entry.prefixed = true;
+          changed = true;
+        }
+      }
+    }
+  }
+
+  const seen = new Map<string, string>();
   const flags: CapabilityFlagSpec[] = [];
   const flagCollisions: string[] = [];
-  for (const candidate of candidates) {
-    const collides =
-      RESERVED_FLAGS.has(candidate.baseFlag) ||
-      (byBaseFlag.get(candidate.baseFlag)?.length ?? 0) > 1;
-    if (collides) {
-      const flag = prefixedFlag(candidate.part, candidate.partPath);
+  for (const entry of resolved) {
+    const { candidate } = entry;
+    const flag = finalName(entry);
+    const source = `${candidate.part}.${candidate.partPath}`;
+    const existing = seen.get(flag);
+    if (existing !== undefined || takenNames.has(flag)) {
+      throw new RouteGenerationError(
+        `capability "${capabilityId}": flag ${flag} (from ${source}) collides with ${existing ?? "a reserved leaf flag"} even after part-prefixing`,
+      );
+    }
+    seen.set(flag, source);
+    if (entry.prefixed) {
       flagCollisions.push(flag);
-      flags.push({
-        ...candidate.base,
-        flag,
-        prop: `${candidate.part}.${candidate.partPath}`,
-        required: candidate.required,
-        part: candidate.part,
-        partPath: candidate.partPath,
-      });
-      continue;
     }
     flags.push({
       ...candidate.base,
-      flag: candidate.baseFlag,
-      prop: candidate.partPath,
+      flag,
+      prop: entry.prefixed ? source : candidate.partPath,
       required: candidate.required,
       part: candidate.part,
       partPath: candidate.partPath,
@@ -329,7 +384,11 @@ export const deriveCapabilityLeaf = (
     );
   }
 
-  const { flags: resolvedFlags, flagCollisions } = resolveFlags(candidates);
+  const { flags: resolvedFlags, flagCollisions } = resolveFlags({
+    capabilityId: entry.id,
+    candidates,
+    takenNames: injectWorkspace ? new Set(["--workspace"]) : new Set(),
+  });
   const flags: CapabilityFlagSpec[] = injectWorkspace
     ? [
         {
@@ -490,3 +549,23 @@ export const insertCapabilities = ({
     },
   };
 };
+
+/**
+ * THE full-tree builder: curated route map + capability merge, in one shared
+ * function so build-time codegen and the runtime registry-refresh path (a
+ * cached `tools/list` with a non-empty delta) produce structurally identical
+ * trees; the capability leaves can never silently vanish from one of them.
+ */
+export const buildCliRouteTree = ({
+  listings,
+  annotations,
+  entries,
+}: {
+  listings: readonly RegistryToolListing[];
+  annotations: Readonly<Record<string, ToolAnnotation>>;
+  entries: readonly CapabilityCatalogEntry[];
+}): { tree: RouteNode; stats: CapabilityTreeStats } =>
+  insertCapabilities({
+    tree: generateRouteMap(listings, annotations),
+    entries,
+  });
