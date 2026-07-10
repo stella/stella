@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   createSchemaPglite,
   installPgliteSchemaPrerequisites,
+  installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 
 const allSchema = {
@@ -73,6 +74,7 @@ const createTestDb = async (): Promise<TestDatabase> => {
     // oxlint-disable-next-line no-await-in-loop -- ordered DDL statements run sequentially on one test DB connection
     await testDb.execute(sql.raw(statement));
   }
+  await installPgliteWorkspaceAccessObjects(testDb);
 
   await testDb.execute(
     sql.raw(`

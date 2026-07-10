@@ -1330,9 +1330,8 @@ describe("cross-org isolation", () => {
     );
     // wsB1 is in the session wsIds, so entities in wsB1
     // are visible (ws policy only checks wsIds). This is
-    // the expected behavior — workspace IDs are server-set
-    // from resolveMemberAccess which filters by
-    // user membership. The test documents this.
+    // the expected behavior for explicit mode: these scopes are minted only by
+    // trusted server code. Request auth uses membership mode instead.
     expect(c).toBeGreaterThan(0);
   });
 });
@@ -1345,8 +1344,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
   // Tables with both workspace_id and organization_id
   // where RLS only checks workspace_id. This documents
   // that org_id is not enforced at the RLS level; it is
-  // safe because workspace IDs are server-set by
-  // resolveMemberAccess which filters by org.
+  // safe because explicit workspace IDs are server-set by trusted code.
 
   test("INSERT timeEntry with correct ws but wrong org → succeeds (ws policy only)", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
@@ -1441,20 +1439,12 @@ describe("scope reassignment via UPDATE", () => {
 // ════════════════════════════════════════════════════════
 
 describe("unset session variables", () => {
-  test("stella role without set_config → ws query errors (no leak)", async () => {
-    // When app.workspace_ids is not set, current_setting
-    // returns '' which fails to cast to text[]. This is
-    // safe: the query errors instead of leaking data.
-    const result = await testDb.transaction(async (tx) => {
+  test("stella role without set_config → ws query returns zero", async () => {
+    const count = await testDb.transaction(async (tx) => {
       await tx.execute(sql`SELECT set_config('role', ${stella.name}, true)`);
-      try {
-        await tx.$count(entities);
-        return "leaked";
-      } catch {
-        return "blocked";
-      }
+      return await tx.$count(entities);
     });
-    expect(result).toBe("blocked");
+    expect(count).toBe(0);
   });
 
   test("stella role without set_config → org query returns zero", async () => {

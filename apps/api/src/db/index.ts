@@ -12,6 +12,8 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 // handlers and tests; `rootDb` now lives in `@/api/db/root`.
 export {
   createIngestionDb,
+  createMembershipSafeDb,
+  createMembershipScopedDb,
   createSafeDb,
   createScopedDb,
 } from "@/api/db/scoped";
@@ -21,8 +23,7 @@ export type { Transaction } from "@/api/db/root";
  * Scoped database handle that wraps every operation in a
  * short-lived RLS transaction. Each call to `scopedDb(fn)`
  * opens a transaction, switches to the `stella` role (which
- * activates RLS), sets `app.workspace_ids` and
- * `app.organization_id` via SET LOCAL, runs `fn`, and
+ * activates RLS), sets the transaction-local authorization context, runs `fn`, and
  * commits. The connection returns to the pool immediately
  * after; safe with PgBouncer in transaction mode.
  *

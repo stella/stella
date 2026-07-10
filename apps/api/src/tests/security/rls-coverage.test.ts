@@ -1,10 +1,15 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 
 import { AUTH_USER_STELLA_SELECT_COLUMN_NAMES } from "@/api/db/auth-schema";
 import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
-  SETTING_WORKSPACE_IDS,
+  WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME,
+  WORKSPACE_ACCESS_FUNCTION_NAME,
+  WORKSPACE_ACCESS_VIEW_NAME,
+  stella,
+  stellaIngestion,
 } from "@/api/db/rls";
 import {
   getRlsFixture,
@@ -103,6 +108,59 @@ describe("policy coverage", () => {
     (table) => !CONFIG_OR_APPEND_ONLY.has(table),
   );
 
+  test("workspace access helpers are granted only to the application role", async () => {
+    const result = await testDb.execute<{
+      ingestion_array_execute: boolean;
+      ingestion_scalar_execute: boolean;
+      ingestion_view_select: boolean;
+      stella_array_execute: boolean;
+      stella_scalar_execute: boolean;
+      stella_view_select: boolean;
+    }>(sql`
+      SELECT
+        has_function_privilege(
+          ${stella.name},
+          ${`public.${WORKSPACE_ACCESS_FUNCTION_NAME}(uuid)`},
+          'EXECUTE'
+        ) AS stella_scalar_execute,
+        has_function_privilege(
+          ${stella.name},
+          ${`public.${WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME}(uuid[])`},
+          'EXECUTE'
+        ) AS stella_array_execute,
+        has_table_privilege(
+          ${stella.name},
+          ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`},
+          'SELECT'
+        ) AS stella_view_select,
+        has_function_privilege(
+          ${stellaIngestion.name},
+          ${`public.${WORKSPACE_ACCESS_FUNCTION_NAME}(uuid)`},
+          'EXECUTE'
+        ) AS ingestion_scalar_execute,
+        has_function_privilege(
+          ${stellaIngestion.name},
+          ${`public.${WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME}(uuid[])`},
+          'EXECUTE'
+        ) AS ingestion_array_execute,
+        has_table_privilege(
+          ${stellaIngestion.name},
+          ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`},
+          'SELECT'
+        ) AS ingestion_view_select
+    `);
+    const privileges = result.rows.at(0);
+
+    expect(privileges).toEqual({
+      ingestion_array_execute: false,
+      ingestion_scalar_execute: false,
+      ingestion_view_select: false,
+      stella_array_execute: true,
+      stella_scalar_execute: true,
+      stella_view_select: true,
+    });
+  });
+
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
     const policies = await fetchStellaPolicies(testDb);
@@ -128,7 +186,7 @@ describe("policy coverage", () => {
       for (const pol of tablePolicies) {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         expect(expr).toContain("workspace_id");
-        expect(expr).toContain(SETTING_WORKSPACE_IDS);
+        expect(expr).toContain(WORKSPACE_ACCESS_FUNCTION_NAME);
       }
     }
   });
@@ -183,7 +241,7 @@ describe("policy coverage", () => {
         expect(expr).toContain("user_id");
         expect(expr).toContain(SETTING_USER_ID);
         expect(expr).toContain("workspace_id IS NULL");
-        expect(expr).toContain(SETTING_WORKSPACE_IDS);
+        expect(expr).toContain(WORKSPACE_ACCESS_FUNCTION_NAME);
       }
     }
   });

@@ -9,9 +9,11 @@ import { DrizzleQueryError, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import {
+  SETTING_WORKSPACE_ACCESS_MODE,
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
+  WORKSPACE_ACCESS_MODE,
   stella,
   stellaIngestion,
 } from "@/api/db/rls";
@@ -65,16 +67,38 @@ export type SafeDbRetryConfig<E = unknown> = {
 
 type SafeDbError = DatabaseError | DatabaseRlsError | UnhandledException;
 
+type WorkspaceScope =
+  | {
+      type: typeof WORKSPACE_ACCESS_MODE.explicit;
+      workspaceIds: SafeId<"workspace">[];
+    }
+  | { type: typeof WORKSPACE_ACCESS_MODE.membership };
+
+type RunScopedTransactionOptions<
+  TTransaction extends ScopedTransactionBase,
+  T,
+> = {
+  database: RlsDatabase<TTransaction>;
+  fn: (tx: TTransaction) => Promise<T>;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceScope: WorkspaceScope;
+};
+
 const runScopedTransaction = async <
   TTransaction extends ScopedTransactionBase,
   T,
->(
-  database: RlsDatabase<TTransaction>,
-  workspaceIds: SafeId<"workspace">[],
-  organizationId: SafeId<"organization">,
-  userId: SafeId<"user">,
-  fn: (tx: TTransaction) => Promise<T>,
-): Promise<T> => {
+>({
+  database,
+  fn,
+  organizationId,
+  userId,
+  workspaceScope,
+}: RunScopedTransactionOptions<TTransaction, T>): Promise<T> => {
+  const workspaceIds =
+    workspaceScope.type === WORKSPACE_ACCESS_MODE.explicit
+      ? workspaceScope.workspaceIds
+      : [];
   const wsIds = `{${workspaceIds.join(",")}}`;
 
   return await database.transaction(async (tx: TTransaction) => {
@@ -82,6 +106,7 @@ const runScopedTransaction = async <
       sql`SELECT
         set_config('role', '${sql.raw(stella.name)}', true),
         set_config('${sql.raw(SETTING_WORKSPACE_IDS)}', ${wsIds}, true),
+        set_config('${sql.raw(SETTING_WORKSPACE_ACCESS_MODE)}', ${workspaceScope.type}, true),
         set_config('${sql.raw(SETTING_ORGANIZATION_ID)}', ${organizationId}, true),
         set_config('${sql.raw(SETTING_USER_ID)}', ${userId}, true)`,
     );
@@ -90,6 +115,11 @@ const runScopedTransaction = async <
   });
 };
 
+/**
+ * Create an explicitly narrowed database scope. Use for trusted jobs/tests
+ * that already hold a bounded workspace set; request auth uses the membership
+ * factory below so it never serializes a user's entire access set.
+ */
 export const createScopedDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
@@ -98,13 +128,36 @@ export const createScopedDb =
     userId: SafeId<"user">,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
-    await runScopedTransaction(
+    await runScopedTransaction({
       database,
-      workspaceIds,
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.explicit,
+        workspaceIds,
+      },
       organizationId,
       userId,
       fn,
-    );
+    });
+
+type MembershipScopedDbIdentity = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+};
+
+/** Create a constant-size RLS scope derived from organization/user membership. */
+export const createMembershipScopedDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: RlsDatabase<TTransaction>,
+    { organizationId, userId }: MembershipScopedDbIdentity,
+  ) =>
+  async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
+    await runScopedTransaction({
+      database,
+      workspaceScope: { type: WORKSPACE_ACCESS_MODE.membership },
+      organizationId,
+      userId,
+      fn,
+    });
 
 // SET LOCAL ROLE stella_ingestion per transaction. Used by the
 // case-law ingestion daemon — narrowed to writes on case_law_*
@@ -122,6 +175,29 @@ export const createIngestionDb =
       return await fn(tx);
     });
 
+const toSafeDbError = (cause: unknown): SafeDbError => {
+  const code = getPgErrorCode(cause);
+
+  if (code === PG_ERROR.INSUFFICIENT_PRIVILEGE) {
+    return new DatabaseRlsError({
+      code,
+      message: "Database row-level security rejected the request",
+      cause,
+    });
+  }
+
+  if (cause instanceof DrizzleQueryError) {
+    return new DatabaseError({
+      message: "Database query failed",
+      cause,
+      code,
+    });
+  }
+
+  return new UnhandledException({ cause });
+};
+
+/** Result-wrapped form of createScopedDb for an explicit workspace scope. */
 export const createSafeDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
@@ -136,36 +212,42 @@ export const createSafeDb =
     await Result.tryPromise(
       {
         try: async () =>
-          await runScopedTransaction(
+          await runScopedTransaction({
             database,
-            workspaceIds,
+            workspaceScope: {
+              type: WORKSPACE_ACCESS_MODE.explicit,
+              workspaceIds,
+            },
             organizationId,
             userId,
             fn,
-          ),
-        catch: (cause): SafeDbError => {
-          const code = getPgErrorCode(cause);
+          }),
+        catch: toSafeDbError,
+      },
+      retry,
+    );
 
-          if (code === PG_ERROR.INSUFFICIENT_PRIVILEGE) {
-            return new DatabaseRlsError({
-              code,
-              message: "Database row-level security rejected the request",
-              cause,
-            });
-          }
-
-          if (cause instanceof DrizzleQueryError) {
-            return new DatabaseError({
-              message: "Database query failed",
-              cause,
-              code,
-            });
-          }
-
-          return new UnhandledException({
-            cause,
-          });
-        },
+/** Result-wrapped membership scope used by authenticated request contexts. */
+export const createMembershipSafeDb =
+  <TTransaction extends ScopedTransactionBase>(
+    database: RlsDatabase<TTransaction>,
+    { organizationId, userId }: MembershipScopedDbIdentity,
+  ) =>
+  async <T>(
+    fn: (tx: TTransaction) => Promise<T>,
+    retry?: SafeDbRetryConfig<SafeDbError>,
+  ) =>
+    await Result.tryPromise(
+      {
+        try: async () =>
+          await runScopedTransaction({
+            database,
+            workspaceScope: { type: WORKSPACE_ACCESS_MODE.membership },
+            organizationId,
+            userId,
+            fn,
+          }),
+        catch: toSafeDbError,
       },
       retry,
     );
