@@ -16,6 +16,13 @@ const api = {
       await Promise.resolve();
       return { data: null as unknown, error: null as unknown };
     },
+    post: async (
+      _body: { value: string },
+      _opts?: { fetch?: { signal?: AbortSignal } },
+    ) => {
+      await Promise.resolve();
+      return { data: null as unknown, error: null as unknown };
+    },
   },
   workspaces: (_params: { workspaceId: string }) => ({
     reports: {
@@ -124,6 +131,12 @@ export const signalDestructuredEdenOptions = {
   queryKey: ["things", "safe"],
   queryFn: async ({ signal }: { signal: AbortSignal }) =>
     await api.things.get({ fetch: { signal } }),
+};
+
+export const signalInSecondEdenArgumentOptions = {
+  queryKey: ["things", "post", "safe"],
+  queryFn: async ({ signal }: { signal: AbortSignal }) =>
+    await api.things.post({ value: "ok" }, { fetch: { signal } }),
 };
 
 export const signalAlongsideOtherParamsOptions = {

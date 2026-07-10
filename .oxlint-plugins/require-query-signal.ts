@@ -231,10 +231,12 @@ const callThreadsSignal = (node) => {
       getObjectPropertyValue(node.arguments.at(1), "signal"),
     );
   }
-  return containsSignalIdentifier(
-    getObjectPropertyValue(
-      getObjectPropertyValue(node.arguments.at(0), "fetch"),
-      "signal",
+  return node.arguments.some((argument) =>
+    containsSignalIdentifier(
+      getObjectPropertyValue(
+        getObjectPropertyValue(argument, "fetch"),
+        "signal",
+      ),
     ),
   );
 };
