@@ -53,9 +53,21 @@ type RuleContext = {
   report: (descriptor: { node: unknown; messageId: string }) => void;
 };
 
+const PRODUCT_WRAPPER_TYPES = new Set([
+  "ParenthesizedExpression",
+  "TSAsExpression",
+  "TSNonNullExpression",
+  "TSSatisfiesExpression",
+  "TSTypeAssertion",
+]);
+
 // Collect the numeric-literal leaves of a `*` chain (`a * b * c * ...`).
 const collectProductLiterals = (node, out: number[]): void => {
   if (!node) {
+    return;
+  }
+  if (PRODUCT_WRAPPER_TYPES.has(node.type)) {
+    collectProductLiterals(node.expression, out);
     return;
   }
   if (node.type === "BinaryExpression" && node.operator === "*") {
@@ -154,7 +166,10 @@ export default {
               return;
             }
             // Only report the maximal chain, not every nested `*` inside it.
-            const parent = node.parent;
+            let parent = node.parent;
+            while (parent && PRODUCT_WRAPPER_TYPES.has(parent.type)) {
+              parent = parent.parent;
+            }
             if (
               parent &&
               parent.type === "BinaryExpression" &&

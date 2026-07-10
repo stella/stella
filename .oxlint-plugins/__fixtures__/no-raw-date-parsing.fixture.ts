@@ -33,6 +33,10 @@ const _dayChainWithFactor = lookbackDays * 24 * 60 * 60 * 1000;
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
 const _dayChainReordered = 1000 * 60 * 60 * 24;
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
+const _dayChainGrouped = 24 * 60 * (60 * 1000);
+// oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
+const _dayChainWithTypedGroup = 24 * ((60 * 60) satisfies number) * 1000;
+// oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing
 const _dayLiteralUnderscore = 86_400_000;
 // oxlint-disable-next-line no-raw-date-parsing/no-raw-date-parsing, unicorn/numeric-separators-style
 const _dayLiteralPlain = 86400000;
@@ -52,6 +56,8 @@ export const noRawDateParsingFixture = [
   _dayChain,
   _dayChainWithFactor,
   _dayChainReordered,
+  _dayChainGrouped,
+  _dayChainWithTypedGroup,
   _dayLiteralUnderscore,
   _dayLiteralPlain,
   _fullUtc,
