@@ -49,6 +49,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { MatterTargetPicker } from "@/components/matter-target-picker";
 import type { MatterTarget } from "@/components/matter-target-picker";
 import Tooltip from "@/components/tooltip";
+import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
@@ -319,7 +320,11 @@ type SaveTarget =
     };
 
 type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
-  /** Live values tap for hosts that preview the fill elsewhere. */
+  /** Live values tap for hosts that preview the fill elsewhere. Called once
+   *  on mount with the merged initial snapshot (field defaults plus
+   *  `initialValues`), then again on every change, so a host that derives
+   *  state only from this callback (e.g. a preview) does not start blank
+   *  when the form restores previously-entered values. */
   onValuesChange?: (values: Record<string, unknown>) => void;
   /** Opt-in edit affordance: when set, each top-level field row shows a
    *  pencil that jumps to that field's configuration. Absent in the real
@@ -1595,6 +1600,15 @@ export const TemplateForm = ({
   const valuesRef = useRef(values);
   // eslint-disable-next-line react/react-compiler -- latest-value ref mirror read only from submit/validation callbacks, never during render
   valuesRef.current = values;
+
+  // Notify once with the merged initial snapshot, matching the on-change
+  // notify in handleChange below. Without this, a host deriving state only
+  // from onValuesChange (e.g. the Studio fill facet's live preview) starts
+  // blank when the form restores previously-entered values via
+  // `initialValues` instead of receiving a first edit.
+  useMountEffect(() => {
+    onValuesChange?.(valuesRef.current);
+  });
 
   /** Resolve a ValidationError to a translated string. */
   const resolveError = useCallback(
