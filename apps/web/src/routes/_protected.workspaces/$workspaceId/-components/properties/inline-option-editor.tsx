@@ -78,7 +78,8 @@ export const InlineOptionEditor = ({
           {options.map((option, index) => (
             <OptionRow
               index={index}
-              key={option.value}
+              // eslint-disable-next-line react/no-array-index-key -- values can be renamed or duplicated in existing data; including the position prevents duplicate keys and remounts following stateful rows after removal.
+              key={`${option.value}-${index}`}
               onPickColor={(color) =>
                 replaceOptionAt(index, { ...option, color })
               }
