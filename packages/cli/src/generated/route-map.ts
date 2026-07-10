@@ -4680,7 +4680,18 @@ export const generatedRouteMap: RouteNode = {
                         limit: {
                           minimum: 1,
                           maximum: 100,
-                          type: "number",
+                          anyOf: [
+                            {
+                              format: "integer",
+                              default: 0,
+                              type: "string",
+                            },
+                            {
+                              minimum: 1,
+                              maximum: 100,
+                              type: "integer",
+                            },
+                          ],
                         },
                         cursor: {
                           type: "string",
@@ -8264,7 +8275,18 @@ export const generatedRouteMap: RouteNode = {
                     limit: {
                       minimum: 1,
                       maximum: 100,
-                      type: "number",
+                      anyOf: [
+                        {
+                          format: "integer",
+                          default: 0,
+                          type: "string",
+                        },
+                        {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      ],
                     },
                     cursor: {
                       type: "string",
