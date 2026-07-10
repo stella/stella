@@ -586,7 +586,7 @@ export const copyEntities = async ({
           await allocateEntityStamp(tx, targetWorkspaceId)
         : null;
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential inserts; children reference parent IDs created in earlier iterations
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential inserts; children reference parent IDs created in earlier iterations
     await tx.insert(entities).values({
       id: newEntityId,
       workspaceId: targetWorkspaceId,
@@ -597,7 +597,7 @@ export const copyEntities = async ({
       docSequence: entityStamp?.docSequence ?? null,
     });
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential version insert depends on the entity row created just above in this iteration
     await tx.insert(entityVersions).values({
       id: newVersionId,
       workspaceId: targetWorkspaceId,
@@ -607,7 +607,7 @@ export const copyEntities = async ({
       verificationCode: entityStamp?.verificationCode ?? null,
     });
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential update sets currentVersionId on the just-created entity/version pair
     await tx
       .update(entities)
       .set({ currentVersionId: newVersionId })
@@ -637,7 +637,7 @@ export const copyEntities = async ({
         };
       });
 
-      // oxlint-disable-next-line no-await-in-loop -- sequential field insert depends on the version created in this iteration
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential field insert depends on the version created in this iteration
       await tx.insert(fields).values(fieldInserts);
     }
 

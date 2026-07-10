@@ -1294,7 +1294,7 @@ const processEntityJob = async (data: EntityJobData, signal: AbortSignal) => {
 
     // Process all batches at this level in parallel
     // (same level = independent dependencies)
-    // oxlint-disable-next-line no-await-in-loop -- levels run in dependency order; a level must finish before the next starts
+    // oxlint-disable-next-line no-await-in-loop, no-db-await-in-loop/no-db-await-in-loop -- levels run in dependency order; a level must finish before the next starts. Same-level batches process a single entity's properties in parallel, so the fan-out width is bounded by the workspace's configured property count, not tenant row volume
     await Promise.all(
       batches.map(
         async (batch) =>

@@ -364,7 +364,7 @@ export const listSitemapShardDecisionsHandler = async (
       languageGroupKeys,
       SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
     )) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential reads on the same transaction connection (one in-flight query per tx)
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential reads on the same transaction connection (one in-flight query per tx)
       const batchRows = await tx
         .select({
           id: caseLawDecisions.id,

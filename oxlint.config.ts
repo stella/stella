@@ -376,6 +376,7 @@ export default defineConfig({
     "./.oxlint-plugins/icon-button-requires-tooltip.ts",
     "./.oxlint-plugins/no-document-cookie.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
+    "./.oxlint-plugins/no-db-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
   ],
 
@@ -952,6 +953,12 @@ export default defineConfig({
       },
     },
     {
+      files: [".oxlint-plugins/__fixtures__/no-db-await-in-loop.fixture.ts"],
+      rules: {
+        "no-db-await-in-loop/no-db-await-in-loop": "error",
+      },
+    },
+    {
       files: ["apps/web/src/components/date-picker-popover.tsx"],
       rules: {
         "no-restricted-imports": [
@@ -1345,6 +1352,19 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "require-query-limit/require-query-limit": "error",
+      },
+    },
+    {
+      // no-db-await-in-loop flags an `await db...` / `await tx...` /
+      // `await safeDb(...)` lexically inside a loop body or a
+      // `Promise.all(items.map(...))` fan-out — the N+1 antipattern. Scoped
+      // to backend source, where `db`/`tx`/`safeDb` are Drizzle handles;
+      // test files intentionally exercise unbatched loops in fixtures/mocks
+      // and are excluded.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "no-db-await-in-loop/no-db-await-in-loop": "error",
       },
     },
     {

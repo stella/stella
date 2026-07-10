@@ -163,7 +163,7 @@ const splitEntry = createSafeHandler(
           }
           const billedMinutes = roundToIncrement(durationMinutes);
 
-          // oxlint-disable-next-line no-await-in-loop -- sequential inserts create ordered successor rows for the split entry
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential inserts create ordered successor rows for the split entry
           const [entry] = await tx
             .insert(timeEntries)
             .values({

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { documentTypes } from "@/api/db/schema";
 import { reorderDocumentTypesBodySchema } from "@/api/handlers/document-types/schema";
@@ -29,25 +29,34 @@ const reorderDocumentTypes = createSafeRootHandler(
           .from(documentTypes)
           .where(eq(documentTypes.organizationId, organizationId));
         const ownedIds = new Set(owned.map((row) => row.id));
+        const orderedOwnedIds = body.orderedIds.filter((id) =>
+          ownedIds.has(id),
+        );
 
-        const now = new Date();
-        let sortOrder = 0;
-        for (const id of body.orderedIds) {
-          if (!ownedIds.has(id)) {
-            continue;
-          }
-          // oxlint-disable-next-line no-await-in-loop -- sequential sortOrder writes inside one transaction
-          await tx
-            .update(documentTypes)
-            .set({ sortOrder, updatedAt: now })
-            .where(
-              and(
-                eq(documentTypes.id, id),
-                eq(documentTypes.organizationId, organizationId),
-              ),
-            );
-          sortOrder++;
+        if (orderedOwnedIds.length === 0) {
+          return;
         }
+
+        // Single batched write: one CASE expression sets every row's
+        // sortOrder in one UPDATE, instead of one query per id (was N+1
+        // for an N-row reorder).
+        const cases = orderedOwnedIds.map(
+          (id, index) =>
+            sql`when ${documentTypes.id} = ${id} then ${index}::integer`,
+        );
+        const now = new Date();
+        await tx
+          .update(documentTypes)
+          .set({
+            sortOrder: sql`(case ${sql.join(cases, sql` `)} end)`,
+            updatedAt: now,
+          })
+          .where(
+            and(
+              eq(documentTypes.organizationId, organizationId),
+              inArray(documentTypes.id, orderedOwnedIds),
+            ),
+          );
       }),
     );
 

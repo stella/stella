@@ -41,7 +41,7 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
   });
 
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-    // oxlint-disable-next-line no-await-in-loop -- retry loop: each attempt re-scans after a concurrent writer took the prior candidate
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- retry loop: each attempt re-scans after a concurrent writer took the prior candidate
     const existingSlugRows = await db((tx) =>
       tx
         .select({ slug: caseLawDecisions.slug })
@@ -57,7 +57,7 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
     try {
       // Compare-and-set on a still-null slug: a concurrent writer may have
       // filled this row, in which case we leave its slug untouched.
-      // oxlint-disable-next-line no-await-in-loop, arrow-body-style -- retry loop must observe this write before retrying; block body carries the audit-skip directive the require-audit-on-mutation rule scans for
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, arrow-body-style -- retry loop must observe this write before retrying; block body carries the audit-skip directive the require-audit-on-mutation rule scans for
       const updated = await db((tx) => {
         // audit: skip — backfills a derived public slug, not user-facing state
         return tx
@@ -110,7 +110,7 @@ export const backfillCaseLawSlugs = async (
       ? and(isNull(caseLawDecisions.slug), idFilter)
       : isNull(caseLawDecisions.slug);
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential keyset pagination: next page cursor (lastId) depends on this query
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential keyset pagination: next page cursor (lastId) depends on this query
     const rows: BackfillRow[] = await db((tx) =>
       tx
         .select({

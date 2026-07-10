@@ -824,7 +824,7 @@ const exportTableView = createSafeHandler(
             commentFieldIds,
             JUSTIFICATION_FIELD_ID_BATCH,
           )) {
-            // oxlint-disable-next-line no-await-in-loop -- sequential reads on the same transaction connection (one in-flight query per tx); the batch caps each `IN (...)` below the bound-parameter limit
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential reads on the same transaction connection (one in-flight query per tx); the batch caps each `IN (...)` below the bound-parameter limit
             const batchRows = await tx.query.justifications.findMany({
               where: {
                 workspaceId: { eq: workspaceId },

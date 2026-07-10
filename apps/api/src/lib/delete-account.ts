@@ -683,6 +683,11 @@ export const verifyAndDeleteUser = async (
             ]),
           );
 
+          // SAFETY: one deleted user's active task reassignments, bounded by
+          // the enforced LIMITS.accountDeletionTaskAssignmentsMax check above
+          // (throws before reaching here if exceeded), not unbounded tenant
+          // data.
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop
           await Promise.all(
             updates.map((item) =>
               tx

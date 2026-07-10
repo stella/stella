@@ -391,7 +391,7 @@ const createDirectoryRows = async ({
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
 
-    // oxlint-disable-next-line no-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
     await tx.insert(entities).values({
       id: entityId,
       workspaceId,
@@ -400,14 +400,14 @@ const createDirectoryRows = async ({
       name: directory.name,
       createdBy: userId,
     });
-    // oxlint-disable-next-line no-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
     await tx.insert(entityVersions).values({
       id: entityVersionId,
       workspaceId,
       entityId,
       versionNumber: 1,
     });
-    // oxlint-disable-next-line no-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- tree creation: child folders depend on parent IDs from earlier iterations
     await tx
       .update(entities)
       .set({ currentVersionId: entityVersionId })
@@ -481,7 +481,7 @@ const createPendingRows = async ({
     };
 
     // audit: skip — presigned URL bookkeeping; entity audit lands on finalize.
-    // oxlint-disable-next-line no-await-in-loop -- sequential inserts in the tree-creation transaction; parents resolved earlier
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential inserts in the tree-creation transaction; parents resolved earlier
     await tx.insert(pendingUploads).values({
       id: file.uploadId,
       organizationId,
