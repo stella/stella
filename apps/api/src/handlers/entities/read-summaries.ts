@@ -50,7 +50,12 @@ const parseSummaryCursor = (cursor: string | undefined) => {
   const parts = decodePaginationCursor(cursor);
   const createdAt = parsePgTimestampCursorValue(parts?.at(0));
   const id = parts?.at(1);
-  if (parts?.length !== 2 || createdAt === null || !isUuid(id)) {
+  if (
+    parts?.length !== 2 ||
+    createdAt === null ||
+    typeof id !== "string" ||
+    !isUuid(id)
+  ) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid cursor" }),
     );
