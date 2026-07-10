@@ -1,6 +1,5 @@
-import { beforeEach, describe, expect, mock, test } from "bun:test";
-
 import { Result } from "better-result";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
