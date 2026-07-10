@@ -84,24 +84,23 @@ export const FilterChips = ({
 }: FilterChipsProps) => {
   const t = useTranslations();
   const fields = useFilterFields(properties);
-  // Which advanced-filter chip's editor is open. Set when a chip is created so
-  // it opens immediately (an unopened "1 rule" chip is otherwise a dead end).
-  const [openAdvancedIndex, setOpenAdvancedIndex] = useState<number | null>(
-    null,
-  );
+  // Which filter chip's editor popover is open (simple or advanced; only one
+  // can be open at a time). Set when an advanced chip is created so it opens
+  // immediately (an unopened "1 rule" chip is otherwise a dead end).
+  const [openIndex, setOpenIndex] = useState<number | null>(null);
 
   const replaceAt = (index: number, node: ConditionNode) => {
     onUpdate(filters.map((existing, i) => (i === index ? node : existing)));
   };
   const removeAt = (index: number) => {
-    setOpenAdvancedIndex((openIndex) => {
-      if (openIndex === null || openIndex < index) {
-        return openIndex;
+    setOpenIndex((current) => {
+      if (current === null || current < index) {
+        return current;
       }
-      if (openIndex === index) {
+      if (current === index) {
         return null;
       }
-      return openIndex - 1;
+      return current - 1;
     });
     onUpdate(filters.filter((_, i) => i !== index));
   };
@@ -120,7 +119,7 @@ export const FilterChips = ({
 
   // The seeded group lands at the current end, so open the chip at that index.
   const addAdvanced = () => {
-    setOpenAdvancedIndex(filters.length);
+    setOpenIndex(filters.length);
     append(seededAdvancedGroup(pickerFields));
   };
 
@@ -156,14 +155,13 @@ export const FilterChips = ({
             <AdvancedFilterChip
               facetContext={facetContext}
               fields={fields}
+              // eslint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
               key={index}
               node={node}
               onChange={(next) => replaceAt(index, next)}
-              onOpenChange={(nextOpen) =>
-                setOpenAdvancedIndex(nextOpen ? index : null)
-              }
+              onOpenChange={(nextOpen) => setOpenIndex(nextOpen ? index : null)}
               onRemove={() => removeAt(index)}
-              open={openAdvancedIndex === index}
+              open={openIndex === index}
             />
           );
         }
@@ -171,10 +169,13 @@ export const FilterChips = ({
           <FilterChip
             facetContext={facetContext}
             fields={fields}
+            // eslint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
             key={index}
             node={node}
             onChange={(next) => replaceAt(index, next)}
+            onOpenChange={(nextOpen) => setOpenIndex(nextOpen ? index : null)}
             onRemove={() => removeAt(index)}
+            open={openIndex === index}
           />
         );
       })}
@@ -207,6 +208,8 @@ type FilterChipProps = {
   node: ConditionNode;
   fields: FieldOption[];
   facetContext?: FacetContext | undefined;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onChange: (next: ConditionNode) => void;
   onRemove: () => void;
 };
@@ -215,11 +218,12 @@ const FilterChip = ({
   node,
   fields,
   facetContext,
+  open,
+  onOpenChange,
   onChange,
   onRemove,
 }: FilterChipProps) => {
   const t = useTranslations();
-  const [open, setOpen] = useState(false);
   const field = fieldForNode(node, fields);
   const operator = leafOperator(node);
 
@@ -230,7 +234,7 @@ const FilterChip = ({
   const valueColor = chipValueColor(field, node, operator);
 
   return (
-    <Popover onOpenChange={setOpen} open={open}>
+    <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger
         render={
           <Button
@@ -262,7 +266,7 @@ const FilterChip = ({
           onChange={onChange}
           onRemove={() => {
             onRemove();
-            setOpen(false);
+            onOpenChange(false);
           }}
           operator={operator}
         />

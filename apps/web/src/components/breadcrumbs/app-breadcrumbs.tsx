@@ -1,4 +1,4 @@
-import { Fragment, useId } from "react";
+import { Fragment } from "react";
 
 import { Link, useMatches } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -85,7 +85,6 @@ const defineBreadcrumb = (
 export const AppBreadcrumbs = () => {
   const t = useTranslations();
   const matches = useMatches();
-  const id = useId();
 
   const breadcrumbDefinitions: BreadcrumbDefinition[] = [
     defineBreadcrumb(
@@ -201,14 +200,14 @@ export const AppBreadcrumbs = () => {
       }
     }
 
-    return [...results.values()];
+    return [...results.entries()];
   })();
 
   return (
     <Breadcrumb className="min-w-0">
       <BreadcrumbList className="flex-nowrap overflow-hidden">
-        {breadcrumbs.map((breadcrumb, index) => (
-          <Fragment key={`${id}-${index}`}>
+        {breadcrumbs.map(([key, breadcrumb], index) => (
+          <Fragment key={key}>
             {index !== 0 && <BreadcrumbSeparator className="shrink-0" />}
             {breadcrumb}
           </Fragment>

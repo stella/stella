@@ -250,6 +250,7 @@ export function AppSidebar(props: AppSidebarProps) {
   };
 
   const recentMatterAction = (ws: MatterIdentity): ContextAction => ({
+    id: ws.id,
     label: ws.name,
     icon: (
       <MatterIcon
@@ -274,6 +275,7 @@ export function AppSidebar(props: AppSidebarProps) {
       action: () => setSearchOpen(true),
       contextMenu: {
         primaryAction: {
+          id: "search-primary",
           label: t("navigation.search"),
           icon: <SearchIcon />,
           onClick: () => setSearchOpen(true),
@@ -284,6 +286,7 @@ export function AppSidebar(props: AppSidebarProps) {
       action: openChat,
       contextMenu: {
         primaryAction: {
+          id: "chat-primary",
           label: t("chat.newChat"),
           icon: <PlusIcon />,
           onClick: openChat,
@@ -296,6 +299,7 @@ export function AppSidebar(props: AppSidebarProps) {
       },
       contextMenu: {
         primaryAction: {
+          id: "matters-primary",
           label: t("common.newMatter"),
           icon: <PlusIcon />,
           onClick: handleCreateWorkspace,
@@ -319,6 +323,7 @@ export function AppSidebar(props: AppSidebarProps) {
           .map((s) => {
             const Icon = s.icon;
             return {
+              id: s.key,
               label: t(s.titleKey),
               icon: <Icon />,
               onClick: () => {
@@ -341,6 +346,7 @@ export function AppSidebar(props: AppSidebarProps) {
       },
       contextMenu: {
         primaryAction: {
+          id: "contacts-primary",
           label: t("navigation.contacts"),
           icon: <UsersIcon />,
           onClick: () => {
@@ -732,6 +738,7 @@ type MatterIdentity = {
 };
 
 type ContextAction = {
+  id: string;
   label: string;
   icon: React.ReactNode;
   onClick: () => void;
@@ -800,12 +807,12 @@ const NavContextMenu = ({
           {hasRecents && config.primaryAction !== undefined && (
             <MenuSeparator />
           )}
-          {config.recents?.map((item, i) => (
+          {config.recents?.map((item) => (
             <MenuItem
               className={
                 item.variant === "destructive" ? "text-destructive" : undefined
               }
-              key={i}
+              key={item.id}
               onClick={item.onClick}
             >
               {item.icon}

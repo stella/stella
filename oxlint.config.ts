@@ -250,6 +250,9 @@ export default defineConfig({
     "react_perf/jsx-no-new-function-as-prop": "off",
 
     "react/hook-use-state": "off",
+    // Enabled ("error") only for apps/web/src via the override below; other
+    // React surfaces (folio, ui, desktop, landing, playground) are not swept
+    // yet.
     "react/no-array-index-key": "off",
     "react/no-children-prop": "off",
     "react/no-danger": "off",
@@ -836,6 +839,7 @@ export default defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
+        "react/no-array-index-key": "error",
         // Direct useEffect is banned; route external-system sync through
         // useMountEffect / useExternalSyncEffect. See /conventions-use-effect.
         // Upstream-synced packages/folio is intentionally exempt.

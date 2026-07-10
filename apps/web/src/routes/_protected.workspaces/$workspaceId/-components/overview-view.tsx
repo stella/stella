@@ -806,6 +806,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           return (
                             <div
                               className="flex size-6 items-center justify-center sm:size-7"
+                              // eslint-disable-next-line react/no-array-index-key -- member.daily is a fixed 7-slot week array; dayIdx is the day-of-week itself (used to derive dayLabel), never reordered or resized.
                               key={dayIdx}
                             >
                               {cell}
@@ -816,6 +817,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         return (
                           <div
                             className="flex size-6 items-center justify-center sm:size-7"
+                            // eslint-disable-next-line react/no-array-index-key -- member.daily is a fixed 7-slot week array; dayIdx is the day-of-week itself (used to derive dayLabel), never reordered or resized.
                             key={dayIdx}
                           >
                             <Popover>

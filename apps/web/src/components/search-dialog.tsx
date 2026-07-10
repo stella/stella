@@ -960,6 +960,7 @@ export const SearchDialog = ({
               {hasTypedQuery && !hasResults && (!hasQuery || isLoading) && (
                 <div className="space-y-3 px-4 py-3">
                   {Array.from({ length: 4 }).map((_, i) => (
+                    // eslint-disable-next-line react/no-array-index-key -- static skeleton-loader placeholder, never reorders
                     <div className="space-y-2" key={`skeleton-${i}`}>
                       <Skeleton className="h-4 w-3/4" />
                       <Skeleton className="h-3 w-1/2" />

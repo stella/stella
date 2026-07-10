@@ -62,6 +62,7 @@ export const WebSearchSources = ({ parts }: WebSearchSourcesProps) => {
         {answers.map((answer, index) => (
           <p
             className="text-foreground text-sm leading-relaxed whitespace-pre-line"
+            // eslint-disable-next-line react/no-array-index-key -- answers is a read-only, immutable tool-result array from a persisted chat message; never edited/reordered by the user.
             key={`${index}-${answer.slice(0, 16)}`}
           >
             {answer}

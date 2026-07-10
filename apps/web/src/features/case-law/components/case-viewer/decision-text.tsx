@@ -479,6 +479,7 @@ const BlockRenderer = ({
     >
       <tbody>
         {block.rows.map((row, rowIndex) => (
+          // eslint-disable-next-line react/no-array-index-key -- read-only case-law document table parsed once from source text; rows are positionally fixed (rowIndex feeds getTableCellPieceId's identity below) and never reordered/inserted by the reader UI.
           <tr key={rowIndex}>
             {row.map((cell, columnIndex) => {
               const pieceId = getTableCellPieceId({

@@ -2276,6 +2276,7 @@ export const TemplateForm = ({
                 {structureErrors.map((error, index) => (
                   <li
                     className="text-warning-foreground text-sm"
+                    // eslint-disable-next-line react/no-array-index-key -- structureErrors is a read-only validation result recomputed and re-rendered as a whole batch on every check; there is no add/remove/reorder interaction or per-row state to key against, and the index only disambiguates otherwise-identical paragraph/directive pairs.
                     key={`${error.paragraphIndex}-${error.directive}-${index}`}
                   >
                     <div className="flex flex-wrap items-center gap-2">

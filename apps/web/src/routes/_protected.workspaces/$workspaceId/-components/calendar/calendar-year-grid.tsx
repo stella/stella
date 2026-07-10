@@ -181,6 +181,7 @@ const MiniDay = ({
           {dots.slice(0, MAX_DOTS).map((dot, i) => (
             <span
               className="size-[3px] rounded-full"
+              // eslint-disable-next-line react/no-array-index-key -- YearDot is a decorative date+color pair with no entity id (multiple entities can share a color); dots are non-interactive and capped at MAX_DOTS with no per-item state.
               key={`${dot.color}-${i}`}
               style={{ backgroundColor: dot.color }}
             />

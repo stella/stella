@@ -78,7 +78,7 @@ export const InlineOptionEditor = ({
           {options.map((option, index) => (
             <OptionRow
               index={index}
-              key={`${option.value}-${index}`}
+              key={option.value}
               onPickColor={(color) =>
                 replaceOptionAt(index, { ...option, color })
               }

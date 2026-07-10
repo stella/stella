@@ -319,6 +319,7 @@ export const VersionDiffBlock = ({
   return (
     <div className="bg-muted/50 flex max-h-64 flex-col gap-1 overflow-y-auto rounded-md px-2.5 py-2 text-xs leading-5 whitespace-pre-wrap">
       {state.value.map((segment, index) => (
+        // eslint-disable-next-line react/no-array-index-key -- read-only version diff fetched once and rendered as a whole batch; never reordered/edited.
         <DiffSegmentParagraph key={index} segment={segment} />
       ))}
     </div>
@@ -367,6 +368,7 @@ const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
     return (
       <p>
         {segment.runs.map((run, index) => (
+          // eslint-disable-next-line react/no-array-index-key -- read-only version diff fetched once and rendered as a whole batch; never reordered/edited.
           <DiffRunSpan key={index} run={run} />
         ))}
       </p>

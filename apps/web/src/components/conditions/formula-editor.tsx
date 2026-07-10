@@ -284,6 +284,7 @@ export const FormulaEditor = ({
           {previewTokens.map((tok, index) => (
             <FormulaPreviewToken
               isField={tok.isField}
+              // eslint-disable-next-line react/no-array-index-key -- previewTokens is re-tokenized from the formula string on every render (whole-list replace); tokens are stateless spans with no add/remove/reorder interaction.
               key={index}
               text={tok.text}
             />

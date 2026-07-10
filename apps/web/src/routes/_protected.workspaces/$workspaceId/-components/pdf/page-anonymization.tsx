@@ -127,6 +127,7 @@ export const PageAnonymization = ({
             return (
               <button
                 className="absolute rounded-xs opacity-50 hover:opacity-70"
+                // eslint-disable-next-line react/no-array-index-key -- rects is a read-only set of detected-entity bounding boxes recomputed on every render; overlays are non-interactive (parent-provided onClick) with no per-item state.
                 key={`${entity.id}-${i}`}
                 onClick={handlePeekClick}
                 style={commonStyle}
@@ -138,6 +139,7 @@ export const PageAnonymization = ({
           return (
             <div
               className="absolute rounded-xs opacity-50"
+              // eslint-disable-next-line react/no-array-index-key -- rects is a read-only set of detected-entity bounding boxes recomputed on every render; overlays are non-interactive with no per-item state.
               key={`${entity.id}-${i}`}
               ref={(el) => {
                 if (isScrollTarget && i === topRectIndex && el !== null) {

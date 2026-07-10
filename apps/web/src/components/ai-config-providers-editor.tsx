@@ -137,6 +137,7 @@ export const AIConfigProvidersEditor = ({
             return (
               <div
                 className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2 gap-y-1 border-t p-2 first:border-t-0 sm:grid-cols-[minmax(5rem,0.7fr)_minmax(0,1fr)_auto] sm:items-center"
+                // eslint-disable-next-line react/no-array-index-key -- ProviderCredentialDraft (shared across onboarding/settings/require-ai-key) has no id field; rows are fully controlled from the draft object with no uncontrolled local state, so index-assisted keys never mismatch rendered content. Adding an id would require a schema change across every call site.
                 key={`${providerDraft.provider}-${index}`}
               >
                 <Select
@@ -251,6 +252,7 @@ export const AIConfigProvidersEditor = ({
           return (
             <div
               className="grid gap-3 border-t p-3 first:border-t-0"
+              // eslint-disable-next-line react/no-array-index-key -- ProviderCredentialDraft (shared across onboarding/settings/require-ai-key) has no id field; rows are fully controlled from the draft object with no uncontrolled local state, so index-assisted keys never mismatch rendered content. Adding an id would require a schema change across every call site.
               key={`${providerDraft.provider}-${index}`}
             >
               <div className="grid gap-2 sm:grid-cols-[minmax(8rem,0.85fr)_minmax(0,1fr)] sm:items-start">

@@ -213,6 +213,7 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
       {previewOperations.map((operation, index) => (
         <div
           className="text-foreground-strong-muted truncate"
+          // eslint-disable-next-line react/no-array-index-key -- previewOperations is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
           key={`${operation.blockId}-${operation.type}-${index}`}
         >
           {renderOperationSummary(operation)}

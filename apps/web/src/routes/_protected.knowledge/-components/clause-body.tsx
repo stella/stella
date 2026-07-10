@@ -149,6 +149,7 @@ const ClauseList = ({ node }: { node: ListTree }) => {
 const ClauseListItems = ({ items }: { items: ListTreeItem[] }) => (
   <>
     {items.map((item, idx) => (
+      // eslint-disable-next-line react/no-array-index-key -- read-only clause list content parsed from source on every render (whole-list replace); items are non-interactive with no per-item state.
       <li className="leading-relaxed" key={idx}>
         <ParagraphContent paragraph={item.paragraph} />
         {item.children ? <ClauseList node={item.children} /> : null}
@@ -170,6 +171,7 @@ const ParagraphContent = ({ paragraph }: { paragraph: ClauseParagraph }) => {
           if (run.italic) {
             content = <em>{content}</em>;
           }
+          // eslint-disable-next-line react/no-array-index-key -- read-only clause paragraph runs parsed from source on every render (whole-list replace); spans are non-interactive with no per-item state.
           return <span key={ri}>{content}</span>;
         })}
       </>
