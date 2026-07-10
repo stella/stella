@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, gte, lt, lte, or } from "drizzle-orm";
+import { and, desc, eq, getColumns, gte, lt, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -11,6 +11,12 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
+import {
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
+import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
@@ -20,20 +26,24 @@ const CURSOR_SEPARATOR = "|";
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
-const encodeCursor = (createdAt: Date, id: string): string =>
-  `${createdAt.toISOString()}${CURSOR_SEPARATOR}${id}`;
+const auditLogCreatedAtCursor = pgTimestampCursorValue(auditLogs.createdAt);
+
+const encodeCursor = (createdAt: string, id: string): string =>
+  `${createdAt}${CURSOR_SEPARATOR}${id}`;
 
 const decodeCursor = (
   cursor: string,
-): { createdAt: Date; id: SafeId<"auditLog"> } | null => {
+): { createdAt: ParsedPgTimestampCursor; id: SafeId<"auditLog"> } | null => {
   const separatorIndex = cursor.indexOf(CURSOR_SEPARATOR);
   if (separatorIndex === -1) {
     return null;
   }
 
-  const createdAt = new Date(cursor.slice(0, separatorIndex));
+  const createdAt = parsePgTimestampCursorValue(
+    cursor.slice(0, separatorIndex),
+  );
   const id = cursor.slice(separatorIndex + 1);
-  if (Number.isNaN(createdAt.getTime()) || !UUID_RE.test(id)) {
+  if (createdAt === null || !UUID_RE.test(id)) {
     return null;
   }
 
@@ -96,9 +106,9 @@ const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
     }
 
     const cursorCondition = or(
-      lt(auditLogs.createdAt, cursor.createdAt),
+      lt(auditLogs.createdAt, pgTimestampCursorBoundary(cursor.createdAt)),
       and(
-        eq(auditLogs.createdAt, cursor.createdAt),
+        eq(auditLogs.createdAt, pgTimestampCursorBoundary(cursor.createdAt)),
         lt(auditLogs.id, cursor.id),
       ),
     );
@@ -178,7 +188,10 @@ export const queryAuditLogPage = async function* ({
   const rows = yield* Result.await(
     safeDb((tx) =>
       tx
-        .select()
+        .select({
+          ...getColumns(auditLogs),
+          createdAtCursor: auditLogCreatedAtCursor.as("created_at_cursor"),
+        })
         .from(auditLogs)
         .where(and(...conditions))
         .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
@@ -186,13 +199,18 @@ export const queryAuditLogPage = async function* ({
     ),
   );
 
-  return Result.ok(
-    createCursorPage({
-      rows,
-      limit,
-      cursorForItem: (item) => encodeCursor(item.createdAt, item.id),
-    }),
-  );
+  const page = createCursorPage({
+    rows,
+    limit,
+    cursorForItem: (item) => encodeCursor(item.createdAtCursor, item.id),
+  });
+
+  return Result.ok({
+    ...page,
+    items: page.items.map(
+      ({ createdAtCursor: _createdAtCursor, ...item }) => item,
+    ),
+  });
 };
 
 const readAuditLogs = createSafeRootHandler(
