@@ -8,6 +8,11 @@ import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/d
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { isUuid, tSafeId } from "@/api/lib/custom-schema";
+import {
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 
@@ -30,6 +35,10 @@ export const listDecisionsQuerySchema = t.Object({
 
 type ListDecisionsQuery = Static<typeof listDecisionsQuerySchema>;
 
+const caseLawCreatedAtCursor = pgTimestampCursorValue(
+  caseLawDecisions.createdAt,
+);
+
 export const listDecisionsHandler = async (
   query: ListDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
@@ -42,19 +51,21 @@ export const listDecisionsHandler = async (
     if (separatorIdx > 0) {
       const ts = query.cursor.slice(0, separatorIdx);
       const id = query.cursor.slice(separatorIdx + 1);
-      const date = new Date(ts);
-      if (Number.isNaN(date.getTime()) || !isUuid(id)) {
+      const timestamp = parsePgTimestampCursorValue(ts);
+      if (timestamp === null || !isUuid(id)) {
         return status(400, { message: "Invalid cursor" });
       }
       conditions.push(
-        sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) < (${date}, ${id})`,
+        sql`(${caseLawDecisions.createdAt}, ${caseLawDecisions.id}) < (${pgTimestampCursorBoundary(timestamp)}, ${id})`,
       );
     } else {
-      const date = new Date(query.cursor);
-      if (Number.isNaN(date.getTime())) {
+      const timestamp = parsePgTimestampCursorValue(query.cursor);
+      if (timestamp === null) {
         return status(400, { message: "Invalid cursor" });
       }
-      conditions.push(lt(caseLawDecisions.createdAt, date));
+      conditions.push(
+        lt(caseLawDecisions.createdAt, pgTimestampCursorBoundary(timestamp)),
+      );
     }
   }
 
@@ -101,6 +112,7 @@ export const listDecisionsHandler = async (
         decisionType: caseLawDecisions.decisionType,
         sourceUrl: caseLawDecisions.sourceUrl,
         createdAt: caseLawDecisions.createdAt,
+        createdAtCursor: caseLawCreatedAtCursor.as("created_at_cursor"),
       })
       .from(caseLawDecisions)
       .innerJoin(
@@ -154,7 +166,7 @@ export const listDecisionsHandler = async (
       .map((row) => [row.languageGroupKey, row.count]),
   );
 
-  return createCursorPage({
+  const page = createCursorPage({
     rows: decisions.map((decision) => ({
       id: decision.id,
       caseNumber: decision.caseNumber,
@@ -173,8 +185,16 @@ export const listDecisionsHandler = async (
       decisionType: decision.decisionType,
       sourceUrl: decision.sourceUrl,
       createdAt: decision.createdAt,
+      createdAtCursor: decision.createdAtCursor,
     })),
     limit,
-    cursorForItem: (item) => `${item.createdAt.toISOString()}_${item.id}`,
+    cursorForItem: (item) => `${item.createdAtCursor}_${item.id}`,
   });
+
+  return {
+    ...page,
+    items: page.items.map(
+      ({ createdAtCursor: _createdAtCursor, ...item }) => item,
+    ),
+  };
 };

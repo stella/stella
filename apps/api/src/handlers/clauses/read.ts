@@ -6,6 +6,12 @@ import type { SafeDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
+import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -15,17 +21,21 @@ import { createCursorPage } from "@/api/lib/pagination";
 
 const CURSOR_SEP = "|";
 
-const encodeCursor = (date: Date, id: string): string =>
-  `${date.toISOString()}${CURSOR_SEP}${id}`;
+const clauseCreatedAtCursor = pgTimestampCursorValue(clauses.createdAt);
 
-const decodeCursor = (cursor: string): { date: Date; id: string } | null => {
+const encodeCursor = (date: string, id: string): string =>
+  `${date}${CURSOR_SEP}${id}`;
+
+const decodeCursor = (
+  cursor: string,
+): { date: ParsedPgTimestampCursor; id: string } | null => {
   const idx = cursor.indexOf(CURSOR_SEP);
   if (idx === -1) {
     return null;
   }
-  const date = new Date(cursor.slice(0, idx));
+  const date = parsePgTimestampCursorValue(cursor.slice(0, idx));
   const id = cursor.slice(idx + 1);
-  if (Number.isNaN(date.getTime()) || !id) {
+  if (date === null || !id) {
     return null;
   }
   return { date, id };
@@ -107,9 +117,9 @@ export const listClausesHandler = async function* ({
       // Compound cursor: (createdAt < cursorDate) OR
       // (createdAt = cursorDate AND id < cursorId)
       const cursorCondition = or(
-        lt(clauses.createdAt, parsed.date),
+        lt(clauses.createdAt, pgTimestampCursorBoundary(parsed.date)),
         and(
-          eq(clauses.createdAt, parsed.date),
+          eq(clauses.createdAt, pgTimestampCursorBoundary(parsed.date)),
           sql`${clauses.id} < ${parsed.id}`,
         ),
       );
@@ -127,6 +137,7 @@ export const listClausesHandler = async function* ({
     description: clauses.description,
     currentVersion: clauses.currentVersion,
     createdAt: clauses.createdAt,
+    createdAtCursor: clauseCreatedAtCursor.as("created_at_cursor"),
     updatedAt: clauses.updatedAt,
   };
 
@@ -150,11 +161,14 @@ export const listClausesHandler = async function* ({
   const page = createCursorPage({
     rows,
     limit,
-    cursorForItem: (item) => encodeCursor(item.createdAt, item.id),
+    cursorForItem: (item) => encodeCursor(item.createdAtCursor, item.id),
   });
 
   return Result.ok({
     ...page,
+    items: page.items.map(
+      ({ createdAtCursor: _createdAtCursor, ...item }) => item,
+    ),
     nextCursor: isSearching ? null : page.nextCursor,
   });
 };
