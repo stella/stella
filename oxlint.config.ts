@@ -342,6 +342,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
     "./.oxlint-plugins/require-query-limit.ts",
+    "./.oxlint-plugins/require-tenant-scope.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
@@ -951,6 +952,12 @@ export default defineConfig({
       },
     },
     {
+      files: [".oxlint-plugins/__fixtures__/require-tenant-scope.fixture.ts"],
+      rules: {
+        "require-tenant-scope/require-tenant-scope": "error",
+      },
+    },
+    {
       files: ["apps/web/src/components/date-picker-popover.tsx"],
       rules: {
         "no-restricted-imports": [
@@ -1344,6 +1351,24 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
       rules: {
         "require-query-limit/require-query-limit": "error",
+      },
+    },
+    {
+      // require-tenant-scope flags Drizzle reads of a tenant-owned table
+      // (apps/api/src/db/schema/*.ts tables carrying workspaceId /
+      // organizationId) with no application-level `where` at all, per
+      // conventions-scale's "filter by tenant ID in the query". Postgres
+      // RLS already scopes rows to the caller's org/workspace memberships;
+      // this rule is defense-in-depth against a read that is technically
+      // RLS-legal but scoped wider than the handler's specific matter.
+      // Genuinely root-scoped reads (admin jobs, migrations, seeds, global
+      // corpus ingestion) carry an inline disable with a `// SAFETY:` note.
+      // Test files construct unscoped fixtures intentionally and are
+      // excluded.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-tenant-scope/require-tenant-scope": "error",
       },
     },
     {

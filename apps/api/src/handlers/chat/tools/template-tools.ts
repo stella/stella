@@ -140,6 +140,7 @@ export const createTemplateTools = ({
     }).server(async () => {
       const rows = await scopedDb((tx) =>
         tx.query.templates.findMany({
+          where: { organizationId: { eq: organizationId } },
           columns: {
             id: true,
             name: true,
