@@ -21,7 +21,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import {
   hasRunningToolCallInLatestAssistantMessage,
-  sanitizeHydratedRunningToolCalls,
+  sanitizeRunningToolCalls,
 } from "@/components/chat/chat-ui-tools";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -961,6 +961,22 @@ export const createChatRuntime = ({
     },
     stop: () => {
       client.stop();
+      // `client.stop()` aborts the live request but never rewrites message
+      // parts, so a tool-call part caught mid-run stays in a running state and
+      // keeps `hasRunningToolCallInLatestAssistantMessage` — and thus
+      // `isGenerating` — stuck true, wedging the composer on Stop/spinner with
+      // the tool card spinning forever. When the aborted turn had a running
+      // tool call, finalize it the same way the hydration path does so the
+      // turn actually ends.
+      if (
+        hasRunningToolCallInLatestAssistantMessage({
+          messages: snapshot.messages,
+        })
+      ) {
+        const sanitized = sanitizeRunningToolCalls(snapshot.messages);
+        client.setMessagesManually(sanitized);
+        setSnapshot({ messages: sanitized });
+      }
     },
     subscribe: (listener) => {
       listeners.add(listener);
@@ -1201,7 +1217,7 @@ export type ChatThreadFetched = {
   /**
    * Sanitized initial history for this thread (running tool-call
    * parts left by a stream that died mid-call are dropped — see
-   * `sanitizeHydratedRunningToolCalls`). Pure server data: this
+   * `sanitizeRunningToolCalls`). Pure server data: this
    * query never builds a `ChatRuntime` (see `chatThreadOptions`
    * docs below), so a route loader can prefetch it safely. Callers
    * that need a live runtime pass this array as `initialMessages`
@@ -1308,7 +1324,7 @@ export const fileChatThreadOptions = ({
           context: stubContext,
         }).queryKey,
         {
-          messages: sanitizeHydratedRunningToolCalls(fetched.messages),
+          messages: sanitizeRunningToolCalls(fetched.messages),
           olderCursor: fetched.olderCursor,
           contextMatterIds: fetched.contextMatterIds,
           lastActivityAt: fetched.lastActivityAt,
@@ -1470,8 +1486,8 @@ export const chatThreadOptions = ({
         // fresh runtime with no live turn; drop any tool-call part left
         // running by a stream that died mid call so the session does not
         // load already wedged as "generating". See
-        // `sanitizeHydratedRunningToolCalls`.
-        messages: sanitizeHydratedRunningToolCalls(fetched.messages),
+        // `sanitizeRunningToolCalls`.
+        messages: sanitizeRunningToolCalls(fetched.messages),
       };
     },
   });

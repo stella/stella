@@ -600,26 +600,29 @@ const toTerminalIfRunningToolPart = (part: ChatPart): ChatPart => {
 };
 
 /**
- * Rewrite dead running tool-call parts to a terminal errored state when a
- * thread is hydrated from persistence.
+ * Rewrite running tool-call parts that can no longer complete into a
+ * terminal errored state, clearing `isRunningToolPart` — and therefore
+ * `hasRunningToolCallInLatestAssistantMessage` / `isGenerating` — so the
+ * composer leaves its stop/spinner state instead of wedging there forever.
  *
- * The server only persists finalized turns (a turn is written at stream
- * end, not mid-stream) and a freshly built runtime drives no live turn, so
- * every running tool-call part in server-loaded messages belongs to a turn
- * whose stream died before finishing (API process restart / deploy / crash
- * mid tool call). Left untouched, such a part keeps
- * `hasRunningToolCallInLatestAssistantMessage` — and therefore
- * `isGenerating` — stuck true on every reload, wedging the composer in a
- * stop/spinner state no live request can ever clear.
+ * Applied on the two triggers that strand a tool part mid-run with no event
+ * that would ever finalize it:
  *
- * Live-turn parts never flow through here: streaming updates reach the UI
- * through the runtime's message subscription, not this hydration path, so a
- * mid-flight tool call is never sanitized. `ask-user` / `create-document`
- * and approval-flow parts are long-lived by design and already excluded by
- * `isRunningToolPart`. Messages and parts left unchanged are returned by
- * reference so downstream memoization stays stable.
+ *  - Hydration from persistence: the server only persists finalized turns
+ *    (written at stream end, not mid-stream), so any running tool-call part
+ *    in server-loaded messages belongs to a turn whose stream died before
+ *    finishing (API restart / deploy / crash mid tool call).
+ *  - Explicit stop: the AI SDK's `stop()` aborts the live request but never
+ *    rewrites message parts, so a tool part caught mid-input would keep the
+ *    turn "generating" forever. The runtime's `stop` applies this right
+ *    after aborting.
+ *
+ * `ask-user` / `create-document` and approval-flow parts are long-lived by
+ * design and already excluded by `isRunningToolPart`. Messages and parts
+ * left unchanged are returned by reference so downstream memoization stays
+ * stable.
  */
-export const sanitizeHydratedRunningToolCalls = (
+export const sanitizeRunningToolCalls = (
   messages: readonly PersistedChatMessage[],
 ): PersistedChatMessage[] =>
   messages.map((message) => {
