@@ -360,47 +360,112 @@ export type CapabilityDispatchRecord = {
 };
 
 /**
- * Strict shape guards for every value interpolated into the generated dispatch
- * module. All three values are derived mechanically (id from the handler file
- * path + export name, import path from the same file path), so a mismatch means
- * the derivation produced something outside its own contract: the serializer
- * throws rather than emitting it. Combined with `JSON.stringify` for the actual
- * literal emission, no interpolated value can alter the generated module's code
- * structure.
+ * Per-segment allowlists for every value interpolated into the generated
+ * dispatch module. Each derived value (id, import path, export name) is split
+ * into its atomic segments and every segment is re-derived from a strict
+ * allowlist match; the emitted value is then REBUILT from those matched pieces
+ * (`rebuildFromSegments`). A crafted segment fails the match and the serializer
+ * throws. Because the emitted string is assembled only from regex-match output
+ * (never the raw input), the flow from a handler file path into generated
+ * `import(...)` code visibly passes through sanitization — no tainted value
+ * reaches code construction. Combined with `JSON.stringify` on the rebuilt
+ * value, nothing a crafted handler path or export name contains can alter the
+ * generated module's structure.
  *
- * - id: dot-joined path segments plus an optional camelCase export-name
- *   segment (e.g. `entities.read-summaries.readEntitySummariesCount`).
+ * - id: dot-joined path segments plus an optional camelCase export-name segment
+ *   (e.g. `entities.read-summaries.readEntitySummariesCount`).
  * - import path: the fixed `@/api/` alias prefix plus lowercase path segments.
- * - export name: a plain TS identifier.
+ * - export name: a single plain TS identifier.
  */
-const DISPATCH_ID_PATTERN = /^[a-zA-Z0-9.-]+$/u;
-const DISPATCH_IMPORT_PATH_PATTERN = /^@\/api\/[a-z0-9/.-]+$/u;
+const DISPATCH_ID_SEGMENT_PATTERN = /^[a-zA-Z0-9-]+$/u;
+const DISPATCH_IMPORT_SEGMENT_PATTERN = /^[a-z0-9.-]+$/u;
 const DISPATCH_EXPORT_NAME_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/u;
+const DISPATCH_IMPORT_PREFIX = "@/api/";
 
-const assertSafeDispatchRecord = ({
+/**
+ * Return the regex match for a single segment, or panic. The returned value is
+ * the matched text (`match[0]`), so callers that rebuild from it are provably
+ * working with allowlisted input rather than the raw (possibly tainted) source.
+ */
+const matchSafeSegment = ({
+  segment,
+  pattern,
+  kind,
   id,
-  importPath,
-  exportName,
-}: CapabilityDispatchRecord): void => {
-  if (!DISPATCH_ID_PATTERN.test(id)) {
-    panic(
-      `capability-catalog: refusing to emit dispatch entry with unsafe id ${JSON.stringify(id)} (must match ${DISPATCH_ID_PATTERN})`,
+}: {
+  segment: string;
+  pattern: RegExp;
+  kind: string;
+  id: string;
+}): string => {
+  const match = pattern.exec(segment);
+  if (match === null) {
+    return panic(
+      `capability-catalog: refusing to emit dispatch entry "${id}" with unsafe ${kind} segment ${JSON.stringify(segment)} (must match ${pattern})`,
     );
   }
-  if (!DISPATCH_IMPORT_PATH_PATTERN.test(importPath)) {
-    panic(
-      `capability-catalog: refusing to emit dispatch entry "${id}" with unsafe import path ${JSON.stringify(importPath)} (must match ${DISPATCH_IMPORT_PATH_PATTERN})`,
-    );
-  }
-  if (
-    exportName !== undefined &&
-    !DISPATCH_EXPORT_NAME_PATTERN.test(exportName)
-  ) {
-    panic(
-      `capability-catalog: refusing to emit dispatch entry "${id}" with unsafe export name ${JSON.stringify(exportName)} (must match ${DISPATCH_EXPORT_NAME_PATTERN})`,
-    );
-  }
+  return match[0];
 };
+
+/** Rebuild a dispatch id from per-segment-validated pieces (dot-joined). */
+const sanitizeDispatchId = (id: string): string =>
+  id
+    .split(".")
+    .map((segment) =>
+      matchSafeSegment({
+        segment,
+        pattern: DISPATCH_ID_SEGMENT_PATTERN,
+        kind: "id",
+        id,
+      }),
+    )
+    .join(".");
+
+/**
+ * Rebuild an import specifier from the fixed `@/api/` prefix plus
+ * per-segment-validated path pieces, so the value emitted into `import(...)`
+ * derives only from allowlisted segments.
+ */
+const sanitizeImportSpecifier = ({
+  importPath,
+  id,
+}: {
+  importPath: string;
+  id: string;
+}): string => {
+  if (!importPath.startsWith(DISPATCH_IMPORT_PREFIX)) {
+    return panic(
+      `capability-catalog: refusing to emit dispatch entry "${id}" with unsafe import path ${JSON.stringify(importPath)} (must start with ${DISPATCH_IMPORT_PREFIX})`,
+    );
+  }
+  const segments = importPath
+    .slice(DISPATCH_IMPORT_PREFIX.length)
+    .split("/")
+    .map((segment) =>
+      matchSafeSegment({
+        segment,
+        pattern: DISPATCH_IMPORT_SEGMENT_PATTERN,
+        kind: "import path",
+        id,
+      }),
+    );
+  return `${DISPATCH_IMPORT_PREFIX}${segments.join("/")}`;
+};
+
+/** Validate a single-identifier export name and return the matched text. */
+const sanitizeExportName = ({
+  exportName,
+  id,
+}: {
+  exportName: string;
+  id: string;
+}): string =>
+  matchSafeSegment({
+    segment: exportName,
+    pattern: DISPATCH_EXPORT_NAME_PATTERN,
+    kind: "export name",
+    id,
+  });
 
 /**
  * Serialize the generated capability-dispatch module: a typed map from
@@ -410,12 +475,13 @@ const assertSafeDispatchRecord = ({
  * default) export to reach the `{ config, handler }` endpoint definition, so the
  * generic invoke path runs the exact code REST does.
  *
- * Every interpolated value is validated against a strict pattern first (see
- * `assertSafeDispatchRecord`) and emitted through `JSON.stringify`, so the
- * generated code's structure cannot be influenced by a crafted handler path or
- * export name. The output is raw (single-line entries); the exporter formats it
- * with oxfmt before writing/comparing, mirroring how the CLI codegen formats
- * its generated modules, so the committed artifact passes `oxfmt --check`.
+ * Every interpolated value is rebuilt from per-segment allowlist matches (see
+ * `sanitizeDispatchId` / `sanitizeImportSpecifier` / `sanitizeExportName`) and
+ * emitted through `JSON.stringify`, so the generated code's structure cannot be
+ * influenced by a crafted handler path or export name. The output is raw (single-
+ * line entries); the exporter formats it with oxfmt before writing/comparing,
+ * mirroring how the CLI codegen formats its generated modules, so the committed
+ * artifact passes `oxfmt --check`.
  */
 export const serializeDispatchModule = (
   records: readonly CapabilityDispatchRecord[],
@@ -440,8 +506,20 @@ export const CAPABILITY_DISPATCH = {
 `;
   const body = records
     .map((record) => {
-      assertSafeDispatchRecord(record);
-      const { id, importPath, exportName } = record;
+      // Rebuild every interpolated value from allowlist-matched segments before
+      // it reaches the generated code (see the sanitizers above).
+      const id = sanitizeDispatchId(record.id);
+      const importPath = sanitizeImportSpecifier({
+        importPath: record.importPath,
+        id: record.id,
+      });
+      const exportName =
+        record.exportName === undefined
+          ? undefined
+          : sanitizeExportName({
+              exportName: record.exportName,
+              id: record.id,
+            });
       const loader = `load: async () => await import(${JSON.stringify(importPath)})`;
       const named =
         exportName === undefined
@@ -528,6 +606,208 @@ export const scanContextFidelity = ({
   }
   const staleWaivers = [...waivedIds].filter((id) => !tripped.has(id)).sort();
   violations.sort((a, b) => a.id.localeCompare(b.id));
+  return { violations, staleWaivers };
+};
+
+// --- File-response scan (fix-6) ---------------------------------------------
+
+/**
+ * Whether a handler's success path returns a web `Response` constructed inline
+ * (`Result.ok(new Response(...))`). This catches the common file/stream export
+ * shape as a hard class guard. A handler that returns a `Response` via an
+ * intermediate variable (e.g. `templates.fill` delegating to a helper) is not
+ * matched here; it is seeded manually into the flag table and kept honest by the
+ * stale check below (`constructsResponse`).
+ */
+export const returnsInlineFileResponse = (source: string): boolean =>
+  /Result\.ok\(\s*new Response\b/su.test(source);
+
+/** Whether a handler constructs any web `Response` (stale-check signal). */
+export const constructsResponse = (source: string): boolean =>
+  /\bnew Response\s*\(/u.test(source);
+
+export type FileResponseScan = {
+  /** Catalog ids whose success path inline-returns a Response but are not flagged. */
+  violations: string[];
+  /** Flagged ids whose handler no longer constructs any Response (remove them). */
+  staleFlags: string[];
+};
+
+/**
+ * Class guard for capabilities that return a file/stream Response: the generic
+ * invoke path cannot serialize one, so each must be flagged (carried into the
+ * catalog as `returnsFileResponse` and refused at invoke). Any catalog handler
+ * whose success path inline-returns a Response but is unflagged is a violation;
+ * a flagged id whose handler no longer constructs any Response is stale.
+ */
+export const scanFileResponseReturns = ({
+  entries,
+  flaggedIds,
+}: {
+  entries: readonly { id: string; source: string }[];
+  flaggedIds: ReadonlySet<string>;
+}): FileResponseScan => {
+  const violations: string[] = [];
+  const sourceById = new Map(entries.map(({ id, source }) => [id, source]));
+  for (const { id, source } of entries) {
+    if (!flaggedIds.has(id) && returnsInlineFileResponse(source)) {
+      violations.push(id);
+    }
+  }
+  const staleFlags: string[] = [];
+  for (const id of flaggedIds) {
+    const source = sourceById.get(id);
+    if (source === undefined || !constructsResponse(source)) {
+      staleFlags.push(id);
+    }
+  }
+  return {
+    violations: violations.sort(),
+    staleFlags: staleFlags.sort(),
+  };
+};
+
+// --- Route-hook guard scan (fix-2) ------------------------------------------
+
+/**
+ * Route-level pre-handler hooks (`onBeforeHandle` / `beforeHandle`) that gate a
+ * mounted endpoint. The generic invoke path calls the handler directly, so any
+ * authorization such a hook adds is bypassed unless it also lives in the handler
+ * config. This detects capability endpoints mounted under such a hook so each is
+ * either fixed (gate moved into the handler) or explicitly waived.
+ */
+const ROUTE_HOOK_PATTERN = /\.(?:onBeforeHandle|beforeHandle)\s*\(/u;
+const ROUTE_HANDLER_MOUNT_PATTERN =
+  /\b(?<local>[A-Za-z_$][\w$]*)\.(?:default\.)?handler\b/gu;
+const ROUTE_IMPORT_STATEMENT =
+  /import\s+(?<clause>[^;]+?)\s+from\s+["'](?<path>@\/api\/handlers\/[^"']+)["']/gu;
+const IDENTIFIER_HEAD = /^(?<name>[A-Za-z_$][\w$]*)/u;
+const NAMED_IMPORT_BLOCK = /\{(?<body>[^}]*)\}/u;
+const ALIASED_IMPORT =
+  /^(?<orig>[A-Za-z_$][\w$]*)\s+as\s+(?<alias>[A-Za-z_$][\w$]*)$/u;
+const PLAIN_IDENTIFIER = /^(?<name>[A-Za-z_$][\w$]*)$/u;
+const HANDLER_IMPORT_ALIAS_PREFIX = "@/api/";
+const HANDLER_ALIAS_TO_SRC_PREFIX = "apps/api/src/";
+
+type ImportedLocal = { importPath: string; exportName: string | undefined };
+
+/** Map each locally-bound handler name to its module import path + export name. */
+const parseHandlerImports = (source: string): Map<string, ImportedLocal> => {
+  const map = new Map<string, ImportedLocal>();
+  for (const match of source.matchAll(ROUTE_IMPORT_STATEMENT)) {
+    const clause = match.groups?.clause?.trim() ?? "";
+    const importPath = match.groups?.path ?? "";
+    if (!clause.startsWith("{")) {
+      const defaultName = IDENTIFIER_HEAD.exec(clause)?.groups?.name;
+      if (defaultName !== undefined) {
+        map.set(defaultName, { importPath, exportName: undefined });
+      }
+    }
+    const namedBody = NAMED_IMPORT_BLOCK.exec(clause)?.groups?.body;
+    if (namedBody !== undefined) {
+      for (const part of namedBody.split(",")) {
+        const trimmed = part.trim();
+        if (trimmed.length === 0) {
+          continue;
+        }
+        const aliased = ALIASED_IMPORT.exec(trimmed)?.groups;
+        if (aliased?.orig !== undefined && aliased.alias !== undefined) {
+          map.set(aliased.alias, { importPath, exportName: aliased.orig });
+          continue;
+        }
+        const plain = PLAIN_IDENTIFIER.exec(trimmed)?.groups?.name;
+        if (plain !== undefined) {
+          map.set(plain, { importPath, exportName: plain });
+        }
+      }
+    }
+  }
+  return map;
+};
+
+/** Capability id for a route-imported handler (`@/api/handlers/x/y` -> `x.y`). */
+const importToCapabilityId = ({
+  importPath,
+  exportName,
+}: ImportedLocal): string | undefined => {
+  if (!importPath.startsWith(`${HANDLER_IMPORT_ALIAS_PREFIX}handlers/`)) {
+    return undefined;
+  }
+  const file = `${importPath.replace(
+    HANDLER_IMPORT_ALIAS_PREFIX,
+    HANDLER_ALIAS_TO_SRC_PREFIX,
+  )}.ts`;
+  return deriveCapabilityId({ file, exportName });
+};
+
+/** Capability ids mounted under a hooked Elysia instance in one route file. */
+const hookGuardedIdsInFile = ({
+  source,
+  capabilityIds,
+}: {
+  source: string;
+  capabilityIds: ReadonlySet<string>;
+}): Set<string> => {
+  const imports = parseHandlerImports(source);
+  const guarded = new Set<string>();
+  // Each `const x = new Elysia(...)...` chain is one block; a hook applies to
+  // routes chained on the same instance, so scan per block.
+  for (const block of source.split(/(?=new Elysia\s*\()/u)) {
+    if (!ROUTE_HOOK_PATTERN.test(block)) {
+      continue;
+    }
+    for (const mount of block.matchAll(ROUTE_HANDLER_MOUNT_PATTERN)) {
+      const local = mount.groups?.local;
+      const imported = local === undefined ? undefined : imports.get(local);
+      const id =
+        imported === undefined ? undefined : importToCapabilityId(imported);
+      if (id !== undefined && capabilityIds.has(id)) {
+        guarded.add(id);
+      }
+    }
+  }
+  return guarded;
+};
+
+export type RouteHookGuardViolation = { routeFile: string; id: string };
+
+export type RouteHookGuardScan = {
+  /** Hook-guarded capability endpoints that are not waived. */
+  violations: RouteHookGuardViolation[];
+  /** Waiver ids no longer mounted under any route hook (remove them). */
+  staleWaivers: string[];
+};
+
+/**
+ * Scan route files for capability endpoints wrapped in a route-level
+ * `onBeforeHandle`/`beforeHandle` hook that the generic invoke path would
+ * bypass. Each hit must be waived (id -> justification, the gate lives in the
+ * handler config) or the export fails; a waiver no longer matched is stale.
+ */
+export const scanRouteHookGuards = ({
+  routeFiles,
+  capabilityIds,
+  waivedIds,
+}: {
+  routeFiles: readonly { id: string; source: string }[];
+  capabilityIds: ReadonlySet<string>;
+  waivedIds: ReadonlySet<string>;
+}): RouteHookGuardScan => {
+  const violations: RouteHookGuardViolation[] = [];
+  const detected = new Set<string>();
+  for (const { id: routeFile, source } of routeFiles) {
+    for (const id of hookGuardedIdsInFile({ source, capabilityIds })) {
+      detected.add(id);
+      if (!waivedIds.has(id)) {
+        violations.push({ routeFile, id });
+      }
+    }
+  }
+  const staleWaivers = [...waivedIds].filter((id) => !detected.has(id)).sort();
+  violations.sort(
+    (a, b) =>
+      a.id.localeCompare(b.id) || a.routeFile.localeCompare(b.routeFile),
+  );
   return { violations, staleWaivers };
 };
 

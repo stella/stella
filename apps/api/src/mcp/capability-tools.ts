@@ -1,6 +1,7 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { TSchema } from "@sinclair/typebox";
 import { Value } from "@sinclair/typebox/value";
+import { panic } from "better-result";
 import { ElysiaCustomStatusResponse } from "elysia";
 
 import { captureError } from "@/api/lib/analytics";
@@ -12,6 +13,7 @@ import {
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
+import { consumeInvokeCapabilityRateLimit } from "@/api/mcp/capability-rate-limit";
 import { CONTEXT_FIDELITY_WAIVERS } from "@/api/mcp/capability-waivers";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
@@ -49,26 +51,93 @@ type CapabilityMcpDisposition =
   | { type: "covered"; by: string }
   | { type: "capability"; reason: string };
 
+const HANDLER_KINDS = [
+  "workspace",
+  "root",
+  "session",
+  "token",
+  "public",
+] as const;
+
+type HandlerKind = (typeof HANDLER_KINDS)[number];
+
 type CatalogEntry = {
   id: string;
-  handlerKind: "workspace" | "root" | "session" | "token" | "public";
+  handlerKind: HandlerKind;
   access: "read" | "write";
   destructive: boolean;
   scope: string;
+  /**
+   * When true, this capability's REST route resolves workspace access through
+   * `validateWorkspaceAccessIncludingArchived` (e.g. `workspaces.unarchive`), so
+   * the generic write gate must let it run against an archived workspace.
+   */
+  allowsArchivedWorkspace?: boolean;
+  /**
+   * When true, this capability's handler returns a web `Response` (file/stream)
+   * on success. The generic invoke path cannot serialize a streamed file, so it
+   * refuses these pre-execution; the REST route remains the way to fetch them.
+   */
+  returnsFileResponse?: boolean;
   permissions?: unknown;
   inputSchema?: { body?: unknown; params?: unknown; query?: unknown };
   inputSchemaTruncated?: true;
   mcp: CapabilityMcpDisposition;
 };
 
-// SAFETY: the JSON is emitted by our own export script
-// (export-capability-catalog.ts) with exactly the CatalogEntry shape; the drift
-// guard keeps it in sync, so this boundary cast cannot silently go stale.
-// eslint-disable-next-line typescript/no-unsafe-type-assertion -- generated artifact, shape guaranteed by the export script + drift guard
-const CATALOG = capabilityCatalogRaw as readonly CatalogEntry[];
-
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const HANDLER_KIND_SET = new Set<string>(HANDLER_KINDS);
+
+const isHandlerKind = (value: unknown): value is HandlerKind =>
+  typeof value === "string" && HANDLER_KIND_SET.has(value);
+
+const isMcpDisposition = (
+  value: unknown,
+): value is CapabilityMcpDisposition => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (value["type"] === "tool") {
+    return typeof value["name"] === "string";
+  }
+  if (value["type"] === "covered") {
+    return typeof value["by"] === "string";
+  }
+  if (value["type"] === "capability") {
+    return typeof value["reason"] === "string";
+  }
+  return false;
+};
+
+const isCatalogEntry = (value: unknown): value is CatalogEntry =>
+  isRecord(value) &&
+  typeof value["id"] === "string" &&
+  isHandlerKind(value["handlerKind"]) &&
+  (value["access"] === "read" || value["access"] === "write") &&
+  typeof value["destructive"] === "boolean" &&
+  typeof value["scope"] === "string" &&
+  isMcpDisposition(value["mcp"]);
+
+/**
+ * Parse the generated catalog artifact into typed entries at the module
+ * boundary. The export script + drift guard keep the JSON in the CatalogEntry
+ * shape, so a mismatch here is a corrupt build artifact: fail fast rather than
+ * casting the raw import and letting a malformed entry flow downstream.
+ */
+const parseCatalog = (raw: unknown): readonly CatalogEntry[] => {
+  if (!Array.isArray(raw)) {
+    return panic("capability catalog artifact is not a JSON array");
+  }
+  return raw.map((entry, index) =>
+    isCatalogEntry(entry)
+      ? entry
+      : panic(`capability catalog entry ${index} has an unexpected shape`),
+  );
+};
+
+const CATALOG = parseCatalog(capabilityCatalogRaw);
 
 const CATALOG_BY_ID = new Map(CATALOG.map((entry) => [entry.id, entry]));
 const CATALOG_IDS = CATALOG.map((entry) => entry.id);
@@ -81,18 +150,27 @@ const capabilityLeaf = (id: string): string => id.split(".").at(-1) ?? id;
 
 // --- Live handler resolution -------------------------------------------------
 
+/**
+ * The endpoint config fields the generic path reads. `body`/`params`/`query`
+ * are Elysia `t.*` schemas (TypeBox `TSchema`) at runtime, built by the handler
+ * graph; the guard below narrows to this shape at the module boundary.
+ */
+type EndpointConfig = {
+  body?: TSchema;
+  params?: TSchema;
+  query?: TSchema;
+  permissions?: unknown;
+};
+
 type EndpointDefinition = {
-  config: Record<string, unknown>;
+  config: EndpointConfig;
   handler: (ctx: SynthesizedCapabilityContext) => Promise<unknown>;
 };
 
 const isEndpointDefinition = (value: unknown): value is EndpointDefinition =>
-  typeof value === "object" &&
-  value !== null &&
-  "config" in value &&
-  typeof (value as { config: unknown }).config === "object" &&
-  "handler" in value &&
-  typeof (value as { handler: unknown }).handler === "function";
+  isRecord(value) &&
+  isRecord(value["config"]) &&
+  typeof value["handler"] === "function";
 
 /**
  * Load the live `{ config, handler }` endpoint definition backing a capability
@@ -133,25 +211,21 @@ type PartValidation =
  */
 const validatePart = (
   part: "body" | "params" | "query",
-  schema: unknown,
+  schema: TSchema | undefined,
   value: unknown,
 ): PartValidation => {
   if (schema === undefined) {
     return { ok: true, value };
   }
-  // SAFETY: a handler config's body/params/query is always an Elysia `t.*`
-  // schema (a TypeBox TSchema) at runtime; the handler graph builds them.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- config schema boundary, always a TSchema at runtime
-  const typebox = schema as TSchema;
   // Object schemas are the norm; default an absent value to `{}` so required
   // fields surface as issues rather than a whole-object "expected object" error.
   const base = value === undefined ? {} : structuredClone(value);
-  const withDefaults = Value.Default(typebox, base);
-  const coerced = Value.Convert(typebox, withDefaults);
-  if (Value.Check(typebox, coerced)) {
+  const withDefaults = Value.Default(schema, base);
+  const coerced = Value.Convert(schema, withDefaults);
+  if (Value.Check(schema, coerced)) {
     return { ok: true, value: coerced };
   }
-  const issues = [...Value.Errors(typebox, coerced)].map((error) => {
+  const issues = [...Value.Errors(schema, coerced)].map((error) => {
     const dot = typeboxPathToDot(error.path);
     return {
       path: dot.length > 0 ? `${part}.${dot}` : part,
@@ -391,9 +465,9 @@ const describeCapabilityHandler = async ({
   // they can go on the payload as-is. Uses the live config, never the snapshot,
   // so a snapshot-truncated capability still describes fully.
   const inputSchema = {
-    body: endpoint.config["body"],
-    params: endpoint.config["params"],
-    query: endpoint.config["query"],
+    body: endpoint.config.body,
+    params: endpoint.config.params,
+    query: endpoint.config.query,
   };
 
   return {
@@ -405,6 +479,11 @@ const describeCapabilityHandler = async ({
       destructive: entry.destructive,
       handlerKind: entry.handlerKind,
       scope: entry.scope,
+      // Surfacing these lets an agent learn, before invoking, that the
+      // capability returns a file (invoke refuses it) or tolerates an archived
+      // workspace (e.g. unarchive).
+      returnsFileResponse: entry.returnsFileResponse === true,
+      allowsArchivedWorkspace: entry.allowsArchivedWorkspace === true,
       permissions: entry.permissions ?? null,
       disposition: entry.mcp,
       inputSchema,
@@ -486,8 +565,14 @@ const resolveCapabilityWorkspace = ({
   }
   // Mirror `validateWorkspaceAccess`: a write/destructive capability 404s an
   // archived workspace; a read capability may run against it (read-only).
+  // Capabilities flagged `allowsArchivedWorkspace` (their REST route uses
+  // `validateWorkspaceAccessIncludingArchived`, e.g. unarchive) run against an
+  // archived — but not deleting — workspace, so they skip this gate. Deleting
+  // workspaces never enter `accessibleWorkspaceStatusById`, so this branch only
+  // ever sees active/archived.
   if (
     entry.access === "write" &&
+    entry.allowsArchivedWorkspace !== true &&
     getWorkspaceStatus({ context, workspaceId: rawId }) !== "active"
   ) {
     return {
@@ -533,6 +618,16 @@ const invokeCapabilityHandler = async ({
       code: "feature_disabled",
       message: `Capability "${id}" cannot run through invoke_capability: ${waiver}`,
       hint: "Perform this operation in the stella app, which has the required request context.",
+    });
+  }
+  // File/stream capabilities return a web Response the generic path cannot
+  // serialize; refuse them before execution (a runtime backstop in
+  // executeInvoke also catches any that slip past this flag).
+  if (entry.returnsFileResponse === true) {
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: `Capability "${id}" returns a file or stream and is not available through invoke_capability`,
+      hint: "Fetch the file through its REST route or the stella app; invoke_capability only returns structured JSON.",
     });
   }
 
@@ -604,9 +699,9 @@ const executeInvoke = async ({
   // from the route macro (absent from the config schema, so it rides through as
   // an allowed extra property — the schemas do not close `additionalProperties`).
   const validations = [
-    validatePart("body", endpoint.config["body"], input.body),
-    validatePart("params", endpoint.config["params"], input.params),
-    validatePart("query", endpoint.config["query"], input.query),
+    validatePart("body", endpoint.config.body, input.body),
+    validatePart("params", endpoint.config.params, input.params),
+    validatePart("query", endpoint.config.query, input.query),
   ] as const;
 
   const issues = validations.flatMap((result) =>
@@ -619,6 +714,29 @@ const executeInvoke = async ({
       issues,
       hint: "Fix the fields named in issues[] and retry.",
     });
+  }
+
+  const [bodyResult, paramsResult, queryResult] = validations;
+  const validatedBody = bodyResult.ok ? bodyResult.value : undefined;
+  const validatedParams = paramsResult.ok ? paramsResult.value : undefined;
+  const validatedQuery = queryResult.ok ? queryResult.value : undefined;
+
+  // 6. Workspace resolution (workspace kind only), from the VALIDATED params so
+  // schema defaults/coercion are respected. This runs BEFORE the validateOnly
+  // return so `validateOnly: true` mirrors a real invoke: a missing/inaccessible/
+  // archived workspace fails here with the same envelope it would at execution,
+  // rather than validateOnly reporting a spurious `{ valid: true }`.
+  let workspaceId: SafeId<"workspace"> | undefined;
+  if (isWorkspace) {
+    const resolved = resolveCapabilityWorkspace({
+      context,
+      entry,
+      params: validatedParams,
+    });
+    if (!resolved.ok) {
+      return resolved.result;
+    }
+    workspaceId = resolved.workspaceId;
   }
 
   if (validateOnly) {
@@ -638,25 +756,20 @@ const executeInvoke = async ({
     });
   }
 
-  const [bodyResult, paramsResult, queryResult] = validations;
-  const validatedBody = bodyResult.ok ? bodyResult.value : undefined;
-  const validatedParams = paramsResult.ok ? paramsResult.value : undefined;
-  const validatedQuery = queryResult.ok ? queryResult.value : undefined;
-
-  // 6. Context synthesis: resolve the workspace (workspace kind only) from the
-  // VALIDATED params (so schema defaults/coercion are respected), then build the
-  // safe-handler context and run the handler through the wrapper.
-  let workspaceId: SafeId<"workspace"> | undefined;
-  if (isWorkspace) {
-    const resolved = resolveCapabilityWorkspace({
-      context,
-      entry,
-      params: validatedParams,
+  // 7. Gateway rate limit, per (organization, capability). Mirrors the explicit
+  // per-route limits some REST routes carry (e.g. entities.translate); capped
+  // before execution so a runaway agent cannot drive backend cost through the
+  // generic path. validateOnly (above) is exempt: it never executes.
+  const rate = await consumeInvokeCapabilityRateLimit({
+    capabilityId: id,
+    organizationId: context.organizationId,
+  });
+  if (!rate.ok) {
+    return structuredErrorResult({
+      code: "rate_limited",
+      message: `Rate limit exceeded for capability "${id}"`,
+      hint: `Too many invocations of this capability for your organization; retry in about ${rate.retryAfterSeconds} seconds.`,
     });
-    if (!resolved.ok) {
-      return resolved.result;
-    }
-    workspaceId = resolved.workspaceId;
   }
 
   const ctx = await synthesizeCapabilityContext({
@@ -672,9 +785,35 @@ const executeInvoke = async ({
   });
 
   const result = await endpoint.handler(ctx);
+  return mapHandlerResult({ id, result });
+};
+
+/**
+ * Map a capability handler's raw return onto an MCP response:
+ *  - a safe-handler `status(code, body)` -> the error envelope;
+ *  - a web `Response` -> `feature_disabled` (runtime backstop for fix-6: the
+ *    catalog flag refuses file/stream capabilities pre-execution, and this
+ *    catches any that slip past; never stringify the Response — that would emit
+ *    "[object Response]" or drain a stream);
+ *  - anything else -> the structured success payload.
+ */
+export const mapHandlerResult = ({
+  id,
+  result,
+}: {
+  id: string;
+  result: unknown;
+}): McpToolResponse => {
   if (result instanceof ElysiaCustomStatusResponse) {
     const statusCode = typeof result.code === "number" ? result.code : 500;
     return mapStatusResponse(statusCode, result.response);
+  }
+  if (result instanceof Response) {
+    return structuredErrorResult({
+      code: "feature_disabled",
+      message: `Capability "${id}" returned a file or stream, which invoke_capability cannot deliver`,
+      hint: "Fetch the file through its REST route or the stella app; invoke_capability only returns structured JSON.",
+    });
   }
   return successEgress(result);
 };

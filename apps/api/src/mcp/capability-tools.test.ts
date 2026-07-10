@@ -33,7 +33,20 @@ void mock.module("@/api/mcp/capability-waivers", () => ({
   ]),
 }));
 
+// Stub the gateway rate limit so execution tests are not throttled; a single
+// test flips it to exhausted to assert the rate_limited envelope. Restored by
+// afterAll(mock.restore).
+const consumeRateLimitMock = mock(async () => ({
+  ok: true,
+  retryAfterSeconds: 60,
+}));
+void mock.module("@/api/mcp/capability-rate-limit", () => ({
+  consumeInvokeCapabilityRateLimit: consumeRateLimitMock,
+}));
+
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
+const { mapHandlerResult } = await import("@/api/mcp/capability-tools");
+const { ElysiaCustomStatusResponse } = await import("elysia");
 const { CAPABILITY_DISPATCH } =
   await import("@/api/mcp/generated/capability-dispatch");
 const capabilityCatalog = (
@@ -137,6 +150,8 @@ const call = async (toolName: string, args: Record<string, unknown>) =>
 beforeEach(() => {
   captureErrorMock.mockReset();
   loadOrgSettingsMock.mockClear();
+  consumeRateLimitMock.mockClear();
+  consumeRateLimitMock.mockResolvedValue({ ok: true, retryAfterSeconds: 60 });
 });
 
 afterAll(() => {
@@ -445,3 +460,204 @@ describe("invoke_capability execution", () => {
     expect(errorEnvelope(result).code).toBe("permission_denied");
   });
 });
+
+// --- fix-2: route-level admin gate moved into the handler config -------------
+
+describe("case-law ingestion status admin gate (fix-2)", () => {
+  test("a non-admin member -> permission_denied (gate now in the handler)", async () => {
+    // The admin/owner gate moved from a route onBeforeHandle into the handler
+    // config (auditLog: ["read"], held only by owner/admin), so the generic
+    // invoke path enforces it too.
+    const result = await handleMcpToolCall({
+      args: { capability: "case-law.ingestion.status" },
+      context: createContext({ memberRole: "member" }),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+  });
+});
+
+// --- fix-3: gateway rate limit ----------------------------------------------
+
+describe("invoke_capability rate limit (fix-3)", () => {
+  test("an exhausted budget -> rate_limited with a retry hint", async () => {
+    consumeRateLimitMock.mockResolvedValueOnce({
+      ok: false,
+      retryAfterSeconds: 60,
+    });
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: { params: { workspaceId: "ws_1" } },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("rate_limited");
+    expect(error.hint).toContain("60 seconds");
+    // Refused before the handler ran: the org-settings loader was not consulted.
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("the limiter is consulted per (organization, capability)", async () => {
+    await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: { params: { workspaceId: "ws_1" } },
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(consumeRateLimitMock).toHaveBeenCalledWith(
+      expect.objectContaining({ capabilityId: "time-entries.export-csv" }),
+    );
+  });
+});
+
+// --- fix-4: archived-workspace gate allows unarchive-shaped invokes ---------
+
+describe("invoke_capability archived-workspace gate (fix-4)", () => {
+  const archivedCtx = () =>
+    createContext({
+      workspaceIds: ["ws_arch"],
+      archivedWorkspaceIds: ["ws_arch"],
+    });
+
+  test("an allowsArchivedWorkspace write passes the gate on an archived workspace", async () => {
+    // validateOnly reaches (and clears) the workspace gate without executing, so
+    // this asserts the gate result independent of the unarchive DB work.
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "workspaces.unarchive",
+        input: { params: { workspaceId: "ws_arch" } },
+        validateOnly: true,
+      },
+      context: archivedCtx(),
+      toolName: "invoke_capability",
+    });
+    expect(
+      parseToolPayload<{ valid: boolean; capability: string }>(result),
+    ).toEqual({
+      valid: true,
+      capability: "workspaces.unarchive",
+    });
+  });
+
+  test("a normal write is still refused on an archived workspace", async () => {
+    // case-law.matter-links.create is a workspace write without the
+    // allowsArchivedWorkspace flag, and its only body field is a UUID (so input
+    // validation passes and the archived-workspace gate is what refuses it).
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "case-law.matter-links.create",
+        input: {
+          params: { workspaceId: "ws_arch" },
+          body: { decisionId: "00000000-0000-0000-0000-000000000000" },
+        },
+        validateOnly: true,
+      },
+      context: archivedCtx(),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("not_found");
+  });
+});
+
+// --- fix-5: validateOnly runs workspace resolution first ---------------------
+
+describe("invoke_capability validateOnly ordering (fix-5)", () => {
+  test("validateOnly on a workspace capability fails when the workspace is missing", async () => {
+    // time-entries.export-csv declares no params schema, so pre-fix validateOnly
+    // returned { valid: true } before any workspace check. Now resolution runs
+    // first, so a missing workspaceId surfaces as it would on a real invoke.
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: {},
+        validateOnly: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("validation_error");
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("validateOnly succeeds once the workspace resolves, still without executing", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "time-entries.export-csv",
+        input: { params: { workspaceId: "ws_1" } },
+        validateOnly: true,
+      },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    expect(
+      parseToolPayload<{ valid: boolean; capability: string }>(result),
+    ).toEqual({
+      valid: true,
+      capability: "time-entries.export-csv",
+    });
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+});
+
+// --- fix-6: file/stream capabilities refused --------------------------------
+
+describe("invoke_capability file-response gate (fix-6)", () => {
+  test("(layer a) a returnsFileResponse capability is refused pre-execution", async () => {
+    const result = await handleMcpToolCall({
+      args: { capability: "clauses.export" },
+      context: createContext(),
+      toolName: "invoke_capability",
+    });
+    const error = errorEnvelope(result);
+    expect(error.code).toBe("feature_disabled");
+    expect(error.message).toContain("file or stream");
+    // Refused before dispatch: no handler ran.
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("(layer b) mapHandlerResult refuses a Response the handler returns", () => {
+    const mapped = mapHandlerResult({
+      id: "x.y",
+      result: new Response("file bytes"),
+    });
+    expect(mappedError(mapped).code).toBe("feature_disabled");
+  });
+
+  test("(layer b) mapHandlerResult passes a plain payload through", () => {
+    const mapped = mapHandlerResult({ id: "x.y", result: { ok: true } });
+    expect(mapped).toEqual({
+      egress: "structured",
+      payload: { ok: true },
+      textFields: [],
+    });
+  });
+
+  test("(layer b) mapHandlerResult maps a status response onto the envelope", () => {
+    const mapped = mapHandlerResult({
+      id: "x.y",
+      result: new ElysiaCustomStatusResponse(404, { message: "Gone" }),
+    });
+    expect(mappedError(mapped).code).toBe("not_found");
+  });
+});
+
+// Read the error envelope out of a raw mapHandlerResult return (a CallToolResult
+// for the error cases), without going through the egress pipeline.
+const mappedError = (
+  mapped: ReturnType<typeof mapHandlerResult>,
+): ErrorEnvelope => {
+  if (!("content" in mapped)) {
+    throw new Error(`Expected an error result, got: ${JSON.stringify(mapped)}`);
+  }
+  const item = mapped.content.at(0);
+  if (!item || item.type !== "text") {
+    throw new Error("Expected a text error result");
+  }
+  return asTestRaw<{ error: ErrorEnvelope }>(JSON.parse(item.text)).error;
+};

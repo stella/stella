@@ -52,6 +52,8 @@ import {
   resolveHandlerKind,
   resolveScope,
   scanContextFidelity,
+  scanFileResponseReturns,
+  scanRouteHookGuards,
   serializeCatalog,
   serializeDispatchModule,
 } from "./lib/capability-catalog";
@@ -280,6 +282,51 @@ const DESTRUCTIVE_NAME_OPT_OUTS: ReadonlySet<string> = new Set([
  */
 const INLINE_CAPABILITY_ALLOWLIST: Record<string, number> = {};
 
+/**
+ * Capabilities whose REST route resolves workspace access through
+ * `validateWorkspaceAccessIncludingArchived` (so they may run against an
+ * archived workspace), carried into the catalog as `allowsArchivedWorkspace` and
+ * consulted by the invoke write gate (see capability-tools.ts). Sweep of
+ * `validateWorkspaceAccessIncludingArchived` usages over capability endpoints
+ * (apps/api/src/handlers/workspaces/routes.ts): only `unarchive`. Stale-checked:
+ * a flagged id that is no longer a discovered capability fails the export.
+ *
+ * - `workspaces.unarchive`: flips an archived workspace back to active; must be
+ *   reachable while the workspace is archived.
+ */
+const ALLOWS_ARCHIVED_WORKSPACE: ReadonlySet<string> = new Set([
+  "workspaces.unarchive",
+]);
+
+/**
+ * Capabilities whose handler returns a web `Response` (file/stream) on success.
+ * The generic invoke path cannot serialize a streamed file, so these are refused
+ * pre-execution (a runtime backstop also catches any that slip past). Carried
+ * into the catalog as `returnsFileResponse`. Sweep of catalog handlers returning
+ * `Result.ok(new Response(...))` (or a Response via a helper): the four inline
+ * cases are also caught by the class-guard scan below; `templates.fill` returns
+ * its Response through `fillHandler`, so it is seeded here explicitly. Stale-
+ * checked: a flagged id whose handler no longer constructs a Response fails.
+ */
+const RETURNS_FILE_RESPONSE: ReadonlySet<string> = new Set([
+  "clauses.export",
+  "entities.download-zip",
+  "templates.fill",
+  "templates.fill-by-id",
+  "views.table-export",
+]);
+
+/**
+ * Waivers for capability endpoints mounted under a route-level
+ * `onBeforeHandle`/`beforeHandle` hook the generic invoke path would bypass
+ * (see `scanRouteHookGuards`). Each entry is a reviewed decision that the hook's
+ * gate is also enforced in the handler config (id -> justification), or the
+ * export fails on the hit. Empty: the one prior hit (`case-law.ingestion.status`)
+ * moved its admin/owner gate into the handler config (`auditLog: ["read"]`), so
+ * no capability endpoint sits under a route hook.
+ */
+const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
+
 type CapabilityMcp =
   | { type: "tool"; name: string }
   | { type: "covered"; by: string }
@@ -291,6 +338,10 @@ type CapabilityEntry = {
   access: "read" | "write";
   destructive: boolean;
   scope: string;
+  /** REST route uses `validateWorkspaceAccessIncludingArchived` (fix-4). */
+  allowsArchivedWorkspace?: true;
+  /** Handler returns a file/stream `Response` on success (fix-6). */
+  returnsFileResponse?: true;
   permissions?: unknown;
   /**
    * Absent when the schema exceeded MAX_CAPABILITY_SCHEMA_BYTES (see
@@ -420,6 +471,85 @@ type BuildResult = {
   errors: string[];
   /** Capability ids whose input schema was omitted for exceeding the byte cap. */
   truncatedSchemas: string[];
+};
+
+/**
+ * Class guards over the built catalog entries. Each returns reviewer-actionable
+ * messages (empty when clean) that fail the export:
+ *  - context-fidelity: a handler reaching for un-honorable request/response
+ *    context must be waived;
+ *  - file-response (fix-6): a handler returning a file/stream Response must be
+ *    flagged (refused at invoke);
+ *  - route-hook (fix-2): a capability endpoint under a route-level pre-handler
+ *    hook the generic path bypasses must be waived (gate also in the handler);
+ *  - archived-flag (fix-4) stale check: a flagged id must still be a capability.
+ */
+const collectClassGuardErrors = ({
+  entries,
+  entrySources,
+  routeFiles,
+}: {
+  entries: readonly CapabilityEntry[];
+  entrySources: readonly { id: string; source: string }[];
+  routeFiles: readonly { id: string; source: string }[];
+}): string[] => {
+  const errors: string[] = [];
+  const capabilityIdSet = new Set(entries.map((entry) => entry.id));
+
+  const fidelity = scanContextFidelity({
+    entries: entrySources,
+    waivedIds: new Set(CONTEXT_FIDELITY_WAIVERS.keys()),
+  });
+  for (const { id, features } of fidelity.violations) {
+    errors.push(
+      `context-fidelity: capability "${id}" uses un-honorable context feature(s) [${features.join(", ")}] the generic invoke path cannot honor. Refactor the handler to return a plain payload, or add "${id}" to CONTEXT_FIDELITY_WAIVERS with a justification (it will then be refused at invoke)`,
+    );
+  }
+  for (const id of fidelity.staleWaivers) {
+    errors.push(
+      `stale CONTEXT_FIDELITY_WAIVERS entry "${id}": its handler no longer uses an un-honorable context feature (remove it)`,
+    );
+  }
+
+  const fileResponses = scanFileResponseReturns({
+    entries: entrySources,
+    flaggedIds: RETURNS_FILE_RESPONSE,
+  });
+  for (const id of fileResponses.violations) {
+    errors.push(
+      `file-response: capability "${id}" returns a web Response on success, which the generic invoke path cannot serialize. Add "${id}" to RETURNS_FILE_RESPONSE (it will be refused at invoke), or refactor the handler to return a structured payload`,
+    );
+  }
+  for (const id of fileResponses.staleFlags) {
+    errors.push(
+      `stale RETURNS_FILE_RESPONSE entry "${id}": it is no longer a catalog capability that constructs a Response (remove it)`,
+    );
+  }
+
+  const routeHooks = scanRouteHookGuards({
+    routeFiles,
+    capabilityIds: capabilityIdSet,
+    waivedIds: new Set(Object.keys(ROUTE_HOOK_WAIVERS)),
+  });
+  for (const { routeFile, id } of routeHooks.violations) {
+    errors.push(
+      `route-hook: capability "${id}" is mounted under a route-level onBeforeHandle/beforeHandle hook in ${routeFile} that invoke_capability bypasses. Move the gate into the handler config (like case-law.ingestion.status), or add "${id}" to ROUTE_HOOK_WAIVERS with a justification`,
+    );
+  }
+  for (const id of routeHooks.staleWaivers) {
+    errors.push(
+      `stale ROUTE_HOOK_WAIVERS entry "${id}": it is no longer mounted under any route hook (remove it)`,
+    );
+  }
+
+  for (const id of ALLOWS_ARCHIVED_WORKSPACE) {
+    if (!capabilityIdSet.has(id)) {
+      errors.push(
+        `stale ALLOWS_ARCHIVED_WORKSPACE entry "${id}": no catalog capability has that id (remove it)`,
+      );
+    }
+  }
+  return errors;
 };
 
 const buildCatalog = async (): Promise<BuildResult> => {
@@ -641,6 +771,12 @@ const buildCatalog = async (): Promise<BuildResult> => {
       access: accessResolution.access,
       destructive: accessResolution.destructive,
       scope,
+      ...(ALLOWS_ARCHIVED_WORKSPACE.has(id)
+        ? { allowsArchivedWorkspace: true as const }
+        : {}),
+      ...(RETURNS_FILE_RESPONSE.has(id)
+        ? { returnsFileResponse: true as const }
+        : {}),
       ...(hasPermissions ? { permissions } : {}),
       ...(capped.truncated
         ? { inputSchemaTruncated: true as const }
@@ -659,21 +795,15 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
   }
 
-  // Class guard: a capability whose handler reaches for a context feature the
-  // synthesized invoke context cannot honor must be waived, or the export fails.
-  const fidelity = scanContextFidelity({
-    entries: entrySources,
-    waivedIds: new Set(CONTEXT_FIDELITY_WAIVERS.keys()),
-  });
-  for (const { id, features } of fidelity.violations) {
-    errors.push(
-      `context-fidelity: capability "${id}" uses un-honorable context feature(s) [${features.join(", ")}] the generic invoke path cannot honor. Refactor the handler to return a plain payload, or add "${id}" to CONTEXT_FIDELITY_WAIVERS with a justification (it will then be refused at invoke)`,
-    );
-  }
-  for (const id of fidelity.staleWaivers) {
-    errors.push(
-      `stale CONTEXT_FIDELITY_WAIVERS entry "${id}": its handler no longer uses an un-honorable context feature (remove it)`,
-    );
+  // Class guards over the built entries (context-fidelity, file-response,
+  // route-hook, archived-flag). Extracted to keep buildCatalog's complexity in
+  // check; each pushes reviewer-actionable errors that fail the export.
+  for (const message of collectClassGuardErrors({
+    entries,
+    entrySources,
+    routeFiles: files.filter((file) => file.id.endsWith("routes.ts")),
+  })) {
+    errors.push(message);
   }
 
   // Keep the mapping/override tables honest: a table entry that no longer

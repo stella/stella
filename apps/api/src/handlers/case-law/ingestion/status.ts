@@ -177,7 +177,13 @@ export const getIngestionStatus = async (
 };
 
 const config = {
-  permissions: { workspace: ["read"] },
+  // Operator-only ingestion observability: `auditLog: ["read"]` is held solely
+  // by owner/admin (see `packages/permissions`), matching the admin/owner gate
+  // this route used to carry as a route-level `onBeforeHandle`. Declaring it in
+  // the handler config means the safe-handler wrapper enforces it for BOTH the
+  // REST route and the generic `invoke_capability` path, so neither bypasses the
+  // gate. Keep this as the single source of the role check for this endpoint.
+  permissions: { auditLog: ["read"] },
   mcp: { type: "capability", reason: "legal_corpus_admin" },
 } satisfies HandlerConfig;
 

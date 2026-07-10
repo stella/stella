@@ -17,7 +17,10 @@ import {
   resolveAccess,
   resolveHandlerKind,
   resolveScope,
+  returnsInlineFileResponse,
   scanContextFidelity,
+  scanFileResponseReturns,
+  scanRouteHookGuards,
   serializeDispatchModule,
   serializeCatalog,
 } from "./capability-catalog";
@@ -714,6 +717,212 @@ describe("serializeDispatchModule", () => {
         },
       ]),
     ).toThrow(/unsafe export name/u);
+  });
+});
+
+describe("serializeDispatchModule sanitization (rebuild from segments)", () => {
+  test("rebuilds id, import path, and export name from validated segments", () => {
+    // A valid record round-trips byte-identically: the rebuilt value equals the
+    // input, so the sanitized flow does not change the committed artifact.
+    const out = serializeDispatchModule([
+      {
+        id: "case-law.ingestion.status",
+        importPath: "@/api/handlers/case-law/ingestion/status",
+        exportName: undefined,
+      },
+    ]);
+    expect(out).toContain(
+      '"case-law.ingestion.status": { load: async () => await import("@/api/handlers/case-law/ingestion/status") },',
+    );
+  });
+
+  test("rejects an id segment outside the allowlist", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y z",
+          importPath: "@/api/handlers/x/y",
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe id/u);
+  });
+
+  test("rejects an import-path segment outside the allowlist", () => {
+    expect(() =>
+      serializeDispatchModule([
+        {
+          id: "x.y",
+          importPath: "@/api/handlers/x/UPPER",
+          exportName: undefined,
+        },
+      ]),
+    ).toThrow(/unsafe import path/u);
+  });
+});
+
+describe("returnsInlineFileResponse", () => {
+  test("detects an inline Result.ok(new Response(...)) success return", () => {
+    expect(
+      returnsInlineFileResponse("return Result.ok(new Response(body, {}));"),
+    ).toBe(true);
+    expect(
+      returnsInlineFileResponse("return Result.ok(\n    new Response(zip));"),
+    ).toBe(true);
+  });
+
+  test("does not match a Response returned via an intermediate variable", () => {
+    expect(returnsInlineFileResponse("return Result.ok(result);")).toBe(false);
+  });
+
+  test("does not match an error-only Response", () => {
+    expect(
+      returnsInlineFileResponse(
+        "return new Response(JSON.stringify({ error }), { status: 400 });",
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("scanFileResponseReturns", () => {
+  test("flags an unflagged inline file-response handler", () => {
+    const scan = scanFileResponseReturns({
+      entries: [
+        { id: "a.export", source: "return Result.ok(new Response(csv));" },
+        { id: "b.read", source: "return Result.ok({ ok: true });" },
+      ],
+      flaggedIds: new Set(),
+    });
+    expect(scan.violations).toEqual(["a.export"]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("a flagged inline handler is not a violation", () => {
+    const scan = scanFileResponseReturns({
+      entries: [
+        { id: "a.export", source: "return Result.ok(new Response(x));" },
+      ],
+      flaggedIds: new Set(["a.export"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("keeps a flagged variable-returned Response honest via constructsResponse", () => {
+    // templates.fill-shaped: returns a Response via a helper, so the inline
+    // detector misses it, but it still constructs a Response, so not stale.
+    const scan = scanFileResponseReturns({
+      entries: [
+        {
+          id: "templates.fill",
+          source: "const r = new Response(pdf);\nreturn Result.ok(result);",
+        },
+      ],
+      flaggedIds: new Set(["templates.fill"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual([]);
+  });
+
+  test("flags a stale entry whose handler no longer constructs a Response", () => {
+    const scan = scanFileResponseReturns({
+      entries: [{ id: "a.export", source: "return Result.ok({ url });" }],
+      flaggedIds: new Set(["a.export"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleFlags).toEqual(["a.export"]);
+  });
+
+  test("flags a flagged id that is no longer a catalog entry", () => {
+    const scan = scanFileResponseReturns({
+      entries: [],
+      flaggedIds: new Set(["gone.export"]),
+    });
+    expect(scan.staleFlags).toEqual(["gone.export"]);
+  });
+});
+
+describe("scanRouteHookGuards", () => {
+  const hookedRoute = `
+import getStatus from "@/api/handlers/case-law/ingestion/status";
+import listLinks from "@/api/handlers/case-law/matter-links/list";
+const adminRoute = new Elysia({ prefix: "/case/admin" })
+  .use(authMacro)
+  .onBeforeHandle(({ memberRole, set }) => {
+    if (!ADMIN_BYPASS_ROLES.includes(memberRole.role)) {
+      set.status = 403;
+      return { error: "Forbidden" };
+    }
+    return undefined;
+  })
+  .get("/ingestion/status", getStatus.handler, {});
+const openRoute = new Elysia({ prefix: "/case" })
+  .get("/links", listLinks.handler, {});
+`;
+
+  test("flags a capability mounted under a route hook when unwaived", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
+      capabilityIds: new Set([
+        "case-law.ingestion.status",
+        "case-law.matter-links.list",
+      ]),
+      waivedIds: new Set(),
+    });
+    expect(scan.violations).toEqual([
+      { routeFile: "case-law/routes.ts", id: "case-law.ingestion.status" },
+    ]);
+    expect(scan.staleWaivers).toEqual([]);
+  });
+
+  test("a waived hook-guarded capability is not a violation", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
+      capabilityIds: new Set(["case-law.ingestion.status"]),
+      waivedIds: new Set(["case-law.ingestion.status"]),
+    });
+    expect(scan.violations).toEqual([]);
+    expect(scan.staleWaivers).toEqual([]);
+  });
+
+  test("a handler mounted only under a non-hooked instance is not flagged", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
+      capabilityIds: new Set(["case-law.matter-links.list"]),
+      waivedIds: new Set(),
+    });
+    expect(scan.violations).toEqual([]);
+  });
+
+  test("resolves a named-export handler mount to its capability id", () => {
+    const source = `
+import { readEntitySummariesCount } from "@/api/handlers/entities/read-summaries";
+const r = new Elysia()
+  .beforeHandle(() => undefined)
+  .get("/count", readEntitySummariesCount.handler, {});
+`;
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "entities/routes.ts", source }],
+      capabilityIds: new Set([
+        "entities.read-summaries.readEntitySummariesCount",
+      ]),
+      waivedIds: new Set(),
+    });
+    expect(scan.violations).toEqual([
+      {
+        routeFile: "entities/routes.ts",
+        id: "entities.read-summaries.readEntitySummariesCount",
+      },
+    ]);
+  });
+
+  test("reports a stale waiver no longer mounted under any hook", () => {
+    const scan = scanRouteHookGuards({
+      routeFiles: [{ id: "case-law/routes.ts", source: hookedRoute }],
+      capabilityIds: new Set(["case-law.ingestion.status"]),
+      waivedIds: new Set(["case-law.ingestion.status", "gone.capability"]),
+    });
+    expect(scan.staleWaivers).toEqual(["gone.capability"]);
   });
 });
 

@@ -7,7 +7,6 @@ import deleteMatterLink from "@/api/handlers/case-law/matter-links/delete";
 import listMatterLinks from "@/api/handlers/case-law/matter-links/list";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import {
-  ADMIN_BYPASS_ROLES,
   authMacro,
   permissionMacro,
   workspaceAccessMacro,
@@ -47,8 +46,10 @@ const caseLawMatterLinksRoute = new Elysia({
   });
 
 /**
- * Admin routes: authenticated + admin/owner role.
- * Ingestion observability for operators.
+ * Admin routes: authenticated. Ingestion observability for operators. The
+ * admin/owner gate lives in the handler config (`auditLog: ["read"]`, a
+ * permission only owner/admin hold) and is enforced by the safe-handler wrapper,
+ * so REST and `invoke_capability` share one gate; no route-level hook is needed.
  */
 const caseLawAdminRoute = new Elysia({
   prefix: "/case/admin",
@@ -56,13 +57,6 @@ const caseLawAdminRoute = new Elysia({
   .use(authMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .onBeforeHandle(({ memberRole, set }) => {
-    if (!ADMIN_BYPASS_ROLES.includes(memberRole.role)) {
-      set.status = 403;
-      return { error: "Forbidden" } as const;
-    }
-    return undefined;
-  })
   .get("/ingestion/status", getCaseLawIngestionStatus.handler, {
     permissions: getCaseLawIngestionStatus.config.permissions,
   });

@@ -110,6 +110,12 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: compat alias, MCP handler reads extractedContent directly (apps/api/src/mcp/compat-tools.ts)",
   send_feedback:
     "no dedicated endpoint: MCP-only tool, files feedback via a prefilled GitHub issue URL or the email transport (apps/api/src/mcp/feedback-tools.ts)",
+  list_capabilities:
+    "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
+  describe_capability:
+    "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
+  invoke_capability:
+    "no dedicated endpoint: curated meta-tool dispatching the whole capability catalog via generated dispatch (apps/api/src/mcp/capability-tools.ts)",
 };
 
 // Re-exported from the shared enumeration lib so the guard's own test suite
