@@ -125,8 +125,14 @@ export type AccessResolution =
 
 /**
  * Resolve a capability's access classification:
- *  - handlers with permissions derive from their verbs; an unclassifiable verb
- *    requires an ACCESS_OVERRIDES entry (id -> classification), else fails;
+ *  - an explicit ACCESS_OVERRIDES entry (id -> classification) wins over every
+ *    heuristic: it is a reviewed decision, needed both for unclassifiable
+ *    verbs AND for re-pinning a read that the verb derivation misclassifies as
+ *    write (a read gated by its resource's write/update verb because no read
+ *    verb exists, e.g. `usage.get-entitlement` under
+ *    `organizationSettings:["update"]`);
+ *  - otherwise handlers with permissions derive from their verbs; an
+ *    unclassifiable verb fails, requiring an override;
  *  - handlers without permissions (session/token/public) default to read only
  *    when the final id segment looks like a getter (get/list/read prefix),
  *    otherwise require an override;
@@ -134,7 +140,8 @@ export type AccessResolution =
  *    escalated to destructive (deletes authorized via an `update` verb would
  *    otherwise come out non-destructive) unless the id is in
  *    `destructiveNameOptOuts` (reviewed false positives, e.g. an unlink that
- *    destroys nothing).
+ *    destroys nothing). The escalation applies to overrides too, so a re-pin
+ *    can never silently drop the destructive flag off a delete-named id.
  */
 export const resolveAccess = ({
   id,
@@ -162,21 +169,18 @@ export const resolveAccess = ({
   };
 
   const override = overrides[id];
+  if (override) {
+    return escalate({ status: "resolved", ...override });
+  }
   if (hasPermissions) {
     const classified = classifyVerbs(verbs);
     if (classified.ok) {
       return escalate({ status: "resolved", ...classified.value });
     }
-    if (override) {
-      return escalate({ status: "resolved", ...override });
-    }
     return {
       status: "needs-override",
       reason: `unclassifiable permission verb(s): ${classified.unknownVerbs.join(", ")}`,
     };
-  }
-  if (override) {
-    return escalate({ status: "resolved", ...override });
   }
   if (GET_LIKE_PREFIX.test(finalIdSegment(id))) {
     return { status: "resolved", access: "read", destructive: false };

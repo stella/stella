@@ -118,13 +118,39 @@ describe("resolveAccess", () => {
     "playbooks.run": { access: "write", destructive: false },
   } as const;
 
-  test("derives from classifiable verbs and ignores the override", () => {
+  test("derives from classifiable verbs when no override is pinned", () => {
     expect(
       resolveAccess({
         id: "entities.delete-by-id",
         verbs: ["delete"],
         hasPermissions: true,
         overrides: {},
+      }),
+    ).toEqual({ status: "resolved", access: "write", destructive: true });
+  });
+
+  test("an explicit override wins over classifiable verbs (read re-pin)", () => {
+    expect(
+      resolveAccess({
+        id: "usage.get-entitlement",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {
+          "usage.get-entitlement": { access: "read", destructive: false },
+        },
+      }),
+    ).toEqual({ status: "resolved", access: "read", destructive: false });
+  });
+
+  test("a re-pin cannot drop the destructive-name escalation", () => {
+    expect(
+      resolveAccess({
+        id: "things.delete-by-id",
+        verbs: ["update"],
+        hasPermissions: true,
+        overrides: {
+          "things.delete-by-id": { access: "write", destructive: false },
+        },
       }),
     ).toEqual({ status: "resolved", access: "write", destructive: true });
   });

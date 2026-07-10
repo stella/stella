@@ -47,9 +47,9 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
 | `chat.delete-thread` | write, destructive | stella:matters_write | — | generic invoke → `stella chat delete-thread` |
-| `chat.get-messages` | write | stella:matters_write | — | generic invoke → `stella chat get-messages` |
-| `chat.get-older-messages` | write | stella:matters_write | — | generic invoke → `stella chat get-older-messages` |
-| `chat.get-threads` | write | stella:matters_write | — | generic invoke → `stella chat get-threads` |
+| `chat.get-messages` | read | stella:matters_write | — | generic invoke → `stella chat get-messages` |
+| `chat.get-older-messages` | read | stella:matters_write | — | generic invoke → `stella chat get-older-messages` |
+| `chat.get-threads` | read | stella:matters_write | — | generic invoke → `stella chat get-threads` |
 | `chat.rename-thread` | write | stella:matters_write | — | generic invoke → `stella chat rename-thread` |
 | `chat.update-thread` | write | stella:matters_write | — | generic invoke → `stella chat update-thread` |
 
@@ -184,10 +184,10 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `organization-settings.preview` | write | stella:admin_write | — | generic invoke → `stella organization-settings preview` |
+| `organization-settings.preview` | read | stella:admin_write | — | generic invoke → `stella organization-settings preview` |
 | `organization-settings.read` | read | stella:admin_write | — | generic invoke → `stella organization-settings read` |
 | `organization-settings.read-ai-availability` | read | stella:admin_write | — | generic invoke → `stella organization-settings read-ai-availability` |
-| `organization-settings.read-anonymization-blacklist` | write | stella:admin_write | — | generic invoke → `stella organization-settings read-anonymization-blacklist` |
+| `organization-settings.read-anonymization-blacklist` | read | stella:admin_write | — | generic invoke → `stella organization-settings read-anonymization-blacklist` |
 | `organization-settings.read-deepl-availability` | read | stella:admin_write | — | generic invoke → `stella organization-settings read-deepl-availability` |
 | `organization-settings.update` | write | stella:admin_write | — | covered by `manage_organization` |
 | `organization-settings.update-anonymization-blacklist` | write | stella:admin_write | — | generic invoke → `stella organization-settings update-anonymization-blacklist` |
@@ -218,7 +218,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `properties.create` | write | stella:matters_write | — | generic invoke → `stella properties create` |
 | `properties.create-batch` | write | stella:matters_write | — | generic invoke → `stella properties create-batch` |
 | `properties.delete-by-id` | write, destructive | stella:matters_write | — | generic invoke → `stella properties delete-by-id` |
-| `properties.preview` | write | stella:matters_write | — | generic invoke → `stella properties preview` |
+| `properties.preview` | read | stella:matters_write | — | generic invoke → `stella properties preview` |
 | `properties.read` | read | stella:matters_write | — | curated tool `list_properties` |
 | `properties.suggest-prompt` | write | stella:matters_write | — | generic invoke → `stella properties suggest-prompt` |
 | `properties.update-by-id` | write | stella:matters_write | — | generic invoke → `stella properties update-by-id` |
@@ -254,10 +254,10 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `skills.delete` | write, destructive | stella:skills | — | generic invoke → `stella skills delete` |
 | `skills.from-blueprint` | write | stella:skills | — | generic invoke → `stella skills from-blueprint` |
 | `skills.generate-draft` | write | stella:skills | — | generic invoke → `stella skills generate-draft` |
-| `skills.get` | write | stella:skills | — | generic invoke → `stella skills get` |
+| `skills.get` | read | stella:skills | — | generic invoke → `stella skills get` |
 | `skills.import-url` | write | stella:skills | — | generic invoke → `stella skills import-url` |
-| `skills.list` | write | stella:skills | — | generic invoke → `stella skills list` |
-| `skills.list-commands` | write | stella:skills | — | generic invoke → `stella skills list-commands` |
+| `skills.list` | read | stella:skills | — | generic invoke → `stella skills list` |
+| `skills.list-commands` | read | stella:skills | — | generic invoke → `stella skills list-commands` |
 | `skills.resources.create` | write | stella:skills | — | generic invoke → `stella skills resources create` |
 | `skills.resources.delete` | write, destructive | stella:skills | — | generic invoke → `stella skills resources delete` |
 | `skills.resources.rename` | write | stella:skills | — | generic invoke → `stella skills resources rename` |
@@ -351,7 +351,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `usage.get-entitlement` | write | stella:read | FEATURE_USAGE | curated tool `get_usage` |
+| `usage.get-entitlement` | read | stella:read | FEATURE_USAGE | curated tool `get_usage` |
 
 ## view-templates
 
@@ -391,7 +391,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `workspaces.read` | read | stella:matters_write | — | curated tool `list_matters` |
 | `workspaces.read-justifications` | read | stella:matters_write | — | generic invoke → `stella workspaces read-justifications` |
 | `workspaces.read-workflow-status` | read | stella:matters_write | — | generic invoke → `stella workspaces read-workflow-status` |
-| `workspaces.read-workflow-target-count` | write | stella:matters_write | — | generic invoke → `stella workspaces read-workflow-target-count` |
+| `workspaces.read-workflow-target-count` | read | stella:matters_write | — | generic invoke → `stella workspaces read-workflow-target-count` |
 | `workspaces.unarchive` | write | stella:matters_write | — | covered by `save_matter` |
 | `workspaces.update-by-id` | write | stella:matters_write | — | covered by `save_matter` |
 | `workspaces.workflow-start` | write | stella:matters_write | — | generic invoke → `stella workspaces workflow-start` |

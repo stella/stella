@@ -3456,7 +3456,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["usage", "get-entitlement"],
             capabilityId: "usage.get-entitlement",
-            access: "write",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -5418,7 +5418,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "get-messages"],
             capabilityId: "chat.get-messages",
-            access: "write",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -5494,7 +5494,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "get-older-messages"],
             capabilityId: "chat.get-older-messages",
-            access: "write",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -5571,7 +5571,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["chat", "get-threads"],
             capabilityId: "chat.get-threads",
-            access: "write",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: true,
@@ -25688,7 +25688,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["organization-settings", "preview"],
             capabilityId: "organization-settings.preview",
-            access: "write",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -25786,7 +25786,7 @@ export const generatedRouteMap: RouteNode = {
               "read-anonymization-blacklist",
             ],
             capabilityId: "organization-settings.read-anonymization-blacklist",
-            access: "write",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -41919,7 +41919,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["properties", "preview"],
             capabilityId: "properties.preview",
-            access: "write",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",
@@ -47258,7 +47258,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "get"],
             capabilityId: "skills.get",
-            access: "write",
+            access: "read",
             flags: [
               {
                 kind: "string",
@@ -47355,7 +47355,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "list"],
             capabilityId: "skills.list",
-            access: "write",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: true,
@@ -47401,7 +47401,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["skills", "list-commands"],
             capabilityId: "skills.list-commands",
-            access: "write",
+            access: "read",
             flags: [],
             inputOnly: [],
             paginated: false,
@@ -56888,7 +56888,7 @@ export const generatedRouteMap: RouteNode = {
           spec: {
             commandPath: ["workspaces", "read-workflow-target-count"],
             capabilityId: "workspaces.read-workflow-target-count",
-            access: "write",
+            access: "read",
             flags: [
               {
                 flag: "--workspace",

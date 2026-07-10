@@ -42,7 +42,7 @@ describe("MCP protected resource metadata", () => {
       "Authorization, Content-Type, MCP-Protocol-Version",
     );
     expect(headers.get("Access-Control-Expose-Headers")).toBe(
-      "WWW-Authenticate, x-stella-cli-latest",
+      "WWW-Authenticate, x-stella-cli-latest, x-request-id",
     );
   });
 

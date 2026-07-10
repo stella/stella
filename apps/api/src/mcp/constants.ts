@@ -1,4 +1,5 @@
 import { env } from "@/api/env";
+import { REQUEST_ID_HEADER } from "@/api/lib/observability/request-context";
 
 export const MCP_DEFAULT_RESOURCE_SCOPES = [
   "stella:search",
@@ -77,6 +78,10 @@ export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
   STELLA_CLI_LATEST_HEADER,
+  // The per-request receipt (also on the global CORS exposeHeaders list):
+  // browser-based MCP clients correlate a failed/successful call with server
+  // logs the same way REST callers do.
+  REQUEST_ID_HEADER,
 ] as const;
 
 const MCP_MODE_CONFIG = {

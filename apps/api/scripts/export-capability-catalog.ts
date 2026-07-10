@@ -250,13 +250,20 @@ const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
 const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
 
 /**
- * Access classification for capabilities whose permission verbs cannot be
- * mechanically classified (verbs outside read/list/view/create/update/delete/
- * manage/write), or permissionless handlers whose name is not get/list/read.
- * Each entry is a reviewed decision; an unclassifiable handler absent here fails
- * the export. Kept tight by a stale-entry check (an id that no longer needs an
- * override fails).
+ * Access classification pins, each a reviewed decision. An override WINS over
+ * the mechanical derivation, and is required in two cases:
+ *  - unclassifiable permission verbs (outside read/list/view/create/update/
+ *    delete/manage/write) or a permissionless handler whose name is not
+ *    get/list/read: the export fails until pinned;
+ *  - a read misclassified as write because its AUTHORIZING verb is a write on
+ *    the parent resource (no read verb exists for it): pin it back to read so
+ *    the catalog's `access` reflects what the handler does, not what consent
+ *    gates it. `access` feeds the doc, `list_capabilities` filters/labels, and
+ *    the CLI's write-receipt line; scope/permission enforcement is untouched.
+ * Kept tight by a stale-entry check: a pin that resolves identically to the
+ * derivation (so it changes nothing) fails the export.
  *
+ * Unclassifiable-verb / permissionless pins:
  * - `playbooks.run`: `playbook:["apply"]` — running a playbook produces a run
  *   record; treat as a (non-destructive) write.
  * - `playbooks.auto-run`: `playbook:["apply"]` — materializes playbook-run
@@ -272,6 +279,25 @@ const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
  *   only, no persistence, so read.
  * - `templates.fill-to-workspace`: `template:["use"], entity:["create"]` —
  *   creates a workspace entity, so write.
+ *
+ * Read-repins (write-verb-gated reads; sweep of read-shaped ids with
+ * access: write, each handler verified to persist nothing):
+ * - `chat.get-messages` / `chat.get-older-messages` / `chat.get-threads`:
+ *   `chat:["create"]` (the only chat verb) gates pure thread/message reads.
+ * - `organization-settings.preview`: `organizationSettings:["update"]` gates a
+ *   matter-number-pattern preview that only reads existing references.
+ * - `organization-settings.read-anonymization-blacklist`:
+ *   `organizationSettings:["update"]` gates a pure blacklist read (admin-only
+ *   visibility, no mutation).
+ * - `properties.preview`: `property:["create"]` gates an AI dry-run over
+ *   documents that returns computed values without persisting them (usage is
+ *   metered by the framework, same as `templates.fill-preview`).
+ * - `skills.get` / `skills.list` / `skills.list-commands`: `chat:["create"]`
+ *   gates pure skill-catalog reads.
+ * - `usage.get-entitlement`: `organizationSettings:["update"]` gates a pure
+ *   entitlement/remaining-units read (the Phase 1 judgment call, now pinned).
+ * - `workspaces.read-workflow-target-count`: `workspace:["update"]` gates a
+ *   pure count read used before running a workflow.
  */
 const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
   "playbooks.run": { access: "write", destructive: false },
@@ -283,6 +309,23 @@ const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
   "templates.fill-preview": { access: "read", destructive: false },
   "templates.prefill": { access: "read", destructive: false },
   "templates.fill-to-workspace": { access: "write", destructive: false },
+  "chat.get-messages": { access: "read", destructive: false },
+  "chat.get-older-messages": { access: "read", destructive: false },
+  "chat.get-threads": { access: "read", destructive: false },
+  "organization-settings.preview": { access: "read", destructive: false },
+  "organization-settings.read-anonymization-blacklist": {
+    access: "read",
+    destructive: false,
+  },
+  "properties.preview": { access: "read", destructive: false },
+  "skills.get": { access: "read", destructive: false },
+  "skills.list": { access: "read", destructive: false },
+  "skills.list-commands": { access: "read", destructive: false },
+  "usage.get-entitlement": { access: "read", destructive: false },
+  "workspaces.read-workflow-target-count": {
+    access: "read",
+    destructive: false,
+  },
 };
 
 /**
@@ -916,14 +959,23 @@ const buildCatalog = async (): Promise<BuildResult> => {
       optOutUses.add(id);
     }
     if (accessResolution.status === "resolved" && id in ACCESS_OVERRIDES) {
-      // Only counts as "used" when the override was actually consulted — a
-      // classifiable handler ignores its override, so it stays reportable.
-      const classifiable =
-        hasPermissions &&
-        verbs.length > 0 &&
-        resolveAccess({ id, verbs, hasPermissions, overrides: {} }).status ===
-          "resolved";
-      if (!classifiable) {
+      // An override counts as "used" only when it CHANGED the outcome: the
+      // derivation without it either fails (unclassifiable/permissionless) or
+      // resolves to a different classification (a read-repin over a
+      // write-verb-gated read). A pin the derivation resolves identically
+      // without is stale clutter and stays reportable.
+      const withoutOverride = resolveAccess({
+        id,
+        verbs,
+        hasPermissions,
+        overrides: {},
+        destructiveNameOptOuts: DESTRUCTIVE_NAME_OPT_OUTS,
+      });
+      const changedOutcome =
+        withoutOverride.status !== "resolved" ||
+        withoutOverride.access !== accessResolution.access ||
+        withoutOverride.destructive !== accessResolution.destructive;
+      if (changedOutcome) {
         accessOverrideUses.push(id);
       }
     }
