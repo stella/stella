@@ -46,12 +46,12 @@ here as its CLI form). Projected from the same handler enumeration that builds
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
-| `chat.delete-thread` | write, destructive | stella:matters_write | — | generic invoke → `stella chat delete-thread` |
-| `chat.get-messages` | read | stella:matters_write | — | generic invoke → `stella chat get-messages` |
-| `chat.get-older-messages` | read | stella:matters_write | — | generic invoke → `stella chat get-older-messages` |
-| `chat.get-threads` | read | stella:matters_write | — | generic invoke → `stella chat get-threads` |
-| `chat.rename-thread` | write | stella:matters_write | — | generic invoke → `stella chat rename-thread` |
-| `chat.update-thread` | write | stella:matters_write | — | generic invoke → `stella chat update-thread` |
+| `chat.delete-thread` | write, destructive | stella:chat | — | generic invoke → `stella chat delete-thread` |
+| `chat.get-messages` | read | stella:chat | — | generic invoke → `stella chat get-messages` |
+| `chat.get-older-messages` | read | stella:chat | — | generic invoke → `stella chat get-older-messages` |
+| `chat.get-threads` | read | stella:chat | — | generic invoke → `stella chat get-threads` |
+| `chat.rename-thread` | write | stella:chat | — | generic invoke → `stella chat rename-thread` |
+| `chat.update-thread` | write | stella:chat | — | generic invoke → `stella chat update-thread` |
 
 ## clauses
 

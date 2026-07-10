@@ -926,6 +926,7 @@
     "scopeAdminRead": "Lugeda oma organisatsiooni auditilogi",
     "scopeAdminWrite": "Hallata organisatsiooni liikmeid ja seadeid",
     "scopeBillingWrite": "Luua, muuta ja kustutada teie ajakirjeid",
+    "scopeChat": "Lugeda ja hallata teie vestlusi ja sõnumeid",
     "scopeDocumentsWrite": "Luua, muuta ja kustutada teie dokumente",
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
     "scopeFeedback": "Tootetagasiside saatmine stella hooldajatele",

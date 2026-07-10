@@ -67,6 +67,7 @@ const PARTS: readonly CapabilityPart[] = ["params", "body", "query"];
 const TOOL_SCOPES: ReadonlySet<string> = new Set<ToolScope>([
   "read",
   "matters_write",
+  "chat",
   "documents_write",
   "knowledge_write",
   "search",

@@ -929,6 +929,7 @@ type Messages = {
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
+    "scopeChat": "Read and manage your chat threads and messages";
     "scopeDocumentsWrite": "Create, edit, and delete your documents";
     "scopeExternalMcps": "Use your connected integrations";
     "scopeFeedback": "Send product feedback to the stella maintainers";

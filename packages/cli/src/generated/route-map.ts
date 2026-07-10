@@ -5378,7 +5378,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: true,
-            scope: "matters_write",
+            scope: "chat",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -5451,7 +5451,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "chat",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -5527,7 +5527,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "chat",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -5578,7 +5578,7 @@ export const generatedRouteMap: RouteNode = {
             paginationPart: "query",
             itemsKey: "items",
             destructive: false,
-            scope: "matters_write",
+            scope: "chat",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -5651,7 +5651,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "chat",
             inputSchema: {
               type: "object",
               additionalProperties: false,
@@ -5735,7 +5735,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: [],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "chat",
             inputSchema: {
               type: "object",
               additionalProperties: false,

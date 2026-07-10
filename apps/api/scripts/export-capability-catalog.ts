@@ -152,9 +152,11 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // the workspace write bucket rather than the read scope legislation uses.
   "case-law": "stella:matters_write",
   catalogue: "stella:skills",
-  // No dedicated chat/assistant consent scope exists; chat-thread CRUD is
-  // workspace-scoped user content, so it reuses the workspace write bucket.
-  chat: "stella:matters_write",
+  // Chat-thread capabilities (list/read threads and messages, rename, update,
+  // delete) are workspace-scoped assistant content that should not demand a
+  // matters-write consent. They get their own dedicated consent bucket rather
+  // than borrowing the workspace write scope.
+  chat: "stella:chat",
   clauses: "stella:knowledge_write",
   contacts: "stella:matters_write",
   "document-types": "stella:matters_write",
@@ -173,8 +175,11 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Now carries rate-card create/update/delete capabilities, so it reuses the
   // billing write bucket rather than the read scope its resolution tool used.
   rates: "stella:billing_write",
-  // Report export creates workspace entities / template records; reuse the
-  // workspace write bucket.
+  // Report export creates workspace artifacts (entities / template records), so
+  // it stays on the workspace write bucket. Unlike chat (which got its own
+  // stella:chat scope because thread reads/renames should not demand a
+  // matters-write consent), a report export is a genuine workspace write, so a
+  // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
   skills: "stella:skills",
   tasks: "stella:matters_write",
@@ -211,6 +216,7 @@ const SCOPE_STRICTNESS: Record<string, number> = {
   "stella:templates": 2,
   "stella:documents_write": 2,
   "stella:matters_write": 2,
+  "stella:chat": 2,
   "stella:knowledge_write": 2,
   "stella:billing_write": 2,
   "stella:skills": 2,

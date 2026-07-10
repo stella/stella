@@ -14,6 +14,7 @@ export const OAUTH_SCOPE_LABELS = {
   "stella:templates": "consent.scopeTemplates",
   "stella:documents_write": "consent.scopeDocumentsWrite",
   "stella:matters_write": "consent.scopeMattersWrite",
+  "stella:chat": "consent.scopeChat",
   "stella:knowledge_write": "consent.scopeKnowledgeWrite",
   "stella:billing_write": "consent.scopeBillingWrite",
   "stella:admin_read": "consent.scopeAdminRead",

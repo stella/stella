@@ -926,6 +926,7 @@
     "scopeAdminRead": "Lire le journal d'audit de votre organisation",
     "scopeAdminWrite": "Gérer les membres et les paramètres de l'organisation",
     "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
+    "scopeChat": "Lire et gérer vos chats et messages",
     "scopeDocumentsWrite": "Créer, modifier et supprimer vos documents",
     "scopeExternalMcps": "Utiliser vos outils externes connectés",
     "scopeFeedback": "Envoyer des retours produit aux mainteneurs de stella",

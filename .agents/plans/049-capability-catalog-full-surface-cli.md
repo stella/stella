@@ -145,11 +145,27 @@ them wholesale.
 
 ## Open Decisions
 
-- **Scope mapping for long-tail writes.** Reuse the existing per-domain
-  write scopes for capabilities in those domains (no new consent labels), or
-  add a dedicated scope for generic invoke? Default in this plan: reuse
-  domain scopes; a capability outside every scoped domain fails the drift
-  guard until mapped.
+- **Scope mapping for long-tail writes.** RESOLVED: reuse the existing
+  per-domain write scopes for capabilities in those domains (no new consent
+  labels); a capability outside every scoped domain fails the drift guard
+  until mapped. The one carve-out is `chat` (below), which earned its own
+  scope because its capabilities are read/rename operations that should not
+  demand a matters-write consent.
+- **Dedicated `stella:chat` scope.** RESOLVED: the `chat` domain maps to a
+  dedicated `stella:chat` consent bucket instead of borrowing
+  `stella:matters_write`. Chat-thread capabilities (list/read threads and
+  messages, rename, update, delete) are workspace-scoped assistant content;
+  gating them behind a matters-write consent overstated what an agent needs.
+- **`reports` scope.** RESOLVED: `reports` deliberately STAYS on
+  `stella:matters_write`. A report export creates workspace artifacts
+  (entities / template records), so it is a genuine workspace write; a
+  read-only or dedicated scope would understate what it does. Rationale
+  recorded in the `DOMAIN_SCOPE` table comment.
+- **Domain-level scope granularity.** RESOLVED: keep scopes at domain
+  granularity (one consent per capability domain) rather than per-capability.
+  Read-only agents are already served by the curated read tools under
+  `stella:read`; a finer per-capability grant is deferred until real external
+  demand surfaces.
 - **Admin-gated capabilities via generic invoke from day one?** Default:
   yes, behind `stella:admin_write` + member-role permission, since the safe
   wrapper enforces both; flag if a narrower rollout is preferred.
