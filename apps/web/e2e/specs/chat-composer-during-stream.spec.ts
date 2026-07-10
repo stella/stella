@@ -54,7 +54,7 @@ test("composer draft survives typing while a response is streaming", async ({
   // Wait for the action button to enter its streaming state. This proves the
   // mock marker survived the server's message preparation before the typing
   // assertion starts.
-  const stopButton = page.getByRole("button", { name: "Stop response" });
+  const stopButton = page.getByRole("button", { name: "Stop", exact: true });
   await expect(stopButton).toBeVisible({ timeout: 30_000 });
 
   // The mock reply streams for ~5s once the marker is recognized (see
