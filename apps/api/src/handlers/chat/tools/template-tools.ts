@@ -129,7 +129,7 @@ export const createTemplateTools = ({
     [LIST_TEMPLATES_TOOL_NAME]: toolDefinition({
       name: LIST_TEMPLATES_TOOL_NAME,
       description:
-        "List the document templates in this workspace (NDAs, powers of " +
+        "List the document templates in this organization (NDAs, powers of " +
         "attorney, leases, and so on). Returns each template's id, name, " +
         "number of fillable fields, tags, and usage guidance (whenToUse / " +
         "whenNotToUse). Call this first so you know which templates exist " +
@@ -148,6 +148,7 @@ export const createTemplateTools = ({
             whenToUse: true,
             whenNotToUse: true,
           },
+          where: { organizationId: { eq: organizationId } },
           orderBy: { createdAt: "desc" },
           limit: LIMITS.templatesCount,
         }),

@@ -18,8 +18,20 @@ const orgId = toSafeId<"organization">("org-test");
 const userId = toSafeId<"user">("user-test");
 
 /** Minimal scopedDb stub exposing only the templates RQB list_templates calls. */
-const stubScopedDb = (rows: TemplateRow[]): ScopedDb => {
-  const tx = { query: { templates: { findMany: async () => rows } } };
+const stubScopedDb = (
+  rows: TemplateRow[],
+  onFindMany?: (options: unknown) => void,
+): ScopedDb => {
+  const tx = {
+    query: {
+      templates: {
+        findMany: async (options: unknown) => {
+          onFindMany?.(options);
+          return rows;
+        },
+      },
+    },
+  };
   // SAFETY: test double — exposes only the surface list_templates touches.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
   return (async (run: (t: typeof tx) => unknown) =>
@@ -63,14 +75,17 @@ describe("createTemplateTools", () => {
     expect(SUGGEST_TEMPLATE_FIELDS_TOOL_NAME in tools).toBe(false);
   });
 
-  test("list_templates returns the workspace's templates", async () => {
+  test("list_templates explicitly scopes the organization query", async () => {
     const rows: TemplateRow[] = [
       { id: "t1", name: "NDA", fieldCount: 4 },
       { id: "t2", name: "Power of Attorney", fieldCount: 7 },
     ];
+    let findManyOptions: unknown;
     const tools = createTemplateTools({
       orgAIConfig: null,
-      scopedDb: stubScopedDb(rows),
+      scopedDb: stubScopedDb(rows, (options) => {
+        findManyOptions = options;
+      }),
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
@@ -84,6 +99,9 @@ describe("createTemplateTools", () => {
 
     const result = await execute({}, {});
     expect(result).toEqual({ templates: rows });
+    expect(findManyOptions).toMatchObject({
+      where: { organizationId: { eq: orgId } },
+    });
   });
 });
 
