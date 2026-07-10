@@ -382,6 +382,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-db-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
+    "./.oxlint-plugins/require-query-signal.ts",
   ],
 
   overrides: [
@@ -417,6 +418,13 @@ export default defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      // Exercise require-query-signal against its regression fixture; the
+      // rule is otherwise scoped to apps/web/src, which the fixtures dir is
+      // not.
+      files: [".oxlint-plugins/__fixtures__/require-query-signal.fixture.ts"],
+      rules: { "require-query-signal/require-query-signal": "error" },
     },
     {
       files: [
@@ -860,6 +868,7 @@ export default defineConfig({
         "@tanstack/query/no-rest-destructuring": "error",
         "@tanstack/query/no-unstable-deps": "error",
         "@tanstack/query/stable-query-client": "error",
+        "require-query-signal/require-query-signal": "error",
         "no-ref-mirror/no-ref-mirror": [
           "error",
           {

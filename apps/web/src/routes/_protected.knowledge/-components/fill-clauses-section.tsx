@@ -41,10 +41,10 @@ export const FillClausesSection = ({
 
   const { data } = useQuery({
     queryKey: ["template-clause-slots", templateId],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
-        ["clause-slots"].get();
+        ["clause-slots"].get({ fetch: { signal } });
       if (response.error) {
         throw toAPIError(response.error);
       }
