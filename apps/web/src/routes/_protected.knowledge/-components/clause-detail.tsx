@@ -796,10 +796,11 @@ const ClauseLanguageField = ({
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
 
+  const compareLabel = compareByLocale(lang);
   const options: LanguagePick[] = LANGUAGES.map((language) => ({
     code: language.code,
     label: displayLanguageName(language.code, { displayLocale: lang }),
-  })).sort((a, b) => compareByLocale(lang)(a.label, b.label));
+  })).sort((a, b) => compareLabel(a.label, b.label));
 
   // Keep a legacy/out-of-enum stored value selectable rather than dropping it.
   const selected: LanguagePick | null =

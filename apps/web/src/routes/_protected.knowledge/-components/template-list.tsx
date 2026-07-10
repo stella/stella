@@ -1284,6 +1284,7 @@ const TemplateLanguagesField = ({
   const selectedCodes = new Set(languages);
   // Offer the full ISO 639-1 living-language list, minus already-picked codes,
   // sorted by the localized label so search and scanning are predictable.
+  const compareLabel = compareByLocale(lang);
   const options: LanguagePick[] = LANGUAGES.filter(
     (language) => !selectedCodes.has(language.code),
   )
@@ -1291,7 +1292,7 @@ const TemplateLanguagesField = ({
       code: language.code,
       label: languageDisplayName(language.code, lang),
     }))
-    .sort((a, b) => compareByLocale(lang)(a.label, b.label));
+    .sort((a, b) => compareLabel(a.label, b.label));
 
   const atLimit = languages.length >= MAX_TEMPLATE_LANGUAGES;
 
