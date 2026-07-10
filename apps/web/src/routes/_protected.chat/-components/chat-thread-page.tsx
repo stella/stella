@@ -166,16 +166,6 @@ export const ChatThreadPage = ({
     hasHostedEntitlement:
       usageEntitlementData?.entitlement?.source === "hosted",
   });
-  const handleUsageLimit = usageLimit.handle;
-  // `handleUsageLimit` is a fresh closure every render (useUsageLimit does
-  // not memoize it). useChatSession's error-transition latch only cares
-  // about `error` changing, not `onError`'s identity, so wrap it in an
-  // Effect Event: a stable reference that always calls the latest
-  // `handleUsageLimit` without forcing useChatSession's internal effect to
-  // re-run on every render of this component.
-  const openUsageLimitModal = useEffectEvent((usageLimitError: Error) => {
-    handleUsageLimit(usageLimitError);
-  });
 
   const {
     error,
@@ -209,7 +199,7 @@ export const ChatThreadPage = ({
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
-    onError: openUsageLimitModal,
+    onError: usageLimit.handle,
     threadRef,
     workspaceId,
   });

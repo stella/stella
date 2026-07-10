@@ -1,6 +1,7 @@
 import {
   createElement,
   useCallback,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -76,10 +77,7 @@ type UseChatSessionOptions = {
    * instance on subsequent renders. `error` never arrives pre-set from a
    * cache/hydration path (a freshly seeded or re-seeded runtime always
    * starts with `error: undefined`), so there is no mount case to cover
-   * here — only the live transition matters. Callers whose handler isn't
-   * referentially stable across renders (e.g. a fresh closure per render)
-   * should wrap it in `useEffectEvent` before passing it in, so this
-   * hook's effect doesn't re-run for reasons unrelated to `error` itself.
+   * here — only the live transition matters.
    */
   onError?: ((error: Error) => void) | undefined;
   threadRef: ChatThreadRef;
@@ -183,6 +181,9 @@ export const useChatSession = ({
     chat.getSnapshot,
   );
   const { error, sessionGenerating, status } = snapshot;
+  const notifyError = useEffectEvent((nextError: Error) => {
+    onError?.(nextError);
+  });
   // Latch for the error-transition effect below: `undefined` means "no
   // error has been notified yet" for the current error-free stretch.
   const lastHandledErrorRef = useRef<Error | undefined>(undefined);
@@ -761,8 +762,8 @@ export const useChatSession = ({
   // the same Error reference alive across renders until the turn is
   // retried or cleared, so a ref latch (not `useState`) distinguishes "the
   // same failed turn is still showing" from "a fresh failure just landed."
-  // Without the latch, an unrelated re-render (e.g. `onError`'s own
-  // identity changing) would re-notify for an error already handled.
+  // The Effect Event reads the latest callback without making its changing
+  // identity a synchronization dependency.
   useExternalSyncEffect(() => {
     if (!error) {
       lastHandledErrorRef.current = undefined;
@@ -772,8 +773,8 @@ export const useChatSession = ({
       return;
     }
     lastHandledErrorRef.current = error;
-    onError?.(error);
-  }, [error, onError]);
+    notifyError(error);
+  }, [error]);
 
   useExternalSyncEffect(() => {
     conversationIdRef.current = conversationId;

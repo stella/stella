@@ -57,8 +57,8 @@ import type {
   TimeFilter,
 } from "@/components/search-filters.logic";
 import { UserAvatar } from "@/components/user-avatar";
-import { usePermissions } from "@/hooks/use-permissions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { usePermissions } from "@/hooks/use-permissions";
 import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
@@ -742,31 +742,25 @@ export const SearchDialog = ({
   // Clear any prior AI summary whenever the effective search changes. The
   // debounced `searchQuery` updates asynchronously (no handler to co-locate
   // with) and the filter setters fan out across ~7 handlers, so there is no
-  // single trigger site to relay the reset into: instead, compare the composed
-  // key against the last-seen one during render (guarded, so the state adjust
-  // fires exactly once per real change, not on every render).
-  const resetKey = [
-    searchQuery,
-    filterTypesKey,
-    filterMimeTypesKey,
-    filterWorkspaceIdsKey,
-    filterEditorIdsKey,
-    JSON.stringify(filters.time ?? null),
-  ].join("|");
-  const [lastResetKey, setLastResetKey] = useState(resetKey);
-  if (resetKey !== lastResetKey) {
-    setLastResetKey(resetKey);
-  }
+  // single trigger site to relay the reset into.
   // The mutation observer is an external system, not render state, so
-  // resetting it belongs in a committed effect keyed on the same value
-  // rather than in the render body above (which can re-run for renders React
-  // discards, and would double-fire under strict mode). `reset` is a stable
+  // resetting it belongs in a committed effect keyed on those values
+  // rather than during render (which can re-run for renders React discards
+  // and would double-fire under strict mode). `reset` is a stable
   // function reference from the mutation observer, so listing it alongside
   // `resetKey` still only fires this once per real search change.
   const resetSummarizeSearch = summarizeSearchMutation.reset;
   useExternalSyncEffect(() => {
     resetSummarizeSearch();
-  }, [resetKey, resetSummarizeSearch]);
+  }, [
+    filterEditorIdsKey,
+    filterMimeTypesKey,
+    filterTypesKey,
+    filterWorkspaceIdsKey,
+    filters.time,
+    resetSummarizeSearch,
+    searchQuery,
+  ]);
 
   const loadMoreRef = useCallback(
     (target: HTMLDivElement | null) => {
