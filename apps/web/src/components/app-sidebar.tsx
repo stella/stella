@@ -1074,13 +1074,22 @@ const MatterItem = ({
         }}
         ref={dropRef}
       >
-        <button
-          aria-controls={`matter-activity-${ws.id}`}
-          aria-expanded={isExpanded}
-          aria-label={isExpanded ? t("common.showLess") : t("common.showMore")}
-          className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 flex size-6 items-center justify-center rounded-md outline-hidden group-data-[collapsible=icon]:hidden focus-visible:ring-2"
-          onClick={onExpandedChange}
-          type="button"
+        <Tooltip
+          content={isExpanded ? t("common.showLess") : t("common.showMore")}
+          render={
+            <Button
+              aria-controls={`matter-activity-${ws.id}`}
+              aria-expanded={isExpanded}
+              aria-label={
+                isExpanded ? t("common.showLess") : t("common.showMore")
+              }
+              className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 flex size-6 items-center justify-center rounded-md outline-hidden group-data-[collapsible=icon]:hidden focus-visible:ring-2"
+              onClick={onExpandedChange}
+              size="icon"
+              type="button"
+              variant="ghost"
+            />
+          }
         >
           <DirectionalIcon
             className={cn(
@@ -1090,7 +1099,7 @@ const MatterItem = ({
             flip={!isExpanded}
             icon={ChevronRightIcon}
           />
-        </button>
+        </Tooltip>
         <SidebarMenuButton
           asChild
           className="ps-8 pe-12 group-data-[collapsible=icon]:ps-2"

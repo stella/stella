@@ -39,6 +39,8 @@ type WorkspaceActivityOptions = {
 
 const WORKSPACE_ACTIVITY_PAGE_SIZE = 3;
 
+const getInitialWorkspaceActivityCursor = (): string | undefined => undefined;
+
 const readWorkspaces = async (signal?: AbortSignal) => {
   const response = await api.workspaces.get(
     signal ? { fetch: { signal } } : {},
@@ -109,11 +111,15 @@ export const workspaceActivityOptions = ({
   infiniteQueryOptions({
     queryKey: workspacesKeys.activity(activeOrganizationId, key),
     queryFn: async ({ pageParam, signal }) => {
+      const query =
+        pageParam === undefined
+          ? { limit: WORKSPACE_ACTIVITY_PAGE_SIZE }
+          : { cursor: pageParam, limit: WORKSPACE_ACTIVITY_PAGE_SIZE };
       const response = await api
         .workspaces({ workspaceId: key.workspaceId })
         .activity.get({
           fetch: { signal },
-          query: { cursor: pageParam, limit: WORKSPACE_ACTIVITY_PAGE_SIZE },
+          query,
         });
 
       if (response.error) {
@@ -122,7 +128,7 @@ export const workspaceActivityOptions = ({
 
       return response.data;
     },
-    initialPageParam: undefined,
+    initialPageParam: getInitialWorkspaceActivityCursor(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

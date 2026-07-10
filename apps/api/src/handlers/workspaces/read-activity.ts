@@ -9,13 +9,18 @@ import {
   encodeWorkspaceActivityCursor,
   type WorkspaceActivityType,
 } from "@/api/handlers/workspaces/activity-cursor";
+import {
+  resolveWorkspaceActivityScope,
+  WORKSPACE_ACTIVITY_PERMISSIONS,
+  WORKSPACE_ACTIVITY_SCOPE,
+} from "@/api/handlers/workspaces/activity-scope";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
-  permissions: { workspace: ["read"], chat: ["create"] },
+  permissions: WORKSPACE_ACTIVITY_PERMISSIONS,
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: t.Object({
     cursor: t.Optional(t.String({ maxLength: 512 })),
@@ -64,7 +69,7 @@ type WorkspaceActivity =
 
 const readWorkspaceActivity = createSafeHandler(
   config,
-  async function* ({ query, safeDb, session, user, workspaceId }) {
+  async function* ({ memberRole, query, safeDb, session, user, workspaceId }) {
     const limit = query.limit ?? LIMITS.workspaceActivityPageSizeDefault;
     const cursor = decodeWorkspaceActivityCursor(query.cursor);
     if (query.cursor !== undefined && cursor === null) {
@@ -95,54 +100,61 @@ const readWorkspaceActivity = createSafeHandler(
       id: chatThreads.id,
       type: "thread",
     });
+    const activityScope = resolveWorkspaceActivityScope(memberRole);
 
-    const [entityRows, threadRows] = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await Promise.all([
-            tx
-              .select({
-                activityAt: entityActivityAt,
-                cursorActivityAt: entityCursorActivityAt,
-                entityKind: entities.kind,
-                id: entities.id,
-                status: entities.status,
-                title: entities.name,
-              })
-              .from(entities)
-              .where(
-                and(
-                  eq(entities.workspaceId, workspaceId),
-                  ...(entityCursorCondition ? [entityCursorCondition] : []),
-                ),
-              )
-              .orderBy(desc(entityActivityAt), desc(entities.id))
-              .limit(limit + 1),
-            tx
-              .select({
-                activityAt: chatThreads.updatedAt,
-                cursorActivityAt: threadCursorActivityAt,
-                id: chatThreads.id,
-                title: chatThreads.title,
-              })
-              .from(chatThreads)
-              .where(
-                and(
-                  eq(chatThreads.organizationId, session.activeOrganizationId),
-                  eq(chatThreads.userId, user.id),
-                  eq(chatThreads.workspaceId, workspaceId),
-                  sql`exists (
+    const { entityRows, threadRows } = yield* Result.await(
+      safeDb(async (tx) => {
+        const entityRowsQuery = tx
+          .select({
+            activityAt: entityActivityAt,
+            cursorActivityAt: entityCursorActivityAt,
+            entityKind: entities.kind,
+            id: entities.id,
+            status: entities.status,
+            title: entities.name,
+          })
+          .from(entities)
+          .where(
+            and(
+              eq(entities.workspaceId, workspaceId),
+              ...(entityCursorCondition ? [entityCursorCondition] : []),
+            ),
+          )
+          .orderBy(desc(entityActivityAt), desc(entities.id))
+          .limit(limit + 1);
+
+        if (activityScope === WORKSPACE_ACTIVITY_SCOPE.entities) {
+          return { entityRows: await entityRowsQuery, threadRows: [] };
+        }
+
+        const [entityRows, threadRows] = await Promise.all([
+          entityRowsQuery,
+          tx
+            .select({
+              activityAt: chatThreads.updatedAt,
+              cursorActivityAt: threadCursorActivityAt,
+              id: chatThreads.id,
+              title: chatThreads.title,
+            })
+            .from(chatThreads)
+            .where(
+              and(
+                eq(chatThreads.organizationId, session.activeOrganizationId),
+                eq(chatThreads.userId, user.id),
+                eq(chatThreads.workspaceId, workspaceId),
+                sql`exists (
                   select 1
                   from ${chatMessages}
                   where ${chatMessages.threadId} = ${chatThreads.id}
                 )`,
-                  ...(threadCursorCondition ? [threadCursorCondition] : []),
-                ),
-              )
-              .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
-              .limit(limit + 1),
-          ]),
-      ),
+                ...(threadCursorCondition ? [threadCursorCondition] : []),
+              ),
+            )
+            .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
+            .limit(limit + 1),
+        ]);
+        return { entityRows, threadRows };
+      }),
     );
 
     const merged: InternalActivity[] = [];
