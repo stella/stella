@@ -134,7 +134,14 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
       return response.data;
     },
     onSuccess: async (data) => {
-      setProviders(providerDraftsFromStoredProviders(data.providers));
+      const nextProviders = providerDraftsFromStoredProviders(data.providers);
+      setProviders(nextProviders);
+      setRoleModels(
+        roleModelsFromOverrideModels({
+          overrideModels: data.overrideModels,
+          providers: getProviderValues(nextProviders),
+        }),
+      );
       queryClient.setQueryData(aiConfigKeys.availability({ organizationId }), {
         available: true,
         instanceProvisioned: config.instanceProvisioned,
