@@ -90,15 +90,25 @@ const spawnSubagentsInputSchema = v.strictObject({
   ),
 });
 
+// A discriminated union (not shared optional `result`/`error` fields):
+// exactly one of them is meaningful per status, and every producer
+// (`runOneSubagent` below) and consumer (`SpawnSubagentsCard` on the
+// frontend) already branches on `status` first.
+const spawnSubagentsResultSchema = v.variant("status", [
+  v.strictObject({
+    index: v.number(),
+    status: v.literal("completed"),
+    result: v.string(),
+  }),
+  v.strictObject({
+    index: v.number(),
+    status: v.literal("failed"),
+    error: v.string(),
+  }),
+]);
+
 const spawnSubagentsOutputSchema = v.strictObject({
-  results: v.array(
-    v.strictObject({
-      index: v.number(),
-      status: v.picklist(["completed", "failed"]),
-      result: v.optional(v.string()),
-      error: v.optional(v.string()),
-    }),
-  ),
+  results: v.array(spawnSubagentsResultSchema),
 });
 
 export type SpawnSubagentsToolInput = v.InferOutput<
