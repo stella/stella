@@ -10,6 +10,7 @@ import type {
   ChatToolCallPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
+import { keySpawnSubagents } from "@/components/chat/spawn-subagents-card.logic";
 
 type SpawnSubagentsPart = Extract<
   ChatToolCallPart,
@@ -87,44 +88,48 @@ export const SpawnSubagentsSubtaskList = ({
   subagents,
   results,
   isAwaitingApproval,
-}: SpawnSubagentsSubtaskListProps) => (
-  <ul className="border-border/50 space-y-2 border-t px-3 py-3">
-    {subagents.map((sub, i) => {
-      const result = results?.find((r) => r.index === i);
-      return (
-        <li className="space-y-1.5" key={`${i}-${sub.task.slice(0, 24)}`}>
-          <div className="flex items-start justify-between gap-2">
-            <p className="line-clamp-2 text-sm">{sub.task}</p>
-            <SubtaskStatus
-              isAwaitingApproval={isAwaitingApproval ?? false}
-              status={result?.status}
-            />
-          </div>
+}: SpawnSubagentsSubtaskListProps) => {
+  const keyedSubagents = keySpawnSubagents(subagents);
 
-          {sub.model ? (
-            <div className="flex items-center gap-1.5">
-              <span className="bg-muted/40 text-muted-foreground rounded px-1.5 py-0.5 text-[11px] font-medium">
-                {sub.model}
-              </span>
+  return (
+    <ul className="border-border/50 space-y-2 border-t px-3 py-3">
+      {keyedSubagents.map(({ index, key, subagent }) => {
+        const result = results?.find((entry) => entry.index === index);
+        return (
+          <li className="space-y-1.5" key={key}>
+            <div className="flex items-start justify-between gap-2">
+              <p className="line-clamp-2 text-sm">{subagent.task}</p>
+              <SubtaskStatus
+                isAwaitingApproval={isAwaitingApproval ?? false}
+                status={result?.status}
+              />
             </div>
-          ) : null}
 
-          {result?.status === "completed" && result.result && (
-            <p className="text-muted-foreground max-h-40 overflow-auto text-xs whitespace-pre-wrap">
-              {result.result}
-            </p>
-          )}
+            {subagent.model ? (
+              <div className="flex items-center gap-1.5">
+                <span className="bg-muted/40 text-muted-foreground rounded px-1.5 py-0.5 text-[11px] font-medium">
+                  {subagent.model}
+                </span>
+              </div>
+            ) : null}
 
-          {result?.status === "failed" && result.error && (
-            <p className="text-destructive max-h-40 overflow-auto text-[11px] whitespace-pre-wrap">
-              {result.error}
-            </p>
-          )}
-        </li>
-      );
-    })}
-  </ul>
-);
+            {result?.status === "completed" && result.result && (
+              <p className="text-muted-foreground max-h-40 overflow-auto text-xs whitespace-pre-wrap">
+                {result.result}
+              </p>
+            )}
+
+            {result?.status === "failed" && result.error && (
+              <p className="text-destructive max-h-40 overflow-auto text-[11px] whitespace-pre-wrap">
+                {result.error}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+};
 
 type SubtaskStatusProps = {
   isAwaitingApproval: boolean;
