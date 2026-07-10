@@ -3720,6 +3720,7 @@ export const generatedRouteMap: RouteNode = {
             paginated: false,
             windowedText: false,
             destructive: false,
+            confirmPassthrough: true,
             scope: "read",
             inputSchema: {
               type: "object",

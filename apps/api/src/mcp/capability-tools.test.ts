@@ -477,6 +477,36 @@ describe("case-law ingestion status admin gate (fix-2)", () => {
   });
 });
 
+// --- validateOnly enforces member permissions --------------------------------
+
+describe("invoke_capability validateOnly permission preflight", () => {
+  test("a role lacking the permission -> permission_denied from validateOnly", async () => {
+    // case-law.ingestion.status is root-kind with auditLog:["read"] (owner/
+    // admin only); validateOnly must mirror the wrapper's gate, not report
+    // valid: true for a call that would 403 at execution.
+    const result = await handleMcpToolCall({
+      args: { capability: "case-law.ingestion.status", validateOnly: true },
+      context: createContext({ memberRole: "member" }),
+      toolName: "invoke_capability",
+    });
+    expect(errorEnvelope(result).code).toBe("permission_denied");
+    // Preflight only: the handler never executed.
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+
+  test("a sufficient role still gets valid: true without executing", async () => {
+    const result = await handleMcpToolCall({
+      args: { capability: "case-law.ingestion.status", validateOnly: true },
+      context: createContext({ memberRole: "owner" }),
+      toolName: "invoke_capability",
+    });
+    expect(
+      parseToolPayload<{ valid: boolean; capability: string }>(result),
+    ).toEqual({ valid: true, capability: "case-law.ingestion.status" });
+    expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+  });
+});
+
 // --- fix-3: gateway rate limit ----------------------------------------------
 
 describe("invoke_capability rate limit (fix-3)", () => {
@@ -741,7 +771,7 @@ describe("invoke_capability file-input gate", () => {
     // type only carries the field on flagged entries.
     const flagged = new Set(
       capabilityCatalog
-        .filter((e) => "requiresFileInput" in e && e.requiresFileInput === true)
+        .filter((e) => "requiresFileInput" in e && e.requiresFileInput)
         .map((e) => e.id),
     );
     for (const id of [

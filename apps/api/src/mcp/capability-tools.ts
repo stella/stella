@@ -4,12 +4,15 @@ import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { ElysiaCustomStatusResponse } from "elysia";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { synthesizeCapabilityContext } from "@/api/mcp/capability-context";
 import type { SynthesizedCapabilityContext } from "@/api/mcp/capability-context";
@@ -161,14 +164,15 @@ const capabilityLeaf = (id: string): string => id.split(".").at(-1) ?? id;
 
 /**
  * The endpoint config fields the generic path reads. `body`/`params`/`query`
- * are Elysia `t.*` schemas (TypeBox `TSchema`) at runtime, built by the handler
- * graph; the guard below narrows to this shape at the module boundary.
+ * are Elysia `t.*` schemas (TypeBox `TSchema`) at runtime, and `permissions` is
+ * the handler's `PermissionInput` literal; both are built by the handler graph.
+ * The guard below narrows to this shape at the module boundary.
  */
 type EndpointConfig = {
   body?: TSchema;
   params?: TSchema;
   query?: TSchema;
-  permissions?: unknown;
+  permissions?: PermissionInput;
 };
 
 type EndpointDefinition = {
@@ -762,6 +766,21 @@ const executeInvoke = async ({
   }
 
   if (validateOnly) {
+    // Honest preflight: mirror the safe wrapper's member-permission gate (the
+    // wrapper is not called on this path), so a role that would be refused at
+    // execution is refused here too instead of getting a spurious
+    // `{ valid: true }`. Configs without permissions (session-kind) skip the
+    // check, exactly as their wrapper does.
+    const permissions = endpoint.config.permissions;
+    if (
+      permissions !== undefined &&
+      !hasMemberPermission({ role: context.memberRole }, permissions)
+    ) {
+      return structuredErrorResult({
+        code: "permission_denied",
+        message: `Your member role does not permit capability "${id}"`,
+      });
+    }
     return {
       egress: "structured",
       payload: { valid: true, capability: id },

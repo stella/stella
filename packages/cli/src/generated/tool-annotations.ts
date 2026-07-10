@@ -234,5 +234,6 @@ export const generatedToolAnnotations: Readonly<
   invoke_capability: {
     command: ["capability", "invoke"],
     scope: "read",
+    confirmPassthrough: true,
   },
 };

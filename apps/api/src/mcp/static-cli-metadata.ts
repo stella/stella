@@ -173,6 +173,11 @@ export const DEFAULT_MCP_CLI_ANNOTATIONS = defineMcpCliToolAnnotations(
     invoke_capability: {
       command: ["capability", "invoke"],
       scope: "read",
+      // Destructiveness is per-invoked-capability (catalog flag), not a
+      // property of the tool, so the leaf is non-destructive; the confirm
+      // passthrough lets --yes / a TTY prompt satisfy the server's per-target
+      // confirmation_required gate.
+      confirmPassthrough: true,
     },
 
     manage_organization: {

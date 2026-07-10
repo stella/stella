@@ -81,6 +81,7 @@ const cliAnnotationSchema = v.looseObject({
     }),
   ),
   flagRename: v.optional(v.record(v.string(), v.string())),
+  confirmPassthrough: v.optional(v.literal(true)),
 });
 
 type ParsedDiscriminatorSubcommand = v.InferOutput<
@@ -144,6 +145,9 @@ const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
   }
   if (cli.flagRename !== undefined) {
     annotation.flagRename = cli.flagRename;
+  }
+  if (cli.confirmPassthrough !== undefined) {
+    annotation.confirmPassthrough = cli.confirmPassthrough;
   }
   return annotation;
 };

@@ -780,24 +780,18 @@ export const runLeafCommand = async ({
     return;
   }
 
-  if (spec.destructive) {
-    const outcome = await confirmDestructive({
-      context,
-      flags,
-      writers,
-      label: spec.commandPath.join(" "),
-    });
-    if (outcome === "aborted") {
-      setExit(context, EXIT_CODES.aborted);
-      return;
-    }
-    // The human confirmed (or passed --yes): satisfy the server's `confirm`
-    // gate so the destructive tool proceeds. Only tools that actually declare
-    // the boolean gate get the flag (see `specHasConfirmGate`).
-    if (specHasConfirmGate(spec)) {
-      args = { ...args, confirm: true };
-    }
+  const gated = await applyConfirmGates({
+    args,
+    context,
+    flags,
+    spec,
+    writers,
+  });
+  if (gated.aborted) {
+    setExit(context, EXIT_CODES.aborted);
+    return;
   }
+  args = gated.args;
 
   // Windowed-text commands print raw document text by default; only an explicit
   // --json / --output json switches them to a structured envelope (spec S4).
@@ -849,5 +843,140 @@ export const runLeafCommand = async ({
     setExit(context, mapClientErrorExit(call.error));
     return;
   }
+
+  const retried = await maybeConfirmRetry({
+    args,
+    call: call.value,
+    context,
+    flags,
+    format,
+    serverUrl,
+    spec,
+    token,
+    writers,
+  });
+  if (retried) {
+    return;
+  }
+
   renderCallResult({ context, spec, result: call.value, format, writers });
+};
+
+type ConfirmGateOutcome = { aborted: boolean; args: Record<string, unknown> };
+
+/**
+ * Pre-call confirm gates:
+ *  - a DESTRUCTIVE leaf prompts (or honors --yes) before any server call and
+ *    injects `confirm: true` when the schema declares the gate;
+ *  - a confirm-PASSTHROUGH leaf (per-target destructiveness, e.g.
+ *    `capability invoke`) never prompts upfront, but --yes pre-approves the
+ *    server's confirmation_required gate by injecting `confirm: true`; without
+ *    --yes the post-call prompt-and-retry flow (`maybeConfirmRetry`) handles it.
+ */
+const applyConfirmGates = async ({
+  args,
+  context,
+  flags,
+  spec,
+  writers,
+}: {
+  args: Record<string, unknown>;
+  context: Context;
+  flags: LeafFlags;
+  spec: LeafCommandSpec;
+  writers: Writers;
+}): Promise<ConfirmGateOutcome> => {
+  if (spec.destructive) {
+    const outcome = await confirmDestructive({
+      context,
+      flags,
+      writers,
+      label: spec.commandPath.join(" "),
+    });
+    if (outcome === "aborted") {
+      return { aborted: true, args };
+    }
+    // The human confirmed (or passed --yes): satisfy the server's `confirm`
+    // gate so the destructive tool proceeds. Only tools that actually declare
+    // the boolean gate get the flag (see `specHasConfirmGate`).
+    return specHasConfirmGate(spec)
+      ? { aborted: false, args: { ...args, confirm: true } }
+      : { aborted: false, args };
+  }
+  if (
+    spec.confirmPassthrough === true &&
+    flags[RESERVED_FLAG_KEYS.yes] === true &&
+    specHasConfirmGate(spec)
+  ) {
+    return { aborted: false, args: { ...args, confirm: true } };
+  }
+  return { aborted: false, args };
+};
+
+type ConfirmRetryOptions = {
+  args: Record<string, unknown>;
+  call: CallToolResult;
+  context: Context;
+  flags: LeafFlags;
+  format: OutputFormat;
+  serverUrl: string;
+  spec: LeafCommandSpec;
+  token: string;
+  writers: Writers;
+};
+
+/**
+ * Confirm-passthrough prompt-and-retry: when a call WITHOUT `confirm` comes
+ * back `confirmation_required` on a confirm-passthrough leaf and stdin is a
+ * TTY, ask the human exactly like the destructive prompt and retry ONCE with
+ * `confirm: true`. Returns true when it fully handled the command (rendered a
+ * retry result or a retry transport error); false lets the caller render the
+ * original envelope, so a declined prompt and every non-TTY call keep today's
+ * behavior (exit 7).
+ */
+const maybeConfirmRetry = async ({
+  args,
+  call,
+  context,
+  flags,
+  format,
+  serverUrl,
+  spec,
+  token,
+  writers,
+}: ConfirmRetryOptions): Promise<boolean> => {
+  if (
+    spec.confirmPassthrough !== true ||
+    call.isError !== true ||
+    args["confirm"] === true ||
+    !context.process.stdin.isTTY
+  ) {
+    return false;
+  }
+  const envelope = errorEnvelope(parsePayload(call));
+  if (envelope?.code !== "confirmation_required") {
+    return false;
+  }
+  const outcome = await confirmDestructive({
+    context,
+    flags,
+    writers,
+    label: spec.commandPath.join(" "),
+  });
+  if (outcome !== "proceed") {
+    return false;
+  }
+  const retry = await callTool({
+    serverUrl,
+    token,
+    name: spec.toolName,
+    args: { ...args, confirm: true },
+  });
+  if (Result.isError(retry)) {
+    writers.stderr(`${retry.error.message}\n`);
+    setExit(context, mapClientErrorExit(retry.error));
+    return true;
+  }
+  renderCallResult({ context, spec, result: retry.value, format, writers });
+  return true;
 };

@@ -57,6 +57,13 @@ export type ToolAnnotation = {
     subcommands: Record<string, DiscriminatorSubcommand>;
   };
   flagRename?: Record<string, string>;
+  /**
+   * The tool is not destructive itself but gates SOME calls behind its
+   * `confirm` arg (per-target destructiveness, e.g. `invoke_capability`). The
+   * leaf accepts `--yes` (injects `confirm: true` upfront) and, on a
+   * `confirmation_required` envelope at a TTY, prompts and retries once.
+   */
+  confirmPassthrough?: true;
 };
 
 /** One generated CLI flag, derived from an `inputSchema` prop (spec S3). */
@@ -92,6 +99,8 @@ export type LeafCommandSpec = {
   windowedText: boolean;
   itemsKey?: string;
   destructive: boolean;
+  /** See `ToolAnnotation.confirmPassthrough`: --yes / prompt-retry confirm flow. */
+  confirmPassthrough?: true;
   scope?: ToolScope;
   inputSchema: JsonSchema;
 };
