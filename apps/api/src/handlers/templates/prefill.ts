@@ -295,7 +295,7 @@ const prefillTemplate = createSafeRootHandler(
             try: async () =>
               await Promise.all(
                 contentRows.map(async (row) => ({
-                  label: row.name ?? "Document",
+                  label: row.name,
                   text: await decryptContent(
                     organizationId,
                     row.ciphertext,
