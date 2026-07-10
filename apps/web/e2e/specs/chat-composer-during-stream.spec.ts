@@ -35,9 +35,8 @@ test("composer draft survives typing while a response is streaming", async ({
   // timeout on a fresh CI runner (see playwright.config.ts).
   await expect(composer).toBeVisible({ timeout: 30_000 });
 
-  const messageText = SLOW_STREAM_MARKER;
   await composer.click();
-  await composer.pressSequentially(messageText);
+  await composer.pressSequentially("Start this test thread");
 
   await page.getByRole("button", { name: "Send message" }).click();
 
@@ -50,6 +49,22 @@ test("composer draft survives typing while a response is streaming", async ({
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
     { timeout: 30_000 },
   );
+
+  const transcript = page.getByRole("log");
+  await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
+    timeout: 30_000,
+  });
+
+  // New-thread navigation settles after its first response, so exercise the
+  // overlap on a second turn inside the stable thread route. The editor's
+  // suggested-follow-up label is dynamic after a response; role and
+  // contenteditable identify the same composer without coupling to that copy.
+  const threadComposer = page.locator(
+    '[role="textbox"][contenteditable="true"]',
+  );
+  await threadComposer.click();
+  await threadComposer.pressSequentially(SLOW_STREAM_MARKER);
+  await page.getByRole("button", { name: "Send message" }).click();
 
   // Wait for the action button to enter its streaming state. This proves the
   // mock marker survived the server's message preparation before the typing
@@ -68,22 +83,22 @@ test("composer draft survives typing while a response is streaming", async ({
   // of bug.
   //
   const draftText = "Draft typed while assistant is replying";
-  await composer.click();
-  await composer.pressSequentially(draftText, { delay: 30 });
-  await expect(composer).toContainText(draftText);
+  await threadComposer.click();
+  await threadComposer.pressSequentially(draftText, { delay: 30 });
+  await expect(threadComposer).toContainText(draftText);
   await expect(stopButton).toBeVisible();
 
-  const transcript = page.getByRole("log");
   // "Retry" appears on the latest assistant message only once the stream
   // finished, so waiting for it pins the turn as complete before the
   // assertions below.
+  await expect(stopButton).toBeHidden({ timeout: 30_000 });
   await expect(transcript.getByRole("button", { name: "Retry" })).toBeVisible({
     timeout: 30_000,
   });
 
   // The draft typed during streaming must have survived every re-render the
   // stream chunks triggered along the way.
-  await expect(composer).toContainText(draftText);
+  await expect(threadComposer).toContainText(draftText);
 
   // Every ChatErrorMessage variant renders a "Resend" button
   // (apps/web/src/components/chat/chat-thread-messages.tsx:329-340);
