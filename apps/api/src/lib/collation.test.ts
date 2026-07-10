@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { compareByLocale, getCollator } from "@/api/lib/collation";
+import {
+  compareByLocale,
+  compareCodepoint,
+  getCollator,
+} from "@/api/lib/collation";
 
 describe("getCollator", () => {
   test("caches one collator instance per locale", () => {
@@ -16,5 +20,23 @@ describe("compareByLocale", () => {
       "cha",
       "ia",
     ]);
+  });
+});
+
+describe("compareCodepoint", () => {
+  test("orders by codepoint, ignoring locale collation rules", () => {
+    // Under cs-CZ collation "ch" sorts after "h", but codepoint order must
+    // not follow that rule.
+    expect(["ia", "cha", "ha"].toSorted(compareCodepoint)).toEqual([
+      "cha",
+      "ha",
+      "ia",
+    ]);
+  });
+
+  test("is antisymmetric and reports equality as 0", () => {
+    expect(compareCodepoint("a", "a")).toBe(0);
+    expect(compareCodepoint("a", "b")).toBe(-1);
+    expect(compareCodepoint("b", "a")).toBe(1);
   });
 });

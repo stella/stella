@@ -2,6 +2,7 @@ import type { CellMetadata } from "@/api/db/schema-validators";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { compareCodepoint } from "@/api/lib/collation";
 
 const CELL_METADATA_VERSION = 1;
 const MANUAL_FLAGS_MAX_ITEMS = 16;
@@ -53,9 +54,10 @@ const normalizeManualFlags = (flags: string[]) =>
 export const sortColumnFlagTargetsForLocking = (
   targets: readonly ColumnFlagTarget[],
 ) =>
+  // entityVersionId order fixes a deterministic lock-acquisition order
+  // (deadlock avoidance), not display text.
   targets.toSorted((a, b) =>
-    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- entityVersionId order fixes a deterministic lock-acquisition order (deadlock avoidance), not display text
-    a.entityVersionId.localeCompare(b.entityVersionId),
+    compareCodepoint(a.entityVersionId, b.entityVersionId),
   );
 
 export const buildColumnFlagMutation = ({

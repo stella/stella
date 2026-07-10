@@ -28,3 +28,13 @@ export const compareByLocale = (
   const collator = getCollator(locale);
   return (a, b) => collator.compare(a, b);
 };
+
+/**
+ * Plain codepoint comparator for `.sort()` / `.toSorted()` on strings that
+ * are ids, paths, or other technical keys rather than user-facing text (lock
+ * ordering, archive entry order, search tiebreaks, ...). Unlike
+ * `.localeCompare()`, this is bit-identical across environments regardless
+ * of runtime/ICU locale.
+ */
+export const compareCodepoint = (a: string, b: string): number =>
+  a < b ? -1 : Number(a > b);
