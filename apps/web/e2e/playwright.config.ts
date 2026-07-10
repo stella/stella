@@ -43,7 +43,20 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: /heap-growth-canary\.spec\.ts$/u,
       use: { ...devices["Desktop Chrome"] },
+    },
+    {
+      // Isolated so --js-flags=--expose-gc (needed for window.gc() inside
+      // heap-growth-canary.spec.ts) never touches V8's GC behavior for any
+      // other spec. Keep this project's testMatch and the "chromium"
+      // project's testIgnore above in sync so the spec runs exactly once.
+      name: "heap-growth-canary",
+      testMatch: /heap-growth-canary\.spec\.ts$/u,
+      use: {
+        ...devices["Desktop Chrome"],
+        launchOptions: { args: ["--js-flags=--expose-gc"] },
+      },
     },
   ],
 
