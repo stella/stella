@@ -14,11 +14,11 @@ import { addDays, isIsoDateString, parseIsoDateLocal } from "./dates";
 let originalTz: string | undefined;
 
 beforeEach(() => {
-  originalTz = process.env["TZ"];
+  originalTz = process.env.TZ;
 });
 
 afterEach(() => {
-  process.env["TZ"] = originalTz ?? "";
+  process.env.TZ = originalTz ?? "";
 });
 
 describe("isIsoDateString", () => {
@@ -36,7 +36,7 @@ describe("isIsoDateString", () => {
 
 describe("parseIsoDateLocal", () => {
   test("does not shift a day west of UTC (the new Date(string) bug)", () => {
-    process.env["TZ"] = "Pacific/Honolulu"; // UTC-10, west of UTC
+    process.env.TZ = "Pacific/Honolulu"; // UTC-10, west of UTC
 
     // The footgun this guards against: `new Date("2024-01-01")` parses as
     // UTC midnight, which renders as Dec 31 in a west-of-UTC timezone.
@@ -50,7 +50,7 @@ describe("parseIsoDateLocal", () => {
   });
 
   test("lands on the intended day east of UTC too", () => {
-    process.env["TZ"] = "Pacific/Auckland"; // UTC+12/+13
+    process.env.TZ = "Pacific/Auckland"; // UTC+12/+13
 
     const parsed = parseIsoDateLocal("2024-06-15");
     expect(parsed?.getFullYear()).toBe(2024);
@@ -73,7 +73,7 @@ describe("parseIsoDateLocal", () => {
 
 describe("addDays", () => {
   test("crosses a spring-forward DST transition without overshooting", () => {
-    process.env["TZ"] = "America/New_York";
+    process.env.TZ = "America/New_York";
     // 2024-03-10 02:00 -> 03:00: the 10th is a 23-hour day.
     const start = new Date(2024, 2, 9, 12, 0, 0);
 
@@ -89,7 +89,7 @@ describe("addDays", () => {
   });
 
   test("crosses a fall-back DST transition without undershooting", () => {
-    process.env["TZ"] = "America/New_York";
+    process.env.TZ = "America/New_York";
     // 2024-11-03 02:00 -> 01:00: the 3rd is a 25-hour day.
     const start = new Date(2024, 10, 2, 12, 0, 0);
 
