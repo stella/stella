@@ -55,37 +55,42 @@ describe("readStoredJson", () => {
   });
 });
 
-class ThrowingStorage implements Storage {
-  length = 0;
+class MemoryStorage implements Storage {
+  readonly #items = new Map<string, string>();
+
+  get length(): number {
+    return this.#items.size;
+  }
+
   clear(): void {
-    // no-op
+    this.#items.clear();
   }
-  getItem(): string | null {
-    return null;
+  getItem(key: string): string | null {
+    return this.#items.get(key) ?? null;
   }
-  key(): string | null {
-    return null;
+  key(index: number): string | null {
+    return [...this.#items.keys()].at(index) ?? null;
   }
-  removeItem(): void {
-    // no-op
+  removeItem(key: string): void {
+    this.#items.delete(key);
   }
-  setItem(): void {
+  setItem(key: string, value: string): void {
+    this.#items.set(key, value);
+  }
+}
+
+class ThrowingStorage extends MemoryStorage {
+  override setItem(): void {
     throw new DOMException("QuotaExceededError");
   }
 }
 
 describe("writeStoredJson", () => {
   test("round-trips through readStoredJson", () => {
-    const storage = new Map<string, string>();
-    const fakeStorage = {
-      getItem: (key: string) => storage.get(key) ?? null,
-      setItem: (key: string, value: string) => {
-        storage.set(key, value);
-      },
-    } as unknown as Storage;
+    const storage = new MemoryStorage();
 
-    writeStoredJson(fakeStorage, "person", { age: 30, name: "Ada" });
-    const raw = fakeStorage.getItem("person");
+    writeStoredJson(storage, "person", { age: 30, name: "Ada" });
+    const raw = storage.getItem("person");
     expect(readStoredJson(raw, PersonSchema)).toEqual({ age: 30, name: "Ada" });
   });
 
