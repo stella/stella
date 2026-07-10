@@ -95,10 +95,7 @@ const seedClausesWithinOneMillisecond = async (count: number) => {
 describe("clause cursor ordering", () => {
   test("returns every row exactly once across page boundaries", async () => {
     const rows = await seedClausesWithinOneMillisecond(12);
-    const expectedIds = rows
-      .map(({ id }) => id)
-      .toSorted()
-      .toReversed();
+    const expectedIds = rows.toReversed().map(({ id }) => id);
     const collectedIds: string[] = [];
     let cursor: string | undefined;
     const readPage = async (pageCursor: string | undefined) =>
@@ -130,5 +127,23 @@ describe("clause cursor ordering", () => {
 
     expect(collectedIds).toEqual(expectedIds);
     expect(new Set(collectedIds).size).toBe(rows.length);
+  });
+
+  test("rejects a malformed compound cursor at the boundary", async () => {
+    const result = await Result.gen(() =>
+      listClausesHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        query: {
+          categoryId,
+          cursor: "2026-07-10T08:15:30.123456|not-a-uuid",
+        },
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toMatchObject({ status: 400 });
+    }
   });
 });

@@ -7,6 +7,7 @@ import { entities } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isUuid } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,
   pgTimestampCursorBoundary,
@@ -49,7 +50,7 @@ const parseSummaryCursor = (cursor: string | undefined) => {
   const parts = decodePaginationCursor(cursor);
   const createdAt = parsePgTimestampCursorValue(parts?.at(0));
   const id = parts?.at(1);
-  if (parts?.length !== 2 || createdAt === null || typeof id !== "string") {
+  if (parts?.length !== 2 || createdAt === null || !isUuid(id)) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid cursor" }),
     );

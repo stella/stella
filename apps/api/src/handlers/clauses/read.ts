@@ -5,7 +5,7 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { isUuid, tSafeId } from "@/api/lib/custom-schema";
 import {
   parsePgTimestampCursorValue,
   pgTimestampCursorBoundary,
@@ -35,7 +35,7 @@ const decodeCursor = (
   }
   const date = parsePgTimestampCursorValue(cursor.slice(0, idx));
   const id = cursor.slice(idx + 1);
-  if (date === null || !id) {
+  if (date === null || !isUuid(id)) {
     return null;
   }
   return { date, id };
@@ -113,19 +113,22 @@ export const listClausesHandler = async function* ({
   // browsing; search results ignore the cursor.
   if (query.cursor && !isSearching) {
     const parsed = decodeCursor(query.cursor);
-    if (parsed) {
-      // Compound cursor: (createdAt < cursorDate) OR
-      // (createdAt = cursorDate AND id < cursorId)
-      const cursorCondition = or(
-        lt(clauses.createdAt, pgTimestampCursorBoundary(parsed.date)),
-        and(
-          eq(clauses.createdAt, pgTimestampCursorBoundary(parsed.date)),
-          sql`${clauses.id} < ${parsed.id}`,
-        ),
+    if (parsed === null) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
-      if (cursorCondition) {
-        conditions.push(cursorCondition);
-      }
+    }
+    // Compound cursor: (createdAt < cursorDate) OR
+    // (createdAt = cursorDate AND id < cursorId)
+    const cursorCondition = or(
+      lt(clauses.createdAt, pgTimestampCursorBoundary(parsed.date)),
+      and(
+        eq(clauses.createdAt, pgTimestampCursorBoundary(parsed.date)),
+        sql`${clauses.id} < ${parsed.id}`,
+      ),
+    );
+    if (cursorCondition) {
+      conditions.push(cursorCondition);
     }
   }
 
