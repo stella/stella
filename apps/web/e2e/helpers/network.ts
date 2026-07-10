@@ -91,9 +91,9 @@ const isTrackedApiRequest = (request: Request, apiOrigin: string): boolean => {
 };
 
 const isStreamedResponse = (response: Response): boolean =>
-  (response.headers()["content-type"] ?? "").includes(
-    STREAMED_RESPONSE_CONTENT_TYPE,
-  );
+  (response.headers()["content-type"] ?? "")
+    .toLowerCase()
+    .includes(STREAMED_RESPONSE_CONTENT_TYPE);
 
 // Playwright's body() rejects for a response that never finishes (aborted or
 // redirected mid-navigation); that is a legitimate outcome here, not a bug in
