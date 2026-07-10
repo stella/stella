@@ -46,6 +46,9 @@ const leafPaths = (node: RouteNode): string[] => {
       out.push(prefix.join(" "));
       return;
     }
+    if (n.kind === "capability-leaf") {
+      return;
+    }
     for (const [name, child] of Object.entries(n.children)) {
       walk(child, [...prefix, name]);
     }

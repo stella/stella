@@ -105,7 +105,57 @@ export type LeafCommandSpec = {
   inputSchema: JsonSchema;
 };
 
+/** Which part of a capability's input a generated flag routes into (spec 049). */
+export type CapabilityPart = "body" | "params" | "query";
+
+/**
+ * One generated flag on a capability leaf: a `FlagSpec` tagged with the input
+ * part it routes into. `FlagSpec.prop` drives the stricli flag identity (the
+ * user-facing flag name), while `part` + `partPath` drive where the coerced
+ * value lands inside the `invoke_capability` `input` object (`input[part]` at
+ * `partPath`). For a flag whose bare name is unique they coincide; on a
+ * cross-part or reserved-flag collision the generator part-prefixes `prop`
+ * (e.g. `query.version` -> `--query-version`) while `partPath` stays the raw
+ * property path (`version`).
+ */
+export type CapabilityFlagSpec = FlagSpec & {
+  part: CapabilityPart;
+  /** Property path WITHIN `part` (leaf name, or dotted for a depth-2 object). */
+  partPath: string;
+};
+
+/**
+ * A generated capability leaf (spec 049): reached through the generic
+ * `invoke_capability` tool rather than a curated tool. `capabilityId` is the
+ * catalog id; the executor calls `invoke_capability` with
+ * `{ capability: capabilityId, input: { body?, params?, query? } }`.
+ */
+export type CapabilityLeafSpec = {
+  commandPath: readonly string[];
+  capabilityId: string;
+  flags: readonly CapabilityFlagSpec[];
+  /** Part-qualified property paths reachable only through `--input` (spec S3). */
+  inputOnly: readonly string[];
+  paginated: boolean;
+  /** The input part carrying the `cursor`/`limit` pagination props, when paginated. */
+  paginationPart?: CapabilityPart;
+  /** Result envelope items key for a list-shaped capability (`Page<T>` -> `items`). */
+  itemsKey?: string;
+  destructive: boolean;
+  scope?: ToolScope;
+  /**
+   * Synthesized `{ body?, params?, query? }` wrapper schema validated against
+   * the `--input` payload. Absent when the catalog entry's schema was truncated
+   * (`schemaTruncated`): then `--input` is passed through unvalidated (the
+   * server still validates against the live handler schema).
+   */
+  inputSchema?: JsonSchema;
+  /** The catalog entry carried `inputSchemaTruncated`: no flags, `--input` only. */
+  schemaTruncated: boolean;
+};
+
 /** stricli assembly: `LeafCommandSpec[]` folds into a nested route tree. */
 export type RouteNode =
   | { kind: "leaf"; spec: LeafCommandSpec }
+  | { kind: "capability-leaf"; spec: CapabilityLeafSpec }
   | { kind: "route"; children: Record<string, RouteNode> };

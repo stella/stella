@@ -16,7 +16,13 @@ import type {
 
 import type { Context } from "./context.js";
 import type { ResourceLeafSpec, ResourceNode } from "./resource-types.js";
-import type { FlagSpec, LeafCommandSpec, RouteNode } from "./route-types.js";
+import type {
+  CapabilityLeafSpec,
+  FlagSpec,
+  LeafCommandSpec,
+  RouteNode,
+} from "./route-types.js";
+import { runCapabilityCommand } from "./run-capability-command.js";
 import {
   flagKey,
   RESERVED_FLAG_KEYS,
@@ -82,7 +88,7 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
     "Full tool-args JSON: '<json>' | - (stdin) | @file",
   );
   flags[RESERVED_FLAG_KEYS.output] = parsedStringFlag(
-    "Output format: json | table",
+    "Output format: json | table | jsonl",
   );
   flags[RESERVED_FLAG_KEYS.json] = booleanFlag(
     "Output JSON (= --output json)",
@@ -90,6 +96,10 @@ const buildLeafFlags = (spec: LeafCommandSpec): Record<string, unknown> => {
   );
   flags[RESERVED_FLAG_KEYS.table] = booleanFlag(
     "Output a table (= --output table)",
+    false,
+  );
+  flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
+    "Never prompt; fail closed (exit 7) where a confirmation is required",
     false,
   );
 
@@ -148,9 +158,108 @@ const buildLeafCommand = (spec: LeafCommandSpec): RoutingTarget => {
   return buildCommand(typedArgs);
 };
 
+const capabilityInputHint = (spec: CapabilityLeafSpec): string => {
+  if (spec.inputOnly.length > 0) {
+    return ` (via --input only: ${spec.inputOnly.join(", ")})`;
+  }
+  if (spec.schemaTruncated) {
+    return " (--input only)";
+  }
+  return "";
+};
+
+const capabilityLeafBrief = (spec: CapabilityLeafSpec): string =>
+  `Invoke the ${spec.capabilityId} capability${capabilityInputHint(spec)}`;
+
+const buildCapabilityLeafFlags = (
+  spec: CapabilityLeafSpec,
+): Record<string, unknown> => {
+  const flags: Record<string, unknown> = {};
+
+  for (const flagSpec of spec.flags) {
+    const key = flagKey(flagSpec);
+    const brief = flagBrief(flagSpec);
+    if (flagSpec.kind === "boolean") {
+      flags[key] = booleanFlag(brief, true);
+      continue;
+    }
+    if (flagSpec.repeatable) {
+      flags[key] = variadicFlag(brief);
+      continue;
+    }
+    flags[key] = parsedStringFlag(brief);
+  }
+
+  flags[RESERVED_FLAG_KEYS.input] = parsedStringFlag(
+    "Full capability input JSON ({ body?, params?, query? }): '<json>' | - (stdin) | @file",
+  );
+  flags[RESERVED_FLAG_KEYS.output] = parsedStringFlag(
+    "Output format: json | table | jsonl",
+  );
+  flags[RESERVED_FLAG_KEYS.json] = booleanFlag(
+    "Output JSON (= --output json)",
+    false,
+  );
+  flags[RESERVED_FLAG_KEYS.table] = booleanFlag(
+    "Output a table (= --output table)",
+    false,
+  );
+  flags[RESERVED_FLAG_KEYS.noInput] = booleanFlag(
+    "Never prompt; fail closed (exit 7) where a confirmation is required",
+    false,
+  );
+  flags[RESERVED_FLAG_KEYS.dryRun] = booleanFlag(
+    "Validate the input server-side and return without executing (validateOnly)",
+    false,
+  );
+
+  if (spec.paginated) {
+    flags[RESERVED_FLAG_KEYS.cursor] = parsedStringFlag(
+      "Opaque pagination cursor from a previous page",
+    );
+    flags[RESERVED_FLAG_KEYS.limit] = parsedStringFlag("Max items per page");
+    flags[RESERVED_FLAG_KEYS.all] = booleanFlag(
+      "Follow cursors and return every page (bounded)",
+      false,
+    );
+  }
+
+  // Every capability leaf carries the server's per-capability confirm gate, so
+  // it always accepts --yes (pre-approve) alongside the TTY prompt/retry flow.
+  flags[RESERVED_FLAG_KEYS.yes] = booleanFlag(
+    "Skip the destructive-op confirmation prompt",
+    false,
+  );
+
+  return flags;
+};
+
+const buildCapabilityLeafCommand = (
+  spec: CapabilityLeafSpec,
+): RoutingTarget => {
+  const flags = buildCapabilityLeafFlags(spec);
+  const builderArgs = {
+    docs: { brief: capabilityLeafBrief(spec) },
+    parameters: { flags },
+    func: async function func(
+      this: Context,
+      parsedFlags: Record<string, unknown>,
+    ): Promise<void> {
+      await runCapabilityCommand({ context: this, flags: parsedFlags, spec });
+    },
+  };
+  const typedArgs: CommandBuilderArguments<BaseFlags, [], Context> =
+    // eslint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment on buildLeafCommand
+    builderArgs as unknown as CommandBuilderArguments<BaseFlags, [], Context>;
+  return buildCommand(typedArgs);
+};
+
 const buildRouteNode = (node: RouteNode, brief: string): RoutingTarget => {
   if (node.kind === "leaf") {
     return buildLeafCommand(node.spec);
+  }
+  if (node.kind === "capability-leaf") {
+    return buildCapabilityLeafCommand(node.spec);
   }
   const routes: Record<string, RoutingTarget> = {};
   for (const [name, child] of Object.entries(node.children)) {
@@ -177,7 +286,9 @@ export const buildGeneratedRoutes = (
 };
 
 const outputOnlyFlags = (): Record<string, unknown> => ({
-  [RESERVED_FLAG_KEYS.output]: parsedStringFlag("Output format: json | table"),
+  [RESERVED_FLAG_KEYS.output]: parsedStringFlag(
+    "Output format: json | table | jsonl",
+  ),
   [RESERVED_FLAG_KEYS.json]: booleanFlag(
     "Output JSON (= --output json)",
     false,

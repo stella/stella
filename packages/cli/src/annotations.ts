@@ -19,6 +19,8 @@ export const RESERVED_FLAGS: ReadonlySet<string> = new Set([
   "--json",
   "--table",
   "--input",
+  "--no-input",
+  "--dry-run",
   "--yes",
   "-y",
   "--all",

@@ -19,8 +19,9 @@ import { Result } from "better-result";
 import { readFile } from "node:fs/promises";
 
 import { TOOL_ANNOTATIONS } from "./annotations.js";
+import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
-import { generateRouteMap } from "./generate-route-map.js";
+import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import {
@@ -114,8 +115,21 @@ export const resolveCommandTree = async ({
   if (isDeltaEmpty(file.delta)) {
     return { tree: generatedRouteMap };
   }
-  const built = Result.try(() =>
-    generateRouteMap(file.listings, TOOL_ANNOTATIONS),
+  // Rebuild through the SAME shared builder codegen uses (curated tools from
+  // the cached listings + the baked capability merge), so a diverged registry
+  // never drops the generated capability leaves. A missing/corrupt catalog or
+  // a tree that fails to build falls back to the baked-in tree (rule 6).
+  const entries = await loadBakedCapabilityCatalog();
+  if (entries === null) {
+    return { tree: generatedRouteMap };
+  }
+  const built = Result.try(
+    () =>
+      buildCliRouteTree({
+        listings: file.listings,
+        annotations: TOOL_ANNOTATIONS,
+        entries,
+      }).tree,
   );
   if (Result.isError(built)) {
     return { tree: generatedRouteMap };

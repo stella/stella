@@ -5,7 +5,7 @@
 // a TTY), honoring `--output`/`--json`/`--table`. `nextCursor` hints and `--all`
 // truncation notices go to stderr so a piped JSON stdout stays clean.
 
-export type OutputFormat = "json" | "table";
+export type OutputFormat = "json" | "table" | "jsonl";
 
 /** Reserved output flags read off a parsed command's flags. */
 export type OutputFlags = {
@@ -32,6 +32,13 @@ export const selectFormat = ({
   }
   return isTTY ? "table" : "json";
 };
+
+/**
+ * Render one JSON value as a single JSONL line (spec 049 §3). Objects and
+ * scalars alike collapse to one compact line on stdout.
+ */
+export const jsonlLine = (value: unknown): string =>
+  `${JSON.stringify(value)}\n`;
 
 /** The four mutually exclusive render shapes (spec S4). */
 export type RenderPlan =
@@ -186,6 +193,8 @@ export const renderResult = ({
   if (plan.kind === "windowed-text") {
     if (format === "json") {
       writers.stdout(`${JSON.stringify({ text: plan.text }, null, 2)}\n`);
+    } else if (format === "jsonl") {
+      writers.stdout(jsonlLine({ text: plan.text }));
     } else {
       writers.stdout(plan.text.endsWith("\n") ? plan.text : `${plan.text}\n`);
     }
@@ -198,6 +207,8 @@ export const renderResult = ({
   if (plan.kind === "single") {
     if (format === "json") {
       writers.stdout(`${JSON.stringify(plan.payload, null, 2)}\n`);
+    } else if (format === "jsonl") {
+      writers.stdout(jsonlLine(plan.payload));
     } else {
       writers.stdout(`${renderKeyValue(plan.payload)}\n`);
     }
@@ -207,6 +218,11 @@ export const renderResult = ({
   // page envelope
   if (format === "json") {
     writers.stdout(`${JSON.stringify(plan.payload, null, 2)}\n`);
+  } else if (format === "jsonl") {
+    // One item per line, so a page streams the same shape --all does (spec §3).
+    for (const item of plan.items) {
+      writers.stdout(jsonlLine(item));
+    }
   } else {
     writers.stdout(
       `${renderTable({ items: plan.items, columns: plan.columns })}\n`,

@@ -16,7 +16,7 @@ import {
   refreshRegistryCache,
   resolveCommandTree,
 } from "./registry-refresh.js";
-import type { RegistryToolListing } from "./route-types.js";
+import type { RegistryToolListing, RouteNode } from "./route-types.js";
 
 const ORIGIN = "https://api.example.com";
 const tempDirs: string[] = [];
@@ -40,6 +40,24 @@ const listing = (name: string): RegistryToolListing => ({
   description: "d",
   inputSchema: { type: "object", properties: {} },
 });
+
+/** Count leaves of one kind (curated `leaf` vs generated `capability-leaf`). */
+const countLeavesOfKind = (
+  node: RouteNode,
+  kind: "leaf" | "capability-leaf",
+): number => {
+  if (node.kind === kind) {
+    return 1;
+  }
+  if (node.kind !== "route") {
+    return 0;
+  }
+  let count = 0;
+  for (const child of Object.values(node.children)) {
+    count += countLeavesOfKind(child, kind);
+  }
+  return count;
+};
 
 const toolsBody = (names: readonly string[]): string =>
   JSON.stringify({
@@ -116,6 +134,26 @@ describe("resolveCommandTree (S5.3)", () => {
     expect(notice).toBe(
       "server registry differs (+1 −0 ~0); see 'stella tools list'\n",
     );
+  });
+
+  test("a rebuilt (diverged) tree still carries the capability leaves", async () => {
+    const env = await makeCacheEnv();
+    await writeCache(env, {
+      listings: [listing("list_widgets")],
+      delta: { added: ["list_widgets"], removed: [], changed: [] },
+    });
+    const { tree } = await resolveCommandTree({ serverOrigin: ORIGIN, env });
+    expect(tree).not.toBe(generatedRouteMap);
+    // The fetched curated tool is present...
+    expect(countLeavesOfKind(tree, "leaf")).toBeGreaterThan(0);
+    // ...and the baked capability merge ran: the rebuilt tree carries the same
+    // capability leaves as the baked-in tree (they must never vanish on a
+    // registry divergence).
+    const capabilityLeaves = countLeavesOfKind(tree, "capability-leaf");
+    expect(capabilityLeaves).toBe(
+      countLeavesOfKind(generatedRouteMap, "capability-leaf"),
+    );
+    expect(capabilityLeaves).toBeGreaterThan(200);
   });
 
   test("provenance pin: a cache for a different origin is ignored (rule 5)", async () => {

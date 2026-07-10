@@ -87,6 +87,28 @@ The exit code lines up with the tool-error `code`: `validation_error` -> 2,
 `internal_error` -> 4. A legacy server that tags only a bare `feature_disabled`
 code (no envelope) still maps to 5; anything else falls to 4.
 
+## Capability commands (full surface)
+
+Beyond the curated commands above, the CLI generates 237
+capability commands from the server's capability catalog: every safe handler
+that is not a curated tool, reached through the generic `invoke_capability`
+path. They follow the same `stella <domain> <action>` shape (a colliding
+capability drops under `stella capability <domain> <action>` instead).
+
+- **Discover**: `stella capability list [--domain <d>] [--access read|write]`
+  enumerates them (paginated); `stella capability describe <id>` prints one
+  capability's full input schema, scope, and flags.
+- **Invoke by id** (forward-compatible with any server): `stella capability
+invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.
+- **Flags**: each capability command derives flags from its input schema;
+  workspace-scoped capabilities take a required `--workspace <id>`. Deep or
+  ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).
+- **Dry run**: `--dry-run` validates the input server-side and returns without
+  executing (maps to `validateOnly`).
+- **Destructive** capabilities prompt on a TTY and need `--yes` off a TTY; the
+  server's per-capability confirm gate is satisfied automatically once confirmed.
+- Exit codes are identical to the curated commands (see above).
+
 ## Filing feedback
 
 `stella feedback send` files a bug, feature request, or docs issue with the
