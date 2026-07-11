@@ -1,10 +1,11 @@
 #!/usr/bin/env bun
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import nodePath from "node:path";
 
 const DEFAULT_MANIFEST_PATH = "docs/policies/evidence.json";
-const POLICY_MARKER_PATTERN = /<!--\s*evidence:\s*([a-z0-9-]+)\s*-->/gu;
+const POLICY_MARKER_PATTERN =
+  /<!--\s*evidence:\s*(?<controlId>[a-z0-9-]+)\s*-->/gu;
 
 type EvidenceFile = {
   path: string;
@@ -138,7 +139,9 @@ const parseManifest = (
 };
 
 const collectPolicyMarkers = (source: string): string[] =>
-  [...source.matchAll(POLICY_MARKER_PATTERN)].map((match) => match[1] ?? "");
+  [...source.matchAll(POLICY_MARKER_PATTERN)].map(
+    ({ groups }) => groups?.["controlId"] ?? "",
+  );
 
 export const checkPolicyEvidence = ({
   manifestPath = DEFAULT_MANIFEST_PATH,
@@ -148,14 +151,14 @@ export const checkPolicyEvidence = ({
   rootDir: string;
 }): PolicyEvidenceCheckResult => {
   const errors: string[] = [];
-  const absoluteManifestPath = resolve(rootDir, manifestPath);
+  const absoluteManifestPath = nodePath.resolve(rootDir, manifestPath);
   if (!existsSync(absoluteManifestPath)) {
     return { errors: [`missing policy evidence manifest: ${manifestPath}`] };
   }
 
   let rawManifest: unknown;
   try {
-    rawManifest = JSON.parse(readFileSync(absoluteManifestPath, "utf8"));
+    rawManifest = JSON.parse(readFileSync(absoluteManifestPath, "utf-8"));
   } catch (error) {
     return {
       errors: [
@@ -182,12 +185,12 @@ export const checkPolicyEvidence = ({
     policyMarkers.add(control.id);
     manifestMarkersByPolicy.set(control.policy, policyMarkers);
 
-    const policyPath = resolve(rootDir, control.policy);
+    const policyPath = nodePath.resolve(rootDir, control.policy);
     if (!existsSync(policyPath)) {
       errors.push(`${control.id}: missing policy file ${control.policy}`);
       continue;
     }
-    const policySource = readFileSync(policyPath, "utf8");
+    const policySource = readFileSync(policyPath, "utf-8");
     if (!collectPolicyMarkers(policySource).includes(control.id)) {
       errors.push(
         `${control.id}: ${control.policy} is missing <!-- evidence: ${control.id} -->`,
@@ -195,12 +198,12 @@ export const checkPolicyEvidence = ({
     }
 
     for (const evidence of control.evidence) {
-      const evidencePath = resolve(rootDir, evidence.path);
+      const evidencePath = nodePath.resolve(rootDir, evidence.path);
       if (!existsSync(evidencePath)) {
         errors.push(`${control.id}: missing evidence file ${evidence.path}`);
         continue;
       }
-      const source = readFileSync(evidencePath, "utf8");
+      const source = readFileSync(evidencePath, "utf-8");
       for (const expected of evidence.contains) {
         if (!source.includes(expected)) {
           errors.push(
@@ -211,7 +214,7 @@ export const checkPolicyEvidence = ({
     }
   }
 
-  const policiesDir = resolve(rootDir, "docs/policies");
+  const policiesDir = nodePath.resolve(rootDir, "docs/policies");
   let policyFiles: string[];
   try {
     policyFiles = readdirSync(policiesDir)
@@ -225,7 +228,7 @@ export const checkPolicyEvidence = ({
     throw error;
   }
   for (const policy of policyFiles) {
-    const source = readFileSync(resolve(rootDir, policy), "utf8");
+    const source = readFileSync(nodePath.resolve(rootDir, policy), "utf-8");
     const markers = collectPolicyMarkers(source);
     if (markers.length === 0) {
       errors.push(`${policy} has no executable evidence marker`);

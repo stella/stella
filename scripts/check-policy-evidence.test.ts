@@ -7,7 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import nodePath from "node:path";
 
 import { checkPolicyEvidence } from "./check-policy-evidence";
 
@@ -26,17 +26,20 @@ const createFixture = ({
   evidenceSource?: string;
   marker?: string;
 } = {}) => {
-  const root = mkdtempSync(join(tmpdir(), "stella-policy-evidence-"));
+  const root = mkdtempSync(nodePath.join(tmpdir(), "stella-policy-evidence-"));
   testRoots.push(root);
-  mkdirSync(join(root, "docs/policies"), { recursive: true });
-  mkdirSync(join(root, "apps/api/src/lib"), { recursive: true });
+  mkdirSync(nodePath.join(root, "docs/policies"), { recursive: true });
+  mkdirSync(nodePath.join(root, "apps/api/src/lib"), { recursive: true });
   writeFileSync(
-    join(root, "docs/policies/access-control.md"),
+    nodePath.join(root, "docs/policies/access-control.md"),
     `# Access control\n\n<!-- evidence: ${marker} -->\n`,
   );
-  writeFileSync(join(root, "apps/api/src/lib/auth.ts"), evidenceSource);
   writeFileSync(
-    join(root, "docs/policies/evidence.json"),
+    nodePath.join(root, "apps/api/src/lib/auth.ts"),
+    evidenceSource,
+  );
+  writeFileSync(
+    nodePath.join(root, "docs/policies/evidence.json"),
     JSON.stringify({
       version: 1,
       controls: [
@@ -85,8 +88,8 @@ describe("policy evidence guard", () => {
 
   test("rejects evidence paths outside the repository", () => {
     const root = createFixture();
-    const manifestPath = join(root, "docs/policies/evidence.json");
-    const manifest = readFileSync(manifestPath, "utf8").replace(
+    const manifestPath = nodePath.join(root, "docs/policies/evidence.json");
+    const manifest = readFileSync(manifestPath, "utf-8").replace(
       "apps/api/src/lib/auth.ts",
       "../../outside.txt",
     );
@@ -101,10 +104,10 @@ describe("policy evidence guard", () => {
   test("reports a missing policies directory instead of throwing", () => {
     const root = createFixture();
     writeFileSync(
-      join(root, "evidence.json"),
-      readFileSync(join(root, "docs/policies/evidence.json"), "utf8"),
+      nodePath.join(root, "evidence.json"),
+      readFileSync(nodePath.join(root, "docs/policies/evidence.json"), "utf-8"),
     );
-    rmSync(join(root, "docs/policies"), { recursive: true });
+    rmSync(nodePath.join(root, "docs/policies"), { recursive: true });
 
     const result = checkPolicyEvidence({
       manifestPath: "evidence.json",
