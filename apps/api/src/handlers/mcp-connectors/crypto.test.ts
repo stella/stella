@@ -31,9 +31,13 @@ const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> => {
   }
 };
 
-const organizationId = toSafeId<"organization">("org-1");
-const connectorId = toSafeId<"mcpConnector">("conn-1");
-const userId = toSafeId<"user">("user-1");
+const organizationId = toSafeId<"organization">(
+  "0191d14d-9a63-7d2e-a021-06053e542c85",
+);
+const connectorId = toSafeId<"mcpConnector">(
+  "0191d14d-9a63-7d2e-a021-06053e542c86",
+);
+const userId = toSafeId<"user">("0191d14d-9a63-7d2e-a021-06053e542c87");
 const purpose = "mcp_access_token" as const;
 const secret = "super-secret-access-token";
 

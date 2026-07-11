@@ -43,15 +43,11 @@ export const TASK_PRIORITIES = [
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
 
-const TASK_STATUS_SET: ReadonlySet<string> = new Set(TASK_STATUSES);
-
 export const isTaskStatus = (v: string | null): v is TaskStatus =>
-  v !== null && TASK_STATUS_SET.has(v);
-
-const TASK_PRIORITY_SET: ReadonlySet<string> = new Set(TASK_PRIORITIES);
+  v !== null && TASK_STATUSES.some((status) => status === v);
 
 export const isTaskPriority = (v: string | null): v is TaskPriority =>
-  v !== null && TASK_PRIORITY_SET.has(v);
+  v !== null && TASK_PRIORITIES.some((priority) => priority === v);
 
 export const STATUS_ICONS = {
   open: CircleIcon,

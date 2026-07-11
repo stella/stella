@@ -1,7 +1,6 @@
 import {
   type RefObject,
   useCallback,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -291,44 +290,12 @@ export const WorkspaceTable = ({
     ...(inlineFlow && { scrollToFn: noopScrollTo }),
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
-  const lastVirtualRow = virtualRows.at(-1);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- infinite-load trigger that must also re-fire when isFetchingNextPage/hasNextPage flip (not only on virtualizer changes), so it can chain the next page while still parked at the bottom; a virtualizer onChange handler would miss that path, so kept
-  useEffect(() => {
-    // Inline (grouped) sections de-virtualize their rows into a non-scrolling
-    // wrapper, so the virtualizer treats every row as visible and would fetch
-    // every page at once. Those sections page via the intersection sentinel
-    // below instead.
-    if (
-      inlineFlow ||
-      !hasNextPage ||
-      isFetchingNextPage ||
-      !onLoadMore ||
-      !lastVirtualRow
-    ) {
-      return;
-    }
-
-    const shouldLoadMore =
-      lastVirtualRow.index >= rowModel.rows.length - 1 - TABLE_ROW_OVERSCAN;
-    if (shouldLoadMore) {
-      onLoadMore();
-    }
-  }, [
-    inlineFlow,
-    hasNextPage,
-    isFetchingNextPage,
-    lastVirtualRow,
-    onLoadMore,
-    rowModel.rows.length,
-  ]);
   useExternalSyncEffect(() => {
-    // Bounded paging for inline sections: only fetch the next page when the
-    // sentinel at the end of the rendered rows actually scrolls into the real
-    // scroll viewport. That viewport is an ancestor `overflow-auto` element, not
-    // the non-scrolling content wrapper passed as `outerScrollRef`, so resolve
-    // it from the sentinel itself (null falls back to the browser viewport).
+    // Only fetch when the true-end sentinel (after virtual padding) enters the
+    // real scroll viewport. Rebinding after a page settles lets paging continue
+    // while the user remains parked at the bottom.
     const sentinel = loadMoreSentinelRef.current;
-    if (!inlineFlow || !hasNextPage || !onLoadMore || !sentinel) {
+    if (!hasNextPage || !onLoadMore || !sentinel) {
       return undefined;
     }
 
@@ -345,7 +312,7 @@ export const WorkspaceTable = ({
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [inlineFlow, hasNextPage, isFetchingNextPage, onLoadMore]);
+  }, [hasNextPage, isFetchingNextPage, onLoadMore]);
   // Grouped sections share one scroll, so each virtualizes its rows against it.
   // `scrollMargin` is this section's row offset within the scroll content; it is
   // scroll-invariant, so we re-measure on layout changes (other groups loading
@@ -756,7 +723,7 @@ export const WorkspaceTable = ({
             {/* Below the bottom spacer so it marks the section's true end, not
                 the windowed end — otherwise the virtualized window keeps it near
                 the viewport and would page every group at once. */}
-            {inlineFlow && hasNextPage && (
+            {hasNextPage && (
               <div
                 aria-hidden
                 className="pointer-events-none h-px"

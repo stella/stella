@@ -14,7 +14,7 @@ import { t } from "elysia";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import {

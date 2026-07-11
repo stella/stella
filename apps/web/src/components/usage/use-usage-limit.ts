@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import type { UsageLimitExceededReason } from "@/components/usage/usage-limit-modal";
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
 
 /**
  * Mutation error hook that opens the usage-limit modal
@@ -116,17 +116,16 @@ export const extractFromError = (
     };
   }
   if (typeof error === "object" && error !== null) {
-    const candidate = error as {
-      statusCode?: unknown;
-      message?: unknown;
-      responseBody?: unknown;
-    };
-    if (candidate.statusCode !== 402) {
+    const statusCode = "statusCode" in error ? error.statusCode : undefined;
+    if (statusCode !== 402) {
       return null;
     }
+    const candidateMessage = "message" in error ? error.message : undefined;
     const message =
-      typeof candidate.message === "string" ? candidate.message : "";
-    const details = parseResponseBody(candidate.responseBody);
+      typeof candidateMessage === "string" ? candidateMessage : "";
+    const responseBody =
+      "responseBody" in error ? error.responseBody : undefined;
+    const details = parseResponseBody(responseBody);
     if (!details || !isReason(details["reason"])) {
       // 402 without our reason marker = not from our usage-limit
       // gate; could be an upstream provider's 402 leaking
@@ -153,7 +152,7 @@ const parseResponseBody = (
     return undefined;
   }
   try {
-    const parsed = JSON.parse(value) as unknown;
+    const parsed: unknown = JSON.parse(value);
     if (isPlainObject(parsed)) {
       return parsed;
     }

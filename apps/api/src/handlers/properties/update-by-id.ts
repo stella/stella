@@ -19,6 +19,7 @@ import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-
 import { comparePropertiesForStale } from "@/api/handlers/properties/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -119,14 +120,17 @@ const getTransitiveDependents = (
   }
 
   const visited = new Set<SafeId<"property">>();
-  const queue = dependents.get(rootId) ?? [];
+  const storedQueue = dependents.get(rootId);
+  const queue = arrayOrEmpty(storedQueue);
 
   for (const id of queue) {
     if (visited.has(id)) {
       continue;
     }
     visited.add(id);
-    for (const next of dependents.get(id) ?? []) {
+    const storedDependents = dependents.get(id);
+    const nextDependents = arrayOrEmpty(storedDependents);
+    for (const next of nextDependents) {
       queue.push(next);
     }
   }
@@ -172,7 +176,9 @@ const hasCircularDependency = ({
 
     visited.add(startId);
 
-    for (const inputId of dependencyGraph.get(startId) ?? []) {
+    const storedInputIds = dependencyGraph.get(startId);
+    const inputIds = arrayOrEmpty(storedInputIds);
+    for (const inputId of inputIds) {
       if (detectCycle(inputId, visited)) {
         return true;
       }

@@ -90,10 +90,16 @@ const handle = async (request: AnonRequest): Promise<AnonResponse> => {
   }
 };
 
-// SAFETY: this module only runs inside a Web Worker — `self` is
-// the dedicated worker scope.
-// oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- worker `self` is the dedicated worker scope
-const scope = self as unknown as DedicatedWorkerGlobalScope;
+const isDedicatedWorkerScope = (
+  value: typeof globalThis,
+): value is typeof globalThis & DedicatedWorkerGlobalScope =>
+  "importScripts" in value && "WorkerGlobalScope" in globalThis;
+
+if (!isDedicatedWorkerScope(globalThis)) {
+  throw new TypeError("Chat anonymization must run in a dedicated worker");
+}
+
+const scope = globalThis;
 
 scope.addEventListener("message", (event: MessageEvent<AnonRequest>) => {
   void handle(event.data).then((response) => {

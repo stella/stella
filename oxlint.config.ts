@@ -111,6 +111,7 @@ export default defineConfig({
     "tagged-error-requires-message/tagged-error-requires-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
+    "no-facade-imports/no-facade-imports": "error",
     "no-unsafe-inner-html/no-unsafe-inner-html": "error",
     "no-static-devtools-import/no-static-devtools-import": "error",
     "no-static-catalogue-route-import/no-static-catalogue-route-import": [
@@ -351,6 +352,7 @@ export default defineConfig({
     "./.oxlint-plugins/stella-toast.ts",
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
+    "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
@@ -1268,7 +1270,7 @@ export default defineConfig({
               "apps/api/src/handlers/case-law/ingestion/adapters/sk-us.ts",
               "apps/api/src/handlers/case-law/ingestion/adapters/utils.ts",
               "apps/api/src/handlers/health/routes.ts",
-              "apps/api/src/index.ts",
+              "apps/api/src/server.ts",
               "apps/api/src/lib/analytics/posthog.ts",
               // dispatch.ts is imported transitively by the chat tool
               // catalogue from contexts that do not run full env
@@ -1591,8 +1593,9 @@ export default defineConfig({
               },
               {
                 name: "@/api/db/root",
+                importNames: ["rootDb", "rlsDb"],
                 message:
-                  "Handlers must not import the root db module. Use ctx.scopedDb, or move owner-level DB access into a narrow lib helper.",
+                  "Handlers must not import owner-level DB values. Use ctx.scopedDb, or move owner-level DB access into a narrow lib helper.",
               },
             ],
           },

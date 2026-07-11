@@ -157,7 +157,11 @@ const collectToolCallSignatures = (
       continue;
     }
 
-    for (const toolCall of message.toolCalls ?? []) {
+    const toolCalls = message.toolCalls;
+    if (toolCalls === undefined) {
+      continue;
+    }
+    for (const toolCall of toolCalls) {
       const serializedInput = stableStringify(
         parseToolArguments(toolCall.function.arguments),
       );

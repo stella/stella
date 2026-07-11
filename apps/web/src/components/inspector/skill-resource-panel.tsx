@@ -12,7 +12,7 @@ import { MarkdownPreview } from "@/components/markdown-preview";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
 import { api } from "@/lib/api";
 import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   toEditorMarkdown,

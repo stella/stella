@@ -19,7 +19,6 @@ import {
   bundledEnglishMessages,
   useI18nStore,
 } from "@/i18n/i18n-store";
-import type Messages from "@/i18n/langs/messages.gen";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { AnalyticsProvider, useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
@@ -90,14 +89,9 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // completes; the persisted locale then swaps in place.
   const preHydrationEnglish = onPublicSsrPath && !hydrated;
 
-  // SAFETY: locale JSON files are shape-checked in i18n-store.ts; this
-  // cast is only at the provider boundary because use-intl's Messages
-  // type preserves English literal message values while translated
-  // locale JSONs necessarily contain different strings.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- i18n provider boundary; locale JSON shape-checked in i18n-store, use-intl's Messages keeps English literal values
-  const activeMessages = (
-    preHydrationEnglish ? bundledEnglishMessages : messages
-  ) as Messages;
+  const activeMessages = preHydrationEnglish
+    ? bundledEnglishMessages
+    : messages;
 
   // Plurals and message lookup key off the base language; the -u- extensions
   // only steer number/date formatting. preHydrationEnglish forces the plain

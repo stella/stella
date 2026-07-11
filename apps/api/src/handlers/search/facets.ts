@@ -1,10 +1,11 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { ENTITY_KINDS } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -71,7 +72,8 @@ export const searchFacetsHandler = async ({
     return resolved.response;
   }
 
-  const types = body.types.length > 0 ? body.types : (body.kinds ?? []);
+  const fallbackTypes = arrayOrEmpty(body.kinds);
+  const types = body.types.length > 0 ? body.types : fallbackTypes;
 
   return await searchGlobalFacet({
     facet: body.facet,

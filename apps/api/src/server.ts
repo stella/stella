@@ -68,7 +68,8 @@ import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
-import { captureRequestError, getAnalytics } from "@/api/lib/analytics";
+import { captureRequestError } from "@/api/lib/analytics/capture";
+import { getAnalytics } from "@/api/lib/analytics/client";
 import { getAuth } from "@/api/lib/auth";
 import {
   beginRequestQueryCounter,
@@ -95,7 +96,7 @@ import {
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
-} from "@/api/lib/rate-limit";
+} from "@/api/lib/rate-limit/rate-limit";
 import {
   isCorpusS3Stale,
   isS3Stale,
@@ -124,7 +125,7 @@ const STATUS_BY_ELYSIA_CODE: Partial<Record<string, number>> = {
 };
 
 const getApiPort = () => {
-  const rawPort = process.env["STELLA_API_PORT"] ?? process.env["PORT"];
+  const rawPort = env.STELLA_API_PORT ?? env.PORT;
   if (!rawPort) {
     return DEFAULT_API_PORT;
   }
@@ -504,7 +505,7 @@ const startS3RefreshLoop = () => {
 };
 
 // Booting (migration check, S3 warmup, BullMQ workers, bound port) runs
-// only when this module is the process entry point: `bun src/index.ts` in
+// only when this module is the process entry point: `bun src/server.ts` in
 // dev and the `bun build --compile` binary in prod. Importing the module
 // instead — as the exact-mirror CI guard in
 // `apps/api/scripts/exact-mirror-guard.ts` does to build every route's

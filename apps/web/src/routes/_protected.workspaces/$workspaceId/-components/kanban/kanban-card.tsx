@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { normalizeOptionalArray } from "@/lib/arrays";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -163,7 +164,7 @@ export const KanbanCard = ({
     );
 
   const isTask = entity.kind === "task";
-  const visibleCardFields = cardFields ?? [];
+  const visibleCardFields = normalizeOptionalArray(cardFields);
   const valueFields = visibleCardFields.filter((fieldId) => {
     if (
       fieldId === getInternalPropertyId("created-by") ||

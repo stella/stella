@@ -123,7 +123,10 @@ export const decodeCaseLawDecisionIdFromRoute = (
   }
 
   const bytes = decodeBase64Url(trimmed);
-  return bytesToUuid(bytes ?? []) ?? trimmed;
+  if (!bytes) {
+    return trimmed;
+  }
+  return bytesToUuid(bytes) ?? trimmed;
 };
 
 const trimSlugHyphens = (value: string): string => {

@@ -11,6 +11,7 @@ import {
   useChatAnonymizePreview,
   useChatDraftText,
 } from "@/lib/anonymize/use-chat-anonymize";
+import { normalizeOptionalReadonlyArray } from "@/lib/arrays";
 
 /**
  * The single integration point that lights up anonymization
@@ -99,7 +100,10 @@ export const useChatAnonymizationLayer = ({
     if (!editor || !enabled) {
       return;
     }
-    setChatAnonDecorationPairs(editor.view, pairs ?? []);
+    setChatAnonDecorationPairs(
+      editor.view,
+      normalizeOptionalReadonlyArray(pairs),
+    );
   }, [editor, enabled, pairs]);
 };
 

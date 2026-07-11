@@ -7,6 +7,7 @@ import { queryEntities } from "@/api/handlers/entities/query-entities";
 import { collectMissingAncestorIds } from "@/api/handlers/entities/read-filesystem-tree.logic";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -50,12 +51,12 @@ export const createReadFilesystemTreeHandler = (
           workspaceId,
           currentUserId: currentUser.id,
           currentOrganizationId: session.activeOrganizationId,
-          filters: body.filters ?? [],
-          sorts: body.sorts ?? [],
+          filters: arrayOrEmpty(body.filters),
+          sorts: arrayOrEmpty(body.sorts),
           ...(body.search !== undefined && { search: body.search }),
           limit: LIMITS.entitiesCount,
           fieldMode: body.fieldMode ?? "full",
-          fieldIds: body.fieldIds ?? [],
+          fieldIds: arrayOrEmpty(body.fieldIds),
           excludedKinds: ["task"],
           previewableForAi: false,
         }),

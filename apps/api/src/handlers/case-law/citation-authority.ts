@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { redistributableCaseLawSourceSqlFor } from "@/api/handlers/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Materialize the citation-authority ranking signal onto
@@ -99,9 +100,12 @@ export const recomputeCitationAuthorityForAll = async (
   const result: unknown = await tx.execute(
     sql`SELECT count(*)::int AS n FROM case_law_decisions WHERE citation_count > 0`,
   );
-  // SAFETY: `count(*)::int AS n` yields one row whose `n` is an integer;
-  // the driver may return the rows bare or wrapped, so guard for an array.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- known count() result shape
-  const rows = Array.isArray(result) ? (result as { n: number }[]) : [];
-  return Number(rows.at(0)?.n) || 0;
+  if (!Array.isArray(result)) {
+    return 0;
+  }
+  const firstRow: unknown = result.at(0);
+  if (!isRecord(firstRow) || typeof firstRow["n"] !== "number") {
+    return 0;
+  }
+  return firstRow["n"];
 };

@@ -7,8 +7,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { ClientOperationError, toAPIError } from "@/lib/errors";
-import type { APIError } from "@/lib/errors";
+import { type APIError, toAPIError } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 
 /** Client-observed ceiling for a model-selection PATCH: long enough for a

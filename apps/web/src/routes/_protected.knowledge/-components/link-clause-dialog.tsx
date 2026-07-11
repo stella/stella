@@ -1,5 +1,5 @@
 import type { ComponentProps } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -31,7 +31,8 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
@@ -90,7 +91,7 @@ export const LinkClauseDialog = ({
   // Variant whose body the preview pane shows while its option is highlighted;
   // null renders the pane empty (and is the "Standard (no variant)" row).
   const [previewVariantId, setPreviewVariantId] = useState<string | null>(null);
-  // null = not yet initialized; the effect below preselects the first
+  // null = not yet initialized; the state machine below preselects the first
   // unfilled discovered slot once the template preview loads.
   const [slotValue, setSlotValue] = useState<string | null>(null);
   const [customSlotName, setCustomSlotName] = useState("");
@@ -135,49 +136,33 @@ export const LinkClauseDialog = ({
     ...reservedSlotNames,
   ]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- resets the slot draft on close and seeds a default slot once the preview/links queries land while open; setSlotValue/setCustomSlotName are also driven by user selection so this is not pure derived state, and the dialog stays mounted (open is controlled) so a key reset cannot replace it
-  useEffect(() => {
+  const [lastOpen, setLastOpen] = useState(open);
+  if (open !== lastOpen) {
+    setLastOpen(open);
     if (!open) {
-      // eslint-disable-next-line react/react-compiler -- resets the slot draft on close and seeds a default once the preview/links queries land; setters are also user-driven, so this syncs with external query state and is not pure derived state
       setSlotValue(null);
       setCustomSlotName("");
-      return;
     }
+  }
+
+  // Until the user owns the slot draft, initialize it from the explicit
+  // default or from the first async-discovered unclaimed slot. Once non-null,
+  // query refetches cannot overwrite the user's selection.
+  if (open && slotValue === null) {
     const reserved = new Set(reservedSlotNames);
-    if (
-      slotValue === null &&
-      defaultSlotName !== undefined &&
-      !reserved.has(defaultSlotName)
-    ) {
+    if (defaultSlotName !== undefined && !reserved.has(defaultSlotName)) {
       setSlotValue(SLOT_VALUE_PREFIX + defaultSlotName);
-      return;
+    } else if (previewData !== undefined) {
+      const firstUnfilled = discoveredSlots.find(
+        (slot) => !takenSlots.has(slot),
+      );
+      setSlotValue(
+        firstUnfilled === undefined
+          ? SLOT_VALUE_NONE
+          : SLOT_VALUE_PREFIX + firstUnfilled,
+      );
     }
-    if (slotValue !== null || previewData === undefined) {
-      return;
-    }
-    const slots = "clauseSlots" in previewData ? previewData.clauseSlots : [];
-    const taken = new Set([
-      ...(linksData && "links" in linksData
-        ? linksData.links.flatMap((link) =>
-            link.slotName === null ? [] : [link.slotName],
-          )
-        : []),
-      ...reserved,
-    ]);
-    const firstUnfilled = slots.find((slot) => !taken.has(slot));
-    setSlotValue(
-      firstUnfilled === undefined
-        ? SLOT_VALUE_NONE
-        : SLOT_VALUE_PREFIX + firstUnfilled,
-    );
-  }, [
-    open,
-    slotValue,
-    previewData,
-    linksData,
-    defaultSlotName,
-    reservedSlotNames,
-  ]);
+  }
 
   const categories =
     catData && "categories" in catData ? catData.categories : [];
@@ -207,6 +192,7 @@ export const LinkClauseDialog = ({
     variantsResult && "variants" in variantsResult
       ? variantsResult.variants
       : [];
+  const previewVariant = variants.find((v) => v.id === previewVariantId);
 
   const filtered = clauses.filter((c) => {
     if (selectedCategory && c.categoryId !== selectedCategory) {
@@ -391,10 +377,7 @@ export const LinkClauseDialog = ({
                       <PreviewPane>
                         {previewVariantId !== null && (
                           <VariantBodyPreview
-                            body={
-                              variants.find((v) => v.id === previewVariantId)
-                                ?.body ?? []
-                            }
+                            body={previewVariant ? previewVariant.body : []}
                           />
                         )}
                       </PreviewPane>

@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getRemainingUsageUnits } from "@/api/lib/usage";
+import { getRemainingUsageUnits } from "@/api/lib/usage/usage-ledger";
 
 /** Read the caller organisation's usage entitlement and current state. */
 

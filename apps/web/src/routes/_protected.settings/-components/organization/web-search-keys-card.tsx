@@ -23,7 +23,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   webSearchConfigOptions,
   webSearchKeysKeys,
@@ -97,7 +98,7 @@ const WebSearchKeyField = ({ kind, state }: WebSearchKeyFieldProps) => {
       analytics.captureError(error);
       stellaToast.add({
         title: t("errors.actionFailed"),
-        description: error instanceof Error ? error.message : undefined,
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
       });
     },

@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import JSZip from "jszip";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";

@@ -62,12 +62,15 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { optionalArray, optionalReadonlyArray } from "@/lib/arrays";
+import { BoundedMap } from "@/lib/bounded-set";
 import {
   DOCX_MIME,
   SIDE_RAIL_TAB_ICON_SIZE_PX,
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
-import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateCheckDialog } from "@/routes/_protected.knowledge/-components/template-check-dialog";
@@ -167,7 +170,7 @@ function TemplateStudioInspectorView({
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
       : null;
-  const languages = detail?.languages ?? [];
+  const languages = detail ? detail.languages : [];
   const openView = useInspectorStore((s) => s.openView);
   const setNavName = useTemplateNavStore((s) => s.setName);
   const [rename, setRename] = useState<{ active: boolean; value: string }>({
@@ -555,7 +558,7 @@ const pushFillPreview = (
   cancelLookupPreviews();
   const preview: Record<string, TemplatePreviewValue> = {};
   const fieldByPath = new Map<string, LookupPreviewField>(
-    (fields ?? []).map((field) => [field.path, field]),
+    optionalReadonlyArray(fields).map((field) => [field.path, field]),
   );
   // Linked clause slots preview their resolved text, keyed by slot name to
   // match the folio plugin's clause-range key.
@@ -582,7 +585,8 @@ const pushFillPreview = (
   }
   // Formula fields are derived (no form input), so they never appear in the
   // submitted values; render them from the field list directly.
-  for (const field of fields ?? []) {
+  const availableFields = optionalReadonlyArray(fields);
+  for (const field of availableFields) {
     if (field.formula === undefined || preview[field.path] !== undefined) {
       continue;
     }
@@ -591,7 +595,7 @@ const pushFillPreview = (
       preview[field.path] = computed;
     }
   }
-  const pending = applyCachedLookupRenderings(preview, fields ?? []);
+  const pending = applyCachedLookupRenderings(preview, availableFields);
   useTemplateStudioStore
     .getState()
     .actions?.setFillPreview(Object.keys(preview).length > 0 ? preview : null);
@@ -710,15 +714,11 @@ const lookupPreviewKey = (request: LookupPreviewRequest): string =>
  *  insertion is evicted, so a long studio session cannot grow it without
  *  limit. */
 const LOOKUP_PREVIEW_CACHE_MAX = 100;
-const lookupPreviewCache = new Map<string, string | null>();
+const lookupPreviewCache = new BoundedMap<string, string | null>(
+  LOOKUP_PREVIEW_CACHE_MAX,
+);
 
 const rememberLookupRendering = (key: string, rendered: string | null) => {
-  if (lookupPreviewCache.size >= LOOKUP_PREVIEW_CACHE_MAX) {
-    const oldest = lookupPreviewCache.keys().next().value;
-    if (oldest !== undefined) {
-      lookupPreviewCache.delete(oldest);
-    }
-  }
   lookupPreviewCache.set(key, rendered);
 };
 
@@ -827,7 +827,7 @@ const InsertExistingFieldItem = ({
 }) => {
   const t = useTranslations();
   const label = field.label === "" ? field.path : field.label;
-  const formats = field.lookup?.formats ?? [];
+  const formats = optionalArray(field.lookup?.formats);
   if (formats.length <= 1) {
     return (
       <MenuItem onClick={() => onInsert(field.path)}>
@@ -1157,6 +1157,11 @@ registerInspectorView<TemplateStudioPayload>({
   railIcon: TemplateStudioRailIcon,
   render: TemplateStudioInspectorView,
   type: TEMPLATE_STUDIO_VIEW,
+  validate: (value): value is TemplateStudioPayload =>
+    typeof value === "object" &&
+    value !== null &&
+    "templateId" in value &&
+    typeof value.templateId === "string",
 });
 
 // ── Selection-scoped inspector ───────────────────────────

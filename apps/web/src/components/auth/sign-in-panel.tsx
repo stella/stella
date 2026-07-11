@@ -21,7 +21,9 @@ import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
-import { APIError, toAuthClientError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { emailSchema, toFormErrors } from "@/lib/schema";
@@ -161,7 +163,10 @@ export function SignInPanel({
     analytics.captureError(toAuthClientError(error));
     if (error.status !== HTTP_TOO_MANY_REQUESTS) {
       stellaToast.add({
-        title: error.message ?? t("errors.actionFailed"),
+        title: userErrorFromThrown(
+          toAuthClientError(error),
+          t("errors.actionFailed"),
+        ),
         type: "error",
       });
     }
@@ -188,7 +193,10 @@ export function SignInPanel({
         analytics.captureError(toAuthClientError(error));
         if (error.status !== HTTP_TOO_MANY_REQUESTS) {
           stellaToast.add({
-            title: error.message ?? t("errors.actionFailed"),
+            title: userErrorFromThrown(
+              toAuthClientError(error),
+              t("errors.actionFailed"),
+            ),
             type: "error",
           });
         }
@@ -359,7 +367,10 @@ function PasswordSignInForm({
         analytics.captureError(toAuthClientError(error));
         if (error.status !== HTTP_TOO_MANY_REQUESTS) {
           stellaToast.add({
-            title: error.message ?? t("errors.actionFailed"),
+            title: userErrorFromThrown(
+              toAuthClientError(error),
+              t("errors.actionFailed"),
+            ),
             type: "error",
           });
         }
@@ -477,7 +488,10 @@ function BootstrapSignUpForm({
         analytics.captureError(toAuthClientError(error));
         if (error.status !== HTTP_TOO_MANY_REQUESTS) {
           stellaToast.add({
-            title: error.message ?? t("errors.actionFailed"),
+            title: userErrorFromThrown(
+              toAuthClientError(error),
+              t("errors.actionFailed"),
+            ),
             type: "error",
           });
         }

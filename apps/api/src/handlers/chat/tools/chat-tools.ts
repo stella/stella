@@ -1,7 +1,7 @@
 import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/skills";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";

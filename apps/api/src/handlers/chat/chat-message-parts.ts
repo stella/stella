@@ -17,6 +17,7 @@ import {
   isUserFileUrl,
   parseUserFileId,
 } from "@/api/handlers/user-files/types";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const IMAGE_MIME_PREFIX = "image/";
@@ -186,10 +187,8 @@ export const normalizeLegacyMessagePartsToTanStack = (
       continue;
     }
     if (isLegacySourceDocumentPart(part)) {
-      metadata.sourceDocuments = [
-        ...(metadata.sourceDocuments ?? []),
-        part.data,
-      ];
+      const sourceDocuments = metadata.sourceDocuments;
+      metadata.sourceDocuments = [...arrayOrEmpty(sourceDocuments), part.data];
       continue;
     }
     if (isLegacyToolPart(part)) {
@@ -490,7 +489,7 @@ const mergeAnonRestorations = (
   current: ChatMessageMetadata["anonRestorations"],
   next: NonNullable<ChatMessageMetadata["anonRestorations"]>,
 ): NonNullable<ChatMessageMetadata["anonRestorations"]> => ({
-  pairs: [...(current?.pairs ?? []), ...next.pairs],
+  pairs: [...(current === undefined ? [] : current.pairs), ...next.pairs],
 });
 
 const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>

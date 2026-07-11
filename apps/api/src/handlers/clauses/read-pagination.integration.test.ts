@@ -9,7 +9,7 @@ import {
 } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { clauseCategories, clauses } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { listClausesHandler } from "@/api/handlers/clauses/read";

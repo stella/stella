@@ -18,16 +18,14 @@
  */
 
 import { panic } from "better-result";
+import * as v from "valibot";
 
-declare const __promptBrand: unique symbol;
+const untrustedTextSchema = v.pipe(v.string(), v.brand("UntrustedText"));
+const promptSafeTextSchema = v.pipe(v.string(), v.brand("PromptSafeText"));
 
-export type UntrustedText = string & {
-  readonly [__promptBrand]: "UntrustedText";
-};
+export type UntrustedText = v.InferOutput<typeof untrustedTextSchema>;
 
-export type PromptSafeText = string & {
-  readonly [__promptBrand]: "PromptSafeText";
-};
+export type PromptSafeText = v.InferOutput<typeof promptSafeTextSchema>;
 
 /**
  * Declares that a string crossed an untrusted boundary. Call this at
@@ -35,9 +33,7 @@ export type PromptSafeText = string & {
  * page, accepting user-pasted content), not deep in the call graph.
  */
 export const untrustedText = (text: string): UntrustedText =>
-  // SAFETY: nominal brand; promotion to PromptSafeText happens in sanitizeForPrompt
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  text as UntrustedText;
+  v.parse(untrustedTextSchema, text);
 
 type SanitizeForPromptOptions = {
   maxLength?: number;
@@ -164,9 +160,5 @@ export const sanitizeForPrompt = (
     )}${TRUNCATION_SUFFIX}`;
   }
 
-  // SAFETY: all known control sequences, role markers, and delimiter
-  // collisions removed above; wrapper guarantees the model sees data
-  // boundaries even if the surrounding template forgets to add them.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return `${open}\n${cleaned}\n${close}` as PromptSafeText;
+  return v.parse(promptSafeTextSchema, `${open}\n${cleaned}\n${close}`);
 };

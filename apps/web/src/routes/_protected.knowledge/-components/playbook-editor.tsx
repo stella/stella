@@ -44,11 +44,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import {
-  toAPIError,
-  userErrorFromThrown,
-  userErrorMessage,
-} from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { usePlaybookNavStore } from "@/routes/_protected.knowledge/-components/playbook-nav-store";
 import {
@@ -263,7 +260,7 @@ const PlaybookEditorForm = ({
   const { data: documentTypesData } = useQuery(
     documentTypesOptions(organizationId),
   );
-  const documentTypes = documentTypesData?.items ?? [];
+  const documentTypes = documentTypesData ? documentTypesData.items : [];
 
   const setNavOpen = usePlaybookNavStore((s) => s.setOpen);
   const clearNav = usePlaybookNavStore((s) => s.clear);

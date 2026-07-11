@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { ElysiaCustomStatusResponse } from "elysia/error";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { templateRecipeDefinitionSchema } from "@/api/handlers/template-recipes/definition";
 import { createTemplateRecipeHandler } from "@/api/handlers/template-recipes/recipes";
 import type { AuditRecorder } from "@/api/lib/audit-log";

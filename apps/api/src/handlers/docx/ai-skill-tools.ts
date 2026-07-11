@@ -14,7 +14,7 @@
  * can adopt the same `maybeSkillTools` seam later without changing this module.
  */
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
 import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";

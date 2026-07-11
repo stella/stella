@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, or } from "drizzle-orm";
 
 import { agentSkills } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { LIMITS } from "@/api/lib/limits";
 import {
   collisionSafeToolName,

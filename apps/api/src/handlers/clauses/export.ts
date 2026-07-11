@@ -2,10 +2,11 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVariants } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
@@ -104,7 +105,8 @@ const exportHandler = async function* ({
   for (const variant of [...variantRows].sort(
     (a, b) => a.sortOrder - b.sortOrder,
   )) {
-    const list = variantsByClause.get(variant.clauseId) ?? [];
+    const storedVariants = variantsByClause.get(variant.clauseId);
+    const list = arrayOrEmpty(storedVariants);
     list.push({ label: variant.label, body: variant.body });
     variantsByClause.set(variant.clauseId, list);
   }
@@ -117,7 +119,10 @@ const exportHandler = async function* ({
     usageNotes: row.usageNotes,
     language: row.language,
     body: row.body,
-    variants: variantsByClause.get(row.id) ?? [],
+    variants: (() => {
+      const storedVariants = variantsByClause.get(row.id);
+      return arrayOrEmpty(storedVariants);
+    })(),
     metadata: normalizeClauseMetadata(row.metadata) ?? null,
     categoryName: row.categoryId
       ? (categoryMap.get(row.categoryId)?.name ?? null)

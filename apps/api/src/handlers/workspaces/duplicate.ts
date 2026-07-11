@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -19,7 +19,7 @@ import {
 import type { FieldContent } from "@/api/db/schema-validators";
 import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -186,7 +186,9 @@ const collectUniqueFileCopies = (
   const fileCopiesBySourceId = new Map<string, FileCopy>();
 
   for (const entity of entitiesToCopy) {
-    for (const field of entity.currentVersion?.fields ?? []) {
+    const currentVersion =
+      entity.currentVersion ?? panic("Entity is missing its current version");
+    for (const field of currentVersion.fields) {
       for (const copy of collectFileCopies(field.content)) {
         if (fileCopiesBySourceId.has(copy.sourceFileId)) {
           continue;
@@ -252,7 +254,10 @@ const orderEntitiesForDuplicate = <
     }
     visited.add(entity.id);
     ordered.push(entity);
-    queue.push(...(childrenByParentId.get(entity.id) ?? []));
+    const children = childrenByParentId.get(entity.id);
+    if (children) {
+      queue.push(...children);
+    }
   }
 
   for (const entity of entitiesToOrder) {

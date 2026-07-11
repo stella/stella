@@ -39,7 +39,8 @@ import { cn } from "@stll/ui/lib/utils";
 import Tooltip from "@/components/tooltip";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { optionalArray } from "@/lib/arrays";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import {
@@ -233,8 +234,6 @@ export type FieldValidation = {
   maxItems?: number | undefined;
 };
 
-const INPUT_TYPE_SET: ReadonlySet<string> = new Set(INPUT_TYPES);
-
 /** Canonical icon + name for a field's value type (shared with the matter
  *  table's property chips via the value-type registry). */
 export const ValueTypeLabel = ({
@@ -254,7 +253,7 @@ export const ValueTypeLabel = ({
 };
 
 export const isInputType = (value: string): value is InputType =>
-  INPUT_TYPE_SET.has(value);
+  INPUT_TYPES.some((inputType) => inputType === value);
 
 const inferInputType = (field: ResolvedField): InputType => {
   if (field.inputType && isInputType(field.inputType)) {
@@ -279,11 +278,11 @@ export const buildEditableFields = (
     hint: f.hint,
     inputType: inferInputType(f),
     required: f.required ?? false,
-    options: f.options ?? [],
+    options: optionalArray(f.options),
     parts: f.parts?.map((part) => ({
       key: part.key,
       inputType: part.inputType,
-      options: part.options ?? [],
+      options: optionalArray(part.options),
       label: part.label,
       pattern: part.pattern,
     })),
@@ -325,7 +324,8 @@ export const defaultCompositeFormat = (
 export const compositeManifestProps = (
   field: TemplateEditableField,
 ): CompositeManifestProps => {
-  const parts = (field.parts ?? []).filter((part) => part.key.trim() !== "");
+  const fieldParts = optionalArray(field.parts);
+  const parts = fieldParts.filter((part) => part.key.trim() !== "");
   // An untyped format defaults to all parts joined by spaces, so a composite
   // never silently degrades to a plain field just because the author skipped
   // the format input.
@@ -472,7 +472,7 @@ export const ConfigureStep = ({
   // paths (`parties.name`) since the array itself holds objects, not values.
   const fieldPathChoices = discoveredFields.flatMap((f) =>
     f.kind === "array"
-      ? (f.itemFields ?? []).map((sub) => `${f.path}.${sub.path}`)
+      ? optionalArray(f.itemFields).map((sub) => `${f.path}.${sub.path}`)
       : [f.path],
   );
 
@@ -770,7 +770,7 @@ const CompositePartsEditor = ({
   onUpdate: (patch: Partial<TemplateEditableField>) => void;
 }) => {
   const t = useTranslations();
-  const parts = field.parts ?? [];
+  const parts = optionalArray(field.parts);
 
   const updatePart = (index: number, patch: Partial<EditablePart>) => {
     onUpdate({
@@ -1200,7 +1200,7 @@ const CompanyLookupConfig = ({
   const t = useTranslations();
   const locale = useLocale();
   const registry = field.lookup?.registry ?? preferredRegistry(locale);
-  const formats = field.lookup?.formats ?? [];
+  const formats = optionalArray(field.lookup?.formats);
   const options = orderedRegistryOptions(locale);
   const selectedOption =
     options.find((option) => option.slug === registry) ?? null;

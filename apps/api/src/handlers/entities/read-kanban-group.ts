@@ -12,6 +12,7 @@ import {
 } from "@/api/handlers/entities/window-cursor";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -79,13 +80,13 @@ const readKanbanGroup = createSafeHandler(
         workspaceId,
         currentUserId: currentUser.id,
         currentOrganizationId: session.activeOrganizationId,
-        filters: body.filters ?? [],
-        sorts: body.sorts ?? [],
+        filters: arrayOrEmpty(body.filters),
+        sorts: arrayOrEmpty(body.sorts),
         cursor: cursorResult.value,
         limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",
-        fieldIds: body.fieldIds ?? [],
-        excludedKinds: body.excludedKinds ?? [],
+        fieldIds: arrayOrEmpty(body.fieldIds),
+        excludedKinds: arrayOrEmpty(body.excludedKinds),
         extraConditions: [conditionResult.value],
       }),
     );

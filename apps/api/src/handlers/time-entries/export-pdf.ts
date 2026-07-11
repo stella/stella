@@ -5,9 +5,9 @@ import type { Static } from "elysia";
 
 import { prorateHourlyCents } from "@stll/money";
 
-import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

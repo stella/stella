@@ -5,7 +5,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - "apps/api/src/db/**"
-      - "apps/api/src/index.ts"
+      - "apps/api/src/server.ts"
       - "apps/api/src/lib/db/**"
       - "apps/api/drizzle/**"
       - "apps/api/drizzle.config.ts"
@@ -163,7 +163,7 @@ jobs:
         run: |
           set -euo pipefail
           log_file="$RUNNER_TEMP/stella-api-smoke.log"
-          bun src/index.ts >"$log_file" 2>&1 &
+          bun src/server.ts >"$log_file" 2>&1 &
           api_pid=$!
 
           # shellcheck disable=SC2329

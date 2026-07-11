@@ -13,6 +13,7 @@
 
 import { renderComposite, resolvePath } from "@stll/template-conditions";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
@@ -225,7 +226,7 @@ export const resolveCompositeFields = ({
   const errors: CompositeFieldError[] = [];
 
   for (const field of compositeFields) {
-    const parts = field.parts ?? [];
+    const parts = arrayOrEmpty(field.parts);
     const format = field.format;
     if (format === undefined) {
       continue;

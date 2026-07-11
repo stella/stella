@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { listAuthSessions } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAuthClientError } from "@/lib/errors/auth";
 
 export const sessionsKeys = {
   all: ["sessions"],

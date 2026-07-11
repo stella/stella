@@ -1,11 +1,7 @@
 import { Result } from "better-result";
 
-import type {
-  SafeDb,
-  SafeDbRetryConfig,
-  ScopedDb,
-  Transaction,
-} from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb, SafeDbRetryConfig, ScopedDb } from "@/api/db/safe-db";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 export const toSafeDbMock =

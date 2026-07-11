@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 

@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 
-import { createSafeDb, createScopedDb } from "@/api/db";
-import type { SafeDb, ScopedDb } from "@/api/db";
 import { rlsDb } from "@/api/db/root";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAccess } from "@/api/lib/auth";

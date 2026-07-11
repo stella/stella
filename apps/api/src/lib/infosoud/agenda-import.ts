@@ -7,7 +7,7 @@ import {
 } from "@stll/infosoud";
 import type { CaseEvent, CaseSearchResult, HearingEvent } from "@stll/infosoud";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

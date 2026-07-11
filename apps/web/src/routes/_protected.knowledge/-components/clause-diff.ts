@@ -1,5 +1,7 @@
 import { diffArrays } from "diff";
 
+import { optionalArray } from "@/lib/arrays";
+
 type ClauseParagraph = {
   text: string;
   style?: string;
@@ -17,7 +19,10 @@ type ParagraphDiff = {
 
 const WORD_TOKEN_RE = /[\p{L}\p{N}_]+|[^\p{L}\p{N}_]+/gu;
 
-const tokenize = (text: string): string[] => text.match(WORD_TOKEN_RE) ?? [];
+const tokenize = (text: string): string[] => {
+  const matches = text.match(WORD_TOKEN_RE);
+  return optionalArray(matches);
+};
 
 /**
  * Diff two clause bodies paragraph-by-paragraph.

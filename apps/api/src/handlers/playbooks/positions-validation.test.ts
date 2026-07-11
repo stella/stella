@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import type {
   PlaybookPositions,
   Position,

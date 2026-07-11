@@ -110,10 +110,6 @@ const getEagerGroupValues = (
   return values;
 };
 
-// Stable empty gate map for groupings other than the "Document Type" classifier,
-// where every section shares the full column set (no per-section filtering).
-const EMPTY_DOC_TYPE_GATE = new Map<string, Set<string>>();
-
 type GroupedTableLayoutProps = {
   workspaceId: string;
   view: WorkspaceView<"table">;
@@ -187,7 +183,7 @@ export const GroupedTableLayout = ({
             properties,
             classifierPropertyId,
           })
-        : EMPTY_DOC_TYPE_GATE,
+        : new Map<string, Set<string>>(),
     [classifierPropertyId, properties],
   );
   // The whole-view "+ new document" row carries the common (ungated) columns: a
@@ -225,8 +221,10 @@ export const GroupedTableLayout = ({
   });
   const countByValue = useMemo(() => {
     const map = new Map<string | null, number>();
-    for (const entry of groupCounts.data ?? []) {
-      map.set(entry.value, entry.count);
+    if (groupCounts.data) {
+      for (const entry of groupCounts.data) {
+        map.set(entry.value, entry.count);
+      }
     }
     return map;
   }, [groupCounts.data]);
@@ -569,11 +567,12 @@ const GroupSection = ({
   // query is disabled, but React Query can still hold cached pages for this key.
   // Drop them when the group has no rows so stale rows aren't published to the
   // selection union or rendered.
-  const entities = useMemo(
-    () =>
-      hasRows ? (query.data?.pages.flatMap((page) => page.entities) ?? []) : [],
-    [hasRows, query.data],
-  );
+  const entities = useMemo(() => {
+    if (!hasRows || !query.data) {
+      return [];
+    }
+    return query.data.pages.flatMap((page) => page.entities);
+  }, [hasRows, query.data]);
   const loadedCount = entities.length;
 
   const treeData = useMemo(() => toTableEntities(entities), [entities]);
@@ -588,13 +587,14 @@ const GroupSection = ({
 
   // AI cells read justifications from the workspace store; sync each loaded page
   // so the source hover card and citation highlights work in grouped views too.
-  const justificationEntityIdChunks = useMemo(
-    () =>
-      query.data?.pages.map((page) =>
-        page.entities.map((entity) => entity.entityId),
-      ) ?? [],
-    [query.data],
-  );
+  const justificationEntityIdChunks = useMemo(() => {
+    if (!query.data) {
+      return [];
+    }
+    return query.data.pages.map((page) =>
+      page.entities.map((entity) => entity.entityId),
+    );
+  }, [query.data]);
   useSyncJustificationChunks({
     workspaceId,
     entityIdChunks: justificationEntityIdChunks,

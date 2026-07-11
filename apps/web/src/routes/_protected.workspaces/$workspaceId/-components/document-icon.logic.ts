@@ -1,28 +1,28 @@
 import { PDF_MIME_TYPE } from "@/consts";
 import { EML_MIME, MSG_MIME, isEmailFile, isMarkdownFile } from "@/lib/consts";
 
-const wordMimeTypes = new Set([
-  "application/msword",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/rtf",
-  "application/vnd.oasis.opendocument.text",
-]);
+const wordMimeTypes = Object.freeze({
+  "application/msword": true,
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+  "application/rtf": true,
+  "application/vnd.oasis.opendocument.text": true,
+});
 
-const spreadsheetMimeTypes = new Set([
-  "application/vnd.ms-excel",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.oasis.opendocument.spreadsheet",
-  "text/csv",
-]);
+const spreadsheetMimeTypes = Object.freeze({
+  "application/vnd.ms-excel": true,
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": true,
+  "application/vnd.oasis.opendocument.spreadsheet": true,
+  "text/csv": true,
+});
 
-const imageMimeTypes = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-]);
+const imageMimeTypes = Object.freeze({
+  "image/jpeg": true,
+  "image/png": true,
+  "image/gif": true,
+  "image/webp": true,
+});
 
-const emailMimeTypes = new Set<string>([EML_MIME, MSG_MIME]);
+const emailMimeTypes = Object.freeze({ [EML_MIME]: true, [MSG_MIME]: true });
 
 export type DocumentIconKind =
   | "pdf"
@@ -42,19 +42,22 @@ export const getDocumentIconKind = (
     return "pdf";
   }
 
-  if (wordMimeTypes.has(mimeType)) {
+  if (Object.hasOwn(wordMimeTypes, mimeType)) {
     return "word";
   }
 
-  if (spreadsheetMimeTypes.has(mimeType)) {
+  if (Object.hasOwn(spreadsheetMimeTypes, mimeType)) {
     return "spreadsheet";
   }
 
-  if (imageMimeTypes.has(mimeType)) {
+  if (Object.hasOwn(imageMimeTypes, mimeType)) {
     return "image";
   }
 
-  if (emailMimeTypes.has(mimeType) || isEmailFile({ fileName, mimeType })) {
+  if (
+    Object.hasOwn(emailMimeTypes, mimeType) ||
+    isEmailFile({ fileName, mimeType })
+  ) {
     return "email";
   }
 

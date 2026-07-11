@@ -18,7 +18,7 @@ import {
   extractLegacyCaseLawDecisionIdFromRouteParam,
   normalizeCaseLawLanguageSegment,
 } from "@/lib/case-law-route";
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
   createCaseLawDecisionJsonLd,

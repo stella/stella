@@ -49,7 +49,7 @@ export const SelfhostUpdateBanner = () => {
         if (!response.ok) {
           return null;
         }
-        const json = (await response.json()) as unknown;
+        const json: unknown = await response.json();
         const parsed = v.safeParse(releaseSchema, json);
         return parsed.success ? parsed.output : null;
       } catch (error: unknown) {

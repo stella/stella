@@ -28,7 +28,8 @@ import { cn } from "@stll/ui/lib/utils";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { documentTypesOptions } from "@/routes/_protected.knowledge/-queries";
@@ -57,7 +58,7 @@ export const DocumentTypesCard = () => {
   });
 
   const { data } = useQuery(documentTypesOptions(activeOrganizationId));
-  const items = data?.items ?? [];
+  const items = data ? data.items : [];
 
   const [newLabel, setNewLabel] = useState("");
 
@@ -79,7 +80,7 @@ export const DocumentTypesCard = () => {
       analytics.captureError(error);
       stellaToast.add({
         title: t("errors.actionFailed"),
-        description: error instanceof Error ? error.message : undefined,
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
       });
     },
@@ -258,7 +259,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
       setDraft(type.label);
       stellaToast.add({
         title: t("errors.actionFailed"),
-        description: error instanceof Error ? error.message : undefined,
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
       });
     },
@@ -284,7 +285,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
       // Surfaces the API's "in use by N playbook(s)" guard message.
       stellaToast.add({
         title: t("settings.organization.documentTypes.deleteFailed"),
-        description: error instanceof Error ? error.message : undefined,
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
       });
     },

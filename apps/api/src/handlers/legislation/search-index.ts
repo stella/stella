@@ -1,6 +1,6 @@
 import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationDocuments,
   legislationSearchDocuments,
@@ -9,7 +9,7 @@ import {
 import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { logger } from "@/api/lib/observability/logger";

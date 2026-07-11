@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { templateFills, templates } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";

@@ -20,7 +20,7 @@ import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-pi
 import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/components/date-picker-popover";
 import { UserAvatar } from "@/components/user-avatar";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   PRIORITY_COLORS,

@@ -27,7 +27,7 @@ export const isBlockDirectiveKind = (
   value: unknown,
 ): value is BlockDirectiveKind =>
   typeof value === "string" &&
-  (BLOCK_DIRECTIVE_KINDS as readonly string[]).includes(value);
+  BLOCK_DIRECTIVE_KINDS.some((kind) => kind === value);
 
 export const ClauseDirectiveNode = Node.create({
   name: CLAUSE_DIRECTIVE_NODE,

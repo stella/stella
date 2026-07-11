@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useLayoutEffect, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -28,9 +28,7 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
   }, []);
 
   const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
-  const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- store-driven rename request fanned out to multiple consumers (PDF tabs here, chat tabs in chat-tab-panel); the single requestRename() call-site can't pick the consumer or reach its local rename state, so the relay can't move into the handler
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (pendingRenameTabId === null) {
       return;
     }
@@ -39,11 +37,14 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
         candidate.type === "pdf" && candidate.id === pendingRenameTabId,
     );
     if (target) {
-      // eslint-disable-next-line react/react-compiler -- store-flag relay: startRename's setState reacts to the pendingRenameTabId store flag AND to the target tab arriving in `tabs` async, so it cannot fold into the distant requestRename() call-site or a store-subscription callback
+      // eslint-disable-next-line react/react-compiler -- commit-safe store request relay; layout timing opens rename before paint when either the keyed request or async tab arrives
       startRename(target);
-      clearRenameRequest();
+      const store = useInspectorStore.getState();
+      if (store.pendingRenameTabId === pendingRenameTabId) {
+        store.clearRenameRequest();
+      }
     }
-  }, [pendingRenameTabId, tabs, startRename, clearRenameRequest]);
+  }, [pendingRenameTabId, tabs, startRename]);
 
   const commitRename = (tab: FileTab) => {
     const trimmed = editValue.trim();

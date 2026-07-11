@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
 
 type BankAccount = {

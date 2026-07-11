@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
@@ -27,7 +28,7 @@ export const projectOrganizationSettingsRow = (
     row?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN,
   matterNumberPadding:
     row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
-  practiceJurisdictions: row?.practiceJurisdictions ?? [],
+  practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
   promptCachingEnabled: row?.promptCachingEnabled ?? true,
 });
 

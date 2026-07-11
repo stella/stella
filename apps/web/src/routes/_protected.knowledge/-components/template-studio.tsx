@@ -1,13 +1,5 @@
 import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
@@ -70,13 +62,15 @@ import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
+import { BoundedMap } from "@/lib/bounded-set";
 import { DOCX_MIME } from "@/lib/consts";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
-import { reusableConditions } from "@/routes/_protected.knowledge/-components/template-studio-conditions";
 import "@/routes/_protected.knowledge/-components/template-studio-inspector";
+import { reusableConditions } from "@/routes/_protected.knowledge/-components/template-studio-conditions";
 import {
   protectedRouteApi,
   TEMPLATE_STUDIO_VIEW,
@@ -377,8 +371,10 @@ const slashRowCount = (
 /** Session-lived answers for the selection popover, keyed by exact selection
  *  + surrounding context + the known-paths list; bounded FIFO so it cannot
  *  grow unchecked. */
-const gestureEnrichmentCache = new Map<string, GestureEnrichment>();
 const GESTURE_ENRICHMENT_CACHE_MAX = 100;
+const gestureEnrichmentCache = new BoundedMap<string, GestureEnrichment>(
+  GESTURE_ENRICHMENT_CACHE_MAX,
+);
 
 /** Progressive AI proposal for the popover's AI row. `fieldPath` carries the
  *  model's claim that the selection is another occurrence of an existing
@@ -604,13 +600,12 @@ export const TemplateStudioPage = ({
     templateDocxBufferOptions(activeOrganizationId, templateId, presignedUrl),
   );
   const [docBuffer, setDocBuffer] = useState<ArrayBuffer | null>(null);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- latches the docx buffer from the query once and freezes it so a later refetch can't re-initialize the editor mid-edit; driven by async query state, not a single setter call-site, so it cannot move into a handler
-  useEffect(() => {
-    if (loadedBuffer && docBuffer === null) {
-      // eslint-disable-next-line react/react-compiler -- deliberate one-time latch of the async query buffer into frozen state; the `docBuffer === null` guard makes it fire once and cannot cascade
-      setDocBuffer(loadedBuffer);
-    }
-  }, [loadedBuffer, docBuffer]);
+  // Freeze the first buffer so a later query refetch cannot re-initialize the
+  // editor mid-edit. Guarded render-time adjustment makes that async arrival a
+  // single transition without an intermediate empty commit.
+  if (loadedBuffer && docBuffer === null) {
+    setDocBuffer(loadedBuffer);
+  }
 
   // Seed the shared session from the manifest and open the Fields/Clauses/
   // History tab in the global inspector; tear both down when the page unmounts
@@ -1298,12 +1293,6 @@ export const TemplateStudioPage = ({
       aiPrompt: match.aiPrompt,
       fieldPath: match.fieldPath,
     };
-    if (gestureEnrichmentCache.size >= GESTURE_ENRICHMENT_CACHE_MAX) {
-      const oldest = gestureEnrichmentCache.keys().next().value;
-      if (oldest !== undefined) {
-        gestureEnrichmentCache.delete(oldest);
-      }
-    }
     gestureEnrichmentCache.set(cacheKey, ready);
     setEnrichment(ready);
   };
@@ -2534,9 +2523,10 @@ export const TemplateStudioPage = ({
       const renamed = useTemplateStudioStore
         .getState()
         .fields.find((f) => f.path === oldPath);
+      const renamedFormats = optionalArray(renamed?.lookup?.formats);
       const literals: { literal: string; replacement: string }[] = [
         { literal: `{{${oldPath}}}`, replacement: `{{${trimmed}}}` },
-        ...(renamed?.lookup?.formats ?? []).map((format) => ({
+        ...renamedFormats.map((format) => ({
           literal: `{{${oldPath}.${format.key}}}`,
           replacement: `{{${trimmed}.${format.key}}}`,
         })),

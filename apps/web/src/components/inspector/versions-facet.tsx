@@ -8,7 +8,7 @@
  * the selection). Compare is owned by the document route.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -18,6 +18,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { VersionsSidebar } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
 import type { Version } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar";
@@ -57,8 +58,8 @@ export const VersionsFacet = ({
   // Initialize from `data` directly so a cache hit on first render seeds the
   // list (the re-seed below only fires when the data identity *changes*, which
   // never happens when useQuery returns cached data on mount).
-  const [accumulated, setAccumulated] = useState<Version[]>(
-    data?.versions ?? [],
+  const [accumulated, setAccumulated] = useState<Version[]>(() =>
+    data ? data.versions : [],
   );
   const [olderCursor, setOlderCursor] = useState<string | null>(
     data?.olderCursor ?? null,
@@ -153,26 +154,13 @@ export const VersionsFacet = ({
   // terminating: it stops once the row appears, the cursor runs out, or a
   // fetch errors. Page size is 50, so this only fires for the rare deep-link
   // to a version outside the newest page.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-walks the version pager (drives loadOlder, a fetch, so not a useExternalSyncEffect) until a deep-linked out-of-page version enters the loaded window; resolves a deep link with no user-event site to relocate into
-  useEffect(() => {
-    if (
-      !currentFieldId ||
-      olderCursor === null ||
-      isLoadingOlder ||
-      loadOlderError ||
-      accumulated.some((version) => version.file?.fieldId === currentFieldId)
-    ) {
-      return;
-    }
-    void loadOlder();
-  }, [
-    accumulated,
-    currentFieldId,
-    isLoadingOlder,
-    loadOlder,
-    loadOlderError,
-    olderCursor,
-  ]);
+  const shouldLoadDeepLinkedVersion = Boolean(
+    currentFieldId &&
+    olderCursor !== null &&
+    !isLoadingOlder &&
+    !loadOlderError &&
+    !accumulated.some((version) => version.file?.fieldId === currentFieldId),
+  );
 
   if (!data) {
     return null;
@@ -180,6 +168,9 @@ export const VersionsFacet = ({
 
   return (
     <div className="bg-background h-full overflow-y-auto">
+      {shouldLoadDeepLinkedVersion && olderCursor !== null && (
+        <LoadOlderVersionLifecycle key={olderCursor} loadOlder={loadOlder} />
+      )}
       <VersionsSidebar
         currentFieldId={currentFieldId}
         currentVersionId={data.currentVersionId}
@@ -250,4 +241,15 @@ export const VersionsFacet = ({
       />
     </div>
   );
+};
+
+const LoadOlderVersionLifecycle = ({
+  loadOlder,
+}: {
+  loadOlder: () => Promise<void>;
+}) => {
+  useMountEffect(() => {
+    void loadOlder();
+  });
+  return null;
 };

@@ -31,7 +31,7 @@
 import { panic } from "better-result";
 import { and, eq, gt, lte, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import {
   usageEvents,
   usageAllocations,

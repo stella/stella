@@ -1,4 +1,4 @@
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
 
 export type StorageFetchPurpose = "display" | "download" | "native-display";
 

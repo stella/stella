@@ -14,8 +14,9 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { SafeDb, Transaction } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
   desktopEditSessions,
@@ -37,6 +38,7 @@ import type {
   EntitiesWindowCursorValue,
   EntitiesWindowCursorValues,
 } from "@/api/handlers/entities/window-cursor";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import {
@@ -967,8 +969,10 @@ const queryEntitiesGenerator = async function* ({
       panic("Entity has no currentVersion");
     }
 
-    const entityFields = fieldsByVersionId.get(versionId) ?? [];
-    const entityCellMetadata = cellMetadataByVersionId.get(versionId) ?? [];
+    const storedFields = fieldsByVersionId.get(versionId);
+    const entityFields = arrayOrEmpty(storedFields);
+    const storedCellMetadata = cellMetadataByVersionId.get(versionId);
+    const entityCellMetadata = arrayOrEmpty(storedCellMetadata);
 
     result.push({
       entityId: entity.id,

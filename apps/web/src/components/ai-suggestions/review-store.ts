@@ -277,7 +277,12 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
       return;
     }
     set((state) => {
-      const existing = state.sessions[entityId] ?? [];
+      const existing = state.sessions[entityId];
+      if (!existing) {
+        return {
+          sessions: { ...state.sessions, [entityId]: items },
+        };
+      }
       const existingIds = new Set(existing.map((s) => s.id));
       const fresh = items.filter((item) => !existingIds.has(item.id));
       if (fresh.length === 0) {

@@ -143,6 +143,14 @@ export const brandPersistedOrganizationId = (
   organizationId: string,
 ): SafeId<"organization"> => toSafeId<"organization">(organizationId);
 
+/** Validate an organization id received from an external system before branding it. */
+export const parseExternalOrganizationId = (
+  organizationId: string,
+): SafeId<"organization"> | null =>
+  /^[A-Za-z0-9_-]{1,128}$/u.test(organizationId)
+    ? toSafeId<"organization">(organizationId)
+    : null;
+
 export const brandValidatedWorkflowActorKey = ({
   organizationId,
   workspaceId,

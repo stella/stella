@@ -14,6 +14,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { includes } from "@/api/lib/type-guards";
 
 import { hashAuthoredSkillContent } from "./authored-content-hash";
 import { authorizeSkillInstallScope } from "./install";
@@ -64,11 +65,7 @@ const createSkill = createSafeRootHandler(
           }),
         );
       }
-      if (
-        (RESERVED_AGENT_SKILL_COMMANDS as readonly string[]).includes(
-          body.command,
-        )
-      ) {
+      if (includes(RESERVED_AGENT_SKILL_COMMANDS, body.command)) {
         return Result.err(
           new HandlerError({
             status: 400,

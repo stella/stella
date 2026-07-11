@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { count, desc, gte, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
   caseLawIngestionEvents,

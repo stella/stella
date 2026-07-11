@@ -54,7 +54,7 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
-} from "@/api/lib/rate-limit";
+} from "@/api/lib/rate-limit/rate-limit";
 
 export const entitiesRoute = new Elysia({
   prefix: "/entities/:workspaceId",

@@ -1,7 +1,7 @@
 import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   buildAiConditionDecider,
@@ -15,7 +15,7 @@ import {
   fillStoredTemplate,
 } from "@/api/handlers/templates/template-fill-service";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

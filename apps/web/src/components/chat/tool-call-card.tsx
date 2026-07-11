@@ -41,31 +41,37 @@ const getToolInput = (part: ToolPart): unknown => {
 // `execute_typescript` is the live code-mode runner; `execute-typescript`
 // (hyphen) and `run-stella-query` are its retired predecessors, kept so
 // historical threads still render as code cards.
-const CODE_TOOL_NAMES = new Set([
-  "execute_typescript",
-  "execute-typescript",
-  "run-stella-query",
-]);
+const CODE_TOOL_NAMES = {
+  "execute-typescript": true,
+  execute_typescript: true,
+  "run-stella-query": true,
+} as const;
 // Input keys that carry the sandbox source across the live and legacy code
 // tools: code-mode's `execute_typescript` uses `typescriptCode`; the retired
 // tools used `code`.
 const CODE_SOURCE_INPUT_KEYS = ["typescriptCode", "code"] as const;
-const SKILL_RESOURCE_OUTPUT_TOOL_NAMES = new Set([
-  "create-current-skill-resource",
-  "read-skill-resource",
+const SKILL_RESOURCE_OUTPUT_TOOL_NAMES = {
+  "create-current-skill-resource": true,
+  "read-skill-resource": true,
+  "update-current-skill-body": true,
+  "update-current-skill-resource": true,
+} as const;
+const SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES: readonly string[] = [
   "update-current-skill-body",
   "update-current-skill-resource",
-]);
-const SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES = new Set([
-  "update-current-skill-body",
-  "update-current-skill-resource",
-]);
+];
+
+const isCodeToolName = (name: string): boolean =>
+  Object.hasOwn(CODE_TOOL_NAMES, name);
+
+const isSkillResourceOutputToolName = (name: string): boolean =>
+  Object.hasOwn(SKILL_RESOURCE_OUTPUT_TOOL_NAMES, name);
 
 const getCodeToolSource = (
   part: ToolPart,
   toolName: string,
 ): string | undefined => {
-  if (!CODE_TOOL_NAMES.has(toolName)) {
+  if (!isCodeToolName(toolName)) {
     return undefined;
   }
   const input = getToolInput(part);
@@ -397,18 +403,20 @@ export const ToolCallCard = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: hasCatalogEntry,
   });
+  const connectors = catalogData ? catalogData.connectors : [];
+  const nativeTools = catalogData ? catalogData.nativeTools : [];
   const catalogEntry = findCatalogEntry({
     toolName: name,
     mcpToolInfo,
-    connectors: catalogData?.connectors ?? [],
-    nativeTools: catalogData?.nativeTools ?? [],
+    connectors,
+    nativeTools,
   });
   const [expanded, setExpanded] = useState(() =>
     Boolean(
       showDetails &&
-      (CODE_TOOL_NAMES.has(name) ||
+      (isCodeToolName(name) ||
         name === "load-skill" ||
-        SKILL_RESOURCE_OUTPUT_TOOL_NAMES.has(name)),
+        isSkillResourceOutputToolName(name)),
     ),
   );
   const Icon = TOOL_ICONS[name] ?? SearchIcon;
@@ -431,11 +439,11 @@ export const ToolCallCard = ({
   const hasError = errorMessage !== undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
-  const showCodeToolOutput = CODE_TOOL_NAMES.has(name) && hasOutput;
+  const showCodeToolOutput = isCodeToolName(name) && hasOutput;
   const codeToolLogs = showCodeToolOutput ? getCodeToolLogs(part) : [];
   const showMcpExactCall = mcpToolInfo !== null && toolInput !== undefined;
   const skillResourceOutput =
-    SKILL_RESOURCE_OUTPUT_TOOL_NAMES.has(name) && hasOutput
+    isSkillResourceOutputToolName(name) && hasOutput
       ? getSkillResourceOutput(part)
       : undefined;
   const canExpand =
@@ -473,7 +481,7 @@ export const ToolCallCard = ({
                 content: skillResourceOutput.content,
                 label: basenameOf(skillResourceOutput.path),
                 refreshContent:
-                  SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES.has(name),
+                  SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES.includes(name),
                 ...(skillResourceOutput.target
                   ? { target: skillResourceOutput.target }
                   : {}),

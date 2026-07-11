@@ -17,7 +17,7 @@ import { entities, entityVersions, fields } from "@/api/db/schema";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { resolveTranslatedOutput } from "@/api/handlers/entities/translate-output";
 import { createFileKey } from "@/api/handlers/files/utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { decryptContent } from "@/api/lib/content-encryption";
@@ -30,7 +30,7 @@ import {
   DeepLTimeoutError,
   DeepLUpstreamError,
   translateDocument,
-} from "@/api/lib/deepl";
+} from "@/api/lib/deepl/deepl";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getScanWarnings, scanFile } from "@/api/lib/file-scan/scan";
 import { getS3 } from "@/api/lib/s3";

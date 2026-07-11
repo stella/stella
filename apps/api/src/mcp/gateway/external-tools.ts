@@ -3,7 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { mcpConnectors, mcpUserConnections } from "@/api/db/schema";
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { LIMITS } from "@/api/lib/limits";
 import { readCachedMcpTools } from "@/api/lib/mcp-upstream/cached-tools";

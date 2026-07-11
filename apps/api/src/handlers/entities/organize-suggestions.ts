@@ -4,7 +4,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersionAiSummaries,
@@ -13,10 +13,11 @@ import {
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -274,7 +275,7 @@ const organizeSuggestionsHandler = async function* ({
         prompt: JSON.stringify({
           locale: locale || null,
           userInstructions: userInstructions || null,
-          existingFolders: (body.existingFolders ?? []).map((folder) => ({
+          existingFolders: arrayOrEmpty(body.existingFolders).map((folder) => ({
             entityId: folder.entityId,
             name: folder.name,
             path: folder.path,
@@ -318,7 +319,7 @@ const organizeSuggestionsHandler = async function* ({
   });
 
   const existingPaths = new Set(
-    (body.existingFolders ?? []).map((folder) =>
+    arrayOrEmpty(body.existingFolders).map((folder) =>
       normalizeAiFolderPath(folder.path),
     ),
   );
@@ -524,7 +525,7 @@ const loadEmptyFolderContexts = async ({
   workspaceId,
   body,
 }: LoadEmptyFolderContextsOptions) => {
-  const folders = body.existingFolders ?? [];
+  const folders = arrayOrEmpty(body.existingFolders);
   if (folders.length === 0) {
     return Result.ok([]);
   }
@@ -561,7 +562,9 @@ const loadEmptyFolderContexts = async ({
         ),
     ]);
 
-    const nonEmptyIds = new Set(childRows.flatMap((row) => row.parentId ?? []));
+    const nonEmptyIds = new Set(
+      childRows.flatMap((row) => (row.parentId === null ? [] : [row.parentId])),
+    );
     const emptyFolders: EmptyFolderContext[] = [];
     for (const row of folderRows) {
       if (nonEmptyIds.has(row.id)) {

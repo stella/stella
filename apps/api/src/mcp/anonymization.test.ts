@@ -6,7 +6,7 @@ import type {
   PipelineConfig,
 } from "@stll/anonymize-wasm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { AnonymizeTextFieldsDependencies } from "@/api/mcp/anonymization-core";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";

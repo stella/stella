@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, desc, eq, ne } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions } from "@/api/db/schema";
 import {
   extractFieldFileRefs,

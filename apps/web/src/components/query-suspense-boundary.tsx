@@ -4,7 +4,7 @@ import type { ErrorInfo, PropsWithChildren, ReactNode } from "react";
 import { CancelledError, QueryErrorResetBoundary } from "@tanstack/react-query";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { ClientTelemetryError } from "@/lib/errors";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 type QuerySuspenseBoundaryProps = PropsWithChildren<{
   area: string;

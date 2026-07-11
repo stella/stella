@@ -7,7 +7,7 @@ import { useRouter } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { APIError, toAPIError } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 

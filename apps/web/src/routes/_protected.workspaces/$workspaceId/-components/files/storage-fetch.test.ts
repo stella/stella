@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
 import { fetchStorageArrayBuffer } from "@/routes/_protected.workspaces/$workspaceId/-components/files/storage-fetch";
 
 const originalFetch = globalThis.fetch;

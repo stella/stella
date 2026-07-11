@@ -10,7 +10,7 @@ import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@/lib/case-law-route";
-import { ClientOperationError } from "@/lib/errors";
+import { ClientOperationError } from "@/lib/errors/client";
 import {
   isPublicLawCrawlAllowed,
   isPublicLawSitemapEnabled,

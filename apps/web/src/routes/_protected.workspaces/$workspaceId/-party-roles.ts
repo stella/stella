@@ -26,10 +26,8 @@ export const PARTY_ROLE_LABEL_KEYS = {
   other: "workspaces.parties.partyRoles.other",
 } as const satisfies Record<PartyRole, TranslationKey>;
 
-const PARTY_ROLES_SET = new Set<string>(PARTY_ROLES);
-
 const isPartyRole = (value: string): value is PartyRole =>
-  PARTY_ROLES_SET.has(value);
+  PARTY_ROLES.some((role) => role === value);
 
 export const toPartyRole = (value: string): PartyRole | null =>
   isPartyRole(value) ? value : null;

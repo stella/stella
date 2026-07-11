@@ -1,4 +1,4 @@
-import { ClientOperationError } from "@/lib/errors";
+import { ClientOperationError } from "@/lib/errors/client";
 
 export type DroppedFileTreeFile = {
   file: File;

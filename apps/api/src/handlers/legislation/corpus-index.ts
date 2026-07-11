@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   legislationDocuments,
   legislationIndexJobs,
@@ -9,7 +9,7 @@ import {
 } from "@/api/db/schema";
 import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getCorpusIndexClient,

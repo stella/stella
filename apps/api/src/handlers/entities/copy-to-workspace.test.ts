@@ -31,7 +31,7 @@ void mock.module("@/api/lib/search/process-extraction", () => ({
 }));
 
 const captureErrorMock = mock(() => undefined);
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
   getAnalytics: () => ({ capture: mock(() => undefined) }),

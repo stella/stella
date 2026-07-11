@@ -1,8 +1,8 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { makeZip } from "client-zip";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import {
   buildArchivePaths,
@@ -12,7 +12,7 @@ import {
 } from "@/api/handlers/entities/zip-archive";
 import type { ArchiveNode } from "@/api/handlers/entities/zip-archive";
 import { createFileKey } from "@/api/handlers/files/utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -178,7 +178,8 @@ const downloadZipHandler = async function* ({
     for (const row of fieldRows) {
       if (row.content.type === "file") {
         const entityFileContents =
-          fileContentsByEntityId.get(String(row.entityId)) ?? [];
+          fileContentsByEntityId.get(String(row.entityId)) ??
+          panic("File contents missing for downloadable entity");
         entityFileContents.push({
           fileId: row.content.id,
           fileName: row.content.fileName,

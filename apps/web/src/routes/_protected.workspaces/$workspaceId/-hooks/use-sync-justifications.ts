@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceJustification } from "@/lib/types";
@@ -106,11 +107,17 @@ export const useSyncJustificationChunks = (
         dataUpdatedAt: number;
       }[],
     ) =>
-      results.map((result, index) => ({
-        data: result.data,
-        dataUpdatedAt: result.dataUpdatedAt,
-        entityIds: normalizedChunks.at(index) ?? [],
-      })),
+      results.map((result, index) => {
+        const entityIds = normalizedChunks.at(index);
+        if (!entityIds) {
+          panic(`Missing justification chunk at index ${index}`);
+        }
+        return {
+          data: result.data,
+          dataUpdatedAt: result.dataUpdatedAt,
+          entityIds,
+        };
+      }),
     [normalizedChunks],
   );
 

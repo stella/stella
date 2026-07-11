@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";

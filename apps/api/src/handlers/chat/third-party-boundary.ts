@@ -9,7 +9,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import { createPipelineContext, deanonymise } from "@stll/anonymize-wasm";
 import type { PipelineContext } from "@stll/anonymize-wasm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_PLAIN_MIME_TYPE,
@@ -817,16 +817,6 @@ type ToolResultPart = Extract<
   ChatMessage["parts"][number],
   { type: "tool-result" }
 >;
-type MutableToolLikePart = ToolLikePart & {
-  approval?: unknown;
-  arguments?: string | undefined;
-  content?: ToolResultPart["content"] | undefined;
-  errorText?: string | undefined;
-  input?: unknown;
-  output?: unknown;
-  title?: string | undefined;
-};
-
 const anonymizeToolPart = ({
   part,
   replacements,
@@ -835,64 +825,68 @@ const anonymizeToolPart = ({
   replacements: TextReplacement[];
 }): Result<ToolLikePart, BoundaryRefusal> =>
   Result.gen(function* () {
-    const prepared: MutableToolLikePart = { ...part };
+    const prepared: ToolLikePart = { ...part };
 
     if (part.type === "tool-call") {
       const parsedArguments = safeParseToolArguments(part.arguments);
       const argumentsResult = yield* anonymizeUnknownStrings({
         apply: (value) => {
-          prepared.arguments = safeStringifyToolArguments(value);
+          Reflect.set(prepared, "arguments", safeStringifyToolArguments(value));
         },
         replacements,
         value: parsedArguments,
       });
-      prepared.arguments = safeStringifyToolArguments(argumentsResult);
+      Reflect.set(
+        prepared,
+        "arguments",
+        safeStringifyToolArguments(argumentsResult),
+      );
     }
 
     if (part.type === "tool-result") {
       const content = yield* anonymizeToolResultContent({
         apply: (value) => {
-          prepared.content = value;
+          Reflect.set(prepared, "content", value);
         },
         content: part.content,
         replacements,
       });
-      prepared.content = content;
+      Reflect.set(prepared, "content", content);
     }
 
     if ("input" in part) {
       const input = yield* anonymizeUnknownStrings({
         apply: (value) => {
-          prepared.input = value;
+          Reflect.set(prepared, "input", value);
         },
         replacements,
         value: part.input,
       });
-      prepared.input = input;
+      Reflect.set(prepared, "input", input);
     }
 
     if ("output" in part) {
       const output = yield* anonymizeUnknownStrings({
         apply: (value) => {
-          prepared.output = value;
+          Reflect.set(prepared, "output", value);
         },
         replacements,
         value: part.output,
       });
-      prepared.output = output;
+      Reflect.set(prepared, "output", output);
     }
 
     const errorText: unknown = Reflect.get(part, "errorText");
     if (typeof errorText === "string" && errorText.length > 0) {
       queueTextReplacement(replacements, errorText, (value) => {
-        prepared.errorText = value;
+        Reflect.set(prepared, "errorText", value);
       });
     }
 
     const title: unknown = Reflect.get(part, "title");
     if (typeof title === "string" && title.length > 0) {
       queueTextReplacement(replacements, title, (value) => {
-        prepared.title = value;
+        Reflect.set(prepared, "title", value);
       });
     }
 
@@ -905,15 +899,11 @@ const anonymizeToolPart = ({
       approval.reason
     ) {
       queueTextReplacement(replacements, approval.reason, (value) => {
-        Object.assign(prepared, {
-          approval: { ...approval, reason: value },
-        });
+        Reflect.set(prepared, "approval", { ...approval, reason: value });
       });
     }
 
-    // SAFETY: the tool UI part discriminator fields are preserved. We only
-    // anonymize provider-visible text nested in input/output/error/title fields.
-    return Result.ok(prepared as ToolLikePart);
+    return Result.ok(prepared);
   });
 
 const anonymizeToolResultContent = ({
@@ -994,7 +984,8 @@ type ParsedToolResultContent =
 
 const parseToolResultContent = (content: string): ParsedToolResultContent => {
   try {
-    return { type: "json", value: JSON.parse(content) as unknown };
+    const value: unknown = JSON.parse(content);
+    return { type: "json", value };
   } catch {
     return { type: "text", value: content };
   }

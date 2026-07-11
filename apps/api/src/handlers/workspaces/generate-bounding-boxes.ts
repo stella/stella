@@ -5,7 +5,7 @@ import { t } from "elysia";
 import { isMockAI } from "@/api/consts";
 import { justifications } from "@/api/db/schema";
 import { aiHandlerError } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { generateBBoxes } from "@/api/lib/bbox/generate-b-boxes";

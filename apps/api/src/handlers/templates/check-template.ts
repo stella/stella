@@ -15,6 +15,7 @@ import type {
   DiscoveredTemplate,
   TemplateManifest,
 } from "@/api/handlers/docx/types";
+import { arrayOrEmpty } from "@/api/lib/array";
 
 // ── Findings ─────────────────────────────────────────────
 
@@ -316,7 +317,8 @@ const expressionReferenceFindings = ({
 }: ExpressionReferenceOptions): TemplateCheckFinding[] => {
   const findings: TemplateCheckFinding[] = [];
 
-  for (const field of manifest?.fields ?? []) {
+  const manifestFields = manifest?.fields;
+  for (const field of arrayOrEmpty(manifestFields)) {
     if (field.formula === undefined) {
       continue;
     }
@@ -378,7 +380,8 @@ const collectKnownPaths = (
   }
   for (const field of discovered.fields) {
     knownPaths.add(field.path);
-    for (const item of field.itemFields ?? []) {
+    const itemFields = field.itemFields;
+    for (const item of arrayOrEmpty(itemFields)) {
       knownPaths.add(`${field.path}.${item.path}`);
     }
   }
@@ -392,7 +395,7 @@ export const buildTemplateCheckFindings = ({
   clauseLinks,
   paragraphs,
 }: BuildTemplateCheckFindingsOptions): TemplateCheckFinding[] => {
-  const manifestFields = manifest?.fields ?? [];
+  const manifestFields = arrayOrEmpty(manifest?.fields);
   // @-prefixed markers (clause slots, numbering) are already excluded by
   // discovery; these are user-fillable markers only.
   const markerNames = discovered.placeholders.map((p) => p.name);

@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 /**
  * URL sanitization with branded type safety.
  *
@@ -7,7 +9,9 @@
  * structurally impossible to render an unsanitized URL.
  */
 
-export type SafeHref = string & { readonly __brand: "SafeHref" };
+const safeHrefSchema = v.pipe(v.string(), v.brand("SafeHref"));
+
+export type SafeHref = v.InferOutput<typeof safeHrefSchema>;
 
 /**
  * Validate that a URL uses a safe protocol (http/https).
@@ -34,12 +38,8 @@ export const sanitizeUrl = (
     return undefined;
   }
 
-  // SAFETY: URL has been validated as http/https
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return trimmed as SafeHref;
+  return v.parse(safeHrefSchema, trimmed);
 };
 
 /** Empty-string sentinel typed as `SafeHref` for fallback cases. */
-// SAFETY: empty string is trivially safe (renders as no-op href)
-// eslint-disable-next-line typescript/no-unsafe-type-assertion
-export const SAFE_HREF_EMPTY = "" as SafeHref;
+export const SAFE_HREF_EMPTY = v.parse(safeHrefSchema, "");

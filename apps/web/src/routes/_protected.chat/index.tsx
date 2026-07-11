@@ -50,7 +50,7 @@ import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -259,14 +259,16 @@ function ChatIndex() {
 
   const pinnedMatters = useMemo(() => {
     const workspaceById = new Map<string, PinnedMatter>();
-    for (const workspace of workspaces ?? []) {
-      workspaceById.set(workspace.id, {
-        color: workspace.color,
-        id: workspace.id,
-        lastActivityAt: workspace.lastActivityAt,
-        name: workspace.name,
-        client: workspace.client,
-      });
+    if (workspaces) {
+      for (const workspace of workspaces) {
+        workspaceById.set(workspace.id, {
+          color: workspace.color,
+          id: workspace.id,
+          lastActivityAt: workspace.lastActivityAt,
+          name: workspace.name,
+          client: workspace.client,
+        });
+      }
     }
     const matters: PinnedMatter[] = [];
     for (const workspaceId of pinnedOrder) {
@@ -278,24 +280,25 @@ function ChatIndex() {
     return matters.slice(0, 5);
   }, [pinnedOrder, workspaces]);
 
-  const lastAccessedMatters = useMemo(
-    () =>
-      (workspaces ?? [])
-        .toSorted(
-          (left, right) =>
-            new Date(right.lastActivityAt).getTime() -
-            new Date(left.lastActivityAt).getTime(),
-        )
-        .slice(0, 5)
-        .map((workspace) => ({
-          color: workspace.color,
-          id: workspace.id,
-          lastActivityAt: workspace.lastActivityAt,
-          name: workspace.name,
-          client: workspace.client,
-        })),
-    [workspaces],
-  );
+  const lastAccessedMatters = useMemo(() => {
+    if (!workspaces) {
+      return [];
+    }
+    return workspaces
+      .toSorted(
+        (left, right) =>
+          new Date(right.lastActivityAt).getTime() -
+          new Date(left.lastActivityAt).getTime(),
+      )
+      .slice(0, 5)
+      .map((workspace) => ({
+        color: workspace.color,
+        id: workspace.id,
+        lastActivityAt: workspace.lastActivityAt,
+        name: workspace.name,
+        client: workspace.client,
+      }));
+  }, [workspaces]);
 
   const visibleMatters =
     pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;

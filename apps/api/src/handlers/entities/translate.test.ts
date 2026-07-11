@@ -77,7 +77,7 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
   initFileDerivativeWorker: mock(() => undefined),
 }));
 
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: mock(() => {}),
 }));

@@ -38,7 +38,8 @@ import type {
   VersionDiffSegment,
 } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
-import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import {

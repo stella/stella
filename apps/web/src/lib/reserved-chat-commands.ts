@@ -30,11 +30,14 @@ const RESERVED_CHAT_COMMANDS: readonly ReservedChatCommand[] = [
 // `/model` reuses the dev-only chat model override (`useDevStore.chatModelId`,
 // sent as `devModelId`), which the API rejects with a 400 outside dev. Hide it
 // from non-dev builds so the command can never be triggered where it would fail.
-const DEV_ONLY_COMMAND_IDS = new Set<ReservedChatCommandId>(["model"]);
+const DEV_ONLY_COMMAND_IDS: readonly ReservedChatCommandId[] = Object.freeze([
+  "model",
+]);
 
 export const getReservedChatCommands = (): ReservedChatCommand[] =>
   RESERVED_CHAT_COMMANDS.filter(
-    (command) => import.meta.env.DEV || !DEV_ONLY_COMMAND_IDS.has(command.id),
+    (command) =>
+      import.meta.env.DEV || !DEV_ONLY_COMMAND_IDS.includes(command.id),
   );
 
 // Compares the composer's HTML against a reserved command. `DOMParser` decodes

@@ -8,6 +8,7 @@ import type {
   ContactEmail,
   ContactPhone,
 } from "@/api/db/schema-validators";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { compareCodepoint } from "@/api/lib/collation";
 import {
@@ -79,28 +80,38 @@ const compact = (parts: readonly (string | null | undefined)[]): string =>
     .join(" ");
 
 const emailsToText = (emails: readonly ContactEmail[] | null | undefined) =>
-  compact(emails?.flatMap((email) => [email.address, email.label]) ?? []);
+  compact(
+    emails === null || emails === undefined
+      ? []
+      : emails.flatMap((email) => [email.address, email.label]),
+  );
 
 const phonesToText = (phones: readonly ContactPhone[] | null | undefined) =>
-  compact(phones?.flatMap((phone) => [phone.number, phone.label]) ?? []);
+  compact(
+    phones === null || phones === undefined
+      ? []
+      : phones.flatMap((phone) => [phone.number, phone.label]),
+  );
 
 const addressesToText = (
   addresses: readonly ContactAddress[] | null | undefined,
 ) =>
   compact(
-    addresses?.flatMap((address) => [
-      address.line1,
-      address.line2,
-      address.city,
-      address.state,
-      address.postalCode,
-      address.country,
-      address.label,
-    ]) ?? [],
+    addresses === null || addresses === undefined
+      ? []
+      : addresses.flatMap((address) => [
+          address.line1,
+          address.line2,
+          address.city,
+          address.state,
+          address.postalCode,
+          address.country,
+          address.label,
+        ]),
   );
 
 const tagsToText = (tags: readonly string[] | null | undefined) =>
-  compact(tags ?? []);
+  compact(arrayOrEmpty(tags));
 
 const toIso = (value: unknown): string =>
   value instanceof Date ? value.toISOString() : String(value);

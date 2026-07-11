@@ -2,8 +2,9 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 
-import type { SafeDb, Transaction } from "@/api/db";
 import { organization, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,

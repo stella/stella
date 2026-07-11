@@ -1,3 +1,4 @@
+import { rlsDb } from "@/api/db/root";
 /**
  * Backfill: assign a unique public slug to every case_law_decisions row
  * that predates slug-at-ingest. Run once before launching the public
@@ -9,8 +10,7 @@
  * Slug assignment reuses the same helper the ingestion pipeline and the
  * dev seed use, so there is a single source of truth for the slug algorithm.
  */
-import { createIngestionDb } from "@/api/db";
-import { rlsDb } from "@/api/db/root";
+import { createIngestionDb } from "@/api/db/scoped";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
 
 console.log("=== BACKFILL CASE-LAW SLUGS ===");

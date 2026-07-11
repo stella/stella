@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { clauseVariants } from "@/api/db/schema";
 import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -274,15 +274,9 @@ export const updateVariantHandler = async function* ({
         });
 
       const changes: FieldDiffs = {};
-      for (const [key, newValue] of Object.entries(updates)) {
-        if (key === "updatedAt") {
-          continue;
-        }
-        const oldValue = (existing as Record<string, unknown>)[key];
-        if (oldValue !== newValue) {
-          changes[key] = { old: oldValue ?? null, new: newValue };
-        }
-      }
+      addFieldDiff(changes, "label", existing.label, updates.label);
+      addFieldDiff(changes, "body", existing.body, updates.body);
+      addFieldDiff(changes, "sortOrder", existing.sortOrder, updates.sortOrder);
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
@@ -300,6 +294,17 @@ export const updateVariantHandler = async function* ({
   }
 
   return Result.ok(updated);
+};
+
+const addFieldDiff = (
+  changes: FieldDiffs,
+  key: string,
+  oldValue: unknown,
+  newValue: unknown,
+): void => {
+  if (newValue !== undefined && oldValue !== newValue) {
+    changes[key] = { old: oldValue ?? null, new: newValue };
+  }
 };
 
 // ── Delete ──────────────────────────────────────────

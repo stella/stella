@@ -3,13 +3,13 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -17,6 +17,7 @@ import {
   brandPersistedPropertyId,
 } from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { isRecord } from "@/api/lib/type-guards";
 
 const idSchema = (description: string) =>
   v.pipe(v.string(), v.uuid(), v.description(description));
@@ -239,11 +240,11 @@ export const createWorkspaceTools = ({
             Array.isArray(property.content.options)
           ) {
             const valid = new Set(
-              (
-                property.content.options as {
-                  value: string;
-                }[]
-              ).map((option) => option.value),
+              property.content.options.flatMap((option) =>
+                isRecord(option) && typeof option.value === "string"
+                  ? [option.value]
+                  : [],
+              ),
             );
             if (!valid.has(value)) {
               throw new ChatToolError({

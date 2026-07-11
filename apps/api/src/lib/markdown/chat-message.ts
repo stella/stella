@@ -11,7 +11,6 @@ import {
   CHAT_REFERENCE_HREF_PREFIXES,
 } from "@/api/handlers/chat/types";
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
-import { typedEntries } from "@/api/lib/object";
 
 const ALLOWED_TAGS = new Set([
   "a",
@@ -108,10 +107,8 @@ const sanitizeHtml = (html: string): string =>
     .transform(html);
 
 const parseMentionCategory = (value: string): ChatMentionCategory | null => {
-  for (const [category] of typedEntries(CHAT_MENTION_HREF_PREFIXES)) {
-    if (value === category) {
-      return category;
-    }
+  if (value === "entity" || value === "workspace") {
+    return value;
   }
 
   return null;
@@ -120,13 +117,10 @@ const parseMentionCategory = (value: string): ChatMentionCategory | null => {
 const parseReferenceCategory = (
   value: string,
 ): ChatReferenceCategory | null => {
-  for (const [category] of typedEntries(CHAT_REFERENCE_HREF_PREFIXES)) {
-    if (value === category) {
-      return category;
-    }
+  if (value === "decision") {
+    return value;
   }
-
-  return null;
+  return parseMentionCategory(value);
 };
 
 const toMentionHref = (mention: ChatMention): ChatMentionHref => {

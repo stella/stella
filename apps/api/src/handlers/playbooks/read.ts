@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

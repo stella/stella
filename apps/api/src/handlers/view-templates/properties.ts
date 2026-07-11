@@ -2,9 +2,10 @@ import { deepEquals } from "bun";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -71,7 +72,8 @@ export const collectTemplateProperties = ({
     if (parsed.status === "invalid") {
       continue;
     }
-    const list = dependenciesByPropertyId.get(dep.propertyId) ?? [];
+    const storedDependencies = dependenciesByPropertyId.get(dep.propertyId);
+    const list = arrayOrEmpty(storedDependencies);
     list.push({
       dependsOnSourceId: dep.dependsOnPropertyId,
       condition: parsed.condition,
@@ -155,7 +157,9 @@ const addDependencySourceIds = (
   const queue = [...creatablePropertyIds];
 
   for (const propertyId of queue) {
-    for (const dependency of dependenciesByPropertyId.get(propertyId) ?? []) {
+    const storedDependencies = dependenciesByPropertyId.get(propertyId);
+    const dependencies = arrayOrEmpty(storedDependencies);
+    for (const dependency of dependencies) {
       if (creatablePropertyIds.has(dependency.dependsOnSourceId)) {
         continue;
       }
@@ -455,33 +459,32 @@ const recreateTemplateDependencies = async ({
       return [];
     }
 
-    const resolvedEdges = (templateProperty.dependencies ?? []).flatMap(
-      (dep) => {
-        // Remaps the edge and the gate condition together (so neither is
-        // forgotten); null when the edge endpoint did not remap — the workflow
-        // planner then treats the property as having no inputs.
-        const refs = remapDependencyRefs(
-          {
-            dependsOnPropertyId: dep.dependsOnSourceId,
-            condition: dep.condition,
-          },
-          (id) => propertyIdBySourceId.get(id),
-        );
-        if (!refs || refs.dependsOnPropertyId === propertyId) {
-          return [];
-        }
-        return [
-          {
-            workspaceId,
-            propertyId: brandPersistedPropertyId(propertyId),
-            dependsOnPropertyId: brandPersistedPropertyId(
-              refs.dependsOnPropertyId,
-            ),
-            condition: refs.condition,
-          },
-        ];
-      },
-    );
+    const templateDependencies = templateProperty.dependencies;
+    const resolvedEdges = arrayOrEmpty(templateDependencies).flatMap((dep) => {
+      // Remaps the edge and the gate condition together (so neither is
+      // forgotten); null when the edge endpoint did not remap — the workflow
+      // planner then treats the property as having no inputs.
+      const refs = remapDependencyRefs(
+        {
+          dependsOnPropertyId: dep.dependsOnSourceId,
+          condition: dep.condition,
+        },
+        (id) => propertyIdBySourceId.get(id),
+      );
+      if (!refs || refs.dependsOnPropertyId === propertyId) {
+        return [];
+      }
+      return [
+        {
+          workspaceId,
+          propertyId: brandPersistedPropertyId(propertyId),
+          dependsOnPropertyId: brandPersistedPropertyId(
+            refs.dependsOnPropertyId,
+          ),
+          condition: refs.condition,
+        },
+      ];
+    });
 
     // Templates strip the workspace-specific Documents id, so an AI
     // column whose only dependency pointed at Documents loses every
@@ -585,7 +588,9 @@ const hasTemplateDependencyCycle = ({
     }
 
     visiting.add(sourceId);
-    for (const dependencySourceId of graph.get(sourceId) ?? []) {
+    const storedDependencyIds = graph.get(sourceId);
+    const dependencyIds = arrayOrEmpty(storedDependencyIds);
+    for (const dependencySourceId of dependencyIds) {
       if (visit(dependencySourceId)) {
         return true;
       }
@@ -995,7 +1000,8 @@ const collectLayoutPropertyIds = (layout: ViewLayout): Set<string> => {
     if (layout.endDatePropertyId) {
       add(layout.endDatePropertyId);
     }
-    for (const id of layout.additionalDatePropertyIds ?? []) {
+    const additionalDatePropertyIds = layout.additionalDatePropertyIds;
+    for (const id of arrayOrEmpty(additionalDatePropertyIds)) {
       add(id);
     }
   }

@@ -2,9 +2,9 @@ import { and, eq } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
 
-import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
   workspaceMembers,

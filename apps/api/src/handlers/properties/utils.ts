@@ -4,12 +4,13 @@ import { deepEquals } from "bun";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type {
   AIModelTool,
   ManualInputTool,
   PropertyContent,
 } from "@/api/db/schema-validators";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { sortDeep } from "@/api/lib/sort-deep";
@@ -139,7 +140,8 @@ export const validatePropertyInputs = async function* ({
     visited.add(startId);
     path.push(startId);
 
-    const inputs = dependencyGraph.get(startId) ?? [];
+    const storedInputs = dependencyGraph.get(startId);
+    const inputs = arrayOrEmpty(storedInputs);
     for (const inputId of inputs) {
       const cycle = detectCycle(inputId, visited, path);
       if (cycle) {

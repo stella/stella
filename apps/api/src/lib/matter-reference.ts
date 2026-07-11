@@ -43,7 +43,7 @@ export const validatePattern = (
     );
   }
 
-  const tokens = pattern.match(TOKEN_REGEX) ?? [];
+  const tokens = Array.from(pattern.matchAll(TOKEN_REGEX), (match) => match[0]);
   const seqCount = tokens.filter((t) => t === "{SEQ}").length;
 
   if (seqCount !== 1) {

@@ -15,8 +15,8 @@
 
 import { eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import { auditLogs, hostedUsageWebhookEvents } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
 import type { AuditAction, AuditResourceType } from "@/api/lib/audit-log";

@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDebouncedCallback } from "use-debounce";
+import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -20,7 +20,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
@@ -68,6 +68,7 @@ const MatterNumberingCardBody = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const [pattern, setPattern] = useState(settings.matterNumberPattern);
   const [padding, setPadding] = useState(settings.matterNumberPadding);
@@ -77,22 +78,30 @@ const MatterNumberingCardBody = ({
         (preset) => preset.value === settings.matterNumberPattern,
       ),
   );
-  const [preview, setPreview] = useState<string | null>(null);
-
-  const fetchPreview = useDebouncedCallback(async (p: string, pad: number) => {
-    const response = await api["organization-settings"].preview.post({
-      matterNumberPattern: p,
-      matterNumberPadding: pad,
-    });
-    if (!response.error) {
-      setPreview(response.data.preview);
-    }
-  }, 300);
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- debounced preview POST that must also fire once on mount; a useQuery migration would change debounce/mount-fire/abort semantics, and moving into the change handlers would drop the initial preview, so kept as an explicit external fetch
-  useEffect(() => {
-    void fetchPreview(pattern, padding);
-  }, [pattern, padding, fetchPreview]);
+  const [debouncedPattern] = useDebounce(pattern, 300);
+  const [debouncedPadding] = useDebounce(padding, 300);
+  const { data: previewData } = useQuery({
+    queryKey: [
+      ...organizationSettingsKeys.byOrganization(activeOrganizationId),
+      "matter-number-preview",
+      debouncedPattern,
+      debouncedPadding,
+    ],
+    queryFn: async ({ signal }) => {
+      const response = await api["organization-settings"].preview.post(
+        {
+          matterNumberPattern: debouncedPattern,
+          matterNumberPadding: debouncedPadding,
+        },
+        { fetch: { signal } },
+      );
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+  });
+  const preview = previewData?.preview ?? null;
 
   const updateMutation = useMutation({
     mutationFn: async () => {

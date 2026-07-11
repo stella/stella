@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { includes } from "@/api/lib/type-guards";
+
 /**
  * Resolve the Postgres connection URL.
  *
@@ -59,7 +61,7 @@ export const resolveDatabaseUrl = (
   }
 
   const sslmode = DB_SSLMODE ?? "require";
-  if (!(ALLOWED_SSLMODES as readonly string[]).includes(sslmode)) {
+  if (!includes(ALLOWED_SSLMODES, sslmode)) {
     panic(`DB_SSLMODE must be one of ${ALLOWED_SSLMODES.join(", ")}`);
   }
   // DB_HOST is left unencoded so IPv6 literals like `[::1]` survive,

@@ -1,8 +1,9 @@
 import type { Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 
-import type { SafeDbError, SafeDbOrTx, Transaction } from "@/api/db";
-import { withScopedTx } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
+import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages } from "@/api/db/schema";
 import {
   chatMessageFromPersisted,

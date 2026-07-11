@@ -15,7 +15,8 @@ import { Separator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
   ConditionNode,
@@ -145,8 +146,7 @@ export const PropertyPopover = ({
     onError: (error) => {
       stellaToast.add({
         title: t("errors.actionFailed"),
-        description:
-          error instanceof Error ? error.message : t("common.unexpectedError"),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
         type: "error",
       });
     },

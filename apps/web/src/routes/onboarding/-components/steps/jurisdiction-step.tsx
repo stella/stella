@@ -178,14 +178,17 @@ export const JurisdictionGlobePreview = ({
     const codeToPoint = new Map(
       COUNTRY_POINTS.map((point) => [point.code, point]),
     );
-    markersRef.current = selected.flatMap((jurisdiction) => {
+    markersRef.current = selected.flatMap<{
+      location: [number, number];
+      size: number;
+    }>((jurisdiction) => {
       const point = codeToPoint.get(jurisdiction.countryCode);
       if (!point) {
         return [];
       }
       return [
         {
-          location: [point.lat, point.lon] as [number, number],
+          location: [point.lat, point.lon],
           size: jurisdiction.isPrimary ? 0.12 : 0.08,
         },
       ];

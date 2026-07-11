@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
 import { discoverOAuthMetadata } from "@/api/handlers/mcp-connectors/oauth";
+import { arrayOrEmpty } from "@/api/lib/array";
 import {
   safeOutboundFetchBytes,
   validateOutboundFetchTarget,
@@ -45,7 +46,7 @@ export const probeMcpServer = async (
       authType: "oauth2" as const,
       authorizationServerUrl: oauth.value.authorizationServer.issuer,
       resourceUrl: oauth.value.protectedResource.resource,
-      scopes: oauth.value.protectedResource.scopes_supported ?? [],
+      scopes: arrayOrEmpty(oauth.value.protectedResource.scopes_supported),
     });
   }
 

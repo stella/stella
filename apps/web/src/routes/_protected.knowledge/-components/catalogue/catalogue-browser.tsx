@@ -50,6 +50,7 @@ import {
 } from "@/components/responsive-action-toolbar";
 import type { TranslationKey } from "@/i18n/types";
 import { compareByLocale } from "@/lib/collation";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   BlueprintGallerySheet,
@@ -672,10 +673,7 @@ const CatalogueEntryRow = ({
       },
       onError: (error) => {
         stellaToast.add({
-          title:
-            error instanceof Error
-              ? error.message
-              : t("catalogue.installFailed"),
+          title: userErrorFromThrown(error, t("catalogue.installFailed")),
           type: "error",
         });
       },

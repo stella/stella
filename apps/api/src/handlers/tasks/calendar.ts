@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { entities, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
   buildFilterConditions,
@@ -235,7 +236,7 @@ const calendarTasks = createSafeHandler(
     const whereClause = and(
       eq(entities.workspaceId, workspaceId),
       eq(entities.kind, "task"),
-      ...buildFilterConditions(body.filters ?? []),
+      ...buildFilterConditions(arrayOrEmpty(body.filters)),
       dateClause,
     );
     const limit = LIMITS.calendarTasksMax;
@@ -245,7 +246,7 @@ const calendarTasks = createSafeHandler(
           .select({ id: entities.id })
           .from(entities)
           .where(whereClause)
-          .orderBy(...buildSortExpressions(body.sorts ?? []))
+          .orderBy(...buildSortExpressions(arrayOrEmpty(body.sorts)))
           .limit(limit + 1),
       ),
     );
@@ -352,7 +353,10 @@ const calendarTasks = createSafeHandler(
         startAt: dateValueToIsoDateTime(task.startAt),
         endAt: dateValueToIsoDateTime(task.endAt),
         occurredAt: dateValueToIsoDateTime(task.occurredAt),
-        fields: fieldsByEntityId.get(taskId) ?? [],
+        fields: (() => {
+          const storedFields = fieldsByEntityId.get(taskId);
+          return arrayOrEmpty(storedFields);
+        })(),
       });
     }
 

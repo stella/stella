@@ -55,15 +55,12 @@ type CatalogueAutoSelectionEntry = {
   slug: string;
 };
 
-// Conservative fallback while the session-scoped deploy availability
-// query is loading. Once the API response arrives, configured EDGAR
-// deployments pass an empty unavailable set and show the tool.
-const DEFAULT_UNAVAILABLE_NATIVE_TOOL_BACKEND_SLUGS = new Set(["edgar"]);
-
 export const isCatalogueEntryAvailableDuringOnboarding = (
   entry: CatalogueSetupEntry,
   {
-    unavailableNativeToolBackendSlugs = DEFAULT_UNAVAILABLE_NATIVE_TOOL_BACKEND_SLUGS,
+    // Conservative fallback while deploy availability loads. Keep it
+    // call-scoped so the default cannot accumulate process-lifetime state.
+    unavailableNativeToolBackendSlugs = new Set(["edgar"]),
   }: CatalogueEntryAvailabilityOptions = {},
 ): boolean =>
   entry.kind !== "native-tool" ||

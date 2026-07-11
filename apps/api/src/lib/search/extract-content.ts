@@ -13,7 +13,7 @@ import {
   EMAIL_MIME_TYPES,
   resolveEmailMimeType,
 } from "@/api/handlers/files/email-to-html";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { resolveRuntimeWorkerPath } from "@/api/lib/runtime-worker-path";

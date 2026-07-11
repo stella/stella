@@ -70,9 +70,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
 import { compareByLocale } from "@/lib/collation";
 import { DOCX_MIME, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { CategoryMobileFilterBar } from "@/routes/_protected.knowledge/-components/category-sidebar";
@@ -256,7 +257,7 @@ export const TemplateList = ({
   }
 
   const allTags = [
-    ...new Set(templates.flatMap((template) => template.tags ?? [])),
+    ...new Set(templates.flatMap((template) => optionalArray(template.tags))),
   ].sort(compareByLocale(lang));
 
   const visibleTemplates = tagFilter
@@ -1026,7 +1027,9 @@ const TemplateTagsDialogBody = ({
 }: Omit<TemplateTagsDialogProps, "open">) => {
   const t = useTranslations();
   const invalidateTemplates = useInvalidateTemplates();
-  const [tags, setTags] = useState<string[]>(template.tags ?? []);
+  const [tags, setTags] = useState<string[]>(() =>
+    optionalArray(template.tags),
+  );
   const [input, setInput] = useState("");
   const [saving, setSaving] = useState(false);
 

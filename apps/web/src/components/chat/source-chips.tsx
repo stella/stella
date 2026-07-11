@@ -79,6 +79,9 @@ export const SourceChips = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: hasMcpExternalSources,
   });
+  const availableConnectors = mcpConnectorsData
+    ? mcpConnectorsData.connectors
+    : [];
   const uniqueExternalSourcesWithIcons = uniqueExternalSources.map((source) => {
     if (source.connectorSlug === undefined) {
       return source;
@@ -86,7 +89,7 @@ export const SourceChips = ({
 
     const iconHref = findMcpConnectorIconHref({
       connectorSlug: source.connectorSlug,
-      connectors: mcpConnectorsData?.connectors ?? [],
+      connectors: availableConnectors,
     });
     return iconHref === undefined ? source : { ...source, iconHref };
   });
@@ -126,7 +129,7 @@ export const SourceChips = ({
 
 const collectSourceChipEntries = ({
   parts,
-  sourceDocuments,
+  sourceDocuments = [],
 }: {
   parts: ChatMessage["parts"];
   sourceDocuments?: readonly ChatSourceDocument[] | undefined;
@@ -136,7 +139,7 @@ const collectSourceChipEntries = ({
 } => {
   const sources: SourceDocumentEntry[] = [];
   const externalSources: ExternalSourceEntry[] = [];
-  for (const sourceDocument of sourceDocuments ?? []) {
+  for (const sourceDocument of sourceDocuments) {
     sources.push({ data: sourceDocument });
   }
 

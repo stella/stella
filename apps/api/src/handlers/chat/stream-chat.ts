@@ -24,7 +24,7 @@ import {
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   getUserFileIdFromAttachmentPart,
   isChatPart,
@@ -70,7 +70,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import { classifyAIError } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -1728,7 +1728,8 @@ const transformToolResultContent = ({
 
 const parseToolResultContent = (content: string): ParsedToolResultContent => {
   try {
-    return { type: "json", value: JSON.parse(content) as unknown };
+    const value: unknown = JSON.parse(content);
+    return { type: "json", value };
   } catch {
     return { type: "text", value: content };
   }

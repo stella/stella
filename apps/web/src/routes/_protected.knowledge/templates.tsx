@@ -9,7 +9,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";

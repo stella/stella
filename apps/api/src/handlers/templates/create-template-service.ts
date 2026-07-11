@@ -14,7 +14,7 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { templates, templateVersions } from "@/api/db/schema";
 import type { TemplateKind } from "@/api/db/schema";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
@@ -25,7 +25,7 @@ import {
 } from "@/api/handlers/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import { detectTemplateLanguagesFromDocx } from "@/api/handlers/templates/template-languages";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 
 const CASE_LAW_PUBLIC_READ_DB = Symbol("caseLawPublicReadDb");
 

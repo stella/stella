@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   chatThreads,
   entities,

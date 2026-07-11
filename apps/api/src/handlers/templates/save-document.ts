@@ -18,6 +18,7 @@ import type {
 import { isTemplateManifest } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -43,7 +44,8 @@ const collectDiscoveredPaths = (
   const visit = (field: DiscoveredField, prefix: string): void => {
     const fullPath = prefix ? `${prefix}.${field.path}` : field.path;
     paths.add(fullPath);
-    for (const item of field.itemFields ?? []) {
+    const itemFields = field.itemFields;
+    for (const item of arrayOrEmpty(itemFields)) {
       visit(item, fullPath);
     }
   };
@@ -183,7 +185,7 @@ const saveTemplateDocument = createSafeRootHandler(
     // parts + format, dependent optionsFrom, registry lookup, formula, date
     // format, and the fill hint are restored the same way.
     const sourceFieldByPath = new Map(
-      (baseManifest?.fields ?? []).map((f) => [f.path, f]),
+      arrayOrEmpty(baseManifest?.fields).map((f) => [f.path, f]),
     );
     const fieldMetas: FieldMeta[] = fields.map((f) => ({
       path: f.path,

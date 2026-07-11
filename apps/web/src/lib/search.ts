@@ -7,10 +7,9 @@ import {
 import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { DAY_IN_MS } from "@/lib/time";
-import { stripUndefined } from "@/lib/utils";
 
 export const TIME_PRESETS = ["day", "week", "month", "year"] as const;
 export type TimePreset = (typeof TIME_PRESETS)[number];
@@ -117,20 +116,22 @@ export const searchInfiniteOptions = (params: SearchParams) =>
     queryKey: searchKeys.query(params),
     queryFn: async ({ signal, pageParam }) => {
       const response = await api.search.post(
-        stripUndefined({
+        {
           query: params.query,
           workspaceIds: params.workspaceIds.map((id) =>
             toSafeId<"workspace">(id),
           ),
-          kinds: params.kinds,
-          types: params.types,
-          editedByUserIds: params.editedByUserIds,
-          mimeTypes: params.mimeTypes,
-          updatedFrom: params.updatedFrom,
-          updatedTo: params.updatedTo,
-          cursor: pageParam,
-          limit: params.limit,
-        }),
+          ...(params.kinds ? { kinds: params.kinds } : {}),
+          ...(params.types ? { types: params.types } : {}),
+          ...(params.editedByUserIds
+            ? { editedByUserIds: params.editedByUserIds }
+            : {}),
+          ...(params.mimeTypes ? { mimeTypes: params.mimeTypes } : {}),
+          ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
+          ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
+          ...(pageParam ? { cursor: pageParam } : {}),
+          ...(params.limit ? { limit: params.limit } : {}),
+        },
         { fetch: { signal } },
       );
 
@@ -140,7 +141,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
 
       return response.data;
     },
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
     enabled: params.query.length > 0,
@@ -151,21 +152,23 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
     queryKey: searchKeys.facet(params),
     queryFn: async ({ signal }) => {
       const response = await api.search.facets.post(
-        stripUndefined({
+        {
           facet: params.facet,
           search: params.search,
           query: params.query,
           workspaceIds: params.workspaceIds.map((id) =>
             toSafeId<"workspace">(id),
           ),
-          types: params.types,
-          kinds: params.kinds,
-          editedByUserIds: params.editedByUserIds,
-          mimeTypes: params.mimeTypes,
-          updatedFrom: params.updatedFrom,
-          updatedTo: params.updatedTo,
-          limit: params.limit,
-        }),
+          ...(params.types ? { types: params.types } : {}),
+          ...(params.kinds ? { kinds: params.kinds } : {}),
+          ...(params.editedByUserIds
+            ? { editedByUserIds: params.editedByUserIds }
+            : {}),
+          ...(params.mimeTypes ? { mimeTypes: params.mimeTypes } : {}),
+          ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
+          ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
+          ...(params.limit ? { limit: params.limit } : {}),
+        },
         { fetch: { signal } },
       );
 

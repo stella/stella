@@ -5,6 +5,7 @@ import type { Static } from "elysia";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -244,7 +245,8 @@ export const listSitemapShardsHandler = async (
   const bucketRowsByNaturalShard = new Map<string, BucketShardRow[]>();
   for (const bucketShard of bucketShardRows) {
     const shardKey = createNaturalShardKey(bucketShard);
-    const bucketRows = bucketRowsByNaturalShard.get(shardKey) ?? [];
+    const storedBucketRows = bucketRowsByNaturalShard.get(shardKey);
+    const bucketRows = arrayOrEmpty(storedBucketRows);
     bucketRows.push(bucketShard);
     bucketRowsByNaturalShard.set(shardKey, bucketRows);
   }
@@ -270,8 +272,10 @@ export const listSitemapShardsHandler = async (
       continue;
     }
 
-    const bucketRows =
-      bucketRowsByNaturalShard.get(createNaturalShardKey(shard)) ?? [];
+    const storedBucketRows = bucketRowsByNaturalShard.get(
+      createNaturalShardKey(shard),
+    );
+    const bucketRows = arrayOrEmpty(storedBucketRows);
     if (bucketRows.length === 0) {
       return status(500, {
         message: "Case-law sitemap bucket rows missing for natural shard.",
@@ -423,8 +427,10 @@ export const listSitemapShardDecisionsHandler = async (
       continue;
     }
 
-    const groupedAlternates =
-      alternatesByGroupKey.get(alternate.languageGroupKey) ?? [];
+    const storedAlternates = alternatesByGroupKey.get(
+      alternate.languageGroupKey,
+    );
+    const groupedAlternates = arrayOrEmpty(storedAlternates);
     if (
       groupedAlternates.some(
         (groupedAlternate) =>
@@ -449,10 +455,11 @@ export const listSitemapShardDecisionsHandler = async (
 
   return {
     items: rows.map((row) => {
-      const alternates =
+      const storedAlternates =
         row.languageGroupKey === null
-          ? []
-          : (alternatesByGroupKey.get(row.languageGroupKey) ?? []);
+          ? undefined
+          : alternatesByGroupKey.get(row.languageGroupKey);
+      const alternates = arrayOrEmpty(storedAlternates);
 
       return {
         id: row.id,

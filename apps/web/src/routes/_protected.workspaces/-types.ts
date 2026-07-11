@@ -96,4 +96,4 @@ export const FILTERABLE_COLUMN_IDS = [
 export type FilterableColumnId = (typeof FILTERABLE_COLUMN_IDS)[number];
 
 export const isFilterableColumnId = (id: string): id is FilterableColumnId =>
-  (FILTERABLE_COLUMN_IDS as readonly string[]).includes(id);
+  FILTERABLE_COLUMN_IDS.some((columnId) => columnId === id);

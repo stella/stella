@@ -21,7 +21,7 @@ import type {
   WorkspaceJustification,
 } from "@/lib/types";
 import {
-  cellFlagsById,
+  getCellFlagById,
   useFlagLabel,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
@@ -86,7 +86,7 @@ export const AICellSourceCard = ({
     }
     setOpen(next);
   };
-  const flags = cellMetadata?.manualFlags ?? [];
+  const flags = cellMetadata ? cellMetadata.manualFlags : [];
   const sourceFiles = resolveSourceFiles(entity, justification);
   const primaryFile = sourceFiles.at(0);
   // The row's document column already names the entity's first file;
@@ -253,7 +253,7 @@ const CellFlagProvenanceRow = ({
   provenance,
 }: CellFlagProvenanceRowProps) => {
   const getFlagLabel = useFlagLabel();
-  const flag = cellFlagsById.get(flagId);
+  const flag = getCellFlagById(flagId);
   if (!flag) {
     return null;
   }

@@ -45,9 +45,12 @@ export const buildPerPage = (
         continue;
       }
       seenPages.add(span.pageIndex);
-      const list = perPage.get(span.pageIndex) ?? [];
-      list.push(entity);
-      perPage.set(span.pageIndex, list);
+      const existing = perPage.get(span.pageIndex);
+      if (existing) {
+        existing.push(entity);
+      } else {
+        perPage.set(span.pageIndex, [entity]);
+      }
     }
   }
   return perPage;

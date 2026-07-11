@@ -16,7 +16,8 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError, userErrorFromThrown } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   knowledgeKeys,
   playbookStartersOptions,
@@ -57,7 +58,7 @@ const PlaybookStarterGallerySheetBody = ({
   const queryClient = useQueryClient();
 
   const { data, isLoading } = useQuery(playbookStartersOptions(organizationId));
-  const starters = data?.items ?? [];
+  const starters = data ? data.items : [];
 
   const create = useMutation({
     mutationFn: async (starterId: StarterId) => {

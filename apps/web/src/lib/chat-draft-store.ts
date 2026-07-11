@@ -3,6 +3,7 @@ import { create } from "zustand";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import { normalizeOptionalArray } from "@/lib/arrays";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 
@@ -49,20 +50,23 @@ const createTextNode = (text: string): JSONContent => ({
 const appendMentionToParagraph = (
   paragraph: JSONContent,
   mention: ChatMentionOption,
-): JSONContent => ({
-  ...paragraph,
-  content: [
-    ...(paragraph.content ?? []),
-    createMentionNode(mention),
-    createTextNode(" "),
-  ],
-});
+): JSONContent => {
+  const existingContent = normalizeOptionalArray(paragraph.content);
+  return {
+    ...paragraph,
+    content: [
+      ...existingContent,
+      createMentionNode(mention),
+      createTextNode(" "),
+    ],
+  };
+};
 
 export const appendMentionToDraftDoc = (
   doc: JSONContent,
   mention: ChatMentionOption,
 ): JSONContent => {
-  const content = [...(doc.content ?? [])];
+  const content = [...normalizeOptionalArray(doc.content)];
   const lastNode = content.at(-1);
 
   if (lastNode?.type === "paragraph") {
@@ -85,7 +89,7 @@ export const appendMentionToDraftDoc = (
 export const createChatDraftState = (
   overrides?: Partial<ChatDraftState>,
 ): ChatDraftState => ({
-  attachments: overrides?.attachments ?? [],
+  attachments: normalizeOptionalArray(overrides?.attachments),
   doc: overrides?.doc ?? createEmptyChatDraftDoc(),
   updatedAt: overrides?.updatedAt ?? Date.now(),
 });

@@ -4,7 +4,7 @@ import { Result } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { projectChatToolSchemasForProvider } from "@/api/handlers/chat/stream-chat";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {

@@ -26,15 +26,15 @@ import {
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import type { ScopedDb } from "@/api/db";
 // SAFETY: rootDb is used only inside runGeneration, which runs in
 // a fire-and-forget background task after the request scope has
 // ended.
 // eslint-disable-next-line no-restricted-imports -- background task outlives the request scope; no ctx.scopedDb available
 import { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions } from "@/api/db/schema";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -49,7 +49,7 @@ import {
 
 import { normalizeAnalysisHeadingLabels } from "./category-catalog";
 import { formatDecisionForPrompt } from "./prompts/base";
-import { getSystemPrompt } from "./prompts/index";
+import { getSystemPrompt } from "./prompts/prompt-registry";
 
 const SENTINEL_STALE_MS = 5 * 60 * 1000;
 

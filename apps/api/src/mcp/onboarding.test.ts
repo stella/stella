@@ -18,7 +18,7 @@ const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
 
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
   getAnalytics: getAnalyticsMock,

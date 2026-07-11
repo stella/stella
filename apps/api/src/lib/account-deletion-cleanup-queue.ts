@@ -5,7 +5,7 @@ import { and, asc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { rootDb } from "@/api/db/root";
 import { accountDeletionRequests } from "@/api/db/schema";
 import { deleteS3Keys } from "@/api/handlers/files/utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";

@@ -1,16 +1,12 @@
+import { getAnalytics } from "@/api/lib/analytics/client";
+import type { ExceptionProperties } from "@/api/lib/analytics/types";
+import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/types";
 import {
   errorFingerprint,
   errorTag,
   logDevError,
 } from "@/api/lib/errors/utils";
 import { getRequestContext } from "@/api/lib/observability/request-context";
-
-import { getAnalytics } from "./client";
-import type { ExceptionProperties } from "./types";
-import { SERVER_ANALYTICS_EVENTS } from "./types";
-
-export { getAnalytics } from "./client";
-export { isLocalPostHogDebugEnabled } from "./client";
 
 /**
  * Capture an error for observability.

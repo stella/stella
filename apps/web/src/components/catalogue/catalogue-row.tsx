@@ -48,12 +48,14 @@ type CatalogueRowProps = {
   accentWhenUnfocused?: boolean;
 };
 
+const EMPTY_CONTEXT_ACTIONS: readonly ContextMenuAction[] = [];
+
 export const CatalogueRow = ({
   display,
   focused,
   onFocus,
   actions,
-  contextActions,
+  contextActions = EMPTY_CONTEXT_ACTIONS,
   accentWhenUnfocused = false,
 }: CatalogueRowProps) => {
   const t = useTranslations();
@@ -65,7 +67,7 @@ export const CatalogueRow = ({
   const displayName = labelKey ? t(labelKey) : display.displayName;
 
   return (
-    <ContextMenu actions={contextActions ?? []}>
+    <ContextMenu actions={contextActions}>
       <div
         aria-pressed={focused}
         className={cn(

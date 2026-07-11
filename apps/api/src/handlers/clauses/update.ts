@@ -3,9 +3,9 @@ import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVersions } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
@@ -286,15 +286,34 @@ export const updateClauseHandler = async function* ({
       }
 
       const changes: FieldDiffs = {};
-      for (const [key, newValue] of Object.entries(updates)) {
-        if (key === "updatedAt") {
-          continue;
-        }
-        const oldValue = (existing as Record<string, unknown>)[key];
-        if (oldValue !== newValue) {
-          changes[key] = { old: oldValue ?? null, new: newValue };
-        }
-      }
+      addFieldDiff(changes, "title", existing.title, updates.title);
+      addFieldDiff(
+        changes,
+        "categoryId",
+        existing.categoryId,
+        updates.categoryId,
+      );
+      addFieldDiff(changes, "language", existing.language, updates.language);
+      addFieldDiff(changes, "body", existing.body, updates.body);
+      addFieldDiff(
+        changes,
+        "description",
+        existing.description,
+        updates.description,
+      );
+      addFieldDiff(
+        changes,
+        "usageNotes",
+        existing.usageNotes,
+        updates.usageNotes,
+      );
+      addFieldDiff(changes, "metadata", existing.metadata, updates.metadata);
+      addFieldDiff(
+        changes,
+        "currentVersion",
+        existing.currentVersion,
+        updates.currentVersion,
+      );
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
@@ -343,6 +362,17 @@ export const updateClauseHandler = async function* ({
   }
 
   return Result.ok(updated.row);
+};
+
+const addFieldDiff = (
+  changes: FieldDiffs,
+  key: string,
+  oldValue: unknown,
+  newValue: unknown,
+): void => {
+  if (newValue !== undefined && oldValue !== newValue) {
+    changes[key] = { old: oldValue ?? null, new: newValue };
+  }
 };
 
 const config = {

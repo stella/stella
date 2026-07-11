@@ -47,7 +47,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -120,7 +120,7 @@ const ENTRY_COLUMN_KEYS = [
   "hours",
   "amount",
 ] as const;
-const ENTRY_END_ALIGNED_COLUMNS = new Set(["hours", "amount"]);
+const ENTRY_END_ALIGNED_COLUMNS = Object.freeze(["hours", "amount"]);
 
 // Mirrors the real InvoiceDetail layout (header row, info grid, time-entries
 // table) so only values fill in when the query resolves; the page does not jump.
@@ -166,7 +166,7 @@ const InvoiceDetailSkeleton = () => (
                   <Skeleton
                     className={cn(
                       "h-3 w-16",
-                      ENTRY_END_ALIGNED_COLUMNS.has(column) && "ms-auto",
+                      ENTRY_END_ALIGNED_COLUMNS.includes(column) && "ms-auto",
                     )}
                   />
                 </th>
@@ -181,7 +181,8 @@ const InvoiceDetailSkeleton = () => (
                     <Skeleton
                       className={cn(
                         "h-4 w-3/5",
-                        ENTRY_END_ALIGNED_COLUMNS.has(column) && "ms-auto w-12",
+                        ENTRY_END_ALIGNED_COLUMNS.includes(column) &&
+                          "ms-auto w-12",
                       )}
                     />
                   </td>

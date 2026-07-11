@@ -26,7 +26,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { toAPIError, userErrorFromThrown } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type { PlaybookVersionItem } from "@/routes/_protected.knowledge/-components/playbook-types";
 import {
@@ -66,7 +67,7 @@ const PlaybookVersionHistorySheetBody = ({
   const { data, isLoading } = useQuery(
     playbookVersionsOptions(organizationId, playbookId),
   );
-  const versions = data?.items ?? [];
+  const versions = data ? data.items : [];
 
   const restore = useMutation({
     mutationFn: async (version: number) => {

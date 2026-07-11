@@ -10,7 +10,7 @@ import {
 } from "@stll/skills";
 import type { SkillMetadata, SkillResource, StellaSkill } from "@stll/skills";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   agentSkillResources,
   agentSkills,

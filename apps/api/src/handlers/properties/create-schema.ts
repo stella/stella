@@ -44,6 +44,13 @@ export const createPropertyBodySchema = t.Object({
 
 export type CreatePropertyBody = typeof createPropertyBodySchema.static;
 
+const arrayOrEmpty = <T>(value: T[] | undefined): T[] => {
+  if (value === undefined) {
+    return [];
+  }
+  return value;
+};
+
 export const areSelectOptionsValid = (
   rawOptions: SelectOption[],
   contentType: "single-select" | "multi-select",
@@ -68,11 +75,12 @@ export const createDefaultTool = ({
     return { version: 1, type: "manual-input" };
   }
 
+  const normalizedDependencies = arrayOrEmpty(dependencies);
   const serialized = serializeAITool({
     version: 1,
     type: "ai-model",
     prompt: prompt?.trim() ?? "",
-    dependencies: dependencies ?? [],
+    dependencies: normalizedDependencies,
   });
 
   return {
@@ -148,6 +156,7 @@ const inferPropertyRole = ({
 export const buildPropertyParts = (
   body: CreatePropertyBody,
 ): BuiltPropertyParts | BuildValidationError => {
+  const dependencies = arrayOrEmpty(body.dependencies);
   const defaultTool = () =>
     createDefaultTool({
       dependencies: body.dependencies,
@@ -169,7 +178,7 @@ export const buildPropertyParts = (
       break;
     case "single-select":
     case "multi-select": {
-      const rawOptions = body.options ?? [];
+      const rawOptions = arrayOrEmpty(body.options);
       if (!areSelectOptionsValid(rawOptions, body.contentType)) {
         return { status: 400, message: "Invalid select options" };
       }
@@ -201,7 +210,7 @@ export const buildPropertyParts = (
   return {
     content,
     tool,
-    dependencies: tool.type === "ai-model" ? (body.dependencies ?? []) : [],
+    dependencies: tool.type === "ai-model" ? dependencies : [],
     role: inferPropertyRole({ content, name: body.name, tool }),
   };
 };

@@ -24,7 +24,7 @@ import { envBase } from "@/api/env-base";
 import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
-import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
+import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { backfillSearchIndex } from "@/api/handlers/case-law/search-index";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";

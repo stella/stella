@@ -5,6 +5,7 @@ import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
+import { optionalArray } from "@/lib/arrays";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
 import {
   defaultStudioField,
@@ -540,7 +541,7 @@ const recipeFieldToStudioPatch = (
     label: field.label ?? "",
     inputType: field.inputType ?? "text",
     required: field.required === true,
-    options: field.options ?? [],
+    options: optionalArray(field.options),
     aiPrompt: field.aiPrompt,
     aiAdapt: field.aiAdapt === true,
     aiSeesDocument: field.aiSeesDocument === true,
@@ -562,7 +563,7 @@ const recipeFieldToStudioPatch = (
       key: part.key,
       label: part.label,
       inputType: part.inputType,
-      options: part.options ?? [],
+      options: optionalArray(part.options),
       pattern: part.pattern,
     }));
     patch.format = field.format;

@@ -47,11 +47,10 @@ import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
-import {
-  ClientOperationError,
-  toAPIError,
-  userErrorMessage,
-} from "@/lib/errors";
+import { normalizeOptionalArray } from "@/lib/arrays";
+import { toAPIError } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -177,9 +176,9 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
             properties={properties}
           />
           <AdditionalDatesControl
-            additionalDatePropertyIds={
-              view.layout.additionalDatePropertyIds ?? []
-            }
+            additionalDatePropertyIds={normalizeOptionalArray(
+              view.layout.additionalDatePropertyIds,
+            )}
             onChange={(additionalDatePropertyIds) =>
               handleUpdate({ additionalDatePropertyIds })
             }
@@ -689,9 +688,9 @@ const FilesystemOrganizerAction = ({
   // useSuspenseQuery) keeps a cache miss from suspending the toolbar
   // chrome — the action button just stays disabled until the data resolves.
   const { data: foldersData } = useQuery(workspaceFoldersOptions(workspaceId));
-  const allFolders = foldersData ?? [];
+  const allFolders = normalizeOptionalArray(foldersData);
   const { data: filesData } = useQuery(workspaceFilesOptions(workspaceId));
-  const allFiles = filesData ?? [];
+  const allFiles = normalizeOptionalArray(filesData);
 
   const existingFolders = (() => {
     const folderById = new Map(

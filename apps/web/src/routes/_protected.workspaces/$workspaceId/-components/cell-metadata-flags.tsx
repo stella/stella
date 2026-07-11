@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
@@ -29,7 +29,8 @@ import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceCellMetadata } from "@/lib/types";
@@ -38,6 +39,8 @@ import {
   useCellMetadataOverridesStore,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+
+const NO_MANUAL_FLAGS = Object.freeze([]);
 
 const CELL_FLAG_IDS = [
   "needs-review",
@@ -93,9 +96,8 @@ const CELL_FLAGS = [
   VERIFIED_CELL_FLAG,
 ] as const satisfies readonly CellFlagDefinition[];
 
-export const cellFlagsById = new Map<string, CellFlagDefinition>(
-  CELL_FLAGS.map((flag) => [flag.id, flag]),
-);
+export const getCellFlagById = (flagId: string) =>
+  CELL_FLAGS.find((flag) => flag.id === flagId);
 
 // Determines which active flag colors the cell background tint when
 // several flags coexist. Verified wins (the desired final state),
@@ -499,34 +501,38 @@ export const useCellMetadataFlags = ({
     (state) => state.clearOverride,
   );
 
+  const serverManualFlags = metadata?.manualFlags;
   const metadataManualFlags = useMemo(
-    () => normalizeManualFlags(metadata?.manualFlags ?? []),
-    [metadata?.manualFlags],
+    () => normalizeManualFlags(serverManualFlags ?? NO_MANUAL_FLAGS),
+    [serverManualFlags],
   );
   const serverLocked = metadata?.locked === true;
 
   const currentManualFlags = override?.manualFlags ?? metadataManualFlags;
   const isLocked = override?.locked ?? serverLocked;
 
-  // Clear the override when the server has caught up — both
-  // dimensions must match (or be unset on the override side).
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconciles the optimistic Zustand override against the server snapshot via a store write (clearOverride, also called from onError); a store mutation can't move into render, so kept
-  useEffect(() => {
-    if (override === undefined) {
+  useLayoutEffect(() => {
+    const store = useCellMetadataOverridesStore.getState();
+    const latestOverride = store.overrides[key];
+    if (latestOverride === undefined) {
       return;
     }
-    const flagsMatch = haveSameFlags(override.manualFlags, metadataManualFlags);
+    const flagsMatch = haveSameFlags(
+      latestOverride.manualFlags,
+      metadataManualFlags,
+    );
     const lockedMatch =
-      override.locked === undefined || override.locked === serverLocked;
+      latestOverride.locked === undefined ||
+      latestOverride.locked === serverLocked;
     if (flagsMatch && lockedMatch) {
-      clearOverride(key);
+      store.clearOverride(key);
     }
-  }, [override, metadataManualFlags, serverLocked, clearOverride, key]);
+  }, [key, metadataManualFlags, override, serverLocked]);
 
   const activeFlags = useMemo(
     () =>
       currentManualFlags.flatMap((flagId) => {
-        const flag = cellFlagsById.get(flagId);
+        const flag = getCellFlagById(flagId);
         return flag === undefined ? [] : [flag];
       }),
     [currentManualFlags],
@@ -538,7 +544,7 @@ export const useCellMetadataFlags = ({
         if (!currentManualFlags.includes(flagId)) {
           return [];
         }
-        const flag = cellFlagsById.get(flagId);
+        const flag = getCellFlagById(flagId);
         return flag === undefined ? [] : [flag];
       }).at(0) ?? null,
     [currentManualFlags],
@@ -558,8 +564,7 @@ export const useCellMetadataFlags = ({
   // Once the server-side metadata catches up with what we last sent,
   // drop the in-flight base so the next flush diffs against the
   // server again.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- post-commit in-flight ref reset gating the next debounced flush's merge base; resetting during render could fire on a discarded concurrent render, so kept as a commit-phase effect
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (
       lastSentRef.current !== null &&
       haveSameFlags(lastSentRef.current, metadataManualFlags)
@@ -602,8 +607,7 @@ export const useCellMetadataFlags = ({
       clearOverride(key);
       stellaToast.add({
         title: t("errors.actionFailed"),
-        description:
-          error instanceof Error ? error.message : t("common.unexpectedError"),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
         type: "error",
       });
     },

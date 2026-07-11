@@ -21,6 +21,7 @@ import { user } from "@/api/db/auth-schema"; // oxlint-disable-line security-gua
 import { entities, workspaceMembers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
@@ -208,7 +209,8 @@ const readWorkspaces = createSafeRootHandler(
         // resolves via the eager-loaded `client` relation.
         panic(`workspace ${workspace.id} has clientId set but no client row`);
       }
-      const allMembers = memberMap.get(workspace.id) ?? [];
+      const storedMembers = memberMap.get(workspace.id);
+      const allMembers = arrayOrEmpty(storedMembers);
       const leadIdx = workspace.leadUserId
         ? allMembers.findIndex((m) => m.userId === workspace.leadUserId)
         : -1;

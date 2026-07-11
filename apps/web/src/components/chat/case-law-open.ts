@@ -10,7 +10,8 @@ import {
   isCaseLawDecisionId,
   pickCaseLawDecisionHit,
 } from "@/lib/case-law-route";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -114,7 +115,7 @@ export const openCaseLawDecision = async (
     getAnalytics().captureError(error);
     const t = getTranslator();
     stellaToast.add({
-      title: error instanceof Error ? error.message : t("errors.actionFailed"),
+      title: userErrorFromThrown(error, t("errors.actionFailed")),
       type: "error",
     });
   }

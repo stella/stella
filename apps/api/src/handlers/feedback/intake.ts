@@ -36,11 +36,11 @@ import {
   type FeedbackIntakeGuards,
   feedbackIntakeGuards,
 } from "@/api/handlers/feedback/intake-guards";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import {
   isTransactionalEmailConfigured,
   sendFeedbackEmail,
-} from "@/api/lib/email";
+} from "@/api/lib/email/email";
 import { DAY_IN_MS } from "@/api/lib/time";
 import type { McpErrorCode } from "@/api/mcp/error-codes";
 import { sanitizeFeedbackText } from "@/api/mcp/feedback-sanitize";

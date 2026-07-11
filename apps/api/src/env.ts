@@ -51,6 +51,8 @@ const hasRequiredEmailProviderEnv = (provider: "ses" | "smtp" | undefined) => {
  */
 const envApi = createEnv({
   server: {
+    PORT: v.optional(v.pipe(v.string(), v.digits())),
+    STELLA_API_PORT: v.optional(v.pipe(v.string(), v.digits())),
     AI_PROVIDER: v.optional(
       v.picklist([
         "google",

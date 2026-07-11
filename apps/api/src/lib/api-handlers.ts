@@ -11,11 +11,11 @@ import { status } from "elysia";
 import type { ModelRole } from "@stll/ai-catalog";
 import type { PermissionInput, roles } from "@stll/permissions";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureRequestError } from "@/api/lib/analytics";
+import { captureRequestError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -41,8 +41,8 @@ import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
-import { assertUsageAvailable } from "@/api/lib/usage";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
+import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // Type-only: derive the closed tool-name union from the single MCP registry
 // so `mcp: { type: "tool", name }` typechecks against the real tools. The
 // import is erased at build time and never creates a runtime import cycle

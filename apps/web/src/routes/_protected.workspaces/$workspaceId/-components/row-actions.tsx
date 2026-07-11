@@ -55,7 +55,8 @@ import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
-import { ClientOperationError, isUnauthorizedError } from "@/lib/errors";
+import { isUnauthorizedError } from "@/lib/errors/auth";
+import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyId,

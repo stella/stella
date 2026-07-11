@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { templateFills } from "@/api/db/schema";
 import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
 import { clauseBodySchema } from "@/api/handlers/clauses/shared-schemas";

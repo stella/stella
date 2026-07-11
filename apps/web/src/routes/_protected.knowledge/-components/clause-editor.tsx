@@ -41,7 +41,8 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { optionalArray } from "@/lib/arrays";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 
 import { diffClauseBodies } from "./clause-diff";
 import { ClauseDiffView } from "./clause-diff-view";
@@ -231,7 +232,8 @@ const nodeToParagraph = (node: JSONContent): ClauseParagraph => {
   const runs: ClauseRun[] = [];
   let plainText = "";
 
-  for (const child of node.content ?? []) {
+  const inlineContent = optionalArray(node.content);
+  for (const child of inlineContent) {
     if (child.type === "text" && child.text) {
       const bold = child.marks?.some((m) => m.type === "bold");
       const italic = child.marks?.some((m) => m.type === "italic");
@@ -275,11 +277,12 @@ const flattenList = (
   level: number,
   out: ClauseParagraph[],
 ): void => {
-  for (const item of listNode.content ?? []) {
+  const listItems = optionalArray(listNode.content);
+  for (const item of listItems) {
     if (item.type !== "listItem") {
       continue;
     }
-    const blocks = item.content ?? [];
+    const blocks = optionalArray(item.content);
     // The item's own text comes first; a list item must carry at least one
     // marker line even if it holds nothing but a nested list.
     const leadBlock = blocks.find((b) => listKindOfNode(b.type) === null);
@@ -300,7 +303,8 @@ const flattenList = (
 export const tipTapToClauseBody = (json: JSONContent): ClauseParagraph[] => {
   const body: ClauseParagraph[] = [];
 
-  for (const node of json.content ?? []) {
+  const documentContent = optionalArray(json.content);
+  for (const node of documentContent) {
     if (node.type === CLAUSE_DIRECTIVE_NODE) {
       body.push(nodeToDirective(node));
       continue;

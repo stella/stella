@@ -507,7 +507,8 @@ export const AddMemberDialog = ({
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const existingUserIds = new Set(existingMembers.map((m) => m.userId));
-  const availableMembers = (org?.members ?? []).filter(
+  const organizationMembers = org ? org.members : [];
+  const availableMembers = organizationMembers.filter(
     (m) => !existingUserIds.has(m.userId),
   );
 

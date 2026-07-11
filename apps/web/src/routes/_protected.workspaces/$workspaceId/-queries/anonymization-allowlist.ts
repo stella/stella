@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 export type AnonymizationAllowlistKey = {
@@ -10,7 +10,7 @@ export type AnonymizationAllowlistKey = {
 };
 
 export const anonymizationAllowlistKeys = {
-  root: ["anonymization-allowlist"] as string[],
+  root: ["anonymization-allowlist"],
   all: ({ workspaceId, entityId }: AnonymizationAllowlistKey): string[] => [
     ...anonymizationAllowlistKeys.root,
     workspaceId,

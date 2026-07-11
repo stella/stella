@@ -54,7 +54,8 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
 import type { Role } from "@/lib/auth";
 import { compareByLocale } from "@/lib/collation";
-import { toAuthClientError } from "@/lib/errors";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
 import {
@@ -80,7 +81,7 @@ const ASSIGNABLE_ROLES = ["owner", "admin", "member"] as const;
 type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
 
 const isAssignableRole = (role: Role): role is AssignableRole =>
-  (ASSIGNABLE_ROLES as readonly Role[]).includes(role);
+  ASSIGNABLE_ROLES.some((assignableRole) => assignableRole === role);
 
 type SortKey = "name" | "role" | "joined";
 type SortDir = "asc" | "desc";
@@ -461,7 +462,10 @@ const RoleCell = ({
       if (result.error) {
         analytics.captureError(toAuthClientError(result.error));
         stellaToast.add({
-          title: result.error.message ?? t("errors.actionFailed"),
+          title: userErrorFromThrown(
+            toAuthClientError(result.error),
+            t("errors.actionFailed"),
+          ),
           type: "error",
         });
         throw toAuthClientError(result.error);

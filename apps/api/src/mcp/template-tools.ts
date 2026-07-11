@@ -22,7 +22,7 @@ import {
   fillStoredTemplateWithText,
 } from "@/api/handlers/templates/template-fill-service";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -254,7 +254,8 @@ const templateFieldOptionItems = (
 
 const templateFieldPartItems = (
   payload: TemplateDetailSuccess,
-): readonly FieldPart[] => payload.fields.flatMap((field) => field.parts ?? []);
+): readonly FieldPart[] =>
+  payload.fields.flatMap((field) => compact(field.parts));
 
 const templateFieldPartOptionItems = (
   payload: TemplateDetailSuccess,
@@ -267,7 +268,16 @@ const templateFieldPartOptionItems = (
 const templateFieldFormatItems = (
   payload: TemplateDetailSuccess,
 ): readonly { key: string; template: string }[] =>
-  payload.fields.flatMap((field) => field.formats ?? []);
+  payload.fields.flatMap((field) => compact(field.formats));
+
+const compact = <T>(
+  items: readonly (T | null)[] | null | undefined,
+): readonly T[] => {
+  if (items === undefined || items === null) {
+    return [];
+  }
+  return items.filter((item) => item !== null);
+};
 
 const buildTemplateDetailTextFieldSpecs = (
   organizationId: string,

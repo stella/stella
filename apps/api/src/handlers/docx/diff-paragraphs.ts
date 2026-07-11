@@ -32,7 +32,7 @@ const SHORT_NEUTRAL_EQUALITY_RE = /^[\t \u00A0()[\]{}.,;:/-]{1,3}$/u;
 const WORD_TOKEN_RE = /[\p{L}\p{N}_]+|[^\p{L}\p{N}_]+/gu;
 
 export const tokenize = (text: string): string[] =>
-  text.match(WORD_TOKEN_RE) ?? [];
+  Array.from(text.matchAll(WORD_TOKEN_RE), (match) => match[0]);
 
 const WORD_ONLY_RE = /[\p{L}\p{N}_]+/gu;
 

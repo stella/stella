@@ -39,6 +39,13 @@ const PAGE_SIZE = 100;
 const LEGACY_PAGE_SIZE = 100;
 const ITEM_CONCURRENCY = 10;
 
+const arrayOrEmpty = <T>(value: T[] | null | undefined): T[] => {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  return value;
+};
+
 type SkSud = {
   registreGuid?: string | null;
   nazov?: string | null;
@@ -327,7 +334,7 @@ export const skCourtsAdapter: SourceAdapter = {
     },
 
     extractItems: (data) => ({
-      items: data.rozhodnutieList ?? [],
+      items: arrayOrEmpty(data.rozhodnutieList),
       total: toOptionalValue(data.numFound),
     }),
 

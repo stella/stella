@@ -67,11 +67,8 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
-import {
-  toAPIError,
-  userErrorFromThrown,
-  userErrorMessage,
-} from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
@@ -165,12 +162,7 @@ export const ClauseDetailView = ({
   const canDeleteClause = usePermissions({ clause: ["delete"] });
   const detailQuery = useQuery(clauseDetailOptions(organizationId, clauseId));
 
-  // SAFETY: bridges the Eden response and this local ClauseDetail; the
-  // body element type resolves through a separate (web-local)
-  // BlockDirectiveKind than the API's, and the response carries extra
-  // fields (metadata, createdBy) this view does not consume.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- duplicated web/api paragraph types diverge; not narrowable without a mapper
-  const detail = detailQuery.data as unknown as ClauseDetail | undefined;
+  const detail = detailQuery.data;
 
   const refreshDetail = () => {
     void queryClient.invalidateQueries({

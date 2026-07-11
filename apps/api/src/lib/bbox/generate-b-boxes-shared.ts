@@ -1,7 +1,7 @@
 import { PDF } from "@libpdf/core";
 import { Result, TaggedError } from "better-result";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type {
   DocxFolioJustificationBlock,
   JustificationBlock,
@@ -52,7 +52,7 @@ class JustificationTextError extends TaggedError("JustificationTextError")<{
 const isDocxFolioBlock = (
   block: JustificationBlock,
 ): block is DocxFolioJustificationBlock =>
-  (block as { kind?: unknown }).kind === "docx-folio";
+  "kind" in block && block.kind === "docx-folio";
 
 export const extractJustificationContent = (
   justification: JustificationContent,

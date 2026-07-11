@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { PlusIcon, Trash2Icon } from "lucide-react";
@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { normalizeOptionalArray } from "@/lib/arrays";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import { getContactMetadata } from "@/routes/_protected.contacts/-components/contact-metadata";
 import type {
@@ -26,7 +27,7 @@ export const ContactCustomFieldsEditor = ({
   const [labelDraft, setLabelDraft] = useState("");
   const [valueDraft, setValueDraft] = useState("");
   const metadata = getContactMetadata(contact);
-  const customFields = metadata.customFields ?? [];
+  const customFields = normalizeOptionalArray(metadata.customFields);
 
   const addCustomField = () => {
     const label = labelDraft.trim();
@@ -175,28 +176,15 @@ const CustomFieldRow = ({
   onSave: (field: ContactCustomField) => Promise<boolean>;
 }) => {
   const t = useTranslations();
-  const [label, setLabel] = useState(field.label);
-  const [value, setValue] = useState(field.value);
-  const latestFieldRef = useRef({ label: field.label, value: field.value });
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconciles controlled label/value drafts with incoming field props without clobbering in-progress edits (latestFieldRef guard); can't compute inline (genuinely editable state, setters used by onChange/save) and can't key (would remount and discard unsaved edits on every server reconciliation)
-  useEffect(() => {
-    const nextField = { label: field.label, value: field.value };
-    setLabel((currentLabel) =>
-      currentLabel === latestFieldRef.current.label
-        ? nextField.label
-        : currentLabel,
-    );
-    setValue((currentValue) =>
-      currentValue === latestFieldRef.current.value
-        ? nextField.value
-        : currentValue,
-    );
-    latestFieldRef.current = nextField;
-  }, [field.label, field.value]);
+  const [labelDraft, setLabelDraft] = useState<string | null>(null);
+  const [valueDraft, setValueDraft] = useState<string | null>(null);
+  const label = labelDraft ?? field.label;
+  const value = valueDraft ?? field.value;
 
   const save = async () => {
     if (label === field.label && value === field.value) {
+      setLabelDraft(null);
+      setValueDraft(null);
       return;
     }
 
@@ -210,8 +198,8 @@ const CustomFieldRow = ({
       return;
     }
 
-    setLabel(nextField.label);
-    setValue(nextField.value);
+    setLabelDraft(null);
+    setValueDraft(null);
   };
 
   return (
@@ -223,7 +211,7 @@ const CustomFieldRow = ({
         onBlur={() => {
           void save();
         }}
-        onChange={(event) => setLabel(event.currentTarget.value)}
+        onChange={(event) => setLabelDraft(event.currentTarget.value)}
         value={label}
       />
       <Input
@@ -233,7 +221,7 @@ const CustomFieldRow = ({
         onBlur={() => {
           void save();
         }}
-        onChange={(event) => setValue(event.currentTarget.value)}
+        onChange={(event) => setValueDraft(event.currentTarget.value)}
         value={value}
       />
       <Button

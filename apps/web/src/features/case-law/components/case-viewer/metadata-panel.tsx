@@ -14,7 +14,7 @@ import { sanitizeHref } from "@/lib/sanitize-href";
  * Countries with a single official court language.
  * Language field is redundant for these; hide it in the UI.
  */
-const MONOLINGUAL_COUNTRIES = new Set(["CZE", "SVK", "POL", "AUT"]);
+const MONOLINGUAL_COUNTRIES = Object.freeze(["CZE", "SVK", "POL", "AUT"]);
 
 /**
  * Convert API URLs to public-facing court page URLs.
@@ -172,8 +172,8 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
     }
   }
 
-  const astKeywords = astMeta?.keywords ?? [];
-  const astStatutes = astMeta?.statutes ?? [];
+  const astKeywords = astMeta ? astMeta.keywords : [];
+  const astStatutes = astMeta ? astMeta.statutes : [];
   const hasExtra =
     sourceFields.length > 0 || astKeywords.length > 0 || astStatutes.length > 0;
 
@@ -201,7 +201,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
         <MetadataField label={t("common.date")} value={decision.decisionDate} />
         <MetadataField label="ECLI" value={decision.ecli} />
         <MetadataField label={t("common.country")} value={decision.country} />
-        {!MONOLINGUAL_COUNTRIES.has(decision.country) && (
+        {!MONOLINGUAL_COUNTRIES.includes(decision.country) && (
           <MetadataField
             label={t("common.language")}
             value={decision.language}

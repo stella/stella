@@ -116,8 +116,8 @@ const flatten = (
   const visit = (siblings: readonly FileTreeNode[], depth: number) => {
     for (const node of siblings) {
       rows.push({ node, depth });
-      if (node.kind === "folder" && expandedIds.has(node.id)) {
-        visit(node.children ?? [], depth + 1);
+      if (node.kind === "folder" && expandedIds.has(node.id) && node.children) {
+        visit(node.children, depth + 1);
       }
     }
   };

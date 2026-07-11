@@ -3,7 +3,7 @@ import { and, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import {
@@ -12,6 +12,7 @@ import {
 } from "@/api/handlers/entities/kanban-group-condition";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
@@ -68,7 +69,7 @@ const readGroupCounts = createSafeHandler(
     const baseConditions = and(
       eq(entities.workspaceId, workspaceId),
       isNotNull(entities.currentVersionId),
-      ...buildFilterConditions(body.filters ?? []),
+      ...buildFilterConditions(arrayOrEmpty(body.filters)),
     );
     // The grouped table is a document table: it never renders folders or tasks
     // (the flat window query excludes them too), so the counts must exclude them

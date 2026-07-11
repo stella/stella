@@ -11,7 +11,8 @@ import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
-import { toAPIError, userErrorFromThrown } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { invalidateChatThread } from "@/routes/_protected.chat/-queries";
 

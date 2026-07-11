@@ -20,7 +20,7 @@
     },
     "apps/api": {
       "entry": [
-        "src/index.ts!",
+        "src/server.ts!",
         "src/handlers/files/pdf-worker.ts!",
         "src/lib/search/extraction-worker.ts!",
         "scripts/*.ts",

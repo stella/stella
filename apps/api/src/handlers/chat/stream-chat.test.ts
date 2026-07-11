@@ -6,7 +6,7 @@ import { describe, expect, test } from "bun:test";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { createPipelineContext } from "@stll/anonymize-wasm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";

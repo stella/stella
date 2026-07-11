@@ -378,22 +378,23 @@ const PropertyComposerBody = ({
   // Both lists are seeded into state so an unmodified Save round-trips
   // the same dependency set instead of dropping non-file deps before
   // the editor gets a chance to fire onUpdate.
-  const initialDependencySplit = (() => {
-    if (!editingProperty || editingTool?.type !== "ai-model") {
-      return { fileIds: [] as string[], otherIds: [] as string[] };
-    }
-    const fileIds = new Set(fileProperties.map((p) => p.id));
-    const inFiles: string[] = [];
-    const inOther: string[] = [];
-    for (const dep of editingTool.dependencies) {
-      if (fileIds.has(dep.dependsOnPropertyId)) {
-        inFiles.push(dep.dependsOnPropertyId);
-      } else {
-        inOther.push(dep.dependsOnPropertyId);
+  const initialDependencySplit: { fileIds: string[]; otherIds: string[] } =
+    (() => {
+      if (!editingProperty || editingTool?.type !== "ai-model") {
+        return { fileIds: [], otherIds: [] };
       }
-    }
-    return { fileIds: inFiles, otherIds: inOther };
-  })();
+      const fileIds = new Set(fileProperties.map((p) => p.id));
+      const inFiles: string[] = [];
+      const inOther: string[] = [];
+      for (const dep of editingTool.dependencies) {
+        if (fileIds.has(dep.dependsOnPropertyId)) {
+          inFiles.push(dep.dependsOnPropertyId);
+        } else {
+          inOther.push(dep.dependsOnPropertyId);
+        }
+      }
+      return { fileIds: inFiles, otherIds: inOther };
+    })();
 
   const initialFileIds = (() => {
     if (editingProperty && editingTool?.type === "ai-model") {

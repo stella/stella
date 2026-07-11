@@ -11,7 +11,7 @@
 
 import { eq, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
 import {
   phraseToPattern,
@@ -26,7 +26,7 @@ import {
   matchRule,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export { extractContext } from "@/api/handlers/case-law/polarity/context";

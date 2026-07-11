@@ -8,6 +8,7 @@ import {
   authorizationServerMetadataUrls,
   mcpWellKnownProtectedResourceUrls,
 } from "@/api/handlers/mcp-connectors/url-safety";
+import { arrayOrEmpty } from "@/api/lib/array";
 import {
   FetchBoundaryError,
   HandlerError,
@@ -588,7 +589,7 @@ export const pickRequestedScopes = ({
     return connectorScopes;
   }
 
-  return protectedResource.scopes_supported ?? [];
+  return arrayOrEmpty(protectedResource.scopes_supported);
 };
 
 export const assertOAuthConnector = ({

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

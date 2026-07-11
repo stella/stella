@@ -1,16 +1,12 @@
 import type * as React from "react";
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import {
-  formatForDisplay,
-  useHotkey,
-  useKeyHold,
-} from "@tanstack/react-hotkeys";
+import { formatForDisplay, useHotkey } from "@tanstack/react-hotkeys";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import {
   getRouteApi,
@@ -283,7 +279,6 @@ export function AppSidebar(props: AppSidebarProps) {
   };
 
   // Hold-to-reveal nav badges (Control on Mac, Alt on Win/Linux)
-  const isNavKeyHeld = useKeyHold(NAV_KEY);
   const [showNavBadges, setShowNavBadges] = useState(false);
 
   const showBadges = useDebouncedCallback(
@@ -291,16 +286,38 @@ export function AppSidebar(props: AppSidebarProps) {
     HOLD_DELAY_MS,
   );
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reacts to the useKeyHold(NAV_KEY) hook output to drive a debounced badge reveal; the trigger is a hook return value with no setter call-site to relay into, so it stays an effect
-  useEffect(() => {
-    if (isNavKeyHeld) {
-      showBadges();
-    } else {
+  useExternalSyncEffect(() => {
+    const hideBadges = () => {
       showBadges.cancel();
-      // eslint-disable-next-line react/react-compiler -- effect reacts to the useKeyHold hook output and drives a debounced badge reveal side effect; not derivable in render
       setShowNavBadges(false);
-    }
-  }, [isNavKeyHeld, showBadges]);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === NAV_KEY && !event.repeat) {
+        showBadges();
+      }
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === NAV_KEY) {
+        hideBadges();
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        hideBadges();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", hideBadges);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", hideBadges);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      showBadges.cancel();
+    };
+  }, [showBadges]);
 
   type NavTarget = {
     action: () => void;

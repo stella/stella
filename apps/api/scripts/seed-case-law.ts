@@ -25,9 +25,9 @@ import * as v from "valibot";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { createIngestionDb } from "@/api/db";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { createIngestionDb } from "@/api/db/scoped";
 import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";

@@ -6,7 +6,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 export const useSignOut = () => {
   const analytics = useAnalytics();
@@ -20,7 +21,10 @@ export const useSignOut = () => {
 
       if (result.error) {
         stellaToast.add({
-          title: result.error.message ?? t("errors.actionFailed"),
+          title: userErrorFromThrown(
+            toAuthClientError(result.error),
+            t("errors.actionFailed"),
+          ),
           type: "error",
         });
         throw toAuthClientError(result.error);

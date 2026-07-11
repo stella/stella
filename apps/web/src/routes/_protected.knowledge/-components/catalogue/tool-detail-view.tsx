@@ -13,6 +13,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { SIDE_RAIL_TAB_ICON_SIZE_PX, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { catalogueOptions } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 import { CatalogueDetailPanel } from "./catalogue-detail-panel";
@@ -156,10 +157,7 @@ const ToolDetailContent = ({
       },
       onError: (error) => {
         stellaToast.add({
-          title:
-            error instanceof Error
-              ? error.message
-              : t("catalogue.installFailed"),
+          title: userErrorFromThrown(error, t("catalogue.installFailed")),
           type: "error",
         });
       },

@@ -1,41 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { toSafeId } from "@/api/lib/branded-types";
+import { parseExternalOrganizationId } from "@/api/lib/safe-id-boundaries";
 
-import { parsePickedEntityIdsJson } from "./safe-id-boundaries";
-
-const UUID_A = "0196d7a8-1111-7777-8888-0123456789ab";
-const UUID_B = "0196d7a8-2222-7777-8888-0123456789ab";
-
-describe("parsePickedEntityIdsJson", () => {
-  test("parses a JSON array of uuids", () => {
-    expect(parsePickedEntityIdsJson(`["${UUID_A}", "${UUID_B}"]`, 5)).toEqual([
-      toSafeId<"entity">(UUID_A),
-      toSafeId<"entity">(UUID_B),
-    ]);
-  });
-
-  test("accepts an empty array", () => {
-    expect(parsePickedEntityIdsJson("[]", 5)).toEqual([]);
-  });
-
-  test("rejects malformed JSON", () => {
-    expect(parsePickedEntityIdsJson("not json", 5)).toBeNull();
-  });
-
-  test("rejects non-array JSON", () => {
-    expect(parsePickedEntityIdsJson(`{"id": "${UUID_A}"}`, 5)).toBeNull();
-    expect(parsePickedEntityIdsJson(`"${UUID_A}"`, 5)).toBeNull();
-  });
-
-  test("rejects arrays over the limit", () => {
+describe("external organization id parsing", () => {
+  test("accepts UUID organization ids", () => {
     expect(
-      parsePickedEntityIdsJson(`["${UUID_A}", "${UUID_B}"]`, 1),
-    ).toBeNull();
+      String(
+        parseExternalOrganizationId("0191d14d-9a63-7d2e-a021-06053e542c85"),
+      ),
+    ).toBe("0191d14d-9a63-7d2e-a021-06053e542c85");
   });
 
-  test("rejects non-uuid members", () => {
-    expect(parsePickedEntityIdsJson(`["${UUID_A}", "nope"]`, 5)).toBeNull();
-    expect(parsePickedEntityIdsJson(`["${UUID_A}", 42]`, 5)).toBeNull();
+  test("rejects malformed provider metadata before database access", () => {
+    expect(parseExternalOrganizationId("not/an/organization/id")).toBeNull();
   });
 });

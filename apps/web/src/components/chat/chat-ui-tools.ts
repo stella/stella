@@ -724,7 +724,8 @@ export const parseCompletedToolCallArguments = (
     return undefined;
   }
   try {
-    return JSON.parse(raw) as unknown;
+    const parsed: unknown = JSON.parse(raw);
+    return parsed;
   } catch {
     return undefined;
   }
@@ -739,14 +740,28 @@ const withParsedToolCallInput = (part: ChatPart): ChatPart => {
     return part;
   }
   const withInput = { ...part, input };
-  // SAFETY: `arguments` is validated against the tool's inputSchema on
-  // the server (validateToolCallPart) before the part is streamed or
-  // persisted, so its parsed form conforms to this part's `input` type.
-  // `JSON.parse` is read as `unknown` above; this narrows it back onto
-  // the discriminated tool-call union without widening the part.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- parsed arguments conform to the tool inputSchema (validated server-side)
-  return withInput as ChatToolCallPart;
+  return isRegisteredToolCallWithInput(withInput) ? withInput : part;
 };
+
+const isRegisteredToolCallWithInput = (
+  value: unknown,
+): value is ChatToolCallPart => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("type" in value) ||
+    value.type !== "tool-call" ||
+    !("name" in value) ||
+    typeof value.name !== "string" ||
+    !("input" in value)
+  ) {
+    return false;
+  }
+  return isChatToolName(value.name) && isJsonObject(value.input);
+};
+
+const isJsonObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * Fill each tool-call part's typed `input` from its raw `arguments`.

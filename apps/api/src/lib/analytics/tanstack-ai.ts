@@ -3,10 +3,10 @@ import { Result } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError as captureTelemetryError } from "@/api/lib/analytics";
+import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
@@ -15,8 +15,8 @@ import {
   resolveEffectiveServiceTierForProvider,
   type ResolvedTanStackTextModelInfo,
 } from "@/api/lib/tanstack-ai-models";
-import { recordUsageEvent } from "@/api/lib/usage";
 import { usageUnitsFromTokens } from "@/api/lib/usage/unit-model";
+import { recordUsageEvent } from "@/api/lib/usage/usage-ledger";
 
 import { getAnalytics } from "./client";
 import {

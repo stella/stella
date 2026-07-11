@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffectEvent, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -39,7 +33,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -51,7 +45,7 @@ import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
@@ -82,6 +76,15 @@ type ChatThreadPageProps = {
 };
 
 const protectedRouteApi = getRouteApi("/_protected");
+
+const WebSearchSeedLifecycle = ({ seed }: { seed: () => void }) => {
+  useMountEffect(() => {
+    seed();
+  });
+  return null;
+};
+
+const EMPTY_CONTEXT_MATTER_IDS = Object.freeze([]);
 
 export const ChatThreadPage = ({
   threadRef,
@@ -121,7 +124,9 @@ export const ChatThreadPage = ({
     null,
   );
   const anonymized = useChatAnonymized(threadRef);
-  const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
+  const getContextMatterIds = useEffectEvent(
+    () => contextMatterIds ?? EMPTY_CONTEXT_MATTER_IDS,
+  );
   const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
 
   // A thread can be opened (e.g. via "Move to main" from the inspector)
@@ -269,7 +274,9 @@ export const ChatThreadPage = ({
       threadRef,
     }),
   );
-  const suggestedFollowupPrompts = suggestedPromptsData?.prompts ?? [];
+  const suggestedFollowupPrompts = suggestedPromptsData
+    ? suggestedPromptsData.prompts
+    : [];
   const suggestedFollowupPrompt = suggestedFollowupPrompts.at(0) ?? undefined;
 
   // Seed brand-new (empty) threads from the persisted web-search
@@ -298,31 +305,23 @@ export const ChatThreadPage = ({
       }
     },
   });
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- PATCH-seed the web-search preference once a freshly-opened thread renders empty. The trigger is derived from async query data (data.webSearchAvailable/Enabled) plus store state, not a single setter or a discrete open handler in this file. Keep.
-  useEffect(() => {
+  const shouldSeedWebSearch =
+    messages.length === 0 &&
+    data.webSearchAvailable &&
+    !data.webSearchEnabled &&
+    enabledPreference;
+  const triggerWebSearchSeed = () => {
     if (seededWebSearchForThreadId.current === threadRef.threadId) {
       return;
     }
     if (seedingWebSearchForThreadId.current === threadRef.threadId) {
       return;
     }
-    if (
-      messages.length === 0 &&
-      data.webSearchAvailable &&
-      !data.webSearchEnabled &&
-      enabledPreference
-    ) {
+    if (shouldSeedWebSearch) {
       seedingWebSearchForThreadId.current = threadRef.threadId;
       seedWebSearch();
     }
-  }, [
-    threadRef.threadId,
-    messages.length,
-    data.webSearchAvailable,
-    data.webSearchEnabled,
-    enabledPreference,
-    seedWebSearch,
-  ]);
+  };
   const controller = useChatEditor({
     disableSlashSuggestion: true,
     reservedCommands: true,
@@ -440,6 +439,12 @@ export const ChatThreadPage = ({
         isLoadingCreateDocumentMatters,
       }}
     >
+      {shouldSeedWebSearch && (
+        <WebSearchSeedLifecycle
+          key={`${threadRef.threadId}:${messages.length}:${data.webSearchAvailable}:${data.webSearchEnabled}:${enabledPreference}`}
+          seed={triggerWebSearchSeed}
+        />
+      )}
       <ChatApprovalContext
         value={{
           activeOrganizationId,

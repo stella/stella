@@ -645,7 +645,9 @@ const KanbanGroupColumn = ({
       groupValue: columnValue,
     }),
   );
-  const entities = query.data?.pages.flatMap((page) => page.entities) ?? [];
+  const entities = query.data
+    ? query.data.pages.flatMap((page) => page.entities)
+    : [];
 
   return (
     <KanbanColumn

@@ -10,8 +10,8 @@ import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 // --- Mocks, installed before the MCP graph is imported -----------------------
 
 const captureErrorMock = mock();
-const realAnalytics = await import("@/api/lib/analytics");
-void mock.module("@/api/lib/analytics", () => ({
+const realAnalytics = await import("@/api/lib/analytics/capture");
+void mock.module("@/api/lib/analytics/capture", () => ({
   ...realAnalytics,
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,

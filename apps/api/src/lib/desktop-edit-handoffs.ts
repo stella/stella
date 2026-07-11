@@ -1,15 +1,15 @@
 import { and, eq, gte, isNotNull, isNull, sql } from "drizzle-orm";
 
-import { createSafeDb } from "@/api/db";
-import type { SafeDb } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   desktopEditHandoffs,
   desktopEditSessions,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { createSafeDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   canUseDesktopEditSession,

@@ -1,3 +1,5 @@
+import * as v from "valibot";
+
 /**
  * Branded type for filenames that have been sanitized.
  *
@@ -7,9 +9,12 @@
  * is via `sanitizeFilename()`, so the type system enforces that
  * every write path passes through sanitization.
  */
-export type SanitizedFileName = string & {
-  readonly __brand: "SanitizedFileName";
-};
+const sanitizedFileNameSchema = v.pipe(
+  v.string(),
+  v.brand("SanitizedFileName"),
+);
+
+export type SanitizedFileName = v.InferOutput<typeof sanitizedFileNameSchema>;
 
 /**
  * Strip characters that could inject into Content-Disposition
@@ -41,10 +46,10 @@ export const sanitizeFilename = (name: string): SanitizedFileName => {
     .replace(PATH_TRAVERSAL_RE, "__");
   const sanitizedWithoutEdgeDots = stripLeadingAndTrailingDots(sanitized);
 
-  // SAFETY: the sanitization above guarantees the result is safe
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- only sanitizeFilename mints the SanitizedFileName brand
-  return (sanitizedWithoutEdgeDots.slice(0, 255) ||
-    "file") as SanitizedFileName;
+  return v.parse(
+    sanitizedFileNameSchema,
+    sanitizedWithoutEdgeDots.slice(0, 255) || "file",
+  );
 };
 
 /** Matches a trailing `.docx` extension (case-insensitive). */

@@ -40,6 +40,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
@@ -153,7 +154,7 @@ const toActionErrorTitle = ({
 }: {
   error: unknown;
   fallback: string;
-}) => (error instanceof Error ? error.message : fallback);
+}) => userErrorFromThrown(error, fallback);
 
 export const CreateMatterDialog = () => {
   const { closeDialog, dialog } = useCreateMatterStore(
@@ -339,11 +340,11 @@ const CreateMatterDialogBody = ({
   const clientInvalid =
     submitAttempted && ownerType === "client" && selectedClient === null;
   const nameInvalid = submitAttempted && name.trim().length === 0;
-  const organizationMembers = organization?.members ?? [];
+  const organizationMembers = organization ? organization.members : [];
   const selectedMemberUserIdSet = new Set(selectedMemberUserIds);
   const collaboratorStats = buildCollaboratorStats({
     currentUserId: currentUser.id,
-    workspaces: workspacesData?.workspaces ?? [],
+    workspaces: workspacesData ? workspacesData.workspaces : [],
   });
   const availableMembers = organizationMembers
     .filter(
@@ -377,16 +378,16 @@ const CreateMatterDialogBody = ({
   );
   const shouldCollapseSelectedMembers = selectedMembers.length > 3;
   const hasAdditionalOrganizationMembers = organizationMembers.length > 1;
-  const possibleDuplicates = (() => {
+  const possibleDuplicates: ExistingWorkspace[] = (() => {
     if (ownerType === "personal" || selectedClient === null) {
-      return [] as ExistingWorkspace[];
+      return [];
     }
 
     return getPossibleDuplicateMatters({
       clientId: selectedClient.id,
       limit: 3,
       name,
-      workspaces: workspacesData?.workspaces ?? [],
+      workspaces: workspacesData ? workspacesData.workspaces : [],
     });
   })();
 

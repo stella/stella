@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { timeEntriesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 

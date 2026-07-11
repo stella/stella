@@ -399,11 +399,34 @@ const createBedrockTextAdapter = (
   config?: BedrockTextAdapterConfig,
 ): AnyTextAdapter => {
   const adapter = bedrockText(model, config);
-  // SAFETY: `model: never` is only a compile-time placeholder so
-  // `extendAdapter` can widen the factory to Stella's arbitrary model IDs.
-  // TanStack's Bedrock factory returns a normal text adapter at runtime.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- erase placeholder generics after adapter construction
-  return adapter as unknown as AnyTextAdapter;
+  return {
+    kind: "text",
+    name: adapter.name,
+    model: adapter.model,
+    "~types": adapter["~types"],
+    // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+    chatStream: (options) => {
+      // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- widens TanStack's erroneous `never` Bedrock method parameter through an explicit structural adapter
+      return Reflect.apply(adapter.chatStream, adapter, [options]);
+    },
+    // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+    structuredOutput: async (options) => {
+      // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
+      return await Reflect.apply(adapter.structuredOutput, adapter, [options]);
+    },
+    // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+    structuredOutputStream: (options) => {
+      // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
+      return Reflect.apply(adapter.structuredOutputStream, adapter, [options]);
+    },
+    // eslint-disable-next-line arrow-body-style -- block keeps the external-boundary suppression scoped to Reflect.apply
+    supportsCombinedToolsAndSchema: (options) => {
+      // eslint-disable-next-line typescript/no-unsafe-return, typescript/unbound-method -- same Bedrock generic widening boundary as chatStream
+      return Reflect.apply(adapter.supportsCombinedToolsAndSchema, adapter, [
+        options,
+      ]);
+    },
+  };
 };
 
 const createExtendedBedrockAdapter = (

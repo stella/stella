@@ -10,7 +10,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
-import { toAPIError, userErrorFromThrown } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 

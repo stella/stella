@@ -5,7 +5,7 @@ import {
   parseAmounts,
   reasonFromMessage,
 } from "@/components/usage/use-usage-limit";
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
 
 describe("reasonFromMessage", () => {
   test("usage_limit_exceeded for messages that mention need / have amounts", () => {

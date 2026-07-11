@@ -1,12 +1,16 @@
 import type { PipelineConfig } from "@stll/anonymize-wasm";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
+import {
+  createPipelineRunRegistry,
+  type PipelineRun,
+} from "@/components/inspector/pipeline-run-registry.logic";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DEFAULT_ENTITY_LABELS } from "@/lib/anonymize/constants";
 import { extractPDFText } from "@/lib/anonymize/pdf-coords";
 import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
 import { api } from "@/lib/api";
-import { ClientOperationError } from "@/lib/errors";
+import { ClientOperationError } from "@/lib/errors/client";
 import {
   allocateEntityOverlayId,
   clearAnonymizationForField,
@@ -39,7 +43,7 @@ const buildPipelineConfig = (
   return config;
 };
 
-const cancelledFieldIds = new Set<string>();
+const pipelineRuns = createPipelineRunRegistry();
 let dictionariesPromise: Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > | null = null;
@@ -54,14 +58,14 @@ export const anonymizePdf = async ({
   fieldId: string;
   mimeType: string | null;
 }): Promise<void> => {
-  cancelledFieldIds.delete(fieldId);
+  const run = pipelineRuns.start(fieldId);
   const isPdf = mimeType === PDF_MIME_TYPE;
   // Tell the inspector facet a producer is in flight so
   // it shows "Detecting entities…" while the wasm pipeline
   // runs. Mirrored on every terminal exit below.
   useInspectorStore.getState().markAnonymizationPipelineStarted(fieldId);
   try {
-    await runPipelineAndCommit({ workspaceId, fieldId, isPdf });
+    await runPipelineAndCommit({ workspaceId, fieldId, isPdf, run });
   } finally {
     // Release the in-flight lock unconditionally — even
     // when cancelled or when an awaited step rejected
@@ -71,7 +75,9 @@ export const anonymizePdf = async ({
     // permanently holding this field, and reopening the
     // same document would keep the inspector facet stuck
     // on the "Detecting…" placeholder.
-    useInspectorStore.getState().markAnonymizationPipelineRan(fieldId);
+    if (pipelineRuns.finish(fieldId, run)) {
+      useInspectorStore.getState().markAnonymizationPipelineRan(fieldId);
+    }
   }
 };
 
@@ -79,10 +85,12 @@ const runPipelineAndCommit = async ({
   workspaceId,
   fieldId,
   isPdf,
+  run,
 }: {
   workspaceId: string;
   fieldId: string;
   isPdf: boolean;
+  run: PipelineRun;
 }): Promise<void> => {
   const response = await api
     .files({ workspaceId })
@@ -160,8 +168,7 @@ const runPipelineAndCommit = async ({
     });
   }
 
-  if (cancelledFieldIds.has(fieldId)) {
-    cancelledFieldIds.delete(fieldId);
+  if (!pipelineRuns.canCommit(fieldId, run)) {
     return;
   }
 
@@ -201,7 +208,7 @@ const runPipelineAndCommit = async ({
 };
 
 export const clearAnonymization = (fieldId: string): void => {
-  cancelledFieldIds.add(fieldId);
+  pipelineRuns.cancel(fieldId);
   clearAnonymizationForField(fieldId);
   // Also drop the matches-store entry for this field so
   // the inspector facet stops showing a stale count when

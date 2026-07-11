@@ -1,5 +1,5 @@
 import { authClient } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAuthClientError } from "@/lib/errors/auth";
 
 export const getFreshLinkedAccount = async () => {
   const result = await authClient.getSession();

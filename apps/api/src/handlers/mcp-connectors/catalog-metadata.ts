@@ -35,6 +35,13 @@ const isRecommendedJurisdictionCode = (
 ): jurisdiction is RecommendedJurisdictionCode =>
   jurisdiction === "EU" || isCountryCode(jurisdiction);
 
+const mutableArrayOrEmpty = <T>(value: T[] | undefined): T[] => {
+  if (value === undefined) {
+    return [];
+  }
+  return value;
+};
+
 /**
  * Native-tool catalogue sourced from `@stll/catalogue`. Recommendation
  * lives in `packages/catalogue/entries/recommended.json` (maintainer-
@@ -51,7 +58,7 @@ const NATIVE_TOOL_CATALOG: readonly NativeToolCatalogItem[] = (() => {
       continue;
     }
     for (const slug of slugs) {
-      const list = jurisdictionsBySlug.get(slug) ?? [];
+      const list = mutableArrayOrEmpty(jurisdictionsBySlug.get(slug));
       list.push(jurisdiction);
       jurisdictionsBySlug.set(slug, list);
     }
@@ -64,7 +71,13 @@ const NATIVE_TOOL_CATALOG: readonly NativeToolCatalogItem[] = (() => {
     url: entry.url ?? entry.homepage ?? "",
     documentationUrl: entry.documentationUrl ?? null,
     iconUrl: entry.iconUrl ?? null,
-    recommendedJurisdictions: jurisdictionsBySlug.get(entry.slug) ?? [],
+    recommendedJurisdictions: (() => {
+      const storedJurisdictions = jurisdictionsBySlug.get(entry.slug);
+      if (storedJurisdictions === undefined) {
+        return [];
+      }
+      return storedJurisdictions;
+    })(),
   }));
 })();
 
@@ -196,9 +209,18 @@ export const getDisabledNativeToolSlugsFromSettingsRow = (
     | undefined,
 ): readonly string[] =>
   getDisabledNativeToolSlugs({
-    practiceJurisdictions: row?.practiceJurisdictions ?? [],
+    practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
     nativeToolOverrides: row?.nativeToolOverrides ?? {},
   });
+
+const arrayOrEmpty = <T>(
+  value: readonly T[] | null | undefined,
+): readonly T[] => {
+  if (value === undefined || value === null) {
+    return [];
+  }
+  return value;
+};
 
 export const mcpConnectorCatalogMetadata = (
   _connector: McpConnectorCatalogSource,

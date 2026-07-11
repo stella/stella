@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { Result } from "better-result";
+import type { Result } from "better-result";
 
 import { STALE_TIME } from "@/lib/consts";
 import { destroyPDFDocument } from "@/lib/pdf/pdf-cleanup";
@@ -50,15 +50,50 @@ export const installPDFDocumentCleanup = (queryClient: QueryClient) => {
     if (rawData === undefined || rawData === null) {
       return;
     }
-    // SAFETY: only usePDFDocument registers this key
-    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- key guard narrows to this hook's data; cache stores unknown
-    const data = rawData as PDFDocumentQueryData;
-    if (!Result.isOk(data)) {
+    if (!isCachedPDFDocument(rawData)) {
       return;
     }
 
-    void destroyPDFDocument(data.value);
+    void destroyPDFDocument(rawData.value);
   });
+};
+
+const isDestroyable = (
+  value: unknown,
+): value is { destroy: () => Promise<void> } =>
+  typeof value === "object" &&
+  value !== null &&
+  "destroy" in value &&
+  typeof value.destroy === "function";
+
+const isCachedPDFDocument = (
+  value: unknown,
+): value is {
+  status: "ok";
+  value: {
+    loadingTask: { destroy: () => Promise<void> };
+    attachmentLoadingTasks: { destroy: () => Promise<void> }[];
+  };
+} => {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("status" in value) ||
+    value.status !== "ok" ||
+    !("value" in value) ||
+    typeof value.value !== "object" ||
+    value.value === null
+  ) {
+    return false;
+  }
+  const document = value.value;
+  return (
+    "loadingTask" in document &&
+    isDestroyable(document.loadingTask) &&
+    "attachmentLoadingTasks" in document &&
+    Array.isArray(document.attachmentLoadingTasks) &&
+    document.attachmentLoadingTasks.every(isDestroyable)
+  );
 };
 
 type PDFDocumentOptionsInput = QueryOptionsInput<

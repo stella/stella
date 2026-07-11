@@ -14,6 +14,7 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
+import { normalizeOptionalArray } from "@/lib/arrays";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import type { PropertyFacetCounts } from "@/routes/_protected.workspaces/$workspaceId/-queries/property-facets";
 import { propertyFacetsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/property-facets";
@@ -50,7 +51,8 @@ export const SingleSelectValue = ({
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const facets = usePropertyFacetCounts({ field, facetContext, open });
-  const options = sortOptionsByCount(field.options ?? [], facets);
+  const fieldOptions = normalizeOptionalArray(field.options);
+  const options = sortOptionsByCount(fieldOptions, facets);
   const selected = options.find((option) => option.value === value);
 
   return (
@@ -113,7 +115,8 @@ export const MultiSelectValue = ({
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const facets = usePropertyFacetCounts({ field, facetContext, open });
-  const options = sortOptionsByCount(field.options ?? [], facets);
+  const fieldOptions = normalizeOptionalArray(field.options);
+  const options = sortOptionsByCount(fieldOptions, facets);
   const label =
     value.length === 0
       ? t("workspaces.fields.selectValues")
@@ -199,7 +202,7 @@ const usePropertyFacetCounts = ({
     ...propertyFacetsOptions({
       workspaceId: facetContext?.workspaceId ?? "",
       propertyId: propertyId ?? "",
-      filters: facetContext?.filters ?? [],
+      filters: normalizeOptionalArray(facetContext?.filters),
     }),
     enabled,
   });

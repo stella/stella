@@ -452,13 +452,16 @@ const VerticalTab = ({
       externalConnectorSlug !== undefined &&
       storedExternalIconHref === undefined,
   });
+  const availableConnectors = mcpConnectorsData
+    ? mcpConnectorsData.connectors
+    : [];
   const externalIconHref =
     storedExternalIconHref ??
     (externalConnectorSlug === undefined
       ? undefined
       : findMcpConnectorIconHref({
           connectorSlug: externalConnectorSlug,
-          connectors: mcpConnectorsData?.connectors ?? [],
+          connectors: availableConnectors,
         }));
 
   const contextMenu = useTabContextMenu({

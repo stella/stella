@@ -8,7 +8,7 @@
 
 import { panic } from "better-result";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import {

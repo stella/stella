@@ -3,7 +3,7 @@ import { count, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { contacts } from "@/api/db/schema";
 import {
   bankAccountSchema,
@@ -14,7 +14,7 @@ import {
   contactPhoneSchema,
 } from "@/api/db/schema-validators";
 import { normalizeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";

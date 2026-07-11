@@ -14,7 +14,8 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
 import type { ClauseBody } from "./clause-editor-types";
@@ -52,7 +53,7 @@ export const FillClausesSection = ({
     },
   });
 
-  const slots = data?.slots ?? [];
+  const slots = data ? data.slots : [];
   if (slots.length === 0) {
     return null;
   }

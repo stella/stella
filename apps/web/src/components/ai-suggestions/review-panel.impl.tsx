@@ -10,6 +10,7 @@ import type { CSSProperties, RefObject } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
+import { panic } from "better-result";
 import {
   ArrowRightIcon,
   CheckIcon,
@@ -55,7 +56,7 @@ import type {
 } from "@/components/ai-suggestions/review-store";
 import { authClient } from "@/lib/auth";
 import { compareByLocale } from "@/lib/collation";
-import { toAuthClientError } from "@/lib/errors";
+import { toAuthClientError } from "@/lib/errors/auth";
 import { sessionOptions } from "@/routes/-queries";
 import {
   getWordEditAuthorName,
@@ -195,16 +196,14 @@ export const ReviewPanelImpl = ({
     if (groupAxis === "severity") {
       const buckets = new Map<ReviewSeverityKey, ReviewSuggestion[]>();
       for (const item of filtered) {
-        const list = buckets.get(item.severity) ?? [];
-        list.push(item);
-        buckets.set(item.severity, list);
+        appendToBucket({ buckets, item, key: item.severity });
       }
       return SEVERITY_ORDER.flatMap((sev) => {
         const list = buckets.get(sev);
         return list && list.length > 0
           ? [
               {
-                key: sev as string,
+                key: sev,
                 label: severityLabels[sev],
                 items: list,
                 tone: severityTone(sev),
@@ -216,9 +215,7 @@ export const ReviewPanelImpl = ({
 
     const buckets = new Map<string, ReviewSuggestion[]>();
     for (const item of filtered) {
-      const list = buckets.get(item.area) ?? [];
-      list.push(item);
-      buckets.set(item.area, list);
+      appendToBucket({ buckets, item, key: item.area });
     }
     const compareArea = compareByLocale(locale);
     const sortedKeys = [...buckets.keys()].toSorted((a, b) => {
@@ -231,7 +228,10 @@ export const ReviewPanelImpl = ({
       return compareArea(a, b);
     });
     return sortedKeys.map((area) => {
-      const items = buckets.get(area) ?? [];
+      const items = buckets.get(area);
+      if (!items) {
+        panic(`Missing review bucket for ${area}`);
+      }
       const label =
         area === REVIEW_UNSPECIFIED_AREA
           ? t("docxReview.areaUnspecified")
@@ -651,6 +651,25 @@ export const ReviewPanelImpl = ({
       )}
     </div>
   );
+};
+
+type AppendToBucketOptions<TKey> = {
+  buckets: Map<TKey, ReviewSuggestion[]>;
+  item: ReviewSuggestion;
+  key: TKey;
+};
+
+const appendToBucket = <TKey,>({
+  buckets,
+  item,
+  key,
+}: AppendToBucketOptions<TKey>) => {
+  const existing = buckets.get(key);
+  if (existing) {
+    existing.push(item);
+    return;
+  }
+  buckets.set(key, [item]);
 };
 
 // -- Helpers --

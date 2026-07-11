@@ -157,10 +157,10 @@ const EXPECTATION_LABEL_KEYS = {
 } as const satisfies Record<(typeof EXPECTATIONS)[number], TranslationKey>;
 
 const isAskContentType = (value: string): value is AskContentType =>
-  (ASK_CONTENT_TYPES as readonly string[]).includes(value);
+  ASK_CONTENT_TYPES.some((contentType) => contentType === value);
 
 const isSeverity = (value: string): value is PositionSeverity =>
-  (SEVERITIES as readonly string[]).includes(value);
+  SEVERITIES.some((severity) => severity === value);
 
 // ── Discriminated-union builders (explicit construction) ──
 
@@ -1090,7 +1090,7 @@ const NegotiationSection = ({
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const { negotiation } = position;
-  const talkingPoints = negotiation?.talkingPoints ?? [];
+  const talkingPoints = negotiation ? negotiation.talkingPoints : [];
 
   const setTalkingPoints = (points: string[]) =>
     onChange(updateNegotiation(position, { talkingPoints: points }));

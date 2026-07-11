@@ -39,7 +39,7 @@ import {
   hostedUsageWebhookEventSchema,
   isHostedUsageHandledEventType,
 } from "@/api/handlers/hosted-usage-webhook/event-schemas";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { getWebhookSecret } from "@/api/lib/hosted-usage-provider/config";
 import { verifyWebhookSignature } from "@/api/lib/hosted-usage-provider/verify-signature";
 import {

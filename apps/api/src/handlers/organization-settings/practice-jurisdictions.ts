@@ -1,8 +1,9 @@
 import { isCountryCode } from "@stll/country-codes";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -88,7 +89,7 @@ export const upsertPracticeJurisdictions = async ({
     resourceId: organizationId,
     changes: {
       practiceJurisdictions: {
-        old: previous?.practiceJurisdictions ?? [],
+        old: arrayOrEmpty(previous?.practiceJurisdictions),
         new: practiceJurisdictions,
       },
     },

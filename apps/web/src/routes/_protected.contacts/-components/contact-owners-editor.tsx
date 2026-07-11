@@ -32,7 +32,8 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
     organizationOptions(activeOrganizationId),
   );
 
-  const memberItems = (organization?.members ?? []).map((member) => ({
+  const organizationMembers = organization ? organization.members : [];
+  const memberItems = organizationMembers.map((member) => ({
     email: member.user.email,
     image: member.user.image,
     name: member.user.name,

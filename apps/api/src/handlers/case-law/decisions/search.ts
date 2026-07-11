@@ -17,6 +17,7 @@ import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceSqlFor,
 } from "@/api/handlers/case-law/redistribution";
+import { arrayOrEmpty } from "@/api/lib/array";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -300,11 +301,11 @@ const searchPostgresDecisions = async (
     languageResultRaw,
   ] = await Promise.all(queries);
 
-  const hitsResult = hitsResultRaw ?? [];
-  const countResult = countResultRaw ?? [];
-  const courtResult = courtResultRaw ?? [];
-  const countryResult = countryResultRaw ?? [];
-  const languageResult = languageResultRaw ?? [];
+  const hitsResult = arrayOrEmpty(hitsResultRaw);
+  const countResult = arrayOrEmpty(countResultRaw);
+  const courtResult = arrayOrEmpty(courtResultRaw);
+  const countryResult = arrayOrEmpty(countryResultRaw);
+  const languageResult = arrayOrEmpty(languageResultRaw);
 
   const hasMore = hitsResult.length > limit;
   const resultRows = hasMore ? hitsResult.slice(0, limit) : hitsResult;

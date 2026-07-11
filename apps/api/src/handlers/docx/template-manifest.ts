@@ -19,6 +19,7 @@ import type { ConditionNode } from "@stll/conditions";
 import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { compareCodepoint } from "@/api/lib/collation";
 
 import { isElement } from "./ooxml";
@@ -929,7 +930,8 @@ export const mergeManifestWithDiscovery = (
   if (manifest) {
     for (const f of manifest.fields) {
       metaByPath.set(f.path, f);
-      for (const format of f.lookup?.formats ?? []) {
+      const formats = f.lookup?.formats;
+      for (const format of arrayOrEmpty(formats)) {
         lookupFormatMarkers.add(`${f.path}.${format.key}`);
       }
     }

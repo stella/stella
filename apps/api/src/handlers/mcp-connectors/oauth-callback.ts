@@ -12,7 +12,7 @@ import {
   exchangeAuthorizationCode,
   tokenExpiresAt,
 } from "@/api/handlers/mcp-connectors/oauth";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

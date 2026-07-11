@@ -14,7 +14,9 @@
 //   - The brand carries no runtime cost; logs/serialization see plain strings,
 //     which is what the `no-secret-in-log-sink` lint rule guards.
 
-declare const __secret: unique symbol;
+import * as v from "valibot";
+
+export const secretSchema = v.pipe(v.string(), v.brand("Secret"));
 
 export type SecretKind =
   | "AccessToken"
@@ -24,8 +26,10 @@ export type SecretKind =
   | "RefreshToken"
   | "StaticBearerToken";
 
-export type Secret<K extends SecretKind> = string & {
-  readonly [__secret]: K;
+export type Secret<K extends SecretKind> = v.InferOutput<
+  typeof secretSchema
+> & {
+  readonly __secretKind?: K;
 };
 
 export type AccessToken = Secret<"AccessToken">;

@@ -157,7 +157,7 @@ export const loadPDF = async ({
 
       return new PDFViewerError({
         code: "LOAD_FAILED",
-        message: error instanceof Error ? error.message : "Failed to load PDF",
+        message: "Failed to load PDF",
         cause: error,
       });
     },
@@ -260,7 +260,7 @@ export const loadPDF = async ({
       await destroyPDFDocument({ loadingTask, attachmentLoadingTasks });
       return new PDFViewerError({
         code: "LOAD_FAILED",
-        message: error instanceof Error ? error.message : "Failed to load PDF",
+        message: "Failed to load PDF",
         cause: error,
       });
     },
