@@ -663,8 +663,7 @@ const CreateContactDialog = ({
 
   const form = useForm({
     defaultValues: {
-      // SAFETY: widening literal for form discriminant union
-      type: "person" as "person" | "organization",
+      type: "person",
       displayName: "",
       firstName: "",
       lastName: "",

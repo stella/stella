@@ -299,6 +299,6 @@ export const htmlToMarkdown = (html: string): string => {
     return "";
   }
   const $ = cheerio.load(html, undefined, false);
-  const body = renderChildren($.root().contents().toArray() as AnyNode[]);
+  const body = renderChildren($.root().contents().toArray());
   return body ? `${body}\n` : "";
 };

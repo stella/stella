@@ -113,7 +113,7 @@ describe("entity read handler search", () => {
         search: "closing binder",
         fieldMode: "visible",
         fieldIds: [],
-      }) as Parameters<typeof readFilesystemTree.handler>[0],
+      }),
     );
 
     expect(queryEntitiesMock).toHaveBeenCalledWith(

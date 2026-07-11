@@ -320,7 +320,7 @@ export const getPendingTasksAndMembers = async (
       }
 
       return {
-        tasks: userAssignments as ActiveTaskAssignment[],
+        tasks: userAssignments,
         members: otherMembers,
       };
     },

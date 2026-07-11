@@ -48,7 +48,7 @@ describe("playbookTrigger", () => {
   });
 
   test("defaults an absent trigger to manual", () => {
-    expect(playbookTrigger({} as PlaybookScope)).toBe("manual");
+    expect(playbookTrigger({})).toBe("manual");
   });
 
   test("returns the explicit trigger", () => {
