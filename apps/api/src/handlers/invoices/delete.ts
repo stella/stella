@@ -26,14 +26,23 @@ const deleteInvoice = createSafeHandler(
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
-        const invoice = await tx.query.invoices.findFirst({
-          where: {
-            id: { eq: params.invoiceId },
-            workspaceId: { eq: workspaceId },
-            status: { eq: INVOICE_STATUS.DRAFT },
-          },
-          columns: { id: true, invoiceNumber: true, totalAmount: true },
-        });
+        const invoiceRows = await tx
+          .select({
+            id: invoices.id,
+            invoiceNumber: invoices.invoiceNumber,
+            totalAmount: invoices.totalAmount,
+          })
+          .from(invoices)
+          .where(
+            and(
+              eq(invoices.id, params.invoiceId),
+              eq(invoices.workspaceId, workspaceId),
+              eq(invoices.status, INVOICE_STATUS.DRAFT),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        const invoice = invoiceRows.at(0);
 
         if (!invoice) {
           return { ok: false as const };
@@ -75,6 +84,7 @@ const deleteInvoice = createSafeHandler(
             and(
               eq(invoices.id, params.invoiceId),
               eq(invoices.workspaceId, workspaceId),
+              eq(invoices.status, INVOICE_STATUS.DRAFT),
             ),
           );
 
