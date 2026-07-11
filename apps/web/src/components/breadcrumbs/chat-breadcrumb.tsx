@@ -20,7 +20,7 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   chatThreadTitleOptions,
   groupedChatThreadsOptions,
-  invalidateGroupedChatThreads,
+  invalidateChatThreadLists,
   mergeGroupedChatThreadPages,
 } from "@/routes/_protected.chat/-queries";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
@@ -138,7 +138,7 @@ export const ChatBreadcrumb = ({
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     },
     onSettled: () => {
-      void invalidateGroupedChatThreads(queryClient);
+      void invalidateChatThreadLists({ queryClient, workspaceId });
       void queryClient.invalidateQueries({ queryKey: titleKey });
     },
   });

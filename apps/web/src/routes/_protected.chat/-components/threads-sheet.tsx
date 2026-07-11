@@ -38,9 +38,9 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import {
   groupedChatThreadsOptions,
+  invalidateChatThreadLists,
   mergeGroupedChatThreadPages,
 } from "@/routes/_protected.chat/-queries";
-import { invalidateWorkspaceActivity } from "@/routes/_protected.workspaces/-queries";
 
 type ThreadsSheetProps = {
   icon?: ReactNode;
@@ -204,9 +204,16 @@ const DeleteThreadButton = ({
         throw toAPIError(response.error);
       }
     },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: groupedChatThreadsOptions(activeOrganizationId).queryKey,
+    onSettled: async (_data, error, variables) => {
+      if (error) {
+        await queryClient.invalidateQueries({
+          queryKey: groupedChatThreadsOptions(activeOrganizationId).queryKey,
+        });
+        return;
+      }
+      await invalidateChatThreadLists({
+        queryClient,
+        workspaceId: variables.workspaceId,
       });
     },
     onError: () => {
@@ -216,9 +223,6 @@ const DeleteThreadButton = ({
       });
     },
     onSuccess: async (_data, variables) => {
-      if (variables.workspaceId) {
-        await invalidateWorkspaceActivity(queryClient, variables.workspaceId);
-      }
       if (activeThreadRef?.threadId === variables.threadId) {
         await navigate({ to: "/chat" });
       }

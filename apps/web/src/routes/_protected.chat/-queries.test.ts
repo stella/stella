@@ -18,12 +18,14 @@ import {
   chatKeys,
   chatThreadOptions,
   createChatRuntime,
+  invalidateChatThreadLists,
   installChatRuntimeCleanup,
   matchesChatThreadAcrossScopes,
   mergeGroupedChatThreadPages,
   sendThreadChatMessage,
   type ChatThreadFetched,
 } from "@/routes/_protected.chat/-queries";
+import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const createMessage = (id = "message-A"): PersistedChatMessage => ({
   id,
@@ -330,6 +332,26 @@ describe("mergeGroupedChatThreadPages", () => {
         threads: [{ id: "workspace-thread-C" }],
       },
     ]);
+  });
+});
+
+describe("invalidateChatThreadLists", () => {
+  test("invalidates grouped threads and workspace activity together", async () => {
+    const queryClient = new QueryClient();
+    const groupedKey = chatKeys.groupedThreads("organization-a");
+    const activityKey = workspacesKeys.activity("organization-a", {
+      workspaceId: "workspace-a",
+    });
+    queryClient.setQueryData(groupedKey, { pages: [] });
+    queryClient.setQueryData(activityKey, { pages: [] });
+
+    await invalidateChatThreadLists({
+      queryClient,
+      workspaceId: "workspace-a",
+    });
+
+    expect(queryClient.getQueryState(groupedKey)?.isInvalidated).toBe(true);
+    expect(queryClient.getQueryState(activityKey)?.isInvalidated).toBe(true);
   });
 });
 

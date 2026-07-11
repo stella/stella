@@ -1864,10 +1864,10 @@ export const acquireChatRuntime = ({
       // the refetch lands, then the idle reconcile replaces it.
       void Promise.all([
         invalidateChatThread({ queryClient, threadRef: key }),
-        invalidateGroupedChatThreads(queryClient),
-        ...(key.scope === "workspace"
-          ? [invalidateWorkspaceActivity(queryClient, key.workspaceId)]
-          : []),
+        invalidateChatThreadLists({
+          queryClient,
+          workspaceId: key.scope === "workspace" ? key.workspaceId : undefined,
+        }),
       ]);
     },
   });
@@ -2066,6 +2066,20 @@ export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
       );
     },
   });
+
+export const invalidateChatThreadLists = async ({
+  queryClient,
+  workspaceId,
+}: {
+  queryClient: QueryClient;
+  workspaceId: string | undefined;
+}) =>
+  await Promise.all([
+    invalidateGroupedChatThreads(queryClient),
+    ...(workspaceId
+      ? [invalidateWorkspaceActivity(queryClient, workspaceId)]
+      : []),
+  ]);
 
 export const invalidateChatThread = async ({
   queryClient,
