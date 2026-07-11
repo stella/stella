@@ -58,6 +58,8 @@ void mock.module("@/api/mcp/capability-feature", () => ({
 
 const { handleMcpToolCall } = await import("@/api/mcp/tools");
 const { mapHandlerResult } = await import("@/api/mcp/capability-tools");
+const { synthesizeCapabilityContext } =
+  await import("@/api/mcp/capability-context");
 const { ElysiaCustomStatusResponse } = await import("elysia");
 const { CAPABILITY_DISPATCH } =
   await import("@/api/mcp/generated/capability-dispatch");
@@ -124,37 +126,53 @@ const createContext = ({
   memberRole = "owner",
   scopedDb = emptyScopedDb,
   safeDb = toSafeDbMock(emptyScopedDb),
+  createOperationDatabaseScope,
+  pinServerValidatedWorkspaceId,
   archivedWorkspaceIds = [] as string[],
   workspaceIds = ["ws_1"],
 }: {
+  createOperationDatabaseScope?: McpRequestContext["createOperationDatabaseScope"];
   grantedScopes?: readonly string[];
   memberRole?: McpRequestContext["memberRole"];
+  pinServerValidatedWorkspaceId?: McpRequestContext["pinServerValidatedWorkspaceId"];
   scopedDb?: McpRequestContext["scopedDb"];
   safeDb?: McpRequestContext["safeDb"];
   archivedWorkspaceIds?: string[];
   workspaceIds?: string[];
-} = {}): McpRequestContext => ({
-  accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
-  accessibleWorkspaceIdSet: new Set(workspaceIds),
-  accessibleWorkspaceStatusById: new Map(
-    workspaceIds.map((id) => [
-      id,
-      archivedWorkspaceIds.includes(id) ? "archived" : "active",
-    ]),
-  ),
-  accessibleWorkspaces: workspaceIds.map((id) => ({
-    id: toSafeId<"workspace">(id),
-    status: archivedWorkspaceIds.includes(id) ? "archived" : "active",
-  })),
-  grantedScopes,
-  memberRole,
-  organizationId: toSafeId<"organization">("org_1"),
-  request: new Request("http://localhost/mcp"),
-  recordAuditEvent: noopRecorder,
-  safeDb,
-  scopedDb,
-  userId: toSafeId<"user">("user_1"),
-});
+} = {}): McpRequestContext => {
+  const accessibleWorkspaceIdSet = new Set(workspaceIds);
+  return {
+    accessibleWorkspaceIds: workspaceIds.map((id) => toSafeId<"workspace">(id)),
+    accessibleWorkspaceIdSet,
+    accessibleWorkspaceStatusById: new Map(
+      workspaceIds.map((id) => [
+        id,
+        archivedWorkspaceIds.includes(id) ? "archived" : "active",
+      ]),
+    ),
+    accessibleWorkspaces: workspaceIds.map((id) => ({
+      id: toSafeId<"workspace">(id),
+      status: archivedWorkspaceIds.includes(id) ? "archived" : "active",
+    })),
+    createOperationDatabaseScope:
+      createOperationDatabaseScope ??
+      (() => ({
+        pinServerValidatedWorkspaceId: (workspaceId) =>
+          accessibleWorkspaceIdSet.has(workspaceId),
+        safeDb,
+        scopedDb,
+      })),
+    grantedScopes,
+    memberRole,
+    organizationId: toSafeId<"organization">("org_1"),
+    request: new Request("http://localhost/mcp"),
+    recordAuditEvent: noopRecorder,
+    pinServerValidatedWorkspaceId,
+    safeDb,
+    scopedDb,
+    userId: toSafeId<"user">("user_1"),
+  };
+};
 
 const call = async (toolName: string, args: Record<string, unknown>) =>
   await handleMcpToolCall({ args, context: createContext(), toolName });
@@ -404,6 +422,7 @@ describe("invoke_capability workspace resolution", () => {
   test("archived workspace on a READ capability -> not_found (REST parity)", async () => {
     // validateWorkspaceAccess (lib/auth.ts) 404s ANY non-active workspace,
     // reads included; the generic path must be no weaker.
+    const pinnedWorkspaceIds: string[] = [];
     const result = await handleMcpToolCall({
       args: {
         capability: "time-entries.export-csv",
@@ -412,11 +431,16 @@ describe("invoke_capability workspace resolution", () => {
       context: createContext({
         workspaceIds: ["ws_arch"],
         archivedWorkspaceIds: ["ws_arch"],
+        pinServerValidatedWorkspaceId: (workspaceId) => {
+          pinnedWorkspaceIds.push(workspaceId);
+          return true;
+        },
       }),
       toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("not_found");
     expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+    expect(pinnedWorkspaceIds).toEqual([]);
   });
 
   test("archived workspace on a write capability -> not_found", async () => {
@@ -435,6 +459,83 @@ describe("invoke_capability workspace resolution", () => {
       toolName: "invoke_capability",
     });
     expect(errorEnvelope(result).code).toBe("not_found");
+  });
+
+  test("pins an active workspace only after capability access validation", async () => {
+    const pinnedWorkspaceIds: string[] = [];
+    const result = await handleMcpToolCall({
+      args: {
+        capability: "case-law.matter-links.create",
+        input: {
+          body: { decisionId: "00000000-0000-0000-0000-000000000000" },
+          params: { workspaceId: "ws_1" },
+        },
+        validateOnly: true,
+      },
+      context: createContext({
+        pinServerValidatedWorkspaceId: (workspaceId) => {
+          pinnedWorkspaceIds.push(workspaceId);
+          return true;
+        },
+      }),
+      toolName: "invoke_capability",
+    });
+
+    expect(parseToolPayload<{ valid: boolean }>(result).valid).toBe(true);
+    expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
+  });
+});
+
+describe("synthesized capability authorization lifetime", () => {
+  test("pins only the resolved workspace and later validated targets", async () => {
+    const pinnedWorkspaceIds: string[] = [];
+    const context = createContext({
+      workspaceIds: ["ws_1", "ws_2"],
+      createOperationDatabaseScope: () => ({
+        pinServerValidatedWorkspaceId: (workspaceId) => {
+          if (!pinnedWorkspaceIds.includes(workspaceId)) {
+            pinnedWorkspaceIds.push(workspaceId);
+          }
+          return workspaceId === "ws_1" || workspaceId === "ws_2";
+        },
+        safeDb: toSafeDbMock(emptyScopedDb),
+        scopedDb: emptyScopedDb,
+      }),
+    });
+    const synthesized = await synthesizeCapabilityContext({
+      capabilityId: "entities.copy-to-workspace",
+      context,
+      input: { body: {}, params: {}, query: {} },
+      request: new Request("http://localhost/mcp"),
+      workspaceId: toSafeId<"workspace">("ws_1"),
+    });
+
+    expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
+    await synthesized.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
+    await synthesized.getWorkspaceAccess(toSafeId<"workspace">("ws_2"));
+    expect(pinnedWorkspaceIds).toEqual(["ws_1", "ws_2"]);
+
+    expect(
+      await synthesized.getWorkspaceAccess(
+        toSafeId<"workspace">("ws_inaccessible"),
+      ),
+    ).toBeNull();
+    expect(pinnedWorkspaceIds).toEqual(["ws_1", "ws_2"]);
+  });
+
+  test("fails closed when an executable context lacks an operation scope", async () => {
+    const context = createContext();
+    context.createOperationDatabaseScope = undefined;
+
+    await expect(
+      synthesizeCapabilityContext({
+        capabilityId: "entities.copy-to-workspace",
+        context,
+        input: { body: {}, params: {}, query: {} },
+        request: new Request("http://localhost/mcp"),
+        workspaceId: toSafeId<"workspace">("ws_1"),
+      }),
+    ).rejects.toThrow("missing an operation database scope");
   });
 });
 

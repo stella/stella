@@ -2,12 +2,16 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
+import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import type { McpRequestContext } from "@/api/mcp/context";
 import {
   buildCaseLawDecisionAppUrl,
   buildCaseLawDecisionUrl,
   closestToolNames,
+  ensureActiveWorkspace,
+  ensureWorkspaceAccess,
   isToolErrorResult,
   mapValibotIssues,
   notFoundResult,
@@ -18,10 +22,58 @@ import {
   validationErrorResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // FRONTEND_URL is "http://localhost:3000" (no trailing slash) from
 // the test env preload; getAppBaseUrl() strips any trailing slash.
 const BASE = "http://localhost:3000";
+const WORKSPACE_ID = toSafeId<"workspace">("ws_1");
+
+const createWorkspaceGateContext = (
+  status: "active" | "archived",
+): {
+  context: McpRequestContext;
+  pinnedWorkspaceIds: string[];
+} => {
+  const pinnedWorkspaceIds: string[] = [];
+  return {
+    context: asTestRaw<McpRequestContext>({
+      accessibleWorkspaceIdSet: new Set([WORKSPACE_ID]),
+      accessibleWorkspaceStatusById: new Map([[WORKSPACE_ID, status]]),
+      pinServerValidatedWorkspaceId: (
+        validatedWorkspaceId: SafeId<"workspace">,
+      ) => {
+        pinnedWorkspaceIds.push(validatedWorkspaceId);
+        return true;
+      },
+    }),
+    pinnedWorkspaceIds,
+  };
+};
+
+describe("MCP workspace authorization lifetime", () => {
+  test("pins a workspace after the read access gate proves it", () => {
+    const { context, pinnedWorkspaceIds } =
+      createWorkspaceGateContext("archived");
+
+    expect(ensureWorkspaceAccess({ context, workspaceId: "ws_1" })).toBe(
+      WORKSPACE_ID,
+    );
+    expect(pinnedWorkspaceIds).toEqual(["ws_1"]);
+  });
+
+  test("pins only after the active-status gate succeeds", () => {
+    const archived = createWorkspaceGateContext("archived");
+    ensureActiveWorkspace({ context: archived.context, workspaceId: "ws_1" });
+    expect(archived.pinnedWorkspaceIds).toEqual([]);
+
+    const active = createWorkspaceGateContext("active");
+    expect(
+      ensureActiveWorkspace({ context: active.context, workspaceId: "ws_1" }),
+    ).toBe(WORKSPACE_ID);
+    expect(active.pinnedWorkspaceIds).toEqual(["ws_1"]);
+  });
+});
 
 describe("slugifyCaseLawPathSegment", () => {
   test("lowercases, strips diacritics, and collapses runs to single hyphens", () => {

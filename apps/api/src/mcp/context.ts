@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { eq } from "drizzle-orm";
 
 import { createMembershipSafeDb, createMembershipScopedDb } from "@/api/db";
 import type { SafeDb, ScopedDb } from "@/api/db";
@@ -17,10 +18,21 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
 import { McpOrganizationAccessError } from "@/api/mcp/errors";
+import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
+
+export type McpOperationDatabaseScope = {
+  /**
+   * Add one workspace only when it belongs to the access map captured by this
+   * MCP request. Returns false instead of minting scope for an unknown ID.
+   */
+  pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
+  safeDb: SafeDb;
+  scopedDb: ScopedDb;
+};
 
 export type McpRequestContext = {
   accessibleWorkspaceIds: SafeId<"workspace">[];
-  accessibleWorkspaceIdSet: Set<string>;
+  accessibleWorkspaceIdSet: ReadonlySet<string>;
   /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Write
    * tools gate on this to keep archived matters read-only, mirroring the HTTP
@@ -46,6 +58,20 @@ export type McpRequestContext = {
   memberRole: MemberRole;
   organizationId: SafeId<"organization">;
   /**
+   * Build an operation-local database scope whose private pinned-ID list can
+   * grow only through its access-map-validating pin method. The generic
+   * capability path uses this for its source/target authorization snapshot
+   * without exposing a raw privilege-minting array.
+   *
+   * Session-authenticated chat projections do not dispatch generic
+   * capabilities, so their synthetic contexts may omit this factory.
+   */
+  createOperationDatabaseScope?: (() => McpOperationDatabaseScope) | undefined;
+  /** Pin one workspace only after an MCP access/status gate proves it. */
+  pinServerValidatedWorkspaceId?:
+    | ((workspaceId: SafeId<"workspace">) => boolean)
+    | undefined;
+  /**
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat
    * projection, which never dispatches the generic capability path. Only
@@ -57,6 +83,28 @@ export type McpRequestContext = {
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
 };
+
+type LoadAccessibleMcpWorkspacesOptions = {
+  organizationId: SafeId<"organization">;
+  scopedDb: ScopedDb;
+};
+
+/**
+ * Enumerate the workspace metadata MCP's current access maps require. Keep the
+ * organization predicate explicit even though RLS independently enforces it,
+ * so the tenant index bounds the query before policy evaluation.
+ */
+export const loadAccessibleMcpWorkspaces = async ({
+  organizationId,
+  scopedDb,
+}: LoadAccessibleMcpWorkspacesOptions): Promise<AccessibleWorkspace[]> =>
+  await scopedDb(
+    async (tx) =>
+      await tx
+        .select({ id: workspaces.id, status: workspaces.status })
+        .from(workspaces)
+        .where(eq(workspaces.organizationId, organizationId)),
+  );
 
 export const resolveMcpSessionContext = async (
   session: McpSession,
@@ -83,29 +131,56 @@ export const resolveMcpSessionContext = async (
   }
 
   const memberRole = authorization.role;
-  const scopedDb = createMembershipScopedDb(rlsDb, { organizationId, userId });
-  const accessibleWorkspaces = await scopedDb((tx) =>
-    tx
-      .select({ id: workspaces.id, status: workspaces.status })
-      .from(workspaces),
-  );
+  const bootstrapScopedDb = createMembershipScopedDb(rlsDb, {
+    organizationId,
+    serverValidatedWorkspaceIds: [],
+    userId,
+  });
+  const accessibleWorkspaces = await loadAccessibleMcpWorkspaces({
+    organizationId,
+    scopedDb: bootstrapScopedDb,
+  });
   // Business-logic fields exclude deleting workspaces so MCP tools don't
   // surface content from sealed workspaces. RLS derives membership from the
-  // scalar organization/user transaction context independently.
+  // organization/user transaction settings independently.
   const usableWorkspaces = accessibleWorkspaces.filter(
     (w) => w.status !== "deleting",
   );
   const usableWorkspaceIds = usableWorkspaces.map((workspace) =>
     brandPersistedWorkspaceId(workspace.id),
   );
+  const workspaceAccessBoundary =
+    createWorkspaceAccessBoundary(usableWorkspaceIds);
+  const createOperationDatabaseScope = (): McpOperationDatabaseScope => {
+    const serverValidatedWorkspaceIds: SafeId<"workspace">[] = [];
+    const pinServerValidatedWorkspaceId =
+      workspaceAccessBoundary.bindWorkspacePin((workspaceId) => {
+        if (!serverValidatedWorkspaceIds.includes(workspaceId)) {
+          serverValidatedWorkspaceIds.push(workspaceId);
+        }
+        return true;
+      });
+    const databaseIdentity = {
+      organizationId,
+      serverValidatedWorkspaceIds,
+      userId,
+    };
+    return {
+      pinServerValidatedWorkspaceId,
+      safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
+      scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+    };
+  };
+  const requestDatabaseScope = createOperationDatabaseScope();
 
   return {
     accessibleWorkspaceIds: usableWorkspaceIds,
-    accessibleWorkspaceIdSet: new Set(usableWorkspaceIds),
+    accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById: new Map(
       usableWorkspaces.map((workspace) => [workspace.id, workspace.status]),
     ),
     accessibleWorkspaces: usableWorkspaces,
+    createOperationDatabaseScope,
     grantedScopes: session.scopes,
     memberRole,
     organizationId,
@@ -117,8 +192,10 @@ export const resolveMcpSessionContext = async (
       userId,
       workspaceId: null,
     }),
-    safeDb: createMembershipSafeDb(rlsDb, { organizationId, userId }),
-    scopedDb,
+    pinServerValidatedWorkspaceId:
+      requestDatabaseScope.pinServerValidatedWorkspaceId,
+    safeDb: requestDatabaseScope.safeDb,
+    scopedDb: requestDatabaseScope.scopedDb,
     userId,
   };
 };
@@ -127,7 +204,7 @@ export const getAccessibleWorkspaceId = ({
   accessibleWorkspaceIdSet,
   workspaceId,
 }: {
-  accessibleWorkspaceIdSet: Set<string>;
+  accessibleWorkspaceIdSet: ReadonlySet<string>;
   workspaceId: string;
 }) =>
   accessibleWorkspaceIdSet.has(workspaceId)

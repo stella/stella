@@ -266,6 +266,10 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     getWorkspaceAccess: (
       workspaceId: SafeId<"workspace">,
     ) => Promise<AccessibleWorkspace | null>;
+    /** Preserve only a workspace whose access this request already proved. */
+    pinServerValidatedWorkspaceId: (
+      workspaceId: SafeId<"workspace">,
+    ) => boolean;
     memberRole: {
       role: keyof typeof roles;
     };

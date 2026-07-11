@@ -76,6 +76,9 @@ const projectedWriteToolNames = (): readonly RegistryWriteToolName[] => {
 };
 
 type BuildChatWriteToolsProps = ChatRegistryContextDeps & {
+  pinServerValidatedWorkspaceId: NonNullable<
+    ChatRegistryContextDeps["pinServerValidatedWorkspaceId"]
+  >;
   refRegistry: ChatRefRegistry;
 };
 

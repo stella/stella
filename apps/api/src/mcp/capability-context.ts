@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
@@ -40,6 +42,7 @@ export type SynthesizedCapabilityContext = {
   getWorkspaceAccess: (
     workspaceId: SafeId<"workspace">,
   ) => Promise<AccessibleWorkspace | null>;
+  pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   memberRole: { role: MemberRole };
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
@@ -58,11 +61,12 @@ export const capabilityRoute = (capabilityId: string): string =>
  * Build the safe-handler context an enumerated capability's `{ config, handler }`
  * export expects. Mirrors what the REST `validateAuth` resolve assembles per
  * request, sourced from the already-resolved MCP session context: identity and
- * DB accessors are threaded verbatim, the member role is reshaped to `{ role }`,
- * the org AI config is loaded lazily (one indexed `organization_settings` read,
- * paid only on an actual invoke), and the audit recorder is bound to the
- * resolved workspace exactly as `workspaceAccessMacro` does. `workspaceId` is
- * set only for workspace-kind capabilities (root/session skip it).
+ * DB accessors are rebound to an operation-local authorization snapshot, the
+ * member role is reshaped to `{ role }`, the org AI config is loaded lazily (one
+ * indexed `organization_settings` read, paid only on an actual invoke), and the
+ * audit recorder is bound to the resolved workspace exactly as
+ * `workspaceAccessMacro` does. `workspaceId` is set only for workspace-kind
+ * capabilities (root/session skip it).
  */
 export const synthesizeCapabilityContext = async ({
   capabilityId,
@@ -86,6 +90,22 @@ export const synthesizeCapabilityContext = async ({
       ? context.recordAuditEvent
       : bindWorkspaceRecorder(context, workspaceId);
 
+  // Executable gateway contexts must provide an operation-local scope. The
+  // session-authenticated chat projection omits it because that surface never
+  // dispatches generic capabilities; reaching this path without one is an
+  // internal wiring error, not a reason to fall back to revocation-unstable DB
+  // handles.
+  const operationDatabaseScope = context.createOperationDatabaseScope?.();
+  if (!operationDatabaseScope) {
+    panic("Executable MCP context is missing an operation database scope");
+  }
+  if (
+    workspaceId !== undefined &&
+    !operationDatabaseScope.pinServerValidatedWorkspaceId(workspaceId)
+  ) {
+    panic("Capability workspace was not present in the MCP access map");
+  }
+
   return {
     body: input.body,
     params: input.params,
@@ -95,8 +115,8 @@ export const synthesizeCapabilityContext = async ({
     set: { headers: {} },
     user: { id: context.userId },
     session: { activeOrganizationId: context.organizationId },
-    scopedDb: context.scopedDb,
-    safeDb: context.safeDb,
+    scopedDb: operationDatabaseScope.scopedDb,
+    safeDb: operationDatabaseScope.safeDb,
     getActiveWorkspaceIds: async () =>
       await Promise.resolve(context.accessibleWorkspaceIds),
     getAccessibleWorkspaces: async () =>
@@ -104,10 +124,18 @@ export const synthesizeCapabilityContext = async ({
     getWorkspaceAccess: async (targetWorkspaceId) => {
       const status =
         context.accessibleWorkspaceStatusById.get(targetWorkspaceId);
+      if (
+        status &&
+        !operationDatabaseScope.pinServerValidatedWorkspaceId(targetWorkspaceId)
+      ) {
+        panic("Capability target was not present in the MCP access map");
+      }
       return await Promise.resolve(
         status ? { id: targetWorkspaceId, status } : null,
       );
     },
+    pinServerValidatedWorkspaceId:
+      operationDatabaseScope.pinServerValidatedWorkspaceId,
     memberRole: { role: context.memberRole },
     orgAIConfig,
     promptCachingEnabled,

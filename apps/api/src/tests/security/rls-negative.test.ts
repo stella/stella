@@ -235,6 +235,47 @@ describe("chat SELECT — wrong user or workspace", () => {
     );
     expect(c).toBe(0);
   });
+
+  test("deleting a contributing workspace seals a global thread and its messages", async () => {
+    await dryScopedQuery(
+      [ids.wsA1],
+      ids.orgA,
+      async (tx) => {
+        await tx
+          .update(chatThreads)
+          .set({ dataWorkspaceIds: [ids.wsA1] })
+          .where(eq(chatThreads.id, ids.chatThreadGlobalA1));
+
+        const visibleThreadCount = await tx.$count(
+          chatThreads,
+          eq(chatThreads.id, ids.chatThreadGlobalA1),
+        );
+        const visibleMessageCount = await tx.$count(
+          chatMessages,
+          eq(chatMessages.id, ids.chatMessageGlobalA1),
+        );
+        expect(visibleThreadCount).toBe(1);
+        expect(visibleMessageCount).toBe(1);
+
+        await tx
+          .update(workspaces)
+          .set({ status: "deleting" })
+          .where(eq(workspaces.id, ids.wsA1));
+
+        const sealedThreadCount = await tx.$count(
+          chatThreads,
+          eq(chatThreads.id, ids.chatThreadGlobalA1),
+        );
+        const sealedMessageCount = await tx.$count(
+          chatMessages,
+          eq(chatMessages.id, ids.chatMessageGlobalA1),
+        );
+        expect(sealedThreadCount).toBe(0);
+        expect(sealedMessageCount).toBe(0);
+      },
+      ids.userA1,
+    );
+  });
 });
 
 describe("global case-law corpus mutations", () => {
@@ -1506,5 +1547,35 @@ describe("chat mutations — wrong user", () => {
       ids.userA1,
     );
     expect(rows).toHaveLength(0);
+  });
+
+  test("data workspace arrays containing NULL fail closed", async () => {
+    const threadId = testId<"chatThread">();
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
+          await tx.execute(sql`
+            INSERT INTO chat_threads (
+              id,
+              organization_id,
+              user_id,
+              title,
+              data_workspace_ids
+            ) VALUES (
+              ${threadId},
+              ${ids.orgA},
+              ${ids.userA1},
+              'invalid data scope',
+              ARRAY[${ids.wsA1}::uuid, NULL]::uuid[]
+            )
+          `);
+        },
+        ids.userA1,
+      ),
+    );
+
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 });

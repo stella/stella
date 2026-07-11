@@ -849,7 +849,30 @@ const resolveValidateAuth = async (
   const orgSettings = await loadOrgSettingsForAuth(activeOrganizationId);
   const { orgAIConfig, promptCachingEnabled } = orgSettings;
 
-  const databaseIdentity = { organizationId: activeOrganizationId, userId };
+  // Preserve the bounded workspace authorization already proved by the
+  // membership lookup for the lifetime of this request's transactions. This
+  // matters for operations such as self-removal: later statements must finish
+  // their cleanup and audit work after the membership row is deleted.
+  const serverValidatedWorkspaceIds = authorization.workspace
+    ? [authorization.workspace.id]
+    : [];
+  const validatedWorkspaceIdSet = new Set(serverValidatedWorkspaceIds);
+  const pinServerValidatedWorkspaceId = (
+    workspaceId: SafeId<"workspace">,
+  ): boolean => {
+    if (!validatedWorkspaceIdSet.has(workspaceId)) {
+      return false;
+    }
+    if (!serverValidatedWorkspaceIds.includes(workspaceId)) {
+      serverValidatedWorkspaceIds.push(workspaceId);
+    }
+    return true;
+  };
+  const databaseIdentity = {
+    organizationId: activeOrganizationId,
+    serverValidatedWorkspaceIds,
+    userId,
+  };
   const scopedDb = createMembershipScopedDb(rlsDb, databaseIdentity);
   const safeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
 
@@ -861,7 +884,12 @@ const resolveValidateAuth = async (
           .select({ id: workspaces.id, status: workspaces.status })
           .from(workspaces)
           .where(eq(workspaces.organizationId, activeOrganizationId)),
-    );
+    ).then((items) => {
+      for (const workspace of items) {
+        validatedWorkspaceIdSet.add(workspace.id);
+      }
+      return items;
+    });
     return await accessibleWorkspacesPromise;
   };
 
@@ -888,23 +916,31 @@ const resolveValidateAuth = async (
   ): Promise<AccessibleWorkspace | null> => {
     let accessPromise = workspaceAccessPromises.get(workspaceId);
     if (!accessPromise) {
-      accessPromise = scopedDb(
-        async (tx) =>
-          await tx
-            .select({ id: workspaces.id, status: workspaces.status })
-            .from(workspaces)
-            .where(
-              and(
-                eq(workspaces.id, workspaceId),
-                eq(workspaces.organizationId, activeOrganizationId),
-              ),
-            )
-            .limit(1)
-            .then((rows) => rows.at(0) ?? null),
-      );
+      accessPromise = accessibleWorkspacesPromise
+        ? accessibleWorkspacesPromise.then(
+            (items) => items.find((item) => item.id === workspaceId) ?? null,
+          )
+        : resolveMemberAuthorization({
+            organizationId: activeOrganizationId,
+            userId,
+            workspaceId,
+          }).then((targetAuthorization) => {
+            if (targetAuthorization?.workspace?.id !== workspaceId) {
+              return null;
+            }
+            return targetAuthorization.workspace;
+          });
       workspaceAccessPromises.set(workspaceId, accessPromise);
     }
-    return await accessPromise;
+    const workspace = await accessPromise;
+    if (workspace) {
+      // The factories above intentionally retain this small array by
+      // reference. A later transaction therefore preserves only the target
+      // this request just proved, never the full accessible-workspace list.
+      validatedWorkspaceIdSet.add(workspace.id);
+      pinServerValidatedWorkspaceId(workspace.id);
+    }
+    return workspace;
   };
 
   const recorderBindings = {
@@ -927,6 +963,11 @@ const resolveValidateAuth = async (
       getActiveWorkspaceIds,
       getAccessibleWorkspaces,
       getWorkspaceAccess,
+      /**
+       * Preserve one workspace in later request transactions only when an
+       * earlier server-side lookup in this request already proved access.
+       */
+      pinServerValidatedWorkspaceId,
       scopedDb,
       safeDb,
       memberRole,

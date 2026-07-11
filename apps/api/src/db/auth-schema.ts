@@ -175,10 +175,6 @@ export const member = pgTable(
   (table) => [
     index("member_organizationId_idx").on(table.organizationId),
     index("member_userId_idx").on(table.userId),
-    index("member_organization_user_idx").on(
-      table.organizationId,
-      table.userId,
-    ),
     index("member_lastActiveWorkspaceId_idx").on(table.lastActiveWorkspaceId),
     ...authMemberPolicies(),
   ],

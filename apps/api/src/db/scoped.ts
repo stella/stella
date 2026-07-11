@@ -72,7 +72,10 @@ type WorkspaceScope =
       type: typeof WORKSPACE_ACCESS_MODE.explicit;
       workspaceIds: SafeId<"workspace">[];
     }
-  | { type: typeof WORKSPACE_ACCESS_MODE.membership };
+  | {
+      type: typeof WORKSPACE_ACCESS_MODE.membership;
+      serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
+    };
 
 type RunScopedTransactionOptions<
   TTransaction extends ScopedTransactionBase,
@@ -98,7 +101,7 @@ const runScopedTransaction = async <
   const workspaceIds =
     workspaceScope.type === WORKSPACE_ACCESS_MODE.explicit
       ? workspaceScope.workspaceIds
-      : [];
+      : workspaceScope.serverValidatedWorkspaceIds;
   const wsIds = `{${workspaceIds.join(",")}}`;
 
   return await database.transaction(async (tx: TTransaction) => {
@@ -139,21 +142,38 @@ export const createScopedDb =
       fn,
     });
 
-type MembershipScopedDbIdentity = {
+type MembershipScopedDbOptions = {
   organizationId: SafeId<"organization">;
+  /**
+   * Small, operation-bounded set whose access was already proved by trusted
+   * server code. These IDs remain authorized for the lifetime of each scoped
+   * transaction, even if that transaction removes the actor's membership.
+   * Never populate this from raw input or with a user's full workspace set.
+   */
+  serverValidatedWorkspaceIds: readonly SafeId<"workspace">[];
   userId: SafeId<"user">;
 };
 
-/** Create a constant-size RLS scope derived from organization/user membership. */
+/**
+ * Create an RLS scope derived from organization/user membership plus an
+ * explicit bounded authorization snapshot (an empty list means no pins).
+ */
 export const createMembershipScopedDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    { organizationId, userId }: MembershipScopedDbIdentity,
+    {
+      organizationId,
+      serverValidatedWorkspaceIds,
+      userId,
+    }: MembershipScopedDbOptions,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
     await runScopedTransaction({
       database,
-      workspaceScope: { type: WORKSPACE_ACCESS_MODE.membership },
+      workspaceScope: {
+        type: WORKSPACE_ACCESS_MODE.membership,
+        serverValidatedWorkspaceIds,
+      },
       organizationId,
       userId,
       fn,
@@ -231,7 +251,11 @@ export const createSafeDb =
 export const createMembershipSafeDb =
   <TTransaction extends ScopedTransactionBase>(
     database: RlsDatabase<TTransaction>,
-    { organizationId, userId }: MembershipScopedDbIdentity,
+    {
+      organizationId,
+      serverValidatedWorkspaceIds,
+      userId,
+    }: MembershipScopedDbOptions,
   ) =>
   async <T>(
     fn: (tx: TTransaction) => Promise<T>,
@@ -242,7 +266,10 @@ export const createMembershipSafeDb =
         try: async () =>
           await runScopedTransaction({
             database,
-            workspaceScope: { type: WORKSPACE_ACCESS_MODE.membership },
+            workspaceScope: {
+              type: WORKSPACE_ACCESS_MODE.membership,
+              serverValidatedWorkspaceIds,
+            },
             organizationId,
             userId,
             fn,

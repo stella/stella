@@ -11,6 +11,7 @@ import { buildMcpContextFromChat } from "./mcp-chat-context";
 
 const workspaceOne = toSafeId<"workspace">("ws_1");
 const workspaceTwo = toSafeId<"workspace">("ws_2");
+const workspaceOutsideChatScope = toSafeId<"workspace">("ws_3");
 
 const buildDeps = (
   overrides: Partial<ChatRegistryContextDeps> = {},
@@ -62,6 +63,23 @@ describe("buildMcpContextFromChat", () => {
     const deps = buildDeps();
     const context = buildMcpContextFromChat(deps);
     expect(context.accessibleWorkspaceIds).not.toBe(deps.toolWorkspaceIds);
+  });
+
+  test("threads the request-authenticated workspace pin into projected tools", () => {
+    const pinServerValidatedWorkspaceId = mock(() => true);
+    const context = buildMcpContextFromChat(
+      buildDeps({ pinServerValidatedWorkspaceId }),
+    );
+
+    expect(context.pinServerValidatedWorkspaceId).not.toBe(
+      pinServerValidatedWorkspaceId,
+    );
+    expect(context.pinServerValidatedWorkspaceId?.(workspaceOne)).toBe(true);
+    expect(
+      context.pinServerValidatedWorkspaceId?.(workspaceOutsideChatScope),
+    ).toBe(false);
+    expect(pinServerValidatedWorkspaceId).toHaveBeenCalledWith(workspaceOne);
+    expect(pinServerValidatedWorkspaceId).toHaveBeenCalledTimes(1);
   });
 
   test("threads a supplied audit recorder through, and no-ops when absent", async () => {

@@ -5,13 +5,14 @@ import { sql, type SQL } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import {
-  WORKSPACE_ACCESS_FUNCTION_NAME,
-  WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME,
-  WORKSPACE_ACCESS_VIEW_NAME,
-} from "@/api/db/rls";
+import { WORKSPACE_ACCESS_VIEW_NAME } from "@/api/db/rls";
 
 const DRIZZLE_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
+const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20260710173000_scalable_workspace_authorization",
+  "migration.sql",
+);
 
 type PgliteSchemaDb = {
   execute: (query: SQL) => Promise<unknown>;
@@ -20,36 +21,30 @@ type PgliteSchemaDb = {
 export const createSchemaPglite = async () =>
   await PGlite.create({ extensions: { pg_trgm } });
 
+const readMigrationStatements = (migrationPath: string): string[] =>
+  readFileSync(migrationPath, "utf-8")
+    .split("--> statement-breakpoint")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+const executableSql = (statement: string): string =>
+  statement.replace(/^\s*--.*$/gmu, "").trim();
+
 export const installPgliteSchemaPrerequisites = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
   await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
   await db.execute(sql.raw(arabicNormalizeFunctionSql()));
-  // Drizzle emits policies that reference these routines before their backing
-  // tables exist. Install harmless stubs for schema creation; the security
-  // test database replaces them after pushSchema finishes.
+  // Drizzle emits policies that reference this view before its backing tables
+  // exist. Install a harmless shape-compatible stub for schema creation; the
+  // security test database replaces it after pushSchema finishes.
   await db.execute(
     sql.raw(`
       CREATE OR REPLACE VIEW public.${WORKSPACE_ACCESS_VIEW_NAME}
-      AS SELECT NULL::uuid AS workspace_id WHERE false
-    `),
-  );
-  await db.execute(
-    sql.raw(`
-      CREATE OR REPLACE FUNCTION public.${WORKSPACE_ACCESS_FUNCTION_NAME}(uuid)
-      RETURNS boolean
-      LANGUAGE sql
-      STABLE
-      AS 'SELECT false'
-    `),
-  );
-  await db.execute(
-    sql.raw(`
-      CREATE OR REPLACE FUNCTION public.${WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME}(uuid[])
-      RETURNS boolean
-      LANGUAGE sql
-      STABLE
-      AS 'SELECT false'
+      AS SELECT
+        NULL::uuid AS authorized_workspace_id,
+        NULL::text AS workspace_status
+      WHERE false
     `),
   );
 };
@@ -60,14 +55,14 @@ const latestMigrationStatementContaining = (fragment: string): string => {
     .map((entry) => entry.name)
     .sort()
     .flatMap((dirName) => {
-      const migrationSql = readFileSync(
-        nodePath.join(DRIZZLE_DIR, dirName, "migration.sql"),
-        "utf-8",
+      const migrationPath = nodePath.join(
+        DRIZZLE_DIR,
+        dirName,
+        "migration.sql",
       );
-      return migrationSql
-        .split("--> statement-breakpoint")
-        .map((part) => part.trim())
-        .filter((part) => part.includes(fragment));
+      return readMigrationStatements(migrationPath).filter((part) =>
+        part.includes(fragment),
+      );
     });
 
   const statement = statements.at(-1);
@@ -87,55 +82,32 @@ const arabicNormalizeFunctionSql = (): string =>
 export const installPgliteWorkspaceAccessObjects = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  await db.execute(
-    sql.raw(
-      latestMigrationStatementContaining(
-        `CREATE OR REPLACE VIEW public.${WORKSPACE_ACCESS_VIEW_NAME}`,
-      ),
-    ),
+  const statements = readMigrationStatements(
+    WORKSPACE_AUTHORIZATION_MIGRATION_PATH,
   );
-  await db.execute(
-    sql.raw(
-      latestMigrationStatementContaining(
-        `CREATE OR REPLACE FUNCTION public.${WORKSPACE_ACCESS_FUNCTION_NAME}`,
-      ),
-    ),
-  );
-  await db.execute(
-    sql.raw(
-      `REVOKE ALL ON TABLE public.${WORKSPACE_ACCESS_VIEW_NAME} FROM PUBLIC`,
-    ),
-  );
-  await db.execute(
-    sql.raw(
-      `GRANT SELECT ON TABLE public.${WORKSPACE_ACCESS_VIEW_NAME} TO stella`,
-    ),
-  );
-  await db.execute(
-    sql.raw(
-      latestMigrationStatementContaining(
-        `CREATE OR REPLACE FUNCTION public.${WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME}`,
-      ),
-    ),
-  );
-  await db.execute(
-    sql.raw(
-      `REVOKE ALL ON FUNCTION public.${WORKSPACE_ACCESS_FUNCTION_NAME}(uuid) FROM PUBLIC`,
-    ),
-  );
-  await db.execute(
-    sql.raw(
-      `GRANT EXECUTE ON FUNCTION public.${WORKSPACE_ACCESS_FUNCTION_NAME}(uuid) TO stella`,
-    ),
-  );
-  await db.execute(
-    sql.raw(
-      `REVOKE ALL ON FUNCTION public.${WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME}(uuid[]) FROM PUBLIC`,
-    ),
-  );
-  await db.execute(
-    sql.raw(
-      `GRANT EXECUTE ON FUNCTION public.${WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME}(uuid[]) TO stella`,
-    ),
-  );
+  for (const statement of statements) {
+    const executable = executableSql(statement);
+    if (executable.length === 0) {
+      continue;
+    }
+    if (
+      /^(?:ABORT|BEGIN|COMMIT(?:\s+PREPARED)?|END|PREPARE\s+TRANSACTION|RELEASE(?:\s+SAVEPOINT)?|ROLLBACK(?:\s+(?:PREPARED|TO(?:\s+SAVEPOINT)?))?|SAVEPOINT|SET\s+(?:TRANSACTION|SESSION\s+CHARACTERISTICS\s+AS\s+TRANSACTION)|START\s+TRANSACTION)\b/iu.test(
+        executable,
+      )
+    ) {
+      panic(
+        "Workspace authorization migration cannot control Drizzle's outer transaction",
+      );
+    }
+    if (/\bCONCURRENTLY\b/iu.test(executable)) {
+      panic(
+        "Workspace authorization migration cannot run concurrent DDL inside Drizzle's transaction",
+      );
+    }
+    if (/^SET LOCAL\b/iu.test(executable)) {
+      continue;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- migration DDL must execute in source order
+    await db.execute(sql.raw(statement));
+  }
 };

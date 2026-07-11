@@ -18,9 +18,6 @@ export const WORKSPACE_ACCESS_MODE = {
   explicit: "explicit",
   membership: "membership",
 } as const;
-export const WORKSPACE_ACCESS_FUNCTION_NAME = "stella_workspace_is_authorized";
-export const WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME =
-  "stella_workspace_array_is_authorized";
 export const WORKSPACE_ACCESS_VIEW_NAME = "stella_authorized_workspaces";
 
 // Created by the authorization migration because its owner-evaluated query is
@@ -28,21 +25,39 @@ export const WORKSPACE_ACCESS_VIEW_NAME = "stella_authorized_workspaces";
 // existing keeps schema introspection/parity aware of the managed object.
 export const stellaAuthorizedWorkspaces = p
   .pgView(WORKSPACE_ACCESS_VIEW_NAME, {
-    workspaceId: p.uuid("workspace_id").notNull(),
+    authorizedWorkspaceId: p.uuid("authorized_workspace_id").notNull(),
+    workspaceStatus: p.text("workspace_status"),
   })
   .existing();
 
 /**
  * Explicit mode is used by deliberately narrowed jobs and security tests.
- * Membership mode derives access from scalar user/org settings through an
- * owner-evaluated security-barrier view, so request setup stays constant-size regardless
- * of how many matters a user can reach. The explicit IDs remain additive in
- * membership mode so a create transaction can authorize its new workspace
- * before the workspace_members row exists.
+ * The owner-evaluated security-barrier view unions those IDs with the live
+ * membership-derived set in membership mode. Explicit IDs stay additive there
+ * so a create transaction can authorize its new workspace before inserting
+ * workspace_members. The direct array check keeps validated point operations
+ * constant-size; when it misses, the planner-visible set lookup can run as a
+ * semi-join or hashed subplan once per statement instead of invoking a SQL
+ * function for every candidate row.
  */
-const workspaceAccessCheck = (workspaceId: SQL) => sql`(
-  public.${sql.raw(WORKSPACE_ACCESS_FUNCTION_NAME)}(${workspaceId})
-)`;
+const workspaceAccessCheck = (workspaceId: SQL) => sql`CASE
+  WHEN ${workspaceId} = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          '${sql.raw(SETTING_WORKSPACE_IDS)}', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE ${workspaceId} IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.${sql.raw(WORKSPACE_ACCESS_VIEW_NAME)} aw
+  )
+END`;
 
 const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
 
@@ -50,8 +65,19 @@ const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
  * Used by `workspaces`, which scopes on `id` rather than `workspace_id`. */
 export const workspaceIdCheck = workspaceAccessCheck(sql`id`);
 
-const workspaceArrayCheck = (workspaceIds: SQL) => sql`(
-  public.${sql.raw(WORKSPACE_ARRAY_ACCESS_FUNCTION_NAME)}(${workspaceIds})
+// Embedded chat data must remain visible only while every contributing
+// workspace is still usable. `IS NULL` makes malformed PostgreSQL arrays fail
+// closed; array-level NOT NULL constraints do not reject NULL elements.
+const workspaceArrayCheck = (workspaceIds: SQL) => sql`NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(${workspaceIds}) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT EXISTS (
+      SELECT 1
+      FROM public.${sql.raw(WORKSPACE_ACCESS_VIEW_NAME)} aw
+      WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+        AND aw.workspace_status <> 'deleting'
+    )
 )`;
 
 export const organizationCheck = sql`organization_id =
