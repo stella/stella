@@ -14,7 +14,7 @@ import type {
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { getProviderIcon } from "@/components/ai-provider-icons";
-import { normalizeOptionalReadonlyArray } from "@/lib/arrays";
+import { optionalReadonlyArray } from "@/lib/arrays";
 
 // "Typical call" = one chat turn through an agent loop with tool
 // calls: large system prompt + tool schemas + a few intermediate
@@ -34,7 +34,7 @@ const modelOptionsForProvider = (
   const optionsByProvider: Partial<Record<ProviderValue, readonly string[]>> =
     MODEL_OPTIONS_BY_PROVIDER;
   const options = optionsByProvider[provider];
-  return normalizeOptionalReadonlyArray(options);
+  return optionalReadonlyArray(options);
 };
 
 type IntlFormatter = ReturnType<typeof useFormatter>;
