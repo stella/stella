@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
+import nodePath from "node:path";
 
 const source = readFileSync(
-  "apps/api/src/handlers/templates/delete.ts",
+  nodePath.join(import.meta.dir, "delete.ts"),
   "utf-8",
 );
 
