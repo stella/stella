@@ -57,6 +57,8 @@ jobs:
 
       - name: Apply revision bumps
         if: steps.check.outputs.update_count != '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           jq -c '.updates[]' upstream.json | while read -r update; do
             path=$(echo "$update" | jq -r '.manifestPath')
@@ -68,6 +70,12 @@ jobs:
           done
           bun run --filter @stll/catalogue generate
           bun run --filter @stll/catalogue validate
+          # Fetch and check the newly-pinned upstream content (SKILL.md +
+          # resource tree) before opening the PR, so a bump to a rev that
+          # would fail the install path (bad frontmatter, oversized body,
+          # too many/large resources) is caught here rather than shipping
+          # green and only failing at a user's install click.
+          bun run --filter @stll/catalogue check-pinned
 
       - name: Open or update pull request
         if: steps.check.outputs.update_count != '0'
