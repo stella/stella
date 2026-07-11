@@ -72,8 +72,7 @@ export const createBusinessRegistryTools = ({
   const picklistOptions: [
     RegistryJurisdictionCode,
     ...RegistryJurisdictionCode[],
-  ] = [first];
-  picklistOptions.push(...rest);
+  ] = [first, ...rest];
   const canonicalOnlyJurisdictions = enabledJurisdictions.filter(
     (jurisdiction) =>
       getRegistryHandlerDefinitionByCountry(jurisdiction)?.search === null,

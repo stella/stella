@@ -104,6 +104,14 @@ const isJsonValue = <T>(value: unknown): value is T => {
   if (typeof value !== "object") {
     return false;
   }
+  // Reject non-plain objects (RegExp, Map, Set, Date, class instances): their
+  // own enumerable values are empty, so `every` would vacuously pass and the
+  // value would later serialize to `{}` or be lost. Only plain and null-proto
+  // objects are JSON-safe.
+  const prototype = Object.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return false;
+  }
   return Object.values(value).every(isJsonValue);
 };
 
