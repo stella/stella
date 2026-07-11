@@ -24,7 +24,9 @@ export const fetchStorageArrayBuffer = async (
 ) => {
   let response: Response;
   try {
-    response = await fetch(presignedUrl, { signal });
+    response = await fetch(presignedUrl, {
+      signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+    });
   } catch (error) {
     if (signal.aborted) {
       throw error;

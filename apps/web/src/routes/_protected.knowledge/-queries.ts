@@ -228,7 +228,9 @@ export const templateDocxBufferOptions = (
   queryOptions({
     queryKey: knowledgeKeys.templates.docxBuffer(organizationId, templateId),
     queryFn: async ({ signal }) => {
-      const response = await fetch(presignedUrl, { signal });
+      const response = await fetch(presignedUrl, {
+        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+      });
 
       if (!response.ok) {
         throw new APIError({
