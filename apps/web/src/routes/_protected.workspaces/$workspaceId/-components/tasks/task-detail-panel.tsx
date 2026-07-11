@@ -14,6 +14,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
@@ -64,6 +65,7 @@ export const TaskDetailPanel = ({
   const handleBack = () => setMinimized(true);
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
+  const analytics = useAnalytics();
   const userId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.id,
@@ -136,7 +138,14 @@ export const TaskDetailPanel = ({
               userId: toSafeId<"user">(userId),
               queryKey: entitiesKeys.all(workspaceId),
             })
-            .then(async () => {
+            .then(async (response) => {
+              if (response.error) {
+                analytics.captureError(toAPIError(response.error));
+                await queryClient.invalidateQueries({
+                  queryKey: taskKeys.detail(workspaceId, taskId),
+                });
+                return;
+              }
               await Promise.all([
                 queryClient.invalidateQueries({
                   queryKey: taskKeys.detail(workspaceId, taskId),
@@ -147,8 +156,11 @@ export const TaskDetailPanel = ({
               ]);
               return;
             })
-            .catch(() => {
-              /* non-critical */
+            .catch((error: unknown) => {
+              analytics.captureError(error);
+              void queryClient.invalidateQueries({
+                queryKey: taskKeys.detail(workspaceId, taskId),
+              });
             });
         }
       }
@@ -162,6 +174,7 @@ export const TaskDetailPanel = ({
     userId,
     workspaceId,
     queryClient,
+    analytics,
   ]);
 
   const startEditingName = () => {

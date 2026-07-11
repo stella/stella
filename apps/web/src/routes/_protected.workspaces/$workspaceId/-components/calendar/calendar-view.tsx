@@ -414,12 +414,22 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           queryKey: entitiesKeys.all(workspaceId),
           dueDate: date,
         })
-        .then(() => {
+        .then((response) => {
+          if (response.error) {
+            stellaToast.add({
+              title: t("errors.actionFailed"),
+              type: "error",
+            });
+          }
           void invalidateCalendarTasks();
           return;
         })
         .catch(() => {
-          // non-critical
+          stellaToast.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+          void invalidateCalendarTasks();
         });
     } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
       api
@@ -430,12 +440,22 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
           allDay: true,
           startAt: toAllDayAgendaDateTime(date),
         })
-        .then(() => {
+        .then((response) => {
+          if (response.error) {
+            stellaToast.add({
+              title: t("errors.actionFailed"),
+              type: "error",
+            });
+          }
           void invalidateCalendarTasks();
           return;
         })
         .catch(() => {
-          // non-critical
+          stellaToast.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+          void invalidateCalendarTasks();
         });
     } else if (isTaskDateProperty(datePropertyId)) {
       // Future-proofing for any new built-in task date pseudo-property.
