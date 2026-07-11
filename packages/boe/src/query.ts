@@ -45,13 +45,17 @@ export const buildSearchQuery = (input: BoeSearchQuery): string => {
     parts.push(`titulo:"${escapeQueryStringPhrase(input.title)}"`);
   }
   if (input.departmentCode) {
-    parts.push(`departamento@codigo:${input.departmentCode}`);
+    parts.push(
+      `departamento@codigo:"${escapeQueryStringPhrase(input.departmentCode)}"`,
+    );
   }
   if (input.legalRangeCode) {
-    parts.push(`rango@codigo:${input.legalRangeCode}`);
+    parts.push(
+      `rango@codigo:"${escapeQueryStringPhrase(input.legalRangeCode)}"`,
+    );
   }
   if (input.matterCode) {
-    parts.push(`materia@codigo:${input.matterCode}`);
+    parts.push(`materia@codigo:"${escapeQueryStringPhrase(input.matterCode)}"`);
   }
 
   const queryString = parts.join(" AND ");

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { BoeSearchQuery } from "./query.js";
 import { buildSearchQuery } from "./query.js";
 
 describe("BOE search query builder", () => {
@@ -124,6 +125,34 @@ describe("BOE search query builder", () => {
       // No raw upstream field markers from user input.
       expect(q).not.toContain("fecha_publicacion");
       expect(q).not.toContain("rango@codigo");
+    }
+  });
+
+  test("INVARIANT: code fields cannot inject field clauses, booleans, or unbalanced parens", () => {
+    const attacks: Array<[keyof BoeSearchQuery, string]> = [
+      ["departmentCode", "1000) OR titulo:(*"],
+      ["legalRangeCode", '1300" OR rango@codigo:"*'],
+      ["matterCode", "2765 OR (a"],
+    ];
+    for (const [field, value] of attacks) {
+      const q = extractQueryString(buildSearchQuery({ [field]: value }));
+      // Unlike free text, code fields are wrapped in a single quoted
+      // phrase, so raw paren-counting (isStructurallyBalanced) is not a
+      // meaningful signal here: a "(" inside a quoted phrase does not
+      // unbalance the DSL. The exact-match assertion below is the real
+      // proof: the attacker-controlled value must stay inside a single
+      // quoted phrase, with any inner quotes/backslashes escaped, and no
+      // unescaped injected "OR"/"titulo:"/parens reaching the DSL.
+      const codigoField =
+        field === "departmentCode"
+          ? "departamento@codigo"
+          : field === "legalRangeCode"
+            ? "rango@codigo"
+            : "materia@codigo";
+      const escapedValue = value
+        .replaceAll("\\", "\\\\")
+        .replaceAll('"', '\\"');
+      expect(q).toBe(`${codigoField}:"${escapedValue}"`);
     }
   });
 
