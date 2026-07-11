@@ -10,6 +10,15 @@ export const resolveSidebarWorkspaceId = ({
   workspaceId: string | undefined;
 }): string | undefined => workspaceId ?? chatWorkspaceId;
 
+export const resolveAutomaticExpandedMatterId = ({
+  activeMatterIsVisible,
+  activeWorkspaceId,
+}: {
+  activeMatterIsVisible: boolean;
+  activeWorkspaceId: string | undefined;
+}): string | null =>
+  activeMatterIsVisible && activeWorkspaceId ? activeWorkspaceId : null;
+
 type RecentWorkspace = {
   id: string;
   lastActivityAt: Date | string;

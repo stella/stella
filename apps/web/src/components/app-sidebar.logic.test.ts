@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   resolveEntityActivityDestination,
+  resolveAutomaticExpandedMatterId,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
@@ -53,6 +54,15 @@ describe("sidebar matter context", () => {
         ],
       }).map(({ id }) => id),
     ).toEqual(["recent"]);
+  });
+
+  test("does not expand an unrelated matter outside matter routes", () => {
+    expect(
+      resolveAutomaticExpandedMatterId({
+        activeMatterIsVisible: false,
+        activeWorkspaceId: undefined,
+      }),
+    ).toBeNull();
   });
 });
 

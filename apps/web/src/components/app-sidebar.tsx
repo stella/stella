@@ -49,6 +49,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import {
   resolveEntityActivityDestination,
+  resolveAutomaticExpandedMatterId,
   resolveSidebarWorkspaceId,
   selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
@@ -250,9 +251,10 @@ export function AppSidebar(props: AppSidebarProps) {
   const activeMatterIsVisible = [...pinned, ...recents].some(
     (workspace) => workspace.id === activeWorkspaceId,
   );
-  const automaticExpandedMatterId = activeMatterIsVisible
-    ? activeWorkspaceId
-    : (pinned.at(0)?.id ?? recents.at(0)?.id ?? null);
+  const automaticExpandedMatterId = resolveAutomaticExpandedMatterId({
+    activeMatterIsVisible,
+    activeWorkspaceId,
+  });
   const expandedMatterId =
     matterExpansion.type === "automatic"
       ? automaticExpandedMatterId
