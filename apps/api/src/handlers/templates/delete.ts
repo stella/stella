@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { templates } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -12,7 +12,6 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { getS3 } from "@/api/lib/s3";
 
 const deleteTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),
@@ -60,6 +59,8 @@ const deleteTemplateHandler = async function* ({
     s3Keys.add(v.s3Key);
   }
 
+  Result.unwrap(await deleteS3Keys([...s3Keys]));
+
   yield* Result.await(
     safeDb(async (tx) => {
       await tx
@@ -86,13 +87,6 @@ const deleteTemplateHandler = async function* ({
       });
     }),
   );
-
-  // Delete S3 objects outside the transaction to keep
-  // DB operations short. If any delete fails, files become
-  // orphaned but that is safer than a dangling DB row.
-  for (const key of s3Keys) {
-    getS3().delete(key).catch(captureError);
-  }
 
   return Result.ok({});
 };

@@ -94,6 +94,15 @@ If the database transaction fails after an S3 object has been
 written, the orphaned S3 object is immediately deleted in the
 error handler.
 
+### Template deletion
+
+Handler: `apps/api/src/handlers/templates/delete.ts`
+
+1. Collect the current and historical template object keys.
+2. Delete the deduplicated S3 keys with bounded concurrency.
+3. Delete the template row and record the audit event in one database
+   transaction. Cascade FKs remove its version rows.
+
 ## S3 object lifecycle
 
 - **ACL:** `private` (no public access).
@@ -123,8 +132,8 @@ content. Deletion is immediate and irreversible upon request.
   soft-delete columns in the schema.
 - Cascade and restrict FK constraints are defined in
   `apps/api/src/db/schema/` and enforced by PostgreSQL.
-- S3 cleanup is integrated into every deletion handler;
-  orphan-prevention logic is tested.
+- Deletion flows that own S3 objects await bounded cleanup before removing
+  their database references.
 
 ## Review
 
