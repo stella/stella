@@ -76,6 +76,15 @@ describe("normalizeGithubRepo", () => {
     ).toBe("jane/gdpr-helper");
   });
 
+  test("strips a combined trailing .git and slash", () => {
+    expect(
+      normalizeGithubRepo("https://github.com/jane/gdpr-helper.git/"),
+    ).toBe("jane/gdpr-helper");
+    expect(normalizeGithubRepo("jane/gdpr-helper.git/")).toBe(
+      "jane/gdpr-helper",
+    );
+  });
+
   test("rejects non-repo input", () => {
     expect(normalizeGithubRepo("not a repo")).toBeNull();
     expect(normalizeGithubRepo("jane")).toBeNull();

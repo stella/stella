@@ -1,10 +1,13 @@
 import { useState } from "react";
 
+import { Result } from "better-result";
 import { CheckIcon, CopyIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
+
+import { copyToClipboard } from "@/lib/copy-to-clipboard";
 
 // Client-only: reads `navigator.clipboard`. Lazy-loaded by the detail
 // page so it never runs during SSR.
@@ -19,13 +22,13 @@ export function CopyButton({
   const [copied, setCopied] = useState(false);
 
   const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
+    const result = await copyToClipboard(text);
+    if (Result.isError(result)) {
       stellaToast.add({ title: t("common.unexpectedError"), type: "error" });
+      return;
     }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
   };
 
   return (

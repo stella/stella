@@ -6,7 +6,12 @@
  */
 import * as v from "valibot";
 
-import { skillEntrySchema } from "@stll/catalogue";
+import {
+  GITHUB_REPO_PATTERN,
+  GITHUB_REV_PATTERN,
+  MAX_SLUG_LENGTH,
+  skillEntrySchema,
+} from "@stll/catalogue";
 import type {
   CatalogueCost,
   CatalogueLicense,
@@ -44,10 +49,6 @@ export type ContributeFormState = {
 const SKILL_ENTRY_PATH = "SKILL.md";
 /** Relative `$schema` ref used by the committed entry manifests. */
 const MANIFEST_SCHEMA_REF = "../../../schema.json";
-const MAX_SLUG_LENGTH = 64;
-const FULL_COMMIT_SHA = /^[0-9a-f]{40}$/u;
-const GITHUB_REPO =
-  /^(?<owner>[A-Za-z0-9][A-Za-z0-9-]{0,38})\/(?<name>[A-Za-z0-9._-]{1,100})$/u;
 
 /**
  * Derive a kebab-case slug from a display name: fold diacritics, lower
@@ -66,22 +67,27 @@ export const deriveSlug = (name: string): string => {
 
 /** A full 40-character lowercase hex commit SHA (abbreviated refs fail). */
 export const isFullCommitSha = (value: string): boolean =>
-  FULL_COMMIT_SHA.test(value);
+  GITHUB_REV_PATTERN.test(value);
 
 /**
  * Normalize a repo reference to the bare `owner/name` identifier. Accepts
  * `owner/name`, an `https://github.com/owner/name` URL, `github.com/…`,
  * and a trailing `.git`; returns `null` when it is not a valid GitHub
  * `owner/name`.
+ *
+ * Order matters: strip protocol/host and every trailing slash first, then
+ * peel the `.git` suffix last. Stripping `.git` first would leave it
+ * intact for inputs like `…/repo.git/` (the trailing slash blocks the
+ * `\.git$` anchor), yielding a `repo.git` identifier that 404s upstream.
  */
 export const normalizeGithubRepo = (input: string): string | null => {
   const withoutHost = input
     .trim()
-    .replace(/\.git$/u, "")
     .replace(/^https?:\/\/(?:www\.)?github\.com\//u, "")
     .replace(/^github\.com\//u, "")
-    .replace(/\/$/u, "");
-  const groups = GITHUB_REPO.exec(withoutHost)?.groups;
+    .replace(/\/+$/u, "")
+    .replace(/\.git$/u, "");
+  const groups = GITHUB_REPO_PATTERN.exec(withoutHost)?.groups;
   return groups ? `${groups["owner"]}/${groups["name"]}` : null;
 };
 

@@ -74,8 +74,12 @@ const loadSkillMarkdown = async (
   return result.status === "ok" ? result.markdown : null;
 };
 
+// Public SEO page: a bad `?install=` value (e.g. `?install=true`) must
+// degrade to "no install intent", not throw into the router's default
+// error boundary. `v.fallback` swallows the parse failure and yields
+// `undefined`, rendering the page as if the param were absent.
 const searchSchema = v.object({
-  install: v.optional(v.literal("1")),
+  install: v.fallback(v.optional(v.literal("1")), undefined),
 });
 
 export const Route = createFileRoute("/tools/$slug")({
