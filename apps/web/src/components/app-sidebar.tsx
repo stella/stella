@@ -50,6 +50,7 @@ import { cn } from "@stll/ui/lib/utils";
 import {
   resolveEntityActivityDestination,
   resolveSidebarWorkspaceId,
+  selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
@@ -230,19 +231,14 @@ export function AppSidebar(props: AppSidebarProps) {
       .filter((ws) => ws !== undefined);
   }, [workspaces, pinnedOrder]);
 
-  const recents = useMemo(() => {
-    if (!workspaces) {
-      return [];
-    }
-    return [...workspaces]
-      .filter((ws) => !pinnedIds.has(ws.id))
-      .toSorted(
-        (a, b) =>
-          new Date(b.lastActivityAt).getTime() -
-          new Date(a.lastActivityAt).getTime(),
-      )
-      .slice(0, RECENTS_LIMIT);
-  }, [workspaces, pinnedIds]);
+  const recents = workspaces
+    ? selectRecentWorkspaces({
+        activeWorkspaceId,
+        limit: RECENTS_LIMIT,
+        pinnedIds,
+        workspaces,
+      })
+    : [];
 
   const [matterExpansion, setMatterExpansion] = useState<MatterExpansion>({
     type: "automatic",

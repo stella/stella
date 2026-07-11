@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   resolveEntityActivityDestination,
   resolveSidebarWorkspaceId,
+  selectRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
 
 describe("sidebar matter context", () => {
@@ -22,6 +23,36 @@ describe("sidebar matter context", () => {
         workspaceId: "workspace-matter",
       }),
     ).toBe("workspace-matter");
+  });
+
+  test("keeps an active chat matter inside the fixed recent limit", () => {
+    const workspaces = Array.from({ length: 6 }, (_, index) => ({
+      id: `matter-${index}`,
+      lastActivityAt: `2026-07-0${6 - index}T12:00:00.000Z`,
+    }));
+
+    expect(
+      selectRecentWorkspaces({
+        activeWorkspaceId: "matter-5",
+        limit: 5,
+        pinnedIds: new Set(),
+        workspaces,
+      }).map(({ id }) => id),
+    ).toEqual(["matter-5", "matter-0", "matter-1", "matter-2", "matter-3"]);
+  });
+
+  test("does not duplicate an active matter that is already pinned", () => {
+    expect(
+      selectRecentWorkspaces({
+        activeWorkspaceId: "active",
+        limit: 5,
+        pinnedIds: new Set(["active"]),
+        workspaces: [
+          { id: "active", lastActivityAt: "2026-07-06T12:00:00.000Z" },
+          { id: "recent", lastActivityAt: "2026-07-05T12:00:00.000Z" },
+        ],
+      }).map(({ id }) => id),
+    ).toEqual(["recent"]);
   });
 });
 
