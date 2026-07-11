@@ -157,7 +157,7 @@ describe("PostHog browser analytics adapter", () => {
     }
   });
 
-  test("keeps non-Error promise rejections that carry a useful value", () => {
+  test("keeps actionable rejection types without their raw value", () => {
     createPostHogAnalytics("phc_test", "https://posthog.test");
 
     const event = {
@@ -172,10 +172,16 @@ describe("PostHog browser analytics adapter", () => {
         ],
       },
     };
-    expect(initOptions?.before_send(event)).toEqual(event);
+    expect(initOptions?.before_send(event)).toEqual({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [{ type: "UnhandledRejection", value: "" }],
+        $exception_type: "UnhandledRejection",
+      },
+    });
   });
 
-  test("keeps real exceptions with messages and stacks", () => {
+  test("keeps real exception types without messages or stacks", () => {
     createPostHogAnalytics("phc_test", "https://posthog.test");
 
     const event = {
@@ -190,7 +196,13 @@ describe("PostHog browser analytics adapter", () => {
         ],
       },
     };
-    expect(initOptions?.before_send(event)).toEqual(event);
+    expect(initOptions?.before_send(event)).toEqual({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $exception_list: [{ type: "TypeError", value: "" }],
+        $exception_type: "TypeError",
+      },
+    });
   });
 
   test("captureError ignores null and undefined", () => {
@@ -201,6 +213,50 @@ describe("PostHog browser analytics adapter", () => {
     analytics.captureError(null);
     analytics.captureError(undefined);
     expect(captureExceptionMock).not.toHaveBeenCalled();
+  });
+
+  test("captureError sends only a structural error type", () => {
+    const { analytics } = createPostHogAnalytics(
+      "phc_test",
+      "https://posthog.test",
+    );
+    analytics.captureError(
+      new TypeError("Privileged document name and server payload"),
+    );
+
+    const captured = captureExceptionMock.mock.calls.at(-1)?.[0];
+    expect(captured).toBeInstanceOf(Error);
+    expect(captured).toMatchObject({ name: "TypeError", message: "" });
+    if (!(captured instanceof Error)) {
+      throw new TypeError("Expected a redacted Error");
+    }
+    expect(captured.stack).toBeUndefined();
+  });
+
+  test("before_send strips exception messages and stack frames", () => {
+    createPostHogAnalytics("phc_test", "https://posthog.test");
+    const sanitized = initOptions?.before_send({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $distinct_id: "user_123",
+        $exception_list: [
+          {
+            type: "TypeError",
+            value: "Privileged document name",
+            stacktrace: { frames: [{ filename: "/matters/secret" }] },
+          },
+        ],
+      },
+    });
+
+    expect(sanitized).toEqual({
+      event: WEB_ANALYTICS_EVENTS.exception,
+      properties: {
+        $distinct_id: "user_123",
+        $exception_list: [{ type: "TypeError", value: "" }],
+        $exception_type: "TypeError",
+      },
+    });
   });
 
   test("captures sanitized page view payloads", () => {

@@ -61,6 +61,50 @@ const isNoiseException = (event: {
   });
 };
 
+const TELEMETRY_ERROR_TYPE = /^[A-Za-z][\w.-]{0,79}$/u;
+
+const normalizeTelemetryErrorType = (candidate: string): string =>
+  TELEMETRY_ERROR_TYPE.test(candidate) ? candidate : "UnknownError";
+
+const telemetryErrorType = (error: unknown): string => {
+  const candidate = error instanceof Error ? error.name : typeof error;
+  return normalizeTelemetryErrorType(candidate);
+};
+
+const toRedactedTelemetryError = (error: unknown): Error => {
+  const redacted = new Error("");
+  redacted.name = telemetryErrorType(error);
+  redacted.stack = undefined;
+  return redacted;
+};
+
+const sanitizeExceptionEvent = (event: {
+  event: string;
+  properties?: Record<string, unknown>;
+}) => {
+  const properties = event.properties;
+  const distinctId = properties?.["$distinct_id"];
+  const appCommit = properties?.["app_commit"];
+  const appVersion = properties?.["app_version"];
+  const exceptionList = properties?.["$exception_list"];
+  const firstException = Array.isArray(exceptionList)
+    ? exceptionList.at(0)
+    : undefined;
+  const type = normalizeTelemetryErrorType(
+    readStringField(firstException, "type"),
+  );
+  return {
+    event: event.event,
+    properties: {
+      $exception_list: [{ type, value: "" }],
+      $exception_type: type,
+      ...(typeof distinctId === "string" ? { $distinct_id: distinctId } : {}),
+      ...(typeof appCommit === "string" ? { app_commit: appCommit } : {}),
+      ...(typeof appVersion === "string" ? { app_version: appVersion } : {}),
+    },
+  };
+};
+
 /**
  * Initialize PostHog and return an Analytics adapter.
  *
@@ -114,6 +158,9 @@ export const createPostHogAnalytics = (
       ) {
         return null;
       }
+      if (event.event === WEB_ANALYTICS_EVENTS.exception) {
+        return sanitizeExceptionEvent(event);
+      }
       return event;
     },
   });
@@ -139,7 +186,7 @@ export const createPostHogAnalytics = (
         return;
       }
       logDevError(error);
-      posthog.captureException(error);
+      posthog.captureException(toRedactedTelemetryError(error));
     },
     capturePageViewed: ({ path }) => {
       posthog.capture(WEB_ANALYTICS_EVENTS.pageViewed, {

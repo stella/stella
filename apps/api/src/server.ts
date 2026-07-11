@@ -303,7 +303,7 @@ const api = new Elysia()
 
       if (statusCode >= 500) {
         Object.assign(attributes, errorFingerprint(error));
-        if (env.DEBUG_UNREDACTED_ERRORS) {
+        if (env.isDev && env.DEBUG_UNREDACTED_ERRORS) {
           Object.assign(attributes, unredactedErrorFields(error));
         }
         logger.error("request.failed", attributes);
