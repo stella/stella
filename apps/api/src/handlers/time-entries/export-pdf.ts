@@ -121,7 +121,7 @@ export const exportPdfHandler = async ({
   ];
 
   let totalMinutes = 0;
-  let totalAmount = 0;
+  const totalAmountByCurrency = new Map<string, number>();
 
   for (const row of rows) {
     const userName = row.userId
@@ -138,7 +138,10 @@ export const exportPdfHandler = async ({
     // amount, which are both derived from billedMinutes; summing raw
     // durationMinutes here produced a total that did not match the lines.
     totalMinutes += row.billedMinutes;
-    totalAmount += amount;
+    totalAmountByCurrency.set(
+      row.currency,
+      (totalAmountByCurrency.get(row.currency) ?? 0) + amount,
+    );
 
     textLines.push(`Date: ${row.dateWorked}  User: ${userName}`);
     textLines.push(
@@ -160,7 +163,10 @@ export const exportPdfHandler = async ({
   textLines.push("-".repeat(80));
   const totalHours = (totalMinutes / 60).toFixed(2);
   textLines.push(`Total Hours: ${totalHours}`);
-  textLines.push(`Total Amount: ${(totalAmount / 100).toFixed(2)}`);
+  for (const currency of [...totalAmountByCurrency.keys()].sort()) {
+    const amount = totalAmountByCurrency.get(currency) ?? 0;
+    textLines.push(`Total Amount: ${currency} ${(amount / 100).toFixed(2)}`);
+  }
 
   return buildMinimalPdf(textLines);
 };
