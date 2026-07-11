@@ -68,7 +68,7 @@ describe("workspace hygiene", () => {
 
     writeFileSync(
       path.join(rootDir, "apps/web/Dockerfile"),
-      "RUN bun install -g turbo@2.10.0\n",
+      "RUN bun install -g turbo@2.10.3\n",
     );
 
     expect(validateWorkspaceRoot(rootDir)).toEqual([]);
