@@ -5,11 +5,19 @@ import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
-import { useMountEffect } from "@/hooks/use-effect";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { userErrorFromThrown } from "@/lib/errors";
 
@@ -28,9 +36,11 @@ type AddToStellaProps = {
 /**
  * Client-only "Add to Stella" affordance. Logged out: opens the sign-in
  * dialog with a redirect back to this entry carrying `?install=1`.
- * Logged in (or returning with that intent): installs via the shared
- * `installCatalogueEntry` path and toasts the outcome. Never on the SSR
- * path — the page renders fully without a session.
+ * Logged in with that intent (or returning after sign-in): opens a
+ * confirmation dialog before installing, so a crafted `?install=1` link
+ * can never install workspace-wide with zero clicks. A direct button
+ * click is itself the confirmation and installs immediately. Never on the
+ * SSR path — the page renders fully without a session.
  */
 export function AddToStella({
   entry,
@@ -80,6 +90,13 @@ export function AddToStella({
     setAuthRedirectTo(`/tools/${entry.slug}?install=1`);
   };
 
+  // Confirm, then clear the `install` intent from the URL (replace:true) so
+  // it cannot re-fire on refresh or back navigation.
+  const confirmInstall = () => {
+    runInstall();
+    onClearInstallIntent();
+  };
+
   return (
     <>
       <Button
@@ -91,15 +108,16 @@ export function AddToStella({
         {t("publicTools.addToStella")}
       </Button>
 
-      {/* Mounts only once the session resolves to authenticated with a
-          pending intent, so the mount-only effect fires exactly when we
-          want and never before auth is known. */}
+      {/* Renders only once the session resolves to authenticated with a
+          pending intent. It never installs on its own: it asks first, and
+          both confirm and cancel strip the `install` param from the URL. */}
       {authStatus.isAuthenticated && installIntent && (
-        <InstallOnArrival
-          onArrive={() => {
-            runInstall();
-            onClearInstallIntent();
-          }}
+        <InstallConfirmDialog
+          entry={entry}
+          isPending={mutation.isPending}
+          name={displayName}
+          onCancel={onClearInstallIntent}
+          onConfirm={confirmInstall}
         />
       )}
 
@@ -120,9 +138,67 @@ export function AddToStella({
   );
 }
 
-function InstallOnArrival({ onArrive }: { onArrive: () => void }) {
-  useMountEffect(() => {
-    onArrive();
-  });
-  return null;
+type InstallConfirmDialogProps = {
+  entry: LoadedCatalogueEntry;
+  name: string;
+  isPending: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+};
+
+function InstallConfirmDialog({
+  entry,
+  name,
+  isPending,
+  onConfirm,
+  onCancel,
+}: InstallConfirmDialogProps) {
+  const t = useTranslations();
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) {
+      onCancel();
+    }
+  };
+
+  return (
+    <AlertDialog onOpenChange={handleOpenChange} open>
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {t("publicTools.installConfirm.title", { name })}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            <InstallConfirmBody kind={entry.kind} name={name} />
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </AlertDialogClose>
+          <Button disabled={isPending} onClick={onConfirm} type="button">
+            {t("publicTools.addToStella")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+}
+
+function InstallConfirmBody({
+  kind,
+  name,
+}: {
+  kind: LoadedCatalogueEntry["kind"];
+  name: string;
+}) {
+  const t = useTranslations();
+
+  if (kind === "mcp") {
+    return t("publicTools.installConfirm.mcpBody", { name });
+  }
+  if (kind === "native-tool") {
+    return t("publicTools.installConfirm.nativeToolBody", { name });
+  }
+  return t("publicTools.installConfirm.skillBody", { name });
 }

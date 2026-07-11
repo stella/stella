@@ -2150,6 +2150,12 @@ type Messages = {
     };
     "documentation": "Documentation";
     "downloadUpstream": "Download upstream archive";
+    "installConfirm": {
+      "mcpBody": "The MCP connector \"{name}\" will be added for your workspace. You provide your own credentials afterwards from the MCP settings.";
+      "nativeToolBody": "The built-in tool \"{name}\" will be enabled for your workspace.";
+      "skillBody": "The skill \"{name}\" will be installed for your workspace.";
+      "title": "Add {name} to your workspace?";
+    };
     "mcpConfigHint": "Client-agnostic connection details. Paste into any MCP-compatible client and add your own credentials.";
     "metaDescription": "Browse the open catalogue of skills, integrations, and built-in tools for legal work.";
     "nativeToolInfo": "This is a built-in stella capability. Enable it from your workspace to use it in chat.";
