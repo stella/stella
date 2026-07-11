@@ -321,6 +321,19 @@ jobs:
             bun run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
           done
 
+      - name: Catalogue pinned-content check
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        # github-sourced catalogue skills pin an upstream commit SHA whose
+        # bytes nothing else in CI fetches: the schema/loader validate only
+        # the manifest, and the offline `bun run test` path stays offline.
+        # This step fetches each pinned SKILL.md and its resource tree and
+        # fails if the content would be rejected by the skill install path
+        # (missing name/description, name pattern, oversized body, or too
+        # many/large resource files), so a broken pin cannot ship green.
+        run: bun run --filter @stll/catalogue check-pinned
+
       - name: Test
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         env:

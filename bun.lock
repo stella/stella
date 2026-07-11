@@ -381,6 +381,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@stll/skills": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
       },
