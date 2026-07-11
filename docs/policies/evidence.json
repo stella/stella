@@ -137,6 +137,10 @@
         {
           "path": "apps/api/src/handlers/uploads/lib.ts",
           "contains": ["PRESIGN_URL_EXPIRY_SECONDS = 5 * 60"]
+        },
+        {
+          "path": "apps/api/src/handlers/files/read-by-id.ts",
+          "contains": ["FILE_READ_URL_EXPIRY_SECONDS = 15 * 60"]
         }
       ]
     },
