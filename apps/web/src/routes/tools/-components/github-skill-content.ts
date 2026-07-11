@@ -7,6 +7,7 @@ import {
   loadCatalogue,
 } from "@stll/catalogue";
 
+import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
 import { MAX_GITHUB_SKILL_BYTES } from "@/routes/tools/-components/tool-detail.logic";
 
 /**
@@ -26,10 +27,29 @@ const inputSchema = v.strictObject({
   slug: v.string(),
 });
 
-// Content at a pinned commit SHA is immutable, so a successful fetch is
-// cached for the process lifetime keyed by the pin. Only successes are
-// cached: a transient network failure must not poison the entry.
-const successCache = new Map<string, GithubSkillContentResult>();
+// A broken upstream (404, rate limit, timeout) is remembered for this long
+// so it costs at most one outbound fetch per pin per window. GitHub's
+// anonymous limit is 60/h/IP, so an uncached error would otherwise turn
+// every anonymous page view into a fresh outbound fetch.
+export const NEGATIVE_CACHE_TTL_MS = 60_000;
+
+// One cache serves three states keyed by the immutable pin:
+//   - pending:  an outbound fetch is in flight; concurrent callers share
+//     the same promise instead of stampeding the upstream.
+//   - resolved success: content at a pinned SHA is immutable, so it is
+//     retained for the process lifetime (`expiresAt` is +Infinity).
+//   - resolved error: retained only until `expiresAt` (now + TTL), then
+//     the next caller refetches. A transient failure never poisons the
+//     entry past the window.
+type SkillCacheEntry =
+  | { state: "pending"; promise: Promise<GithubSkillContentResult> }
+  | {
+      state: "resolved";
+      result: GithubSkillContentResult;
+      expiresAt: number;
+    };
+
+const skillCache = new Map<string, SkillCacheEntry>();
 
 /**
  * Read a response body, aborting the moment accumulated bytes exceed
@@ -110,33 +130,113 @@ const loadRawSkill = async (url: string): Promise<GithubSkillContentResult> => {
   }
 };
 
+type ResolveWithCacheOptions = {
+  cache: Map<string, SkillCacheEntry>;
+  now: () => number;
+};
+
+/**
+ * Run `fetcher` under the pin-keyed cache, deduplicating concurrent
+ * callers onto a single in-flight promise and honoring the success /
+ * negative-TTL retention policy described on {@link SkillCacheEntry}.
+ * Exported for tests; production callers go through
+ * {@link resolveGithubSkillContent}.
+ */
+export const resolveWithCache = (
+  key: string,
+  fetcher: () => Promise<GithubSkillContentResult>,
+  { cache, now }: ResolveWithCacheOptions,
+): Promise<GithubSkillContentResult> => {
+  const existing = cache.get(key);
+  if (existing) {
+    if (existing.state === "pending") {
+      return existing.promise;
+    }
+    if (existing.expiresAt > now()) {
+      return Promise.resolve(existing.result);
+    }
+    // A negative entry that outlived its TTL falls through to a refetch.
+  }
+  const promise = (async (): Promise<GithubSkillContentResult> => {
+    const result = await fetcher();
+    // Successes are immutable (pinned SHA) so they never expire; errors
+    // get a short TTL so a broken upstream is retried, not memoized.
+    const expiresAt =
+      result.status === "ok"
+        ? Number.POSITIVE_INFINITY
+        : now() + NEGATIVE_CACHE_TTL_MS;
+    cache.set(key, { state: "resolved", result, expiresAt });
+    return result;
+  })().catch((): GithubSkillContentResult => {
+    // `loadRawSkill` already catches internally, so a rejection here is
+    // defensive: still land it as a TTL'd negative entry so the in-flight
+    // slot is not poisoned past the window.
+    const result: GithubSkillContentResult = { status: "error" };
+    cache.set(key, {
+      state: "resolved",
+      result,
+      expiresAt: now() + NEGATIVE_CACHE_TTL_MS,
+    });
+    return result;
+  });
+  // Publish the in-flight promise so concurrent callers share this fetch.
+  cache.set(key, { state: "pending", promise });
+  return promise;
+};
+
+type ResolveGithubSkillContentOptions = {
+  isEnabled?: () => boolean;
+  fetchRawSkill?: (url: string) => Promise<GithubSkillContentResult>;
+  now?: () => number;
+  cache?: Map<string, SkillCacheEntry>;
+};
+
+/**
+ * Resolve a github-sourced skill's `SKILL.md`, gated on the public-tools
+ * launch flag and served through the pin-keyed cache. Dependencies are
+ * injectable for tests; production callers omit them to use the real
+ * launch gate, fetcher, clock, and module cache.
+ */
+export const resolveGithubSkillContent = (
+  slug: string,
+  {
+    isEnabled = isPublicToolsRouteEnabled,
+    fetchRawSkill = loadRawSkill,
+    now = Date.now,
+    cache = skillCache,
+  }: ResolveGithubSkillContentOptions = {},
+): Promise<GithubSkillContentResult> => {
+  // The route's `beforeLoad` gates rendering, not this RPC: a flag-off
+  // deployment must not expose an unauthenticated outbound GitHub fetch,
+  // so the gate is enforced here before any network work.
+  if (!isEnabled()) {
+    return Promise.resolve({ status: "error" });
+  }
+  const entry = loadCatalogue().find(
+    (candidate) => candidate.kind === "skill" && candidate.slug === slug,
+  );
+  if (!entry || !isGithubSkillEntry(entry)) {
+    return Promise.resolve({ status: "error" });
+  }
+  const key = `${entry.repo}@${entry.rev}/${entry.directory ?? ""}`;
+  return resolveWithCache(
+    key,
+    () => fetchRawSkill(`${githubRawContentBaseUrl(entry)}SKILL.md`),
+    { cache, now },
+  );
+};
+
 /**
  * Server function: fetch a github-sourced skill's `SKILL.md` at its
- * pinned SHA from `raw.githubusercontent.com`, with a timeout, a byte
- * cap, and process-lifetime caching of successes. Runs server-side
- * during SSR and via RPC on client navigation.
+ * pinned SHA from `raw.githubusercontent.com`, with a launch-flag gate, a
+ * timeout, a byte cap, in-flight dedup, and TTL negative caching. Runs
+ * server-side during SSR and via RPC on client navigation.
  */
 export const fetchGithubSkillContent = createServerFn({ method: "GET" })
   .validator((input: v.InferInput<typeof inputSchema>) =>
     v.parse(inputSchema, input),
   )
-  .handler(async ({ data }): Promise<GithubSkillContentResult> => {
-    const entry = loadCatalogue().find(
-      (candidate) => candidate.kind === "skill" && candidate.slug === data.slug,
-    );
-    if (!entry || !isGithubSkillEntry(entry)) {
-      return { status: "error" };
-    }
-    const key = `${entry.repo}@${entry.rev}/${entry.directory ?? ""}`;
-    const cached = successCache.get(key);
-    if (cached) {
-      return cached;
-    }
-    const result = await loadRawSkill(
-      `${githubRawContentBaseUrl(entry)}SKILL.md`,
-    );
-    if (result.status === "ok") {
-      successCache.set(key, result);
-    }
-    return result;
-  });
+  .handler(
+    ({ data }): Promise<GithubSkillContentResult> =>
+      resolveGithubSkillContent(data.slug),
+  );
