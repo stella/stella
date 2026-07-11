@@ -1,7 +1,7 @@
 # Change Management Policy
 
 **Owner:** Engineering
-**Last reviewed:** 2026-02-22
+**Last reviewed:** 2026-07-10
 **Review cadence:** Annual
 
 ## Purpose
@@ -26,11 +26,11 @@ and documentation.
    `main`. Direct commits to `main` are blocked by the branch
    protection ruleset.
 
-2. **Required review.** Every PR requires at least one
-   approval from a code owner defined in `CODEOWNERS`. The
-   ruleset dismisses stale approvals when new commits are
-   pushed and requires the last push to be approved by someone
-   other than the author.
+2. **Required review.** Every PR requires at least one approval.
+   Changes matching sensitive paths in `CODEOWNERS` additionally require
+   approval from that owner. The ruleset dismisses stale approvals when
+   new commits are pushed and requires the last push to be approved by
+   someone other than the author.
 
 3. **Thread resolution.** All review conversation threads must
    be resolved before a PR can be merged.
@@ -46,6 +46,8 @@ and documentation.
 
 ### Automated checks (CI gate)
 
+<!-- evidence: change-ci-gate -->
+
 The `ci.yml` workflow runs on every PR and produces a single
 `ci-result` status check that gates merging. The pipeline
 includes:
@@ -56,9 +58,10 @@ includes:
 | i18n sync          | `bun run i18n:check`      | Ensure translation keys are consistent |
 | Lint               | oxlint (ultracite preset) | Code quality and security rules        |
 | Custom lint rules  | oxlint JS plugins         | Semantic tokens, RTL, ownership IDs    |
-| Format             | Prettier                  | Consistent code formatting             |
-| Type check         | TypeScript strict mode    | Type safety                            |
+| Format             | oxfmt                     | Consistent code formatting             |
+| Type check         | TypeScript native preview | Type safety                            |
 | Tests              | Bun test runner           | Functional correctness                 |
+| Policy evidence    | Repository guard          | Policy-to-implementation drift         |
 
 All checks must pass. The `ci-result` aggregation job
 (`if: always()`) ensures the gate is never accidentally
@@ -73,23 +76,25 @@ skipped.
    Elastic, CPAL).
 
 7. **Automated updates.** Dependabot submits PRs for outdated
-   dependencies daily (Bun packages), weekly (GitHub Actions,
-   Docker images). Updates are subject to a 3-day cooldown
-   before adoption.
+   dependencies weekly (Bun packages, GitHub Actions, Docker
+   images, and Cargo crates). Updates are subject to a five-day
+   cooldown before adoption.
 
 8. **Workspace consistency.** `sherif` runs as a `postinstall`
    hook to flag version mismatches across monorepo packages.
 
 ### Database schema changes
 
-9. **Dedicated ownership.** Schema files
-   (`apps/api/src/db/schema.ts`, `schema-validators.ts`)
-   require review from the designated schema owner
-   per `CODEOWNERS`.
+<!-- evidence: change-migration-gate -->
 
-10. **Migration via Drizzle.** Schema changes are applied
-    through `bun run db:push` (Drizzle ORM). Raw SQL is
-    avoided unless strictly necessary.
+9. **Dedicated ownership.** Database code, modular schema files, and
+   migration files require review from their designated owner per
+   `CODEOWNERS`.
+
+10. **Migration via Drizzle.** Production schema changes ship as
+    immutable migrations under `apps/api/drizzle/` and are applied with
+    `bun run db:migrate`. CI checks schema coverage, SQL safety, fresh
+    application, and parity with the declarative Drizzle schema.
 
 ### Sensitive path protection
 

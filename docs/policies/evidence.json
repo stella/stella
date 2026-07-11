@@ -1,0 +1,229 @@
+{
+  "version": 1,
+  "controls": [
+    {
+      "id": "access-auth-boundary",
+      "policy": "docs/policies/access-control.md",
+      "evidence": [
+        {
+          "path": "apps/api/src/lib/auth.ts",
+          "contains": [
+            "export const authMacro",
+            "export const workspaceAccessMacro"
+          ]
+        },
+        {
+          "path": "apps/api/src/lib/branded-types.ts",
+          "contains": ["export type SafeId"]
+        }
+      ]
+    },
+    {
+      "id": "access-branch-protection",
+      "policy": "docs/policies/access-control.md",
+      "evidence": [
+        {
+          "path": ".github/branch-protection/ruleset-main.json",
+          "contains": [
+            "\"required_approving_review_count\": 1",
+            "\"context\": \"ci-result\"",
+            "\"context\": \"dependency-review\""
+          ]
+        },
+        {
+          "path": ".github/workflows/audit-branch-protection.yml",
+          "contains": ["name: Audit Branch Protection"]
+        }
+      ]
+    },
+    {
+      "id": "asset-provenance-inventory",
+      "policy": "docs/policies/asset-management.md",
+      "evidence": [
+        {
+          "path": ".provenance.yml",
+          "contains": [
+            "output_dir: provenance",
+            "id: root",
+            "id: desktop-tauri"
+          ]
+        },
+        {
+          "path": ".github/workflows/provenance-nightly.yml",
+          "contains": ["name: Provenance Nightly", "provenance-update.yml@"]
+        }
+      ]
+    },
+    {
+      "id": "asset-dependency-quarantine",
+      "policy": "docs/policies/asset-management.md",
+      "evidence": [
+        {
+          "path": "bunfig.toml",
+          "contains": ["minimumReleaseAge = 432_000"]
+        },
+        {
+          "path": ".github/dependabot.yml",
+          "contains": [
+            "package-ecosystem: \"bun\"",
+            "interval: \"weekly\"",
+            "default-days: 5"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "change-ci-gate",
+      "policy": "docs/policies/change-management.md",
+      "evidence": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "contains": [
+            "name: CI Checks",
+            "name: Policy evidence",
+            "name: Format",
+            "name: Typecheck",
+            "name: Test"
+          ]
+        },
+        {
+          "path": "scripts/verify.sh",
+          "contains": [
+            "run_step \"Lint\"",
+            "run_step \"Policy evidence\"",
+            "run_step \"Format\"",
+            "run_step \"Typecheck\"",
+            "run_step \"Test\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": "change-migration-gate",
+      "policy": "docs/policies/change-management.md",
+      "evidence": [
+        {
+          "path": ".github/workflows/db-migrations.yml",
+          "contains": [
+            "name: Database Migrations",
+            "Apply all migrations to fresh Postgres",
+            "Verify schema parity with schema.ts"
+          ]
+        },
+        {
+          "path": "scripts/check-migrations.sh",
+          "contains": [
+            "Database schema changed without a migration file",
+            "check-migration-safety.ts"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "classification-object-storage",
+      "policy": "docs/policies/data-classification.md",
+      "evidence": [
+        {
+          "path": "apps/api/src/lib/s3.ts",
+          "contains": ["acl: \"private\""]
+        },
+        {
+          "path": "apps/api/src/handlers/files/utils.ts",
+          "contains": [
+            "`${organizationId}/${workspaceId}/${fileId}",
+            "export const createFileKey"
+          ]
+        },
+        {
+          "path": "apps/api/src/handlers/uploads/lib.ts",
+          "contains": ["PRESIGN_URL_EXPIRY_SECONDS = 5 * 60"]
+        },
+        {
+          "path": "apps/api/src/handlers/files/read-by-id.ts",
+          "contains": ["FILE_READ_URL_EXPIRY_SECONDS = 15 * 60"]
+        }
+      ]
+    },
+    {
+      "id": "retention-hard-delete",
+      "policy": "docs/policies/data-retention.md",
+      "evidence": [
+        {
+          "path": "apps/api/src/handlers/entities/delete.ts",
+          "contains": ["deleteS3Objects", ".delete(entities)"]
+        },
+        {
+          "path": "apps/api/src/handlers/workspaces/delete-by-id.ts",
+          "contains": ["status: \"deleting\"", ".delete(workspaces)"]
+        }
+      ]
+    },
+    {
+      "id": "vendor-provider-abstraction",
+      "policy": "docs/policies/vendor-management.md",
+      "evidence": [
+        {
+          "path": "apps/api/src/lib/tanstack-ai-models.ts",
+          "contains": [
+            "export const requireTanStackAIAvailableForRole",
+            "switch (config.provider)"
+          ]
+        },
+        {
+          "path": "package.json",
+          "contains": [
+            "\"@tanstack/ai\"",
+            "\"@tanstack/ai-anthropic\"",
+            "\"@tanstack/ai-openai\""
+          ]
+        }
+      ]
+    },
+    {
+      "id": "vendor-supply-chain",
+      "policy": "docs/policies/vendor-management.md",
+      "evidence": [
+        {
+          "path": ".github/workflows/dependency-review.yml",
+          "contains": ["fail-on-severity: high", "allow-licenses: >-"]
+        },
+        {
+          "path": ".github/dependabot.yml",
+          "contains": ["default-days: 5"]
+        }
+      ]
+    },
+    {
+      "id": "vulnerability-static-analysis",
+      "policy": "docs/policies/vulnerability-mgmt.md",
+      "evidence": [
+        {
+          "path": ".github/workflows/codeql.yml",
+          "contains": ["name: CodeQL", "pull_request:", "schedule:"]
+        },
+        {
+          "path": "oxlint.config.ts",
+          "contains": ["security-guards"]
+        }
+      ]
+    },
+    {
+      "id": "vulnerability-disclosure",
+      "policy": "docs/policies/vulnerability-mgmt.md",
+      "evidence": [
+        {
+          "path": "SECURITY.md",
+          "contains": [
+            "security@stll.app",
+            "within 48 hours",
+            "within 7 business days"
+          ]
+        },
+        {
+          "path": "apps/web/public/.well-known/security.txt",
+          "contains": ["Contact: mailto:security@stll.app"]
+        }
+      ]
+    }
+  ]
+}

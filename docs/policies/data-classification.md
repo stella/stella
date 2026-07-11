@@ -1,7 +1,7 @@
 # Data Classification Policy
 
 **Owner:** Engineering
-**Last reviewed:** 2026-02-22
+**Last reviewed:** 2026-07-10
 **Review cadence:** Annual
 
 ## Purpose
@@ -19,27 +19,26 @@ outputs, session tokens, and logs.
 
 ## Classification levels
 
-| Level            | Description                                                                                        | Examples                                                                              |
-| ---------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| **Confidential** | Data protected by legal privilege or regulation. Unauthorized disclosure could cause serious harm. | Document contents, entity metadata, AI review results, attorney-client communications |
-| **Internal**     | Operational data not intended for external disclosure.                                             | User profiles, organization membership, workspace configuration, audit logs           |
-| **Secret**       | Credentials and cryptographic material. Exposure leads to immediate compromise.                    | Session tokens, API keys, S3 credentials, OTP codes, signing keys                     |
+| Level            | Description                                                                                                               | Examples                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Public**       | Material intentionally published or sourced from an official public record.                                               | Public case law, legislation, published catalogue metadata                            |
+| **Confidential** | Data protected by legal privilege, privacy law, or a client obligation. Unauthorized disclosure could cause serious harm. | Document contents, entity metadata, AI review results, attorney-client communications |
+| **Internal**     | Operational data not intended for public disclosure.                                                                      | User profiles, organization membership, workspace configuration, audit logs           |
+| **Secret**       | Credentials and cryptographic material. Exposure leads to immediate compromise.                                           | Session tokens, API keys, S3 credentials, OTP codes, signing keys                     |
 
-Stella does not process or store public-tier data in normal
-operation; all workspace content is treated as Confidential
-by default.
+All workspace content is treated as Confidential by default, regardless
+of whether a source document was previously public.
 
 ## Controls by classification
 
 ### Confidential (document content)
 
-1. **Workspace isolation.** Primary content tables (`entities`,
-   `files`, `properties`, `views`) carry a `workspaceId`
-   foreign key with a cascade-delete constraint. Dependent
-   tables (`entityVersions`, `fields`, `justifications`) are
-   isolated transitively via their parent records. Queries are
-   scoped by `workspaceId`, never filtered in application code
-   after fetching.
+<!-- evidence: classification-object-storage -->
+
+1. **Workspace isolation.** Primary content tables carry a
+   `workspaceId` foreign key or derive their scope through a parent with
+   enforced foreign keys. Queries apply tenant predicates before data is
+   returned; PostgreSQL RLS provides an independent enforcement layer.
 
 2. **Organization boundary.** The `workspaceAccessMacro`
    verifies that the workspace belongs to the caller's active
@@ -49,9 +48,10 @@ by default.
    uses TLS. S3 presigned URLs are generated with HTTPS
    endpoints.
 
-4. **Encryption at rest.** S3 objects use server-side
-   encryption (SSE). The database uses encrypted storage
-   volumes.
+4. **Encryption at rest.** Deployed database and S3-compatible storage
+   must use provider-side encryption. Extracted document text and stored
+   provider credentials additionally use application-layer encryption in
+   deployed environments.
 
 5. **Short-lived access.** Presigned URLs for file downloads
    expire after 15 minutes
@@ -82,8 +82,8 @@ by default.
     credentials, API keys) are stored in environment variables,
     never in source code or configuration files.
 
-11. **Local secret scanning.** Developers who opt into
-    Lefthook pre-commit hooks get a staged Gitleaks scan that
+11. **Local secret scanning.** Developers who install the repository
+    Lefthook hooks get a staged Gitleaks scan that
     blocks commits containing candidate credentials or tokens.
 
 12. **No secrets in logs.** Error handlers and logging

@@ -18,6 +18,7 @@
     "typegen": "turbo run typegen",
     "typecheck": "turbo run typecheck",
     "secrets:check:staged": "bash scripts/check-staged-secrets.sh",
+    "policies:check": "bun test scripts/check-policy-evidence.test.ts && bun scripts/check-policy-evidence.ts",
     "sync-ai": "bash scripts/sync-ai-skills.sh",
     "sync-ai:check": "bash scripts/sync-ai-skills.sh --check",
     "link-codex": "bash scripts/link-codex-skills.sh",

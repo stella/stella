@@ -26,6 +26,8 @@ import { getS3 } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
+const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
+
 type FilePurpose = "download" | "display" | "native-display";
 
 type ReadFileHandlerProps = {
@@ -101,7 +103,7 @@ export const readFileHandler = async ({
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: row.entityId,
           s3Key: fileKey,
-          expiresInSeconds: 900,
+          expiresInSeconds: FILE_READ_URL_EXPIRY_SECONDS,
           fileName: content.fileName,
           organizationId,
           workspaceId,
@@ -147,7 +149,7 @@ export const readFileHandler = async ({
       fileName: content.fileName,
       encrypted: content.encrypted,
       presignedUrl: await presignDownloadUrl(nativeFileKey, {
-        expiresIn: 900,
+        expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
         scope: { organizationId, workspaceId },
       }),
       stampable: false,
@@ -173,7 +175,7 @@ export const readFileHandler = async ({
       fileName: content.fileName,
       encrypted: content.encrypted,
       presignedUrl: await presignDownloadUrl(nativeFileKey, {
-        expiresIn: 900,
+        expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
         scope: { organizationId, workspaceId },
       }),
       stampable: false,
@@ -200,7 +202,7 @@ export const readFileHandler = async ({
     fileName: content.fileName,
     encrypted: content.encrypted,
     presignedUrl: await presignDownloadUrl(displayFileKey, {
-      expiresIn: 900,
+      expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
       scope: { organizationId, workspaceId },
     }),
     stampable: false,
@@ -297,9 +299,12 @@ const inlineContentDisposition = (fileName: string): string =>
 const fetchStoredFileResponse = async (
   key: string,
 ): Promise<Response | null> => {
-  const response = await fetch(getS3().presign(key, { expiresIn: 900 }), {
-    signal: AbortSignal.timeout(30_000),
-  }).catch(() => null);
+  const response = await fetch(
+    getS3().presign(key, { expiresIn: FILE_READ_URL_EXPIRY_SECONDS }),
+    {
+      signal: AbortSignal.timeout(30_000),
+    },
+  ).catch(() => null);
 
   if (!response?.ok) {
     return null;
@@ -453,7 +458,9 @@ export const stampedDownloadHandler = async ({
     mimeType: content.mimeType,
   });
 
-  const presignedUrl = getS3().presign(fileKey, { expiresIn: 900 });
+  const presignedUrl = getS3().presign(fileKey, {
+    expiresIn: FILE_READ_URL_EXPIRY_SECONDS,
+  });
   const response = await fetch(presignedUrl, {
     signal: AbortSignal.timeout(30_000),
   });

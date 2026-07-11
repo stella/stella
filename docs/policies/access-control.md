@@ -1,7 +1,7 @@
 # Access Control Policy
 
 **Owner:** Engineering
-**Last reviewed:** 2026-02-22
+**Last reviewed:** 2026-07-10
 **Review cadence:** Annual, or after any access-related incident
 
 ## Purpose
@@ -20,6 +20,8 @@ operations runbook (private).
 ## Controls
 
 ### Application layer
+
+<!-- evidence: access-auth-boundary -->
 
 1. **Authentication.** All API requests are authenticated via
    `better-auth` with session tokens. The `authMacro`
@@ -44,19 +46,22 @@ operations runbook (private).
    business logic have been validated by the macro. Ownership
    IDs are never accepted from client-supplied request bodies.
 
-5. **Tenant isolation in storage.** S3 object keys follow the
+5. **Tenant isolation in storage.** Workspace file object keys follow the
    pattern `{organizationId}/{workspaceId}/{fileId}.{ext}`,
    ensuring namespace-level separation. All objects use a
-   `private` ACL; access is granted only through presigned
-   URLs that expire after 15 minutes.
+   `private` ACL. Upload URLs expire after five minutes; normal
+   file-read and download URLs expire after 15 minutes.
 
 ### Repository and CI/CD
+
+<!-- evidence: access-branch-protection -->
 
 6. **Branch protection.** The `main` branch is protected by a
    GitHub ruleset (`.github/branch-protection/ruleset-main.json`)
    that enforces:
    - No direct pushes; all changes via pull request.
-   - At least one approval from a code owner.
+   - At least one approval; matching sensitive paths additionally
+     require their code owner.
    - Stale reviews dismissed on new pushes.
    - Last-push approval required (author cannot self-approve).
    - All review threads resolved before merge.
@@ -64,9 +69,9 @@ operations runbook (private).
    - Signed commits required.
    - No force pushes or branch deletion.
 
-7. **Code ownership.** `CODEOWNERS` assigns default reviewers
-   for all changes and designates specific owners for
-   sensitive paths (database schema, CI workflows).
+7. **Code ownership.** `CODEOWNERS` designates owners for sensitive
+   paths, including CI/release automation, database code and migrations,
+   authentication, dependency manifests, and privileged desktop code.
 
 8. **Fork trust gate.** The CI workflow
    (`.github/workflows/ci.yml`) skips checks on fork PRs
@@ -80,9 +85,10 @@ operations runbook (private).
 
 ## Enforcement
 
-- `workspaceAccessMacro` is applied to all workspace-scoped
-  route groups via `.guard()`. Adding a new workspace endpoint
-  without the macro causes a type error (missing `SafeId`).
+- Workspace-scoped handlers use `createSafeHandler`, whose authorized
+  context requires the `SafeId<"workspace">` minted by
+  `workspaceAccessMacro`; security invariant tests cover route and RLS
+  enforcement.
 - Branch protection rules are enforced by GitHub and audited
   weekly.
 - Lefthook's staged Gitleaks scan helps block commits
