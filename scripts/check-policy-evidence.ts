@@ -212,10 +212,18 @@ export const checkPolicyEvidence = ({
   }
 
   const policiesDir = resolve(rootDir, "docs/policies");
-  const policyFiles = readdirSync(policiesDir)
-    .filter((name) => name.endsWith(".md"))
-    .map((name) => `docs/policies/${name}`)
-    .sort();
+  let policyFiles: string[];
+  try {
+    policyFiles = readdirSync(policiesDir)
+      .filter((name) => name.endsWith(".md"))
+      .map((name) => `docs/policies/${name}`)
+      .sort();
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+      return { errors: [...errors, "missing docs/policies directory"] };
+    }
+    throw error;
+  }
   for (const policy of policyFiles) {
     const source = readFileSync(resolve(rootDir, policy), "utf8");
     const markers = collectPolicyMarkers(source);

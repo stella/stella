@@ -76,9 +76,9 @@ skipped.
    Elastic, CPAL).
 
 7. **Automated updates.** Dependabot submits PRs for outdated
-   dependencies weekly (Bun packages, GitHub Actions, and
-   Docker images). Updates are subject to a five-day cooldown
-   before adoption.
+   dependencies weekly (Bun packages, GitHub Actions, Docker
+   images, and Cargo crates). Updates are subject to a five-day
+   cooldown before adoption.
 
 8. **Workspace consistency.** `sherif` runs as a `postinstall`
    hook to flag version mismatches across monorepo packages.

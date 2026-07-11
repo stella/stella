@@ -50,10 +50,9 @@ service SDKs (AI providers, email, analytics, storage).
    `bun.lock`.
 
 5. **Cooldown period.** Dependabot is configured with a five-day
-   cooldown (`open-pull-requests-limit` and schedule
-   settings in `.github/dependabot.yml`) before proposing
-   updates, reducing exposure to compromised releases that
-   are quickly retracted.
+   cooldown (`cooldown.default-days` in `.github/dependabot.yml`)
+   before proposing updates, reducing exposure to compromised
+   releases that are quickly retracted.
 
 6. **Automated updates.** Dependabot checks Bun packages, GitHub
    Actions, Docker images, and Cargo crates weekly.

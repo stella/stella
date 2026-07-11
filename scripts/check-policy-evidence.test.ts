@@ -97,4 +97,20 @@ describe("policy evidence guard", () => {
       "controls[0].evidence[0].path must be a repository-relative path",
     );
   });
+
+  test("reports a missing policies directory instead of throwing", () => {
+    const root = createFixture();
+    writeFileSync(
+      join(root, "evidence.json"),
+      readFileSync(join(root, "docs/policies/evidence.json"), "utf8"),
+    );
+    rmSync(join(root, "docs/policies"), { recursive: true });
+
+    const result = checkPolicyEvidence({
+      manifestPath: "evidence.json",
+      rootDir: root,
+    });
+
+    expect(result.errors).toContain("missing docs/policies directory");
+  });
 });
