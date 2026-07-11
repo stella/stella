@@ -47,6 +47,10 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import {
+  resolveEntityActivityDestination,
+  resolveSidebarWorkspaceId,
+} from "@/components/app-sidebar.logic";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { FeedbackDialog } from "@/components/feedback-dialog";
@@ -150,7 +154,14 @@ export function AppSidebar(props: AppSidebarProps) {
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
   });
-  const activeWorkspaceId = workspaceMatch?.params.workspaceId;
+  const workspaceChatMatch = useMatch({
+    from: "/_protected/chat/workspaces/$workspaceId/$threadId",
+    shouldThrow: false,
+  });
+  const activeWorkspaceId = resolveSidebarWorkspaceId({
+    chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
+    workspaceId: workspaceMatch?.params.workspaceId,
+  });
   const activeWorkspace = workspaces?.find((ws) => ws.id === activeWorkspaceId);
   const activeMatterColor =
     activeWorkspaceId && activeWorkspace
@@ -1246,14 +1257,15 @@ const MatterActivityList = ({
     id: entityId,
     title,
   }: (typeof items)[number] & { type: "entity" }) => {
-    if (entityKind === "task") {
+    const destination = resolveEntityActivityDestination(entityKind);
+    if (destination.type === "task") {
       useInspectorStore
         .getState()
         .openTask({ taskId: entityId, workspaceId, label: title });
       return;
     }
 
-    if (entityKind === "folder") {
+    if (destination.type === "folder") {
       await navigateToWorkspaceFolder({
         folderId: entityId,
         navigate,
@@ -1263,14 +1275,14 @@ const MatterActivityList = ({
       return;
     }
 
-    if (entityKind === "document") {
+    if (destination.type === "document") {
       await openEntityInInspector(entityId, title, workspaceId);
       return;
     }
 
     await navigate({
-      to: "/workspaces/$workspaceId/$viewId",
-      params: { workspaceId, viewId: "all" },
+      to: "/workspaces/$workspaceId/entities/$entityId",
+      params: { entityId, workspaceId },
     });
   };
 
