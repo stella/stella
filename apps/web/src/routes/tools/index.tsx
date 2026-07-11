@@ -45,8 +45,12 @@ const KIND_LABEL_KEY = {
   "native-tool": "catalogue.filter.nativeTools",
 } as const satisfies Record<ToolsKindFilter, TranslationKey>;
 
+// Public SEO page: a bad `?kind=` value (e.g. `?kind=skills`) must degrade
+// to the default "all" filter, not throw into the router's default error
+// boundary. `v.fallback` swallows the parse failure and yields "all",
+// rendering the page as if the param were absent.
 const searchSchema = v.object({
-  kind: v.optional(v.picklist(TOOLS_KIND_FILTERS), "all"),
+  kind: v.fallback(v.optional(v.picklist(TOOLS_KIND_FILTERS), "all"), "all"),
 });
 
 export const Route = createFileRoute("/tools/")({

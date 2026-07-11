@@ -77,10 +77,16 @@ export type PracticeArea = (typeof PRACTICE_AREAS)[number];
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ISO_COUNTRY_OR_UNION = /^[A-Z]{2}$/u;
 
+/**
+ * Max slug length. Exported so the contribute form's slug derivation
+ * caps to the same limit the schema enforces (single source of truth).
+ */
+export const MAX_SLUG_LENGTH = 64;
+
 const slug = v.pipe(
   v.string(),
   v.minLength(2),
-  v.maxLength(64),
+  v.maxLength(MAX_SLUG_LENGTH),
   v.regex(SLUG_PATTERN, "slug must be kebab-case"),
 );
 
@@ -88,12 +94,14 @@ const slug = v.pipe(
  * GitHub `owner/name`. Owner: 1–39 chars, alphanumeric or hyphen, no
  * leading hyphen. Name: 1–100 chars from GitHub's allowed set. Storing
  * the bare identifier (not a URL) makes "GitHub only" structural — the
- * URL builders in the loader are the sole way it becomes a URL.
+ * URL builders in the loader are the sole way it becomes a URL. Named
+ * `owner`/`name` groups let the contribute form's normalizer reuse this
+ * one pattern instead of re-declaring its own copy.
  */
-const GITHUB_REPO_PATTERN =
-  /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/u;
+export const GITHUB_REPO_PATTERN =
+  /^(?<owner>[A-Za-z0-9][A-Za-z0-9-]{0,38})\/(?<name>[A-Za-z0-9._-]{1,100})$/u;
 /** Full 40-character lowercase hex commit SHA; abbreviated refs rejected. */
-const GITHUB_REV_PATTERN = /^[0-9a-f]{40}$/u;
+export const GITHUB_REV_PATTERN = /^[0-9a-f]{40}$/u;
 /** Relative path segments; traversal (`..`) rejected by an extra check. */
 const GITHUB_DIRECTORY_PATTERN = /^[\w.-]+(?:\/[\w.-]+)*$/u;
 

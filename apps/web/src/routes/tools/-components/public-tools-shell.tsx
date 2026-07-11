@@ -18,6 +18,7 @@ function PublicToolsTopBar() {
       const loaderData = state.matches.at(-1)?.loaderData;
       if (
         typeof loaderData === "object" &&
+        loaderData !== null &&
         "displayName" in loaderData &&
         typeof loaderData.displayName === "string"
       ) {

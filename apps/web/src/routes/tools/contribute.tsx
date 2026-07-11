@@ -1,5 +1,5 @@
 import type { Dispatch, ReactNode, SetStateAction } from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import { Result } from "better-result";
@@ -317,7 +317,10 @@ function AddSkillForm() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <FormRow label={t("publicTools.contribute.form.licenseLabel")}>
+        <FormRow
+          htmlFor="skill-license"
+          label={t("publicTools.contribute.form.licenseLabel")}
+        >
           <Select
             onValueChange={(license) => {
               // Base UI passes null for a cleared single select; these
@@ -328,7 +331,7 @@ function AddSkillForm() {
             }}
             value={form.license}
           >
-            <SelectTrigger>
+            <SelectTrigger id="skill-license">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
@@ -340,7 +343,10 @@ function AddSkillForm() {
             </SelectPopup>
           </Select>
         </FormRow>
-        <FormRow label={t("publicTools.contribute.form.costLabel")}>
+        <FormRow
+          htmlFor="skill-cost"
+          label={t("publicTools.contribute.form.costLabel")}
+        >
           <Select
             onValueChange={(cost) => {
               if (cost !== null) {
@@ -349,7 +355,7 @@ function AddSkillForm() {
             }}
             value={form.cost}
           >
-            <SelectTrigger>
+            <SelectTrigger id="skill-cost">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
@@ -361,7 +367,10 @@ function AddSkillForm() {
             </SelectPopup>
           </Select>
         </FormRow>
-        <FormRow label={t("publicTools.contribute.form.setupLabel")}>
+        <FormRow
+          htmlFor="skill-setup"
+          label={t("publicTools.contribute.form.setupLabel")}
+        >
           <Select
             onValueChange={(setup) => {
               if (setup !== null) {
@@ -370,7 +379,7 @@ function AddSkillForm() {
             }}
             value={form.setup}
           >
-            <SelectTrigger>
+            <SelectTrigger id="skill-setup">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
@@ -386,11 +395,13 @@ function AddSkillForm() {
 
       <FormRow
         hint={t("publicTools.contribute.form.jurisdictionsHint")}
+        htmlFor="skill-jurisdictions"
         label={t("onboarding.stepJurisdiction")}
       >
         <div className="flex gap-2">
           <Input
             className="font-mono uppercase"
+            id="skill-jurisdictions"
             maxLength={2}
             onChange={(event) =>
               setJurisdictionInput(event.currentTarget.value)
@@ -418,15 +429,17 @@ function AddSkillForm() {
         {form.jurisdictions.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {form.jurisdictions.map((code) => (
-              <button
-                className="border-border text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-xs"
+              <Button
+                className="h-auto gap-1 px-1.5 py-0.5 font-mono text-xs"
                 key={code}
                 onClick={() => removeJurisdiction(code)}
+                size="sm"
                 type="button"
+                variant="outline"
               >
                 {code}
                 <XIcon className="size-3" />
-              </button>
+              </Button>
             ))}
           </div>
         )}
@@ -628,6 +641,26 @@ function FormRow({
   htmlFor?: string;
   label: string;
 }) {
+  const groupLabelId = useId();
+
+  // A single labelable control associates via `htmlFor`. Rows that hold a
+  // group of controls (chips, source toggles) have no single target, so
+  // the label names a `role="group"` region through `aria-labelledby`
+  // rather than orphaning a `<label>` with no `for`.
+  if (htmlFor === undefined) {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label id={groupLabelId} render={<span />}>
+          {label}
+        </Label>
+        <div aria-labelledby={groupLabelId} role="group">
+          {children}
+        </div>
+        {hint && <p className="text-muted-foreground text-xs">{hint}</p>}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={htmlFor}>{label}</Label>

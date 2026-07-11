@@ -2,6 +2,9 @@
  * Catalogue PR-time validator. Beyond schema parsing (handled by the
  * loader at import), this enforces:
  *   - per-entry folder size cap (10 MB; prevents PDF dumps in PRs)
+ *   - per-file icon size cap (512 KiB; icons are base64-inlined into the
+ *     web bundle for every entry, so this applies even to github entries
+ *     that skip the folder cap)
  *   - slug uniqueness across the whole catalogue
  *   - recommended.json references exist
  *   - manifest folder matches `entries/<kind>/<slug>/`
@@ -22,11 +25,21 @@ import {
 
 const MAX_ENTRY_BYTES = 10 * 1024 * 1024;
 
+/**
+ * Per-file cap for the inlined icons. generate-manifest.ts base64-encodes
+ * icon.png/icon.svg straight into the web bundle, so an oversized icon
+ * bloats the client payload regardless of the folder cap the github
+ * source is otherwise exempt from.
+ */
+const MAX_ICON_FILE_BYTES = 512 * 1024;
+
+/** Icon files that generate-manifest.ts inlines, in the order it prefers. */
+const ICON_FILE_NAMES = ["icon.png", "icon.svg"] as const;
+
 /** Files a github-sourced skill folder may contain; content is upstream. */
 const GITHUB_SKILL_ALLOWED_FILES: ReadonlySet<string> = new Set([
   "manifest.json",
-  "icon.png",
-  "icon.svg",
+  ...ICON_FILE_NAMES,
 ]);
 
 type ValidationResult = {
@@ -92,6 +105,10 @@ const validateEntryFolder = (
     return;
   }
 
+  // Icons are inlined into the web bundle for every entry, so cap them
+  // regardless of source (github entries skip the folder cap below).
+  validateIconSizes(location, errors);
+
   const isGithubSkill = entry.kind === "skill" && entry.source === "github";
   if (isGithubSkill) {
     validateGithubSkillFolder(location, errors);
@@ -107,6 +124,26 @@ const validateEntryFolder = (
     if (bytes > MAX_ENTRY_BYTES) {
       errors.push(
         `${location.kind}/${location.slug}: folder is ${formatBytes(bytes)}, exceeds ${formatBytes(MAX_ENTRY_BYTES)} cap`,
+      );
+    }
+  }
+};
+
+/**
+ * Caps each inlined icon file. Enforced for every entry — github-sourced
+ * included — since generate-manifest.ts base64-inlines the icon into the
+ * client bundle even when the folder itself skips the size cap.
+ */
+const validateIconSizes = (location: EntryLocation, errors: string[]): void => {
+  for (const iconName of ICON_FILE_NAMES) {
+    const iconFile = path.join(location.folder, iconName);
+    if (!existsSync(iconFile)) {
+      continue;
+    }
+    const bytes = statSync(iconFile).size;
+    if (bytes > MAX_ICON_FILE_BYTES) {
+      errors.push(
+        `${location.kind}/${location.slug}: ${iconName} is ${formatBytes(bytes)}, exceeds ${formatBytes(MAX_ICON_FILE_BYTES)} icon cap`,
       );
     }
   }
