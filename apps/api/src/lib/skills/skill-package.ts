@@ -88,13 +88,13 @@ export type SkillPackageDiscovery = {
 
 type PersistedSkillResourceKind = Exclude<SkillResourceKind, "other">;
 
-type SkillFile = {
+export type SkillFile = {
   content: string;
   path: string;
   sizeBytes: number;
 };
 
-type GithubSkillPath = {
+export type GithubSkillPath = {
   owner: string;
   ref: string;
   repo: string;
@@ -221,22 +221,29 @@ export const fetchSkillPackageFromUrl = async (
     catch: toHandlerError,
   });
 
-/** Fetch and parse a catalogue skill from an immutable raw-content base URL. */
+/**
+ * Fetch and parse a catalogue skill from an immutable GitHub directory.
+ * This shares the URL importer's tree traversal and resource safeguards so
+ * catalogue installs include the pinned SKILL.md and all allowed resources.
+ */
 export const fetchGithubCatalogueSkillPackage = async (
-  rawContentBaseUrl: string,
-  fetchBytes: (
-    url: URL,
-    maxBytes: number,
-  ) => Promise<{ body: ArrayBuffer }> = fetchSafeBytes,
+  target: GithubSkillPath,
+  sourceUrl: string,
+  fetchFiles: (target: GithubSkillPath) => Promise<SkillFile[]> = async (
+    skillTarget,
+  ) =>
+    await fetchGithubSkillFiles(
+      skillTarget,
+      createSkillPackageFetchContext(),
+    ),
 ): Promise<Result<ParsedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const url = new URL(`${rawContentBaseUrl}${SKILL_FILE_NAME}`);
-      const response = await fetchBytes(url, GITHUB_SKILL_FILE_MAX_BYTES);
-      const parsed = parseMarkdownSkillPackage(decodeUtf8(response.body));
+      const files = await fetchFiles(target);
+      const parsed = parseSkillFiles(files);
       return {
         ...parsed,
-        sourceUrl: redactSkillSourceUrlForStorage(url.toString()),
+        sourceUrl: redactSkillSourceUrlForStorage(sourceUrl),
       };
     },
     catch: toHandlerError,

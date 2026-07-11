@@ -5,6 +5,7 @@ import {
   parseInTreeCatalogueSkill,
   resolveCatalogueSkillPackage,
 } from "@/api/handlers/catalogue/catalogue-skill-package";
+import type { GithubSkillPath } from "@/api/handlers/skills/skill-package";
 
 const inTreePayload = {
   slug: "contract-review",
@@ -66,5 +67,46 @@ describe("resolveCatalogueSkillPackage", () => {
       throw new Error("expected an unknown slug to fail");
     }
     expect(result.error.status).toBe(404);
+  });
+
+  test("installs a github skill under the catalogue slug, not the upstream frontmatter name", async () => {
+    // `jurisrank-csjn-analysis` is a real github-sourced catalogue
+    // entry. Its upstream SKILL.md frontmatter name can differ from the
+    // slug; the resolver must still resolve to the catalogue slug so the
+    // stored row is findable by install-state matching and uninstall.
+    const captured: { target: GithubSkillPath | null; sourceUrl: string } = {
+      target: null,
+      sourceUrl: "",
+    };
+    const result = await resolveCatalogueSkillPackage(
+      "jurisrank-csjn-analysis",
+      async (target, sourceUrl) => {
+        captured.target = target;
+        captured.sourceUrl = sourceUrl;
+        return Result.ok({
+          body: "Analyze the ruling.",
+          compatibility: null,
+          contentHash: "hash",
+          description: "Upstream skill.",
+          license: "MIT",
+          metadata: {},
+          // Upstream frontmatter name deliberately differs from the slug.
+          name: "jurisrank-upstream-name",
+          resources: [],
+          sourceUrl: `${sourceUrl}SKILL.md`,
+          version: null,
+        });
+      },
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(result.value.installSlug).toBe("jurisrank-csjn-analysis");
+    expect(result.value.package.name).toBe("jurisrank-upstream-name");
+    // The pinned commit SHA (not a branch) is threaded through as the ref.
+    expect(captured.target?.ref).toMatch(/^[0-9a-f]{40}$/u);
+    expect(captured.sourceUrl).toContain("raw.githubusercontent.com");
   });
 });

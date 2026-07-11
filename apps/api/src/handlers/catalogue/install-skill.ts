@@ -42,9 +42,9 @@ const installBundledSkill = createSafeRootHandler(
     session,
     user,
   }) {
-    const parsedResult = await resolveCatalogueSkillPackage(body.slug);
-    if (Result.isError(parsedResult)) {
-      return yield* Result.err(parsedResult.error);
+    const resolvedResult = await resolveCatalogueSkillPackage(body.slug);
+    if (Result.isError(resolvedResult)) {
+      return yield* Result.err(resolvedResult.error);
     }
 
     const installResult = await installSkill({
@@ -54,18 +54,24 @@ const installBundledSkill = createSafeRootHandler(
       // non-editable `bundled` origin rather than the user-editable `url`
       // origin; re-installing is how an updated catalogue entry propagates.
       origin: "bundled",
-      parsed: parsedResult.value,
+      parsed: resolvedResult.value.package,
       recordAuditEvent,
       safeDb,
       scope: body.scope ?? "team",
       session,
+      // Store the catalogue slug, never the upstream frontmatter name: a
+      // github skill whose SKILL.md `name` differs from the catalogue slug
+      // must still install under the slug so install-state matching,
+      // re-install detection, and uninstall can find the row. In-tree skills
+      // already guarantee name == slug, so this is a structural no-op there.
+      slug: resolvedResult.value.installSlug,
       user,
     });
     if (installResult.isErr()) {
       return yield* Result.err(installResult.error);
     }
 
-    return Result.ok({ slug: parsedResult.value.name });
+    return Result.ok({ slug: resolvedResult.value.installSlug });
   },
 );
 
