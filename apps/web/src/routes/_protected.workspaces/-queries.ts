@@ -4,6 +4,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 
 export const workspacesKeys = {
   all: ["workspaces"],
@@ -23,7 +24,7 @@ export const workspacesKeys = {
     "overview",
   ],
   activityAll: (workspaceId: string) => [
-    ...workspacesKeys.byId(workspaceId),
+    ...entitiesKeys.all(workspaceId),
     "activity",
   ],
   activity: (activeOrganizationId: string, key: WorkspaceActivityKey) => [

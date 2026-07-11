@@ -1,6 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 import {
   invalidateWorkspaceActivity,
   workspacesKeys,
@@ -22,5 +23,19 @@ describe("workspace activity invalidation", () => {
 
     expect(queryClient.getQueryState(targetKey)?.isInvalidated).toBe(true);
     expect(queryClient.getQueryState(otherKey)?.isInvalidated).toBe(false);
+  });
+
+  test("inherits entity invalidation through the shared parent key", async () => {
+    const queryClient = new QueryClient();
+    const activityKey = workspacesKeys.activity("organization-a", {
+      workspaceId: "workspace-a",
+    });
+    queryClient.setQueryData(activityKey, { pages: [] });
+
+    await queryClient.invalidateQueries({
+      queryKey: entitiesKeys.all("workspace-a"),
+    });
+
+    expect(queryClient.getQueryState(activityKey)?.isInvalidated).toBe(true);
   });
 });
