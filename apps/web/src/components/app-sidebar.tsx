@@ -154,6 +154,20 @@ export function AppSidebar(props: AppSidebarProps) {
   const { data: workspacesData } = useChromeQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );
+  const mounted = useHasMounted();
+  const { data: groupedChatThreadPages } = useInfiniteQuery({
+    ...groupedChatThreadsOptions(user.activeOrganizationId),
+    enabled: mounted,
+  });
+  const groupedChatThreads = mergeGroupedChatThreadPages(
+    groupedChatThreadPages?.pages,
+  );
+  const chatActivityByWorkspaceId = new Map(
+    groupedChatThreads.workspaces.flatMap((workspace) => {
+      const updatedAt = workspace.threads.at(0)?.updatedAt;
+      return updatedAt ? [[workspace.workspaceId, updatedAt] as const] : [];
+    }),
+  );
   const workspaces = workspacesData?.workspaces;
 
   const workspaceMatch = useMatch({
@@ -239,6 +253,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const recents = workspaces
     ? selectRecentWorkspaces({
         activeWorkspaceId,
+        chatActivityByWorkspaceId,
         limit: RECENTS_LIMIT,
         pinnedIds,
         workspaces,
@@ -638,8 +653,8 @@ export function AppSidebar(props: AppSidebarProps) {
           )}
 
           <RecentGlobalChatsGroup
-            activeOrganizationId={user.activeOrganizationId}
             showSeparator={pinned.length > 0 || recents.length > 0}
+            threads={groupedChatThreads.global}
           />
         </SidebarContextArea>
       </SidebarContent>
@@ -1414,24 +1429,16 @@ const MatterActivityList = ({
 };
 
 const RecentGlobalChatsGroup = ({
-  activeOrganizationId,
   showSeparator,
+  threads,
 }: {
-  activeOrganizationId: string;
   showSeparator: boolean;
+  threads: ReturnType<typeof mergeGroupedChatThreadPages>["global"];
 }) => {
   const t = useTranslations();
-  const mounted = useHasMounted();
-  const { data } = useInfiniteQuery({
-    ...groupedChatThreadsOptions(activeOrganizationId),
-    enabled: mounted,
-  });
-  const threads = mergeGroupedChatThreadPages(data?.pages).global.slice(
-    0,
-    RECENT_GLOBAL_CHATS_LIMIT,
-  );
+  const recentThreads = threads.slice(0, RECENT_GLOBAL_CHATS_LIMIT);
 
-  if (threads.length === 0) {
+  if (recentThreads.length === 0) {
     return null;
   }
 
@@ -1442,7 +1449,7 @@ const RecentGlobalChatsGroup = ({
         <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
         <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
           <SidebarMenu>
-            {threads.map((thread) => {
+            {recentThreads.map((thread) => {
               const title = isPlaceholderThreadTitle(thread.title)
                 ? t("chat.newChat")
                 : thread.title;

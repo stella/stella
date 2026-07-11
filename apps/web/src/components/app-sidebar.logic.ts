@@ -31,18 +31,34 @@ const activityTime = ({ lastActivityAt }: RecentWorkspace): number =>
 
 export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
   activeWorkspaceId,
+  chatActivityByWorkspaceId,
   limit,
   pinnedIds,
   workspaces,
 }: {
   activeWorkspaceId: string | undefined;
+  chatActivityByWorkspaceId: ReadonlyMap<string, Date | string>;
   limit: number;
   pinnedIds: ReadonlySet<string>;
   workspaces: readonly TWorkspace[];
 }): TWorkspace[] => {
+  const recentActivityTime = (workspace: TWorkspace): number => {
+    const chatActivity = chatActivityByWorkspaceId.get(workspace.id);
+    if (chatActivity === undefined) {
+      return activityTime(workspace);
+    }
+
+    const chatActivityTime =
+      chatActivity instanceof Date
+        ? chatActivity.getTime()
+        : new Date(chatActivity).getTime();
+    return Math.max(activityTime(workspace), chatActivityTime);
+  };
   const sorted = workspaces
     .filter((workspace) => !pinnedIds.has(workspace.id))
-    .toSorted((left, right) => activityTime(right) - activityTime(left));
+    .toSorted(
+      (left, right) => recentActivityTime(right) - recentActivityTime(left),
+    );
   const activeWorkspace = sorted.find(
     (workspace) => workspace.id === activeWorkspaceId,
   );
