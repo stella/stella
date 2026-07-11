@@ -74,16 +74,9 @@ const isWorkspaceActivityTimestamp = (value: unknown): value is string => {
     return false;
   }
 
-  const date = new Date(
-    Date.UTC(
-      yearValue,
-      monthValue - 1,
-      dayValue,
-      hourValue,
-      minuteValue,
-      secondValue,
-    ),
-  );
+  const date = new Date(0);
+  date.setUTCFullYear(yearValue, monthValue - 1, dayValue);
+  date.setUTCHours(hourValue, minuteValue, secondValue, 0);
 
   return (
     date.getUTCFullYear() === yearValue &&

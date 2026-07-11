@@ -20,6 +20,18 @@ describe("workspace activity cursor", () => {
     ).toEqual(cursor);
   });
 
+  test("round-trips the null-updatedAt index sentinel year", () => {
+    const cursor = {
+      activityAt: "0001-01-01T00:00:00.000000",
+      id: ENTITY_ID,
+      type: "entity" as const,
+    };
+
+    expect(
+      decodeWorkspaceActivityCursor(encodeWorkspaceActivityCursor(cursor)),
+    ).toEqual(cursor);
+  });
+
   test("rejects malformed and incomplete cursors", () => {
     expect(decodeWorkspaceActivityCursor("not-base64-json")).toBeNull();
     expect(
