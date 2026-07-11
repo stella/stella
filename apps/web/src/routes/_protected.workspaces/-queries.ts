@@ -1,4 +1,5 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -21,9 +22,12 @@ export const workspacesKeys = {
     ...workspacesKeys.byId(workspaceId),
     "overview",
   ],
-  activity: (activeOrganizationId: string, key: WorkspaceActivityKey) => [
-    ...workspacesKeys.byId(key.workspaceId),
+  activityAll: (workspaceId: string) => [
+    ...workspacesKeys.byId(workspaceId),
     "activity",
+  ],
+  activity: (activeOrganizationId: string, key: WorkspaceActivityKey) => [
+    ...workspacesKeys.activityAll(key.workspaceId),
     activeOrganizationId,
   ],
 };
@@ -131,6 +135,14 @@ export const workspaceActivityOptions = ({
     initialPageParam: getInitialWorkspaceActivityCursor(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
+
+export const invalidateWorkspaceActivity = async (
+  queryClient: QueryClient,
+  workspaceId: string,
+) =>
+  await queryClient.invalidateQueries({
+    queryKey: workspacesKeys.activityAll(workspaceId),
   });
 
 export const overviewOptions = (workspaceId: string) =>

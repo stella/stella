@@ -78,7 +78,8 @@ const readWorkspaceActivity = createSafeHandler(
       );
     }
 
-    const entityActivityAt = sql<Date>`coalesce(${entities.updatedAt}, ${entities.createdAt})`;
+    // Keep this expression aligned with entities_ws_updated_at_coalesce_id_idx.
+    const entityActivityAt = sql<Date>`coalesce(${entities.updatedAt}, '0001-01-01 00:00:00'::timestamp)`;
     const entityCursorActivityAt = sql<string>`to_char(
       ${entityActivityAt},
       'YYYY-MM-DD"T"HH24:MI:SS.US'

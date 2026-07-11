@@ -35,6 +35,7 @@ import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import type { ChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
+import { invalidateWorkspaceActivity } from "@/routes/_protected.workspaces/-queries";
 
 type ActiveFileContext = {
   docxEditSnapshot?:
@@ -1864,6 +1865,9 @@ export const acquireChatRuntime = ({
       void Promise.all([
         invalidateChatThread({ queryClient, threadRef: key }),
         invalidateGroupedChatThreads(queryClient),
+        ...(key.scope === "workspace"
+          ? [invalidateWorkspaceActivity(queryClient, key.workspaceId)]
+          : []),
       ]);
     },
   });

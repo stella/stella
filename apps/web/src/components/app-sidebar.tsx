@@ -96,6 +96,10 @@ import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type { EntityKind } from "@/lib/types";
+import {
+  groupedChatThreadsOptions,
+  mergeGroupedChatThreadPages,
+} from "@/routes/_protected.chat/-queries";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
 import type { CopyToMatterEntity } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
@@ -630,6 +634,11 @@ export function AppSidebar(props: AppSidebarProps) {
               </SidebarGroupContent>
             </SidebarGroup>
           )}
+
+          <RecentGlobalChatsGroup
+            activeOrganizationId={user.activeOrganizationId}
+            showSeparator={pinned.length > 0 || recents.length > 0}
+          />
         </SidebarContextArea>
       </SidebarContent>
 
@@ -661,6 +670,7 @@ export function AppSidebar(props: AppSidebarProps) {
 }
 
 const RECENTS_LIMIT = 5;
+const RECENT_GLOBAL_CHATS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 
 type MatterExpansion =
@@ -1398,6 +1408,63 @@ const MatterActivityList = ({
         </SidebarMenuSubItem>
       ) : null}
     </SidebarMenuSub>
+  );
+};
+
+const RecentGlobalChatsGroup = ({
+  activeOrganizationId,
+  showSeparator,
+}: {
+  activeOrganizationId: string;
+  showSeparator: boolean;
+}) => {
+  const t = useTranslations();
+  const mounted = useHasMounted();
+  const { data } = useInfiniteQuery({
+    ...groupedChatThreadsOptions(activeOrganizationId),
+    enabled: mounted,
+  });
+  const threads = mergeGroupedChatThreadPages(data?.pages).global.slice(
+    0,
+    RECENT_GLOBAL_CHATS_LIMIT,
+  );
+
+  if (threads.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {showSeparator ? <SidebarSeparator /> : null}
+      <SidebarGroup className="min-h-0">
+        <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
+        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
+          <SidebarMenu>
+            {threads.map((thread) => {
+              const title = isPlaceholderThreadTitle(thread.title)
+                ? t("chat.newChat")
+                : thread.title;
+              return (
+                <SidebarMenuItem key={thread.id}>
+                  <SidebarMenuButton asChild tooltip={title}>
+                    <Link
+                      activeProps={{ "data-active": true }}
+                      params={{ threadId: thread.id }}
+                      to="/chat/$threadId"
+                    >
+                      <MessageSquareIcon />
+                      <BidiText as="span" className="truncate">
+                        {title}
+                      </BidiText>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </>
   );
 };
 
