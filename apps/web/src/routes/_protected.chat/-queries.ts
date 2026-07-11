@@ -35,6 +35,7 @@ import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import type { ChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
+import { invalidateWorkspaceActivity } from "@/routes/_protected.workspaces/-queries";
 
 type ActiveFileContext = {
   docxEditSnapshot?:
@@ -1863,7 +1864,10 @@ export const acquireChatRuntime = ({
       // the refetch lands, then the idle reconcile replaces it.
       void Promise.all([
         invalidateChatThread({ queryClient, threadRef: key }),
-        invalidateGroupedChatThreads(queryClient),
+        invalidateChatThreadLists({
+          queryClient,
+          workspaceId: key.scope === "workspace" ? key.workspaceId : undefined,
+        }),
       ]);
     },
   });
@@ -2062,6 +2066,20 @@ export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
       );
     },
   });
+
+export const invalidateChatThreadLists = async ({
+  queryClient,
+  workspaceId,
+}: {
+  queryClient: QueryClient;
+  workspaceId: string | undefined;
+}) =>
+  await Promise.all([
+    invalidateGroupedChatThreads(queryClient),
+    ...(workspaceId
+      ? [invalidateWorkspaceActivity(queryClient, workspaceId)]
+      : []),
+  ]);
 
 export const invalidateChatThread = async ({
   queryClient,

@@ -133,6 +133,10 @@ export const LIMITS = {
   billingCodesPageSizeDefault: 500,
   billingCodesPageSizeMax: 1000,
   overviewRecentEntities: 10,
+  /** Initial number of mixed chat/entity rows shown beneath one matter in
+   *  persistent sidebar chrome. Additional rows are cursor-paginated. */
+  workspaceActivityPageSizeDefault: 3,
+  workspaceActivityPageSizeMax: 10,
   activeTimersPerUser: 1,
   timeEntryMaxAgeDays: 90,
   billingIncrementMinutes: 6,

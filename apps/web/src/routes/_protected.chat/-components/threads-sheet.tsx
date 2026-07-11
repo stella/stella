@@ -38,6 +38,7 @@ import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 import {
   groupedChatThreadsOptions,
+  invalidateChatThreadLists,
   mergeGroupedChatThreadPages,
 } from "@/routes/_protected.chat/-queries";
 
@@ -203,9 +204,16 @@ const DeleteThreadButton = ({
         throw toAPIError(response.error);
       }
     },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: groupedChatThreadsOptions(activeOrganizationId).queryKey,
+    onSettled: async (_data, error, variables) => {
+      if (error) {
+        await queryClient.invalidateQueries({
+          queryKey: groupedChatThreadsOptions(activeOrganizationId).queryKey,
+        });
+        return;
+      }
+      await invalidateChatThreadLists({
+        queryClient,
+        workspaceId: variables.workspaceId,
       });
     },
     onError: () => {

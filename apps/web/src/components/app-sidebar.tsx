@@ -12,8 +12,14 @@ import {
   useKeyHold,
 } from "@tanstack/react-hotkeys";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
+  getRouteApi,
+  Link,
+  useMatch,
+  useRouterState,
+} from "@tanstack/react-router";
+import {
+  ChevronRightIcon,
   EllipsisVerticalIcon,
   MessageSquareIcon,
   PanelLeftIcon,
@@ -29,6 +35,7 @@ import { useShallow } from "zustand/react/shallow";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import {
   Menu,
@@ -40,7 +47,16 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import {
+  resolveEntityActivityDestination,
+  resolveAutomaticExpandedMatterId,
+  resolveSidebarWorkspaceId,
+  selectRecentWorkspaces,
+} from "@/components/app-sidebar.logic";
+import { openEntityInInspector } from "@/components/chat/entity-open";
+import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { FeedbackDialog } from "@/components/feedback-dialog";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { MatterIcon } from "@/components/matter-icon";
 import { SearchDialog } from "@/components/search-dialog";
 import {
@@ -56,6 +72,8 @@ import {
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
   SidebarSeparator,
   useSidebar,
 } from "@/components/sidebar";
@@ -87,13 +105,17 @@ import { knowledgeSections } from "@/routes/_protected.knowledge/index";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
 import type { CopyToMatterEntity } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
+import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import {
   MatterMenuHeader,
   MatterMenuItems,
   useMatterActions,
 } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
-import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
+import {
+  workspaceActivityOptions,
+  workspacesNavigationOptions,
+} from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
 // Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
@@ -132,13 +154,34 @@ export function AppSidebar(props: AppSidebarProps) {
   const { data: workspacesData } = useChromeQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );
+  const mounted = useHasMounted();
+  const { data: groupedChatThreadPages } = useInfiniteQuery({
+    ...groupedChatThreadsOptions(user.activeOrganizationId),
+    enabled: mounted,
+  });
+  const groupedChatThreads = mergeGroupedChatThreadPages(
+    groupedChatThreadPages?.pages,
+  );
+  const chatActivityByWorkspaceId = new Map(
+    groupedChatThreads.workspaces.flatMap((workspace) => {
+      const updatedAt = workspace.threads.at(0)?.updatedAt;
+      return updatedAt ? [[workspace.workspaceId, updatedAt] as const] : [];
+    }),
+  );
   const workspaces = workspacesData?.workspaces;
 
   const workspaceMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId",
     shouldThrow: false,
   });
-  const activeWorkspaceId = workspaceMatch?.params.workspaceId;
+  const workspaceChatMatch = useMatch({
+    from: "/_protected/chat/workspaces/$workspaceId/$threadId",
+    shouldThrow: false,
+  });
+  const activeWorkspaceId = resolveSidebarWorkspaceId({
+    chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
+    workspaceId: workspaceMatch?.params.workspaceId,
+  });
   const activeWorkspace = workspaces?.find((ws) => ws.id === activeWorkspaceId);
   const activeMatterColor =
     activeWorkspaceId && activeWorkspace
@@ -207,19 +250,37 @@ export function AppSidebar(props: AppSidebarProps) {
       .filter((ws) => ws !== undefined);
   }, [workspaces, pinnedOrder]);
 
-  const recents = useMemo(() => {
-    if (!workspaces) {
-      return [];
-    }
-    return [...workspaces]
-      .filter((ws) => !pinnedIds.has(ws.id))
-      .toSorted(
-        (a, b) =>
-          new Date(b.lastActivityAt).getTime() -
-          new Date(a.lastActivityAt).getTime(),
-      )
-      .slice(0, RECENTS_LIMIT);
-  }, [workspaces, pinnedIds]);
+  const recents = workspaces
+    ? selectRecentWorkspaces({
+        activeWorkspaceId,
+        chatActivityByWorkspaceId,
+        limit: RECENTS_LIMIT,
+        pinnedIds,
+        workspaces,
+      })
+    : [];
+
+  const [matterExpansion, setMatterExpansion] = useState<MatterExpansion>({
+    type: "automatic",
+  });
+  const activeMatterIsVisible = [...pinned, ...recents].some(
+    (workspace) => workspace.id === activeWorkspaceId,
+  );
+  const automaticExpandedMatterId = resolveAutomaticExpandedMatterId({
+    activeMatterIsVisible,
+    activeWorkspaceId,
+  });
+  const expandedMatterId =
+    matterExpansion.type === "automatic"
+      ? automaticExpandedMatterId
+      : matterExpansion.workspaceId;
+
+  const toggleMatterExpansion = (workspaceId: string) => {
+    setMatterExpansion({
+      type: "selected",
+      workspaceId: expandedMatterId === workspaceId ? null : workspaceId,
+    });
+  };
 
   // Hold-to-reveal nav badges (Control on Mac, Alt on Win/Linux)
   const isNavKeyHeld = useKeyHold(NAV_KEY);
@@ -544,6 +605,8 @@ export function AppSidebar(props: AppSidebarProps) {
                 <SidebarMenu>
                   {pinned.map((ws, i) => (
                     <MatterItem
+                      activeOrganizationId={user.activeOrganizationId}
+                      isExpanded={!isCollapsed && expandedMatterId === ws.id}
                       isPinned
                       key={ws.id}
                       navBadge={
@@ -553,6 +616,7 @@ export function AppSidebar(props: AppSidebarProps) {
                       }
                       onDeleted={handleMatterDeleted}
                       onEntityDrop={handleEntityDropOnMatter}
+                      onExpandedChange={() => toggleMatterExpansion(ws.id)}
                       onReorder={reorderPinned}
                       onTogglePin={togglePin}
                       workspace={ws}
@@ -566,14 +630,19 @@ export function AppSidebar(props: AppSidebarProps) {
           {/* Recents — sorted by lastActivityAt */}
           {recents.length > 0 && (
             <SidebarGroup className="min-h-0 flex-1">
-              <SidebarGroupLabel>{t("navigation.recents")}</SidebarGroupLabel>
+              <SidebarGroupLabel>
+                {t("navigation.recentMatters")}
+              </SidebarGroupLabel>
               <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
                 <SidebarMenu>
                   {recents.map((ws) => (
                     <MatterItem
+                      activeOrganizationId={user.activeOrganizationId}
+                      isExpanded={!isCollapsed && expandedMatterId === ws.id}
                       key={ws.id}
                       onDeleted={handleMatterDeleted}
                       onEntityDrop={handleEntityDropOnMatter}
+                      onExpandedChange={() => toggleMatterExpansion(ws.id)}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />
@@ -583,9 +652,9 @@ export function AppSidebar(props: AppSidebarProps) {
             </SidebarGroup>
           )}
 
-          <RecentChatsGroup
-            activeOrganizationId={user.activeOrganizationId}
+          <RecentGlobalChatsGroup
             showSeparator={pinned.length > 0 || recents.length > 0}
+            threads={groupedChatThreads.global}
           />
         </SidebarContextArea>
       </SidebarContent>
@@ -618,111 +687,13 @@ export function AppSidebar(props: AppSidebarProps) {
 }
 
 const RECENTS_LIMIT = 5;
-const RECENT_CHATS_LIMIT = 5;
+const RECENT_GLOBAL_CHATS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 
-type RecentChatThread =
-  | { scope: "global"; id: string; title: string; updatedAt: string | Date }
-  | {
-      scope: "workspace";
-      id: string;
-      title: string;
-      updatedAt: string | Date;
-      workspaceId: string;
-    };
+type MatterExpansion =
+  | { type: "automatic" }
+  | { type: "selected"; workspaceId: string | null };
 
-const RecentChatsGroup = ({
-  activeOrganizationId,
-  showSeparator,
-}: {
-  activeOrganizationId: string;
-  showSeparator: boolean;
-}) => {
-  const t = useTranslations();
-  const mounted = useHasMounted();
-  const { data } = useInfiniteQuery({
-    ...groupedChatThreadsOptions(activeOrganizationId),
-    enabled: mounted,
-  });
-
-  const merged = mergeGroupedChatThreadPages(data?.pages);
-  const threads: RecentChatThread[] = [
-    ...merged.global.map(
-      (thread): RecentChatThread => ({
-        scope: "global",
-        id: thread.id,
-        title: thread.title,
-        updatedAt: thread.updatedAt,
-      }),
-    ),
-    ...merged.workspaces.flatMap((workspace) =>
-      workspace.threads.map(
-        (thread): RecentChatThread => ({
-          scope: "workspace",
-          id: thread.id,
-          title: thread.title,
-          updatedAt: thread.updatedAt,
-          workspaceId: workspace.workspaceId,
-        }),
-      ),
-    ),
-  ]
-    // Recency is updatedAt (a new message bumps it); the threads API
-    // orders the same way.
-    .toSorted(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    )
-    .slice(0, RECENT_CHATS_LIMIT);
-
-  if (threads.length === 0) {
-    return null;
-  }
-
-  return (
-    <>
-      {showSeparator && <SidebarSeparator />}
-      <SidebarGroup className="min-h-0 flex-1">
-        <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
-        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
-          <SidebarMenu>
-            {threads.map((thread) => {
-              const title = isPlaceholderThreadTitle(thread.title)
-                ? t("chat.newChat")
-                : thread.title;
-              return (
-                <SidebarMenuItem key={thread.id}>
-                  <SidebarMenuButton asChild tooltip={title}>
-                    <Link
-                      activeProps={{ "data-active": true }}
-                      {...(thread.scope === "global"
-                        ? {
-                            to: "/chat/$threadId",
-                            params: { threadId: thread.id },
-                          }
-                        : {
-                            to: "/chat/workspaces/$workspaceId/$threadId",
-                            params: {
-                              threadId: thread.id,
-                              workspaceId: thread.workspaceId,
-                            },
-                          })}
-                    >
-                      <MessageSquareIcon />
-                      <BidiText as="span" className="truncate">
-                        {title}
-                      </BidiText>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    </>
-  );
-};
 // Pinned workspaces are local UI state until backend user preferences or a
 // workspace-member `pinned` flag exists.
 
@@ -845,12 +816,15 @@ type AppSidebarStyle = React.CSSProperties & {
 };
 
 type MatterItemProps = {
+  activeOrganizationId: string;
   workspace: MatterIdentity & {
     reference: string | null;
     client?: { id: string; displayName: string } | null;
     lastActivityAt: Date;
   };
   isPinned?: boolean;
+  isExpanded: boolean;
+  onExpandedChange: () => void;
   onTogglePin: (id: string) => void;
   /** Navigate-away (or other cleanup) after the matter is deleted; the
    *  delete itself is owned by the shared menu via useMatterActions. */
@@ -922,12 +896,15 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
 };
 
 const MatterItem = ({
+  activeOrganizationId,
   workspace: ws,
+  isExpanded,
   isPinned: _isPinnedProp,
   onTogglePin,
   onDeleted,
   onReorder,
   onEntityDrop,
+  onExpandedChange,
   navBadge,
 }: MatterItemProps) => {
   // Read pin state directly from the store so the menu label
@@ -1131,9 +1108,35 @@ const MatterItem = ({
         }}
         ref={dropRef}
       >
+        <Tooltip
+          content={isExpanded ? t("common.showLess") : t("common.showMore")}
+          render={
+            <Button
+              aria-controls={`matter-activity-${ws.id}`}
+              aria-expanded={isExpanded}
+              aria-label={
+                isExpanded ? t("common.showLess") : t("common.showMore")
+              }
+              className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 flex size-6 items-center justify-center rounded-md outline-hidden group-data-[collapsible=icon]:hidden focus-visible:ring-2"
+              onClick={onExpandedChange}
+              size="icon"
+              type="button"
+              variant="ghost"
+            />
+          }
+        >
+          <DirectionalIcon
+            className={cn(
+              "size-3.5 transition-transform duration-150",
+              isExpanded && "rotate-90",
+            )}
+            flip={!isExpanded}
+            icon={ChevronRightIcon}
+          />
+        </Tooltip>
         <SidebarMenuButton
           asChild
-          className="pe-12"
+          className="ps-8 pe-12 group-data-[collapsible=icon]:ps-2"
           tooltip={[
             ws.name,
             ws.client?.displayName ?? t("workspaces.parties.personalLabel"),
@@ -1221,9 +1224,255 @@ const MatterItem = ({
             </Menu>
           </div>
         )}
+        {isExpanded ? (
+          <MatterActivityList
+            activeOrganizationId={activeOrganizationId}
+            id={`matter-activity-${ws.id}`}
+            workspaceId={ws.id}
+          />
+        ) : null}
       </SidebarMenuItem>
 
       {dialogs}
+    </>
+  );
+};
+
+const ACTIVITY_ROW_CLASS =
+  "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground flex h-7 w-full min-w-0 items-center gap-2 rounded-md px-2 text-xs outline-hidden focus-visible:ring-2";
+
+type MatterActivityListProps = {
+  activeOrganizationId: string;
+  id: string;
+  workspaceId: string;
+};
+
+const MatterActivityList = ({
+  activeOrganizationId,
+  id,
+  workspaceId,
+}: MatterActivityListProps) => {
+  const t = useTranslations();
+  const navigate = routeApi.useNavigate();
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const mounted = useHasMounted();
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isError,
+    isFetchingNextPage,
+    isPending,
+    refetch,
+  } = useInfiniteQuery({
+    ...workspaceActivityOptions({
+      activeOrganizationId,
+      key: { workspaceId },
+    }),
+    enabled: mounted,
+  });
+  const items = data ? data.pages.flatMap((page) => page.items) : [];
+
+  const openEntity = async ({
+    entityKind,
+    id: entityId,
+    title,
+  }: (typeof items)[number] & { type: "entity" }) => {
+    const destination = resolveEntityActivityDestination(entityKind);
+    if (destination.type === "task") {
+      useInspectorStore
+        .getState()
+        .openTask({ taskId: entityId, workspaceId, label: title });
+      return;
+    }
+
+    if (destination.type === "folder") {
+      await navigateToWorkspaceFolder({
+        folderId: entityId,
+        navigate,
+        pathname,
+        targetWorkspaceId: workspaceId,
+      });
+      return;
+    }
+
+    if (destination.type === "document") {
+      await openEntityInInspector(entityId, title, workspaceId);
+      return;
+    }
+
+    await navigate({
+      to: "/workspaces/$workspaceId/entities/$entityId",
+      params: { entityId, workspaceId },
+    });
+  };
+
+  if (isPending) {
+    return (
+      <SidebarMenuSub className="border-0" id={id}>
+        {[0, 1, 2].map((index) => (
+          <SidebarMenuSubItem key={index}>
+            <div className="flex h-7 items-center gap-2 px-2">
+              <span className="bg-muted size-3.5 animate-pulse rounded" />
+              <span className="bg-muted h-3 flex-1 animate-pulse rounded" />
+            </div>
+          </SidebarMenuSubItem>
+        ))}
+      </SidebarMenuSub>
+    );
+  }
+
+  if (isError) {
+    return (
+      <SidebarMenuSub className="border-0" id={id}>
+        <SidebarMenuSubItem>
+          <Button
+            className={ACTIVITY_ROW_CLASS}
+            onClick={() => {
+              void refetch();
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {t("common.tryAgain")}
+          </Button>
+        </SidebarMenuSubItem>
+      </SidebarMenuSub>
+    );
+  }
+
+  if (items.length === 0) {
+    return <SidebarMenuSub className="border-0" id={id} />;
+  }
+
+  return (
+    <SidebarMenuSub className="border-0" id={id}>
+      {items.map((item) => {
+        const title =
+          item.type === "thread" && isPlaceholderThreadTitle(item.title)
+            ? t("chat.newChat")
+            : item.title;
+        const relativeTime = formatRelativeTime(item.activityAt);
+        const content = (
+          <>
+            {item.type === "thread" ? (
+              <MessageSquareIcon className="text-muted-foreground size-3.5 shrink-0" />
+            ) : (
+              <EntityKindIcon
+                className="text-muted-foreground size-3.5 shrink-0"
+                kind={item.entityKind}
+                status={item.status}
+              />
+            )}
+            <BidiText as="span" className="min-w-0 flex-1 truncate text-start">
+              {title}
+            </BidiText>
+            {relativeTime ? (
+              <span
+                className="text-muted-foreground shrink-0 tabular-nums"
+                title={formatFullTimestamp(item.activityAt)}
+              >
+                {relativeTime}
+              </span>
+            ) : null}
+          </>
+        );
+
+        return (
+          <SidebarMenuSubItem key={`${item.type}-${item.id}`}>
+            {item.type === "thread" ? (
+              <Link
+                activeProps={{ "data-active": true }}
+                className={ACTIVITY_ROW_CLASS}
+                params={{ threadId: item.id, workspaceId }}
+                to="/chat/workspaces/$workspaceId/$threadId"
+              >
+                {content}
+              </Link>
+            ) : (
+              <Button
+                className={ACTIVITY_ROW_CLASS}
+                onClick={() => {
+                  void openEntity(item);
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                {content}
+              </Button>
+            )}
+          </SidebarMenuSubItem>
+        );
+      })}
+      {hasNextPage ? (
+        <SidebarMenuSubItem>
+          <Button
+            className={cn(
+              ACTIVITY_ROW_CLASS,
+              "text-muted-foreground justify-start",
+            )}
+            disabled={isFetchingNextPage}
+            onClick={() => {
+              void fetchNextPage();
+            }}
+            size="sm"
+            variant="ghost"
+          >
+            {isFetchingNextPage ? t("common.loading") : t("common.showMore")}
+          </Button>
+        </SidebarMenuSubItem>
+      ) : null}
+    </SidebarMenuSub>
+  );
+};
+
+const RecentGlobalChatsGroup = ({
+  showSeparator,
+  threads,
+}: {
+  showSeparator: boolean;
+  threads: ReturnType<typeof mergeGroupedChatThreadPages>["global"];
+}) => {
+  const t = useTranslations();
+  const recentThreads = threads.slice(0, RECENT_GLOBAL_CHATS_LIMIT);
+
+  if (recentThreads.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {showSeparator ? <SidebarSeparator /> : null}
+      <SidebarGroup className="min-h-0">
+        <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
+        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
+          <SidebarMenu>
+            {recentThreads.map((thread) => {
+              const title = isPlaceholderThreadTitle(thread.title)
+                ? t("chat.newChat")
+                : thread.title;
+              return (
+                <SidebarMenuItem key={thread.id}>
+                  <SidebarMenuButton asChild tooltip={title}>
+                    <Link
+                      activeProps={{ "data-active": true }}
+                      params={{ threadId: thread.id }}
+                      to="/chat/$threadId"
+                    >
+                      <MessageSquareIcon />
+                      <BidiText as="span" className="truncate">
+                        {title}
+                      </BidiText>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
     </>
   );
 };
