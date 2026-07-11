@@ -13,6 +13,7 @@ import {
   redactSkillSourceUrlForStorage,
   resolveGithubRefAndPath,
 } from "./skill-package";
+import type { GithubSkillPath } from "./skill-package";
 
 describe("agent skill package imports", () => {
   test("parses a single SKILL.md upload", async () => {
@@ -268,45 +269,52 @@ Instructions.`,
   });
 });
 
-const GITHUB_SKILL_FILE_MAX_BYTES = LIMITS.agentSkillResourceMaxChars * 4;
-const PINNED_BASE_URL =
+const PINNED_TARGET: GithubSkillPath = {
+  owner: "acme",
+  ref: "a".repeat(40),
+  repo: "legal-skills",
+  rootPath: "skills/german-law",
+};
+const PINNED_SOURCE_URL =
   "https://raw.githubusercontent.com/acme/legal-skills/" +
   `${"a".repeat(40)}/skills/german-law/`;
-
-const toArrayBuffer = (value: string): ArrayBuffer => {
-  const bytes = new TextEncoder().encode(value);
-  const buffer = new ArrayBuffer(bytes.byteLength);
-  new Uint8Array(buffer).set(bytes);
-  return buffer;
-};
+const encodedSize = (value: string): number =>
+  new TextEncoder().encode(value).byteLength;
+const skillFile = (content: string) => ({
+  content,
+  path: "SKILL.md",
+  sizeBytes: encodedSize(content),
+});
 
 describe("github catalogue skill fetch", () => {
-  test("appends SKILL.md to the pinned base url and caps the byte size", async () => {
+  test("mirrors the whole pinned directory (SKILL.md plus resources)", async () => {
     // Captured via an object rather than closure-assigned `let`s: the
     // typechecker keeps a mutated object property at its declared type,
     // whereas a `let` reassigned only inside the fetch callback is flow-typed
     // back to its `null` initializer at the assertion below.
-    const captured: { url: URL | null; maxBytes: number } = {
-      url: null,
-      maxBytes: 0,
-    };
-
-    const result = await fetchGithubCatalogueSkillPackage(
-      PINNED_BASE_URL,
-      async (url, maxBytes) => {
-        captured.url = url;
-        captured.maxBytes = maxBytes;
-        return {
-          body: toArrayBuffer(
-            `---
+    const captured: { target: GithubSkillPath | null } = { target: null };
+    const skillSource = `---
 name: german-law
 description: Community skill for German legal drafting.
 license: MIT
 ---
 
-Draft in German.`,
-          ),
-        };
+Draft in German.`;
+    const scriptSource = "print('draft')\n";
+
+    const result = await fetchGithubCatalogueSkillPackage(
+      PINNED_TARGET,
+      PINNED_SOURCE_URL,
+      async (target) => {
+        captured.target = target;
+        return [
+          skillFile(skillSource),
+          {
+            content: scriptSource,
+            path: "scripts/draft.py",
+            sizeBytes: encodedSize(scriptSource),
+          },
+        ];
       },
     );
 
@@ -314,18 +322,20 @@ Draft in German.`,
     if (Result.isError(result)) {
       throw result.error;
     }
-    expect(captured.url?.toString()).toBe(`${PINNED_BASE_URL}SKILL.md`);
-    expect(captured.maxBytes).toBe(GITHUB_SKILL_FILE_MAX_BYTES);
+    expect(captured.target).toEqual(PINNED_TARGET);
     expect(result.value.name).toBe("german-law");
     expect(result.value.license).toBe("MIT");
-    expect(result.value.resources).toEqual([]);
-    // v1 mirrors only SKILL.md, so the stored provenance points at it.
-    expect(result.value.sourceUrl).toBe(`${PINNED_BASE_URL}SKILL.md`);
+    // Resource files travel with the install, unlike the SKILL.md-only v1.
+    expect(result.value.resources.map((resource) => resource.path)).toEqual([
+      "scripts/draft.py",
+    ]);
+    expect(result.value.sourceUrl).toBe(PINNED_SOURCE_URL);
   });
 
-  test("surfaces a non-200 upstream response as an error", async () => {
+  test("surfaces an upstream fetch failure as an error", async () => {
     const result = await fetchGithubCatalogueSkillPackage(
-      PINNED_BASE_URL,
+      PINNED_TARGET,
+      PINNED_SOURCE_URL,
       async () => {
         throw new HandlerError({
           status: 400,
@@ -343,18 +353,17 @@ Draft in German.`,
 
   test("rejects a SKILL.md whose instructions exceed the size cap", async () => {
     const result = await fetchGithubCatalogueSkillPackage(
-      PINNED_BASE_URL,
-      async () => ({
-        body: toArrayBuffer(
-          `---
+      PINNED_TARGET,
+      PINNED_SOURCE_URL,
+      async () => [
+        skillFile(`---
 name: german-law
 description: Community skill for German legal drafting.
 license: MIT
 ---
 
-${"x".repeat(LIMITS.agentSkillBodyMaxChars + 1)}`,
-        ),
-      }),
+${"x".repeat(LIMITS.agentSkillBodyMaxChars + 1)}`),
+      ],
     );
 
     expect(Result.isError(result)).toBe(true);

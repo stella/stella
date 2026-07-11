@@ -57,12 +57,21 @@ type SkillFile = {
   sizeBytes: number;
 };
 
-type GithubSkillPath = {
+export type GithubSkillPath = {
   owner: string;
   ref: string;
   repo: string;
   rootPath: string;
 };
+
+/**
+ * Directory traversal shape used by the catalogue github fetch.
+ * Defaults to `fetchGithubSkillFiles`; tests inject a fake so the
+ * network (GitHub contents API + raw content) is not touched.
+ */
+export type FetchGithubSkillFiles = (
+  target: GithubSkillPath,
+) => Promise<SkillFile[]>;
 
 type GithubRefKind = "heads" | "tags";
 
@@ -138,34 +147,30 @@ export const fetchSkillPackageFromUrl = async (
   });
 
 /**
- * Raw-byte fetcher shape used by the catalogue skill fetch. Defaults to
- * `fetchSafeBytes`; tests inject a fake so the network is not touched.
- */
-type FetchSkillBytes = (
-  url: URL,
-  maxBytes: number,
-) => Promise<{ body: ArrayBuffer }>;
-
-/**
  * Fetch and parse a github-sourced catalogue skill from its pinned
- * raw-content base URL (must end in a trailing slash). Only `SKILL.md`
- * is fetched here: resource files (scripts/, references/, ...) are
- * deliberately not mirrored, because enumerating the upstream tree is
- * not cheap and the commit-SHA pin already makes the content immutable.
- * The byte cap and timeout are enforced by `fetchSafeBytes`.
+ * directory. The whole skill directory is traversed (SKILL.md plus the
+ * resource roots: scripts/, references/, assets/, ...) via
+ * `fetchGithubSkillFiles`, so a catalogue install carries the same
+ * resources that a URL-import of the directory would; the commit-SHA
+ * pin (`target.ref`) keeps the fetched bytes immutable. Every
+ * safeguard the URL-import path enforces applies unchanged: SSRF-safe
+ * host resolution, per-file and cumulative byte caps, request timeouts,
+ * redirect rejection, and resource count/size limits (all inside
+ * `fetchGithubSkillFiles` + `parseSkillFiles`). `fetchFiles` is
+ * injectable so tests exercise parsing without the network.
  */
 export const fetchGithubCatalogueSkillPackage = async (
-  rawContentBaseUrl: string,
-  fetchBytes: FetchSkillBytes = fetchSafeBytes,
+  target: GithubSkillPath,
+  sourceUrl: string,
+  fetchFiles: FetchGithubSkillFiles = fetchGithubSkillFiles,
 ): Promise<Result<ParsedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const url = new URL(`${rawContentBaseUrl}${SKILL_FILE_NAME}`);
-      const response = await fetchBytes(url, GITHUB_SKILL_FILE_MAX_BYTES);
-      const parsed = parseMarkdownSkillPackage(decodeUtf8(response.body));
+      const files = await fetchFiles(target);
+      const parsed = parseSkillFiles(files);
       return {
         ...parsed,
-        sourceUrl: redactSkillSourceUrlForStorage(url.toString()),
+        sourceUrl: redactSkillSourceUrlForStorage(sourceUrl),
       };
     },
     catch: toHandlerError,
