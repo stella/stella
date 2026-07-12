@@ -17,6 +17,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { acquireWorkspaceEntityCapLock } from "@/api/lib/entity-cap-lock";
 import {
   AGENDA_ITEM_KIND,
   AGENDA_ITEM_KINDS,
@@ -131,6 +132,12 @@ export const createTaskEntityHandler = async function* ({
 
   const txResult = yield* Result.await(
     safeDb(async (tx) => {
+      // A workspace-scoped advisory lock serializes this
+      // count-then-insert sequence against concurrent creations;
+      // same-transaction placement alone does not prevent TOCTOU
+      // races under READ COMMITTED.
+      await acquireWorkspaceEntityCapLock(tx, workspaceId);
+
       const totalEntities = await tx.$count(
         entities,
         eq(entities.workspaceId, workspaceId),

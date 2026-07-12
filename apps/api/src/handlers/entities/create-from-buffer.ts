@@ -16,6 +16,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { acquireWorkspaceEntityCapLock } from "@/api/lib/entity-cap-lock";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -139,8 +140,14 @@ export const createEntityFromBuffer = async ({
     await getS3().write(s3Key, bytes);
 
     await scopedDb(async (tx) => {
-      // The authoritative limit check must stay in the same
-      // transaction as the insert to avoid TOCTOU races.
+      // A workspace-scoped advisory lock serializes this
+      // count-then-insert sequence against concurrent creations.
+      // Same-transaction placement alone does not prevent TOCTOU
+      // races under READ COMMITTED: without the lock, two
+      // concurrent transactions can each read a count under the
+      // limit before either commits its insert.
+      await acquireWorkspaceEntityCapLock(tx, workspaceId);
+
       const entityCount = await tx.$count(
         entities,
         eq(entities.workspaceId, workspaceId),
