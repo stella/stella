@@ -24,6 +24,7 @@ import {
   MAX_ALL_BYTES,
   MAX_ALL_ITEMS,
   MAX_ALL_PAGES,
+  mapHttpStatusExit,
   MCP_ERROR_CODE_EXIT_MAP,
   type ExitCode,
 } from "./mcp-constants.js";
@@ -401,13 +402,7 @@ export const confirmDestructive = async ({
 
 export const mapClientErrorExit = (error: McpClientError): ExitCode => {
   if (error.kind === "http") {
-    if (error.httpStatus === 401) {
-      return EXIT_CODES.auth;
-    }
-    if (error.httpStatus === 404) {
-      return EXIT_CODES.notFound;
-    }
-    return EXIT_CODES.server;
+    return mapHttpStatusExit(error.httpStatus);
   }
   if (error.kind === "rpc") {
     if (error.rpcCode === -32_602) {
