@@ -1270,13 +1270,27 @@ const waitForHttpReadiness = async ({
   // Races the HTTP poll against the child's own exit: a child that dies at
   // spawn (bad env var, port conflict, etc.) should fail immediately with
   // its exit code instead of burning the full readiness timeout.
-  const watchForCrash = child.exited.then((exitCode) =>
+  //
+  // `child.exited` keeps resolving long after readiness is decided (e.g. when
+  // the runner kills the child during a later, normal shutdown), so the
+  // `.then` below must check `settled` before panicking; otherwise it fires
+  // on every post-readiness exit, including clean ones.
+  let settled = false;
+  const watchForCrash = child.exited.then((exitCode) => {
+    if (settled) {
+      return;
+    }
+
     panic(
       `${label} exited with code ${String(exitCode)} before it became ready.`,
-    ),
-  );
+    );
+  });
 
-  await Promise.race([pollUntilReady(), watchForCrash]);
+  try {
+    await Promise.race([pollUntilReady(), watchForCrash]);
+  } finally {
+    settled = true;
+  }
 };
 
 // Readiness checks and their running steps are built in the same mode-gated
@@ -1832,11 +1846,17 @@ const main = async () => {
     process.exit(exitCode);
   };
 
-  const startSteps = (steps: readonly Step[]): RunningStep[] => {
-    const started = steps.map((step) => spawnPersistentStep(step));
-    children.push(...started);
-    return started;
-  };
+  const startSteps = (steps: readonly Step[]): RunningStep[] =>
+    // Push each child into `children` as soon as it spawns, not after the
+    // whole batch finishes: if a later step's spawn throws mid-map, the
+    // already-started children must already be tracked so stopChildren()
+    // (called from the outer catch) can still clean them up instead of
+    // leaving them orphaned.
+    steps.map((step) => {
+      const runningStep = spawnPersistentStep(step);
+      children.push(runningStep);
+      return runningStep;
+    });
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
