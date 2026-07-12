@@ -12,3 +12,5 @@ export {
   isAgentHarness,
 } from "./sandbox";
 export { stellaSandboxPolicy } from "./policy";
+export type { StellaSandboxRunInput } from "./run";
+export { resolveStellaSandboxRun } from "./run";

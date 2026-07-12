@@ -345,6 +345,9 @@ const envApi = createEnv({
     /** Enables pre-flight usage-limit enforcement when true. */
     USAGE_ENFORCEMENT_ENABLED: featureFlagSchema,
 
+    /** Enables agent-sandbox chat runs (plan 050) when true. */
+    AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
+
     /**
      * Break-glass diagnostics. When true, 5xx responses additionally
      * log the full `error.msg` and `error.stack` so a deployment can be

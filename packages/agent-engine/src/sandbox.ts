@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import {
   bearer,
   createSecrets,
@@ -9,6 +7,7 @@ import {
   type SandboxDefinition,
 } from "@tanstack/ai-sandbox";
 import { dockerSandbox } from "@tanstack/ai-sandbox-docker";
+import { panic } from "better-result";
 
 import { stellaSandboxPolicy } from "./policy";
 
