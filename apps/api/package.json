@@ -56,7 +56,7 @@
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
-    "@stll/folio-agents": "^0.2.0",
+    "@stll/folio-agents": "^0.3.0",
     "@stll/folio-core": "^0.5.0",
     "@stll/infosoud": "workspace:*",
     "@stll/legal-ast": "workspace:*",

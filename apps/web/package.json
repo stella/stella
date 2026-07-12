@@ -45,7 +45,7 @@
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
-    "@stll/folio-agents": "^0.2.0",
+    "@stll/folio-agents": "^0.3.0",
     "@stll/folio-react": "^0.7.0",
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
