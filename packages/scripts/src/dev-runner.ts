@@ -1242,16 +1242,17 @@ let isShuttingDown = false;
 // itself. The signal handler's own in-flight shutdown() call already owns
 // tearing down children and exiting the process; this just stops main()
 // from racing it by continuing to start more steps.
-class DevRunnerShutdownSignal extends Error {
+class DevRunnerShutdownSignalError extends Error {
   constructor() {
     super("Dev runner shutdown requested during startup.");
-    this.name = "DevRunnerShutdownSignal";
+    this.name = "DevRunnerShutdownSignalError";
   }
 }
 
 const isDevRunnerShutdownSignal = (
   error: unknown,
-): error is DevRunnerShutdownSignal => error instanceof DevRunnerShutdownSignal;
+): error is DevRunnerShutdownSignalError =>
+  error instanceof DevRunnerShutdownSignalError;
 
 const waitForHttpReadiness = async ({
   child,
@@ -1316,7 +1317,7 @@ const waitForHttpReadiness = async ({
     }
 
     if (isShuttingDown) {
-      throw new DevRunnerShutdownSignal();
+      throw new DevRunnerShutdownSignalError();
     }
 
     return panic(
@@ -1889,7 +1890,7 @@ const main = async () => {
     // outside of any readiness wait. Refuse to start more children once
     // shutdown has begun instead of racing stopChildren().
     if (isShuttingDown) {
-      throw new DevRunnerShutdownSignal();
+      throw new DevRunnerShutdownSignalError();
     }
 
     // Push each child into `children` as soon as it spawns, not after the
