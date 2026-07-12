@@ -17,7 +17,7 @@ import {
 import { createFileKey } from "@/api/handlers/files/utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
@@ -25,6 +25,7 @@ import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { fetchWithTimeout } from "@/api/lib/fetch";
 import { getS3 } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
+import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const FILE_READ_URL_EXPIRY_SECONDS = 15 * 60;
@@ -277,6 +278,7 @@ type StampedDownloadHandlerProps = {
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+  recordAuditEvent: AuditRecorder;
 };
 
 type PrintPdfHandlerProps = {
@@ -284,6 +286,7 @@ type PrintPdfHandlerProps = {
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
+  recordAuditEvent: AuditRecorder;
 };
 
 const pdfFileName = (fileName: string): string => {
@@ -327,6 +330,7 @@ const fetchStoredFile = async (key: string): Promise<ArrayBuffer | null> => {
 const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
   new Response(buffer, {
     headers: {
+      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
       "Content-Type": PDF_MIME_TYPE,
       "Content-Disposition": inlineContentDisposition(fileName),
       "Content-Length": String(buffer.byteLength),
@@ -336,6 +340,7 @@ const pdfResponse = (buffer: ArrayBuffer, fileName: string) =>
 const streamedPdfResponse = (response: Response, fileName: string) =>
   new Response(response.body, {
     headers: {
+      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
       "Content-Type": PDF_MIME_TYPE,
       "Content-Disposition": inlineContentDisposition(fileName),
       ...(response.headers.has("Content-Length")
@@ -349,6 +354,7 @@ export const printPdfHandler = async ({
   fieldId,
   organizationId,
   workspaceId,
+  recordAuditEvent,
 }: PrintPdfHandlerProps) => {
   const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   const row = rows.at(0);
@@ -367,6 +373,19 @@ export const printPdfHandler = async ({
   if (content.encrypted) {
     return status(400);
   }
+
+  // Record the access before any document bytes leave the server: this
+  // endpoint streams full content, so it needs the same DOWNLOAD audit row
+  // the presigned-download path emits (GDPR Art. 30 / SOC 2 access record).
+  await scopedDb(
+    async (tx) =>
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DOWNLOAD,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: row.entityId,
+        metadata: { format: "pdf" },
+      }),
+  );
 
   if (content.mimeType === PDF_MIME_TYPE || content.pdfFileId) {
     const fileKey = createFileKey({
@@ -429,6 +448,7 @@ export const stampedDownloadHandler = async ({
   fieldId,
   organizationId,
   workspaceId,
+  recordAuditEvent,
 }: StampedDownloadHandlerProps) => {
   const rows = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   const row = rows.at(0);
@@ -451,6 +471,18 @@ export const stampedDownloadHandler = async ({
   ) {
     return status(400);
   }
+
+  // Record the access before the stamped document leaves the server, matching
+  // the presigned-download path's DOWNLOAD audit row.
+  await scopedDb(
+    async (tx) =>
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.DOWNLOAD,
+        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+        resourceId: row.entityId,
+        metadata: { format: "docx", stamped: true },
+      }),
+  );
 
   const fileKey = createFileKey({
     organizationId,
@@ -480,6 +512,7 @@ export const stampedDownloadHandler = async ({
 
   return new Response(stamped, {
     headers: {
+      ...RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS,
       "Content-Type": content.mimeType,
       "Content-Disposition": contentDisposition(content.fileName),
       "Content-Length": String(stamped.byteLength),

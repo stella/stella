@@ -15,3 +15,20 @@ export const setSecurityHeaders = (set: Context["set"]) => {
     set.headers[key] = value;
   }
 };
+
+/**
+ * Security headers for handlers that return a raw `Response` (streamed file
+ * bytes, PDF/DOCX downloads). Those responses bypass Elysia's `set.headers`,
+ * so the global `setSecurityHeaders` never reaches them: a stored document
+ * would otherwise be served without nosniff/frame/CSP protection and could be
+ * MIME-sniffed (e.g. a `text/html` upload rendered inline) or framed. Every
+ * raw document `Response` must spread these into its headers so that class of
+ * gap cannot recur per-endpoint.
+ */
+export const RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS = {
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+  "Referrer-Policy": "no-referrer",
+  "Content-Security-Policy":
+    "default-src 'none'; object-src 'none'; base-uri 'none'",
+} as const;

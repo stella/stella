@@ -76,7 +76,13 @@ const printPdfEndpoint = createSafeHandler(
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies HandlerConfig,
-  async function* ({ params: { fieldId }, scopedDb, session, workspaceId }) {
+  async function* ({
+    params: { fieldId },
+    scopedDb,
+    session,
+    workspaceId,
+    recordAuditEvent,
+  }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -85,6 +91,7 @@ const printPdfEndpoint = createSafeHandler(
             organizationId: session.activeOrganizationId,
             workspaceId,
             scopedDb,
+            recordAuditEvent,
           }),
       ),
     );
@@ -99,7 +106,13 @@ const stampedDownloadEndpoint = createSafeHandler(
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies HandlerConfig,
-  async function* ({ params: { fieldId }, scopedDb, session, workspaceId }) {
+  async function* ({
+    params: { fieldId },
+    scopedDb,
+    session,
+    workspaceId,
+    recordAuditEvent,
+  }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -108,6 +121,7 @@ const stampedDownloadEndpoint = createSafeHandler(
             organizationId: session.activeOrganizationId,
             workspaceId,
             scopedDb,
+            recordAuditEvent,
           }),
       ),
     );
