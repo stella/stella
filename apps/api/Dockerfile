@@ -90,9 +90,14 @@ COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Loose files for the one-off migrate task (the API itself is the compiled
 # /app/server binary). migrate.ts runs the drizzle migrator over Bun's SQL
-# client; it imports db-url.ts and reads the drizzle/ migration folder.
+# client; it imports db-url.ts (which imports lib/type-guards.ts) and reads
+# the drizzle/ migration folder. This COPY set is the migrate entrypoint's
+# full transitive @/api dependency — keep it in sync when db-url.ts/migrate.ts
+# gain an import, or the loose-file task fails at runtime with "Cannot find
+# module" (the compiled API binary bundles these, so it won't catch it).
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle.config.ts /app/apps/api/drizzle.config.ts
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db-url.ts /app/apps/api/src/db-url.ts
+COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/type-guards.ts /app/apps/api/src/lib/type-guards.ts
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.ts /app/apps/api/src/db/migrate.ts
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 RUN mkdir -p '/$bunfs/root'
