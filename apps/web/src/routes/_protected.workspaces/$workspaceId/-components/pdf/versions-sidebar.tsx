@@ -333,7 +333,7 @@ export function VersionsSidebar({
   };
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
-    await api
+    const response = await api
       .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .entity({ entityId: toSafeId<"entity">(entityId) })
       .versions({ versionId: toSafeId<"entityVersion">(versionId) })
@@ -341,17 +341,27 @@ export function VersionsSidebar({
         label,
         queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
       });
+
+    if (response.error) {
+      throw toAPIError(response.error);
+    }
+
     await invalidateVersions();
   };
 
   const handleRestore = async (versionId: string) => {
-    await api
+    const response = await api
       .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .entity({ entityId: toSafeId<"entity">(entityId) })
       .versions({ versionId: toSafeId<"entityVersion">(versionId) })
       .restore.post({
         queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
       });
+
+    if (response.error) {
+      throw toAPIError(response.error);
+    }
+
     await invalidateVersions();
   };
 
