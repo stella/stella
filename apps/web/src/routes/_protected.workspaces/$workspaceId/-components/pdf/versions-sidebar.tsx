@@ -29,6 +29,7 @@ import {
   MenuSeparator,
 } from "@stll/ui/components/menu";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useContentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -309,16 +310,22 @@ export function VersionsSidebar({
     const switchTarget =
       remaining.find((v) => v.id === currentVersionId) ?? remaining.at(0);
 
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .entity({ entityId: toSafeId<"entity">(entityId) })
-      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-      .delete({
-        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-      });
+    try {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
+        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+        .delete({
+          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+        });
 
-    if (response.error) {
-      throw toAPIError(response.error);
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      await invalidateVersions();
+      return;
     }
 
     onClearCompare();
@@ -333,36 +340,44 @@ export function VersionsSidebar({
   };
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .entity({ entityId: toSafeId<"entity">(entityId) })
-      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-      .label.patch({
-        label,
-        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-      });
+    try {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
+        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+        .label.patch({
+          label,
+          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+        });
 
-    if (response.error) {
-      throw toAPIError(response.error);
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    } finally {
+      await invalidateVersions();
     }
-
-    await invalidateVersions();
   };
 
   const handleRestore = async (versionId: string) => {
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .entity({ entityId: toSafeId<"entity">(entityId) })
-      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-      .restore.post({
-        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-      });
+    try {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
+        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+        .restore.post({
+          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+        });
 
-    if (response.error) {
-      throw toAPIError(response.error);
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    } finally {
+      await invalidateVersions();
     }
-
-    await invalidateVersions();
   };
 
   const handleDownload = async (fieldId: string) => {
