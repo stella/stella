@@ -3,10 +3,7 @@ import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import type {
-  EmptyAst,
-  IngestionResult,
-} from "@/api/handlers/case-law/ingestion/adapter";
+import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -30,7 +27,7 @@ const itemToDecision = (item: TestItem): IngestionResult => ({
   country: "TST",
   language: "en",
   metadata: {},
-  documentAst: {} as EmptyAst,
+  documentAst: {},
   rawHash: `hash-${item.id}`,
 });
 

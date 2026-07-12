@@ -22,7 +22,7 @@ const gradedWith = (tiers: GradedPosition["tiers"]): GradedPosition =>
     ask: { mode: "manual", question: "Which law?", content: textContent },
     tiers,
     enabled: true,
-  }) satisfies Position as GradedPosition;
+  }) satisfies Position;
 
 const emptySnapshots = new Map<string, ClauseSnapshot>();
 

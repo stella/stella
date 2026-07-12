@@ -104,9 +104,7 @@ const enumValues = (schema: PropSchema): readonly string[] | undefined => {
   if (!Array.isArray(values)) {
     return undefined;
   }
-  return values.every((v) => typeof v === "string")
-    ? (values as readonly string[])
-    : undefined;
+  return values.every((v) => typeof v === "string") ? values : undefined;
 };
 
 /** Conditionally include `min`/`max` so an absent bound is omitted, not `undefined`. */

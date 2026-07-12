@@ -204,7 +204,7 @@ export const ReviewPanelImpl = ({
         return list && list.length > 0
           ? [
               {
-                key: sev as string,
+                key: sev,
                 label: severityLabels[sev],
                 items: list,
                 tone: severityTone(sev),

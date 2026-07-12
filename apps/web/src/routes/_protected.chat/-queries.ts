@@ -902,14 +902,14 @@ export const createChatRuntime = ({
     action: () => Promise<void>,
   ) => {
     if (options?.body !== undefined) {
-      client.updateOptions({ body: options.body });
+      client.updateOptions({ forwardedProps: options.body });
     }
 
     try {
       await action();
     } finally {
       if (options?.body !== undefined) {
-        client.updateOptions({ body: {} });
+        client.updateOptions({ forwardedProps: {} });
       }
     }
   };
