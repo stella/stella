@@ -17,7 +17,9 @@ import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
 
 const FAILURE = new Error("provider unavailable");
 
-const chat = (): Promise<never> => Promise.reject(FAILURE);
+const chat = async (): Promise<never> => {
+  throw FAILURE;
+};
 
 const testModel = {
   adapter: {},
