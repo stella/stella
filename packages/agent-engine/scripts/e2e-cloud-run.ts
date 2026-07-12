@@ -29,6 +29,9 @@ import { SANDBOX_NO_MCP } from "../src/sandbox";
 
 const IMAGE = process.env["AGENT_SANDBOX_IMAGE"] ?? "stella/agent-sandbox:dev";
 const HARNESS_MODEL = process.env["AGENT_SANDBOX_MODEL"] ?? "gpt-4o-mini";
+// Linux defaults to /var/run/docker.sock; Docker Desktop on macOS uses a
+// per-user socket, so allow an override for local runs.
+const socketPath = process.env["AGENT_SANDBOX_DOCKER_SOCKET"];
 
 // Auto-detect the harness credential. codex speaks the OpenAI Responses API,
 // so a plain OpenAI key is the default; `AGENT_HARNESS_BASE_URL` switches to a
@@ -53,6 +56,7 @@ const { adapter, middleware } = resolveStellaSandboxRun({
   harnessApiKey: apiKey,
   ...(baseUrl ? { harnessBaseUrl: baseUrl } : {}),
   cloudImage: IMAGE,
+  ...(socketPath ? { cloudSocketPath: socketPath } : {}),
   // Smoke test: prove the harness boots in the sandbox and streams back, not
   // tool round-trips. Explicitly opt out of the MCP tool surface.
   mcp: SANDBOX_NO_MCP,

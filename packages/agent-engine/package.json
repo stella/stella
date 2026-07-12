@@ -13,7 +13,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "e2e:cloud": "bun build scripts/e2e-cloud-run.ts --target node --outdir .e2e-build && node --env-file=.env.e2e .e2e-build/e2e-cloud-run.js",
+    "e2e:cloud": "bun --env-file=.env.e2e scripts/e2e-cloud-run.ts",
     "test": "bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/agent-engine",
@@ -24,7 +24,6 @@
     "@tanstack/ai": "catalog:",
     "@tanstack/ai-codex": "catalog:",
     "@tanstack/ai-sandbox": "catalog:",
-    "@tanstack/ai-sandbox-docker": "catalog:",
     "better-result": "catalog:"
   },
   "devDependencies": {
