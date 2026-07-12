@@ -42,7 +42,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v6
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Create GitHub App token
         id: app-token
@@ -52,20 +52,18 @@ jobs:
           private-key: ${{ secrets.BRANCH_PROTECTION_APP_KEY }}
 
       - name: Apply ruleset
-        # On push, sync configs touched by the commit. When the sync
-        # workflow itself changes, apply every checked-in ruleset so a
-        # prior config-only merge cannot leave live GitHub behind.
-        # On manual dispatch, sync the selected config only.
+        # On push, the `on.push.paths` filter already established that
+        # this push is relevant, so apply every checked-in ruleset.
+        # head_commit only reflects the last commit of the push, so
+        # gating on it here would skip matrix legs for configs touched
+        # by an earlier commit in a multi-commit push, leaving live
+        # rulesets silently unsynced. The apply is idempotent per
+        # config, so running both matrix legs on every matching push is
+        # safe. On manual dispatch, sync the selected config only.
         if: >-
           github.event_name == 'workflow_dispatch'
           && matrix.expected-config-path == inputs.expected-config-path
           || github.event_name == 'push'
-          && (
-            contains(github.event.head_commit.modified, matrix.expected-config-path)
-            || contains(github.event.head_commit.added, matrix.expected-config-path)
-            || contains(github.event.head_commit.modified, '.github/workflows/sync-branch-protection.yml')
-            || contains(github.event.head_commit.added, '.github/workflows/sync-branch-protection.yml')
-          )
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           REPO: ${{ github.repository }}
