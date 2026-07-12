@@ -54,6 +54,10 @@ import {
   readFullWorkflowSnapshotCursor,
 } from "@/api/lib/workflow-target-queries";
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
+import {
+  COMPLETE_ENTITY_SCRIPT,
+  parseEntityCompletionReply,
+} from "@/api/lib/workflow/completion-tracking";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
   AIJustification,
@@ -1800,20 +1804,32 @@ const onEntityCompleted = async (
   requestId: string,
   runLockTtlSec: number,
 ) => {
-  const isCurrentRequest = await isCurrentWorkflowRequest({
+  const redis = getRedis();
+
+  // Atomically re-check that this job still belongs to the active
+  // workflow request AND increment the completed counter in the same
+  // Redis command (see `COMPLETE_ENTITY_SCRIPT`). A plain check-then-INCR
+  // (two round trips) leaves a window where a stale job's check can pass
+  // just before the run it belongs to finishes and a new run resets the
+  // counters — the stale job's INCR would then land on the new run's
+  // counter instead of being a no-op. Same idiom as
+  // `RESERVE_RECOVERY_LOCK_SCRIPT` above.
+  const reply: unknown = await redis.send("EVAL", [
+    COMPLETE_ENTITY_SCRIPT,
+    "4",
+    workflowKey(workspaceId, "request-id"),
+    workflowKey(workspaceId, "running"),
+    workflowKey(workspaceId, "completed"),
+    workflowKey(workspaceId, "total"),
     requestId,
-    workspaceId,
-  });
-  if (!isCurrentRequest) {
+    LEGACY_RUNNING_LOCK_VALUE,
+  ]);
+  const result = parseEntityCompletionReply(reply);
+  if (!result.matched) {
     return;
   }
 
-  const redis = getRedis();
-  const completed = await redis.incr(workflowKey(workspaceId, "completed"));
-  const totalStr = await redis.get(workflowKey(workspaceId, "total"));
-  const total = Number(totalStr ?? "0");
-
-  if (completed >= total) {
+  if (result.completed >= result.total) {
     await finishWorkflow(workspaceId, organizationId, userId, requestId);
     return;
   }
