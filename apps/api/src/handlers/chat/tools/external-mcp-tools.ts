@@ -13,6 +13,7 @@ import {
 import { normalizeExternalMcpToolsForChat } from "@/api/handlers/chat/tools/external-mcp-tools-normalization";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   createMcpClientForConnection,
   loadActiveMcpConnectionsForUser,
@@ -75,14 +76,15 @@ export const loadExternalMcpToolsForUser = async ({
   // timeout — degrades to "no tools from that connector" rather than
   // failing the whole load; see `loadConnectorTools`.
   const results = await Promise.all(
-    rows.map((row) =>
-      loadConnectorTools({
-        nullUnionStrategy,
-        organizationId,
-        row,
-        safeDb,
-        userId,
-      }),
+    rows.map(
+      async (row) =>
+        await loadConnectorTools({
+          nullUnionStrategy,
+          organizationId,
+          row,
+          safeDb,
+          userId,
+        }),
     ),
   );
 
@@ -181,49 +183,101 @@ const loadConnectorTools = async ({
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<LoadedExternalMcpConnectorResult | null> => {
+  // Tracks the client for the whole life of this discovery attempt, from
+  // the moment `createMcpClientForConnection` resolves, so every failure
+  // path below — a synchronous throw or a discovery timeout — has a
+  // handle to close it. Nothing else owns this client: on success it is
+  // handed to the caller via the returned result (which takes over
+  // closing it), and on any failure path it must be closed here or it
+  // leaks.
+  let client: MCPClient | undefined;
+
+  // Constructed once, outside `withTimeout`, so the same promise can be
+  // raced against the timeout AND, on the timeout path, awaited again
+  // afterwards to close whatever client discovery eventually produces.
+  // `withTimeout` itself only swallows the loser's late rejection to
+  // avoid an unhandled-rejection warning; it does not close resources
+  // the loser created.
+  const discovery =
+    (async (): Promise<LoadedExternalMcpConnectorResult | null> => {
+      const createdClient = await createMcpClientForConnection({
+        organizationId,
+        row,
+        safeDb,
+        userId,
+      });
+      if (!createdClient) {
+        return null;
+      }
+      client = createdClient;
+
+      const tools = await loadMcpConnectorTools({ client, row });
+      const normalized = normalizeExternalMcpToolsForChat({
+        allowedTools: row.allowedTools,
+        connectorSlug: row.slug,
+        nullUnionStrategy,
+        tools,
+      });
+
+      return {
+        client,
+        connector: {
+          description: row.description,
+          displayName: row.displayName,
+          slug: row.slug,
+          toolNames: normalized.toolNames,
+        },
+        tools: normalized.tools,
+      };
+    })();
+
   try {
-    return await withTimeout(
-      async () => {
-        const client = await createMcpClientForConnection({
-          organizationId,
-          row,
-          safeDb,
-          userId,
-        });
-        if (!client) {
-          return null;
-        }
-
-        const tools = await loadMcpConnectorTools({ client, row });
-        const normalized = normalizeExternalMcpToolsForChat({
-          allowedTools: row.allowedTools,
-          connectorSlug: row.slug,
-          nullUnionStrategy,
-          tools,
-        });
-
-        return {
-          client,
-          connector: {
-            description: row.description,
-            displayName: row.displayName,
-            slug: row.slug,
-            toolNames: normalized.toolNames,
-          },
-          tools: normalized.tools,
-        };
-      },
-      {
-        label: `external-mcp-tools:${row.slug}`,
-        timeoutMs: EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS,
-      },
-    );
+    return await withTimeout(async () => await discovery, {
+      label: `external-mcp-tools:${row.slug}`,
+      timeoutMs: EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS,
+    });
   } catch (error) {
+    if (error instanceof TimeoutError) {
+      // `discovery` is still running; wait for it to settle (success or
+      // failure) and close whatever client it created, since the timeout
+      // already discarded its result and no caller will ever see it.
+      void discovery
+        .catch(() => undefined)
+        .then(
+          async () =>
+            await closeAbandonedClient({ client, connectorSlug: row.slug }),
+        );
+    } else {
+      // `discovery` has already settled (that rejection is `error`), so
+      // any client it created is safe to close immediately.
+      await closeAbandonedClient({ client, connectorSlug: row.slug });
+    }
+
     captureError(error, {
       source: "external-mcp-tools",
       connectorSlug: row.slug,
     });
     return null;
+  }
+};
+
+const closeAbandonedClient = async ({
+  client,
+  connectorSlug,
+}: {
+  client: MCPClient | undefined;
+  connectorSlug: string;
+}): Promise<void> => {
+  if (!client) {
+    return;
+  }
+  try {
+    await client.close();
+  } catch (closeError) {
+    captureError(closeError, {
+      source: "external-mcp-tools-close",
+      connectorSlug,
+    });
   }
 };
 
