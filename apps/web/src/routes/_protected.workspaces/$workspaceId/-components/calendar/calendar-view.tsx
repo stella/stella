@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -417,17 +418,14 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               dueDate: date,
             });
           if (response.error) {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+            throw toAPIError(response.error);
           }
-          void invalidateCalendarTasks();
         } catch {
           stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
+        } finally {
           void invalidateCalendarTasks();
         }
       })();
@@ -443,17 +441,14 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               startAt: toAllDayAgendaDateTime(date),
             });
           if (response.error) {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
+            throw toAPIError(response.error);
           }
-          void invalidateCalendarTasks();
         } catch {
           stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
+        } finally {
           void invalidateCalendarTasks();
         }
       })();

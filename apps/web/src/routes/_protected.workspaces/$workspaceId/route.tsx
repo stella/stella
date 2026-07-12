@@ -100,7 +100,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
             .workspaces({ workspaceId: wsId })
             .active.post();
           if (response.error) {
-            onPrefetchError(toAPIError(response.error));
+            throw toAPIError(response.error);
           }
         } catch (error: unknown) {
           onPrefetchError(error);
