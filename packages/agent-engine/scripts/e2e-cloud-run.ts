@@ -15,14 +15,27 @@
  *
  * The credential here is the harness's own model key (OpenAI/codex). It is NOT
  * a stella org key and NOT a user subscription — those never enter a sandbox.
+ *
+ * NOTE: the `e2e:cloud` script bundles this to a Node target and runs it under
+ * Node, not bun. dockerode's container attach uses an HTTP 101 socket hijack
+ * that docker-modem mishandles under bun; Node drives it correctly. This is
+ * also why the production cloud engine must provision sandboxes from a Node
+ * context, not directly in the bun api process (see plan 050).
  */
 import { chat, EventType } from "@tanstack/ai";
 
-import { resolveStellaSandboxRun } from "../src/run";
+import { resolveStellaSandboxRun, type HarnessProvider } from "../src/run";
+import { SANDBOX_NO_MCP } from "../src/sandbox";
 
 const IMAGE = process.env["AGENT_SANDBOX_IMAGE"] ?? "stella/agent-sandbox:dev";
-const HARNESS_MODEL = process.env["AGENT_SANDBOX_MODEL"] ?? "gpt-5.1";
+const HARNESS_MODEL = process.env["AGENT_SANDBOX_MODEL"] ?? "gpt-4o-mini";
+
+// Auto-detect the harness credential. codex speaks the OpenAI Responses API,
+// so a plain OpenAI key is the default; `AGENT_HARNESS_BASE_URL` switches to a
+// self-declared Responses-compatible gateway (the org's BYOK in production).
 const apiKey = process.env["OPENAI_API_KEY"] ?? process.env["CODEX_API_KEY"];
+const baseUrl = process.env["AGENT_HARNESS_BASE_URL"];
+const provider: HarnessProvider = baseUrl ? "openai-compatible" : "openai";
 
 if (!apiKey) {
   console.error(
@@ -35,17 +48,14 @@ const { adapter, middleware } = resolveStellaSandboxRun({
   runId: "e2e-cloud-run",
   engine: "cloud",
   harness: "codex",
+  harnessProvider: provider,
   harnessModel: HARNESS_MODEL,
   harnessApiKey: apiKey,
+  ...(baseUrl ? { harnessBaseUrl: baseUrl } : {}),
   cloudImage: IMAGE,
-  // No real MCP server for this smoke test: the point is proving the harness
-  // boots in the sandbox and streams back, not tool round-trips. Point the
-  // binding at an unused localhost port and instruct the agent not to call it.
-  mcp: {
-    serverName: "stella",
-    url: "http://127.0.0.1:9/mcp",
-    token: "e2e-placeholder-token",
-  },
+  // Smoke test: prove the harness boots in the sandbox and streams back, not
+  // tool round-trips. Explicitly opt out of the MCP tool surface.
+  mcp: SANDBOX_NO_MCP,
   instructions:
     "This is a connectivity smoke test. Do not call any tools. Reply with exactly the single word READY.",
 });

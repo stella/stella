@@ -1,6 +1,7 @@
 export type {
   AgentEngine,
   AgentHarness,
+  SandboxMcp,
   StellaSandboxInput,
   StellaSandboxMcpBinding,
 } from "./sandbox";
@@ -10,7 +11,8 @@ export {
   defineStellaSandbox,
   isAgentEngine,
   isAgentHarness,
+  SANDBOX_NO_MCP,
 } from "./sandbox";
 export { stellaSandboxPolicy } from "./policy";
-export type { StellaSandboxRunInput } from "./run";
-export { resolveStellaSandboxRun } from "./run";
+export type { HarnessProvider, StellaSandboxRunInput } from "./run";
+export { HARNESS_PROVIDERS, resolveStellaSandboxRun } from "./run";
