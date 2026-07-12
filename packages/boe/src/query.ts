@@ -61,8 +61,16 @@ const escapeQueryStringPhrase = (value: string): QueryStringSafe => {
  * `phrase` must already carry the `QueryStringSafe` brand, so the escaping
  * invariant cannot be bypassed by a future caller.
  */
-const fieldClause = (field: string, phrase: QueryStringSafe): QueryStringSafe =>
-  rawClause(`${field}:"${phrase}"`);
+type BoeFieldName =
+  | "titulo"
+  | "departamento@codigo"
+  | "rango@codigo"
+  | "materia@codigo";
+
+const fieldClause = (
+  field: BoeFieldName,
+  phrase: QueryStringSafe,
+): QueryStringSafe => rawClause(`${field}:"${phrase}"`);
 
 /**
  * Build the tokenized free-text OR-clause across titulo/texto. Terms are
