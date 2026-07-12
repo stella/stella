@@ -10,6 +10,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
@@ -38,6 +39,10 @@ export default createSafeHandler(
       body: { title, url, snippet, citation, jurisdiction, sourceType },
     } = ctx;
 
+    // Non-authoritative fast-fail: cheap, unlocked, avoids doing
+    // metadata work for a request that's obviously over the limit.
+    // The authoritative check is inside the write transaction below,
+    // behind the workspace-row lock.
     const entityCount = yield* Result.await(
       safeDb((tx) =>
         tx.$count(entities, eq(entities.workspaceId, workspaceId)),
@@ -61,8 +66,20 @@ export default createSafeHandler(
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
 
-    yield* Result.await(
+    const writeResult = yield* Result.await(
       safeDb(async (tx) => {
+        // See `lockWorkspacesForEntityCap` for the canonical lock
+        // order every entity-creating path follows (issue #1139).
+        await lockWorkspacesForEntityCap(tx, [workspaceId]);
+
+        const authoritativeEntityCount = await tx.$count(
+          entities,
+          eq(entities.workspaceId, workspaceId),
+        );
+        if (authoritativeEntityCount >= LIMITS.entitiesCount) {
+          return { ok: false as const };
+        }
+
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
         await tx.insert(entities).values({
@@ -126,8 +143,16 @@ export default createSafeHandler(
             },
           },
         ]);
+
+        return { ok: true as const };
       }),
     );
+
+    if (!writeResult.ok) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Entities limit reached" }),
+      );
+    }
 
     getSearchProvider().indexEntity(entityId).catch(captureError);
 

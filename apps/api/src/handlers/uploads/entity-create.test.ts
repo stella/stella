@@ -116,19 +116,19 @@ const createCapacityInsertTx = (
   existingEntityCount: number,
   reservedUploadCount = 0,
 ) => {
-  const forUpdate = mock(async () => [{ id: workspaceId }]);
-  const limit = mock(() => ({ for: forUpdate }));
-  const where = mock(() => ({ limit }));
-  const from = mock(() => ({ where }));
-  const select = mock(() => ({ from }));
+  // `checkEntityCreateCapacityForInsert` acquires its workspace-row
+  // lock via the shared `lockWorkspacesForEntityCap` helper, which
+  // issues a raw `tx.execute(sql\`... FOR UPDATE\`)` per workspace id
+  // (see apps/api/src/lib/entity-cap-lock.ts).
+  const execute = mock(async () => [{ id: workspaceId }]);
   const countEntities = mock(async (table) =>
     table === pendingUploads ? reservedUploadCount : existingEntityCount,
   );
 
   return {
-    forUpdate,
+    execute,
     tx: {
-      select,
+      execute,
       $count: countEntities,
     },
   };
@@ -139,7 +139,7 @@ const runCapacityInsertCheck = async (
   reservedUploadCount = 0,
   excludeUploadId?: SafeId<"pendingUpload">,
 ) => {
-  const { forUpdate, tx } = createCapacityInsertTx(
+  const { execute, tx } = createCapacityInsertTx(
     existingEntityCount,
     reservedUploadCount,
   );
@@ -150,7 +150,7 @@ const runCapacityInsertCheck = async (
     excludeUploadId,
   });
 
-  return { forUpdate, result };
+  return { execute, result };
 };
 
 type RolledBackTxCallback<T> = (tx: TestDatabaseTransaction) => Promise<T>;
@@ -428,12 +428,12 @@ describe("entity-create presigned upload validation", () => {
   });
 
   test("rejects finalization writes that no longer fit entity capacity", async () => {
-    const { forUpdate, result } = await runCapacityInsertCheck(
+    const { execute, result } = await runCapacityInsertCheck(
       LIMITS.entitiesCount,
     );
 
     expect(Result.isError(result)).toBe(true);
-    expect(forUpdate).toHaveBeenCalledWith("update");
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 
   test("accepts finalization writes that exactly fit remaining capacity", async () => {

@@ -50,6 +50,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -448,15 +449,9 @@ export const checkEntityCreateCapacityForInsert = async ({
     panic("Entity create insert count must be a positive integer");
   }
 
-  const workspaceRows = await tx
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(eq(workspaces.id, workspaceId))
-    .limit(1)
-    .for("update");
-  if (!workspaceRows.at(0)) {
-    panic("Workspace lock for entity create returned no rows");
-  }
+  // See `lockWorkspacesForEntityCap` for the canonical lock order
+  // every entity-creating path follows (issue #1139).
+  await lockWorkspacesForEntityCap(tx, [workspaceId]);
 
   const existingEntityCount = await tx.$count(
     entities,

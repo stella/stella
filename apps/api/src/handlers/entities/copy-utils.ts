@@ -18,6 +18,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
@@ -499,6 +500,19 @@ export const copyEntities = async ({
   sourceEntities,
   sourceWorkspaceId,
 }: CopyEntitiesProps): Promise<CopyEntitiesResult> => {
+  // Same-workspace duplicate locks the target only; cross-workspace
+  // copy/move also locks the source (needed when the caller deletes
+  // source rows afterward). Both ids go through
+  // `lockWorkspacesForEntityCap`, which sorts them ascending before
+  // locking — see that function for why this closes the
+  // cross-workspace ABBA between an A->B and a concurrent B->A move.
+  await lockWorkspacesForEntityCap(
+    tx,
+    sourceWorkspaceId
+      ? [sourceWorkspaceId, targetWorkspaceId]
+      : [targetWorkspaceId],
+  );
+
   const entityCount = await tx.$count(
     entities,
     eq(entities.workspaceId, targetWorkspaceId),

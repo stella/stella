@@ -24,6 +24,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -107,6 +108,10 @@ const uploadEntityHandler = async function* ({
   body: { file, name: rawName, propertyId },
 }: UploadEntityHandlerProps) {
   const name = sanitizeFilename(rawName);
+  // Non-authoritative fast-fail: cheap, unlocked, avoids scanning
+  // and uploading a file for a request that's obviously over the
+  // limit. The authoritative check is inside the write transaction
+  // below, behind the workspace-row lock.
   const [entityCountResult, propertyResult] = await Promise.all([
     safeDb((tx) => tx.$count(entities, eq(entities.workspaceId, workspaceId))),
     safeDb((tx) =>
@@ -215,8 +220,23 @@ const uploadEntityHandler = async function* ({
     const entityVersionId = createSafeId<"entityVersion">();
     const fieldId = createSafeId<"field">();
 
-    const fileName = yield* Result.await(
+    const writeResult = yield* Result.await(
       safeDb(async (tx) => {
+        // See `lockWorkspacesForEntityCap` for the canonical lock
+        // order every entity-creating path follows (issue #1139).
+        await lockWorkspacesForEntityCap(tx, [workspaceId]);
+
+        // The earlier `entityCount` check above is a
+        // non-authoritative fast-fail to avoid wasted scan/upload
+        // work; this is the authoritative check.
+        const authoritativeEntityCount = await tx.$count(
+          entities,
+          eq(entities.workspaceId, workspaceId),
+        );
+        if (authoritativeEntityCount >= LIMITS.entitiesCount) {
+          return { ok: false as const };
+        }
+
         const resolvedName = await resolveFileName({ tx, propertyId, name });
 
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -294,9 +314,20 @@ const uploadEntityHandler = async function* ({
           },
         });
 
-        return resolvedName;
+        return { ok: true as const, resolvedName };
       }),
     );
+
+    if (!writeResult.ok) {
+      await Promise.allSettled(
+        s3Keys.map(async (key) => await getS3().delete(key)),
+      );
+      return Result.err(
+        new HandlerError({ status: 400, message: "Entities limit reached" }),
+      );
+    }
+
+    const fileName = writeResult.resolvedName;
 
     await processExtraction(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
@@ -341,7 +372,11 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } catch (error) {
-    await Promise.all(s3Keys.map(async (key) => await getS3().delete(key)));
+    // Settled, not `Promise.all`: one failed delete must not stop
+    // cleanup of the remaining keys and orphan them in S3.
+    await Promise.allSettled(
+      s3Keys.map(async (key) => await getS3().delete(key)),
+    );
     throw error;
   }
 };
