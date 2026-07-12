@@ -259,6 +259,17 @@ describe("currencyCents() and addCents()", () => {
     addCents(usd, eur);
   });
 
+  test("COMPILE ERROR: addCents rejects a non-literal (wide) currency type", () => {
+    // A currency read back from a DB row types as plain `string`, not a
+    // literal — `CurrencyCents<string>` must be structurally unusable with
+    // addCents even though both operands nominally "share" currency A.
+    const dynamicCurrency: string = "USD";
+    const a = currencyCents(dynamicCurrency, 100);
+    const b = currencyCents(dynamicCurrency, 200);
+    // @ts-expect-error - addCents must not accept a non-literal CurrencyCents<string>
+    addCents(a, b);
+  });
+
   test("INVARIANT: addCents is commutative and associative", () => {
     const rand = makePrng(4_611_812);
     for (let n = 0; n < 2000; n++) {

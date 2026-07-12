@@ -57,7 +57,7 @@ describe("exportPdfHandler totals", () => {
         timeEntryRow({
           currency: "EUR",
           billedMinutes: 60,
-          rateAtEntry: 5_000,
+          rateAtEntry: 5000,
         }),
         timeEntryRow({
           currency: "USD",

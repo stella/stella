@@ -136,17 +136,28 @@ export const currencyCents = <C extends string>(
  * different currency literal (e.g. `addCents(usdAmount, eurAmount)`) is a
  * compile error, not a runtime bug — see `packages/money/src/index.test.ts`
  * for the `@ts-expect-error` proof.
+ *
+ * Both operands are further constrained to reject the WIDE
+ * `CurrencyCents<string>` (as opposed to a literal currency such as
+ * `CurrencyCents<"USD">`). A currency read back from a DB row types as
+ * plain `string`, so without this, `addCents(currencyCents(row.currency, x),
+ * currencyCents(row.currency, y))` would still typecheck even when the two
+ * rows carry genuinely different runtime currencies — the compile-time
+ * guarantee above only bites for literal currency types. Code that
+ * aggregates rows with a dynamic (non-literal) currency must use
+ * `MoneyTotals` instead, which buckets by currency at runtime and is the
+ * runtime-correct tool for that case.
  */
 export const addCents = <A extends string, B extends A = A>(
-  a: CurrencyCents<A>,
-  b: CurrencyCents<B>,
+  a: string extends A ? never : CurrencyCents<A>,
+  b: string extends B ? never : CurrencyCents<B>,
 ): CurrencyCents<A> =>
   // SAFETY: the currency brand is phantom-only (never materialized at
   // runtime, same as CentsAmount itself); the result is just a + b with
   // A's brand reattached, which is sound because the parameter types
   // already proved both operands share currency A.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  cents(a + b) as CurrencyCents<A>;
+  cents((a as CurrencyCents<A>) + (b as CurrencyCents<B>)) as CurrencyCents<A>;
 
 /**
  * Per-currency accumulator for aggregating money across rows that may carry
@@ -156,6 +167,15 @@ export const addCents = <A extends string, B extends A = A>(
  * currency and sorts deterministically by currency code. This keeps
  * cross-currency summation structurally unreachable through this package's
  * API — callers must handle each currency's total explicitly.
+ *
+ * Division of responsibility with `addCents`: `addCents` gives a
+ * compile-time guarantee, but only when both operands carry a literal
+ * currency type (`CurrencyCents<"USD">`); it rejects the wide
+ * `CurrencyCents<string>` outright. Any flow whose currency is dynamic
+ * (read from a DB row, request body, etc.) cannot satisfy that literal
+ * constraint and must bucket through `MoneyTotals` instead, which enforces
+ * the same "never sum across currencies" invariant at runtime via the
+ * per-currency `Map`.
  */
 export type MoneyTotalsEntry = {
   currency: string;
