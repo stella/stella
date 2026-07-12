@@ -181,7 +181,12 @@ const folioOperationComment = (operation: FolioAIEditOperation) =>
 type PreparedOperation = {
   folio: FolioAIEditOperation;
   input: ToolInputOperation;
+  /** Internal suggestion/operation id — always generated (uuid-based) so
+   *  review-store entries stay unique across batches. */
   id: string;
+  /** Id echoed to the model in `queued`/`skipped`: the model-supplied
+   *  operation id when present (folio contract), else {@link id}. */
+  reportId: string;
 };
 
 const getOperationComment = (
@@ -189,6 +194,7 @@ const getOperationComment = (
 ): { text: string } | undefined => {
   switch (operation.type) {
     case "replaceInBlock":
+    case "replaceRange":
     case "insertAfterBlock":
     case "insertBeforeBlock":
     case "replaceBlock":
@@ -196,6 +202,7 @@ const getOperationComment = (
     case "insertSignatureTable":
       return operation.comment ? { text: operation.comment.text } : undefined;
     case "commentOnBlock":
+    case "commentOnRange":
       return { text: operation.comment.text };
     default:
       operation satisfies never;
@@ -282,6 +289,43 @@ type PrepareOperationOptions = {
   operation: ToolInputOperation;
   id: string;
   comment: { text: string } | undefined;
+};
+
+type RangeOperationOptions = {
+  operation: Extract<
+    ToolInputOperation,
+    { type: "commentOnRange" | "replaceRange" }
+  >;
+  id: string;
+  comment: { text: string } | undefined;
+};
+
+// Range-addressed operations pass the `find_text` handle straight
+// through; the apply engine re-validates it against the live document
+// and skips with `staleRange` when the selection no longer matches.
+const toFolioRangeOperation = ({
+  operation,
+  id,
+  comment,
+}: RangeOperationOptions): FolioAIEditOperation => {
+  if (operation.type === "commentOnRange") {
+    return {
+      comment: { text: operation.comment.text },
+      id,
+      range: operation.range,
+      type: operation.type,
+    };
+  }
+  const next: FolioAIEditOperation = {
+    id,
+    range: operation.range,
+    replace: operation.replace,
+    type: operation.type,
+  };
+  if (comment) {
+    next.comment = comment;
+  }
+  return next;
 };
 
 const toFolioOperation = ({
@@ -400,6 +444,9 @@ const toFolioOperation = ({
       }
       return next;
     }
+    case "replaceRange":
+    case "commentOnRange":
+      return toFolioRangeOperation({ operation, id, comment });
     default:
       operation satisfies never;
       return null;
@@ -418,7 +465,12 @@ const prepareOperations = (
     if (folio === null) {
       continue;
     }
-    prepared.push({ folio, input: operation, id });
+    prepared.push({
+      folio,
+      input: operation,
+      id,
+      reportId: operation.id ?? id,
+    });
   }
 
   return prepared;
@@ -480,13 +532,57 @@ const buildPreview = (
   const block = blocksById.get(folioOperationBlockId(operation));
   const blockText = block?.text ?? "";
   switch (operation.type) {
-    // Range-addressed operations are folio-native; stella's
-    // apply-active-docx-edits tool never emits them, so a prepared
-    // suggestion cannot carry one. Skip defensively if one appears.
-    case "replaceRange":
-    case "commentOnRange":
+    // `formatRange` is outside this tool's accepted subset (direct-only
+    // apply mode; the review flow is tracked-changes). Skip defensively
+    // if one ever appears on a stored suggestion.
     case "formatRange":
       return null;
+    // Range-addressed edits render with the replaceInBlock preview: the
+    // handle's offsets locate the replaced text inside the snapshot block
+    // the same way a `find` match does.
+    case "replaceRange": {
+      if (block === undefined) {
+        return null;
+      }
+      const start = operation.range.startOffset;
+      const end = Math.min(operation.range.endOffset, blockText.length);
+      if (start >= end) {
+        return null;
+      }
+      const contextStart = Math.max(0, start - PREVIEW_CONTEXT_CHARS);
+      const contextEnd = Math.min(
+        blockText.length,
+        end + PREVIEW_CONTEXT_CHARS,
+      );
+      return {
+        type: "replaceInBlock",
+        contextBefore: blockText.slice(contextStart, start),
+        before: blockText.slice(start, end),
+        after: operation.replace,
+        contextAfter: blockText.slice(end, contextEnd),
+        ...(block.previewRuns !== undefined && {
+          sourceRuns: block.previewRuns,
+          contextStart,
+          matchStart: start,
+          matchEnd: end,
+          contextEnd,
+        }),
+      };
+    }
+    // Anchored like commentOnBlock with a quote: the sliced range text is
+    // the anchor, so no anchorRuns (those render from the block start).
+    case "commentOnRange": {
+      if (block === undefined) {
+        return null;
+      }
+      const start = operation.range.startOffset;
+      const end = Math.min(operation.range.endOffset, blockText.length);
+      const anchor =
+        start < end
+          ? blockText.slice(start, end)
+          : blockText.slice(0, PREVIEW_ANCHOR_CHARS);
+      return { type: "commentOnBlock", anchor };
+    }
     case "replaceInBlock": {
       const idx = blockText.indexOf(operation.find);
       if (idx === -1) {
@@ -603,45 +699,47 @@ const queueReviewSuggestions = ({
   const queuedIds: string[] = [];
   const skipped: { id: string; reason: "noopOperation" | "missingBlock" }[] =
     [];
-  const items: ReviewSuggestion[] = prepared.flatMap(({ id, input, folio }) => {
-    // Drop true no-ops before they ever reach the panel: the model
-    // occasionally emits `find === replace` (or replaceBlock text
-    // identical to the source) as a side effect of running through
-    // every block. Showing them as "X → X" cards is noise.
-    if (isNoopReviewOperation(folio, blocksById)) {
-      skipped.push({ id, reason: "noopOperation" });
-      return [];
-    }
-    const preview = buildPreview(folio, blocksById);
-    if (!preview) {
-      skipped.push({ id, reason: "missingBlock" });
-      return [];
-    }
-    queuedIds.push(id);
-    const base: ReviewSuggestion = {
-      id,
-      blockId: folioOperationBlockId(folio),
-      type: folio.type,
-      summary: summarizeOperation(folio),
-      preview,
-      severity: inputOperationSeverity(input),
-      area: inputOperationArea(input),
-      status: "pending",
-      applyMode: null,
-      revisionIds: null,
-      pendingOperation: folio,
-      snapshot,
-    };
-    const label = labelsById.get(input.blockId);
-    if (label !== undefined) {
-      base.blockLabel = label;
-    }
-    const folioComment = folioOperationComment(folio);
-    if (folioComment) {
-      base.comment = folioComment.text;
-    }
-    return [base];
-  });
+  const items: ReviewSuggestion[] = prepared.flatMap(
+    ({ id, reportId, input, folio }) => {
+      // Drop true no-ops before they ever reach the panel: the model
+      // occasionally emits `find === replace` (or replaceBlock text
+      // identical to the source) as a side effect of running through
+      // every block. Showing them as "X → X" cards is noise.
+      if (isNoopReviewOperation(folio, blocksById)) {
+        skipped.push({ id: reportId, reason: "noopOperation" });
+        return [];
+      }
+      const preview = buildPreview(folio, blocksById);
+      if (!preview) {
+        skipped.push({ id: reportId, reason: "missingBlock" });
+        return [];
+      }
+      queuedIds.push(reportId);
+      const base: ReviewSuggestion = {
+        id,
+        blockId: folioOperationBlockId(folio),
+        type: folio.type,
+        summary: summarizeOperation(folio),
+        preview,
+        severity: inputOperationSeverity(input),
+        area: inputOperationArea(input),
+        status: "pending",
+        applyMode: null,
+        revisionIds: null,
+        pendingOperation: folio,
+        snapshot,
+      };
+      const label = labelsById.get(folioOperationBlockId(folio));
+      if (label !== undefined) {
+        base.blockLabel = label;
+      }
+      const folioComment = folioOperationComment(folio);
+      if (folioComment) {
+        base.comment = folioComment.text;
+      }
+      return [base];
+    },
+  );
 
   useReviewStore.getState().appendSuggestions(entityId, items);
 
@@ -1033,10 +1131,11 @@ const FileChatOverlayInner = ({
       // actually clicks Accept.
       if (!activeFile) {
         return {
+          version: 1,
           applied: [],
           queued: [],
           skipped: input.operations.map((operation, index) => ({
-            id: `ai-docx-${String(index + 1)}-${operation.blockId}`,
+            id: operation.id ?? `ai-docx-${String(index + 1)}`,
             reason: "documentNotEditable",
           })),
         };
@@ -1062,6 +1161,7 @@ const FileChatOverlayInner = ({
         snapshot: lastSnapshot,
       });
       return {
+        version: 1,
         applied: [],
         queued: queuedIds.map((id) => ({ id })),
         skipped,

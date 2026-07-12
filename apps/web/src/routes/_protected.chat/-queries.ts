@@ -1141,7 +1141,12 @@ type FileChatThreadOptionsArgs = {
  *  `chatThreadContext` the docx-editing overlay builds once mounted. */
 const stubHandleActiveDocxEditToolCall = (
   _input: ApplyActiveDocxEditsInput,
-): ApplyActiveDocxEditsOutput => ({ applied: [], queued: [], skipped: [] });
+): ApplyActiveDocxEditsOutput => ({
+  version: 1,
+  applied: [],
+  queued: [],
+  skipped: [],
+});
 
 /** Never actually invoked: mirrors `getActiveFile`'s presence for the
  *  non-docx (PDF) overlay, steering `getChatRuntimeContextKind` to

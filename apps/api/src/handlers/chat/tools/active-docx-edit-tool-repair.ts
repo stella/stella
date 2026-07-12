@@ -1,5 +1,22 @@
+/**
+ * Pre-validation repair for `apply-active-docx-edits` tool calls.
+ *
+ * Folio's document-operation contract (`parseFolioDocumentOperationBatch` in
+ * `@stll/folio-core`) validates strictly and never coerces, so the only
+ * thing left for this layer is fixing malformations the model produces
+ * BEFORE validation, where a hard failure would bounce the whole batch:
+ *
+ * - `kind` used instead of the `type` discriminator;
+ * - an operation serialized as a JSON string inside `operations`.
+ *
+ * The former `id` -> `blockId` alias repair is intentionally gone: under
+ * the versioned contract `id` is the operation id (echoed in
+ * `queued`/`skipped`), so rewriting it into `blockId` would corrupt valid
+ * inputs. An operation missing `blockId` now fails validation and the
+ * error is fed back to the model to retry.
+ */
+
 type JsonObject = Record<string, unknown>;
-const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
 
 const isJsonObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -35,26 +52,15 @@ const normalizeOperation = (value: unknown): JsonObject | null => {
     }
     return null;
   })();
-  const blockId = (() => {
-    if (typeof operation["blockId"] === "string") {
-      return operation["blockId"];
-    }
-    if (typeof operation["id"] === "string") {
-      return operation["id"];
-    }
-    return null;
-  })();
 
-  if (type === null || blockId === null) {
+  if (type === null) {
     return null;
   }
 
   const normalized: JsonObject = {
     ...operation,
-    blockId,
     type,
   };
-  delete normalized["id"];
   delete normalized["kind"];
 
   return normalized;
@@ -77,21 +83,11 @@ export const normalizeActiveDocxEditToolInput = (
     operations.push(normalized);
   }
 
-  return JSON.stringify({ operations });
-};
-
-export const repairActiveDocxEditToolCall = <
-  TToolCall extends {
-    input: string;
-    toolName: string;
-  },
->(
-  toolCall: TToolCall,
-): TToolCall | null => {
-  if (toolCall.toolName !== APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME) {
-    return null;
-  }
-
-  const input = normalizeActiveDocxEditToolInput(toolCall.input);
-  return input === null ? null : { ...toolCall, input };
+  // Preserve the batch's contract version; everything else on the
+  // envelope is dropped (the strict input schema would reject it anyway).
+  const version = parsed["version"];
+  return JSON.stringify({
+    ...(version === undefined ? {} : { version }),
+    operations,
+  });
 };

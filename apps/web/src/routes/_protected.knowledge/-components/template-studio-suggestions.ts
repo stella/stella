@@ -134,11 +134,21 @@ export type DocxEditOperation = ApplyActiveDocxEditsInput["operations"][number];
 
 type SkippedOperation = ApplyActiveDocxEditsOutput["skipped"][number];
 
-/** Stable per-operation id echoed to the model in queued/skipped. */
+/** The block an operation anchors to; range-addressed ops carry it on the
+ *  `find_text` handle. */
+const operationAnchorBlockId = (operation: DocxEditOperation): string =>
+  operation.type === "replaceRange" || operation.type === "commentOnRange"
+    ? operation.range.blockId
+    : operation.blockId;
+
+/** Stable per-operation id echoed to the model in queued/skipped: the
+ *  model-supplied contract id when present, else a positional fallback. */
 export const operationSpecId = (
   operation: DocxEditOperation,
   index: number,
-): string => `tpl-edit-${String(index + 1)}-${operation.blockId}`;
+): string =>
+  operation.id ??
+  `tpl-edit-${String(index + 1)}-${operationAnchorBlockId(operation)}`;
 
 export type BuildReplaceSpecArgs = {
   id: string;
@@ -192,7 +202,7 @@ export const buildOperationSpecs = ({
 
   for (const [offset, operation] of operations.entries()) {
     const id = operationSpecId(operation, startIndex + offset);
-    const blockText = blockTextById.get(operation.blockId);
+    const blockText = blockTextById.get(operationAnchorBlockId(operation));
     switch (operation.type) {
       case "replaceInBlock": {
         if (operation.find === operation.replace) {
@@ -248,13 +258,17 @@ export const buildOperationSpecs = ({
         break;
       }
       // The Studio renders suggestions as text replacements over the
-      // live document; structural inserts and comments have no such
-      // representation here. The prompt steers the model away from
-      // them; skip defensively when it emits one anyway.
+      // live document; structural inserts, comments, and range-addressed
+      // edits (the Studio surface registers no `find_text` tool, so the
+      // model has no valid handles here) have no such representation.
+      // The prompt steers the model away from them; skip defensively
+      // when it emits one anyway.
       case "insertAfterBlock":
       case "insertBeforeBlock":
       case "commentOnBlock":
-      case "insertSignatureTable": {
+      case "commentOnRange":
+      case "insertSignatureTable":
+      case "replaceRange": {
         skipped.push({ id, reason: "unsupportedBlock" });
         break;
       }

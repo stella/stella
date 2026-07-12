@@ -163,6 +163,14 @@ type ActiveDocxEditSummaryProps = {
   input: ActiveDocxEditInput;
 };
 
+/** The block an operation anchors to; range ops carry it on the handle. */
+const docxOperationAnchorBlockId = (
+  operation: ActiveDocxEditInput["operations"][number],
+): string =>
+  operation.type === "replaceRange" || operation.type === "commentOnRange"
+    ? operation.range.blockId
+    : operation.blockId;
+
 const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
   const t = useTranslations("chat.tool");
   const previewOperations = input.operations.slice(0, 3);
@@ -180,6 +188,17 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
       case "replaceBlock":
         return t("docxReplaceBlockSummary", {
           blockId: operation.blockId,
+        });
+      // Range-addressed ops reuse the block-level summaries: the range
+      // handle anchors to one block, and the card only needs to say
+      // which block is touched.
+      case "replaceRange":
+        return t("docxReplaceBlockSummary", {
+          blockId: operation.range.blockId,
+        });
+      case "commentOnRange":
+        return t("docxCommentSummary", {
+          blockId: operation.range.blockId,
         });
       case "insertAfterBlock":
         return t("docxInsertAfterSummary", {
@@ -216,7 +235,7 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
         <div
           className="text-foreground-strong-muted truncate"
           // eslint-disable-next-line react/no-array-index-key -- previewOperations is a read-only summary of an immutable AI tool-call input; never edited/reordered by the user.
-          key={`${operation.blockId}-${operation.type}-${index}`}
+          key={`${docxOperationAnchorBlockId(operation)}-${operation.type}-${index}`}
         >
           {renderOperationSummary(operation)}
         </div>
