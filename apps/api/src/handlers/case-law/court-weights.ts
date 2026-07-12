@@ -127,6 +127,19 @@ export const loadCourtWeightsForCountry = async (
 // -- SQL entries -----------------------------------------------------------
 
 /**
+ * Per-map-instance cache of the flattened, sorted entries. `loadCourtWeights`
+ * only ever mutates `cached.map` by swapping in a brand-new `Map` on refresh
+ * (never mutating an existing instance in place), so keying on the map
+ * instance gives free invalidation: once the 60 s TTL rotates in a new map,
+ * this WeakMap simply misses and recomputes, and the old entry is GC'd along
+ * with its map.
+ */
+const flattenedEntriesCache = new WeakMap<
+  CourtWeightMap,
+  CourtWeightEntry[] | undefined
+>();
+
+/**
  * Flatten every country's entries into one list, sorted by tier
  * descending so the highest-authority pattern is checked first.
  *
@@ -143,8 +156,14 @@ export const loadCourtWeightsForCountry = async (
 export const flattenCourtWeightEntries = (
   map: CourtWeightMap,
 ): CourtWeightEntry[] | undefined => {
+  if (flattenedEntriesCache.has(map)) {
+    return flattenedEntriesCache.get(map);
+  }
+
   const entries = [...map.values()].flat().sort((a, b) => b.tier - a.tier);
-  return entries.length > 0 ? entries : undefined;
+  const result = entries.length > 0 ? entries : undefined;
+  flattenedEntriesCache.set(map, result);
+  return result;
 };
 
 /**
