@@ -1,7 +1,8 @@
 {
   "as-casts": {
-    "count": 1,
+    "count": 2,
     "files": {
+      "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
       "apps/web/src/app-providers.tsx": 1
     }
   },
@@ -438,7 +439,7 @@
     }
   },
   "cross-route-private-imports": {
-    "count": 217,
+    "count": 216,
     "files": {
       "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 8,
@@ -543,7 +544,6 @@
       "apps/web/src/routes/_protected.workspaces/-components/matter-context-menu.tsx": 1,
       "apps/web/src/routes/auth/organization.tsx": 1,
       "apps/web/src/routes/consent.tsx": 1,
-      "apps/web/src/routes/dev.tsx": 1,
       "apps/web/src/routes/onboarding/-components/catalogue-detail-preview.tsx": 1,
       "apps/web/src/routes/onboarding/-components/catalogue-stack-preview.tsx": 1,
       "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx": 1,

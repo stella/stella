@@ -505,7 +505,13 @@ const crossesRoutePrivate: CrossSliceRule = (file, resolved) => {
   if (!ROUTE_PRIVATE_SEGMENT.test(rest)) {
     return false;
   }
-  return sliceOf(file, WEB_ROUTES_PREFIX) !== to;
+  // A file directly under routes/ (routes/dev.tsx) IS the route whose
+  // children live in the same-named dir (routes/dev/): strip its extension
+  // so the route file's own `-`-private imports stay same-slice. A parent
+  // layout (_protected.tsx) reaching into a CHILD route dir
+  // (_protected.chat/) still differs after the strip and still counts.
+  const from = sliceOf(file, WEB_ROUTES_PREFIX)?.replace(/\.tsx?$/u, "");
+  return from !== to;
 };
 
 const crossesFeature: CrossSliceRule = (file, resolved) => {
@@ -1019,6 +1025,16 @@ const SELF_TEST_CROSS_ROUTE_NESTED = `${CROSS_ROUTE_NESTED_FIXTURE_LINES.join("\
 // import from a NESTED dir proves attribution to the top-level route dir.
 const EXPECTED_CROSS_ROUTE_NESTED = 1;
 
+const CROSS_ROUTE_FILE_FIXTURE_LINES = [
+  'import { own } from "@/routes/_protected.alpha/-queries";',
+  'import { other } from "@/routes/_protected.beta/-queries";',
+];
+const SELF_TEST_CROSS_ROUTE_FILE = `${CROSS_ROUTE_FILE_FIXTURE_LINES.join("\n")}\n`;
+// Expected (file IS the route file routes/_protected.alpha.tsx): its own
+// dir's private import is same-slice after extension stripping; only the
+// `_protected.beta` reach counts.
+const EXPECTED_CROSS_ROUTE_FILE = 1;
+
 const CROSS_ROUTE_CHROME_FIXTURE_LINES = [
   'import { q } from "@/routes/_protected.alpha/-queries";',
   'import { util } from "@/lib/utils";',
@@ -1105,6 +1121,11 @@ const runSelfTest = (): number => {
       root,
       "apps/web/src/routes/_protected.alpha/$id/nested.tsx",
       SELF_TEST_CROSS_ROUTE_NESTED,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/routes/_protected.alpha.tsx",
+      SELF_TEST_CROSS_ROUTE_FILE,
     );
     writeFixture(
       root,
@@ -1210,6 +1231,7 @@ const runSelfTest = (): number => {
     const expectedCrossRouteTotal =
       EXPECTED_CROSS_ROUTE_BETA +
       EXPECTED_CROSS_ROUTE_NESTED +
+      EXPECTED_CROSS_ROUTE_FILE +
       EXPECTED_CROSS_ROUTE_CHROME;
     if (crossRouteMetric.count !== expectedCrossRouteTotal) {
       failures.push(

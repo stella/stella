@@ -479,17 +479,56 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run typecheck -- "${args[@]}"
 
+  # Typecheck-cost baseline guard. What silently rots is the compiler's
+  # workload: an annotation-heavy or inference-exploding pattern in a hot
+  # generic path (Eden surface, route trees, query options) lands as
+  # "typecheck got slow" weeks later with no diff to point at. This re-runs
+  # tsc per project with --extendedDiagnostics and fails when the
+  # deterministic size counters (Types, Instantiations) jump past a committed
+  # baseline; an improvement just prompts a re-baseline. Time/memory are
+  # printed but never gated (machine noise). A separate job, not a step in
+  # typecheck: the guard's full per-project typechecks stacked on the turbo
+  # run would blow that job's timeout; here they run in parallel instead.
+  # Regenerate: `bun scripts/typecheck-baseline.ts --write-baseline`.
+  typecheck-baseline:
+    needs: [trust-check, ci-changes]
+    if: >-
+      needs.ci-changes.outputs.package_checks_required == 'true'
+      && (needs.trust-check.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but PR installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      - name: Generate types
+        # The guard calls tsc directly (no turbo), so the generated inputs
+        # that turbo's typecheck pipeline would produce must exist first.
+        run: bun run typegen
+
       - name: Typecheck-cost baseline guard
-        # What silently rots is the compiler's workload: an annotation-heavy
-        # or inference-exploding pattern in a hot generic path (Eden surface,
-        # route trees, query options) lands as "typecheck got slow" weeks
-        # later with no diff to point at. This re-runs tsgo per project with
-        # --extendedDiagnostics and fails when the deterministic size counters
-        # (Types, Instantiations) jump past a committed baseline; an
-        # improvement just prompts a re-baseline. Time/memory are printed but
-        # never gated (machine noise). The --self-test run first proves the
-        # parser and comparison logic, so a broken guard cannot pass silently.
-        # Regenerate: `bun scripts/typecheck-baseline.ts --write-baseline`.
+        # The --self-test run first proves the parser and comparison logic,
+        # so a broken guard cannot pass silently.
         run: |
           bun scripts/typecheck-baseline.ts --self-test
           bun scripts/typecheck-baseline.ts --check
@@ -1211,6 +1250,7 @@ jobs:
         ci-checks,
         lint,
         typecheck,
+        typecheck-baseline,
         web-build,
         landing-build,
         e2e,
@@ -1235,6 +1275,7 @@ jobs:
           LINT_RESULT: ${{ needs.lint.result }}
           TRUSTED: ${{ needs.trust-check.outputs.trusted }}
           TRUST_RESULT: ${{ needs.trust-check.result }}
+          TYPECHECK_BASELINE_RESULT: ${{ needs.typecheck-baseline.result }}
           TYPECHECK_RESULT: ${{ needs.typecheck.result }}
           WEB_RESULT: ${{ needs.web-build.result }}
           WINDOWS_SCRIPTS_RESULT: ${{ needs.windows-scripts.result }}
@@ -1251,6 +1292,7 @@ jobs:
             if [[ "$CI_RESULT" == "failure" || "$CI_RESULT" == "cancelled" \
                   || "$LINT_RESULT" == "failure" || "$LINT_RESULT" == "cancelled" \
                   || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_RESULT" == "cancelled" \
+                  || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" \
                   || "$WEB_RESULT" == "failure" || "$WEB_RESULT" == "cancelled" \
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
@@ -1271,12 +1313,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$LINT_RESULT" == "cancelled" || "$TYPECHECK_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$LINT_RESULT" == "cancelled" || "$TYPECHECK_RESULT" == "cancelled" || "$TYPECHECK_BASELINE_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$CI_CHANGES_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$LINT_RESULT" == "failure" || "$TYPECHECK_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$LINT_RESULT" == "failure" || "$TYPECHECK_RESULT" == "failure" || "$TYPECHECK_BASELINE_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$CI_CHANGES_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi

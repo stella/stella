@@ -104,7 +104,7 @@ run_typecheck() {
   # The typecheck-cost baseline guard (scripts/typecheck-baseline.ts) is
   # deliberately NOT run here: like the bundle baseline, it re-runs full
   # per-project typechecks and is too slow for the local loop. It runs in
-  # the CI typecheck job only; its failures point at type-cost growth, not
+  # its own CI job (typecheck-baseline); its failures point at type-cost growth, not
   # type errors, so a green verify still matches a green typecheck.
   if [[ -n "$affected_flag" ]]; then
     bun run typecheck -- --concurrency=1 "$affected_flag"

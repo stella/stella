@@ -23,8 +23,8 @@
 //   bun scripts/typecheck-baseline.ts --self-test      prove parser + comparison logic
 //
 // CI-only by design: it re-runs full typechecks (tens of seconds), too slow
-// for the local lint/pre-commit loop. Wired into .github/workflows/ci.yml's
-// typecheck job, right after the turbo typecheck step.
+// for the local lint/pre-commit loop. Wired into .github/workflows/ci.yml as
+// its own typecheck-baseline job, parallel to the turbo typecheck job.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -39,6 +39,12 @@ const WRITE_HINT = "bun scripts/typecheck-baseline.ts --write-baseline";
 // One entry per tsconfig project the repo typechecks in CI. Fixed schema
 // (like bundle-baseline's GROUP_KEYS): a new project must be added here
 // deliberately, and a stale baseline key is a guarded event, not noise.
+//
+// Scope is deliberately the two hot apps plus the web e2e project, not every
+// workspace: packages are leaves whose types are instantiated inside the app
+// checks (a package-level explosion surfaces in the consumer's counters),
+// and each additional project adds a full typecheck to the guard's CI cost.
+// Add a project only when its own check time becomes a pain point.
 const PROJECTS = [
   { id: "api", project: "apps/api" },
   { id: "web", project: "apps/web" },
