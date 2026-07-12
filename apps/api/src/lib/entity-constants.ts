@@ -69,9 +69,6 @@ export const AGENDA_ATTENDEE_TYPE = {
   RESOURCE: "resource",
 } as const;
 
-export type AgendaAttendeeType =
-  (typeof AGENDA_ATTENDEE_TYPE)[keyof typeof AGENDA_ATTENDEE_TYPE];
-
 export const AGENDA_ATTENDEE_TYPES = Object.values(AGENDA_ATTENDEE_TYPE);
 
 const DOCUMENT_STATUS = {
@@ -82,8 +79,6 @@ const DOCUMENT_STATUS = {
 
 export type DocumentStatus =
   (typeof DOCUMENT_STATUS)[keyof typeof DOCUMENT_STATUS];
-
-export const DOCUMENT_STATUSES = Object.values(DOCUMENT_STATUS);
 
 const ENTITY_PRIORITY = {
   NONE: "none",
@@ -111,8 +106,5 @@ export const TASK_ASSIGNEE_ROLES = Object.values(TASK_ASSIGNEE_ROLE);
 const ENTITY_LINK_TYPE = {
   RELATED: "related",
 } as const;
-
-export type EntityLinkType =
-  (typeof ENTITY_LINK_TYPE)[keyof typeof ENTITY_LINK_TYPE];
 
 export const ENTITY_LINK_TYPES = Object.values(ENTITY_LINK_TYPE);
