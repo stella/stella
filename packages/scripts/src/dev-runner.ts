@@ -129,6 +129,13 @@ type HttpReadinessCheck = {
   ) => Promise<string | undefined> | string | undefined;
 };
 
+// The process backing this readiness check: if it dies before the check
+// passes, waitForHttpReadiness fails fast with the crash instead of
+// polling until the HTTP timeout.
+type HttpReadinessWaitOptions = HttpReadinessCheck & {
+  child: Bun.Subprocess;
+};
+
 export type DockerComposeServiceStatus = {
   exitCode: number | undefined;
   health: string | undefined;
@@ -1222,40 +1229,73 @@ const validateDesktopBridgeHealth =
   };
 
 const waitForHttpReadiness = async ({
+  child,
   label,
   timeoutMs = DEFAULT_HTTP_READY_TIMEOUT_MS,
   url,
   validate,
-}: HttpReadinessCheck) => {
-  const startedAt = Date.now();
-  let lastFailure = "service did not respond yet";
+}: HttpReadinessWaitOptions) => {
+  const pollUntilReady = async () => {
+    const startedAt = Date.now();
+    let lastFailure = "service did not respond yet";
 
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- sequential readiness poll: probe the URL once per retry until it responds or timeout
-      const response = await fetch(url, {
-        method: "GET",
-        signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),
-      });
-      // oxlint-disable-next-line no-await-in-loop -- reads the body of this poll's response before validating it
-      const bodyText = await response.text();
-      // oxlint-disable-next-line no-await-in-loop -- validates this poll's response and returns early once it passes
-      const validationFailure = await validate(response, bodyText);
+    while (Date.now() - startedAt < timeoutMs) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- sequential readiness poll: probe the URL once per retry until it responds or timeout
+        const response = await fetch(url, {
+          method: "GET",
+          signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),
+        });
+        // oxlint-disable-next-line no-await-in-loop -- reads the body of this poll's response before validating it
+        const bodyText = await response.text();
+        // oxlint-disable-next-line no-await-in-loop -- validates this poll's response and returns early once it passes
+        const validationFailure = await validate(response, bodyText);
 
-      if (!validationFailure) {
-        return;
+        if (!validationFailure) {
+          return;
+        }
+
+        lastFailure = validationFailure;
+      } catch (error) {
+        lastFailure = error instanceof Error ? error.message : String(error);
       }
 
-      lastFailure = validationFailure;
-    } catch (error) {
-      lastFailure = error instanceof Error ? error.message : String(error);
+      // oxlint-disable-next-line no-await-in-loop -- sequential poll: back off between readiness probes until the service is up or timeout
+      await Bun.sleep(300);
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential poll: back off between readiness probes until the service is up or timeout
-    await Bun.sleep(300);
-  }
+    panic(`Timed out waiting for ${label}: ${lastFailure}.`);
+  };
 
-  panic(`Timed out waiting for ${label}: ${lastFailure}.`);
+  // Races the HTTP poll against the child's own exit: a child that dies at
+  // spawn (bad env var, port conflict, etc.) should fail immediately with
+  // its exit code instead of burning the full readiness timeout.
+  const watchForCrash = child.exited.then((exitCode) =>
+    panic(
+      `${label} exited with code ${String(exitCode)} before it became ready.`,
+    ),
+  );
+
+  await Promise.race([pollUntilReady(), watchForCrash]);
+};
+
+// Readiness checks and their running steps are built in the same mode-gated
+// order (see buildPersistentSteps / buildReadinessChecks), so they line up
+// positionally; pairing them here is what lets waitForHttpReadiness watch
+// the right child for a crash.
+const waitForReadinessChecks = async (
+  runningSteps: readonly RunningStep[],
+  checks: readonly HttpReadinessCheck[],
+) => {
+  for (const [index, readinessCheck] of checks.entries()) {
+    const runningStep =
+      runningSteps[index] ??
+      panic(
+        `No running process found for readiness check "${readinessCheck.label}".`,
+      );
+    // oxlint-disable-next-line no-await-in-loop -- ordered startup: each service in this group must be ready before the next is awaited
+    await waitForHttpReadiness({ ...readinessCheck, child: runningStep.child });
+  }
 };
 
 const spawnPersistentStep = (step: Step): RunningStep => {
@@ -1792,10 +1832,10 @@ const main = async () => {
     process.exit(exitCode);
   };
 
-  const startSteps = (steps: readonly Step[]) => {
-    for (const step of steps) {
-      children.push(spawnPersistentStep(step));
-    }
+  const startSteps = (steps: readonly Step[]): RunningStep[] => {
+    const started = steps.map((step) => spawnPersistentStep(step));
+    children.push(...started);
+    return started;
   };
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -1805,19 +1845,11 @@ const main = async () => {
   }
 
   try {
-    startSteps(persistentSteps.primary);
+    const primaryChildren = startSteps(persistentSteps.primary);
+    await waitForReadinessChecks(primaryChildren, readinessChecks.primary);
 
-    for (const readinessCheck of readinessChecks.primary) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered startup: each primary service must be ready before the next is awaited
-      await waitForHttpReadiness(readinessCheck);
-    }
-
-    startSteps(persistentSteps.secondary);
-
-    for (const readinessCheck of readinessChecks.secondary) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered startup: each secondary service must be ready before the next is awaited
-      await waitForHttpReadiness(readinessCheck);
-    }
+    const secondaryChildren = startSteps(persistentSteps.secondary);
+    await waitForReadinessChecks(secondaryChildren, readinessChecks.secondary);
 
     if (browserWillOpen && !openBrowser(webUrlForPort(ports.web))) {
       console.warn(
