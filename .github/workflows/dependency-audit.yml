@@ -1,0 +1,49 @@
+name: Dependency Audit
+
+# Gates on NEW high/critical advisories from `bun audit` against a committed,
+# annotated baseline (scripts/dependency-audit-baseline.json). Runs on lockfile
+# or baseline changes, on a nightly schedule (advisories are disclosed against
+# already-resolved versions over time), and on demand. Complements the 5-day
+# `minimumReleaseAge` quarantine in bunfig.toml, which blocks freshly published
+# versions at install time.
+
+on:
+  pull_request:
+    paths:
+      - "bun.lock"
+      - "bunfig.toml"
+      - "scripts/dependency-audit.ts"
+      - "scripts/dependency-audit-baseline.json"
+      - ".github/workflows/dependency-audit.yml"
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-audit-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: bun audit (high/critical)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      # `bun audit` reads bun.lock against the npm advisory database; no
+      # dependency install is required.
+      - name: Audit dependencies
+        run: bun scripts/dependency-audit.ts --check

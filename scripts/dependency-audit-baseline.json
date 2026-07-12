@@ -1,0 +1,97 @@
+{
+  "note": "Accepted high/critical advisories from `bun audit` at the time the guard was introduced. The guard (scripts/dependency-audit.ts --check) fails CI on any NEW high/critical advisory not listed here, while these known ones are tracked for resolution via the weekly dependency sweep. All current entries are transitive (build tooling, the MCP SDK's HTTP stack, websocket/undici in deps) with no direct reachable exploit path in the API's own runtime. Remove an entry once the dependency is bumped past the fix; the guard warns when a listed advisory is no longer present so the baseline can be ratcheted down.",
+  "auditLevel": "high",
+  "accepted": [
+    {
+      "id": "GHSA-w7jw-789q-3m8p",
+      "severity": "critical",
+      "package": "shell-quote",
+      "title": "shell-quote quote() does not escape newlines in object .op values",
+      "reason": "Transitive dev-tooling dependency; stella does not pass untrusted object .op values to shell-quote. Bump when an upstream dev dep releases the fix."
+    },
+    {
+      "id": "GHSA-737v-mqg7-c878",
+      "severity": "high",
+      "package": "defu",
+      "title": "defu: Prototype pollution via __proto__ key in defaults argument",
+      "reason": "Transitive; defu merges internal config objects, not untrusted input."
+    },
+    {
+      "id": "GHSA-v39h-62p7-jpjc",
+      "severity": "high",
+      "package": "fast-uri",
+      "title": "fast-uri host confusion via percent-encoded authority delimiters",
+      "reason": "Transitive URI parser in tooling; outbound fetches use the SSRF-guarded resolver, not fast-uri."
+    },
+    {
+      "id": "GHSA-q3j6-qgpj-74h6",
+      "severity": "high",
+      "package": "fast-uri",
+      "title": "fast-uri path traversal via percent-encoded dot segments",
+      "reason": "See GHSA-v39h-62p7-jpjc."
+    },
+    {
+      "id": "GHSA-88fw-hqm2-52qc",
+      "severity": "high",
+      "package": "hono",
+      "title": "hono CORS middleware reflects any Origin with credentials on wildcard default",
+      "reason": "Transitive via @modelcontextprotocol/sdk. Stella's own CORS is Elysia with an explicit single-origin allowlist, not hono's default-wildcard CORS."
+    },
+    {
+      "id": "GHSA-r5fr-rjxr-66jc",
+      "severity": "high",
+      "package": "lodash-es",
+      "title": "lodash Code Injection via _.template imports key names",
+      "reason": "Transitive; _.template is not called on untrusted input in stella."
+    },
+    {
+      "id": "GHSA-c2c7-rcm5-vvqj",
+      "severity": "high",
+      "package": "picomatch",
+      "title": "Picomatch ReDoS via extglob quantifiers",
+      "reason": "Transitive glob matcher in build tooling (vite/astro/tanstack/eslint), not fed untrusted patterns at runtime."
+    },
+    {
+      "id": "GHSA-677m-j7p3-52f9",
+      "severity": "high",
+      "package": "socket.io-parser",
+      "title": "socket.io allows an unbounded number of binary attachments",
+      "reason": "Transitive; stella does not run a socket.io server on untrusted input."
+    },
+    {
+      "id": "GHSA-f269-vfmq-vjvj",
+      "severity": "high",
+      "package": "undici",
+      "title": "Undici malicious WebSocket 64-bit length overflows parser",
+      "reason": "Transitive; the API runtime uses Bun's native fetch, not undici's WebSocket client."
+    },
+    {
+      "id": "GHSA-vrm6-8vpv-qv8q",
+      "severity": "high",
+      "package": "undici",
+      "title": "Undici unbounded memory in WebSocket permessage-deflate",
+      "reason": "See GHSA-f269-vfmq-vjvj."
+    },
+    {
+      "id": "GHSA-v9p9-hfj2-hcw8",
+      "severity": "high",
+      "package": "undici",
+      "title": "Undici unhandled exception in WebSocket client (server_max_window_bits)",
+      "reason": "See GHSA-f269-vfmq-vjvj."
+    },
+    {
+      "id": "GHSA-vxpw-j846-p89q",
+      "severity": "high",
+      "package": "undici",
+      "title": "Undici WebSocket client DoS via fragment count bypass",
+      "reason": "See GHSA-f269-vfmq-vjvj."
+    },
+    {
+      "id": "GHSA-96hv-2xvq-fx4p",
+      "severity": "high",
+      "package": "ws",
+      "title": "ws memory exhaustion DoS from tiny fragments and data chunks",
+      "reason": "Transitive websocket lib; not exposed as an untrusted-input server surface in stella."
+    }
+  ]
+}
