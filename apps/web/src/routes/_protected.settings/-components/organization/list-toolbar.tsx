@@ -16,6 +16,14 @@ import { InviteMemberDialog } from "@/routes/_protected.organization/-components
 const settingsOrgParentRoute = getRouteApi("/_protected/settings/organization");
 const membersRoute = getRouteApi("/_protected/settings/organization/members");
 
+/**
+ * One-shot marker for the value the debounced writer last pushed up, so the
+ * resync-during-render branch can tell that write's echo apart from external
+ * navigation. Wrapped in an object because `undefined` is itself a legitimate
+ * written value (a cleared field); `null` means "no unconsumed write".
+ */
+type WrittenMarker = { value: string | undefined } | null;
+
 export const OrganizationListToolbar = () => {
   const t = useTranslations();
   // Search lives on the parent route so it survives sub-tab swaps;
@@ -27,25 +35,34 @@ export const OrganizationListToolbar = () => {
   // prevents flicker between keystrokes; the URL is the source of
   // truth and gets the trimmed value via the debounced writer.
   const [localQuery, setLocalQuery] = useState(q);
-  // Adjusting state during render: when the URL `q` changes to a
-  // value our local mirror has not seen (back/forward navigation,
-  // tab switches landing on a different `?q=`) replace the input
-  // without an effect round-trip. Our own debounced writes also
-  // flow through here, but the post-navigate render arrives only
-  // after the user pauses typing, so `localQuery` already equals
-  // the value being re-set.
   const [lastSeenUrlQuery, setLastSeenUrlQuery] = useState(q);
+  const [lastWrittenQuery, setLastWrittenQuery] = useState<WrittenMarker>(null);
   const updateSearch = useDebouncedCallback((value: string) => {
+    // Marker must match what the navigate search updater stores: empty becomes undefined.
+    setLastWrittenQuery({ value: value || undefined });
     void navigate({
       to: "/settings/organization/members",
       search: (prev) => ({ ...prev, q: value || undefined }),
     });
   }, 300);
 
+  // Adjusting state during render: when the URL `q` changes to a value our
+  // local mirror has not seen, decide echo vs. external change. The echo of
+  // our own debounced write must NOT cancel or reset local state: the user
+  // may have resumed typing during the navigate round-trip, and a reset
+  // would drop those keystrokes plus their newly-scheduled debounced write.
+  // Only a genuinely external change (back/forward navigation, tab switches
+  // landing on a different `?q=`) replaces the input. The marker is
+  // consumed on every transition so a stale one cannot misclassify a later
+  // external change as an echo. `q` normalizes a missing param to "", so the
+  // marker's value gets the same normalization before comparing.
   if (q !== lastSeenUrlQuery) {
-    updateSearch.cancel();
     setLastSeenUrlQuery(q);
-    setLocalQuery(q);
+    setLastWrittenQuery(null);
+    if (lastWrittenQuery === null || (lastWrittenQuery.value ?? "") !== q) {
+      updateSearch.cancel();
+      setLocalQuery(q);
+    }
   }
 
   return (
