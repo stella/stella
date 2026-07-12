@@ -6,9 +6,9 @@ import {
   mcpSkill,
   type SandboxDefinition,
 } from "@tanstack/ai-sandbox";
-import { dockerSandbox } from "@tanstack/ai-sandbox-docker";
 import { panic } from "better-result";
 
+import { bunDockerSandbox } from "./bun-docker/provider";
 import { stellaSandboxPolicy } from "./policy";
 
 /**
@@ -71,11 +71,11 @@ export type StellaSandboxInput = {
   /** Container image for the `cloud` engine (must ship the harness CLIs). */
   cloudImage: string;
   /**
-   * Dockerode connection options for the `cloud` engine (socket/host/port).
-   * Omit to use the ambient Docker daemon; production points this at the
-   * stella-operated host pool.
+   * Docker daemon unix socket for the `cloud` engine. Omit to use the ambient
+   * daemon (`/var/run/docker.sock`); production points this at the
+   * stella-operated host pool's socket.
    */
-  cloudDockerodeOptions?: Record<string, unknown>;
+  cloudSocketPath?: string;
   /** AGENTS.md guidance written into the sandbox for the harness. */
   instructions: string;
   /** Keep a cloud sandbox warm between turns of one thread. Defaults to 10m. */
@@ -129,15 +129,17 @@ export const defineStellaSandbox = (
 
   return defineSandbox({
     id: input.runId,
-    provider: dockerSandbox({
+    provider: bunDockerSandbox({
       image: input.cloudImage,
-      dockerodeOptions: input.cloudDockerodeOptions,
+      ...(input.cloudSocketPath ? { socketPath: input.cloudSocketPath } : {}),
     }),
     workspace,
     policy: stellaSandboxPolicy(),
     lifecycle: {
+      // No `snapshot` in v1: the bun-native provider does not implement image
+      // commit yet, so warm reuse is by keeping the container alive per thread,
+      // not by snapshotting. Snapshot support is a follow-up (plan 050).
       reuse: "thread",
-      snapshot: "after-setup",
       keepAlive: input.keepAlive ?? "10m",
       destroyOnComplete: false,
     },
