@@ -68,7 +68,7 @@
     "react": "catalog:react19",
     "sherif": "catalog:",
     "squawk-cli": "2.59.0",
-    "turbo": "^2.10.3",
+    "turbo": "^2.10.4",
     "typescript": "catalog:",
     "ultracite": "catalog:",
     "vite": "catalog:"
