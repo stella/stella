@@ -24,6 +24,7 @@ import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
 import { APIError } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { emailSchema, toFormErrors } from "@/lib/schema";
@@ -622,12 +623,12 @@ const signUpWithSelfhostBootstrap = async (
 ) => {
   let response: Response;
   try {
-    response = await fetch(
+    response = await fetchWithTimeout(
       `${env.VITE_API_URL}${BETTER_AUTH_SIGN_UP_EMAIL_PATH}`,
       {
         method: "POST",
         credentials: "include",
-        signal: AbortSignal.timeout(10_000),
+        timeoutMs: 10_000,
         headers: {
           "Content-Type": "application/json",
         },

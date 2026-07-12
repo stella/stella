@@ -28,7 +28,7 @@ const config = {
 const getThreadTitle = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     query: { workspaceId },
     params,
     safeDb,
@@ -36,7 +36,7 @@ const getThreadTitle = createSafeRootHandler(
     user,
   }) {
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 

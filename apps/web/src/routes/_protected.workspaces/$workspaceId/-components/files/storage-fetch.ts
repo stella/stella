@@ -1,4 +1,5 @@
 import { APIError } from "@/lib/errors/api";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 export type StorageFetchPurpose = "display" | "download" | "native-display";
 
@@ -24,7 +25,10 @@ export const fetchStorageArrayBuffer = async (
 ) => {
   let response: Response;
   try {
-    response = await fetch(presignedUrl, { signal });
+    response = await fetchWithTimeout(presignedUrl, {
+      signal,
+      timeoutMs: 60_000,
+    });
   } catch (error) {
     if (signal.aborted) {
       throw error;

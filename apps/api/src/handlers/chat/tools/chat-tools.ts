@@ -203,6 +203,7 @@ type BuiltInChatToolPolicyName =
 type GetChatToolsProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
+  pinServerValidatedWorkspaceId: (workspaceId: SafeId<"workspace">) => boolean;
   organizationId: SafeId<"organization">;
   /**
    * Caller's workspace member role. Gates role-restricted tools so a
@@ -416,6 +417,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     safeDb,
     scopedDb,
+    pinServerValidatedWorkspaceId,
     organizationId,
     memberRole,
     orgAIConfig,
@@ -597,6 +599,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       : buildChatWriteTools({
           memberRole,
           organizationId,
+          pinServerValidatedWorkspaceId,
           recordAuditEvent,
           refRegistry,
           safeDb,

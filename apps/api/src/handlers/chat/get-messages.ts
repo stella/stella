@@ -49,7 +49,7 @@ const config = {
 const getMessages = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     orgAIConfig,
     params: { threadId },
     query: { allowMissingThread, workspaceId },
@@ -58,7 +58,7 @@ const getMessages = createSafeRootHandler(
     user,
   }) {
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 
@@ -116,7 +116,7 @@ const getMessages = createSafeRootHandler(
     // web-search BYOK keys in one widened select), the most-recent message
     // page, the active compaction checkpoint, and the per-send windowed
     // history used to estimate context usage. All reads share the same RLS
-    // scope (workspaceIds/organizationId/userId), so one transaction is
+    // scope (workspace access mode/organizationId/userId), so one transaction is
     // semantically identical to the independent transactions this replaced,
     // while paying for a single `set_config`.
     const reads = yield* Result.await(

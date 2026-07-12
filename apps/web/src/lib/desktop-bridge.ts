@@ -4,6 +4,7 @@ import { env } from "@/env";
 import { api } from "@/lib/api";
 import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
 import { toAPIError } from "@/lib/errors/api";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
@@ -110,9 +111,9 @@ const readBridgeHealth = async (
   timeoutMs: number,
 ): Promise<BridgeHealth | null> => {
   try {
-    const response = await fetch(`${DESKTOP_BRIDGE_URL}/health`, {
+    const response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/health`, {
       method: "GET",
-      signal: AbortSignal.timeout(timeoutMs),
+      timeoutMs,
     });
     if (!response.ok) {
       return null;
@@ -323,11 +324,11 @@ const readSelfHostedDesktopConnection = async ({
   const params = new URLSearchParams({ apiBaseUrl });
 
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `${DESKTOP_BRIDGE_URL}/v1/self-host-connection?${params.toString()}`,
       {
         method: "GET",
-        signal: AbortSignal.timeout(1000),
+        timeoutMs: 1000,
       },
     );
     if (!response.ok) {
@@ -391,7 +392,7 @@ const openDocxViaBridge = async ({
   let response: Response;
 
   try {
-    response = await fetch(`${DESKTOP_BRIDGE_URL}/v1/open-docx`, {
+    response = await fetchWithTimeout(`${DESKTOP_BRIDGE_URL}/v1/open-docx`, {
       body: JSON.stringify({
         apiBaseUrl,
         entityId,
@@ -404,7 +405,7 @@ const openDocxViaBridge = async ({
         "Content-Type": "application/json",
       },
       method: "POST",
-      signal: AbortSignal.timeout(10_000),
+      timeoutMs: 10_000,
     });
   } catch {
     throw new DesktopBridgeUnavailableError();

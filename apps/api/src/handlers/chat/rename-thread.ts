@@ -33,7 +33,7 @@ const config = {
 const renameThread = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     body,
     query: { workspaceId },
     params,
@@ -53,7 +53,7 @@ const renameThread = createSafeRootHandler(
     }
 
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 

@@ -718,6 +718,12 @@ const resolveCapabilityWorkspace = ({
       ),
     };
   }
+  if (context.pinServerValidatedWorkspaceId?.(branded) === false) {
+    return {
+      ok: false,
+      result: notFoundResult("Workspace not found or not accessible"),
+    };
+  }
   return { ok: true, workspaceId: branded };
 };
 

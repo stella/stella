@@ -29,6 +29,7 @@ import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError } from "@/lib/errors/api";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -618,6 +619,11 @@ export const mergeGroupedChatThreadPages = (
 
 const getChatApiPath = () => apiUrl("/chat");
 
+// Matches the backend's own AI-call budget (send-message.ts'
+// CHAT_METERED_AI_TIMEOUT_MS) so the client doesn't cut a slow-but-healthy
+// model response off before the server would.
+const CHAT_FETCH_TIMEOUT_MS = 600_000;
+
 type CreateChatRuntimeProps = {
   context: ChatThreadOptionsContext | undefined;
   initialMessages: PersistedChatMessage[];
@@ -702,7 +708,7 @@ export const createChatRuntime = ({
     threadId: key.threadId,
     initialMessages,
     fetcher: async (input, { signal }) => {
-      const response = await fetch(getChatApiPath(), {
+      const response = await fetchWithTimeout(getChatApiPath(), {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -715,6 +721,7 @@ export const createChatRuntime = ({
           }),
         ),
         signal,
+        timeoutMs: CHAT_FETCH_TIMEOUT_MS,
       });
 
       return response;

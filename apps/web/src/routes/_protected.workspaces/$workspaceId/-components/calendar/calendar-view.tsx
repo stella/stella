@@ -10,6 +10,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -412,36 +413,50 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return;
     }
     if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
-      api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .patch({
-          taskId: toSafeId<"entity">(entityId),
-          queryKey: entitiesKeys.all(workspaceId),
-          dueDate: date,
-        })
-        .then(() => {
+      void (async () => {
+        try {
+          const response = await api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .patch({
+              taskId: toSafeId<"entity">(entityId),
+              queryKey: entitiesKeys.all(workspaceId),
+              dueDate: date,
+            });
+          if (response.error) {
+            throw toAPIError(response.error);
+          }
+        } catch {
+          stellaToast.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        } finally {
           void invalidateCalendarTasks();
-          return;
-        })
-        .catch(() => {
-          // non-critical
-        });
+        }
+      })();
     } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
-      api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .patch({
-          taskId: toSafeId<"entity">(entityId),
-          queryKey: entitiesKeys.all(workspaceId),
-          allDay: true,
-          startAt: toAllDayAgendaDateTime(date),
-        })
-        .then(() => {
+      void (async () => {
+        try {
+          const response = await api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .patch({
+              taskId: toSafeId<"entity">(entityId),
+              queryKey: entitiesKeys.all(workspaceId),
+              allDay: true,
+              startAt: toAllDayAgendaDateTime(date),
+            });
+          if (response.error) {
+            throw toAPIError(response.error);
+          }
+        } catch {
+          stellaToast.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
+        } finally {
           void invalidateCalendarTasks();
-          return;
-        })
-        .catch(() => {
-          // non-critical
-        });
+        }
+      })();
     } else if (isTaskDateProperty(datePropertyId)) {
       // Future-proofing for any new built-in task date pseudo-property.
       if (kind !== "task") {

@@ -34,7 +34,7 @@ type ThreadRecapResult = { recap: string | null };
 const getThreadRecap = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     orgAIConfig,
     params: { threadId },
     promptCachingEnabled,
@@ -57,7 +57,7 @@ const getThreadRecap = createSafeRootHandler(
     }
 
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 

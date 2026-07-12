@@ -43,6 +43,7 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { BoundedSet } from "@/lib/bounded-set";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
 import { APIError, toAPIError } from "@/lib/errors/api";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -422,9 +423,10 @@ const useExternalPdfBuffer = ({
         });
       }
 
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         credentials: "include",
         signal,
+        timeoutMs: 60_000,
       });
 
       if (!response.ok) {

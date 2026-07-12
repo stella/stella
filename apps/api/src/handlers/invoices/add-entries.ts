@@ -11,6 +11,7 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -260,23 +261,16 @@ const addEntries = createSafeHandler(
     }
 
     const txResult = await safeDb(async (tx) => {
-      const invoiceRows = await tx
-        .select({
-          id: invoices.id,
-          totalAmount: invoices.totalAmount,
-          currency: invoices.currency,
-        })
-        .from(invoices)
-        .where(
-          and(
-            eq(invoices.id, params.invoiceId),
-            eq(invoices.workspaceId, workspaceId),
-            eq(invoices.status, INVOICE_STATUS.DRAFT),
-          ),
-        )
-        .limit(1)
-        .for("update");
-      const invoiceCheck = invoiceRows.at(0);
+      // Lock the invoice row before touching any child rows: `delete.ts`
+      // and other invoice mutation handlers lock the invoice first, then
+      // mutate `time_entries`/`expenses`, so this handler must follow the
+      // same order or a concurrent transaction can deadlock (see
+      // `lockInvoiceInStatus`'s doc comment).
+      const invoiceCheck = await lockInvoiceInStatus(tx, {
+        invoiceId: params.invoiceId,
+        workspaceId,
+        status: INVOICE_STATUS.DRAFT,
+      });
       if (!invoiceCheck) {
         return { ok: false as const };
       }

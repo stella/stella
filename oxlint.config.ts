@@ -355,6 +355,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
+    "./.oxlint-plugins/require-eden-error-check.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/no-bare-error.ts",
@@ -685,6 +686,17 @@ export default defineConfig({
       excludeFiles: ["apps/web/src/lib/stored-json.ts"],
       rules: {
         "no-raw-stored-json/no-raw-stored-json": "error",
+      },
+    },
+    {
+      // Eden treaty calls (api.* from @/lib/api) resolve { data, error }
+      // and never throw, so consuming them with .then()/.catch() lets a
+      // failed request masquerade as success. Scoped to product code;
+      // logic tests exercise mocked responses directly, not live chains.
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: ["apps/web/src/**/*.test.{ts,tsx}"],
+      rules: {
+        "require-eden-error-check/require-eden-error-check": "error",
       },
     },
     {

@@ -39,6 +39,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { DOCX_MIME } from "@/lib/consts";
 import { APIError } from "@/lib/errors/api";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -298,13 +299,9 @@ export const fetchPrintPdf = async ({
   fieldId: string;
   signal?: AbortSignal | undefined;
 }) => {
-  const timeoutSignal = AbortSignal.timeout(30_000);
-  const combinedSignal = signal
-    ? AbortSignal.any([signal, timeoutSignal])
-    : timeoutSignal;
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     apiUrl(`/files/${workspaceId}/print-pdf/${fieldId}`),
-    { credentials: "include", signal: combinedSignal },
+    { credentials: "include", signal, timeoutMs: 30_000 },
   );
 
   if (!response.ok) {

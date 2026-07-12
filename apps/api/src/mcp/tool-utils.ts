@@ -540,11 +540,16 @@ export const ensureWorkspaceAccess = ({
 }: {
   context: McpRequestContext;
   workspaceId: string;
-}) =>
-  getAccessibleWorkspaceId({
+}) => {
+  const resolved = getAccessibleWorkspaceId({
     accessibleWorkspaceIdSet: context.accessibleWorkspaceIdSet,
     workspaceId,
   });
+  if (resolved && context.pinServerValidatedWorkspaceId?.(resolved) === false) {
+    return null;
+  }
+  return resolved;
+};
 
 /** Status of an accessible workspace, or undefined when it is not accessible. */
 export const getWorkspaceStatus = ({
@@ -581,6 +586,9 @@ export const ensureActiveWorkspace = ({
   }
   if (getWorkspaceStatus({ context, workspaceId }) !== "active") {
     return errorResult("Matter is archived; unarchive it first");
+  }
+  if (context.pinServerValidatedWorkspaceId?.(resolved) === false) {
+    return notFoundResult("Matter not found or not accessible");
   }
   return resolved;
 };

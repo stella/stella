@@ -57,6 +57,7 @@ import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyId,
@@ -905,10 +906,13 @@ const downloadEntityAsZip = async (
 
   const responseResult = await Result.tryPromise(
     async () =>
-      await fetch(apiUrl(`/entities/${workspaceId}/zip/${entity.entityId}`), {
-        credentials: "include",
-        signal: AbortSignal.timeout(60_000),
-      }),
+      await fetchWithTimeout(
+        apiUrl(`/entities/${workspaceId}/zip/${entity.entityId}`),
+        {
+          credentials: "include",
+          timeoutMs: 60_000,
+        },
+      ),
   );
 
   if (Result.isError(responseResult)) {
@@ -951,8 +955,8 @@ const downloadSingleFile = async (
   }
 
   const blobResult = await Result.tryPromise(async () => {
-    const s3Response = await fetch(response.data.presignedUrl, {
-      signal: AbortSignal.timeout(60_000),
+    const s3Response = await fetchWithTimeout(response.data.presignedUrl, {
+      timeoutMs: 60_000,
     });
     if (!s3Response.ok) {
       throw new ClientOperationError({

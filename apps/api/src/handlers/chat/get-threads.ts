@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import {
@@ -33,7 +33,7 @@ const config = {
 
 const getThreads = createSafeRootHandler(
   config,
-  async function* ({ activeWorkspaceIds, query, safeDb, session, user }) {
+  async function* ({ query, safeDb, session, user }) {
     const limit = query.limit ?? LIMITS.chatThreadListPageSizeDefault;
     const cursor = query.cursor
       ? decodeChatThreadListCursor(query.cursor)
@@ -44,26 +44,23 @@ const getThreads = createSafeRootHandler(
       );
     }
 
-    const visibleWorkspaceIds = activeWorkspaceIds;
     const conditions: SQL[] = [
       eq(chatThreads.organizationId, session.activeOrganizationId),
       eq(chatThreads.userId, user.id),
+      sql`(
+        ${chatThreads.workspaceId} IS NULL
+        OR ${workspacesTable.status} <> 'deleting'
+      )`,
       sql`exists (
         select 1
         from ${chatMessages}
         where ${chatMessages.threadId} = ${chatThreads.id}
       )`,
     ];
-    const visibleWorkspaceCondition =
-      visibleWorkspaceIds.length > 0
-        ? or(
-            isNull(chatThreads.workspaceId),
-            inArray(chatThreads.workspaceId, visibleWorkspaceIds),
-          )
-        : isNull(chatThreads.workspaceId);
-    if (visibleWorkspaceCondition) {
-      conditions.push(visibleWorkspaceCondition);
-    }
+    // Membership-mode RLS filters workspace-scoped threads and verifies every
+    // data_workspace_ids entry on global threads without materializing an
+    // application-side workspace allowlist. The joined status predicate keeps
+    // deleting workspaces sealed at the product layer.
     if (cursor) {
       conditions.push(
         sql`(${chatThreads.updatedAt}, ${chatThreads.id}) < (${cursor.updatedAt}::timestamp, ${cursor.id}::uuid)`,

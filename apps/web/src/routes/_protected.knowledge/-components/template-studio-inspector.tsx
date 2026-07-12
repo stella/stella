@@ -71,6 +71,7 @@ import {
 } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
 import { TemplateCheckDialog } from "@/routes/_protected.knowledge/-components/template-check-dialog";
@@ -455,8 +456,9 @@ const TemplateFillFacet = ({
       if (presignedUrl === undefined || fileName === undefined) {
         panic("fill tab: saved template document is unavailable");
       }
-      const res = await fetch(presignedUrl, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+      const res = await fetchWithTimeout(presignedUrl, {
+        signal,
+        timeoutMs: 15_000,
       });
       if (!res.ok) {
         throw new TemplateDocumentFetchError({

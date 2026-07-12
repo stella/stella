@@ -53,6 +53,7 @@ const buildContext = ({
   buildMcpContextFromChat({
     memberRole: "owner",
     organizationId: toSafeId<"organization">("org_1"),
+    pinServerValidatedWorkspaceId: () => true,
     recordAuditEvent,
     safeDb: toSafeDbMock(noopScopedDb),
     scopedDb: noopScopedDb,

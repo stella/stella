@@ -61,3 +61,12 @@ migrations.
   Fetch by an indexed column, then validate the JSONB content
   in application code. Narrow the discriminated union with a
   type guard instead of using `as` casts.
+- Any status-conditional mutation (read a row, decide based on its status,
+  then write) must close the check-then-act gap: either hold a `SELECT ...
+  FOR UPDATE` lock from the read that makes the decision, re-checking the
+  status inside that same locked read, or express the precondition directly
+  in the mutating statement's `WHERE` clause and check the affected-row
+  count instead of trusting the earlier read. A plain read followed by an
+  unconditional write is a race between concurrent requests. See
+  `apps/api/src/handlers/invoices/lock-invoice.ts` for the reference
+  implementation shared by the invoice update/transition/delete handlers.

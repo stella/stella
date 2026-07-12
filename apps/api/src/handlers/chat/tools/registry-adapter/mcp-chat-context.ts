@@ -6,6 +6,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { createWorkspaceAccessBoundary } from "@/api/mcp/workspace-access-boundary";
 
 /**
  * Everything a chat request has already resolved that an `McpRequestContext`
@@ -18,6 +19,14 @@ export type ChatRegistryContextDeps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   memberRole: MemberRole;
+  /**
+   * Pin a workspace into the request's RLS identity only when request auth
+   * already proved it accessible. Projected mutations need this to finish
+   * cleanup after operations such as removing the caller's own membership.
+   */
+  pinServerValidatedWorkspaceId?:
+    | ((workspaceId: SafeId<"workspace">) => boolean)
+    | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   /**
@@ -83,10 +92,20 @@ export const buildMcpContextFromChat = (
   deps: ChatRegistryContextDeps,
 ): McpRequestContext => {
   const accessibleWorkspaceIds = [...deps.toolWorkspaceIds];
+  const workspaceAccessBoundary = createWorkspaceAccessBoundary(
+    accessibleWorkspaceIds,
+  );
   const accessibleWorkspaceStatusById = deriveWorkspaceStatusMap(deps);
+  const requestPinServerValidatedWorkspaceId =
+    deps.pinServerValidatedWorkspaceId;
+  const pinServerValidatedWorkspaceId = requestPinServerValidatedWorkspaceId
+    ? workspaceAccessBoundary.bindWorkspacePin(
+        requestPinServerValidatedWorkspaceId,
+      )
+    : undefined;
   return {
     accessibleWorkspaceIds,
-    accessibleWorkspaceIdSet: new Set(accessibleWorkspaceIds),
+    accessibleWorkspaceIdSet: workspaceAccessBoundary.accessibleWorkspaceIdSet,
     accessibleWorkspaceStatusById,
     // Reconstructed from the authorized id set + status map; chat never
     // dispatches the generic capability path, so this is unread on this surface.
@@ -98,6 +117,7 @@ export const buildMcpContextFromChat = (
     grantedScopes: [],
     memberRole: deps.memberRole,
     organizationId: deps.organizationId,
+    pinServerValidatedWorkspaceId,
     recordAuditEvent: deps.recordAuditEvent ?? NO_OP_AUDIT_RECORDER,
     safeDb: deps.safeDb,
     scopedDb: deps.scopedDb,

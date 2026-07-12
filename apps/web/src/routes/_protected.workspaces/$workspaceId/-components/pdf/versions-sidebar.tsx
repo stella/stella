@@ -29,6 +29,7 @@ import {
   MenuSeparator,
 } from "@stll/ui/components/menu";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { stellaToast } from "@stll/ui/components/toast";
 import { useContentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -39,6 +40,7 @@ import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
@@ -98,7 +100,9 @@ const LABEL_PRESETS: LabelPreset[] = [
   { key: "signed", color: "bg-warning" },
 ];
 
-const UPLOAD_PUT_TIMEOUT_MS = 5 * 60 * 1000;
+// Stall ceiling, not a target duration: a healthy slow upload of a large
+// file can legitimately take several minutes.
+const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 export function VersionsSidebar({
   workspaceId,
@@ -271,16 +275,26 @@ export function VersionsSidebar({
       const { uploadId, url, headers } = presign.data;
 
       // 3. PUT to S3.
-      const putResponse = await fetch(url, {
+      const putResponse = await fetchWithTimeout(url, {
         method: "PUT",
         headers,
         body: file,
-        signal: AbortSignal.timeout(UPLOAD_PUT_TIMEOUT_MS),
+        timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
       });
       if (!putResponse.ok) {
-        await wsClient({ uploadId })
-          .abort.post({})
-          .catch(() => undefined);
+        // Best-effort: the bucket lifecycle rule and daily prune already
+        // reclaim the tmp object and row, so a failed abort here is not
+        // fatal. We swallow errors to avoid masking the original S3
+        // rejection with a follow-up rejection.
+        try {
+          // SAFETY: best-effort abort; the bucket lifecycle rule and daily
+          // prune already reclaim the tmp object and row, so a failed abort
+          // here is not fatal and has no user-facing outcome.
+          // eslint-disable-next-line require-eden-error-check/require-eden-error-check
+          await wsClient({ uploadId }).abort.post({});
+        } catch {
+          // Intentionally swallowed; see comment above.
+        }
         throw new ClientOperationError({
           action: "upload-version-to-s3",
           message: `S3 rejected upload (${putResponse.status})`,
@@ -307,16 +321,22 @@ export function VersionsSidebar({
     const switchTarget =
       remaining.find((v) => v.id === currentVersionId) ?? remaining.at(0);
 
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .entity({ entityId: toSafeId<"entity">(entityId) })
-      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-      .delete({
-        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-      });
+    try {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
+        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+        .delete({
+          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+        });
 
-    if (response.error) {
-      throw toAPIError(response.error);
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      await invalidateVersions();
+      return;
     }
 
     onClearCompare();
@@ -331,26 +351,44 @@ export function VersionsSidebar({
   };
 
   const handleSetLabel = async (versionId: string, label: string | null) => {
-    await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .entity({ entityId: toSafeId<"entity">(entityId) })
-      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-      .label.patch({
-        label,
-        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-      });
-    await invalidateVersions();
+    try {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
+        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+        .label.patch({
+          label,
+          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    } finally {
+      await invalidateVersions();
+    }
   };
 
   const handleRestore = async (versionId: string) => {
-    await api
-      .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .entity({ entityId: toSafeId<"entity">(entityId) })
-      .versions({ versionId: toSafeId<"entityVersion">(versionId) })
-      .restore.post({
-        queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
-      });
-    await invalidateVersions();
+    try {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .entity({ entityId: toSafeId<"entity">(entityId) })
+        .versions({ versionId: toSafeId<"entityVersion">(versionId) })
+        .restore.post({
+          queryKey: entityVersionsKeys.all({ workspaceId, entityId }),
+        });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+    } catch {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    } finally {
+      await invalidateVersions();
+    }
   };
 
   const handleDownload = async (fieldId: string) => {

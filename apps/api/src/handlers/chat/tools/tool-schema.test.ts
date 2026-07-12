@@ -17,7 +17,7 @@ import {
   EXPAND_CHAT_HISTORY_TOOL_NAME,
   SEARCH_CHAT_HISTORY_TOOL_NAME,
 } from "@/api/handlers/chat/tools/chat-history-tools";
-import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
+import { getChatTools as getChatToolsWithPin } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   ADD_COMMENT_TOOL_NAME,
@@ -65,6 +65,17 @@ const unusedSafeDb: SafeDb = async () => {
 };
 
 const noopAuditRecorder: AuditRecorder = async () => undefined;
+
+const getChatTools = (
+  props: Omit<
+    Parameters<typeof getChatToolsWithPin>[0],
+    "pinServerValidatedWorkspaceId"
+  >,
+) =>
+  getChatToolsWithPin({
+    ...props,
+    pinServerValidatedWorkspaceId: () => true,
+  });
 
 const editableActiveSkillContext: ActiveChatSkillContext = {
   body: "# Instructions\nUse the checklist.",
