@@ -79,6 +79,15 @@ describe("defineStellaSandbox", () => {
   });
 });
 
+describe("bun docker provider capabilities", () => {
+  test("advertises snapshot support and exposes restoreSnapshot", async () => {
+    const { bunDockerSandbox } = await import("./bun-docker/provider");
+    const provider = bunDockerSandbox({ image: "stella/agent-sandbox:dev" });
+    expect(provider.capabilities().snapshots).toBe(true);
+    expect(typeof provider.restoreSnapshot).toBe("function");
+  });
+});
+
 describe("resolveStellaSandboxRun", () => {
   test("pairs a codex adapter with sandbox middleware", () => {
     const { adapter, middleware } = resolveStellaSandboxRun(baseRunInput());

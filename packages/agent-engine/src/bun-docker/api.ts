@@ -275,6 +275,25 @@ export const removeContainer = async (
   await send(conn, "DELETE", `/containers/${containerId}?force=true&v=true`);
 };
 
+/** Commit a container to a new image `repo:tag`; returns the image id. */
+export const commitContainer = async (
+  conn: DockerConn,
+  containerId: string,
+  repo: string,
+  tag: string,
+): Promise<string> => {
+  const params = new URLSearchParams({ container: containerId, repo, tag });
+  return readId(await sendJson(conn, "POST", `/commit?${params.toString()}`));
+};
+
+/** Remove an image (best-effort; used to clean up snapshot images). */
+export const removeImage = async (
+  conn: DockerConn,
+  image: string,
+): Promise<void> => {
+  await send(conn, "DELETE", `/images/${encodeURIComponent(image)}?force=true`);
+};
+
 export const imageExists = async (
   conn: DockerConn,
   image: string,

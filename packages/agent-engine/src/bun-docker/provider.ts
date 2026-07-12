@@ -12,6 +12,7 @@ import {
 } from "@tanstack/ai-sandbox";
 
 import {
+  commitContainer,
   createContainer,
   createExec,
   decodeChunk,
@@ -31,14 +32,18 @@ import {
 
 const DEFAULT_WORKDIR = "/workspace";
 const KEEP_ALIVE_CMD = ["sh", "-c", "tail -f /dev/null"];
+const SNAPSHOT_REPO = "stella-agent-sandbox-snapshot";
+
+// Process-local counter for unique snapshot image tags (avoids Date.now()).
+let snapshotSeq = 0;
 
 /**
  * Capabilities of the bun-native Docker provider. `writableStdin` is false by
  * design: exec output streams over a plain (non-hijacked) response body, which
  * has no host→process stdin, so harness adapters deliver the prompt via a file
- * (they already branch on this flag). Snapshots/fork/ports are out of scope for
- * v1; network egress is governed by the infra egress proxy, not a provider
- * network policy.
+ * (they already branch on this flag). Snapshots use image commit; ports/fork
+ * are out of scope for v1. Network egress is governed by the infra egress
+ * proxy, not a provider network policy.
  */
 const BUN_DOCKER_CAPS: SandboxCapabilities = {
   fs: true,
@@ -47,7 +52,7 @@ const BUN_DOCKER_CAPS: SandboxCapabilities = {
   ports: false,
   backgroundProcesses: true,
   writableStdin: false,
-  snapshots: false,
+  snapshots: true,
   networkPolicy: false,
   durableFilesystem: true,
   fork: false,
@@ -317,6 +322,17 @@ const createBunDockerHandle = (deps: HandleDeps): SandboxHandle => {
         return r.exitCode === 0;
       },
     },
+    snapshot: async (label) => {
+      snapshotSeq += 1;
+      const tag = `${containerId.slice(0, 12)}-${snapshotSeq}`;
+      const imageId = await commitContainer(
+        conn,
+        containerId,
+        SNAPSHOT_REPO,
+        tag,
+      );
+      return { id: imageId, ...(label ? { label } : {}) };
+    },
     destroy: async () => {
       await stopContainer(conn, containerId);
       if (deps.removeOnDestroy) {
@@ -343,18 +359,22 @@ export const bunDockerSandbox = (
   const removeOnDestroy = config.removeOnDestroy ?? true;
   const hostGateway = config.hostGateway ?? true;
 
-  const start = async (
-    env?: Record<string, string>,
-  ): Promise<SandboxHandle> => {
-    if (!(await imageExists(conn, config.image))) {
-      await pullImage(conn, config.image);
+  const start = async (opts?: {
+    image?: string;
+    env?: Record<string, string>;
+  }): Promise<SandboxHandle> => {
+    const image = opts?.image ?? config.image;
+    if (!(await imageExists(conn, image))) {
+      await pullImage(conn, image);
     }
     const containerId = await createContainer(conn, {
-      image: config.image,
+      image,
       workdir,
       cmd: KEEP_ALIVE_CMD,
       hostGateway,
-      ...(env ? { env: Object.entries(env).map(([k, v]) => `${k}=${v}`) } : {}),
+      ...(opts?.env
+        ? { env: Object.entries(opts.env).map(([k, v]) => `${k}=${v}`) }
+        : {}),
     });
     await startContainer(conn, containerId);
     const handle = createBunDockerHandle({
@@ -370,7 +390,13 @@ export const bunDockerSandbox = (
   return {
     name: "bun-docker",
     capabilities: () => BUN_DOCKER_CAPS,
-    create: async (input: SandboxCreateInput) => await start(input.env),
+    create: async (input: SandboxCreateInput) =>
+      await start(input.env ? { env: input.env } : {}),
+    restoreSnapshot: async (input) =>
+      await start({
+        image: input.snapshotId,
+        ...(input.env ? { env: input.env } : {}),
+      }),
     resume: async (input: SandboxResumeInput) => {
       const running = await inspectContainerRunning(conn, input.id);
       if (running === null) {
