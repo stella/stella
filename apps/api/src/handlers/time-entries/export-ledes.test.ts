@@ -78,6 +78,59 @@ describe("exportLedesHandler billing integrity", () => {
     expect(dataLines).toHaveLength(2);
   });
 
+  test("emits the batch total and billing period identically on every row, unaffected by a skipped line", async () => {
+    const output = await runExport([
+      timeEntryRow({
+        dateWorked: "2026-06-10",
+        billedMinutes: 60,
+        rateAtEntry: 10_000, // $100.00 line total
+        narrative: "First",
+      }),
+      // Non-billable: must not contribute to the total or widen the period.
+      timeEntryRow({
+        dateWorked: "2026-01-01",
+        billable: false,
+        narrative: "Skipped",
+      }),
+      timeEntryRow({
+        dateWorked: "2026-06-20",
+        billedMinutes: 120,
+        rateAtEntry: 15_000, // $300.00 line total
+        narrative: "Second",
+      }),
+    ]);
+
+    const dataLines = output
+      .split("\n")
+      .filter((line) => line.endsWith("[]") && !line.startsWith("LEDES1998B"))
+      .filter((line) => !line.startsWith("INVOICE_DATE"));
+
+    expect(dataLines).toHaveLength(2);
+
+    // Batch total is the sum of the two included lines ($100 + $300), not
+    // either line's individual total; the skipped non-billable line does
+    // not affect it.
+    const expectedInvoiceTotal = "400.00";
+    // Billing period spans the two included lines' dates only; the skipped
+    // line's earlier date must not widen the period.
+    const expectedStart = "20260610";
+    const expectedEnd = "20260620";
+
+    for (const line of dataLines) {
+      const fields = line.replace(/\[\]$/u, "").split("|");
+      expect(fields[4]).toBe(expectedInvoiceTotal); // INVOICE_TOTAL
+      expect(fields[5]).toBe(expectedStart); // BILLING_START_DATE
+      expect(fields[6]).toBe(expectedEnd); // BILLING_END_DATE
+    }
+
+    // Per-line fields still vary: LINE_ITEM_TOTAL (index 12) differs from
+    // INVOICE_TOTAL and from each other.
+    const firstFields = (dataLines[0] ?? "").replace(/\[\]$/u, "").split("|");
+    const secondFields = (dataLines[1] ?? "").replace(/\[\]$/u, "").split("|");
+    expect(firstFields[12]).toBe("100.00");
+    expect(secondFields[12]).toBe("300.00");
+  });
+
   test("neutralizes delimiter injection in narrative and timekeeper name", async () => {
     let call = 0;
     const scopedDb = asTestRaw<ScopedDb>(async () => {

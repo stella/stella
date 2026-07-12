@@ -40,6 +40,19 @@ type ExportLedesHandlerProps = {
 export const escapeLedesField = (value: string): string =>
   value.replace(/[\r\n|]/gu, " ");
 
+type LedesLineItem = {
+  matterId: SafeId<"entity">;
+  dateWorked: string;
+  totalCents: number;
+  hours: number;
+  taskCode: string;
+  activityCode: string;
+  userId: string;
+  narrative: string;
+  rateAtEntry: number;
+  userName: string;
+};
+
 /**
  * Generates a LEDES 1998B formatted export.
  * LEDES 1998B uses pipe-delimited lines with a fixed header row.
@@ -139,6 +152,63 @@ export const exportLedesHandler = async ({
     "|LINE_ITEM_TASK_DESCRIPTION" +
     "|LINE_ITEM_ACTIVITY_DESCRIPTION[]";
 
+  // First pass: apply the same billing-integrity guard as the SQL filter
+  // (defensive: a non-billable, no-charge, or written-off entry must never
+  // produce a charged line), then collect the per-line data needed both to
+  // compute the invoice-level aggregates and to emit each row.
+  const lineItems: LedesLineItem[] = [];
+
+  for (const row of rows) {
+    if (
+      !row.billable ||
+      row.noCharge ||
+      row.status === BILLING_STATUS.WRITTEN_OFF
+    ) {
+      continue;
+    }
+    const totalCents = prorateHourlyCents({
+      billedMinutes: row.billedMinutes,
+      hourlyRateCents: row.rateAtEntry,
+    });
+    const userName = escapeLedesField(
+      row.userId ? (userMap.get(row.userId) ?? "") : "",
+    );
+    const narrative = escapeLedesField(row.invoiceNarrative ?? row.narrative);
+
+    lineItems.push({
+      matterId: row.matterId,
+      dateWorked: row.dateWorked,
+      totalCents,
+      hours: row.billedMinutes / 60,
+      taskCode: escapeLedesField(row.taskCode ?? ""),
+      activityCode: escapeLedesField(row.activityCode ?? ""),
+      userId: row.userId ?? "",
+      narrative,
+      rateAtEntry: row.rateAtEntry,
+      userName,
+    });
+  }
+
+  // Invoice-level aggregates: INVOICE_TOTAL is the total for the whole
+  // invoice/batch (not a single line), and BILLING_START_DATE/
+  // BILLING_END_DATE are the min/max dates across the included lines. Per
+  // the LEDES 1998B spec, both are repeated identically on every row.
+  let billingStart = "";
+  let billingEnd = "";
+  let invoiceTotalCents = 0;
+  for (const item of lineItems) {
+    if (!billingStart || item.dateWorked < billingStart) {
+      billingStart = item.dateWorked;
+    }
+    if (!billingEnd || item.dateWorked > billingEnd) {
+      billingEnd = item.dateWorked;
+    }
+    invoiceTotalCents += item.totalCents;
+  }
+  const invoiceTotalFormatted = (invoiceTotalCents / 100).toFixed(2);
+  const billingStartFormatted = billingStart.replace(/-/gu, "");
+  const billingEndFormatted = billingEnd.replace(/-/gu, "");
+
   const lines = ["LEDES1998B[]", header];
   const now = new Date();
   const invoiceDate = (now.toISOString().split("T")[0] ?? "").replace(
@@ -148,53 +218,34 @@ export const exportLedesHandler = async ({
 
   let lineItemNumber = 0;
 
-  for (const row of rows) {
-    // Defensive billing-integrity guard alongside the SQL filter: a
-    // non-billable, no-charge, or written-off entry must never produce a
-    // charged line.
-    if (
-      !row.billable ||
-      row.noCharge ||
-      row.status === BILLING_STATUS.WRITTEN_OFF
-    ) {
-      continue;
-    }
+  for (const item of lineItems) {
     lineItemNumber++;
-    const hours = row.billedMinutes / 60;
-    const total = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
-    const dateFormatted = row.dateWorked.replace(/-/gu, "");
-    const userName = escapeLedesField(
-      row.userId ? (userMap.get(row.userId) ?? "") : "",
-    );
-    const narrative = escapeLedesField(row.invoiceNarrative ?? row.narrative);
+    const dateFormatted = item.dateWorked.replace(/-/gu, "");
 
     lines.push(
       `${[
         invoiceDate,
         "", // INVOICE_NUMBER
         "", // CLIENT_ID
-        row.matterId,
-        (total / 100).toFixed(2),
-        dateFormatted,
-        dateFormatted,
+        item.matterId,
+        invoiceTotalFormatted,
+        billingStartFormatted,
+        billingEndFormatted,
         "", // INVOICE_DESCRIPTION
         String(lineItemNumber),
         "F", // FEE type
-        hours.toFixed(2),
+        item.hours.toFixed(2),
         "0.00", // ADJUSTMENT
-        (total / 100).toFixed(2),
+        (item.totalCents / 100).toFixed(2),
         dateFormatted,
-        escapeLedesField(row.taskCode ?? ""),
+        item.taskCode,
         "", // EXPENSE_CODE
-        escapeLedesField(row.activityCode ?? ""),
-        row.userId ?? "",
-        narrative,
+        item.activityCode,
+        item.userId,
+        item.narrative,
         "", // LAW_FIRM_ID
-        (row.rateAtEntry / 100).toFixed(2),
-        userName,
+        (item.rateAtEntry / 100).toFixed(2),
+        item.userName,
         "", // TASK_DESCRIPTION
         "", // ACTIVITY_DESCRIPTION
       ].join("|")}[]`,
