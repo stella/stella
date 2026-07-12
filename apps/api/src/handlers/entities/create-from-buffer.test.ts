@@ -27,8 +27,16 @@ const enqueuePdfDerivativeOrMarkFailedMock = mock(async () => {});
 const broadcastMock = mock();
 let intentStatuses: string[] = [];
 
+// Spread the real module: mock.module is process-global; a partial mock would delete s3's other exports for later test files.
+const realS3 = await import("@/api/lib/s3");
+
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   deleteS3ObjectWithSignal: s3DeleteMock,
+  getS3: () => ({
+    write: s3WriteMock,
+    delete: s3DeleteMock,
+  }),
   putS3ObjectWithSignal: s3WriteMock,
   // `mock.module` replaces the module, so every named export a consumer
   // imports must exist here or the import fails at link time. This suite
