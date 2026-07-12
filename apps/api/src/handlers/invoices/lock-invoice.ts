@@ -25,7 +25,7 @@ export const lockInvoiceInStatus = async (
   { invoiceId, workspaceId, status }: LockInvoiceOptions,
 ) => {
   const statusFilter = Array.isArray(status)
-    ? inArray(invoices.status, status)
+    ? inArray(invoices.status, [...status])
     : eq(invoices.status, status);
 
   const rows = await tx

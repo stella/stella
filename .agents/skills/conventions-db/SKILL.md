@@ -47,7 +47,7 @@ migrations.
   ```
 
 - Treat existing large-table changes as lock-sensitive. Prefer `CREATE INDEX
-CONCURRENTLY`, avoid table rewrites in request-critical tables, and backfill
+  CONCURRENTLY`, avoid table rewrites in request-critical tables, and backfill
   in bounded batches outside the schema migration when the data volume can grow.
 
 ## Queries
@@ -68,7 +68,7 @@ CONCURRENTLY`, avoid table rewrites in request-critical tables, and backfill
   type guard instead of using `as` casts.
 - Any status-conditional mutation (read a row, decide based on its status,
   then write) must close the check-then-act gap: either hold a `SELECT ...
-FOR UPDATE` lock from the read that makes the decision, re-checking the
+  FOR UPDATE` lock from the read that makes the decision, re-checking the
   status inside that same locked read, or express the precondition directly
   in the mutating statement's `WHERE` clause and check the affected-row
   count instead of trusting the earlier read. A plain read followed by an
