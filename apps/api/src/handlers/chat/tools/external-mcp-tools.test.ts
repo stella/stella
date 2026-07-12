@@ -234,13 +234,19 @@ describe("createLazyExternalMcpToolsLoader", () => {
     });
     const loader = createLazyExternalMcpToolsLoader(load);
 
-    await expect(loader.getExternalMcpTools()).rejects.toThrow(
+    const rejection = await loader.getExternalMcpTools().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toContain(
       "discovery failed",
     );
 
     // The finally block's cleanup call must not throw a second time on top
-    // of the original failure already surfaced to the caller above.
-    await expect(loader.closeIfLoaded()).resolves.toBeUndefined();
+    // of the original failure already surfaced to the caller above: a bare
+    // await that completes is the assertion (the test fails if it throws).
+    await loader.closeIfLoaded();
   });
 });
 

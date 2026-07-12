@@ -315,13 +315,14 @@ const sendMessage = createSafeRootHandler(
     // streaming try/catch, so every other exit path (validation failure,
     // any early return or throw between here and streaming) still closes
     // them exactly once.
-    const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(() =>
-      loadExternalMcpToolsForUser({
-        nullUnionStrategy: externalMcpNullUnionStrategy,
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        userId: user.id,
-      }),
+    const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(
+      async () =>
+        await loadExternalMcpToolsForUser({
+          nullUnionStrategy: externalMcpNullUnionStrategy,
+          organizationId: session.activeOrganizationId,
+          safeDb,
+          userId: user.id,
+        }),
     );
     let externalMcpToolsHandedOffToStreaming = false;
 

@@ -155,9 +155,9 @@ export const createLazyExternalMcpToolsLoader = (
   let loadPromise: Promise<LoadedExternalMcpTools> | null = null;
   let closePromise: Promise<void> | null = null;
 
-  const getExternalMcpTools = (): Promise<LoadedExternalMcpTools> => {
+  const getExternalMcpTools = async (): Promise<LoadedExternalMcpTools> => {
     loadPromise ??= load();
-    return loadPromise;
+    return await loadPromise;
   };
 
   const closeIfLoaded = async (): Promise<void> => {
@@ -165,7 +165,7 @@ export const createLazyExternalMcpToolsLoader = (
       return;
     }
     closePromise ??= loadPromise.then(
-      async (loaded) => await loaded.close(),
+      (loaded): void | Promise<void> => loaded.close(),
       () => undefined,
     );
     await closePromise;
