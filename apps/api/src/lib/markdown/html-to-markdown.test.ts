@@ -116,6 +116,13 @@ describe("htmlToMarkdown", () => {
     expect(htmlToMarkdown(html)).toBe("| x |\n| --- |\n| a\\|b   c |\n");
   });
 
+  test("table cell backslashes are escaped once, not double-escaped", () => {
+    const html =
+      "<table><tr><th>p</th></tr><tr><td>C:\\tmp|x</td></tr></table>";
+    // `\` -> `\\` and `|` -> `\|` in a single escape pass (renders as `C:\tmp|x`).
+    expect(htmlToMarkdown(html)).toBe("| p |\n| --- |\n| C:\\\\tmp\\|x |\n");
+  });
+
   test("markdown special characters in text are backslash-escaped", () => {
     expect(htmlToMarkdown("<p>5 * 3</p>")).toBe("5 \\* 3\n");
     expect(htmlToMarkdown("<p>foo_bar</p>")).toBe("foo\\_bar\n");
