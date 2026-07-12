@@ -2,8 +2,16 @@ import "@/api/lib/observability/otel";
 import { logs, SeverityNumber } from "@opentelemetry/api-logs";
 
 const otelLogger = logs.getLogger("stella.api");
+// Denylist of attribute-key substrings whose values may carry document
+// content, client-identifying text, PII, or credentials, none of which
+// belong in telemetry for privileged legal data. This is defense-in-depth:
+// the ideal is an allowlist of known-safe keys (or value-level scrubbing),
+// but a denylist is safe to extend without risking a needed metric being
+// dropped — provided each substring cannot collide with a benign key. The
+// credential terms are deliberately specific (`api[_-]?key`, not bare
+// `token`, which would also drop `tokenCount`/`inputTokens` usage metrics).
 const SENSITIVE_ATTRIBUTE_KEY_PATTERN =
-  /(?:body|content|email|fileName|message|name|title)/iu;
+  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt|snippet|subject|phone)/iu;
 
 type LoggerAttributeValue = boolean | number | string;
 
