@@ -4,7 +4,10 @@ import {
   defineStellaSandbox,
   isAgentEngine,
   isAgentHarness,
+  resolveStellaSandboxRun,
+  SANDBOX_NO_MCP,
   type StellaSandboxInput,
+  type StellaSandboxRunInput,
 } from "./index";
 
 const baseInput = (
@@ -19,6 +22,17 @@ const baseInput = (
   },
   cloudImage: "stella/agent-sandbox:latest",
   instructions: "Use the stella MCP tools to act on the workspace.",
+  ...overrides,
+});
+
+const baseRunInput = (
+  overrides: Partial<StellaSandboxRunInput> = {},
+): StellaSandboxRunInput => ({
+  ...baseInput(),
+  harness: "codex",
+  harnessProvider: "openai",
+  harnessModel: "gpt-4o-mini",
+  harnessApiKey: "sk-test",
   ...overrides,
 });
 
@@ -52,5 +66,31 @@ describe("defineStellaSandbox", () => {
     expect(() => defineStellaSandbox(baseInput({ engine: "local" }))).toThrow(
       /local engine/u,
     );
+  });
+
+  test("a real binding projects an MCP tool surface into the workspace", () => {
+    const definition = defineStellaSandbox(baseInput());
+    expect(definition.workspace?.skills?.length).toBe(1);
+  });
+
+  test("the SANDBOX_NO_MCP sentinel yields no tool surface", () => {
+    const definition = defineStellaSandbox(baseInput({ mcp: SANDBOX_NO_MCP }));
+    expect(definition.workspace?.skills ?? []).toHaveLength(0);
+  });
+});
+
+describe("resolveStellaSandboxRun", () => {
+  test("pairs a codex adapter with sandbox middleware", () => {
+    const { adapter, middleware } = resolveStellaSandboxRun(baseRunInput());
+    expect(adapter.name).toBe("codex");
+    expect(middleware).toBeDefined();
+  });
+
+  test("requires a base URL for the openai-compatible provider", () => {
+    expect(() =>
+      resolveStellaSandboxRun(
+        baseRunInput({ harnessProvider: "openai-compatible" }),
+      ),
+    ).toThrow(/harnessBaseUrl/u);
   });
 });

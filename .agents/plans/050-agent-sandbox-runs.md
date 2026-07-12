@@ -155,6 +155,15 @@ nothing (user's own subscription). This completes the spend ladder: credits
 3. Follows the deploy ordering rule (`feedback_cross_repo_deploy_ordering`):
    stella-infra main → both envs; app flag gates exposure.
 
+**Runtime constraint (verified 2026-07-12):** dockerode's container attach uses
+an HTTP 101 socket hijack that `docker-modem` mishandles under bun (works under
+Node). apps/api runs on bun, so the cloud engine must NOT drive Docker from the
+bun api process directly. Options: (a) a small Node sidecar/worker that owns
+sandbox provisioning and streams chunks back to the api, (b) a bun-native
+Docker client, or (c) the sandbox host pool exposing a Node-fronted control
+plane. The e2e proves the wiring under Node; picking the production execution
+context is a phase-3 decision.
+
 ### Phase 4 — Follow-ups (tracked, not in this plan)
 
 - Anthropic Agent SDK approval application (long lead time — START EARLY in
