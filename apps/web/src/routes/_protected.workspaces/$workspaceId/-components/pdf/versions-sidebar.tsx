@@ -281,9 +281,19 @@ export function VersionsSidebar({
         timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
       });
       if (!putResponse.ok) {
-        await wsClient({ uploadId })
-          .abort.post({})
-          .catch(() => undefined);
+        // Best-effort: the bucket lifecycle rule and daily prune already
+        // reclaim the tmp object and row, so a failed abort here is not
+        // fatal. We swallow errors to avoid masking the original S3
+        // rejection with a follow-up rejection.
+        try {
+          // SAFETY: best-effort abort; the bucket lifecycle rule and daily
+          // prune already reclaim the tmp object and row, so a failed abort
+          // here is not fatal and has no user-facing outcome.
+          // eslint-disable-next-line require-eden-error-check/require-eden-error-check
+          await wsClient({ uploadId }).abort.post({});
+        } catch {
+          // Intentionally swallowed; see comment above.
+        }
         throw new ClientOperationError({
           action: "upload-version-to-s3",
           message: `S3 rejected upload (${putResponse.status})`,

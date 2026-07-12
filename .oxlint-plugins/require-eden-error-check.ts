@@ -61,6 +61,16 @@
 // variable's declaration is the `api` import from `@/lib/api` itself. A
 // local `api` (parameter, destructure, `const api = ...`) that shadows the
 // import resolves to a different `Variable` and is left alone.
+//
+// Aliasing: a chain root that is not the `api` import itself is also
+// treated as an Eden root when it resolves to a `const`/`let` variable
+// whose own initializer is itself Eden-rooted (recursively, via the same
+// chain-root walk) — e.g. `const wsClient = api.uploads({ id });
+// wsClient.presign.post(body).then(cb)`. Resolution stops (does not flag)
+// at `var`, function parameters, and reassignments: only a
+// `VariableDeclarator`'s own initializer is inspected, capped at
+// `MAX_ALIAS_DEPTH` hops and guarded by a `visited` set against declaration
+// cycles.
 
 import {
   getImportedName,
@@ -193,16 +203,67 @@ export default {
             );
           });
 
-        // A chain root only counts as a genuine Eden `api` call when it is
+        // A chain root only counts as a direct Eden `api` root when it is
         // both spelled like the import (fast pre-check against the
         // `apiLocalNames` set collected from `ImportDeclaration`) and
         // resolves, through scope, to that same import binding rather than
         // a local shadow (parameter, destructure, `const api = ...`).
-        const isGenuineApiRoot = (root: unknown): boolean => {
+        const isDirectApiRoot = (root: unknown): boolean => {
           if (!isIdentifier(root) || !apiLocalNames.has(root.name)) {
             return false;
           }
           return isApiImportVariable(resolveVariable(root));
+        };
+
+        // Alias-chain hop cap: comfortably covers realistic
+        // `const a = api...; const b = a...;` aliasing depth while keeping a
+        // runaway or (guarded-against but cheap to also bound) cyclic chain
+        // from walking indefinitely.
+        const MAX_ALIAS_DEPTH = 5;
+
+        // True when `root` is either the `api` import itself, or (up to
+        // `MAX_ALIAS_DEPTH` hops) a local `const`/`let` variable whose own
+        // initializer is itself Eden-rooted — see the "Aliasing" doc comment
+        // above. `visited` guards against declaration cycles across hops.
+        const isGenuineApiRoot = (
+          root: unknown,
+          visited: Set<unknown> = new Set(),
+          depth = 0,
+        ): boolean => {
+          if (isDirectApiRoot(root)) {
+            return true;
+          }
+          if (depth >= MAX_ALIAS_DEPTH || !isIdentifier(root)) {
+            return false;
+          }
+          const variable = resolveVariable(root);
+          if (variable === null || visited.has(variable)) {
+            return false;
+          }
+          visited.add(variable);
+          return variable.defs.some((def) => {
+            if (def.type !== "Variable" || !isAstNode(def.node)) {
+              return false;
+            }
+            if (def.node.type !== "VariableDeclarator") {
+              return false;
+            }
+            // Only `const`/`let` initializers are traced; `var` is left
+            // alone since its hoisting/reassignment semantics make "the"
+            // initializer a weaker signal.
+            if (
+              !isAstNode(def.parent) ||
+              def.parent.type !== "VariableDeclaration" ||
+              def.parent.kind === "var"
+            ) {
+              return false;
+            }
+            const init = def.node.init;
+            if (!isAstNode(init)) {
+              return false;
+            }
+            return isGenuineApiRoot(getChainRoot(init), visited, depth + 1);
+          });
         };
 
         return {
