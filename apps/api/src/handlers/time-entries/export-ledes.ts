@@ -3,7 +3,8 @@ import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { prorateHourlyCents } from "@stll/money";
+import { MoneyTotals, prorateHourlyCents } from "@stll/money";
+import type { CentsAmount } from "@stll/money";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
@@ -13,6 +14,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 export const exportLedesQuerySchema = t.Object({
@@ -43,7 +45,8 @@ export const escapeLedesField = (value: string): string =>
 type LedesLineItem = {
   matterId: SafeId<"entity">;
   dateWorked: string;
-  totalCents: number;
+  totalCents: CentsAmount;
+  currency: string;
   hours: number;
   taskCode: string;
   activityCode: string;
@@ -179,6 +182,7 @@ export const exportLedesHandler = async ({
       matterId: row.matterId,
       dateWorked: row.dateWorked,
       totalCents,
+      currency: row.currency,
       hours: row.billedMinutes / 60,
       taskCode: escapeLedesField(row.taskCode ?? ""),
       activityCode: escapeLedesField(row.activityCode ?? ""),
@@ -193,9 +197,12 @@ export const exportLedesHandler = async ({
   // invoice/batch (not a single line), and BILLING_START_DATE/
   // BILLING_END_DATE are the min/max dates across the included lines. Per
   // the LEDES 1998B spec, both are repeated identically on every row.
+  // Currency is a per-entry column, so accumulate through MoneyTotals: it
+  // buckets by currency and makes a cross-currency sum structurally
+  // unreachable.
   let billingStart = "";
   let billingEnd = "";
-  let invoiceTotalCents = 0;
+  const invoiceTotals = new MoneyTotals();
   for (const item of lineItems) {
     if (!billingStart || item.dateWorked < billingStart) {
       billingStart = item.dateWorked;
@@ -203,8 +210,22 @@ export const exportLedesHandler = async ({
     if (!billingEnd || item.dateWorked > billingEnd) {
       billingEnd = item.dateWorked;
     }
-    invoiceTotalCents += item.totalCents;
+    invoiceTotals.add(item.currency, item.totalCents);
   }
+
+  // LEDES 1998B has no currency field, so a mixed-currency batch cannot be
+  // represented at all: there is no honest value to put in INVOICE_TOTAL.
+  const totalsEntries = invoiceTotals.entries();
+  if (totalsEntries.length > 1) {
+    const currencies = totalsEntries.map((entry) => entry.currency).join(", ");
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `LEDES 1998B cannot represent a batch spanning multiple currencies (${currencies}); export a single currency at a time by narrowing the date or matter filters`,
+      }),
+    );
+  }
+  const invoiceTotalCents = totalsEntries.at(0)?.amountCents ?? 0;
   const invoiceTotalFormatted = (invoiceTotalCents / 100).toFixed(2);
   const billingStartFormatted = billingStart.replace(/-/gu, "");
   const billingEndFormatted = billingEnd.replace(/-/gu, "");
@@ -252,7 +273,7 @@ export const exportLedesHandler = async ({
     );
   }
 
-  return lines.join("\n");
+  return Result.ok(lines.join("\n"));
 };
 
 const config = {
@@ -276,7 +297,7 @@ const exportLedes = createSafeHandler(
       ),
     );
 
-    return Result.ok(response);
+    return response;
   },
 );
 
