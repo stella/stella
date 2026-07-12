@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
+import type { BoeSearchQuery } from "./query.js";
 import { buildSearchQuery } from "./query.js";
 
 describe("BOE search query builder", () => {
@@ -159,5 +163,155 @@ describe("BOE search query builder", () => {
   test("free text of only symbols produces an empty query (no clause)", () => {
     expect(extractQueryString(buildSearchQuery({ text: "()[]:*?" }))).toBe("");
     expect(extractQueryString(buildSearchQuery({ text: "   " }))).toBe("");
+  });
+
+  // Strips every correctly-escaped quoted phrase from a query_string,
+  // honoring the same backslash-escape grammar `escapeQueryStringPhrase`
+  // writes (`\\` and `\"` are single escaped units inside a phrase). If
+  // attacker content ever manages to close a phrase early with an
+  // unescaped `"`, the remaining text after that point is left in the
+  // output instead of being swallowed, and if a phrase is left dangling
+  // (opened but never closed) this throws instead of silently consuming
+  // the rest of the string — either way the fuzz property below fails
+  // loudly instead of passing on a broken parse.
+  const stripQuotedPhrases = (q: string): string => {
+    let result = "";
+    let i = 0;
+    while (i < q.length) {
+      if (q[i] !== '"') {
+        result += q[i];
+        i += 1;
+        continue;
+      }
+      let j = i + 1;
+      let closed = false;
+      while (j < q.length) {
+        if (q[j] === "\\") {
+          j += 2;
+          continue;
+        }
+        if (q[j] === '"') {
+          j += 1;
+          closed = true;
+          break;
+        }
+        j += 1;
+      }
+      if (!closed) {
+        throw new Error(`unterminated quoted phrase in query_string: ${q}`);
+      }
+      i = j;
+    }
+    return result;
+  };
+
+  // Paren balance, checked on the quote-stripped remainder rather than the
+  // raw query_string: raw-string quote-parity (as `isStructurallyBalanced`
+  // above checks) breaks once a phrase legitimately contains an escaped
+  // quote (`\"`), which adds one literal `"` to the string without
+  // unbalancing anything. Parens are unaffected by that, so checking them
+  // post-strip stays a meaningful signal without the false positive.
+  const isParenBalanced = (s: string): boolean => {
+    let depth = 0;
+    for (const ch of s) {
+      if (ch === "(") {
+        depth++;
+      } else if (ch === ")") {
+        depth--;
+        if (depth < 0) {
+          return false;
+        }
+      }
+    }
+    return depth === 0;
+  };
+
+  // The exact set of literal syntax fragments `buildSearchQuery` may emit
+  // outside of quoted phrases: parens, the AND/OR joiners, and the field
+  // prefixes for the five clause kinds it can produce. Nothing else is
+  // legitimate: an attacker string that escapes its quoted phrase would
+  // leave behind characters (another field name, a stray `:`, raw
+  // boolean text) that do not match any of these tokens.
+  const GRAMMAR_TOKEN =
+    /^(?:\(|\)| AND | OR |titulo:|texto:|departamento@codigo:|rango@codigo:|materia@codigo:)/u;
+
+  // Repeatedly strips one recognized grammar token from the front of the
+  // (already quote-stripped) remainder. Anything left over once no token
+  // matches is attacker-controlled syntax that escaped its phrase.
+  const stripGrammarTokens = (remainder: string): string => {
+    let s = remainder;
+    for (;;) {
+      const match = GRAMMAR_TOKEN.exec(s);
+      if (!match) {
+        return s;
+      }
+      s = s.slice(match[0].length);
+    }
+  };
+
+  // Attack fragments biased toward the query_string DSL's reserved
+  // syntax (quotes, backslashes, parens, colons, boolean keywords),
+  // mixed with fully arbitrary unicode strings so both targeted and
+  // unstructured input get exercised.
+  const INJECTION_FRAGMENTS = [
+    '"',
+    "\\",
+    '\\"',
+    '") OR (',
+    'x" OR "y',
+    ") OR fecha_publicacion:[* TO *] OR (",
+    " OR ",
+    " AND ",
+    "(",
+    ")",
+    ":",
+    "titulo:",
+    "texto:",
+    "departamento@codigo:",
+    "rango@codigo:",
+    "materia@codigo:",
+    "NOT",
+    "*",
+    "?",
+  ] as const;
+
+  const fieldValueArb: fc.Arbitrary<string> = fc.oneof(
+    fc.string(),
+    fc.constantFrom(...INJECTION_FRAGMENTS),
+    fc
+      .array(fc.constantFrom(...INJECTION_FRAGMENTS), {
+        minLength: 1,
+        maxLength: 5,
+      })
+      .map((fragments) => fragments.join("")),
+  );
+
+  // Every string field of BoeSearchQuery gets independently fuzzed,
+  // including dateFrom/dateTo (which never reach query_string, but are
+  // included so a future regression that routes them through it would
+  // be caught here too).
+  const boeSearchQueryArb: fc.Arbitrary<BoeSearchQuery> = fc.record(
+    {
+      text: fieldValueArb,
+      title: fieldValueArb,
+      departmentCode: fieldValueArb,
+      legalRangeCode: fieldValueArb,
+      matterCode: fieldValueArb,
+      dateFrom: fieldValueArb,
+      dateTo: fieldValueArb,
+    },
+    { requiredKeys: [] },
+  );
+
+  test("INVARIANT (fuzz): no field lets attacker content escape its quoted phrase", () => {
+    fc.assert(
+      fc.property(boeSearchQueryArb, (query) => {
+        const q = extractQueryString(buildSearchQuery(query));
+        const stripped = stripQuotedPhrases(q);
+        expect(isParenBalanced(stripped)).toBe(true);
+        expect(stripGrammarTokens(stripped)).toBe("");
+      }),
+      propertyConfig(),
+    );
   });
 });
