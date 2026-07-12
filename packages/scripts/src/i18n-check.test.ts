@@ -239,6 +239,43 @@ describe("findUntranslated", () => {
   });
 });
 
+describe("findUntranslated — nested ICU braces (regression)", () => {
+  // Real en.json value: a select whose "other" branch mixes literal text
+  // ("New ") with a nested placeholder ({layout}). A brace-matcher that
+  // closes on the FIRST "}" (instead of the matching one) swallows "New"
+  // entirely, so a byte-identical locale copy is wrongly treated as
+  // language-neutral and never flagged as untranslated.
+  test("flags a verbatim copy of a nested select as untranslated", () => {
+    const en: NestedMessages = {
+      folio: { newView: "{layoutType, select, other {New {layout}}}" },
+    };
+    const target: NestedMessages = {
+      folio: { newView: "{layoutType, select, other {New {layout}}}" },
+    };
+    expect(findUntranslated(en, target, "cs", emptyBaseline())).toEqual([
+      "folio.newView",
+    ]);
+  });
+
+  test("counts plural branch text but not the plural placeholder itself", () => {
+    const en: NestedMessages = {
+      docs: { count: "{count, plural, one {# document} other {# documents}}" },
+    };
+    const target: NestedMessages = {
+      docs: { count: "{count, plural, one {# document} other {# documents}}" },
+    };
+    expect(findUntranslated(en, target, "cs", emptyBaseline())).toEqual([
+      "docs.count",
+    ]);
+  });
+
+  test("still strips a flat placeholder-only value", () => {
+    const en: NestedMessages = { common: { count: "{n}" } };
+    const target: NestedMessages = { common: { count: "{n}" } };
+    expect(findUntranslated(en, target, "cs", emptyBaseline())).toEqual([]);
+  });
+});
+
 describe("findCommonDuplicates", () => {
   const en: NestedMessages = {
     common: { remove: "Remove", save: "Save" },
