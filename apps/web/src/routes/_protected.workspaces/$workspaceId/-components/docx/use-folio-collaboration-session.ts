@@ -146,6 +146,10 @@ export const useFolioCollaborationSession = ({
 
       openingSession = null;
       try {
+        // SAFETY: best-effort cleanup for an abandoned session open;
+        // the session either never opened or is about to be replaced,
+        // so there is no user-facing outcome to surface on failure.
+        // eslint-disable-next-line require-eden-error-check/require-eden-error-check
         await api["folio-collab-sessions"]({
           sessionId: session.sessionId,
         }).cancel.post({ token: session.token });

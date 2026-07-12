@@ -94,16 +94,18 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
       getAnalytics().captureError(error);
     };
     if (cause === "enter") {
-      void api
-        .workspaces({ workspaceId: wsId })
-        .active.post()
-        .then((response) => {
+      void (async () => {
+        try {
+          const response = await api
+            .workspaces({ workspaceId: wsId })
+            .active.post();
           if (response.error) {
-            onPrefetchError(toAPIError(response.error));
+            throw toAPIError(response.error);
           }
-          return;
-        })
-        .catch(onPrefetchError);
+        } catch (error: unknown) {
+          onPrefetchError(error);
+        }
+      })();
     }
 
     void prefetchRouteQuery(
