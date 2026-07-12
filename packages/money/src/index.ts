@@ -130,6 +130,31 @@ export const currencyCents = <C extends string>(
   return cents(amount) as CurrencyCents<C>;
 };
 
+// Standard "distribute over the union, then intersect" trick: for a union
+// `U = "USD" | "EUR"`, this produces `(x: "USD") => void & (x: "EUR") =>
+// void`, and inferring a single parameter type `I` from that intersection
+// hits TypeScript's contravariant-position inference, which turns the
+// union into an intersection (`"USD" & "EUR"`, i.e. `never` for disjoint
+// string literals) instead of preserving it as a union.
+type UnionToIntersection<U> = (
+  U extends unknown ? (x: U) => void : never
+) extends (x: infer I) => void
+  ? I
+  : never;
+
+// True (evaluates to `C` itself) only when `C` is a single string-literal
+// currency code such as `"USD"` — never the WIDE `string` type, and never a
+// finite union of literals such as `"USD" | "EUR"`. A union only survives
+// `UnionToIntersection` intact when it has exactly one member (intersecting
+// one type with itself is a no-op); intersecting two or more distinct
+// string literals collapses to `never`, so `[C] extends
+// [UnionToIntersection<C>]` fails for any multi-member union.
+type IsSingletonCurrency<C extends string> = string extends C
+  ? never
+  : [C] extends [UnionToIntersection<C>]
+    ? C
+    : never;
+
 /**
  * Add two `CurrencyCents` amounts of the SAME currency. The second
  * parameter's currency `B` is constrained to `extends A`, so passing a
@@ -137,20 +162,23 @@ export const currencyCents = <C extends string>(
  * compile error, not a runtime bug — see `packages/money/src/index.test.ts`
  * for the `@ts-expect-error` proof.
  *
- * Both operands are further constrained to reject the WIDE
- * `CurrencyCents<string>` (as opposed to a literal currency such as
- * `CurrencyCents<"USD">`). A currency read back from a DB row types as
- * plain `string`, so without this, `addCents(currencyCents(row.currency, x),
- * currencyCents(row.currency, y))` would still typecheck even when the two
- * rows carry genuinely different runtime currencies — the compile-time
- * guarantee above only bites for literal currency types. Code that
- * aggregates rows with a dynamic (non-literal) currency must use
- * `MoneyTotals` instead, which buckets by currency at runtime and is the
- * runtime-correct tool for that case.
+ * Both operands are further constrained by `IsSingletonCurrency` to reject
+ * any non-singleton currency type: the WIDE `CurrencyCents<string>`, and
+ * also a finite union such as `CurrencyCents<"USD" | "EUR">` (e.g. from a
+ * validator's `t.UnionEnum`). A currency read back from a DB row or
+ * narrowed only to a finite set of allowed codes types as `string` or a
+ * union, not a single literal, so without this, `addCents(currencyCents(a,
+ * x), currencyCents(b, y))` would still typecheck even when `a`/`b` are
+ * both known only up to a union of currencies that could differ at
+ * runtime — the compile-time guarantee above only bites for a genuine
+ * single-literal currency type on both operands. Code that aggregates rows
+ * with a dynamic or union (non-singleton) currency must use `MoneyTotals`
+ * instead, which buckets by currency at runtime and is the runtime-correct
+ * tool for that case.
  */
 export const addCents = <A extends string, B extends A = A>(
-  a: string extends A ? never : CurrencyCents<A>,
-  b: string extends B ? never : CurrencyCents<B>,
+  a: IsSingletonCurrency<A> extends never ? never : CurrencyCents<A>,
+  b: IsSingletonCurrency<B> extends never ? never : CurrencyCents<B>,
 ): CurrencyCents<A> =>
   // SAFETY: the currency brand is phantom-only (never materialized at
   // runtime, same as CentsAmount itself); the result is just a + b with
@@ -169,11 +197,13 @@ export const addCents = <A extends string, B extends A = A>(
  * API — callers must handle each currency's total explicitly.
  *
  * Division of responsibility with `addCents`: `addCents` gives a
- * compile-time guarantee, but only when both operands carry a literal
- * currency type (`CurrencyCents<"USD">`); it rejects the wide
- * `CurrencyCents<string>` outright. Any flow whose currency is dynamic
- * (read from a DB row, request body, etc.) cannot satisfy that literal
- * constraint and must bucket through `MoneyTotals` instead, which enforces
+ * compile-time guarantee, but only when both operands carry a single
+ * string-literal currency type (`CurrencyCents<"USD">`); it rejects both
+ * the wide `CurrencyCents<string>` and a finite union such as
+ * `CurrencyCents<"USD" | "EUR">` outright. Any flow whose currency is
+ * dynamic or only known up to a union of allowed codes (read from a DB row,
+ * request body, etc.) cannot satisfy that singleton-literal constraint and
+ * must bucket through `MoneyTotals` instead, which enforces
  * the same "never sum across currencies" invariant at runtime via the
  * per-currency `Map`.
  */

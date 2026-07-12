@@ -270,6 +270,28 @@ describe("currencyCents() and addCents()", () => {
     addCents(a, b);
   });
 
+  test("COMPILE ERROR: addCents rejects a finite union currency type", () => {
+    // A currency narrowed only to a finite set of allowed codes (e.g. a
+    // validator's `t.UnionEnum(["USD", "EUR"])`) still nominally "shares"
+    // A under a plain `extends` bound, but two `CurrencyCents<"USD" |
+    // "EUR">` values can carry genuinely different runtime currencies —
+    // addCents must reject the union just like it rejects wide `string`.
+    //
+    // The union is routed through a function parameter rather than a
+    // `const ...: "USD" | "EUR" = "USD"` literal initializer: TypeScript's
+    // control-flow analysis narrows a `const` with a union-literal
+    // annotation down to the specific literal of its initializer at each
+    // read site, which would silently collapse the union to `"USD"` and
+    // defeat the point of this test.
+    const checkUnionCurrencyRejected = (currency: "USD" | "EUR") => {
+      const a = currencyCents(currency, 100);
+      const b = currencyCents(currency, 200);
+      // @ts-expect-error - addCents must not accept a union CurrencyCents<"USD" | "EUR">
+      addCents(a, b);
+    };
+    checkUnionCurrencyRejected("USD");
+  });
+
   test("INVARIANT: addCents is commutative and associative", () => {
     const rand = makePrng(4_611_812);
     for (let n = 0; n < 2000; n++) {
