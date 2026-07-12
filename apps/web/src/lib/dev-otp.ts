@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { env } from "@/env";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 const devOtpSchema = v.object({ otp: v.string() });
 
@@ -19,9 +20,9 @@ export const fetchDevOtp = async (email: string): Promise<string | null> => {
   const result = await Result.tryPromise(async () => {
     const url = new URL("/dev-public/last-otp", env.VITE_API_URL);
     url.searchParams.set("email", email);
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       credentials: "include",
-      signal: AbortSignal.timeout(3000),
+      timeoutMs: 3000,
     });
     if (!response.ok) {
       return null;

@@ -21,6 +21,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import {
   fetchPrintPdf,
@@ -105,8 +106,8 @@ export const PdfViewerControls = ({
         throw toAPIError(response.error);
       }
 
-      const fileResponse = await fetch(response.data.presignedUrl, {
-        signal: AbortSignal.timeout(60_000),
+      const fileResponse = await fetchWithTimeout(response.data.presignedUrl, {
+        timeoutMs: 60_000,
       });
       if (!fileResponse.ok) {
         throw new ClientOperationError({

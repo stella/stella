@@ -38,6 +38,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
@@ -270,11 +271,11 @@ export function VersionsSidebar({
       const { uploadId, url, headers } = presign.data;
 
       // 3. PUT to S3.
-      const putResponse = await fetch(url, {
+      const putResponse = await fetchWithTimeout(url, {
         method: "PUT",
         headers,
         body: file,
-        signal: AbortSignal.timeout(UPLOAD_PUT_TIMEOUT_MS),
+        timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
       });
       if (!putResponse.ok) {
         await wsClient({ uploadId })

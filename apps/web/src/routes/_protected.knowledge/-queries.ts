@@ -3,6 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { STALE_TIME } from "@/lib/consts";
 import { APIError, toAPIError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -228,8 +229,9 @@ export const templateDocxBufferOptions = (
   queryOptions({
     queryKey: knowledgeKeys.templates.docxBuffer(organizationId, templateId),
     queryFn: async ({ signal }) => {
-      const response = await fetch(presignedUrl, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+      const response = await fetchWithTimeout(presignedUrl, {
+        signal,
+        timeoutMs: 15_000,
       });
 
       if (!response.ok) {

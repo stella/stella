@@ -52,6 +52,7 @@ import {
   toAPIError,
   userErrorMessage,
 } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -362,12 +363,12 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
       );
       url.searchParams.set("format", format);
 
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         credentials: "include",
         headers: {
           "Accept-Language": locale,
         },
-        signal: AbortSignal.timeout(60_000),
+        timeoutMs: 60_000,
       });
       if (!response.ok) {
         throw new ClientOperationError({

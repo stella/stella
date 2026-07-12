@@ -18,6 +18,7 @@ import {
 import { caseLawDecisionKeys } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 type AnalysisState =
   | { status: "idle" }
@@ -104,11 +105,12 @@ export const useDecisionAnalysis = (
   const query = useQuery({
     queryKey: ["decision-analysis", decisionId],
     queryFn: async ({ signal }): Promise<AnalysisQueryResult> => {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         apiUrl(`/case/decisions/${decisionId}/analysis`),
         {
           credentials: "include",
           signal,
+          timeoutMs: 15_000,
         },
       );
 

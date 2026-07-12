@@ -14,6 +14,7 @@ import {
 } from "@stll/folio-react";
 
 import { apiUrl } from "@/lib/api-url";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 export type UseAutocompleteStreamOptions = {
   enabled: boolean;
@@ -217,17 +218,21 @@ export const useAutocompleteStream = (
       );
 
       try {
-        const response = await fetch(apiUrl("/ai-autocomplete/stream"), {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            prefix,
-            suffix: suffix.length > 0 ? suffix : undefined,
-            language,
-          }),
-          signal: controller.signal,
-        });
+        const response = await fetchWithTimeout(
+          apiUrl("/ai-autocomplete/stream"),
+          {
+            method: "POST",
+            credentials: "include",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              prefix,
+              suffix: suffix.length > 0 ? suffix : undefined,
+              language,
+            }),
+            signal: controller.signal,
+            timeoutMs: 15_000,
+          },
+        );
         if (!response.ok || response.body === null) {
           dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
           return;

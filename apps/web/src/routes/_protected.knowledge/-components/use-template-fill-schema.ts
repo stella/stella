@@ -5,6 +5,7 @@ import { panic } from "better-result";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import {
   knowledgeKeys,
   templateDetailOptions,
@@ -63,8 +64,9 @@ export const useTemplateFillSchema = (
       if (presignedUrl === undefined || fileName === undefined) {
         panic("template fill: saved template document is unavailable");
       }
-      const res = await fetch(presignedUrl, {
-        signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]),
+      const res = await fetchWithTimeout(presignedUrl, {
+        signal,
+        timeoutMs: 15_000,
       });
       const blob = await res.blob();
       const file = new File([blob], fileName, { type: DOCX_MIME });
