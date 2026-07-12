@@ -177,4 +177,48 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
 
     expect(fakeClient.close).toHaveBeenCalledTimes(1);
   });
+
+  test("closes the MCP client immediately on timeout when the client was already created and tools() is the hung step", async () => {
+    const row = buildRow();
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue([row]);
+
+    // Never resolves — simulates `client.tools()` (not client creation)
+    // being the step that hangs past the aggregate discovery timeout.
+    const hangingTools = createDeferred<never[]>();
+    const fakeClient = buildFakeClient({
+      tools: mock(async () => await hangingTools.promise),
+    });
+    createMcpClientForConnectionMock.mockResolvedValue(asMcpClient(fakeClient));
+
+    withTimeoutMock.mockImplementation(async (operation, opts) => {
+      // Mirrors the real `withTimeout`, but flushes microtasks first so the
+      // still-running `discovery` promise has a chance to resolve
+      // `createMcpClientForConnection` (already-resolved) and assign its
+      // closure's `client` variable before hanging on `client.tools()` —
+      // otherwise this test could not distinguish "client known" from
+      // "client not yet created" at the moment the timeout fires.
+      void operation();
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      throw new TimeoutError({
+        message: `${opts.label} exceeded ${opts.timeoutMs}ms`,
+        label: opts.label,
+        timeoutMs: opts.timeoutMs,
+      });
+    });
+
+    const loaded = await loadExternalMcpToolsForUser({
+      nullUnionStrategy: "json-schema",
+      organizationId: orgId,
+      safeDb: stubSafeDb,
+      userId,
+    });
+
+    expect(loaded.connectors).toEqual([]);
+    // The client was already known when the timeout fired, so it is closed
+    // right away — the fix does not wait for the permanently-hung
+    // `tools()` call to settle before closing the leaked client/sockets.
+    expect(fakeClient.close).toHaveBeenCalledTimes(1);
+  });
 });

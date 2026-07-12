@@ -238,9 +238,22 @@ const loadConnectorTools = async ({
     });
   } catch (error) {
     if (error instanceof TimeoutError) {
-      // `discovery` is still running; wait for it to settle (success or
-      // failure) and close whatever client it created, since the timeout
-      // already discarded its result and no caller will ever see it.
+      // Close whatever client discovery has already produced right away,
+      // instead of waiting for `discovery` to settle first: `MCPClient.close()`
+      // closes the underlying transport, which aborts the fetch backing an
+      // in-flight `client.tools()` call and locally rejects that pending
+      // call with a `ConnectionClosed` error (see `Protocol.close()` /
+      // `_onclose()` in the MCP SDK). So closing here cannot hang the way
+      // the timed-out discovery itself did — if `client.tools()` is the
+      // stuck step, this unblocks it. If discovery hasn't created a client
+      // yet (still inside `createMcpClientForConnection`, e.g. a hung
+      // DB/KMS call), `client` is still `undefined` here and there is
+      // nothing to close yet.
+      await closeAbandonedClient({ client, connectorSlug: row.slug });
+      // Still attach a best-effort close to `discovery`'s eventual
+      // settlement: it covers the case above where no client existed yet
+      // at timeout, and is a no-op otherwise since `MCPClient.close()` is
+      // idempotent (safe even if it ends up closing the same client twice).
       void discovery
         .catch(() => undefined)
         .then(

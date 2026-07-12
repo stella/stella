@@ -306,8 +306,8 @@ const sendMessage = createSafeRootHandler(
     // time right before streaming. `externalMcpToolsHandedOffToStreaming`
     // below tracks whether ownership of closing these connectors passed
     // to the streaming try/catch, so every other exit path (validation
-    // failure, any early return between here and streaming) still closes
-    // them exactly once.
+    // failure, any early return or throw between here and streaming) still
+    // closes them exactly once.
     const externalMcpTools = await loadExternalMcpToolsForUser({
       nullUnionStrategy: externalMcpNullUnionStrategy,
       organizationId: session.activeOrganizationId,
@@ -316,79 +316,84 @@ const sendMessage = createSafeRootHandler(
     });
     let externalMcpToolsHandedOffToStreaming = false;
 
-    // Resolve the org's web-search providers once (BYOK key first,
-    // platform env key as fallback) and reuse for both the validation
-    // and streaming tool sets.
-    const webSearchProviders = await loadWebSearchProvidersForOrg(
-      session.activeOrganizationId,
-    );
-
-    // Tool input schemas don't depend on `accessibleWorkspaceIds`
-    // (scope is checked at execute time, not in the schema), so we
-    // can validate the incoming message against the broad set and
-    // then rebuild the tools with the narrowed `effective` set
-    // before streaming. This lets the picker's scope actually
-    // govern tool authorization rather than just being persisted.
-    // Validation tools include the broadest workspace surface, but
-    // still honor thread/org gates for tools whose presence is an
-    // explicit user or administrator opt-in.
-    const validationTools = getChatTools({
-      organizationId: session.activeOrganizationId,
-      memberRole: memberRole.role,
-      orgAIConfig,
-      pinServerValidatedWorkspaceId,
-      requestWorkspaceId: workspaceId,
-      refRegistry,
-      safeDb,
-      scopedDb,
-      threadId: body.threadId,
-      userId: user.id,
-      // Schema validation only; this tool set's `spawn_subagents` never
-      // executes, so a raw (non-anonymizing) boundary is correct here —
-      // the real per-request boundary is created below and threaded
-      // into the streaming tool set instead.
-      thirdPartyBoundary: { type: "raw" },
-      // Schema validation runs against the user's full accessible
-      // set; per-tool scope checks happen at execute time below.
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds,
-      }),
-      activeFile: body.activeFile,
-      hasActiveDocxEditClient: true,
-      hasActiveDocxFileClient: true,
-      webSearchEnabled: validationThreadState.webSearchEnabled,
-      webSearchProviders,
-      externalTools: externalToolsForValidation(body.message, externalMcpTools),
-      disabledNativeToolSlugs,
-      activeSkillContext: validationActiveSkillContext,
-      recordAuditEvent,
-      workspaceStatusById,
-    });
-
-    const validatedMessageResult = await validateMessage({
-      message: body.message,
-      safeDb,
-      threadId: body.threadId,
-      tools: validationTools,
-      userId: user.id,
-    });
-    if (Result.isError(validatedMessageResult)) {
-      // Validation is the only exit before the streaming pass takes over
-      // ownership of `externalMcpTools` (see `externalMcpToolsHandedOffToStreaming`
-      // below); every later early return closes it via the wrapping try/finally.
-      await externalMcpTools.close();
-      return Result.err(validatedMessageResult.error);
-    }
-    const validatedMessage = validatedMessageResult.value;
-
-    // From here on, every early return (validation already handled above)
-    // must still close `externalMcpTools` since the streaming try/catch
-    // below — which owns closing on its own exit paths — may never be
-    // reached. `Result.gen`'s `yield*` short-circuit resumes the generator
-    // via `.return()`, which unwinds this `finally` like a normal early
-    // `return` would.
+    // The try/finally starts immediately after the load (rather than just
+    // around the streaming pass) so that a throw from any of the awaited
+    // steps below — web-search provider load, tool-set construction,
+    // message validation — still closes `externalMcpTools` instead of
+    // leaking the MCP clients. The streaming pass further below takes over
+    // ownership once it starts consuming the clients (flips
+    // `externalMcpToolsHandedOffToStreaming`); until then this `finally` is
+    // the sole owner. `Result.gen`'s `yield*` short-circuit resumes the
+    // generator via `.return()`, which unwinds this `finally` like a normal
+    // early `return` would.
     try {
+      // Resolve the org's web-search providers once (BYOK key first,
+      // platform env key as fallback) and reuse for both the validation
+      // and streaming tool sets.
+      const webSearchProviders = await loadWebSearchProvidersForOrg(
+        session.activeOrganizationId,
+      );
+
+      // Tool input schemas don't depend on `accessibleWorkspaceIds`
+      // (scope is checked at execute time, not in the schema), so we
+      // can validate the incoming message against the broad set and
+      // then rebuild the tools with the narrowed `effective` set
+      // before streaming. This lets the picker's scope actually
+      // govern tool authorization rather than just being persisted.
+      // Validation tools include the broadest workspace surface, but
+      // still honor thread/org gates for tools whose presence is an
+      // explicit user or administrator opt-in.
+      const validationTools = getChatTools({
+        organizationId: session.activeOrganizationId,
+        memberRole: memberRole.role,
+        orgAIConfig,
+        pinServerValidatedWorkspaceId,
+        requestWorkspaceId: workspaceId,
+        refRegistry,
+        safeDb,
+        scopedDb,
+        threadId: body.threadId,
+        userId: user.id,
+        // Schema validation only; this tool set's `spawn_subagents` never
+        // executes, so a raw (non-anonymizing) boundary is correct here —
+        // the real per-request boundary is created below and threaded
+        // into the streaming tool set instead.
+        thirdPartyBoundary: { type: "raw" },
+        // Schema validation runs against the user's full accessible
+        // set; per-tool scope checks happen at execute time below.
+        toolWorkspaceIds: resolveToolWorkspaceIds({
+          pinnedIds: [],
+          accessibleWorkspaceIds,
+        }),
+        activeFile: body.activeFile,
+        hasActiveDocxEditClient: true,
+        hasActiveDocxFileClient: true,
+        webSearchEnabled: validationThreadState.webSearchEnabled,
+        webSearchProviders,
+        externalTools: externalToolsForValidation(
+          body.message,
+          externalMcpTools,
+        ),
+        disabledNativeToolSlugs,
+        activeSkillContext: validationActiveSkillContext,
+        recordAuditEvent,
+        workspaceStatusById,
+      });
+
+      const validatedMessageResult = await validateMessage({
+        message: body.message,
+        safeDb,
+        threadId: body.threadId,
+        tools: validationTools,
+        userId: user.id,
+      });
+      if (Result.isError(validatedMessageResult)) {
+        // The wrapping try/finally closes `externalMcpTools` on this exit
+        // path too — no explicit close needed here.
+        return Result.err(validatedMessageResult.error);
+      }
+      const validatedMessage = validatedMessageResult.value;
+
       const thread = yield* Result.await(
         loadThread({
           initialContextMatterIds: requestedContextMatterIds,
