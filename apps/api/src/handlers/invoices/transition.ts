@@ -10,6 +10,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
+import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
@@ -134,19 +135,11 @@ const transitionInvoice = createSafeHandler(
     if (body.action === "void") {
       const txResult = yield* Result.await(
         safeDb(async (tx) => {
-          const existingRows = await tx
-            .select({ id: invoices.id, status: invoices.status })
-            .from(invoices)
-            .where(
-              and(
-                eq(invoices.id, params.invoiceId),
-                eq(invoices.workspaceId, workspaceId),
-                inArray(invoices.status, transition.from),
-              ),
-            )
-            .limit(1)
-            .for("update");
-          const existing = existingRows.at(0);
+          const existing = await lockInvoiceInStatus(tx, {
+            invoiceId: params.invoiceId,
+            workspaceId,
+            status: transition.from,
+          });
           if (!existing) {
             return { ok: false as const };
           }
@@ -226,19 +219,11 @@ const transitionInvoice = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const existingRows = await tx
-          .select({ id: invoices.id, status: invoices.status })
-          .from(invoices)
-          .where(
-            and(
-              eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
-              inArray(invoices.status, transition.from),
-            ),
-          )
-          .limit(1)
-          .for("update");
-        const existing = existingRows.at(0);
+        const existing = await lockInvoiceInStatus(tx, {
+          invoiceId: params.invoiceId,
+          workspaceId,
+          status: transition.from,
+        });
         if (!existing) {
           return [];
         }

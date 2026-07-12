@@ -8,6 +8,7 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
@@ -106,27 +107,11 @@ const updateInvoice = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const existingRows = await tx
-          .select({
-            id: invoices.id,
-            currency: invoices.currency,
-            dueDate: invoices.dueDate,
-            invoiceDate: invoices.invoiceDate,
-            invoiceNumber: invoices.invoiceNumber,
-            notes: invoices.notes,
-            reference: invoices.reference,
-          })
-          .from(invoices)
-          .where(
-            and(
-              eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
-              eq(invoices.status, INVOICE_STATUS.DRAFT),
-            ),
-          )
-          .limit(1)
-          .for("update");
-        const existing = existingRows.at(0);
+        const existing = await lockInvoiceInStatus(tx, {
+          invoiceId: params.invoiceId,
+          workspaceId,
+          status: INVOICE_STATUS.DRAFT,
+        });
         if (!existing) {
           return { status: "not-updated" } satisfies InvoiceUpdateResult;
         }
