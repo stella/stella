@@ -20,7 +20,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.0",
+          turbo: "^2.10.3",
         },
       },
       webPackageJson: {
@@ -42,12 +42,12 @@ describe("workspace hygiene", () => {
     expect(validateWorkspaceRoot(rootDir)).toEqual([
       {
         message:
-          "turbo install pin must match root package.json turbo 2.10.0; found 2.9.18",
+          "turbo install pin must match root package.json turbo 2.10.3; found 2.9.18",
         path: "apps/web/Dockerfile:1",
       },
       {
         message:
-          "turbo install pin must match root package.json turbo 2.10.0; found 2.9.18",
+          "turbo install pin must match root package.json turbo 2.10.3; found 2.9.18",
         path: ".github/workflows/ci.yml:1",
       },
     ]);
@@ -57,7 +57,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.0",
+          turbo: "^2.10.3",
         },
       },
       webPackageJson: {
@@ -68,7 +68,7 @@ describe("workspace hygiene", () => {
 
     writeFileSync(
       path.join(rootDir, "apps/web/Dockerfile"),
-      "RUN bun install -g turbo@2.10.0\n",
+      "RUN bun install -g turbo@2.10.3\n",
     );
 
     expect(validateWorkspaceRoot(rootDir)).toEqual([]);
@@ -78,7 +78,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.0",
+          turbo: "^2.10.3",
         },
       },
       webPackageJson: {
@@ -105,7 +105,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.0",
+          turbo: "^2.10.3",
         },
       },
       webPackageJson: {
@@ -128,7 +128,7 @@ describe("workspace hygiene", () => {
     const rootDir = createWorkspaceRoot({
       rootPackageJson: {
         devDependencies: {
-          turbo: "^2.10.0",
+          turbo: "^2.10.3",
         },
       },
       webPackageJson: {

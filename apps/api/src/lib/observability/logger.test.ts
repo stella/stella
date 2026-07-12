@@ -28,10 +28,10 @@ describe("logger attributes", () => {
 
   test("stderr backstop emits only sanitized attributes", () => {
     const chunks: string[] = [];
-    process.stderr.write = ((chunk: string | Uint8Array): boolean => {
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
       chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
       return true;
-    }) as typeof process.stderr.write;
+    };
 
     logger.error("test.failed", {
       body: "raw body",
