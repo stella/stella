@@ -374,7 +374,7 @@ export const TaskDetailPanel = ({
                 }
                 if (e.key === "Escape") {
                   setIsEditingName(false);
-                  setEditNameValue(task.name ?? "");
+                  setEditNameValue(task.name);
                 }
               }}
               placeholder={t("untitled")}

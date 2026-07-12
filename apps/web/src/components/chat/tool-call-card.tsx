@@ -56,10 +56,10 @@ const SKILL_RESOURCE_OUTPUT_TOOL_NAMES = {
   "update-current-skill-body": true,
   "update-current-skill-resource": true,
 } as const;
-const SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES: readonly string[] = [
-  "update-current-skill-body",
-  "update-current-skill-resource",
-];
+const SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES = {
+  "update-current-skill-body": true,
+  "update-current-skill-resource": true,
+} as const;
 
 const isCodeToolName = (name: string): boolean =>
   Object.hasOwn(CODE_TOOL_NAMES, name);
@@ -480,8 +480,10 @@ export const ToolCallCard = ({
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,
                 label: basenameOf(skillResourceOutput.path),
-                refreshContent:
-                  SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES.includes(name),
+                refreshContent: Object.hasOwn(
+                  SKILL_RESOURCE_REFRESH_OUTPUT_TOOL_NAMES,
+                  name,
+                ),
                 ...(skillResourceOutput.target
                   ? { target: skillResourceOutput.target }
                   : {}),

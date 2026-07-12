@@ -81,12 +81,12 @@ const toRedactedTelemetryError = (error: unknown): Error => {
 };
 
 const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
-  const properties = event.properties;
+  const properties: Record<string, unknown> = event.properties;
   const distinctId = properties["$distinct_id"];
   const appCommit = properties["app_commit"];
   const appVersion = properties["app_version"];
   const exceptionList = properties["$exception_list"];
-  const firstException = Array.isArray(exceptionList)
+  const firstException: unknown = Array.isArray(exceptionList)
     ? exceptionList.at(0)
     : undefined;
   const type = normalizeTelemetryErrorType(

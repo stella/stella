@@ -202,7 +202,6 @@ export const OnboardingWizard = () => {
     }
     // eslint-disable-next-line react/react-compiler -- commit-safe one-shot latch for an async suggestion; user edits are rechecked in the functional data update below
     setJurisdictionSuggestionApplied(true);
-    // eslint-disable-next-line react/react-compiler -- commit-safe parent-owned default; the functional update preserves any jurisdiction selected since render
     setData((currentData) => {
       if (currentData.practiceJurisdictions.length > 0) {
         return currentData;

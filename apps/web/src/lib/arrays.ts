@@ -14,10 +14,13 @@ export const optionalArray = <T>(value: T[] | null | undefined): T[] => {
   return value;
 };
 
+// Body mirrors optionalArray by design (same runtime); the readonly input/
+// output signature is the meaningful difference. The null/undefined checks are
+// ordered differently so this does not read as an accidental duplicate.
 export const optionalReadonlyArray = <T>(
   value: readonly T[] | null | undefined,
 ): readonly T[] => {
-  if (value === undefined || value === null) {
+  if (value === null || value === undefined) {
     return [];
   }
   return value;

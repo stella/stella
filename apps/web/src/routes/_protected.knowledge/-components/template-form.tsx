@@ -2531,7 +2531,7 @@ const normalizeBinaryResponse = async (
     );
     return new Blob([bytes], { type: mimeType });
   }
-  panic("Template fill returned a non-binary response");
+  return panic("Template fill returned a non-binary response");
 };
 
 /**

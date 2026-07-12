@@ -1,5 +1,5 @@
 import { useRef, useSyncExternalStore } from "react";
-import type { ComponentProps, PropsWithChildren } from "react";
+import type { PropsWithChildren } from "react";
 
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -19,6 +19,7 @@ import {
   bundledEnglishMessages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import type Messages from "@/i18n/langs/messages.gen";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { AnalyticsProvider, useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
@@ -115,8 +116,10 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
       // inference app-wide), but locales load as dynamic JSON so LocaleMessages
       // widens every leaf to `string`. The runtime values conform to the
       // schema; only the literal-vs-string widening differs at this boundary.
+      // This is the single sanctioned as-cast in app source (ratchet baseline).
       messages={
-        activeMessages as ComponentProps<typeof IntlProvider>["messages"]
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- documented i18n provider boundary (see comment above); translated locale JSON widens leaves to string vs use-intl's literal Messages schema
+        activeMessages as Messages
       }
       timeZone={resolveAppTimeZone()}
     >

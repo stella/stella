@@ -1082,9 +1082,6 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
   if (registration === undefined) {
     return false;
   }
-  if (registration.validate === undefined) {
-    return true;
-  }
   return registration.validate(value["payload"]);
 };
 

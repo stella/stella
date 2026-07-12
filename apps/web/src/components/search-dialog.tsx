@@ -430,7 +430,7 @@ export const SearchDialog = ({
         mimeTypes: params.mimeTypes,
         ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
         ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
-        ...(params.limit ? { limit: params.limit } : {}),
+        ...(params.limit !== undefined ? { limit: params.limit } : {}),
       });
 
       if (response.error) {
@@ -480,7 +480,7 @@ export const SearchDialog = ({
         mimeTypes: vars.mimeTypes,
         ...(vars.updatedFrom ? { updatedFrom: vars.updatedFrom } : {}),
         ...(vars.updatedTo ? { updatedTo: vars.updatedTo } : {}),
-        ...(vars.limit ? { limit: vars.limit } : {}),
+        ...(vars.limit !== undefined ? { limit: vars.limit } : {}),
       });
 
       if (response.error) {
@@ -1524,7 +1524,7 @@ const FACET_SEARCH_LIMIT = 20;
 type SearchableFacetGroupProps = {
   facet: SearchableFacet;
   title: string;
-  defaultBuckets: FacetBucket[];
+  defaultBuckets: readonly FacetBucket[];
   selected: string[];
   onChange: (value: string) => void;
   searchParams: {

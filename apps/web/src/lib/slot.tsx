@@ -107,7 +107,7 @@ const Slot = ({
   // In React 19, ref lives in element.props (element.ref is
   // deprecated and triggers console warnings in dev).
   const childRef = childProps["ref"];
-  if (parentRef || childRef) {
+  if (parentRef !== undefined || childRef !== undefined) {
     mergedProps["ref"] = composeSlotRefs(parentRef, childRef);
   }
 
@@ -135,7 +135,8 @@ const Slot = ({
   // This matches Radix's Slot behaviour: because handlers
   // are merged (not DOM-propagated), the child can inspect
   // the event before the parent acts on it.
-  for (const [key, parentValue] of Object.entries(rest)) {
+  const restEntries: [string, unknown][] = Object.entries(rest);
+  for (const [key, parentValue] of restEntries) {
     if (key.startsWith("on") && typeof parentValue === "function") {
       const childValue = childProps[key];
 

@@ -129,7 +129,7 @@ export const searchInfiniteOptions = (params: SearchParams) =>
           ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
           ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
           ...(pageParam ? { cursor: pageParam } : {}),
-          ...(params.limit ? { limit: params.limit } : {}),
+          ...(params.limit !== undefined ? { limit: params.limit } : {}),
         },
         { fetch: { signal } },
       );
@@ -159,12 +159,12 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
             toSafeId<"workspace">(id),
           ),
           types: params.types,
-          ...(params.kinds ? { kinds: params.kinds } : {}),
+          kinds: params.kinds,
           editedByUserIds: params.editedByUserIds,
           mimeTypes: params.mimeTypes,
           ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
           ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
-          ...(params.limit ? { limit: params.limit } : {}),
+          ...(params.limit !== undefined ? { limit: params.limit } : {}),
         },
         { fetch: { signal } },
       );

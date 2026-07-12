@@ -123,7 +123,7 @@ export type InspectorViewRegistration<P = unknown> = {
 // looking up by `type` and (if relevant) running `validate` on the
 // payload before invoking `render`. This is the standard
 // "heterogeneous registry" pattern; the structural variance is sound.
-type StoredRegistration = InspectorViewRegistration<unknown>;
+type StoredRegistration = InspectorViewRegistration;
 
 class InspectorViewRegistry {
   private readonly registrations = new Map<
@@ -171,15 +171,16 @@ export const registerInspectorView = <P>(
         active,
       });
     },
-    ...(registration.ariaLabel
-      ? {
-          ariaLabel: (tab: InspectorViewTab<unknown>) =>
-            registration.validate(tab.payload)
-              ? (registration.ariaLabel?.({ ...tab, payload: tab.payload }) ??
-                "")
-              : "",
-        }
-      : {}),
+    // Set unconditionally (function or undefined) so it replaces the
+    // `InspectorViewTab<P>`-typed ariaLabel carried in by `...registration`;
+    // a conditional spread would leave that narrower signature in the type and
+    // clash with StoredRegistration's `InspectorViewTab<unknown>` erasure.
+    ariaLabel: registration.ariaLabel
+      ? (tab: InspectorViewTab<unknown>) =>
+          registration.validate(tab.payload)
+            ? (registration.ariaLabel?.({ ...tab, payload: tab.payload }) ?? "")
+            : ""
+      : undefined,
     validate: (payload): payload is unknown => registration.validate(payload),
   };
   registry.register(registration.type, stored);
