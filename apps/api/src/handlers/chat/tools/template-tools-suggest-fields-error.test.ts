@@ -9,7 +9,7 @@
  * module graph, and `template-tools.test.ts` already imports it statically.
  */
 
-import { describe, expect, mock, test } from "bun:test";
+import { afterAll, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -28,11 +28,19 @@ void mock.module("@/api/handlers/templates/suggest-template-fields", () => ({
   suggestTemplateFields: suggestTemplateFieldsMock,
 }));
 
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
   getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),
 }));
+
+// Bun runs every test file in one process, and `mock.module` mutates a
+// shared registry: without restoring here, these `mock.module` calls (for
+// `suggest-template-fields` and `analytics/capture`) would leak into
+// whichever other test file runs next in the same process.
+afterAll(() => {
+  mock.restore();
+});
 
 const { createTemplateAuthoringTools, SUGGEST_TEMPLATE_FIELDS_TOOL_NAME } =
   await import("@/api/handlers/chat/tools/template-tools");
