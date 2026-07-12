@@ -13,6 +13,7 @@ import type { DroppedFileTree } from "@/hooks/external-file-drop.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
 import {
@@ -29,6 +30,11 @@ import {
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const MAX_DISPLAYED_FAILURES = 5;
+// Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded
+// file can be arbitrarily large). This is a stall ceiling, not a target
+// duration: a healthy slow upload of a large file can legitimately take
+// several minutes.
+const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 const formatFailedFiles = (names: readonly string[]): string => {
   const shown = names.slice(0, MAX_DISPLAYED_FAILURES);
@@ -301,11 +307,12 @@ const uploadPreparedFileEntity = async ({
   //    as the error message.
   let putResponse: Response;
   try {
-    putResponse = await fetch(url, {
+    putResponse = await fetchWithTimeout(url, {
       method: "PUT",
       headers,
       body: file,
       signal,
+      timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
     });
   } catch (error) {
     await abortUpload(workspaceId, uploadId);

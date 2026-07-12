@@ -24,6 +24,7 @@ import {
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
+import { fetchWithTimeout } from "@/lib/fetch";
 
 const DEBOUNCE_MS = 1500;
 const MIN_PREFIX_CHARS = 8;
@@ -129,12 +130,13 @@ const startStream = async (
   prefix: string,
   signal: AbortSignal,
 ): Promise<Response> => {
-  const response = await fetch(apiUrl("/ai-autocomplete/stream"), {
+  const response = await fetchWithTimeout(apiUrl("/ai-autocomplete/stream"), {
     method: "POST",
     credentials: "include",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ prefix, language: "en" }),
     signal,
+    timeoutMs: 15_000,
   });
   return response;
 };

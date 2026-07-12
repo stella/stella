@@ -7,6 +7,7 @@ import { extractPDFText } from "@/lib/anonymize/pdf-coords";
 import { createPipelineContextRunner } from "@/lib/anonymize/pipeline-context";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import {
   allocateEntityOverlayId,
   clearAnonymizationForField,
@@ -99,8 +100,8 @@ const runPipelineAndCommit = async ({
     });
   }
 
-  const s3Response = await fetch(response.data.presignedUrl, {
-    signal: AbortSignal.timeout(60_000),
+  const s3Response = await fetchWithTimeout(response.data.presignedUrl, {
+    timeoutMs: 60_000,
   });
   if (!s3Response.ok) {
     throw new ClientOperationError({

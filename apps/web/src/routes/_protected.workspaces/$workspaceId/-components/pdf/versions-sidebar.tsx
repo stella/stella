@@ -38,6 +38,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { entityVersionsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
@@ -97,7 +98,9 @@ const LABEL_PRESETS: LabelPreset[] = [
   { key: "signed", color: "bg-warning" },
 ];
 
-const UPLOAD_PUT_TIMEOUT_MS = 5 * 60 * 1000;
+// Stall ceiling, not a target duration: a healthy slow upload of a large
+// file can legitimately take several minutes.
+const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 export function VersionsSidebar({
   workspaceId,
@@ -270,11 +273,11 @@ export function VersionsSidebar({
       const { uploadId, url, headers } = presign.data;
 
       // 3. PUT to S3.
-      const putResponse = await fetch(url, {
+      const putResponse = await fetchWithTimeout(url, {
         method: "PUT",
         headers,
         body: file,
-        signal: AbortSignal.timeout(UPLOAD_PUT_TIMEOUT_MS),
+        timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
       });
       if (!putResponse.ok) {
         await wsClient({ uploadId })

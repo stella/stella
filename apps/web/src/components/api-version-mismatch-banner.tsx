@@ -6,6 +6,7 @@ import * as v from "valibot";
 
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { compareSemver } from "@/lib/semver-compare";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
@@ -33,9 +34,10 @@ export const ApiVersionMismatchBanner = () => {
     refetchIntervalInBackground: false,
     retry: false,
     queryFn: async ({ signal }): Promise<string | null> => {
-      const response = await fetch(`${env.VITE_API_URL}/health`, {
+      const response = await fetchWithTimeout(`${env.VITE_API_URL}/health`, {
         cache: "no-store",
-        signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
+        signal,
+        timeoutMs: 8000,
       });
       if (!response.ok) {
         return null;

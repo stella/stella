@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
@@ -33,8 +34,8 @@ export const downloadTabOriginalFile = async ({
   }
 
   const downloaded = await Result.tryPromise(async () => {
-    const fetched = await fetch(response.data.presignedUrl, {
-      signal: AbortSignal.timeout(60_000),
+    const fetched = await fetchWithTimeout(response.data.presignedUrl, {
+      timeoutMs: 60_000,
     });
     if (!fetched.ok) {
       return { kind: "http-error" as const, status: fetched.status };

@@ -14,6 +14,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { FetchBoundaryError, userErrorMessage } from "@/lib/errors";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { filesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -94,30 +95,20 @@ const loadCollaborationRuntimeModules =
   };
 
 const fetchSeedDocumentBuffer = async (seedDownloadUrl: string) => {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(
-    () => controller.abort(),
-    SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS,
-  );
+  const response = await fetchWithTimeout(seedDownloadUrl, {
+    timeoutMs: SEED_DOCUMENT_DOWNLOAD_TIMEOUT_MS,
+  });
 
-  try {
-    const response = await fetch(seedDownloadUrl, {
-      signal: controller.signal,
+  if (!response.ok) {
+    throw new FetchBoundaryError({
+      url: seedDownloadUrl,
+      status: response.status,
+      statusText: response.statusText,
+      message: "Failed to download collaborative editing seed file.",
     });
-
-    if (!response.ok) {
-      throw new FetchBoundaryError({
-        url: seedDownloadUrl,
-        status: response.status,
-        statusText: response.statusText,
-        message: "Failed to download collaborative editing seed file.",
-      });
-    }
-
-    return await response.arrayBuffer();
-  } finally {
-    clearTimeout(timeoutId);
   }
+
+  return await response.arrayBuffer();
 };
 
 export const useFolioCollaborationSession = ({

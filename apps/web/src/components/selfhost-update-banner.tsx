@@ -7,6 +7,7 @@ import * as v from "valibot";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { logDevError } from "@/lib/errors/utils";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { compareSemver } from "@/lib/semver-compare";
 import { DAY_IN_MS } from "@/lib/time";
@@ -42,9 +43,10 @@ export const SelfhostUpdateBanner = () => {
     retry: false,
     queryFn: async ({ signal }): Promise<Release | null> => {
       try {
-        const response = await fetch(RELEASES_API_URL, {
+        const response = await fetchWithTimeout(RELEASES_API_URL, {
           headers: { Accept: "application/vnd.github+json" },
-          signal: AbortSignal.any([signal, AbortSignal.timeout(8000)]),
+          signal,
+          timeoutMs: 8000,
         });
         if (!response.ok) {
           return null;
