@@ -44,8 +44,8 @@ describe("parseEstablishment", () => {
         "AVENIDA PASEO DE LA REFORMA 276, JUAREZ, CP 06600, CUAUHTEMOC, CUAUHTEMOC, CIUDAD DE MEXICO",
     });
     expect(establishment.coordinates).toEqual({
-      latitude: 19.428_611,
-      longitude: -99.162_222,
+      latitude: 19.428611,
+      longitude: -99.162222,
     });
   });
 
@@ -62,6 +62,16 @@ describe("parseEstablishment", () => {
       latitude: null,
       longitude: null,
     });
+  });
+
+  test("does not create an empty address from a postal-code sentinel", () => {
+    const establishment = parseEstablishment({
+      Id: "34185",
+      Nombre: "MARRIOTT GUADALAJARA",
+      CP: "0",
+    });
+
+    expect(establishment.address).toBeNull();
   });
 
   test("parses two-part location as municipality and state", () => {
@@ -110,8 +120,8 @@ describe("parseSearchEntry", () => {
       address:
         "AVENIDA PASEO DE LA REFORMA 276, JUAREZ, CP 06600, CUAUHTEMOC, CUAUHTEMOC, CIUDAD DE MEXICO",
       coordinates: {
-        latitude: 19.428_611,
-        longitude: -99.162_222,
+        latitude: 19.428611,
+        longitude: -99.162222,
       },
       registryUrl:
         "https://www.inegi.org.mx/app/mapa/denue/default.aspx?idee=6281106",

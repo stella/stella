@@ -64,6 +64,11 @@ describe("isPlausibleLookupValue", () => {
     expect(isPlausibleLookupValue("krs", " 0000 592 109 ")).toBe(true);
   });
 
+  test("accepts a numeric DENUE establishment Id", () => {
+    expect(isPlausibleLookupValue("denue", "6281106")).toBe(true);
+    expect(isPlausibleLookupValue("denue", "DENUE-6281106")).toBe(false);
+  });
+
   test("rejects short, long, and non-numeric inputs", () => {
     expect(isPlausibleLookupValue("krs", "592109")).toBe(false);
     expect(isPlausibleLookupValue("krs", "00005921090")).toBe(false);

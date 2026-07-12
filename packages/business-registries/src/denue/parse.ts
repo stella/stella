@@ -46,10 +46,10 @@ const parseLocation = (
       text: null,
     };
   }
-  const parts = text
-    .split(",")
-    .map((part) => part.trim())
-    .filter(Boolean);
+  const parts = text.split(",").flatMap((part) => {
+    const trimmed = part.trim();
+    return trimmed ? [trimmed] : [];
+  });
   return {
     locality: parts.length > 2 ? parts.slice(0, -2).join(", ") : null,
     municipality: parts.length > 1 ? (parts.at(-2) ?? null) : null,
@@ -69,6 +69,7 @@ const parseAddress = (raw: DenueRawEstablishment): DenueAddress | null => {
   const exterior = emptyToNull(raw.Num_Exterior);
   const interior = emptyToNull(raw.Num_Interior);
   const neighborhood = emptyToNull(raw.Colonia);
+  const postalCode = emptyToNull(raw.CP);
   const location = parseLocation(raw.Ubicacion);
 
   const line1 = [streetType, street, exterior].filter(Boolean).join(" ");
@@ -78,19 +79,19 @@ const parseAddress = (raw: DenueRawEstablishment): DenueAddress | null => {
   const textAddress = [
     line1 || null,
     line2 || null,
-    emptyToNull(raw.CP) ? `CP ${emptyToNull(raw.CP)}` : null,
+    postalCode ? `CP ${postalCode}` : null,
     location.text,
   ]
     .filter(Boolean)
     .join(", ");
 
-  if (!line1 && !line2 && !raw.CP && !location.text) {
+  if (!line1 && !line2 && !postalCode && !location.text) {
     return null;
   }
   return {
     line1: line1 || null,
     line2: line2 || null,
-    postalCode: emptyToNull(raw.CP),
+    postalCode,
     locality: location.locality,
     municipality: location.municipality,
     state: location.state,

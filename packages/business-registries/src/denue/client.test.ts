@@ -89,8 +89,8 @@ describe("lookupByEstablishmentId (fixture)", () => {
     expect(company?.address?.municipality).toBe("CUAUHTEMOC");
     expect(company?.address?.state).toBe("CIUDAD DE MEXICO");
     expect(company?.coordinates).toEqual({
-      latitude: 19.428_611,
-      longitude: -99.162_222,
+      latitude: 19.428611,
+      longitude: -99.162222,
     });
     expect(company?.registryUrl).toBe(
       "https://www.inegi.org.mx/app/mapa/denue/default.aspx?idee=6281106",
@@ -114,8 +114,8 @@ describe("lookupByEstablishmentId (fixture)", () => {
   });
 
   test("does not leak the token on request failures", async () => {
-    restore = installFetchStub(async () => {
-      throw new Error("network down");
+    restore = installFetchStub(async (input) => {
+      throw new Error(`network down for ${getFetchInputUrl(input)}`);
     });
 
     try {
@@ -126,6 +126,7 @@ describe("lookupByEstablishmentId (fixture)", () => {
       if (error instanceof DenueRequestError) {
         expect(error.url).toContain("[redacted]");
         expect(error.url).not.toContain("secret");
+        expect(error.cause).toBeUndefined();
       }
     }
   });
@@ -151,6 +152,23 @@ describe("lookupByEstablishmentId (fixture)", () => {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
+    );
+
+    expect(
+      lookupByEstablishmentId("6281106", { token: "test-token" }),
+    ).rejects.toBeInstanceOf(DenueAPIError);
+  });
+
+  test("rejects malformed optional fields as DenueAPIError", () => {
+    restore = installFetchStub(
+      async () =>
+        new Response(
+          JSON.stringify([{ Id: "6281106", Nombre: "Hotel", CP: 66_600 }]),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
     );
 
     expect(
@@ -221,6 +239,27 @@ describe("searchByName (fixture)", () => {
     expect(
       searchByName("Marriott", { token: "test-token" }),
     ).rejects.toBeInstanceOf(DenueAPIError);
+  });
+
+  test("redacts tokens echoed by DENUE error-string responses", async () => {
+    restore = installFetchStub(
+      async () =>
+        new Response(JSON.stringify(["Token secret-token no autorizado"]), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+
+    try {
+      await searchByName("Marriott", { token: "secret-token" });
+      throw new Error("expected authentication failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(DenueAuthError);
+      if (error instanceof DenueAuthError) {
+        expect(error.message).toContain("[redacted]");
+        expect(error.message).not.toContain("secret-token");
+      }
+    }
   });
 });
 

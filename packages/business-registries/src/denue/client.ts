@@ -1,3 +1,4 @@
+import { clampSearchLimit } from "../shared/search.js";
 import {
   DenueAPIError,
   DenueAuthError,
@@ -86,11 +87,10 @@ const denueGet = async (
       signal: AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS),
       headers: { Accept: "application/json" },
     });
-  } catch (error) {
+  } catch {
     throw new DenueRequestError(
       redactToken(url, options),
       "DENUE request failed",
-      { cause: error },
     );
   }
 
@@ -103,16 +103,15 @@ const denueGet = async (
   let bodyText: string;
   try {
     bodyText = await response.text();
-  } catch (error) {
+  } catch {
     throw new DenueRequestError(
       redactToken(url, options),
       "DENUE response body unreadable",
-      { cause: error },
     );
   }
 
   if (!response.ok) {
-    const upstreamText = bodyText.trim() || null;
+    const upstreamText = redactToken(bodyText.trim(), options) || null;
     throw new DenueAPIError({
       message: `DENUE ${response.status}: ${upstreamText ?? response.statusText}`,
       httpStatus: response.status,
@@ -132,7 +131,7 @@ const denueGet = async (
     throw new DenueAPIError({
       message: "DENUE returned malformed JSON",
       httpStatus: response.status,
-      upstreamMessage: trimmed.slice(0, 200),
+      upstreamMessage: redactToken(trimmed.slice(0, 200), options),
       cause: error,
     });
   }
@@ -147,8 +146,12 @@ const denueGet = async (
   return parsed;
 };
 
-const redactToken = (url: string, options: DenueClientOptions): string =>
-  url.replace(encodeURIComponent(requireToken(options)), "[redacted]");
+const redactToken = (value: string, options: DenueClientOptions): string => {
+  const token = requireToken(options);
+  return value
+    .replaceAll(token, "[redacted]")
+    .replaceAll(encodeURIComponent(token), "[redacted]");
+};
 
 const isDenueResponse = (value: unknown): value is DenueResponse => {
   if (!Array.isArray(value)) {
@@ -169,20 +172,50 @@ const hasRawEstablishmentShape = (
   if (!("Id" in value) || !("Nombre" in value)) {
     return false;
   }
-  return typeof value.Id === "string" && typeof value.Nombre === "string";
+  return (
+    typeof value.Id === "string" &&
+    typeof value.Nombre === "string" &&
+    (!("CLEE" in value) || typeof value.CLEE === "string") &&
+    (!("Razon_social" in value) || typeof value.Razon_social === "string") &&
+    (!("Clase_actividad" in value) ||
+      typeof value.Clase_actividad === "string") &&
+    (!("Estrato" in value) || typeof value.Estrato === "string") &&
+    (!("Tipo_vialidad" in value) || typeof value.Tipo_vialidad === "string") &&
+    (!("Calle" in value) || typeof value.Calle === "string") &&
+    (!("Num_Exterior" in value) || typeof value.Num_Exterior === "string") &&
+    (!("Num_Interior" in value) || typeof value.Num_Interior === "string") &&
+    (!("Colonia" in value) || typeof value.Colonia === "string") &&
+    (!("CP" in value) || typeof value.CP === "string") &&
+    (!("Ubicacion" in value) || typeof value.Ubicacion === "string") &&
+    (!("Telefono" in value) || typeof value.Telefono === "string") &&
+    (!("Correo_e" in value) || typeof value.Correo_e === "string") &&
+    (!("Sitio_internet" in value) ||
+      typeof value.Sitio_internet === "string") &&
+    (!("Tipo" in value) || typeof value.Tipo === "string") &&
+    (!("Longitud" in value) || typeof value.Longitud === "string") &&
+    (!("Latitud" in value) || typeof value.Latitud === "string") &&
+    (!("CentroComercial" in value) ||
+      typeof value.CentroComercial === "string") &&
+    (!("TipoCentroComercial" in value) ||
+      typeof value.TipoCentroComercial === "string") &&
+    (!("NumLocal" in value) || typeof value.NumLocal === "string")
+  );
 };
 
 const isDenueErrorResponse = (response: DenueResponse): response is string[] =>
   response.every((entry) => typeof entry === "string");
 
-const extractRows = (response: DenueResponse): DenueRawEstablishment[] => {
+const extractRows = (
+  response: DenueResponse,
+  options: DenueClientOptions,
+): DenueRawEstablishment[] => {
   if (response.length === 0) {
     return [];
   }
   if (!isDenueErrorResponse(response)) {
     return response;
   }
-  const message = response.join(" ").trim();
+  const message = redactToken(response.join(" ").trim(), options);
   if (!message || /no se encontraron resultados/iu.test(message)) {
     return [];
   }
@@ -215,7 +248,7 @@ export const lookupByEstablishmentId = async (
   }
   const token = requireToken(options);
   const url = buildUrl(options, ["Ficha", normalized, token]);
-  const rows = extractRows(await denueGet(url, options));
+  const rows = extractRows(await denueGet(url, options), options);
   const hit = rows.at(0);
   return hit ? parseEstablishment(hit) : null;
 };
@@ -239,7 +272,7 @@ export const searchByName = async (
     throw new DenueValidationError("Search name must not be empty");
   }
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
-  const limit = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
+  const limit = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const stateCode = normalizeStateCode(options?.stateCode ?? ALL_STATES_CODE);
   if (!validateStateCode(stateCode)) {
     throw new DenueValidationError(
@@ -256,6 +289,6 @@ export const searchByName = async (
     String(limit),
     token,
   ]);
-  const rows = extractRows(await denueGet(url, clientOptions));
+  const rows = extractRows(await denueGet(url, clientOptions), clientOptions);
   return rows.slice(0, limit).map((row) => parseSearchEntry(row));
 };
