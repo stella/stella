@@ -13,7 +13,7 @@ export default defineConfig({
   build: {
     emptyOutDir: true,
     outDir: "../../dist",
-    rollupOptions: {
+    rolldownOptions: {
       input: {
         main: "src/mainview/index.html",
         "takeover-dialog": "src/mainview/takeover-dialog.html",

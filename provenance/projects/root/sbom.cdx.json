@@ -8671,6 +8671,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/-queries.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/-queries.ts#2"
+          },
+          {
             "location": "apps/web/src/routes/onboarding/-queries.ts#1"
           },
           {
@@ -9427,7 +9430,7 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#12"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#15"
+            "location": "apps/web/src/components/app-sidebar.tsx#20"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#5"
@@ -14313,6 +14316,9 @@
             "location": "apps/api/src/handlers/workspaces/read-active.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/read-activity.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/read-justifications.ts#1"
           },
           {
@@ -14599,6 +14605,9 @@
           },
           {
             "location": "apps/web/src/components/ai-suggestions/playbook-review-store.ts#16"
+          },
+          {
+            "location": "apps/web/src/components/app-sidebar.logic.ts#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#7"
@@ -16642,6 +16651,12 @@
             "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/read-activity.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-activity.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/read-justifications.ts#2"
           },
           {
@@ -18181,6 +18196,9 @@
             "location": "apps/api/src/handlers/workspaces/infosoud-common.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/workspaces/read-activity.ts#4"
+          },
+          {
             "location": "apps/api/src/handlers/workspaces/read-by-id.ts#1"
           },
           {
@@ -18828,7 +18846,7 @@
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#3"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#25"
+            "location": "apps/web/src/components/app-sidebar.tsx#31"
           },
           {
             "location": "apps/web/src/components/chat/ask-user-card.tsx#9"
@@ -22257,7 +22275,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#12"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#26"
+            "location": "apps/web/src/components/app-sidebar.tsx#32"
           },
           {
             "location": "apps/web/src/components/chat/composer-plus-menu.tsx#21"
@@ -22434,7 +22452,7 @@
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#27"
+            "location": "apps/web/src/components/app-sidebar.tsx#33"
           },
           {
             "location": "apps/web/src/components/auth/inbox-quick-jump.tsx#1"
@@ -24567,7 +24585,7 @@
             "location": "apps/web/src/stores/config-store.ts#2"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#28"
+            "location": "apps/web/src/components/app-sidebar.tsx#34"
           },
           {
             "location": "apps/web/src/components/chat/model-selector-dialog.tsx#2"
@@ -24651,7 +24669,7 @@
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#5"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#28"
+            "location": "apps/web/src/components/app-sidebar.tsx#34"
           },
           {
             "location": "apps/web/src/components/chat/model-selector-dialog.tsx#2"

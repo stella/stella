@@ -350,7 +350,7 @@ describe("case-law adapter nullish optionals", () => {
       {
         preconnect: originalFetch.preconnect.bind(originalFetch),
       },
-    ) as typeof fetch;
+    );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
 
@@ -482,7 +482,7 @@ describe("case-law adapter nullish optionals", () => {
       {
         preconnect: originalFetch.preconnect.bind(originalFetch),
       },
-    ) as typeof fetch;
+    );
 
     const first = await plCourtsAdapter.fetchPage(null, {});
     detailMode = "timeout";
@@ -540,7 +540,7 @@ describe("case-law adapter nullish optionals", () => {
       {
         preconnect: originalFetch.preconnect.bind(originalFetch),
       },
-    ) as typeof fetch;
+    );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
 
@@ -613,7 +613,7 @@ describe("case-law adapter nullish optionals", () => {
       {
         preconnect: originalFetch.preconnect.bind(originalFetch),
       },
-    ) as typeof fetch;
+    );
 
     const result = await plCourtsAdapter.fetchPage(null, {});
 

@@ -119,6 +119,7 @@ describe("outgoing chat stream message ids", () => {
               parentMessageId: "openrouter-responses-b",
               toolCallId: "tool-1",
               toolCallName: "ask-user",
+              // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
               toolName: "ask-user",
             },
             {
@@ -155,6 +156,7 @@ describe("outgoing chat stream message ids", () => {
         parentMessageId: firstId,
         toolCallId: "tool-1",
         toolCallName: "ask-user",
+        // eslint-disable-next-line typescript/no-deprecated -- AG-UI still requires the compatibility field.
         toolName: "ask-user",
       },
       {
