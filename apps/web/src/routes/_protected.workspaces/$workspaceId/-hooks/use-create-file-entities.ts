@@ -185,10 +185,15 @@ const abortUpload = async (
   // 24h and the daily prune cleans the row, so a failed abort is
   // not fatal. We swallow errors to avoid masking the original
   // cancellation/failure with a follow-up rejection.
-  await api
-    .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({ uploadId })
-    .abort.post({})
-    .catch(() => undefined);
+  try {
+    await api
+      .uploads({ workspaceId: toSafeId<"workspace">(workspaceId) })({
+        uploadId,
+      })
+      .abort.post({});
+  } catch {
+    // Intentionally swallowed; see comment above.
+  }
 };
 
 type AbortPreparedUploadsForFilesOptions = {

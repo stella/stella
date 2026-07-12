@@ -131,14 +131,15 @@ export const TaskDetailPanel = ({
           (a) => a.user.id === userId,
         );
         if (!alreadyAssigned) {
-          api
-            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-            .assignees.post({
-              taskId: toSafeId<"entity">(taskId),
-              userId: toSafeId<"user">(userId),
-              queryKey: entitiesKeys.all(workspaceId),
-            })
-            .then(async (response) => {
+          void (async () => {
+            try {
+              const response = await api
+                .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+                .assignees.post({
+                  taskId: toSafeId<"entity">(taskId),
+                  userId: toSafeId<"user">(userId),
+                  queryKey: entitiesKeys.all(workspaceId),
+                });
               if (response.error) {
                 analytics.captureError(toAPIError(response.error));
                 await queryClient.invalidateQueries({
@@ -154,14 +155,13 @@ export const TaskDetailPanel = ({
                   queryKey: workspacesKeys.overview(workspaceId),
                 }),
               ]);
-              return;
-            })
-            .catch((error: unknown) => {
+            } catch (error: unknown) {
               analytics.captureError(error);
               void queryClient.invalidateQueries({
                 queryKey: taskKeys.detail(workspaceId, taskId),
               });
-            });
+            }
+          })();
         }
       }
     }

@@ -407,14 +407,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return;
     }
     if (datePropertyId === TASK_DATE_IDS[0] && kind === "task") {
-      api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .patch({
-          taskId: toSafeId<"entity">(entityId),
-          queryKey: entitiesKeys.all(workspaceId),
-          dueDate: date,
-        })
-        .then((response) => {
+      void (async () => {
+        try {
+          const response = await api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .patch({
+              taskId: toSafeId<"entity">(entityId),
+              queryKey: entitiesKeys.all(workspaceId),
+              dueDate: date,
+            });
           if (response.error) {
             stellaToast.add({
               title: t("errors.actionFailed"),
@@ -422,25 +423,25 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             });
           }
           void invalidateCalendarTasks();
-          return;
-        })
-        .catch(() => {
+        } catch {
           stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
           void invalidateCalendarTasks();
-        });
+        }
+      })();
     } else if (datePropertyId === TASK_DATE_IDS[1] && kind === "task") {
-      api
-        .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .patch({
-          taskId: toSafeId<"entity">(entityId),
-          queryKey: entitiesKeys.all(workspaceId),
-          allDay: true,
-          startAt: toAllDayAgendaDateTime(date),
-        })
-        .then((response) => {
+      void (async () => {
+        try {
+          const response = await api
+            .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
+            .patch({
+              taskId: toSafeId<"entity">(entityId),
+              queryKey: entitiesKeys.all(workspaceId),
+              allDay: true,
+              startAt: toAllDayAgendaDateTime(date),
+            });
           if (response.error) {
             stellaToast.add({
               title: t("errors.actionFailed"),
@@ -448,15 +449,14 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
             });
           }
           void invalidateCalendarTasks();
-          return;
-        })
-        .catch(() => {
+        } catch {
           stellaToast.add({
             title: t("errors.actionFailed"),
             type: "error",
           });
           void invalidateCalendarTasks();
-        });
+        }
+      })();
     } else if (isTaskDateProperty(datePropertyId)) {
       // Future-proofing for any new built-in task date pseudo-property.
       if (kind !== "task") {
