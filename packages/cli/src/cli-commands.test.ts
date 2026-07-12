@@ -511,6 +511,27 @@ describe("error tiers -> exit codes (S4)", () => {
     expect(result.exitCode).toBe(3);
   });
 
+  test("HTTP 403 -> exit 8", async () => {
+    const server = startMockServer(() => ({ httpStatus: 403 }));
+    const result = await runCli({
+      args: ["matter", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(8);
+  });
+  test("HTTP 409 -> exit 10", async () => {
+    const server = startMockServer(() => ({ httpStatus: 409 }));
+    const result = await runCli({
+      args: ["matter", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(10);
+  });
+
   test("MCP InvalidParams (-32602) -> exit 2", async () => {
     const server = startMockServer(() => ({
       rpc: { code: -32_602, message: "invalid params" },
@@ -1035,5 +1056,16 @@ describe("reference resources (S5.4/Phase 4)", () => {
     server.stop();
     expect(result.exitCode).toBe(6);
     expect(result.stderr).toContain("Unknown resource");
+  });
+
+  test("an organization-access-denied resource read (HTTP 403) maps to exit 8", async () => {
+    const server = startMockServer(() => ({ httpStatus: 403 }));
+    const result = await runCli({
+      args: ["reference", "show", "template-markers"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(8);
   });
 });

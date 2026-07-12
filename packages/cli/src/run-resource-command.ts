@@ -12,7 +12,11 @@ import {
   type McpClientError,
   readResource,
 } from "./mcp-client.js";
-import { EXIT_CODES, type ExitCode } from "./mcp-constants.js";
+import {
+  EXIT_CODES,
+  mapHttpStatusExit,
+  type ExitCode,
+} from "./mcp-constants.js";
 import { renderResult, type OutputFormat, type Writers } from "./output.js";
 import type { ResourceLeafSpec } from "./resource-types.js";
 import {
@@ -31,13 +35,7 @@ const mapResourceErrorExit = (error: McpClientError): ExitCode => {
     return EXIT_CODES.notFound;
   }
   if (error.kind === "http") {
-    if (error.httpStatus === 401) {
-      return EXIT_CODES.auth;
-    }
-    if (error.httpStatus === 404) {
-      return EXIT_CODES.notFound;
-    }
-    return EXIT_CODES.server;
+    return mapHttpStatusExit(error.httpStatus);
   }
   return EXIT_CODES.server;
 };

@@ -57,3 +57,30 @@ export const MCP_ERROR_CODE_EXIT_MAP: Readonly<Record<string, ExitCode>> = {
   unknown_tool: EXIT_CODES.server,
   internal_error: EXIT_CODES.server,
 };
+
+/**
+ * Maps a transport-level HTTP status (`McpClientError.httpStatus`) to the CLI
+ * exit class (spec 051 S4). Every executor that surfaces `kind: "http"`
+ * errors (`run-leaf-command.ts`'s `mapClientErrorExit`,
+ * `run-resource-command.ts`'s `mapResourceErrorExit`) must route through this
+ * one function so the HTTP-status mapping cannot drift between them; 403 is a
+ * transport-level organization-access denial (distinct from the
+ * `permission_denied` tool-error envelope code above, which arrives inside a
+ * 200 response) and must not be folded into the generic server-error class,
+ * or callers cannot distinguish "don't retry" from "retry".
+ */
+export const mapHttpStatusExit = (httpStatus: number | undefined): ExitCode => {
+  if (httpStatus === 401) {
+    return EXIT_CODES.auth;
+  }
+  if (httpStatus === 403) {
+    return EXIT_CODES.permissionDenied;
+  }
+  if (httpStatus === 404) {
+    return EXIT_CODES.notFound;
+  }
+  if (httpStatus === 409) {
+    return EXIT_CODES.conflict;
+  }
+  return EXIT_CODES.server;
+};
