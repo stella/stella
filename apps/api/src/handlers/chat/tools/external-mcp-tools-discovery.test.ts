@@ -1,5 +1,5 @@
 import type { MCPClient } from "@tanstack/ai-mcp";
-import { beforeEach, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -22,7 +22,7 @@ void mock.module("@/api/lib/mcp-upstream/connections", () => ({
   loadActiveMcpConnectionsForUser: loadActiveMcpConnectionsForUserMock,
 }));
 
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
   getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),
@@ -97,6 +97,14 @@ beforeEach(() => {
   captureErrorMock.mockReset();
   withTimeoutMock.mockReset();
   withTimeoutMock.mockImplementation(passThroughTimeout);
+});
+
+// Bun runs every test file in one process, and `mock.module` mutates a
+// shared registry: without restoring here, these `mock.module` calls (for
+// `mcp-upstream/connections`, `analytics/capture`, and `with-timeout`) would
+// leak into whichever other test file runs next in the same process.
+afterAll(() => {
+  mock.restore();
 });
 
 describe("loadExternalMcpToolsForUser client lifecycle", () => {
