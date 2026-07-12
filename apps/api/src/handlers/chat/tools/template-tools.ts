@@ -19,6 +19,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 
@@ -298,14 +299,28 @@ export const createTemplateAuthoringTools = ({
         }),
       ),
     }).server(async ({ text, instructions }) => {
-      const suggestions = await suggestTemplateFields({
-        documentText: text,
-        instructions: instructions ?? undefined,
-        orgAIConfig: orgAIConfig ?? null,
-        organizationId,
-        aiAnalytics,
-      });
-      return { suggestions };
+      // suggestTemplateFields rejects on a call failure (BYOK
+      // misconfiguration, provider outage, timeout); capture the original
+      // for telemetry, then throw a sanitized, stable message instead of
+      // rethrowing it — the raw provider error can carry internals (key
+      // names, quota details) that must not reach the model verbatim.
+      try {
+        const suggestions = await suggestTemplateFields({
+          documentText: text,
+          instructions: instructions ?? undefined,
+          orgAIConfig: orgAIConfig ?? null,
+          organizationId,
+          aiAnalytics,
+        });
+        return { suggestions };
+      } catch (error) {
+        aiAnalytics.captureError(error);
+        throw new ChatToolError({
+          message:
+            "Template field suggestion failed; the workspace's AI provider returned an error.",
+          cause: error,
+        });
+      }
     }),
   };
 };
