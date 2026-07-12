@@ -68,15 +68,32 @@ export const workspaceIdCheck = workspaceAccessCheck(sql`id`);
 // Embedded chat data must remain visible only while every contributing
 // workspace is still usable. `IS NULL` makes malformed PostgreSQL arrays fail
 // closed; array-level NOT NULL constraints do not reject NULL elements.
+// Explicit pinned IDs stay additive here exactly as in the scalar check:
+// without the pin bypass, sealing a workspace to 'deleting' would hide its
+// embedded-data threads from the deletion transaction's own cleanup DELETE,
+// leaving rows that break the workspaces FK.
 const workspaceArrayCheck = (workspaceIds: SQL) => sql`NOT EXISTS (
   SELECT 1
   FROM pg_catalog.unnest(${workspaceIds}) AS scoped_workspace(workspace_id)
   WHERE scoped_workspace.workspace_id IS NULL
-    OR NOT EXISTS (
-      SELECT 1
-      FROM public.${sql.raw(WORKSPACE_ACCESS_VIEW_NAME)} aw
-      WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
-        AND aw.workspace_status <> 'deleting'
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              '${sql.raw(SETTING_WORKSPACE_IDS)}', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.${sql.raw(WORKSPACE_ACCESS_VIEW_NAME)} aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
     )
 )`;
 

@@ -256,16 +256,31 @@ USING (
 
 DO $$
 DECLARE
+  -- Explicit pinned IDs stay additive here exactly as in the scalar check:
+  -- without the pin bypass, sealing a workspace to 'deleting' would hide its
+  -- embedded-data threads from the deletion transaction's own cleanup DELETE,
+  -- leaving rows that break the workspaces FK.
   active_workspace_array_template constant text := $predicate$
     NOT EXISTS (
       SELECT 1
       FROM pg_catalog.unnest(%s) AS scoped_workspace(workspace_id)
       WHERE scoped_workspace.workspace_id IS NULL
-        OR NOT EXISTS (
-          SELECT 1
-          FROM public.stella_authorized_workspaces aw
-          WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
-            AND aw.workspace_status <> 'deleting'
+        OR NOT (
+          scoped_workspace.workspace_id = ANY(
+            COALESCE(
+              NULLIF(
+                (SELECT pg_catalog.current_setting('app.workspace_ids', true)),
+                ''
+              )::uuid[],
+              ARRAY[]::uuid[]
+            )
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM public.stella_authorized_workspaces aw
+            WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+              AND aw.workspace_status <> 'deleting'
+          )
         )
     )
   $predicate$;
@@ -358,16 +373,31 @@ $$;--> statement-breakpoint
 
 DO $$
 DECLARE
+  -- Explicit pinned IDs stay additive here exactly as in the scalar check:
+  -- without the pin bypass, sealing a workspace to 'deleting' would hide its
+  -- embedded-data threads from the deletion transaction's own cleanup DELETE,
+  -- leaving rows that break the workspaces FK.
   active_workspace_array_template constant text := $predicate$
     NOT EXISTS (
       SELECT 1
       FROM pg_catalog.unnest(%s) AS scoped_workspace(workspace_id)
       WHERE scoped_workspace.workspace_id IS NULL
-        OR NOT EXISTS (
-          SELECT 1
-          FROM public.stella_authorized_workspaces aw
-          WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
-            AND aw.workspace_status <> 'deleting'
+        OR NOT (
+          scoped_workspace.workspace_id = ANY(
+            COALESCE(
+              NULLIF(
+                (SELECT pg_catalog.current_setting('app.workspace_ids', true)),
+                ''
+              )::uuid[],
+              ARRAY[]::uuid[]
+            )
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM public.stella_authorized_workspaces aw
+            WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+              AND aw.workspace_status <> 'deleting'
+          )
         )
     )
   $predicate$;
