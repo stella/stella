@@ -1,3 +1,4 @@
+/* eslint-disable auth-lifecycle/no-direct-auth-artifact-delete -- Helper function designed to revoke these artifacts */
 import { and, eq, isNull } from "drizzle-orm";
 
 import {

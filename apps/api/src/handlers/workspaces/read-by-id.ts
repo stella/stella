@@ -55,7 +55,7 @@ export const readWorkspaceHandler = async ({
     return status(403);
   }
 
-  const primaryJurisdiction = orgSettings?.practiceJurisdictions?.find(
+  const primaryJurisdiction = orgSettings?.practiceJurisdictions.find(
     (j) => j.isPrimary,
   );
   const primaryJurisdictionCountryCode =
