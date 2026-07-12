@@ -31,7 +31,6 @@ void mock.module("@/api/handlers/templates/suggest-template-fields", () => ({
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-  getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),
 }));
 
 // Bun runs every test file in one process, and `mock.module` mutates a

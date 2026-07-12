@@ -25,7 +25,6 @@ void mock.module("@/api/lib/mcp-upstream/connections", () => ({
 void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
-  getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),
 }));
 
 void mock.module("@/api/lib/with-timeout", () => ({

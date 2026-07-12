@@ -1,83 +1,62 @@
 import { Result } from "better-result";
-import { diffArrays } from "diff";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
+
+import {
+  compareDocxVersions,
+  generateRedlineDocx,
+} from "@stll/folio-core/server";
+import type { FolioVersionDiff } from "@stll/folio-core/server";
 
 import { member, user } from "@/api/db/auth-schema";
 import { desktopEditSessions, entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { diffParagraphs } from "@/api/handlers/docx/diff-paragraphs";
-import { editWithTracking } from "@/api/handlers/docx/edit-with-tracking";
-import { extractText } from "@/api/handlers/docx/extract-text";
-import type {
-  DocxEditSet,
-  ExtractedDocument,
-  ParagraphRewrite,
-} from "@/api/handlers/docx/types";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const DOCX_MIME =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+const WORD_RE = /[\p{L}\p{N}_]+/gu;
+
+const countWords = (text: string): number => text.match(WORD_RE)?.length ?? 0;
+
+type DiffWordCounts = { wordsAdded: number; wordsRemoved: number };
 
 /**
- * Align paragraphs between two document versions using diff, then
- * produce rewrites only for paragraphs that actually changed.
- * Unlike naive index matching, this handles inserted/deleted paragraphs.
+ * Word-level add/remove counts derived from the folio block diff: `ins`/`del`
+ * segments of modified blocks plus the full text of added/deleted blocks.
+ * Moves and format-only changes relocate or restyle existing words, so they
+ * leave the counts untouched.
  */
-const alignParagraphs = (
-  base: ExtractedDocument,
-  target: ExtractedDocument,
-): ParagraphRewrite[] => {
-  const baseTexts = base.paragraphs.map((p) => p.text);
-  const targetTexts = target.paragraphs.map((p) => p.text);
+const countDiffWords = (diff: FolioVersionDiff): DiffWordCounts => {
+  let wordsAdded = 0;
+  let wordsRemoved = 0;
 
-  const diffs = diffArrays(baseTexts, targetTexts);
-  const rewrites: ParagraphRewrite[] = [];
-  let baseIdx = 0;
-
-  for (const change of diffs) {
-    if (!change.added && !change.removed) {
-      // Equal — skip, no rewrite needed
-      baseIdx += change.value.length;
-    } else if (change.removed && !change.added) {
-      // Deleted paragraphs — rewrite each to empty (tracked delete)
-      for (const _ of change.value) {
-        const para = base.paragraphs[baseIdx];
-        if (para) {
-          rewrites.push({ paragraphIndex: para.index, newText: "" });
-        }
-        baseIdx++;
-      }
-    } else if (change.added && !change.removed) {
-      // Inserted paragraphs — rewrite the previous base paragraph
-      // to include the new text (limitation: DOCX tracked changes
-      // can't insert new paragraphs, only modify existing ones).
-      // For now, append inserted text to the last base paragraph.
-      const anchorIdx = Math.max(0, baseIdx - 1);
-      const anchor = base.paragraphs[anchorIdx];
-      if (anchor) {
-        const insertedText = change.value.join("\n");
-        const existing = rewrites.find(
-          (r) => r.paragraphIndex === anchor.index,
-        );
-        if (existing) {
-          existing.newText += `\n${insertedText}`;
-        } else {
-          rewrites.push({
-            paragraphIndex: anchor.index,
-            newText: `${anchor.text}\n${insertedText}`,
-          });
-        }
+  for (const change of diff.changes) {
+    if (change.type === "added") {
+      wordsAdded += countWords(change.text);
+      continue;
+    }
+    if (change.type === "deleted") {
+      wordsRemoved += countWords(change.text);
+      continue;
+    }
+    if (change.type !== "modified") {
+      continue;
+    }
+    for (const segment of change.segments) {
+      if (segment.type === "ins") {
+        wordsAdded += countWords(segment.text);
+      } else if (segment.type === "del") {
+        wordsRemoved += countWords(segment.text);
       }
     }
   }
 
-  return rewrites;
+  return { wordsAdded, wordsRemoved };
 };
 
 const config = {
@@ -148,7 +127,10 @@ export default createSafeHandler(
       fieldList: { content: FieldContent }[],
     ): Extract<FieldContent, { type: "file" }> | null => {
       for (const f of fieldList) {
-        if (f.content.type === "file" && f.content.mimeType === DOCX_MIME) {
+        if (
+          f.content.type === "file" &&
+          f.content.mimeType === DOCX_MIME_TYPE
+        ) {
           return f.content;
         }
       }
@@ -175,7 +157,7 @@ export default createSafeHandler(
             organizationId,
             workspaceId,
             fileId: baseFile.id,
-            mimeType: DOCX_MIME,
+            mimeType: DOCX_MIME_TYPE,
           }),
         )
         .arrayBuffer(),
@@ -185,22 +167,11 @@ export default createSafeHandler(
             organizationId,
             workspaceId,
             fileId: targetFile.id,
-            mimeType: DOCX_MIME,
+            mimeType: DOCX_MIME_TYPE,
           }),
         )
         .arrayBuffer(),
     ]);
-
-    // Extract text from both versions
-    const [baseExtracted, targetExtracted] = await Promise.all([
-      extractText(new Uint8Array(baseBuffer)),
-      extractText(new Uint8Array(targetBuffer)),
-    ]);
-
-    // Align paragraphs using diff (handles insertions/deletions
-    // correctly instead of naive index matching which breaks when
-    // paragraph counts differ between versions).
-    const rewrites = alignParagraphs(baseExtracted, targetExtracted);
 
     // Look up the target version's author
     const targetAuthorResult = await safeDb((tx) =>
@@ -226,37 +197,38 @@ export default createSafeHandler(
     const targetAuthorRows = yield* targetAuthorResult;
     const authorName = targetAuthorRows.at(0)?.userName ?? "Unknown";
 
-    // Diff the paragraphs to get edit operations
-    const diffResult = diffParagraphs(baseExtracted, rewrites);
+    // Block-level diff for the word stats plus the tracked-changes redline;
+    // both come from the same folio comparison, so the counts describe the
+    // document the user downloads. Accept-all yields the target version,
+    // reject-all yields the base version.
+    const compared = yield* Result.await(
+      Result.tryPromise({
+        try: async () => {
+          const [diff, redline] = await Promise.all([
+            compareDocxVersions(baseBuffer, targetBuffer),
+            generateRedlineDocx(baseBuffer, targetBuffer, {
+              author: authorName,
+            }),
+          ]);
+          return { diff, redline };
+        },
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Failed to compare document versions",
+            cause,
+          }),
+      }),
+    );
 
-    // Apply edits as tracked changes to the base DOCX
-    const editSet: DocxEditSet = {
-      edits: diffResult.edits,
-      comments: [],
-      author: {
-        name: authorName,
-        date: new Date().toISOString(),
-      },
-    };
-
-    const editResult = await editWithTracking(Buffer.from(baseBuffer), editSet);
-
-    if (Result.isError(editResult)) {
-      return Result.err(
-        new HandlerError({
-          status: 500,
-          message: `Failed to apply tracked changes: ${editResult.error.message}`,
-        }),
-      );
-    }
-
-    const docxBase64 = Buffer.from(editResult.value.buffer).toString("base64");
+    const { wordsAdded, wordsRemoved } = countDiffWords(compared.diff);
+    const docxBase64 = Buffer.from(compared.redline.buffer).toString("base64");
 
     return Result.ok({
       docxBase64,
-      editsApplied: diffResult.edits.length,
-      wordsAdded: diffResult.stats.wordsAdded,
-      wordsRemoved: diffResult.stats.wordsRemoved,
+      editsApplied: compared.redline.applied.length,
+      wordsAdded,
+      wordsRemoved,
     });
   },
 );

@@ -22,6 +22,10 @@ minimumReleaseAgeExcludes = [
   # Transitive exact pin from @tanstack/ai-openrouter 0.15.6; fresh
   # inside quarantine as part of the TanStack AI 0.39 provider batch.
   "@openrouter/sdk",
+  # Transitive exact pin from @stll/folio-react 0.7.0; fresh inside
+  # quarantine as part of the folio 0.5/0.7 release batch. Remove once
+  # lucide-react 1.24.0 clears the 5-day quarantine on its own.
+  "lucide-react",
   # TanStack AI beta: opted in ahead of stable for the AI SDK migration.
   "@tanstack/ai",
   "@tanstack/ai-anthropic",

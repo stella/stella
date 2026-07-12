@@ -654,7 +654,7 @@ export const processBlockDirectives = (
       }
 
       // Process blocks in reverse order to preserve paragraph
-      // indices (same pattern as apply-edits.ts)
+      // indices
       const sortedBlocks = [...blocks].toSorted((a, b) => {
         const aStart = a.directiveParagraphs[0] ?? 0;
         const bStart = b.directiveParagraphs[0] ?? 0;

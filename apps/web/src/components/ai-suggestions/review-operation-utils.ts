@@ -18,8 +18,18 @@ export const isNoopReviewOperation = (
         operation.styleId !== undefined && operation.styleId !== block?.styleId;
       return operation.text === (block?.text ?? "") && !requestedStyleChanged;
     }
+    case "replaceRange": {
+      const block = blocksById.get(operation.range.blockId);
+      const selected = block?.text.slice(
+        operation.range.startOffset,
+        operation.range.endOffset,
+      );
+      return selected !== undefined && selected === operation.replace;
+    }
     case "commentOnBlock":
+    case "commentOnRange":
     case "deleteBlock":
+    case "formatRange":
     case "insertAfterBlock":
     case "insertBeforeBlock":
     case "insertSignatureTable":

@@ -963,6 +963,7 @@ const TemplateStudioChatInner = ({
         }
         removePendingSuggestions(provisionalIds);
         return {
+          version: 1,
           applied: [],
           queued: [],
           skipped: input.operations.map((operation, index) => ({
@@ -1026,7 +1027,7 @@ const TemplateStudioChatInner = ({
         }
       }
 
-      return { applied: [], queued, skipped };
+      return { version: 1, applied: [], queued, skipped };
     },
   );
 

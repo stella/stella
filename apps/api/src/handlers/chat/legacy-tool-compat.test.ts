@@ -111,7 +111,7 @@ describe("legacy chat tool input compatibility", () => {
     const result = await tool.inputSchema["~standard"].validate({
       operations: [
         JSON.stringify({
-          id: "block-1",
+          blockId: "block-1",
           kind: "replaceInBlock",
           find: "old",
           replace: "new",
@@ -133,6 +133,8 @@ describe("legacy chat tool input compatibility", () => {
           severity: "medium",
         },
       ]);
+      // Validation materializes the versioned contract's default.
+      expect(result.value.version).toBe(1);
     }
   });
 });

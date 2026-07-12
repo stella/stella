@@ -34,15 +34,45 @@ describe("normalizeActiveDocxEditToolInput", () => {
     });
   });
 
-  test("repairs common model aliases for block id and operation type", () => {
+  test("preserves the batch contract version through repair", () => {
+    expect(
+      parseJson(
+        normalizeActiveDocxEditToolInput(
+          JSON.stringify({
+            version: 1,
+            operations: [
+              {
+                blockId: "b-0010",
+                find: "old",
+                kind: "replaceInBlock",
+                replace: "new",
+              },
+            ],
+          }),
+        ),
+      ),
+    ).toEqual({
+      version: 1,
+      operations: [
+        {
+          blockId: "b-0010",
+          find: "old",
+          replace: "new",
+          type: "replaceInBlock",
+        },
+      ],
+    });
+  });
+
+  test("repairs the kind alias for the operation type", () => {
     expect(
       parseJson(
         normalizeActiveDocxEditToolInput(
           JSON.stringify({
             operations: [
               {
+                blockId: "b-0010",
                 find: "David Cuketa",
-                id: "b-0010",
                 kind: "replaceInBlock",
                 replace: "Jiří Novotný",
               },
@@ -62,6 +92,37 @@ describe("normalizeActiveDocxEditToolInput", () => {
     });
   });
 
+  test("keeps id as the contract operation id (no blockId alias repair)", () => {
+    // Under the versioned contract `id` is the operation id, so the
+    // repair layer must NOT rewrite it into `blockId`; the operation
+    // stays as-is and fails validation on the missing blockId instead.
+    expect(
+      parseJson(
+        normalizeActiveDocxEditToolInput(
+          JSON.stringify({
+            operations: [
+              {
+                find: "David Cuketa",
+                id: "op-1",
+                kind: "replaceInBlock",
+                replace: "Jiří Novotný",
+              },
+            ],
+          }),
+        ),
+      ),
+    ).toEqual({
+      operations: [
+        {
+          find: "David Cuketa",
+          id: "op-1",
+          replace: "Jiří Novotný",
+          type: "replaceInBlock",
+        },
+      ],
+    });
+  });
+
   test("repairs JSON-stringified operations inside the operations array", () => {
     expect(
       parseJson(
@@ -69,8 +130,8 @@ describe("normalizeActiveDocxEditToolInput", () => {
           JSON.stringify({
             operations: [
               JSON.stringify({
+                blockId: "b-0010",
                 find: "David Cuketa",
-                id: "b-0010",
                 replace: "Jiří Novotný",
                 type: "replaceInBlock",
               }),

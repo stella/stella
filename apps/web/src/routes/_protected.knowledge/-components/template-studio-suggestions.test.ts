@@ -249,7 +249,11 @@ describe("extractCompletedStreamingOperations", () => {
       ],
     });
     expect(operations).toHaveLength(2);
-    expect(operations[1]?.blockId).toBe("B2");
+    const second = operations.at(1);
+    // Narrow on the discriminator: range-addressed ops carry no blockId.
+    expect(second?.type === "replaceInBlock" ? second.blockId : null).toBe(
+      "B2",
+    );
   });
 
   test("stops at the first malformed element to keep indices aligned", () => {
