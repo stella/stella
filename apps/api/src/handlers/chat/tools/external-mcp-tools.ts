@@ -121,6 +121,59 @@ export const loadExternalMcpToolsForUser = async ({
   return { close: closeClients, connectors, source, tools: loadedTools };
 };
 
+export type LazyExternalMcpToolsLoader = {
+  /**
+   * Loads on first call and caches the in-flight/settled promise for every
+   * later call, so concurrent callers within one send (validation, then
+   * streaming) share a single connector-discovery round trip instead of
+   * running it twice.
+   */
+  getExternalMcpTools: () => Promise<LoadedExternalMcpTools>;
+  /**
+   * No-op when `getExternalMcpTools` was never called (nothing was loaded,
+   * so no connector clients exist to close). Otherwise awaits the cached
+   * load and closes it exactly once, no matter how many times
+   * `closeIfLoaded` itself is called — the close, like the load, is
+   * memoized. Swallows a load failure instead of rethrowing: a failed load
+   * already has no clients to leak, and the failure itself already
+   * surfaced to its own caller via `getExternalMcpTools`.
+   */
+  closeIfLoaded: () => Promise<void>;
+};
+
+/**
+ * Wraps a `LoadedExternalMcpTools` loader (normally a
+ * `loadExternalMcpToolsForUser` call bound to the current request) in a
+ * lazy, memoized accessor: connector discovery only runs if some caller
+ * actually needs the tools, and runs at most once no matter how many
+ * callers ask. Closing is memoized the same way, so a caller cannot
+ * accidentally double-close by calling `closeIfLoaded` more than once.
+ */
+export const createLazyExternalMcpToolsLoader = (
+  load: () => Promise<LoadedExternalMcpTools>,
+): LazyExternalMcpToolsLoader => {
+  let loadPromise: Promise<LoadedExternalMcpTools> | null = null;
+  let closePromise: Promise<void> | null = null;
+
+  const getExternalMcpTools = (): Promise<LoadedExternalMcpTools> => {
+    loadPromise ??= load();
+    return loadPromise;
+  };
+
+  const closeIfLoaded = async (): Promise<void> => {
+    if (loadPromise === null) {
+      return;
+    }
+    closePromise ??= loadPromise.then(
+      async (loaded) => await loaded.close(),
+      () => undefined,
+    );
+    await closePromise;
+  };
+
+  return { closeIfLoaded, getExternalMcpTools };
+};
+
 export const createStellaMcpToolSource = ({
   closeClients,
   sourceTools,

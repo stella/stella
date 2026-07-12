@@ -90,9 +90,13 @@ import {
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   buildExternalMcpSystemHint,
+  createLazyExternalMcpToolsLoader,
   loadExternalMcpToolsForUser,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
-import type { LoadedExternalMcpTools } from "@/api/handlers/chat/tools/external-mcp-tools";
+import type {
+  LazyExternalMcpToolsLoader,
+  LoadedExternalMcpTools,
+} from "@/api/handlers/chat/tools/external-mcp-tools";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
   type ChatToolScope,
@@ -299,29 +303,35 @@ const sendMessage = createSafeRootHandler(
         userId: user.id,
       }),
     );
-    // Loaded once and reused for both the validation and streaming tool
-    // sets (and for the streaming `externalMcpToolSource`) instead of
-    // running connector discovery twice per send: the streaming pass
-    // always needs this set, so load it up front rather than a second
-    // time right before streaming. `externalMcpToolsHandedOffToStreaming`
-    // below tracks whether ownership of closing these connectors passed
-    // to the streaming try/catch, so every other exit path (validation
-    // failure, any early return or throw between here and streaming) still
-    // closes them exactly once.
-    const externalMcpTools = await loadExternalMcpToolsForUser({
-      nullUnionStrategy: externalMcpNullUnionStrategy,
-      organizationId: session.activeOrganizationId,
-      safeDb,
-      userId: user.id,
-    });
+    // Lazy and memoized: connector discovery only runs once some caller
+    // actually needs the tools (validation only needs them when
+    // `messageNeedsExternalMcpValidation` is true; the streaming pass
+    // always needs them), and at most once per send no matter how many
+    // callers ask — `createLazyExternalMcpToolsLoader` caches the first
+    // call's promise, so a validation-triggered load is reused by the
+    // streaming pass instead of running discovery twice.
+    // `externalMcpToolsHandedOffToStreaming` below tracks whether
+    // ownership of closing these connectors (if ever loaded) passed to the
+    // streaming try/catch, so every other exit path (validation failure,
+    // any early return or throw between here and streaming) still closes
+    // them exactly once.
+    const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(() =>
+      loadExternalMcpToolsForUser({
+        nullUnionStrategy: externalMcpNullUnionStrategy,
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        userId: user.id,
+      }),
+    );
     let externalMcpToolsHandedOffToStreaming = false;
 
-    // The try/finally starts immediately after the load (rather than just
-    // around the streaming pass) so that a throw from any of the awaited
-    // steps below — web-search provider load, tool-set construction,
-    // message validation — still closes `externalMcpTools` instead of
-    // leaking the MCP clients. The streaming pass further below takes over
-    // ownership once it starts consuming the clients (flips
+    // The try/finally starts immediately after the loader is constructed
+    // (rather than just around the streaming pass) so that a throw from
+    // any of the awaited steps below — web-search provider load,
+    // tool-set construction, message validation — still closes
+    // `externalMcpToolsLoader` (a no-op if nothing was ever loaded)
+    // instead of leaking MCP clients. The streaming pass further below
+    // takes over ownership once it starts consuming the clients (flips
     // `externalMcpToolsHandedOffToStreaming`); until then this `finally` is
     // the sole owner. `Result.gen`'s `yield*` short-circuit resumes the
     // generator via `.return()`, which unwinds this `finally` like a normal
@@ -333,6 +343,17 @@ const sendMessage = createSafeRootHandler(
       const webSearchProviders = await loadWebSearchProvidersForOrg(
         session.activeOrganizationId,
       );
+
+      // Only load external MCP tools for validation when the incoming
+      // message actually carries a part that needs them — an ordinary
+      // message never triggers connector discovery here. The streaming
+      // pass below always needs the full set and reuses this same load via
+      // the memoized loader instead of running discovery again.
+      const externalToolsForValidation =
+        await resolveExternalToolsForValidation(
+          body.message,
+          externalMcpToolsLoader,
+        );
 
       // Tool input schemas don't depend on `accessibleWorkspaceIds`
       // (scope is checked at execute time, not in the schema), so we
@@ -370,10 +391,7 @@ const sendMessage = createSafeRootHandler(
         hasActiveDocxFileClient: true,
         webSearchEnabled: validationThreadState.webSearchEnabled,
         webSearchProviders,
-        externalTools: externalToolsForValidation(
-          body.message,
-          externalMcpTools,
-        ),
+        externalTools: externalToolsForValidation,
         disabledNativeToolSlugs,
         activeSkillContext: validationActiveSkillContext,
         recordAuditEvent,
@@ -388,8 +406,9 @@ const sendMessage = createSafeRootHandler(
         userId: user.id,
       });
       if (Result.isError(validatedMessageResult)) {
-        // The wrapping try/finally closes `externalMcpTools` on this exit
-        // path too — no explicit close needed here.
+        // The wrapping try/finally closes `externalMcpToolsLoader` on this
+        // exit path too (a no-op if this message never needed the external
+        // tools) — no explicit close needed here.
         return Result.err(validatedMessageResult.error);
       }
       const validatedMessage = validatedMessageResult.value;
@@ -744,6 +763,18 @@ const sendMessage = createSafeRootHandler(
         }),
       );
 
+      // The streaming pass always needs the external MCP tool set (for the
+      // tool map, the connector system hint, and the `externalMcpToolSource`
+      // handed to `streamChat` below). This is the point where discovery
+      // actually runs for a message that didn't already trigger it during
+      // validation — deferred this far so a request that fails or aborts
+      // earlier (malformed parts, thread scope mismatch, upload/compaction
+      // failure, client disconnect) never contacts a single connector.
+      // `getExternalMcpTools` reuses the validation-triggered load instead
+      // of loading again when one already happened.
+      const externalMcpTools =
+        await externalMcpToolsLoader.getExternalMcpTools();
+
       // Streaming tools mirror the surface the user is on: only the
       // DOCX file-overlay client knows how to satisfy
       // apply-active-docx-edits (it queues into the review store and
@@ -814,7 +845,9 @@ const sendMessage = createSafeRootHandler(
       // From here, the try/catch below owns closing `externalMcpTools` (on a
       // non-streaming response or a thrown error) or hands it to `streamChat`
       // to close once the actual token stream finishes; the outer `finally`
-      // must not close it again.
+      // must not close it again. `externalMcpTools` is guaranteed loaded at
+      // this point (the `await` above), so `externalMcpToolsLoader.closeIfLoaded`
+      // in the outer `finally` would otherwise close the same clients again.
       externalMcpToolsHandedOffToStreaming = true;
       const response = yield* Result.await(
         Result.tryPromise({
@@ -1017,8 +1050,11 @@ const sendMessage = createSafeRootHandler(
 
       return Result.ok(response);
     } finally {
+      // No-op if `getExternalMcpTools` was never called on this exit path
+      // (the message needed neither validation nor streaming to load
+      // external tools before failing/returning early).
       if (!externalMcpToolsHandedOffToStreaming) {
-        await externalMcpTools.close();
+        await externalMcpToolsLoader.closeIfLoaded();
       }
     }
   },
@@ -1312,12 +1348,6 @@ const isChatStreamResponse = (response: Response): boolean => {
   return contentType !== null && contentType.includes("text/event-stream");
 };
 
-const externalToolsForValidation = (
-  message: Static<typeof sendMessageBodySchema>["message"],
-  loaded: LoadedExternalMcpTools,
-): LoadedExternalMcpTools["tools"] | undefined =>
-  messageNeedsExternalMcpValidation(message) ? loaded.tools : undefined;
-
 const messageNeedsExternalMcpValidation = (
   message: Static<typeof sendMessageBodySchema>["message"],
 ): boolean => {
@@ -1327,6 +1357,23 @@ const messageNeedsExternalMcpValidation = (
 
   const parts: unknown[] = Array.isArray(message.parts) ? message.parts : [];
   return parts.some(isExternalMcpToolPart);
+};
+
+/**
+ * Loads external MCP tools (via the memoized `loader`) only when the
+ * incoming message needs them for validation; returns `undefined` without
+ * ever calling the loader otherwise. Kept as a standalone helper so its
+ * branch doesn't add to the handler generator's own cognitive complexity.
+ */
+const resolveExternalToolsForValidation = async (
+  message: Static<typeof sendMessageBodySchema>["message"],
+  loader: LazyExternalMcpToolsLoader,
+): Promise<LoadedExternalMcpTools["tools"] | undefined> => {
+  if (!messageNeedsExternalMcpValidation(message)) {
+    return undefined;
+  }
+  const loaded = await loader.getExternalMcpTools();
+  return loaded.tools;
 };
 
 type ReadThreadValidationStateProps = {
