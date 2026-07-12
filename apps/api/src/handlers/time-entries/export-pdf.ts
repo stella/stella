@@ -3,7 +3,7 @@ import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { prorateHourlyCents } from "@stll/money";
+import { MoneyTotals, prorateHourlyCents } from "@stll/money";
 
 import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
@@ -121,7 +121,7 @@ export const exportPdfHandler = async ({
   ];
 
   let totalMinutes = 0;
-  let totalAmount = 0;
+  const totalAmountByCurrency = new MoneyTotals();
 
   for (const row of rows) {
     const userName = row.userId
@@ -138,7 +138,7 @@ export const exportPdfHandler = async ({
     // amount, which are both derived from billedMinutes; summing raw
     // durationMinutes here produced a total that did not match the lines.
     totalMinutes += row.billedMinutes;
-    totalAmount += amount;
+    totalAmountByCurrency.add(row.currency, amount);
 
     textLines.push(`Date: ${row.dateWorked}  User: ${userName}`);
     textLines.push(
@@ -160,7 +160,11 @@ export const exportPdfHandler = async ({
   textLines.push("-".repeat(80));
   const totalHours = (totalMinutes / 60).toFixed(2);
   textLines.push(`Total Hours: ${totalHours}`);
-  textLines.push(`Total Amount: ${(totalAmount / 100).toFixed(2)}`);
+  for (const { currency, amountCents } of totalAmountByCurrency.entries()) {
+    textLines.push(
+      `Total Amount: ${currency} ${(amountCents / 100).toFixed(2)}`,
+    );
+  }
 
   return buildMinimalPdf(textLines);
 };
