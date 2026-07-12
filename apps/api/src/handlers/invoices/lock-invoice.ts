@@ -24,9 +24,10 @@ export const lockInvoiceInStatus = async (
   tx: Transaction,
   { invoiceId, workspaceId, status }: LockInvoiceOptions,
 ) => {
-  const statusFilter = Array.isArray(status)
-    ? inArray(invoices.status, [...status])
-    : eq(invoices.status, status);
+  const statusFilter =
+    typeof status === "string"
+      ? eq(invoices.status, status)
+      : inArray(invoices.status, [...status]);
 
   const rows = await tx
     .select({
