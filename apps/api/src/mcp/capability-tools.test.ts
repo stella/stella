@@ -527,15 +527,22 @@ describe("synthesized capability authorization lifetime", () => {
     const context = createContext();
     context.createOperationDatabaseScope = undefined;
 
-    await expect(
-      synthesizeCapabilityContext({
-        capabilityId: "entities.copy-to-workspace",
-        context,
-        input: { body: {}, params: {}, query: {} },
-        request: new Request("http://localhost/mcp"),
-        workspaceId: toSafeId<"workspace">("ws_1"),
-      }),
-    ).rejects.toThrow("missing an operation database scope");
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the rejection explicitly instead.
+    const rejection = await synthesizeCapabilityContext({
+      capabilityId: "entities.copy-to-workspace",
+      context,
+      input: { body: {}, params: {}, query: {} },
+      request: new Request("http://localhost/mcp"),
+      workspaceId: toSafeId<"workspace">("ws_1"),
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toContain(
+      "missing an operation database scope",
+    );
   });
 });
 

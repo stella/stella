@@ -79,6 +79,19 @@ const arabicNormalizeFunctionSql = (): string =>
     "CREATE OR REPLACE FUNCTION arabic_normalize",
   );
 
+// Split by leading keyword so each pattern stays below the lint's regex
+// complexity budget; together they cover PostgreSQL's transaction-control
+// statements (single-keyword forms subsume their PREPARED/SAVEPOINT/TO
+// variants).
+const isTransactionControlStatement = (executable: string): boolean =>
+  /^(?:ABORT|BEGIN|COMMIT|END|RELEASE|ROLLBACK|SAVEPOINT)\b/iu.test(
+    executable,
+  ) ||
+  /^(?:PREPARE|START)\s+TRANSACTION\b/iu.test(executable) ||
+  /^SET\s+(?:TRANSACTION|SESSION\s+CHARACTERISTICS\s+AS\s+TRANSACTION)\b/iu.test(
+    executable,
+  );
+
 export const installPgliteWorkspaceAccessObjects = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
@@ -90,11 +103,7 @@ export const installPgliteWorkspaceAccessObjects = async (
     if (executable.length === 0) {
       continue;
     }
-    if (
-      /^(?:ABORT|BEGIN|COMMIT(?:\s+PREPARED)?|END|PREPARE\s+TRANSACTION|RELEASE(?:\s+SAVEPOINT)?|ROLLBACK(?:\s+(?:PREPARED|TO(?:\s+SAVEPOINT)?))?|SAVEPOINT|SET\s+(?:TRANSACTION|SESSION\s+CHARACTERISTICS\s+AS\s+TRANSACTION)|START\s+TRANSACTION)\b/iu.test(
-        executable,
-      )
-    ) {
+    if (isTransactionControlStatement(executable)) {
       panic(
         "Workspace authorization migration cannot control Drizzle's outer transaction",
       );

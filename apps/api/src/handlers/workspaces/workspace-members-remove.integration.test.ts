@@ -119,7 +119,9 @@ describe("removeWorkspaceMemberHandler RLS integration", () => {
           workspaceId: ids.wsA2,
         });
         if (typeof workspaceId !== "string") {
-          throw new Error("Expected global-chat workspace access to be pinned");
+          throw new TypeError(
+            "Expected global-chat workspace access to be pinned",
+          );
         }
         expect(serverValidatedWorkspaceIds).toEqual([ids.wsA2]);
 
