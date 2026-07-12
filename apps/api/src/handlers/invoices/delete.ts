@@ -8,6 +8,7 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -26,23 +27,11 @@ const deleteInvoice = createSafeHandler(
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
-        const invoiceRows = await tx
-          .select({
-            id: invoices.id,
-            invoiceNumber: invoices.invoiceNumber,
-            totalAmount: invoices.totalAmount,
-          })
-          .from(invoices)
-          .where(
-            and(
-              eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
-              eq(invoices.status, INVOICE_STATUS.DRAFT),
-            ),
-          )
-          .limit(1)
-          .for("update");
-        const invoice = invoiceRows.at(0);
+        const invoice = await lockInvoiceInStatus(tx, {
+          invoiceId: params.invoiceId,
+          workspaceId,
+          status: INVOICE_STATUS.DRAFT,
+        });
 
         if (!invoice) {
           return { ok: false as const };
