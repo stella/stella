@@ -31,8 +31,10 @@ import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
 const MAX_DISPLAYED_FAILURES = 5;
 // Matches the versions-sidebar PUT-to-S3 upload budget (same flow, uploaded
-// file can be arbitrarily large).
-const UPLOAD_PUT_TIMEOUT_MS = 5 * 60 * 1000;
+// file can be arbitrarily large). This is a stall ceiling, not a target
+// duration: a healthy slow upload of a large file can legitimately take
+// several minutes.
+const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 const formatFailedFiles = (names: readonly string[]): string => {
   const shown = names.slice(0, MAX_DISPLAYED_FAILURES);

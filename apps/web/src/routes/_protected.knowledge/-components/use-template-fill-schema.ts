@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
@@ -18,6 +18,13 @@ import {
  * fill endpoint applies, so `{{#each}}` array fields and manifest metadata
  * are both present.
  */
+
+class TemplateDocumentFetchError extends TaggedError(
+  "TemplateDocumentFetchError",
+)<{
+  message: string;
+  status: number;
+}>() {}
 
 type DiscoverResponse = Awaited<ReturnType<typeof api.templates.discover.post>>;
 
@@ -68,6 +75,12 @@ export const useTemplateFillSchema = (
         signal,
         timeoutMs: 15_000,
       });
+      if (!res.ok) {
+        throw new TemplateDocumentFetchError({
+          message: `Template document fetch failed (${res.status})`,
+          status: res.status,
+        });
+      }
       const blob = await res.blob();
       const file = new File([blob], fileName, { type: DOCX_MIME });
       const response = await api.templates.discover.post(

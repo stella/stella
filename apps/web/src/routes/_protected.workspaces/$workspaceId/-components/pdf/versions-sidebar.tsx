@@ -98,7 +98,9 @@ const LABEL_PRESETS: LabelPreset[] = [
   { key: "signed", color: "bg-warning" },
 ];
 
-const UPLOAD_PUT_TIMEOUT_MS = 5 * 60 * 1000;
+// Stall ceiling, not a target duration: a healthy slow upload of a large
+// file can legitimately take several minutes.
+const UPLOAD_PUT_TIMEOUT_MS = 30 * 60 * 1000;
 
 export function VersionsSidebar({
   workspaceId,
