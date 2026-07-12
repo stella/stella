@@ -1,5 +1,5 @@
 import { useRef, useSyncExternalStore } from "react";
-import type { PropsWithChildren } from "react";
+import type { ComponentProps, PropsWithChildren } from "react";
 
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -109,7 +109,15 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   return (
     <IntlProvider
       locale={formattingLocale}
-      messages={activeMessages}
+      // SAFETY: activeMessages is the fully-populated catalog for the active
+      // locale. use-intl types its `messages` prop with the generated Messages
+      // schema (literal string leaves, which also drives `t()` ICU-argument
+      // inference app-wide), but locales load as dynamic JSON so LocaleMessages
+      // widens every leaf to `string`. The runtime values conform to the
+      // schema; only the literal-vs-string widening differs at this boundary.
+      messages={
+        activeMessages as ComponentProps<typeof IntlProvider>["messages"]
+      }
       timeZone={resolveAppTimeZone()}
     >
       {children}

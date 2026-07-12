@@ -68,7 +68,7 @@ const ClauseDirectiveNodeView = ({ node }: NodeViewProps) => {
     typeof node.attrs["expression"] === "string"
       ? node.attrs["expression"]
       : "";
-  const isConditional = CONDITIONAL_KINDS.has(kind);
+  const isConditional = CONDITIONAL_KINDS.includes(kind);
 
   return (
     <NodeViewWrapper

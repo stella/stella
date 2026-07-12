@@ -31,7 +31,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { normalizeOptionalArray } from "@/lib/arrays";
+import { optionalArray } from "@/lib/arrays";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
@@ -123,7 +123,7 @@ function Organization() {
       {hasOrganizations ? (
         <OrganizationList
           isOauthPostLogin={isOauthPostLogin}
-          organizations={normalizeOptionalArray(organizations)}
+          organizations={optionalArray(organizations)}
         />
       ) : (
         <CreateOrganizationForm isOauthPostLogin={isOauthPostLogin} />

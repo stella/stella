@@ -200,7 +200,7 @@ const PreviewParagraph = ({
     : undefined;
 
   if (paragraph.isDirective && paragraph.directiveKind) {
-    const isConditional = CONDITIONAL_KINDS.has(paragraph.directiveKind);
+    const isConditional = CONDITIONAL_KINDS.includes(paragraph.directiveKind);
 
     return (
       <div className="relative">

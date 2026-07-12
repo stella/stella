@@ -1090,7 +1090,7 @@ const NegotiationSection = ({
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const { negotiation } = position;
-  const talkingPoints = negotiation ? negotiation.talkingPoints : [];
+  const talkingPoints = negotiation?.talkingPoints ?? [];
 
   const setTalkingPoints = (points: string[]) =>
     onChange(updateNegotiation(position, { talkingPoints: points }));

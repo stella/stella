@@ -1837,16 +1837,18 @@ export const modelOptionsOptions = (activeOrganizationId: string) =>
     queryFn: async () => await fetchChatModelOptions(),
   });
 
-export const groupedChatThreadsOptions = (activeOrganizationId: string) =>
-  infiniteQueryOptions({
+export const groupedChatThreadsOptions = (activeOrganizationId: string) => {
+  const initialPageParam: string | undefined = undefined;
+  return infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads(activeOrganizationId),
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({ cursor: pageParam, signal }),
-    initialPageParam: undefined,
+    initialPageParam,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
+};
 
 const fetchChatThreadTitle = async ({
   threadId,

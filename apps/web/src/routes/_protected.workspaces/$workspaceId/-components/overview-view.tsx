@@ -385,7 +385,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           const hours = entry.durationMinutes / 60;
           daily[dayIdx] = (daily[dayIdx] ?? 0) + hours;
 
-          const storedEntries = dailyEntries.at(dayIdx);
+          const storedEntries = dailyEntries[dayIdx];
           const entries = normalizeOptionalArray(storedEntries);
           entries.push({
             id: entry.id,
@@ -781,7 +781,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       </div>
                       {member.daily.map((hours, dayIdx) => {
                         const opacity = maxDaily > 0 ? hours / maxDaily : 0;
-                        const storedEntries = member.dailyEntries.at(dayIdx);
+                        const storedEntries = member.dailyEntries[dayIdx];
                         const entries = normalizeOptionalArray(storedEntries);
                         const dayLabel = getLocaleDayLabel(
                           dayIdx,

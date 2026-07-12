@@ -9,7 +9,7 @@ import * as v from "valibot";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { normalizeOptionalArray } from "@/lib/arrays";
+import { normalizeOptionalArray, optionalArray } from "@/lib/arrays";
 import { AddContactMethodForm } from "@/routes/_protected.contacts/-components/add-contact-method-form";
 import { useContactPatch } from "@/routes/_protected.contacts/-components/contact-caches";
 import {
@@ -31,8 +31,8 @@ export const ContactCommunicationEditor = ({
   const [phoneDraft, setPhoneDraft] = useState("");
   const [dataBoxDraft, setDataBoxDraft] = useState("");
 
-  const emails = normalizeOptionalArray(contact.emails);
-  const phones = normalizeOptionalArray(contact.phones);
+  const emails = optionalArray(contact.emails);
+  const phones = optionalArray(contact.phones);
   const metadata = getContactMetadata(contact);
   const dataBoxes = normalizeOptionalArray(metadata.dataBoxes);
 

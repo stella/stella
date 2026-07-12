@@ -84,8 +84,6 @@ const WebSearchSeedLifecycle = ({ seed }: { seed: () => void }) => {
   return null;
 };
 
-const EMPTY_CONTEXT_MATTER_IDS = Object.freeze([]);
-
 export const ChatThreadPage = ({
   threadRef,
   workspaceId,
@@ -124,9 +122,7 @@ export const ChatThreadPage = ({
     null,
   );
   const anonymized = useChatAnonymized(threadRef);
-  const getContextMatterIds = useEffectEvent(
-    () => contextMatterIds ?? EMPTY_CONTEXT_MATTER_IDS,
-  );
+  const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
   const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
 
   // A thread can be opened (e.g. via "Move to main" from the inspector)

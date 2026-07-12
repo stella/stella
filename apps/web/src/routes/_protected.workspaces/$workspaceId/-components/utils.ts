@@ -63,8 +63,9 @@ export const emptyColor: ColorVariants = optionVar("empty");
 
 /** Resolve any OptionColor (named or hex) to CSS color variants. */
 export const resolveOptionColor = (color: OptionColor): ColorVariants => {
-  if (NAMED_COLORS.some((namedColor) => namedColor === color)) {
-    return namedColorsMap[color];
+  const namedColor = NAMED_COLORS.find((candidate) => candidate === color);
+  if (namedColor !== undefined) {
+    return namedColorsMap[namedColor];
   }
   return hexVar(color);
 };

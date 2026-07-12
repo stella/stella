@@ -111,8 +111,9 @@ const searchKeys = {
     ] as const,
 };
 
-export const searchInfiniteOptions = (params: SearchParams) =>
-  infiniteQueryOptions({
+export const searchInfiniteOptions = (params: SearchParams) => {
+  const initialPageParam: string | undefined = undefined;
+  return infiniteQueryOptions({
     queryKey: searchKeys.query(params),
     queryFn: async ({ signal, pageParam }) => {
       const response = await api.search.post(
@@ -121,12 +122,10 @@ export const searchInfiniteOptions = (params: SearchParams) =>
           workspaceIds: params.workspaceIds.map((id) =>
             toSafeId<"workspace">(id),
           ),
-          ...(params.kinds ? { kinds: params.kinds } : {}),
-          ...(params.types ? { types: params.types } : {}),
-          ...(params.editedByUserIds
-            ? { editedByUserIds: params.editedByUserIds }
-            : {}),
-          ...(params.mimeTypes ? { mimeTypes: params.mimeTypes } : {}),
+          kinds: params.kinds,
+          types: params.types,
+          editedByUserIds: params.editedByUserIds,
+          mimeTypes: params.mimeTypes,
           ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
           ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
           ...(pageParam ? { cursor: pageParam } : {}),
@@ -141,11 +140,12 @@ export const searchInfiniteOptions = (params: SearchParams) =>
 
       return response.data;
     },
-    initialPageParam: undefined,
+    initialPageParam,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
     enabled: params.query.length > 0,
   });
+};
 
 export const searchFacetOptions = (params: SearchFacetParams) =>
   queryOptions({
@@ -159,12 +159,10 @@ export const searchFacetOptions = (params: SearchFacetParams) =>
           workspaceIds: params.workspaceIds.map((id) =>
             toSafeId<"workspace">(id),
           ),
-          ...(params.types ? { types: params.types } : {}),
+          types: params.types,
           ...(params.kinds ? { kinds: params.kinds } : {}),
-          ...(params.editedByUserIds
-            ? { editedByUserIds: params.editedByUserIds }
-            : {}),
-          ...(params.mimeTypes ? { mimeTypes: params.mimeTypes } : {}),
+          editedByUserIds: params.editedByUserIds,
+          mimeTypes: params.mimeTypes,
           ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
           ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
           ...(params.limit ? { limit: params.limit } : {}),

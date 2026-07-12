@@ -93,7 +93,7 @@ export type InspectorViewRegistration<P = unknown> = {
   type: InspectorViewKind;
   render: (props: InspectorViewRenderProps<P>) => ReactNode;
   railIcon: (props: InspectorRailIconProps<P>) => ReactNode;
-  navigationPolicy?: InspectorNavigationPolicy;
+  navigationPolicy?: InspectorNavigationPolicy | undefined;
   /**
    * Runtime payload validator. Required for kinds whose payloads
    * cross the BroadcastChannel sync (otherwise re-hydrated tabs
@@ -101,15 +101,15 @@ export type InspectorViewRegistration<P = unknown> = {
    * for view kinds whose tabs are never broadcast.
    */
   validate: (payload: unknown) => payload is P;
-  canRename?: boolean;
-  ariaLabel?: (tab: InspectorViewTab<P>) => string;
+  canRename?: boolean | undefined;
+  ariaLabel?: ((tab: InspectorViewTab<P>) => string) | undefined;
   /**
    * Cap on simultaneously-mounted instances. Used by view kinds
    * that hold heavy DOM/WebGL state (PDF viewer) to bound memory.
    * The active tab is always mounted; the most recently viewed
    * remaining tabs fill the rest of the slots up to the cap.
    */
-  maxMounted?: number;
+  maxMounted?: number | undefined;
 };
 
 // Registry stores registrations keyed by `type`. The payload-typed

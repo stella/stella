@@ -1,7 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -138,6 +138,11 @@ export const DocumentAiSourceBar = ({
       justificationId,
     ],
     queryFn: async ({ signal }) => {
+      // `enabled` gates this query on `justificationId !== undefined`, so an
+      // undefined id here is an impossible invariant, not a runtime state.
+      if (justificationId === undefined) {
+        return panic("bounding-box generation ran without a justification id");
+      }
       const result = await Result.tryPromise(async () => {
         const response = await api
           .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })

@@ -419,15 +419,15 @@ export const SearchDialog = ({
       const response = await api.search.summary.post({
         query: params.query,
         locale: params.locale,
-        originalQuery: params.originalQuery,
+        ...(params.originalQuery !== undefined && {
+          originalQuery: params.originalQuery,
+        }),
         workspaceIds: params.workspaceIds.map((id) =>
           toSafeId<"workspace">(id),
         ),
-        ...(params.types ? { types: params.types } : {}),
-        ...(params.editedByUserIds
-          ? { editedByUserIds: params.editedByUserIds }
-          : {}),
-        ...(params.mimeTypes ? { mimeTypes: params.mimeTypes } : {}),
+        types: params.types,
+        editedByUserIds: params.editedByUserIds,
+        mimeTypes: params.mimeTypes,
         ...(params.updatedFrom ? { updatedFrom: params.updatedFrom } : {}),
         ...(params.updatedTo ? { updatedTo: params.updatedTo } : {}),
         ...(params.limit ? { limit: params.limit } : {}),
@@ -471,13 +471,13 @@ export const SearchDialog = ({
         citations: vars.citations.map((citation) => ({
           number: citation.number,
         })),
-        originalQuery: vars.originalQuery,
+        ...(vars.originalQuery !== undefined && {
+          originalQuery: vars.originalQuery,
+        }),
         workspaceIds: vars.workspaceIds.map((id) => toSafeId<"workspace">(id)),
-        ...(vars.types ? { types: vars.types } : {}),
-        ...(vars.editedByUserIds
-          ? { editedByUserIds: vars.editedByUserIds }
-          : {}),
-        ...(vars.mimeTypes ? { mimeTypes: vars.mimeTypes } : {}),
+        types: vars.types,
+        editedByUserIds: vars.editedByUserIds,
+        mimeTypes: vars.mimeTypes,
         ...(vars.updatedFrom ? { updatedFrom: vars.updatedFrom } : {}),
         ...(vars.updatedTo ? { updatedTo: vars.updatedTo } : {}),
         ...(vars.limit ? { limit: vars.limit } : {}),
@@ -1481,7 +1481,7 @@ const FacetGroup = ({
 type FacetBucket = { value: string; label?: string; count: number };
 
 const EMPTY_FACET_BUCKETS: readonly FacetBucket[] = [];
-const EMPTY_SEARCH_HITS = [];
+const EMPTY_SEARCH_HITS: readonly GlobalSearchHit[] = [];
 
 type FacetBucketListProps = {
   buckets: FacetBucket[];

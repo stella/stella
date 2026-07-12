@@ -190,7 +190,7 @@ export const OnboardingWizard = () => {
       }
       return {
         ...currentData,
-        catalogueSlugs: autoSelectionPlan.selectedSlugs,
+        catalogueSlugs: [...autoSelectionPlan.selectedSlugs],
       };
     });
   }, [catalogueRemovedSlugs, onboardingCatalogueEntries, step]);

@@ -1,5 +1,6 @@
 import { CancelledError } from "@tanstack/react-query";
 import { posthog } from "posthog-js";
+import type { CaptureResult } from "posthog-js";
 
 import { env } from "@/env";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
@@ -72,21 +73,19 @@ const telemetryErrorType = (error: unknown): string => {
 };
 
 const toRedactedTelemetryError = (error: unknown): Error => {
+  // eslint-disable-next-line unicorn/error-message -- the original message is intentionally dropped so telemetry cannot leak PII from the underlying error; the error class is carried in `.name` instead.
   const redacted = new Error("");
   redacted.name = telemetryErrorType(error);
-  redacted.stack = undefined;
+  Reflect.deleteProperty(redacted, "stack");
   return redacted;
 };
 
-const sanitizeExceptionEvent = (event: {
-  event: string;
-  properties?: Record<string, unknown>;
-}) => {
+const sanitizeExceptionEvent = (event: CaptureResult): CaptureResult => {
   const properties = event.properties;
-  const distinctId = properties?.["$distinct_id"];
-  const appCommit = properties?.["app_commit"];
-  const appVersion = properties?.["app_version"];
-  const exceptionList = properties?.["$exception_list"];
+  const distinctId = properties["$distinct_id"];
+  const appCommit = properties["app_commit"];
+  const appVersion = properties["app_version"];
+  const exceptionList = properties["$exception_list"];
   const firstException = Array.isArray(exceptionList)
     ? exceptionList.at(0)
     : undefined;
@@ -94,7 +93,7 @@ const sanitizeExceptionEvent = (event: {
     readStringField(firstException, "type"),
   );
   return {
-    event: event.event,
+    ...event,
     properties: {
       $exception_list: [{ type, value: "" }],
       $exception_type: type,

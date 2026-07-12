@@ -40,7 +40,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-overrides-store";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
-const NO_MANUAL_FLAGS = Object.freeze([]);
+const NO_MANUAL_FLAGS: readonly string[] = Object.freeze([]);
 
 const CELL_FLAG_IDS = [
   "needs-review",
@@ -129,7 +129,7 @@ export const useFlagLabel = () => {
   return (flagId: CellFlagId) => t(FLAG_LABEL_KEYS[flagId]);
 };
 
-const normalizeManualFlags = (flags: string[]) =>
+const normalizeManualFlags = (flags: readonly string[]) =>
   [...new Set(flags)].toSorted();
 
 const haveSameFlags = (a: string[], b: string[]) =>
