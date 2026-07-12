@@ -124,8 +124,10 @@ const buildContent = (
 };
 
 const promptFromHtml = (html: string): string =>
-  // Strip HTML tags to get a quick "is the prompt empty" check.
-  html.replace(/<[^>]+>/g, "").trim();
+  // Extract text via the DOM (inert `text/html` parse; scripts never run) for a
+  // quick "is the prompt empty" check. Robust against nested/malformed tags that
+  // a single-pass tag-stripping regex leaves behind.
+  new DOMParser().parseFromString(html, "text/html").body.textContent.trim();
 
 export const CreateProperty = ({
   workspaceId,

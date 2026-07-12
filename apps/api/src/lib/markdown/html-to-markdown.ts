@@ -168,7 +168,12 @@ const renderList = (el: Element, ordered: boolean): string => {
 };
 
 const renderTableCell = (cell: Element): string =>
-  renderInline(cell.children).replace(/\|/g, "\\|").replace(/\n/g, " ");
+  renderInline(cell.children)
+    // Escape the backslash first so escaping `|` -> `\|` cannot be undone by a
+    // literal backslash already in the content (incomplete-escaping guard).
+    .replace(/\\/g, "\\\\")
+    .replace(/\|/g, "\\|")
+    .replace(/\n/g, " ");
 
 const collectTableRows = (parent: Element): string[][] => {
   const rows: string[][] = [];
