@@ -1,4 +1,4 @@
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
@@ -104,4 +104,4 @@ export const WorkflowServiceTierPromptProvider = ({
 };
 
 export const useWorkflowServiceTierPrompt = () =>
-  useContext(WorkflowServiceTierPromptContext);
+  use(WorkflowServiceTierPromptContext);

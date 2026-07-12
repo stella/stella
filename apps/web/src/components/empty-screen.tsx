@@ -10,36 +10,16 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button, buttonVariants } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/components/button";
+import { buttonVariants } from "@stll/ui/components/button-variants";
 import { cn } from "@stll/ui/lib/utils";
 
-import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const DEFAULT_SUPPORT_EMAIL = "hello@stll.app";
-const MATTERS_VIDEO_ASPECT_RATIO = "2152 / 1080";
-const MATTERS_VIDEO_POSTER_SRC = "/empty-states/matters-intro-poster.jpg";
 export const EMPTY_SCREEN_PLACEHOLDER_YOUTUBE_URL =
   "https://www.youtube.com/watch?v=M7lc1UVf-VE";
-export const EMPTY_SCREEN_MATTERS_VIDEO = env.VITE_EMPTY_STATE_MATTERS_VIDEO_URL
-  ? ({
-      type: "native",
-      src: env.VITE_EMPTY_STATE_MATTERS_VIDEO_URL,
-      aspectRatio: MATTERS_VIDEO_ASPECT_RATIO,
-      captionsSrc: "/empty-states/matters-intro.vtt",
-      poster: MATTERS_VIDEO_POSTER_SRC,
-    } as const)
-  : ({
-      type: "image",
-      src: MATTERS_VIDEO_POSTER_SRC,
-      aspectRatio: MATTERS_VIDEO_ASPECT_RATIO,
-    } as const);
-export const EMPTY_SCREEN_TABLE_PREVIEW = {
-  type: "image",
-  src: "/empty-states/table-toolbar-preview.png",
-  aspectRatio: "674 / 162",
-} as const;
 
 type EmptyScreenMediaPlacement = "side" | "bottom";
 

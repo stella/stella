@@ -447,10 +447,10 @@ const plainTextParagraphsToInlines = (text: string): Inline[] => {
 };
 
 const parsePlainText = (state: ParserState, content: string): void => {
-  const paragraphs = content
-    .split(/\n{2,}/u)
-    .map((paragraph) => normalizeWhitespace(paragraph))
-    .filter(Boolean);
+  const paragraphs = content.split(/\n{2,}/u).flatMap((paragraph) => {
+    const normalized = normalizeWhitespace(paragraph);
+    return normalized ? [normalized] : [];
+  });
 
   for (const paragraph of paragraphs) {
     const inlines = plainTextParagraphsToInlines(paragraph);
@@ -495,8 +495,10 @@ export const parsePlDecisionContent = (
     parsePlainText(state, normalizedContent);
     const paragraphs = normalizedContent
       .split(/\n{2,}/u)
-      .map((paragraph) => normalizeWhitespace(paragraph))
-      .filter(Boolean);
+      .flatMap((paragraph) => {
+        const normalized = normalizeWhitespace(paragraph);
+        return normalized ? [normalized] : [];
+      });
     validateAndLog(
       "pl-courts",
       input.caseNumber,
@@ -506,8 +508,7 @@ export const parsePlDecisionContent = (
   }
 
   const fulltext = state.blocks
-    .map((block) => block.plainText)
-    .filter(Boolean)
+    .flatMap((block) => (block.plainText ? [block.plainText] : []))
     .join("\n\n");
 
   const documentAst: DocumentAst = {

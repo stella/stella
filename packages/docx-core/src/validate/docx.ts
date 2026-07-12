@@ -166,8 +166,9 @@ export const assertValidDocumentModel = (document: Document): void => {
   }
 
   const details = result.issues
-    .filter((issue) => issue.severity === "error")
-    .map((issue) => `${issue.path}: ${issue.message}`)
+    .flatMap((issue) =>
+      issue.severity === "error" ? [`${issue.path}: ${issue.message}`] : [],
+    )
     .join("\n");
   panic(`Invalid DOCX document model:\n${details}`);
 };

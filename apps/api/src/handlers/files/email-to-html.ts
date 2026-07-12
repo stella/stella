@@ -179,11 +179,26 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
     }
   }
 
+  const to: string[] = [];
+  for (const address of arrayOrEmpty(email.to)) {
+    const formatted = formatAddress(address);
+    if (nonEmpty(formatted)) {
+      to.push(formatted);
+    }
+  }
+  const cc: string[] = [];
+  for (const address of arrayOrEmpty(email.cc)) {
+    const formatted = formatAddress(address);
+    if (nonEmpty(formatted)) {
+      cc.push(formatted);
+    }
+  }
+
   return {
     subject: email.subject ?? null,
     from: email.from ? formatAddress(email.from) : null,
-    to: arrayOrEmpty(email.to).map(formatAddress).filter(nonEmpty),
-    cc: arrayOrEmpty(email.cc).map(formatAddress).filter(nonEmpty),
+    to,
+    cc,
     date: email.date ?? null,
     body: email.html
       ? { type: "html", html: email.html }
@@ -195,10 +210,14 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
 
 const formatAddress = (address: Address): string => {
   if (address.group) {
-    return address.group
-      .map((member) => formatNameAddress(member.name, member.address))
-      .filter(nonEmpty)
-      .join(", ");
+    const names: string[] = [];
+    for (const member of address.group) {
+      const formatted = formatNameAddress(member.name, member.address);
+      if (nonEmpty(formatted)) {
+        names.push(formatted);
+      }
+    }
+    return names.join(", ");
   }
   return formatNameAddress(address.name, address.address) ?? "";
 };
@@ -260,15 +279,26 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
     });
   }
 
+  const to: string[] = [];
+  for (const recipient of data.to) {
+    const formatted = formatNameAddress(recipient.name, recipient.email);
+    if (nonEmpty(formatted)) {
+      to.push(formatted);
+    }
+  }
+  const cc: string[] = [];
+  for (const recipient of data.cc) {
+    const formatted = formatNameAddress(recipient.name, recipient.email);
+    if (nonEmpty(formatted)) {
+      cc.push(formatted);
+    }
+  }
+
   return {
     subject: data.subject ?? null,
     from: formatNameAddress(data.fromName, data.fromEmail),
-    to: data.to
-      .map((recipient) => formatNameAddress(recipient.name, recipient.email))
-      .filter(nonEmpty),
-    cc: data.cc
-      .map((recipient) => formatNameAddress(recipient.name, recipient.email))
-      .filter(nonEmpty),
+    to,
+    cc,
     date: data.date,
     body: data.html
       ? { type: "html", html: data.html }

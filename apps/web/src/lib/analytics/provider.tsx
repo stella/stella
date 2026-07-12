@@ -1,7 +1,4 @@
-import { createContext, use, useState } from "react";
-import type { PropsWithChildren } from "react";
-
-import { PostHogProvider } from "@posthog/react";
+import { createContext, use } from "react";
 
 import { env } from "@/env";
 import { hasPostHogConfig } from "@/lib/analytics/config";
@@ -9,7 +6,7 @@ import { noopAnalytics } from "@/lib/analytics/noop";
 import { createPostHogAnalytics } from "@/lib/analytics/posthog";
 import type { Analytics } from "@/lib/analytics/types";
 
-const AnalyticsContext = createContext(noopAnalytics);
+export const AnalyticsContext = createContext(noopAnalytics);
 let globalAnalytics: Analytics = noopAnalytics;
 
 export const useAnalytics = () => use(AnalyticsContext);
@@ -43,27 +40,4 @@ export const createAnalyticsValue = (): AnalyticsValue => {
   globalAnalytics = value.analytics;
 
   return value;
-};
-
-type AnalyticsProviderProps = PropsWithChildren<{
-  value: AnalyticsValue;
-}>;
-
-export const AnalyticsProvider = ({
-  children,
-  value: providedValue,
-}: AnalyticsProviderProps) => {
-  const [value] = useState(() => providedValue);
-
-  if (value.client) {
-    return (
-      <PostHogProvider client={value.client}>
-        <AnalyticsContext value={value.analytics}>{children}</AnalyticsContext>
-      </PostHogProvider>
-    );
-  }
-
-  return (
-    <AnalyticsContext value={value.analytics}>{children}</AnalyticsContext>
-  );
 };

@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
 
-import { messageComponents } from "@/components/ai-elements/message-response";
+import { messageComponents } from "@/components/ai-elements/message-response-components";
 
 describe("message response media", () => {
   test("renders image labels without loading their source", () => {

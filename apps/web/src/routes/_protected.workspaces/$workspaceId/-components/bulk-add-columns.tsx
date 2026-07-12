@@ -25,6 +25,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
 import {
@@ -202,40 +203,48 @@ const BulkTrigger = ({ triggerVariant }: BulkTriggerProps) => {
   }
   if (triggerVariant === "icon") {
     return (
-      <DialogTrigger
+      <Tooltip
+        content={t("workspaces.properties.newColumn")}
         render={
-          <button
-            aria-label={t("workspaces.properties.newColumn")}
-            className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-            data-add-property-trigger
-            data-row-expansion-ignore
-            onClick={(event) => event.currentTarget.blur()}
-            title={t("workspaces.properties.newColumn")}
-            type="button"
+          <DialogTrigger
+            render={
+              <button
+                aria-label={t("workspaces.properties.newColumn")}
+                className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                data-add-property-trigger
+                data-row-expansion-ignore
+                onClick={(event) => event.currentTarget.blur()}
+                type="button"
+              />
+            }
           />
         }
       >
         <PlusIcon className="size-4" />
-      </DialogTrigger>
+      </Tooltip>
     );
   }
   if (triggerVariant === "rail") {
     return (
-      <DialogTrigger
+      <Tooltip
+        content={t("workspaces.properties.newColumn")}
         render={
-          <button
-            aria-label={t("workspaces.properties.newColumn")}
-            className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-            data-add-property-trigger
-            data-row-expansion-ignore
-            onClick={(event) => event.currentTarget.blur()}
-            title={t("workspaces.properties.newColumn")}
-            type="button"
-          >
-            <PlusIcon className="text-muted-foreground group-hover/add-column-rail:text-foreground group-focus-visible/add-column-rail:text-foreground absolute start-1/2 top-5 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors rtl:translate-x-1/2" />
-          </button>
+          <DialogTrigger
+            render={
+              <button
+                aria-label={t("workspaces.properties.newColumn")}
+                className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                data-add-property-trigger
+                data-row-expansion-ignore
+                onClick={(event) => event.currentTarget.blur()}
+                type="button"
+              />
+            }
+          />
         }
-      />
+      >
+        <PlusIcon className="text-muted-foreground group-hover/add-column-rail:text-foreground group-focus-visible/add-column-rail:text-foreground absolute start-1/2 top-5 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors rtl:translate-x-1/2" />
+      </Tooltip>
     );
   }
   return null;
@@ -262,9 +271,9 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
 
   const fileProperties = useMemo<FileChip[]>(
     () =>
-      properties
-        .filter((p) => p.content.type === "file")
-        .map((p) => ({ id: p.id, name: p.name })),
+      properties.flatMap((p) =>
+        p.content.type === "file" ? [{ id: p.id, name: p.name }] : [],
+      ),
     [properties],
   );
   const allProperties = useMemo<FileChip[]>(

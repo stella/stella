@@ -553,9 +553,10 @@ const pendingToBlock = (
       return {
         type: "list",
         ordered: pending.ordered,
-        items: pending.lines
-          .map((line) => stripListMarker(line, pending.ordered))
-          .filter(Boolean),
+        items: pending.lines.flatMap((line) => {
+          const stripped = stripListMarker(line, pending.ordered);
+          return stripped ? [stripped] : [];
+        }),
       };
     case "table":
       return parseTableBlock(pending, diagnostics, fixes);
@@ -587,12 +588,16 @@ const parseTableBlock = (
   diagnostics: LegalDraftDiagnostic[],
   fixes: Autofix[],
 ): LegalDraftBlock => {
-  const tableLines = pending.lines
-    .map((line) => line.trim())
+  const tableLines = pending.lines.flatMap((rawLine) => {
+    const line = rawLine.trim();
     // A leading pipe is enough to recognise a row; tolerate a missing trailing
     // pipe (a common hand-written/AI variant) so the row is not silently dropped.
-    .filter((line) => line.startsWith("|"));
-  const rows = tableLines.map(parsePipeRow).filter((row) => row.length > 0);
+    return line.startsWith("|") ? [line] : [];
+  });
+  const rows = tableLines.flatMap((line) => {
+    const row = parsePipeRow(line);
+    return row.length > 0 ? [row] : [];
+  });
 
   const header = rows.at(0) ?? [];
   const bodyRows = rows.slice(1).filter((row) => !isMarkdownDividerRow(row));

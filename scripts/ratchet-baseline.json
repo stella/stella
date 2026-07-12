@@ -1,7 +1,8 @@
 {
   "as-casts": {
-    "count": 1,
+    "count": 2,
     "files": {
+      "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
       "apps/web/src/app-providers.tsx": 1
     }
   },
@@ -18,8 +19,16 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 0,
-    "files": {}
+    "count": 8,
+    "files": {
+      "apps/web/src/components/chat/rehype-anon-spans.ts": 1,
+      "apps/web/src/components/conditions/formula-editor.tsx": 1,
+      "apps/web/src/lib/jurisdictions.ts": 1,
+      "apps/web/src/lib/relative-time.ts": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/template-field-manifest.ts": 1,
+      "apps/web/src/routes/_protected.knowledge/-components/template-preview.tsx": 2,
+      "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1
+    }
   },
   "raw-use-effect-suppressions": {
     "count": 0,

@@ -24,7 +24,7 @@ import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageProps } from "@/lib/pdf/pdf-page";
 import { approximateFraction } from "@/lib/pdf/pdfjs-utils";
 import { getDevicePixelRatio } from "@/lib/pdf/utils";
-import { composeRefs } from "@/lib/slot";
+import { composeRefs } from "@/lib/utils";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
 

@@ -126,8 +126,7 @@ export const parseUsDecisionHtml = (
   validateAndLog("cz-us", input.caseNumber, validationHtml, blocks);
 
   const fulltext = blocks
-    .map((b) => b.plainText)
-    .filter(Boolean)
+    .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
   const ast: DocumentAst = {

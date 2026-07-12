@@ -508,7 +508,7 @@ export const insertCapabilities = ({
   const flagCollisions: { id: string; flag: string }[] = [];
   let generated = 0;
 
-  const sorted = [...entries].sort((a, b) => a.id.localeCompare(b.id));
+  const sorted = entries.toSorted((a, b) => a.id.localeCompare(b.id));
   for (const entry of sorted) {
     if (
       entry.requiresFileInput === true ||

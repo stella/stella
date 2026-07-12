@@ -8,6 +8,8 @@ import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
+
 const DELIMITERS = /[,;\n\t]/u;
 
 const getDomain = (email: string) => email.split("@")[1]?.toLowerCase() ?? "";
@@ -185,15 +187,19 @@ export const InviteStep = ({
                   <BidiText as="span" direction="ltr">
                     {email}
                   </BidiText>
-                  <button
-                    aria-label={t("common.remove")}
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => removeEmail(email)}
-                    title={t("common.remove")}
-                    type="button"
-                  >
-                    <XIcon className="size-3" />
-                  </button>
+                  <Tooltip
+                    content={t("common.remove")}
+                    render={
+                      <button
+                        aria-label={t("common.remove")}
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={() => removeEmail(email)}
+                        type="button"
+                      >
+                        <XIcon className="size-3" />
+                      </button>
+                    }
+                  />
                 </span>
               );
             })}

@@ -28,12 +28,10 @@ import { DeleteProperty } from "@/routes/_protected.workspaces/$workspaceId/-com
 import { PinProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/pin-property";
 import { PropertyConditions } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-conditions";
 import { PropertyPopoverTrigger } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
-import {
-  SortProperty,
-  toSortHint,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import { SortProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { toSortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";

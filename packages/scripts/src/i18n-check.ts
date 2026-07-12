@@ -326,6 +326,12 @@ export const findUntranslated = (
   baseline: CheckBaseline,
 ): string[] => {
   const offenders: string[] = [];
+  const identicalToSourceLocales = new Map(
+    Object.entries(baseline.identicalToSource).map(([key, locales]) => [
+      key,
+      new Set(locales),
+    ]),
+  );
 
   for (const key of flattenKeys(source)) {
     const sourceValue = getNestedValue(source, key);
@@ -336,7 +342,7 @@ export const findUntranslated = (
     if (isTriviallyIdentical(sourceValue)) {
       continue;
     }
-    if (baseline.identicalToSource[key]?.includes(locale)) {
+    if (identicalToSourceLocales.get(key)?.has(locale)) {
       continue;
     }
     offenders.push(key);
@@ -503,10 +509,14 @@ if (import.meta.main) {
   // Seed/refresh the baseline from the current state, then exit.
   if (shouldWriteBaseline) {
     const identicalToSource: Record<string, string[]> = {};
-    for (const file of localeFiles) {
+    const baselineLocaleMessages = await Promise.all(
+      localeFiles.map(async (file) => ({
+        file,
+        messages: await readLang(file),
+      })),
+    );
+    for (const { file, messages } of baselineLocaleMessages) {
       const locale = file.replace(/\.json$/u, "");
-      // oxlint-disable-next-line no-await-in-loop -- locales must be processed in sorted order so identicalToSource accumulates deterministically
-      const messages = await readLang(file);
       for (const key of findUntranslated(
         enMessages,
         messages,
@@ -590,10 +600,15 @@ if (import.meta.main) {
     }
   }
 
-  for (const file of localeFiles) {
+  const localeMessages = await Promise.all(
+    localeFiles.map(async (file) => ({
+      file,
+      messages: await readLang(file),
+    })),
+  );
+
+  for (const { file, messages } of localeMessages) {
     const locale = file.replace(/\.json$/u, "");
-    // oxlint-disable-next-line no-await-in-loop -- locales reported in sorted order; console output and sync writes must stay deterministic per file
-    const messages = await readLang(file);
     const langKeys = new Set(flattenKeys(messages));
 
     const missing = [...enKeys].filter((k) => !langKeys.has(k));
@@ -634,7 +649,7 @@ if (import.meta.main) {
 
     if (shouldSync) {
       const synced = syncMessages(enMessages, messages);
-      // oxlint-disable-next-line no-await-in-loop -- sequential per-locale file write paired with ordered console output
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: write must stay paired with this file's ordered console output
       await Bun.write(filePath, `${JSON.stringify(synced, null, 2)}\n`);
       console.log("  ✓ synced");
     }

@@ -25,6 +25,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -34,7 +35,6 @@ import type {
 } from "@/lib/types";
 import {
   COMPOSER_CARD_CLASS,
-  isCreatableContentType,
   ReadingFromRow,
   TypeChipsRow,
   useChipDefinitions,
@@ -51,6 +51,7 @@ import {
   docTypeGateLabel,
   resolveDocumentTypeClassifier,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
+import { isCreatableContentType } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import {
@@ -214,23 +215,27 @@ export const CreateProperty = ({
         }
         if (triggerVariant === "icon") {
           return (
-            <DialogTrigger
+            <Tooltip
+              content={t("workspaces.properties.newColumn")}
               render={
-                <button
-                  aria-label={t("workspaces.properties.newColumn")}
-                  className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                  data-add-property-trigger
-                  data-row-expansion-ignore
-                  onClick={(event) => {
-                    event.currentTarget.blur();
-                  }}
-                  title={t("workspaces.properties.newColumn")}
-                  type="button"
-                />
+                <DialogTrigger
+                  render={
+                    <button
+                      aria-label={t("workspaces.properties.newColumn")}
+                      className="ring-ring focus-visible:ring-offset-background text-muted-foreground flex h-full w-full cursor-pointer items-center justify-center border-0 bg-transparent p-0 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                      data-add-property-trigger
+                      data-row-expansion-ignore
+                      onClick={(event) => {
+                        event.currentTarget.blur();
+                      }}
+                      type="button"
+                    />
+                  }
+                >
+                  <PlusIcon className="size-4" />
+                </DialogTrigger>
               }
-            >
-              <PlusIcon className="size-4" />
-            </DialogTrigger>
+            />
           );
         }
         if (triggerVariant === "blank-cell") {
@@ -245,7 +250,6 @@ export const CreateProperty = ({
                   onClick={(event) => {
                     event.currentTarget.blur();
                   }}
-                  title={t("workspaces.properties.newColumn")}
                   type="button"
                 />
               }
@@ -254,21 +258,25 @@ export const CreateProperty = ({
         }
         if (triggerVariant === "rail") {
           return (
-            <DialogTrigger
+            <Tooltip
+              content={t("workspaces.properties.newColumn")}
               render={
-                <button
-                  aria-label={t("workspaces.properties.newColumn")}
-                  className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
-                  data-add-property-trigger
-                  data-row-expansion-ignore
-                  onClick={(event) => {
-                    event.currentTarget.blur();
-                  }}
-                  title={t("workspaces.properties.newColumn")}
-                  type="button"
-                >
-                  <PlusIcon className="text-muted-foreground group-hover/add-column-rail:text-foreground group-focus-visible/add-column-rail:text-foreground absolute start-1/2 top-5 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors rtl:translate-x-1/2" />
-                </button>
+                <DialogTrigger
+                  render={
+                    <button
+                      aria-label={t("workspaces.properties.newColumn")}
+                      className="group/add-column-rail ring-ring focus-visible:ring-offset-background absolute inset-0 z-10 cursor-pointer border-0 bg-transparent p-0 outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                      data-add-property-trigger
+                      data-row-expansion-ignore
+                      onClick={(event) => {
+                        event.currentTarget.blur();
+                      }}
+                      type="button"
+                    >
+                      <PlusIcon className="text-muted-foreground group-hover/add-column-rail:text-foreground group-focus-visible/add-column-rail:text-foreground absolute start-1/2 top-5 size-4 -translate-x-1/2 -translate-y-1/2 transition-colors rtl:translate-x-1/2" />
+                    </button>
+                  }
+                />
               }
             />
           );
@@ -524,17 +532,19 @@ const PropertyComposerBody = ({
     // classifier slot: drop the classifier dependency only when it is (or was)
     // a scope gate, then re-add the gate below for the chosen document type. A
     // plain classifier mention with no scope is preserved with its condition.
-    const dependencies: PropertyDependency[] = dependencyIds
-      .filter((id) => {
-        if (id !== classifier?.id) {
-          return true;
-        }
-        return scopeDocType === null && initialScopeDocType === null;
-      })
-      .map((id) => ({
+    const dependencies: PropertyDependency[] = [];
+    for (const id of dependencyIds) {
+      const isScopeGate =
+        id === classifier?.id &&
+        !(scopeDocType === null && initialScopeDocType === null);
+      if (isScopeGate) {
+        continue;
+      }
+      dependencies.push({
         dependsOnPropertyId: toSafeId<"property">(id),
         condition: initialDependencyConditions.get(id) ?? null,
-      }));
+      });
+    }
     if (classifier && scopeDocType !== null) {
       dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
     }

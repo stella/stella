@@ -1,5 +1,6 @@
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
+import { getRelativeTimeFormatter } from "@/lib/relative-time";
 import { DAY_IN_MS } from "@/lib/time";
 import type {
   WorkspaceEntity,
@@ -147,10 +148,7 @@ export const formatRelativeTime = (
   const now = Date.now();
   const diff = now - date.getTime();
 
-  const rtf = new Intl.RelativeTimeFormat(currentLocale, {
-    numeric: "auto",
-    style: "narrow",
-  });
+  const rtf = getRelativeTimeFormatter(currentLocale);
 
   if (diff < MINUTE) {
     return rtf.format(0, "second");

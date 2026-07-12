@@ -45,27 +45,29 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers";
 import {
   DraggableHeaderCell,
-  getOrderedHeaders,
-  getRequiredHeader,
   HeaderEndFillerCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells";
 import {
   ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
-  addPropertyColId,
-  getColumnPinningGroup,
-  getScrollableAncestor,
-  getVerticalScrollbarWidth,
-  getWorkspaceGridTemplateColumns,
-  TABLE_COLUMN_DRAG_TYPE,
   TABLE_ROW_ESTIMATE_PX,
   TABLE_ROW_OVERSCAN,
-  toColumnDropEdge,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import type {
   ColumnDropPosition,
   ExpandedTableCell,
   WorkspaceGridStyle,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+import {
+  addPropertyColId,
+  getColumnPinningGroup,
+  getOrderedHeaders,
+  getRequiredHeader,
+  getScrollableAncestor,
+  getVerticalScrollbarWidth,
+  getWorkspaceGridTemplateColumns,
+  TABLE_COLUMN_DRAG_TYPE,
+  toColumnDropEdge,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 import { DraggableRow } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
@@ -215,11 +217,15 @@ export const WorkspaceTable = ({
   });
 
   const rowModel = table.getRowModel();
-  const selectableRowIds = useMemo(
-    () =>
-      rowModel.rows.filter((row) => row.getCanSelect()).map((row) => row.id),
-    [rowModel.rows],
-  );
+  const selectableRowIds = useMemo(() => {
+    const ids: string[] = [];
+    for (const row of rowModel.rows) {
+      if (row.getCanSelect()) {
+        ids.push(row.id);
+      }
+    }
+    return ids;
+  }, [rowModel.rows]);
   const selectAllState = getSelectAllState({
     selectableRowIds,
     rowSelection: table.state.rowSelection,
@@ -441,10 +447,12 @@ export const WorkspaceTable = ({
         edge,
       });
       const visibleIdSet = new Set(currentVisibleIds);
-      const hiddenIds = table
-        .getAllLeafColumns()
-        .map((column) => column.id)
-        .filter((id) => !visibleIdSet.has(id));
+      const hiddenIds: string[] = [];
+      for (const column of table.getAllLeafColumns()) {
+        if (!visibleIdSet.has(column.id)) {
+          hiddenIds.push(column.id);
+        }
+      }
 
       table.setColumnOrder([...reorderedVisibleIds, ...hiddenIds]);
     },

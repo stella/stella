@@ -62,6 +62,7 @@ export const useDefaultWorkspaceViewRedirect = ({
 
     void (async () => {
       try {
+        // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: run.cancelled only becomes true during this await (unmount race guard); it is always false before, so the check cannot move earlier
         const target = await resolveDefaultWorkspaceViewTarget({
           queryClient,
           workspaceId,

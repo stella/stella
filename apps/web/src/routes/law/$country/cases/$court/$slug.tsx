@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { PublicDecisionViewer } from "@/routes/law/-case-detail";
 import {
   createPublicCaseLawDecisionHead,
   loadPublicCaseLawDecisionRoute,
-  PublicDecisionViewer,
   publicDecisionSearchSchema,
-} from "@/routes/law/-case-detail";
+} from "@/routes/law/-case-detail.logic";
 
 export const Route = createFileRoute("/law/$country/cases/$court/$slug")({
   validateSearch: publicDecisionSearchSchema,

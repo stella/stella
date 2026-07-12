@@ -6,7 +6,7 @@
  * orphan; deleting a type in use is blocked by the API and surfaced here.
  */
 
-import { useEffectEvent, useState } from "react";
+import { useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -26,6 +26,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
@@ -185,7 +186,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
   const [gripRef, setGripRef] = useState<HTMLButtonElement | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [draft, setDraft] = useState(type.label);
-  const handleReorder = useEffectEvent(onReorder);
+  const handleReorder = useLatestCallback(onReorder);
 
   // Resync the rename draft when the label changes upstream (a refetch after
   // this or another client renames the type); `type.label` is stable while the
@@ -237,7 +238,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         },
       }),
     );
-  }, [rowRef, gripRef, type.id]);
+  }, [rowRef, gripRef, type.id, handleReorder]);
 
   const renameMutation = useMutation({
     mutationFn: async (label: string) => {

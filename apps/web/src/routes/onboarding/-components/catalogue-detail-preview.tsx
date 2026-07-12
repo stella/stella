@@ -15,6 +15,7 @@ import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import Tooltip from "@/components/tooltip";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
 
@@ -47,15 +48,19 @@ export const CatalogueDetailPreview = ({
   return (
     <div className="flex h-full max-h-full w-full items-stretch justify-center overflow-hidden">
       <div className="bg-background border-border/40 relative flex h-full max-h-full w-full max-w-[340px] flex-col rounded-2xl border shadow-[0_1px_2px_rgb(0_0_0/0.04),0_8px_24px_rgb(0_0_0/0.06)]">
-        <button
-          aria-label={t("common.close")}
-          title={t("common.close")}
-          className="text-muted-foreground hover:text-foreground absolute end-4 top-4 transition-colors"
-          onClick={onCancel}
-          type="button"
+        <Tooltip
+          content={t("common.close")}
+          render={
+            <button
+              aria-label={t("common.close")}
+              className="text-muted-foreground hover:text-foreground absolute end-4 top-4 transition-colors"
+              onClick={onCancel}
+              type="button"
+            />
+          }
         >
           <XIcon className="size-5" />
-        </button>
+        </Tooltip>
 
         {/* Header */}
         <header className="border-border flex items-center gap-3 border-b px-5 py-4">
@@ -193,8 +198,9 @@ const Field = ({
 
   return (
     <div
+      aria-label={fieldLabel}
       className="flex w-fit max-w-full min-w-0 items-center gap-2"
-      title={fieldLabel}
+      role="group"
     >
       <Icon
         aria-hidden="true"
@@ -246,7 +252,6 @@ const AuthorField = ({
         onClick={(e) => e.stopPropagation()}
         rel="noreferrer"
         target="_blank"
-        title={fieldLabel}
       >
         {inner}
       </a>
@@ -255,8 +260,9 @@ const AuthorField = ({
 
   return (
     <div
+      aria-label={fieldLabel}
       className="flex w-fit max-w-full min-w-0 items-center gap-2"
-      title={fieldLabel}
+      role="group"
     >
       {inner}
     </div>
@@ -272,7 +278,7 @@ const ChipRow = ({
   ariaLabel: string;
   values: readonly string[];
 }) => (
-  <div className="flex items-center gap-2" title={ariaLabel}>
+  <div aria-label={ariaLabel} className="flex items-center gap-2" role="group">
     <Icon
       aria-hidden="true"
       className="text-muted-foreground size-4 shrink-0"

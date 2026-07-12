@@ -331,7 +331,7 @@ const deleteStagedUploadObjects = async ({
   workspaceId,
 }: StagedUploadKeyProps & { stage: string }) => {
   for (const key of tmpUploadKeys({ organizationId, uploadId, workspaceId })) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential S3 tmp-object cleanup after multipart finalize
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: S3 cleanup loop, not parallelized per rate-limit guidance
     await getS3()
       .delete(key)
       .catch((deleteError: unknown) =>
@@ -435,9 +435,12 @@ const runFinalize = async function* ({
     );
   }
   if (scanResult.value.verdict === "reject") {
-    const reasons = scanResult.value.findings
-      .filter((finding) => finding.severity === "reject")
-      .map((finding) => finding.message);
+    const reasons: string[] = [];
+    for (const finding of scanResult.value.findings) {
+      if (finding.severity === "reject") {
+        reasons.push(finding.message);
+      }
+    }
     return Result.err(
       new UploadFinalizeError({
         status: 422,
@@ -446,12 +449,15 @@ const runFinalize = async function* ({
       }),
     );
   }
-  const scanWarnings =
-    scanResult.value.verdict === "warn"
-      ? scanResult.value.findings
-          .filter((finding) => finding.severity === "warn")
-          .map((finding) => finding.message)
-      : undefined;
+  let scanWarnings: string[] | undefined;
+  if (scanResult.value.verdict === "warn") {
+    scanWarnings = [];
+    for (const finding of scanResult.value.findings) {
+      if (finding.severity === "warn") {
+        scanWarnings.push(finding.message);
+      }
+    }
+  }
 
   const promoteTmpObject = async (finalKey: string) => {
     const copyResult = await copyObject(tmpKey, finalKey);

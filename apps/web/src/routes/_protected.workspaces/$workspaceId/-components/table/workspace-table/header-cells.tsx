@@ -11,19 +11,16 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { flexRender } from "@tanstack/react-table";
-import { panic } from "better-result";
 import { CheckIcon, GripVerticalIcon, MinusIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { SelectAllState } from "@/routes/_protected.workspaces/$workspaceId/-components/table/select-all.logic";
-import type {
-  TableColumn,
-  TableHeader,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceGridHead } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import type { ColumnDropEdge } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
+import { PinnedBoundary } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import {
   addPropertyColId,
   getColumnDragData,
@@ -31,15 +28,14 @@ import {
   getEndFillerGridColumn,
   getGridPinningStyles,
   isPinnedBoundaryColumn,
-  PinnedBoundary,
   selectColId,
   TABLE_COLUMN_DRAG_TYPE,
   toColumnDropEdge,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 import type {
   ColumnDragData,
   EndFillerInput,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 
 type DraggableHeaderCellProps = {
   header: TableHeader;
@@ -266,31 +262,3 @@ export const HeaderEndFillerCell = ({
     }}
   />
 );
-
-export const getOrderedHeaders = (
-  headers: TableHeader[],
-  columns: TableColumn[],
-) => {
-  const headersByColumnId = new Map(
-    headers.map((header) => [header.column.id, header]),
-  );
-  const orderedHeaders: TableHeader[] = [];
-
-  for (const column of columns) {
-    const header = headersByColumnId.get(column.id);
-    if (header) {
-      orderedHeaders.push(header);
-    }
-  }
-
-  return orderedHeaders;
-};
-
-export const getRequiredHeader = (headers: TableHeader[], columnId: string) => {
-  const header = headers.find((candidate) => candidate.column.id === columnId);
-  if (!header) {
-    panic(`Missing header for workspace table column "${columnId}"`);
-  }
-
-  return header;
-};

@@ -1,4 +1,4 @@
-import { useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/external/file";
@@ -11,6 +11,7 @@ import {
   type DroppedFileTree,
 } from "@/hooks/external-file-drop.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { ClientOperationError } from "@/lib/errors/client";
 
 type ExternalFileDropOptions = {
@@ -60,7 +61,7 @@ export const useExternalFileDrop = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [isInnerActive, setIsInnerActive] = useState(false);
 
-  const handleDroppedTree = useEffectEvent((tree: DroppedFileTree) => {
+  const handleDroppedTree = useLatestCallback((tree: DroppedFileTree) => {
     if (onDropTree) {
       onDropTree(tree);
       return;
@@ -71,7 +72,7 @@ export const useExternalFileDrop = ({
       onDrop(files);
     }
   });
-  const handleDropError = useEffectEvent((error: Error) => {
+  const handleDropError = useLatestCallback((error: Error) => {
     onError?.(error);
   });
 
@@ -125,7 +126,7 @@ export const useExternalFileDrop = ({
           });
       },
     });
-  }, [enabled, ref, t]);
+  }, [enabled, ref, t, handleDropError, handleDroppedTree]);
 
   return { ref, isDropTarget, isInnerActive };
 };

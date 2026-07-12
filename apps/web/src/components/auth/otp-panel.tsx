@@ -30,6 +30,10 @@ import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
+const renderEmail = (chunks: ReactNode) => (
+  <BidiText direction="ltr">{chunks}</BidiText>
+);
+
 type OTPPanelProps = {
   className?: string;
   email: string;
@@ -215,9 +219,6 @@ function OTPPanelContent({
   onUseDifferentEmail: () => void;
 }) {
   const t = useTranslations();
-  const renderEmail = (chunks: ReactNode) => (
-    <BidiText direction="ltr">{chunks}</BidiText>
-  );
 
   const header = (
     <>

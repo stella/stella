@@ -19,6 +19,7 @@ import {
 } from "@stll/ui/components/table";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -46,6 +47,10 @@ import { useConfigStore } from "@/stores/config-store";
 const MAX_VISIBLE_AVATARS = 3;
 const MATTER_INLINE_EDIT_SELECTOR = "[data-matter-inline-edit]";
 const MATTERS_TABLE_NAME_COLUMN_WIDTH_PX = 260;
+
+const isInlineEditEvent = (target: EventTarget | null) =>
+  target instanceof Element &&
+  target.closest(MATTER_INLINE_EDIT_SELECTOR) !== null;
 
 type MattersTableProps = {
   workspaces: Workspace[];
@@ -227,18 +232,18 @@ const EntityCountCell = ({ workspace }: CellProps) => {
 };
 
 const LastActivityCell = ({ workspace }: CellProps) => (
-  <span
-    className="text-muted-foreground"
-    title={new Date(workspace.lastActivityAt).toLocaleString(
+  <Tooltip
+    content={new Date(workspace.lastActivityAt).toLocaleString(
       getFormattingLocale(),
       {
         dateStyle: "full",
         timeStyle: "medium",
       },
     )}
+    render={<span className="text-muted-foreground" />}
   >
     {formatRelativeTime(workspace.lastActivityAt)}
-  </span>
+  </Tooltip>
 );
 
 /** Format a Date as `YYYY-MM-DD` in local time (locale-neutral, ISO-style). */
@@ -264,15 +269,15 @@ const TeamCell = ({ workspace }: CellProps) => (
 const CreatedAtCell = ({ workspace }: CellProps) => {
   const date = new Date(workspace.createdAt);
   return (
-    <span
-      className="text-muted-foreground tabular-nums"
-      title={date.toLocaleString(getFormattingLocale(), {
+    <Tooltip
+      content={date.toLocaleString(getFormattingLocale(), {
         dateStyle: "full",
         timeStyle: "medium",
       })}
+      render={<span className="text-muted-foreground tabular-nums" />}
     >
       {toLocalISODate(date)}
-    </span>
+    </Tooltip>
   );
 };
 
@@ -312,9 +317,6 @@ const MattersTableRow = ({
     client: workspace.client,
   });
   const isEditing = ctx.rename.status === "editing";
-  const isInlineEditEvent = (target: EventTarget | null) =>
-    target instanceof Element &&
-    target.closest(MATTER_INLINE_EDIT_SELECTOR) !== null;
 
   const openMatter = () => {
     if (isEditing) {

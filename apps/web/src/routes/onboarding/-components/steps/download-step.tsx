@@ -3,7 +3,8 @@ import type * as React from "react";
 import { MonitorIcon, PlugIcon, TerminalIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button, buttonVariants } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/components/button";
+import { buttonVariants } from "@stll/ui/components/button-variants";
 import { cn } from "@stll/ui/lib/utils";
 
 import { CopyField } from "@/components/copy-field";

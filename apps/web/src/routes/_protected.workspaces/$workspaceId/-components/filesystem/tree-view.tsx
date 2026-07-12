@@ -2,7 +2,6 @@ import {
   Fragment,
   useCallback,
   useDeferredValue,
-  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -53,7 +52,9 @@ import {
 } from "@/components/drag-preview";
 import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
@@ -535,7 +536,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const setFolderState = useWorkspaceStore((s) => s.setFolderState);
 
-  const handleToggleAll = useEffectEvent(toggleAll);
+  const handleToggleAll = useLatestCallback(toggleAll);
   useExternalSyncEffect(() => {
     let previousToggleVersion =
       useWorkspaceStore.getState().folderState.toggleVersion;
@@ -549,7 +550,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         handleToggleAll();
       }
     });
-  }, []);
+  }, [handleToggleAll]);
 
   useExternalSyncEffect(() => {
     setFolderState({
@@ -675,7 +676,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const rootBarRef = useRef<HTMLDivElement>(null);
-  const handleMoveEntitiesToRoot = useEffectEvent((entityIds: string[]) => {
+  const handleMoveEntitiesToRoot = useLatestCallback((entityIds: string[]) => {
     for (const entityId of entityIds) {
       moveEntity.mutate(
         { workspaceId, entityId, parentId: null },
@@ -737,7 +738,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         handleMoveEntitiesToRoot(entityIds);
       },
     });
-  }, []);
+  }, [handleMoveEntitiesToRoot]);
 
   if (data.length === 0) {
     return (
@@ -771,17 +772,21 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
             <Breadcrumb>
               <BreadcrumbList>
                 <BreadcrumbItem>
-                  <button
-                    aria-label={t("workspaces.copyToMatter.rootFolder")}
-                    className="text-muted-foreground hover:text-foreground text-xs"
-                    onClick={() => {
-                      void navigateToFolder();
-                    }}
-                    title={t("workspaces.copyToMatter.rootFolder")}
-                    type="button"
+                  <Tooltip
+                    content={t("workspaces.copyToMatter.rootFolder")}
+                    render={
+                      <button
+                        aria-label={t("workspaces.copyToMatter.rootFolder")}
+                        className="text-muted-foreground hover:text-foreground text-xs"
+                        onClick={() => {
+                          void navigateToFolder();
+                        }}
+                        type="button"
+                      />
+                    }
                   >
                     <FolderIcon className="size-3.5" />
-                  </button>
+                  </Tooltip>
                 </BreadcrumbItem>
                 {breadcrumbs.map((crumb, i) => {
                   const isLast = i === breadcrumbs.length - 1;
@@ -970,6 +975,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         parentId={currentFolderId}
         showTaskOption={false}
         render={
+          // eslint-disable-next-line github/a11y-no-visually-hidden-interactive-element -- sr-only anchor for a programmatic right-click Menu; not meant to be reachable
           <button
             aria-label={t("common.add")}
             className="sr-only"
@@ -1089,6 +1095,7 @@ const ColumnHeaderCell = ({
         >
           <MenuTrigger
             render={
+              // eslint-disable-next-line github/a11y-no-visually-hidden-interactive-element -- sr-only anchor for a programmatic right-click Menu; not meant to be reachable
               <button
                 aria-label={t("common.options")}
                 className="sr-only"
@@ -1241,24 +1248,24 @@ const FilesystemRow = ({
   const { isDropTarget: isExternalDropTarget, pendingDrop } =
     useVersionOrNewFileDrop({ entity: node, workspaceId, rowRef });
 
-  const isExpanded = useEffectEvent(() => expanded);
-  const isAncestor = useEffectEvent((entityId: string) =>
+  const isExpanded = useLatestCallback(() => expanded);
+  const isAncestor = useLatestCallback((entityId: string) =>
     ancestorIds.has(entityId),
   );
-  const getCurrentSelectedIds = useEffectEvent(() => selectedIds);
-  const getCurrentSelectedDragItems = useEffectEvent((ids: Set<string>) =>
+  const getCurrentSelectedIds = useLatestCallback(() => selectedIds);
+  const getCurrentSelectedDragItems = useLatestCallback((ids: Set<string>) =>
     getSelectedDragItems(ids),
   );
-  const getCurrentSelectedEntities = useEffectEvent((ids: Set<string>) =>
+  const getCurrentSelectedEntities = useLatestCallback((ids: Set<string>) =>
     getSelectedEntities(ids),
   );
-  const getCurrentAncestorIds = useEffectEvent((id: string) =>
+  const getCurrentAncestorIds = useLatestCallback((id: string) =>
     getAncestorIds(id),
   );
-  const toggleCurrentFolder = useEffectEvent(() => {
+  const toggleCurrentFolder = useLatestCallback(() => {
     onToggleFolder(node.entityId);
   });
-  const moveEntitiesToFolder = useEffectEvent((entityIds: string[]) => {
+  const moveEntitiesToFolder = useLatestCallback((entityIds: string[]) => {
     for (const entityId of entityIds) {
       if (isAncestor(entityId)) {
         continue;
@@ -1407,6 +1414,13 @@ const FilesystemRow = ({
     workspaceId,
     t,
     scheduleAutoExpand,
+    getCurrentSelectedDragItems,
+    getCurrentSelectedEntities,
+    isExpanded,
+    isAncestor,
+    getCurrentSelectedIds,
+    getCurrentAncestorIds,
+    moveEntitiesToFolder,
   ]);
 
   // Shared cells: Name + Type. The presentation (indent, guide lines, chevron,

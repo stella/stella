@@ -98,10 +98,21 @@ export const getWeekDays = (
   return days;
 };
 
+// Keyed by locale + serialized options: the calendar grid only ever
+// requests a handful of distinct (locale, options) pairs (month labels,
+// weekday labels, the month/year header), so the cache stays tiny.
+const dateFormatterCache: Record<string, Intl.DateTimeFormat> = {};
+
 const getDateFormatter = (
   locale: string,
   options: Intl.DateTimeFormatOptions,
-): Intl.DateTimeFormat => new Intl.DateTimeFormat(locale, options);
+): Intl.DateTimeFormat => {
+  const cacheKey = `${locale}:${JSON.stringify(options)}`;
+  return (dateFormatterCache[cacheKey] ??= new Intl.DateTimeFormat(
+    locale,
+    options,
+  ));
+};
 
 export const getMonthLabels = (
   locale: string,
@@ -218,12 +229,20 @@ export const isTaskDateProperty = (id: string) =>
  * 2024-01-07 is a Sunday (getUTCDay() === 0); offsetting by the first
  * weekday yields labels starting from that day.
  */
+export const TASK_STATUS_DOT_COLORS: Record<string, string> = {
+  open: "var(--option-gray)",
+  in_progress: "var(--option-blue)",
+  in_review: "var(--option-amber)",
+  done: "var(--option-emerald)",
+  cancelled: "var(--option-red)",
+};
+
 export const getWeekdayLabels = (
   locale: string,
   format: "short" | "narrow" = "short",
 ): string[] => {
   const firstWeekday = getFirstWeekday(locale);
-  const fmt = new Intl.DateTimeFormat(locale, {
+  const fmt = getDateFormatter(locale, {
     weekday: format,
     timeZone: "UTC",
   });

@@ -15,7 +15,6 @@
  *   - render the shared `PromptBar` for the composer
  */
 
-import { useEffectEvent } from "react";
 import type { MouseEvent } from "react";
 
 import {
@@ -63,6 +62,7 @@ import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -117,22 +117,22 @@ export const ChatTabPanel = ({
   // Use the tab's own workspaceId — undefined means global.
   const tabWorkspaceId = tab.workspaceId;
   const userContext = useChatUserContext();
-  // useEffectEvent so the chat transport's `getUserContext` is a
+  // useLatestCallback so the chat transport's `getUserContext` is a
   // stable reference across renders (matches legacy chat's pattern
   // — keeps Chat<>'s prepareSendMessagesRequest from re-binding).
-  const getUserContext = useEffectEvent(() => userContext);
+  const getUserContext = useLatestCallback(() => userContext);
   // Same pattern for the decision context — it's per-tab metadata
   // that changes only when openChat() is re-invoked, so capturing
-  // the current value via useEffectEvent keeps the transport's
+  // the current value via useLatestCallback keeps the transport's
   // request shape stable across renders.
   const tabDecisionId = tab.activeDecisionId;
-  const getActiveDecision = useEffectEvent(() =>
+  const getActiveDecision = useLatestCallback(() =>
     tabDecisionId
       ? { decisionId: toSafeId<"caseLawDecision">(tabDecisionId) }
       : undefined,
   );
   const tabActiveSkill = tab.activeSkill;
-  const getActiveSkill = useEffectEvent(() => tabActiveSkill);
+  const getActiveSkill = useLatestCallback(() => tabActiveSkill);
   const t = useTranslations();
   const { ensureAIAvailable } = useAIKeyGate();
 
@@ -140,8 +140,8 @@ export const ChatTabPanel = ({
   // once and cached per `threadRef`, so a plain closure over `tab`
   // would freeze the IDs from the render that built the instance —
   // picker updates would land in the store but never reach the
-  // server. `useEffectEvent` always reads the latest closure values.
-  const getContextMatterIds = useEffectEvent(() => tab.contextMatterIds);
+  // server. `useLatestCallback` always reads the latest closure values.
+  const getContextMatterIds = useLatestCallback(() => tab.contextMatterIds);
   const threadRef: ChatThreadRef =
     tabWorkspaceId === undefined
       ? {
@@ -162,7 +162,7 @@ export const ChatTabPanel = ({
   // same store — so the shield can never show a state the next request
   // won't honour.
   const anonymized = useChatAnonymized(threadRef);
-  const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
+  const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
 
@@ -245,7 +245,7 @@ export const ChatTabPanel = ({
     threadRef,
     workspaceId: tabWorkspaceId,
   });
-  const handlePromptSubmit = useEffectEvent(
+  const handlePromptSubmit = useLatestCallback(
     async ({
       prompt,
       files,
@@ -302,7 +302,7 @@ export const ChatTabPanel = ({
     threadRef,
   });
   const focusComposer = editorController.focus;
-  const sendWithoutAnonymization = useEffectEvent(async () => {
+  const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
@@ -352,7 +352,7 @@ export const ChatTabPanel = ({
   // PDF tabs read that flag in InspectorPanel; chat tabs own their
   // rename state locally so they consume the flag here.
   const startRenameFromStore = labelRename.startEditing;
-  const consumeRenameRequest = useEffectEvent(() => {
+  const consumeRenameRequest = useLatestCallback(() => {
     const store = useInspectorStore.getState();
     if (store.pendingRenameTabId === tab.id) {
       startRenameFromStore();
@@ -614,19 +614,15 @@ const ChatTabPanelChrome = ({
   const t = useTranslations();
   // New-chat is not a header action: it lives in the composer's status
   // row (`ChatComposerDock`), uniform with every other chat surface.
-  const actions = (
-    <>
-      {onMoveToMain && (
-        <Tooltip
-          content={t("chat.moveToMain")}
-          render={
-            <Button onClick={onMoveToMain} size="icon-xs" variant="ghost">
-              <Maximize2Icon className="size-3.5" />
-            </Button>
-          }
-        />
-      )}
-    </>
+  const actions = onMoveToMain && (
+    <Tooltip
+      content={t("chat.moveToMain")}
+      render={
+        <Button onClick={onMoveToMain} size="icon-xs" variant="ghost">
+          <Maximize2Icon className="size-3.5" />
+        </Button>
+      }
+    />
   );
 
   return (

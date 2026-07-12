@@ -407,13 +407,15 @@ const buildReviewGrid = (
   return { columns, rows };
 };
 
+const generatedAtFormatter = new Intl.DateTimeFormat(REPORT_LOCALE, {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  timeZone: "UTC",
+});
+
 const formatGeneratedAt = (now: Date): string =>
-  new Intl.DateTimeFormat(REPORT_LOCALE, {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(now);
+  generatedAtFormatter.format(now);
 
 /** The workspace "Document Type" classifier property id, or null when absent. */
 export const findDocTypePropertyId = (
@@ -503,9 +505,12 @@ export const buildReportData = async ({
     if (docTypePropertyId) {
       loadedPropertyIds.add(docTypePropertyId);
     }
-    const fieldIds = properties
-      .filter((property) => loadedPropertyIds.has(property.id))
-      .map((property) => toSafeId<"property">(property.id));
+    const fieldIds: SafeId<"property">[] = [];
+    for (const property of properties) {
+      if (loadedPropertyIds.has(property.id)) {
+        fieldIds.push(toSafeId<"property">(property.id));
+      }
+    }
 
     const queryResult = yield* Result.await(
       queryEntities({
@@ -566,7 +571,7 @@ export const buildReportData = async ({
               index,
               index + JUSTIFICATION_FIELD_ID_BATCH,
             );
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop -- sequential reads on one tx connection; the batch caps each `IN (...)` below the bound-parameter limit
             const batchRows = await tx.query.justifications.findMany({
               where: {
                 workspaceId: { eq: workspaceId },

@@ -66,7 +66,7 @@ import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { folioUIComponents } from "@/lib/folio-ui-components";
-import { composeRefs } from "@/lib/slot";
+import { composeRefs } from "@/lib/utils";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { useFolioCollaborationSession } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session";
@@ -1711,7 +1711,6 @@ const AutosaveIndicator = ({ status }: { status: AutosaveStatus }) => {
       aria-label={isSynced ? t("folio.synced") : t("folio.syncing")}
       className="text-foreground-ghost inline-flex h-8 w-8 items-center justify-center"
       role="status"
-      title={isSynced ? t("folio.synced") : t("folio.syncing")}
     >
       {(() => {
         if (isSynced) {
@@ -1739,9 +1738,9 @@ const DocxBrowserEditorPendingFallback = ({
 }: DocxBrowserEditorProps) => {
   const t = useTranslations();
   const toolbarExtra =
-    showActionBar || actionBarControls !== undefined ? (
-      <>{actionBarControls}</>
-    ) : undefined;
+    showActionBar || actionBarControls !== undefined
+      ? actionBarControls
+      : undefined;
 
   return (
     <DocxEditorLoadingFallback

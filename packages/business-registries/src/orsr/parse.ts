@@ -141,8 +141,14 @@ const currencyName = (
   return item.codelistItem?.itemName ?? null;
 };
 
-// Render `140000` + currency "EUR" as "140 000 EUR" — the Slovak
-// thousands separator is U+00A0 (non-breaking space). Used for both
+// Slovak thousands separator is U+00A0 (non-breaking space); the formatter's
+// args never vary, so build it once instead of on every call.
+const SLOVAK_MONETARY_FORMATTER = new Intl.NumberFormat("sk-SK", {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+// Render `140000` + currency "EUR" as "140 000 EUR". Used for both
 // the entity-level share capital and per-shareholder deposits.
 const formatMonetary = (
   value: number | null | undefined,
@@ -151,11 +157,7 @@ const formatMonetary = (
   if (!isPresent(value)) {
     return null;
   }
-  const formatter = new Intl.NumberFormat("sk-SK", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  });
-  const amount = formatter.format(value);
+  const amount = SLOVAK_MONETARY_FORMATTER.format(value);
   return currency ? `${amount} ${currency}` : amount;
 };
 

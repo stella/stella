@@ -362,7 +362,7 @@ const removeQueuedWorkflowJobs = async (
   jobIds: readonly string[],
 ): Promise<void> => {
   for (const chunk of chunkItems(jobIds, LIMITS.workflowEntityBatchSize)) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the per-batch Promise.all concurrency
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential chunk drain bounds the per-batch Promise.all concurrency
     await Promise.all(
       chunk.map(async (jobId) => {
         try {
@@ -380,16 +380,22 @@ const filterPlanByPropertyIds = (
   propertyIds: readonly SafeId<"property">[],
 ): ExecutionLevel[] => {
   const allowed = new Set<string>(propertyIds);
-  return plan
-    .map((level) =>
-      level
-        .map((batch) => ({
-          ...batch,
-          properties: batch.properties.filter((p) => allowed.has(p.id)),
-        }))
-        .filter((batch) => batch.properties.length > 0),
-    )
-    .filter((level) => level.length > 0);
+  const filteredPlan: ExecutionLevel[] = [];
+  for (const level of plan) {
+    const filteredLevel: ExecutionLevel = [];
+    for (const batch of level) {
+      const filteredProperties = batch.properties.filter((p) =>
+        allowed.has(p.id),
+      );
+      if (filteredProperties.length > 0) {
+        filteredLevel.push({ ...batch, properties: filteredProperties });
+      }
+    }
+    if (filteredLevel.length > 0) {
+      filteredPlan.push(filteredLevel);
+    }
+  }
+  return filteredPlan;
 };
 
 /**
@@ -572,7 +578,7 @@ export const startWorkflow = async ({
           workflowEntityJobId({ entityId, requestId }),
         );
         queuedJobIds.push(...chunkJobIds);
-        // oxlint-disable-next-line no-await-in-loop -- sequential chunk enqueue bounds queue write batch size and preserves job ordering
+        // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential chunk enqueue bounds queue write batch size and preserves job ordering
         await enqueueEntityJobs({
           entityIds: chunk,
           executionPlan,
@@ -713,7 +719,7 @@ const selectWorkspacesWithPendingCells = async (
             fields.workspaceId,
             workspaceIdBatch.map((id) => brandPersistedWorkspaceId(id)),
           );
-    // oxlint-disable-next-line no-await-in-loop -- sequential batched DB scan bounds the IN-list size per query
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential batched DB scan bounds the IN-list size per query; workspace count is unbounded across tenants, so unbounded parallel fan-out risks DB pool exhaustion
     const rows = await rootDb
       .selectDistinct({ workspaceId: fields.workspaceId })
       .from(fields)
@@ -754,7 +760,7 @@ const readWorkflowRequestIds = async (
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
     await Promise.all(
       workspaceIdBatch.map(async (id) => {
         const requestId = await redis.get(
@@ -776,7 +782,7 @@ const readWorkflowRunningValues = async (
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
     await Promise.all(
       workspaceIdBatch.map(async (id) => {
         const runningValue = await redis.get(
@@ -990,14 +996,12 @@ export const reconcileOrphanedWorkflows = async ({
     return;
   }
 
-  const currentRequestIds = await readWorkflowRequestIds(
-    redis,
-    orphanCandidates,
-  );
-  const currentRunningValues = await readWorkflowRunningValues(
-    redis,
-    orphanCandidates,
-  );
+  // Independent reads of two distinct Redis keys per workspace; neither
+  // depends on the other's result.
+  const [currentRequestIds, currentRunningValues] = await Promise.all([
+    readWorkflowRequestIds(redis, orphanCandidates),
+    readWorkflowRunningValues(redis, orphanCandidates),
+  ]);
   const recoveryWorkspaceIds = new Set<string>();
   for (const workspaceId of orphanCandidates) {
     if (currentRunningValues.get(workspaceId) === RECOVERY_LOCK_VALUE) {
@@ -1014,7 +1018,7 @@ export const reconcileOrphanedWorkflows = async ({
   });
 
   for (const workspaceId of recoverableOrphans) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential recovery serialises lock contention across orphaned workflows
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential recovery serialises lock contention across orphaned workflows
     await recoverOrphanedWorkflow({
       expectedRequestId: currentRequestIds.get(workspaceId) ?? null,
       workspaceId: brandPersistedWorkspaceId(workspaceId),
@@ -1496,11 +1500,12 @@ const processOneBatch = async ({
         ),
       ),
   );
-  const lockedPropertyIds = new Set<string>(
-    lockedCellRows
-      .filter((row) => row.metadata.locked === true)
-      .map((row) => row.propertyId),
-  );
+  const lockedPropertyIds = new Set<string>();
+  for (const row of lockedCellRows) {
+    if (row.metadata.locked === true) {
+      lockedPropertyIds.add(row.propertyId);
+    }
+  }
 
   const batch = prepareBatch(
     rawBatch,
@@ -1720,11 +1725,12 @@ const processOneBatch = async ({
               )
               .for("update")
           : [];
-      const lockedAtWrite = new Set<string>(
-        lockedRowsAtWrite
-          .filter((row) => row.metadata.locked === true)
-          .map((row) => row.propertyId),
-      );
+      const lockedAtWrite = new Set<string>();
+      for (const row of lockedRowsAtWrite) {
+        if (row.metadata.locked === true) {
+          lockedAtWrite.add(row.propertyId);
+        }
+      }
       const allPropertyIds = candidatePropertyIds.filter(
         (id) => !lockedAtWrite.has(id),
       );
@@ -1740,37 +1746,45 @@ const processOneBatch = async ({
           );
       }
 
-      const fieldValues = [
-        ...processedFields.aiResults
-          .filter(({ propertyId }) => !lockedAtWrite.has(propertyId))
-          .map(({ fieldId, propertyId, content }) => ({
+      const fieldValues = [];
+      for (const {
+        fieldId,
+        propertyId,
+        content,
+      } of processedFields.aiResults) {
+        if (!lockedAtWrite.has(propertyId)) {
+          fieldValues.push({
             id: fieldId,
             workspaceId,
             propertyId,
             entityVersionId,
             content,
-          })),
-        ...processedFields.unsupportedPropertyIds
-          .filter((propertyId) => !lockedAtWrite.has(propertyId))
-          .map((propertyId) => ({
+          });
+        }
+      }
+      for (const propertyId of processedFields.unsupportedPropertyIds) {
+        if (!lockedAtWrite.has(propertyId)) {
+          fieldValues.push({
             id: createSafeId<"field">(),
             workspaceId,
             propertyId,
             entityVersionId,
             content: { type: "unsupported" as const, version: 1 as const },
-          })),
-      ];
+          });
+        }
+      }
 
       if (fieldValues.length > 0) {
         await tx.insert(fields).values(fieldValues);
       }
 
       if (processedFields.aiJustifications.length > 0) {
-        const aiResultFieldIdsForLockedProps = new Set(
-          processedFields.aiResults
-            .filter(({ propertyId }) => lockedAtWrite.has(propertyId))
-            .map(({ fieldId }) => fieldId),
-        );
+        const aiResultFieldIdsForLockedProps = new Set<string>();
+        for (const { fieldId, propertyId } of processedFields.aiResults) {
+          if (lockedAtWrite.has(propertyId)) {
+            aiResultFieldIdsForLockedProps.add(fieldId);
+          }
+        }
         const liveJustifications = processedFields.aiJustifications.filter(
           (j) => !aiResultFieldIdsForLockedProps.has(j.fieldId),
         );
@@ -2095,11 +2109,12 @@ const setFieldsStatus = async ({
           inArray(cellMetadata.propertyId, propertyIds),
         ),
       );
-    const lockedNow = new Set<string>(
-      lockedRows
-        .filter((row) => row.metadata.locked === true)
-        .map((row) => row.propertyId),
-    );
+    const lockedNow = new Set<string>();
+    for (const row of lockedRows) {
+      if (row.metadata.locked === true) {
+        lockedNow.add(row.propertyId);
+      }
+    }
     const writablePropertyIds = propertyIds.filter((id) => !lockedNow.has(id));
 
     if (writablePropertyIds.length === 0) {

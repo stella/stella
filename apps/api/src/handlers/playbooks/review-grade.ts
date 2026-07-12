@@ -316,7 +316,7 @@ export const buildFindings = async ({
       cursor,
       cursor + POSITION_MATCH_CONCURRENCY,
     );
-    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the single-doc review's Promise.all fan-out of LLM compares
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential chunk drain bounds the single-doc review's Promise.all fan-out of LLM compares
     await Promise.all(
       chunk.map(async ({ index, position }) => {
         indexedFindings.push({ index, finding: await buildFinding(position) });

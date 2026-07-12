@@ -20,6 +20,7 @@ export const listDecisionFacetsHandler = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const [countryRows, courtRows, yearRows] = await caseLawDb(async (tx) => {
+    // eslint-disable-next-line react-doctor/async-parallel -- sequential by design: all three queries share one tx client; a single transaction connection can't run concurrent statements
     const countries = await tx
       .select({
         value: caseLawDecisions.country,
@@ -34,6 +35,7 @@ export const listDecisionFacetsHandler = async (
       .groupBy(caseLawDecisions.country)
       .orderBy(desc(sql`count(*)`), desc(caseLawDecisions.country))
       .limit(LIMITS.caseLawFacetLimit);
+    // eslint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same tx client as `countries`; a single transaction connection can't run concurrent statements
     const courts = await tx
       .select({
         value: caseLawDecisions.court,

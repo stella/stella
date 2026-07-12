@@ -351,7 +351,7 @@ const replacePlaceholders = async (
   let replaced = false;
 
   for (const path of xmlPaths) {
-    // oxlint-disable-next-line no-await-in-loop -- read-modify-write against the shared mutable JSZip archive
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- read-modify-write against the shared mutable JSZip archive
     const xml = await archive.readEntryString(path);
     if (!xml) {
       continue;

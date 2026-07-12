@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { createProviderCredentialDraft } from "@/components/ai-config-role-models.logic";
-
-process.env["VITE_API_URL"] ??= "https://api.example.test";
-const { createProviderPreview } =
-  await import("@/routes/onboarding/-components/steps/ai-step");
+import { createProviderPreview } from "@/routes/onboarding/-components/steps/ai-step.logic";
 
 const idleRowStates = {
   google: { status: "idle" },

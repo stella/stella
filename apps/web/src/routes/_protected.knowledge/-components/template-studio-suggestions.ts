@@ -203,6 +203,7 @@ export const buildOperationSpecs = ({
   for (const [offset, operation] of operations.entries()) {
     const id = operationSpecId(operation, startIndex + offset);
     const blockText = blockTextById.get(operationAnchorBlockId(operation));
+    const commentText = operation.comment?.text;
     switch (operation.type) {
       case "replaceInBlock": {
         if (operation.find === operation.replace) {
@@ -215,7 +216,7 @@ export const buildOperationSpecs = ({
             find: operation.find,
             replace: operation.replace,
             scopeText: blockText,
-            comment: operation.comment?.text,
+            comment: commentText,
             area: operation.area,
           }),
         );
@@ -236,7 +237,7 @@ export const buildOperationSpecs = ({
             find: blockText,
             replace: operation.text,
             scopeText: blockText,
-            comment: operation.comment?.text,
+            comment: commentText,
             area: operation.area,
           }),
         );
@@ -251,8 +252,8 @@ export const buildOperationSpecs = ({
           id,
           literalText: blockText,
           suggestedText: "",
-          topic: operation.comment?.text ?? operation.area,
-          rationale: operation.comment?.text ?? "",
+          topic: commentText ?? operation.area,
+          rationale: commentText ?? "",
           scopeText: blockText,
         });
         break;

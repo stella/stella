@@ -129,6 +129,11 @@ type TemplateListProps = {
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+// Only the .docx file-drop affordance — NOT the internal template-row drag
+// (which carries TEMPLATE_DRAG_MIME, not files) — should light up the list.
+const isFileDrag = (e: React.DragEvent) =>
+  e.dataTransfer.types.includes("Files");
+
 export const TemplateList = ({
   templates,
   categories,
@@ -203,11 +208,6 @@ export const TemplateList = ({
     }
     e.target.value = "";
   };
-
-  // Only the .docx file-drop affordance — NOT the internal template-row drag
-  // (which carries TEMPLATE_DRAG_MIME, not files) — should light up the list.
-  const isFileDrag = (e: React.DragEvent) =>
-    e.dataTransfer.types.includes("Files");
 
   const handleDragOver = (e: React.DragEvent) => {
     if (!canCreateTemplate || !isFileDrag(e)) {
@@ -309,15 +309,19 @@ export const TemplateList = ({
             {tagFilter && (
               <span className="bg-muted text-foreground flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium">
                 {tagFilter}
-                <button
-                  aria-label={t("common.remove")}
-                  title={t("common.remove")}
-                  className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
-                  onClick={() => setTagFilter(null)}
-                  type="button"
+                <Tooltip
+                  content={t("common.remove")}
+                  render={
+                    <button
+                      aria-label={t("common.remove")}
+                      className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
+                      onClick={() => setTagFilter(null)}
+                      type="button"
+                    />
+                  }
                 >
                   <XIcon className="size-3" />
-                </button>
+                </Tooltip>
               </span>
             )}
           </div>
@@ -916,9 +920,10 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
         <span className="flex items-center gap-1">
           {template.languages.map((tag) => (
             <span
+              aria-label={languageDisplayName(tag, lang)}
               className="bg-muted rounded px-1.5 py-0.5 text-[10px] font-medium uppercase"
               key={tag}
-              title={languageDisplayName(tag, lang)}
+              role="group"
             >
               {tag}
             </span>
@@ -1088,17 +1093,21 @@ const TemplateTagsDialogBody = ({
                 key={tag}
               >
                 {tag}
-                <button
-                  aria-label={t("common.remove")}
-                  title={t("common.remove")}
-                  className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
-                  onClick={() =>
-                    setTags((current) => current.filter((x) => x !== tag))
+                <Tooltip
+                  content={t("common.remove")}
+                  render={
+                    <button
+                      aria-label={t("common.remove")}
+                      className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
+                      onClick={() =>
+                        setTags((current) => current.filter((x) => x !== tag))
+                      }
+                      type="button"
+                    />
                   }
-                  type="button"
                 >
                   <XIcon className="size-3" />
-                </button>
+                </Tooltip>
               </span>
             ))}
           </div>
@@ -1288,14 +1297,16 @@ const TemplateLanguagesField = ({
   // Offer the full ISO 639-1 living-language list, minus already-picked codes,
   // sorted by the localized label so search and scanning are predictable.
   const compareLabel = compareByLocale(lang);
-  const options: LanguagePick[] = LANGUAGES.filter(
-    (language) => !selectedCodes.has(language.code),
-  )
-    .map((language) => ({
-      code: language.code,
-      label: languageDisplayName(language.code, lang),
-    }))
-    .sort((a, b) => compareLabel(a.label, b.label));
+  const options: LanguagePick[] = LANGUAGES.flatMap((language) =>
+    selectedCodes.has(language.code)
+      ? []
+      : [
+          {
+            code: language.code,
+            label: languageDisplayName(language.code, lang),
+          },
+        ],
+  ).sort((a, b) => compareLabel(a.label, b.label));
 
   const atLimit = languages.length >= MAX_TEMPLATE_LANGUAGES;
 
@@ -1325,15 +1336,19 @@ const TemplateLanguagesField = ({
             >
               {languageDisplayName(tag, lang)}
               <span className="text-muted-foreground uppercase">{tag}</span>
-              <button
-                aria-label={t("common.remove")}
-                title={t("common.remove")}
-                className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
-                onClick={() => onChange(languages.filter((x) => x !== tag))}
-                type="button"
+              <Tooltip
+                content={t("common.remove")}
+                render={
+                  <button
+                    aria-label={t("common.remove")}
+                    className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
+                    onClick={() => onChange(languages.filter((x) => x !== tag))}
+                    type="button"
+                  />
+                }
               >
                 <XIcon className="size-3" />
-              </button>
+              </Tooltip>
             </span>
           ))}
         </div>

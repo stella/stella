@@ -176,6 +176,7 @@ const transitionInvoice = createSafeHandler(
             )
             .returning({ id: timeEntries.id });
 
+          // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client (tx)
           const revertedExpenses = await tx
             .update(expenses)
             .set({

@@ -54,6 +54,7 @@ import type {
   ReviewSuggestion,
   ReviewSuggestionPreview,
 } from "@/components/ai-suggestions/review-store";
+import Tooltip from "@/components/tooltip";
 import { authClient } from "@/lib/auth";
 import { compareByLocale } from "@/lib/collation";
 import { toAuthClientError } from "@/lib/errors/auth";
@@ -469,15 +470,19 @@ export const ReviewPanelImpl = ({
                 })}
               </p>
             </div>
-            <button
-              aria-label={t("docxReview.dismiss")}
-              title={t("docxReview.dismiss")}
-              className="text-muted-foreground hover:text-foreground rounded-md p-1"
-              onClick={() => dismissPanel(entityId)}
-              type="button"
+            <Tooltip
+              content={t("docxReview.dismiss")}
+              render={
+                <button
+                  aria-label={t("docxReview.dismiss")}
+                  className="text-muted-foreground hover:text-foreground rounded-md p-1"
+                  onClick={() => dismissPanel(entityId)}
+                  type="button"
+                />
+              }
             >
               <XIcon className="size-4" />
-            </button>
+            </Tooltip>
           </div>
         )}
 
@@ -941,6 +946,20 @@ const cssFontFamily = (fontFamily: string | undefined): string | undefined => {
   return `${first}, sans-serif`;
 };
 
+// Word-diff segments carry no id of their own (recomputed fresh from
+// `before`/`after` on every render), so keys derive from type + text plus an
+// occurrence counter so the same word appearing twice stays unique without
+// leaning on the array index.
+const withStableKeys = <T,>(items: readonly T[], base: (item: T) => string) => {
+  const counts = new Map<string, number>();
+  return items.map((item) => {
+    const b = base(item);
+    const n = counts.get(b) ?? 0;
+    counts.set(b, n + 1);
+    return { item, key: `${b}-${n}` };
+  });
+};
+
 const RedlinePreview = ({
   preview,
   srSummary,
@@ -998,28 +1017,25 @@ const RedlinePreview = ({
         </>
       );
     }
-    return segments.map((seg, i) => {
-      if (seg.type === "equal") {
-        // eslint-disable-next-line react/no-array-index-key -- segments is a read-only word-diff recomputed fresh from `before`/`after` on every render (whole-list replace); spans are non-interactive with no per-item state.
-        return <span key={i}>{seg.text}</span>;
-      }
-      return (
-        <span
-          className={seg.type === "del" ? delCls : insCls}
-          // eslint-disable-next-line react/no-array-index-key -- segments is a read-only word-diff recomputed fresh from `before`/`after` on every render (whole-list replace); spans are non-interactive with no per-item state.
-          key={i}
-        >
-          {seg.text}
-        </span>
-      );
-    });
+    return withStableKeys(segments, (seg) => `${seg.type}-${seg.text}`).map(
+      ({ item: seg, key }) => {
+        if (seg.type === "equal") {
+          return <span key={key}>{seg.text}</span>;
+        }
+        return (
+          <span className={seg.type === "del" ? delCls : insCls} key={key}>
+            {seg.text}
+          </span>
+        );
+      },
+    );
   };
 
   switch (preview.type) {
     case "replaceInBlock":
       if (isFormattedReplaceInBlockPreview(preview)) {
         return (
-          <p aria-label={srSummary} className={baseCls}>
+          <p aria-label={srSummary} className={baseCls} role="group">
             {renderFormattedRuns(
               slicePreviewRuns(
                 preview.sourceRuns,
@@ -1050,7 +1066,7 @@ const RedlinePreview = ({
         );
       }
       return (
-        <p aria-label={srSummary} className={baseCls}>
+        <p aria-label={srSummary} className={baseCls} role="group">
           {preview.contextBefore && (
             <span className={contextCls}>{preview.contextBefore}</span>
           )}
@@ -1063,7 +1079,7 @@ const RedlinePreview = ({
     case "replaceBlock":
       if (preview.sourceRuns !== undefined) {
         return (
-          <p aria-label={srSummary} className={baseCls}>
+          <p aria-label={srSummary} className={baseCls} role="group">
             {renderFormattedRuns(preview.sourceRuns, delCls)}
             {arrow}
             <span className={insCls}>{preview.after}</span>
@@ -1071,27 +1087,27 @@ const RedlinePreview = ({
         );
       }
       return (
-        <p aria-label={srSummary} className={baseCls}>
+        <p aria-label={srSummary} className={baseCls} role="group">
           {renderDiff(preview.before, preview.after)}
         </p>
       );
     case "deleteBlock":
       if (preview.sourceRuns !== undefined) {
         return (
-          <p aria-label={srSummary} className={baseCls}>
+          <p aria-label={srSummary} className={baseCls} role="group">
             {renderFormattedRuns(preview.sourceRuns, delCls)}
           </p>
         );
       }
       return (
-        <p aria-label={srSummary} className={baseCls}>
+        <p aria-label={srSummary} className={baseCls} role="group">
           <span className={delCls}>{preview.before}</span>
         </p>
       );
     case "insertBeforeBlock":
     case "insertAfterBlock":
       return (
-        <p aria-label={srSummary} className={baseCls}>
+        <p aria-label={srSummary} className={baseCls} role="group">
           {preview.anchorRuns !== undefined &&
             preview.anchorEnd !== undefined && (
               <>
@@ -1108,7 +1124,7 @@ const RedlinePreview = ({
     case "commentOnBlock":
       if (preview.anchorRuns !== undefined && preview.anchorEnd !== undefined) {
         return (
-          <p aria-label={srSummary} className={cn(baseCls, muted)}>
+          <p aria-label={srSummary} className={cn(baseCls, muted)} role="group">
             {renderFormattedRuns(
               slicePreviewRuns(preview.anchorRuns, 0, preview.anchorEnd),
             )}
@@ -1116,7 +1132,7 @@ const RedlinePreview = ({
         );
       }
       return (
-        <p aria-label={srSummary} className={cn(baseCls, muted)}>
+        <p aria-label={srSummary} className={cn(baseCls, muted)} role="group">
           {preview.anchor}
         </p>
       );
@@ -1127,11 +1143,10 @@ const RedlinePreview = ({
       // names captures the gist without recreating the full table
       // layout inside the panel card.
       const partyList = preview.parties
-        .map((party) => party.name)
-        .filter((name) => name.length > 0)
+        .flatMap((party) => (party.name.length > 0 ? [party.name] : []))
         .join("  |  ");
       return (
-        <p aria-label={srSummary} className={baseCls}>
+        <p aria-label={srSummary} className={baseCls} role="group">
           {preview.anchorRuns !== undefined &&
             preview.anchorEnd !== undefined && (
               <>

@@ -138,7 +138,6 @@ function ColorSwatch({
           )}
           onClick={onClick}
           style={{ backgroundColor: cssColor }}
-          title={label}
           type="button"
         />
       }

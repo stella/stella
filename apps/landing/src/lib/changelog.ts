@@ -37,10 +37,16 @@ const listReleaseTags = (): string[] => {
     return [];
   }
 
-  return readdirSync(CHANGELOG_DIR)
-    .filter((fileName) => STABLE_CHANGELOG_FILE_PATTERN.test(fileName))
-    .map((fileName) => fileName.replace(/\.md$/u, ""))
-    .sort((left, right) => right.localeCompare(left, "en", { numeric: true }));
+  const tags: string[] = [];
+  for (const fileName of readdirSync(CHANGELOG_DIR)) {
+    if (STABLE_CHANGELOG_FILE_PATTERN.test(fileName)) {
+      tags.push(fileName.replace(/\.md$/u, ""));
+    }
+  }
+
+  return tags.sort((left, right) =>
+    right.localeCompare(left, "en", { numeric: true }),
+  );
 };
 
 const readRelease = (tagName: string): ChangelogRelease => {

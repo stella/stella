@@ -23,11 +23,6 @@ type Props = {
   lang: SupportedLang;
 };
 
-export const subject = (
-  lang: SupportedLang,
-  { organizationName }: { organizationName: string },
-) => getTranslator(lang)("invitation.subject", { organizationName });
-
 export const Email = ({
   inviteLink,
   organizationName,

@@ -30,10 +30,8 @@ import {
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
-import type { EditorView } from "prosemirror-view";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { scrollFolioPositionIntoView } from "@stll/folio-react";
 import type {
   AISuggestion,
   AISuggestionPreset,
@@ -53,10 +51,8 @@ import type {
   ChatEditorController,
   ChatInputDraft,
 } from "@/components/chat-editor-provider";
-import {
-  ChatComposerActionButton,
-  resolveChatComposerAction,
-} from "@/components/chat/chat-composer-action-button";
+import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
+import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
 import { ComposerVeil } from "@/components/chat/composer-veil";
@@ -98,34 +94,6 @@ type FileAIChatLayout = "floating" | "standalone";
 // ===========================================================================
 // View helpers
 // ===========================================================================
-
-/**
- * Scroll the document so the given PM position is centered in view.
- *
- * Folio's paged editor keeps its editing PM view hidden off-screen;
- * `coordsAtPos` on that view yields coordinates of the hidden mirror,
- * not the visible pages — scrolling by them moves a near-constant step
- * per call instead of jumping to the target. Prefer the paged-layout
- * scroll (anchors on the painted pages, page shells under
- * virtualization); fall back to coordinate math only when no paged
- * layout is mounted around the view.
- */
-export function scrollEditorToPos(view: EditorView, pos: number): void {
-  if (scrollFolioPositionIntoView(view, pos)) {
-    return;
-  }
-  const scrollContainer = view.dom.closest("[data-folio-scroll]");
-  if (scrollContainer === null) {
-    return;
-  }
-  const coords = view.coordsAtPos(pos);
-  const rect = scrollContainer.getBoundingClientRect();
-  const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
-  scrollContainer.scrollTo({
-    top: targetTop - rect.height / 3,
-    behavior: "smooth",
-  });
-}
 
 // ===========================================================================
 // Prompt bar

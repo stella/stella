@@ -14,8 +14,10 @@ import type Messages from "@/i18n/langs/messages.gen";
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
 
-const { ChatThreadMessages, buildMessageTurns } =
+const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
+const { buildMessageTurns } =
+  await import("@/components/chat/chat-thread-messages.logic");
 
 afterAll(() => {
   if (previousApiUrl === undefined) {

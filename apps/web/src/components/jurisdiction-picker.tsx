@@ -11,6 +11,7 @@ import {
 } from "@stll/ui/components/input-group";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { compareByLocale } from "@/lib/collation";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
@@ -45,7 +46,7 @@ export const JurisdictionPicker = ({
   const filteredCountries = (() => {
     const normalizedQuery = query.trim().toLowerCase();
     const compareName = compareByLocale(locale);
-    const sorted = [...countryOptions].sort((a, b) => {
+    const sorted = countryOptions.toSorted((a, b) => {
       const aSelected = selectedSet.has(a.code);
       const bSelected = selectedSet.has(b.code);
 
@@ -162,26 +163,30 @@ export const JurisdictionPicker = ({
                 </span>
               </button>
               {isSelected && selected.length > 1 && (
-                <button
-                  aria-label={t("onboarding.jurisdictionMakePrimary", {
+                <Tooltip
+                  content={t("onboarding.jurisdictionMakePrimary", {
                     name: country.name,
                   })}
-                  title={t("onboarding.jurisdictionMakePrimary", {
-                    name: country.name,
-                  })}
-                  className={cn(
-                    "hover:bg-background/40 flex size-8 items-center justify-center rounded-md transition-colors",
-                    isPrimary
-                      ? "text-primary"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                  onClick={() => makePrimary(country.code)}
-                  type="button"
-                >
-                  <StarIcon
-                    className={cn("size-4", isPrimary && "fill-current")}
-                  />
-                </button>
+                  render={
+                    <button
+                      aria-label={t("onboarding.jurisdictionMakePrimary", {
+                        name: country.name,
+                      })}
+                      className={cn(
+                        "hover:bg-background/40 flex size-8 items-center justify-center rounded-md transition-colors",
+                        isPrimary
+                          ? "text-primary"
+                          : "text-muted-foreground hover:text-foreground",
+                      )}
+                      onClick={() => makePrimary(country.code)}
+                      type="button"
+                    >
+                      <StarIcon
+                        className={cn("size-4", isPrimary && "fill-current")}
+                      />
+                    </button>
+                  }
+                />
               )}
             </div>
           );

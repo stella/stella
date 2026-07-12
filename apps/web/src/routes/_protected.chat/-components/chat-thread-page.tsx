@@ -1,4 +1,4 @@
-import { useCallback, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -12,7 +12,8 @@ import { Maximize2Icon, PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
-import { Button, buttonVariants } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/components/button";
+import { buttonVariants } from "@stll/ui/components/button-variants";
 
 import {
   Conversation,
@@ -34,6 +35,7 @@ import Tooltip from "@/components/tooltip";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -92,7 +94,7 @@ export const ChatThreadPage = ({
   const t = useTranslations();
   const { ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
-  const getUserContext = useEffectEvent(() => userContext);
+  const getUserContext = useLatestCallback(() => userContext);
   const prompts = useSavedPrompts();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -123,10 +125,10 @@ export const ChatThreadPage = ({
     null,
   );
   const anonymized = useChatAnonymized(threadRef);
-  const getContextMatterIds = useEffectEvent(() =>
+  const getContextMatterIds = useLatestCallback(() =>
     optionalArray(contextMatterIds),
   );
-  const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
+  const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
 
   // A thread can be opened (e.g. via "Move to main" from the inspector)
   // before its first message has reached the server, so the row may not
@@ -384,7 +386,7 @@ export const ChatThreadPage = ({
     controller.setContent(prompt.body);
     controller.focus();
   };
-  const sendWithoutAnonymization = useEffectEvent(async () => {
+  const sendWithoutAnonymization = useLatestCallback(async () => {
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 

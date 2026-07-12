@@ -234,6 +234,7 @@ export const deleteWorkspaceHandler = async function* ({
       .from(properties)
       .where(eq(properties.workspaceId, workspaceId));
 
+    // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client, deletes ordered around FK/cascade constraints (see comments above each step)
     await tx
       .delete(propertyDependencies)
       .where(

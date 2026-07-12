@@ -12,6 +12,7 @@ import {
 } from "@stll/ui/components/menu";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -266,22 +267,28 @@ const FacetChip = ({
   activeBadge,
   onSelect,
 }: FacetChipProps) => (
-  <button
-    className={cn(
-      CHIP_CLASS,
-      isActive ? "bg-foreground text-background" : INACTIVE_CHIP_CLASS,
-      isActive && pulsing && "ring-foreground-disabled animate-pulse ring-2",
-      disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
-    )}
-    disabled={disabled}
-    onClick={onSelect}
-    title={
+  <Tooltip
+    content={
       isActive && activeBadge !== undefined
         ? `${label} · ${activeBadge}`
         : label
     }
-    type="button"
-  >
-    {label}
-  </button>
+    render={
+      <button
+        className={cn(
+          CHIP_CLASS,
+          isActive ? "bg-foreground text-background" : INACTIVE_CHIP_CLASS,
+          isActive &&
+            pulsing &&
+            "ring-foreground-disabled animate-pulse ring-2",
+          disabled && "cursor-not-allowed opacity-40 hover:bg-transparent",
+        )}
+        disabled={disabled}
+        onClick={onSelect}
+        type="button"
+      >
+        {label}
+      </button>
+    }
+  />
 );

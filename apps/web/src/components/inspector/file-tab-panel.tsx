@@ -26,13 +26,13 @@ import { EmailHtmlViewer } from "@/components/inspector/email-html-viewer";
 import { EntityMetadataPanel } from "@/components/inspector/entity-metadata-panel";
 import { downloadTabOriginalFile } from "@/components/inspector/file-download-service";
 import {
-  FACETS,
-  FULLVIEW_FACETS,
   FullViewPreviewGuard,
   MetadataPanelSkeleton,
   TabFacetBar,
 } from "@/components/inspector/file-facets";
 import {
+  FACETS,
+  FULLVIEW_FACETS,
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
 } from "@/components/inspector/file-tab-panel.logic";
@@ -371,27 +371,25 @@ export const FileTabPanel = ({
         />
         <InspectorTabHeader
           actions={
-            <>
-              <Tooltip
-                content={t("workspaces.pdf.backToPeek")}
-                render={
-                  <Button
-                    className={cn(
-                      "transition-[color,background-color,box-shadow]",
-                      flashingMinimizeTabId === tab.id &&
-                        "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
-                    )}
-                    onClick={() => {
-                      handleMinimizeFromFullView(tab);
-                    }}
-                    size="icon-xs"
-                    variant="ghost"
-                  >
-                    <Minimize2Icon className="size-3.5" />
-                  </Button>
-                }
-              />
-            </>
+            <Tooltip
+              content={t("workspaces.pdf.backToPeek")}
+              render={
+                <Button
+                  className={cn(
+                    "transition-[color,background-color,box-shadow]",
+                    flashingMinimizeTabId === tab.id &&
+                      "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
+                  )}
+                  onClick={() => {
+                    handleMinimizeFromFullView(tab);
+                  }}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <Minimize2Icon className="size-3.5" />
+                </Button>
+              }
+            />
           }
           label={stripExtension(tab.label)}
           matter={
@@ -551,40 +549,38 @@ export const FileTabPanel = ({
     }
 
     return (
-      <>
-        {markdownIsDirty && (
-          <>
-            <Button
-              disabled={markdownSaveMutation.isPending}
-              onClick={() => {
-                setMarkdownDraft(markdownText);
-              }}
-              size="xs"
-              variant="ghost"
-            >
-              <XIcon className="size-3.5" />
-              {t("common.cancel")}
-            </Button>
-            <Button
-              disabled={markdownSaveMutation.isPending}
-              onClick={() => {
-                markdownSaveMutation.mutate({
-                  entityId: tab.entityId,
-                  fieldId: tab.id,
-                  fileName: tab.fileName,
-                  propertyId: tab.propertyId,
-                  text: markdownDraft,
-                  workspaceId: tab.workspaceId,
-                });
-              }}
-              size="xs"
-            >
-              <CheckIcon className="size-3.5" />
-              {t("common.save")}
-            </Button>
-          </>
-        )}
-      </>
+      markdownIsDirty && (
+        <>
+          <Button
+            disabled={markdownSaveMutation.isPending}
+            onClick={() => {
+              setMarkdownDraft(markdownText);
+            }}
+            size="xs"
+            variant="ghost"
+          >
+            <XIcon className="size-3.5" />
+            {t("common.cancel")}
+          </Button>
+          <Button
+            disabled={markdownSaveMutation.isPending}
+            onClick={() => {
+              markdownSaveMutation.mutate({
+                entityId: tab.entityId,
+                fieldId: tab.id,
+                fileName: tab.fileName,
+                propertyId: tab.propertyId,
+                text: markdownDraft,
+                workspaceId: tab.workspaceId,
+              });
+            }}
+            size="xs"
+          >
+            <CheckIcon className="size-3.5" />
+            {t("common.save")}
+          </Button>
+        </>
+      )
     );
   })();
 

@@ -457,6 +457,7 @@ export const checkEntityCreateCapacityForInsert = async ({
     entities,
     eq(entities.workspaceId, workspaceId),
   );
+  // eslint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same tx client as `existingEntityCount`; a single transaction connection can't run concurrent statements
   const reservedEntityCount = await countActiveEntityCreateReservations({
     tx,
     workspaceId,
@@ -623,6 +624,7 @@ export const finalizeEntityCreate = async function* ({
       parentId,
       name: sanitizedName,
     });
+    // eslint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same tx client as `renamed`; a single transaction connection can't run concurrent statements
     const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
     await tx.insert(entities).values({

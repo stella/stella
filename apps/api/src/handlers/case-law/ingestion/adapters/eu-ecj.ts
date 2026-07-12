@@ -128,12 +128,14 @@ const isSparqlResponse = (value: unknown): value is SparqlResponse =>
 
 const SPARQL_LIMIT = 10_000;
 
+/* eslint-disable sonarjs/no-clear-text-protocols -- CDM ontology namespace IRIs; string identifiers from the SPARQL response, never fetched */
 const CDM_TYPE_MAP: Record<string, string> = {
   "http://publications.europa.eu/ontology/cdm#judgement": "judgment",
   "http://publications.europa.eu/ontology/cdm#order": "order",
   "http://publications.europa.eu/ontology/cdm#opinion_advocate_general":
     "opinion",
 };
+/* eslint-enable sonarjs/no-clear-text-protocols */
 
 /**
  * Query the Cellar SPARQL endpoint for CJEU decisions
@@ -378,13 +380,14 @@ export const euEcjAdapter: SourceAdapter = {
           const caseNumber = celexToCaseNumber(celex);
           const decisionType = CDM_TYPE_MAP[binding.type.value] ?? "unknown";
 
+          // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
           const court = ecli.includes(":T:")
             ? "General Court"
             : "Court of Justice";
 
           // 3. Fetch fulltext in each language
           for (const lang of ECJ_LANGUAGES) {
-            // oxlint-disable-next-line no-await-in-loop -- polite sequential fulltext fetch per language against EUR-Lex
+            // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- rate-limited external call: EUR-Lex fulltext fetches are throttled (minRequestIntervalMs) per adapter, so per-language requests stay sequential rather than fanning out
             const fulltext = await fetchFulltext(
               celex,
               lang,

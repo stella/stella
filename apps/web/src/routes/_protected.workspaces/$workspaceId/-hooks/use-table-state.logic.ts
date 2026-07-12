@@ -67,8 +67,12 @@ export const createColumnVisibilityState = (
 
 export const getPersistedHiddenColumnIds = (
   visibility: ColumnVisibilityState,
-): string[] =>
-  Object.entries(visibility)
-    .filter(([, visible]) => !visible)
-    .map(([id]) => id)
-    .filter(isPersistableColumnId);
+): string[] => {
+  const hiddenIds: string[] = [];
+  for (const [id, visible] of Object.entries(visibility)) {
+    if (!visible && isPersistableColumnId(id)) {
+      hiddenIds.push(id);
+    }
+  }
+  return hiddenIds;
+};

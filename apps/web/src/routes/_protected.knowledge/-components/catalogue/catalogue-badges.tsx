@@ -71,7 +71,11 @@ export const FirstPartyMark = () => {
     <Tooltip
       content={t("catalogue.firstPartyTooltip")}
       render={
-        <span aria-label={t("catalogue.firstParty")} className="inline-flex">
+        <span
+          aria-label={t("catalogue.firstParty")}
+          className="inline-flex"
+          role="img"
+        >
           <StellaMark className="text-foreground-muted size-3.5 shrink-0" />
         </span>
       }

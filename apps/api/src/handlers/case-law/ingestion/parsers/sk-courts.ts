@@ -117,8 +117,7 @@ export const parseSkDecisionPdf = async (
   validateAndLog("sk-courts", input.caseNumber, validationHtml, blocks);
 
   const fulltext = blocks
-    .map((b) => b.plainText)
-    .filter(Boolean)
+    .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
   const ast: DocumentAst = {

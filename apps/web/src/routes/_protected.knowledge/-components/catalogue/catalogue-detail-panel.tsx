@@ -320,6 +320,7 @@ const Field = ({ icon: Icon, ariaLabel, value }: FieldProps) => {
         <div
           aria-label={fieldLabel}
           className="flex w-fit max-w-full min-w-0 items-center gap-2"
+          role="group"
         >
           <Icon
             aria-hidden="true"
@@ -393,6 +394,7 @@ const AuthorField = ({ ariaLabel, authorUrl, value }: AuthorFieldProps) => {
         <div
           aria-label={fieldLabel}
           className="flex w-fit max-w-full min-w-0 items-center gap-2"
+          role="group"
         >
           {inner}
         </div>
@@ -423,7 +425,11 @@ const ChipRow = ({ icon: Icon, ariaLabel, values }: ChipRowProps) => (
   <Tooltip
     content={ariaLabel}
     render={
-      <div aria-label={ariaLabel} className="flex w-fit items-center gap-2">
+      <div
+        aria-label={ariaLabel}
+        className="flex w-fit items-center gap-2"
+        role="group"
+      >
         <Icon
           aria-hidden="true"
           className="text-muted-foreground size-4 shrink-0"

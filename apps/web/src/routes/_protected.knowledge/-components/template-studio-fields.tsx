@@ -68,9 +68,9 @@ import {
   OutdatedChanges,
   UnlinkButton,
 } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
-import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
+import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention-extension";
+import { booleanFieldForExpr } from "@/routes/_protected.knowledge/-components/template-studio-condition-source";
 import {
-  booleanFieldForExpr,
   ConditionBuilder,
   LoopBoundsInputs,
 } from "@/routes/_protected.knowledge/-components/template-studio-conditions";
@@ -596,11 +596,15 @@ const OutlineRow = ({
         : VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon;
     return (
       <li className="group/row relative">
-        <button
-          className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
-          onClick={jump}
-          title={node.path}
-          type="button"
+        <Tooltip
+          content={node.path}
+          render={
+            <button
+              className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
+              onClick={jump}
+              type="button"
+            />
+          }
         >
           <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <Icon className="size-4" />
@@ -620,7 +624,7 @@ const OutlineRow = ({
               />
             </span>
           )}
-        </button>
+        </Tooltip>
         {field === undefined ? null : (
           <InsertAtCaretButton
             field={field}
@@ -636,11 +640,15 @@ const OutlineRow = ({
   if (node.type === "clause") {
     return (
       <li className="group/row relative">
-        <button
-          className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
-          onClick={jump}
-          title={t("templates.studio.scopeClause")}
-          type="button"
+        <Tooltip
+          content={t("templates.studio.scopeClause")}
+          render={
+            <button
+              className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
+              onClick={jump}
+              type="button"
+            />
+          }
         >
           <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <TextQuoteIcon className="size-4" />
@@ -648,7 +656,7 @@ const OutlineRow = ({
           <span className="truncate" dir="auto">
             {node.name}
           </span>
-        </button>
+        </Tooltip>
         <Button
           aria-label={t("templates.studio.insertAtCaret")}
           className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100"
@@ -679,11 +687,15 @@ const OutlineRow = ({
           : VALUE_TYPE_META[inputTypeValueKind(loopField.inputType)].icon;
       return (
         <li className="group/row relative">
-          <button
-            className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
-            onClick={() => actions?.focusPosition(onlyChild.from)}
-            title={onlyChild.path}
-            type="button"
+          <Tooltip
+            content={onlyChild.path}
+            render={
+              <button
+                className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
+                onClick={() => actions?.focusPosition(onlyChild.from)}
+                type="button"
+              />
+            }
           >
             <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
               <LoopIcon className="size-4" />
@@ -702,7 +714,7 @@ const OutlineRow = ({
                 icon={ChevronRightIcon}
               />
             </span>
-          </button>
+          </Tooltip>
         </li>
       );
     }
@@ -755,11 +767,15 @@ const OutlineGroupRow = ({
       {/* Expand control sits on the RIGHT so the leading icon lines up with
           field rows (which have no leading chevron). */}
       <div className="flex items-center">
-        <button
-          className="hover:bg-muted group flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
-          onClick={jump}
-          title={node.expr === "" ? groupTitle : node.expr}
-          type="button"
+        <Tooltip
+          content={node.expr === "" ? groupTitle : node.expr}
+          render={
+            <button
+              className="hover:bg-muted group flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
+              onClick={jump}
+              type="button"
+            />
+          }
         >
           <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <GroupIcon className="size-4" />
@@ -773,7 +789,7 @@ const OutlineGroupRow = ({
               <FieldCapabilityIcons field={conditionField} />
             </span>
           )}
-        </button>
+        </Tooltip>
         {hasChildren ? (
           <button
             aria-expanded={open}
@@ -901,12 +917,16 @@ const formulaInScopeRefFields = (
   const scopeOf = (path: string): string | null =>
     findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
   const currentScope = scopeOf(currentPath);
-  return fields
-    .filter((f) => f.path !== currentPath && scopeOf(f.path) === currentScope)
-    .map((f) => ({
-      path: formulaRefName(outline, currentPath, f.path),
-      label: f.label,
-    }));
+  const result: { path: string; label: string }[] = [];
+  for (const f of fields) {
+    if (f.path !== currentPath && scopeOf(f.path) === currentScope) {
+      result.push({
+        path: formulaRefName(outline, currentPath, f.path),
+        label: f.label,
+      });
+    }
+  }
+  return result;
 };
 
 /** Mini-icons marking what a field can do: registry lookup, AI involvement,
@@ -930,10 +950,7 @@ const FieldCapabilityIcons = ({ field }: { field: StudioField }) => {
         <Tooltip
           content={t("common.required")}
           render={
-            <span
-              aria-label={t("common.required")}
-              className="flex size-3.5 items-center justify-center"
-            />
+            <span className="flex size-3.5 items-center justify-center" />
           }
         >
           <span aria-hidden="true" className="size-1 rounded-full bg-current" />
@@ -1168,15 +1185,15 @@ export const FieldFace = ({
   // `@`-mention source for the AI-instruction inputs: every other field's
   // path/label, so an author can reference a sibling field. The mention node
   // serializes back to `{{path}}` in the stored `aiPrompt` string.
-  const fieldMention = useMemo(
-    () =>
-      createTemplateFieldMention(
-        fields
-          .filter((f) => f.path !== field.path)
-          .map((f) => ({ id: f.path, label: f.label || f.path })),
-      ),
-    [fields, field.path],
-  );
+  const fieldMention = useMemo(() => {
+    const mentionFields: { id: string; label: string }[] = [];
+    for (const f of fields) {
+      if (f.path !== field.path) {
+        mentionFields.push({ id: f.path, label: f.label || f.path });
+      }
+    }
+    return createTemplateFieldMention(mentionFields);
+  }, [fields, field.path]);
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   // Restore the captured scroll position when the remounted viewport mounts.
@@ -1691,17 +1708,21 @@ const ClauseSlotEditor = ({
 
   if (!editing) {
     return (
-      <button
-        className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
-        onClick={() => setEditing(true)}
-        title={t("clauses.renameSlot")}
-        type="button"
+      <Tooltip
+        content={t("clauses.renameSlot")}
+        render={
+          <button
+            className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+            onClick={() => setEditing(true)}
+            type="button"
+          />
+        }
       >
         <code className="truncate text-xs" dir="auto" title={slotName}>
           {slotName}
         </code>
         <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
-      </button>
+      </Tooltip>
     );
   }
   return (
@@ -1753,17 +1774,21 @@ const FieldPathEditor = ({
 
   if (!editing) {
     return (
-      <button
-        className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
-        onClick={() => setEditing(true)}
-        title={t("templates.studio.renameField")}
-        type="button"
+      <Tooltip
+        content={t("templates.studio.renameField")}
+        render={
+          <button
+            className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+            onClick={() => setEditing(true)}
+            type="button"
+          />
+        }
       >
         <code className="truncate text-xs" title={path}>
           {path}
         </code>
         <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
-      </button>
+      </Tooltip>
     );
   }
   return (

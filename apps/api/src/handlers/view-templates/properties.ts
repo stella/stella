@@ -85,36 +85,41 @@ export const collectTemplateProperties = ({
     ...visiblePropertyIds,
   ]);
   addDependencySourceIds(creatablePropertyIds, dependenciesByPropertyId);
+  const hiddenPropertyIds = new Set(layout.hiddenProperties);
 
-  return workspaceProperties
-    .filter((property) => !property.system)
-    .filter(
-      (property) =>
-        creatablePropertyIds.has(property.id) ||
-        layout.hiddenProperties.includes(property.id),
-    )
-    .map((property): ViewTemplateProperty => {
-      const propertyDeps = dependenciesByPropertyId.get(property.id);
-      const result: ViewTemplateProperty = {
-        version: 1,
-        sourceId: property.id,
-        name: property.name,
-        content: property.content,
-        // A view template can carry ai-model or manual-input columns only; a
-        // playbook verdict column exports as a plain single-select (manual)
-        // column, since its verdict computation is tied to a playbook run.
-        tool:
-          property.tool.type === "playbook-verdict"
-            ? { version: 1, type: "manual-input" }
-            : property.tool,
-        role: resolveTemplateExportRole(property, workspaceProperties),
-        createIfMissing: creatablePropertyIds.has(property.id),
-      };
-      if (propertyDeps && propertyDeps.length > 0) {
-        result.dependencies = propertyDeps;
-      }
-      return result;
-    });
+  const templateProperties: ViewTemplateProperty[] = [];
+  for (const property of workspaceProperties) {
+    if (property.system) {
+      continue;
+    }
+    if (
+      !creatablePropertyIds.has(property.id) &&
+      !hiddenPropertyIds.has(property.id)
+    ) {
+      continue;
+    }
+    const propertyDeps = dependenciesByPropertyId.get(property.id);
+    const templateProperty: ViewTemplateProperty = {
+      version: 1,
+      sourceId: property.id,
+      name: property.name,
+      content: property.content,
+      // A view template can carry ai-model or manual-input columns only; a
+      // playbook verdict column exports as a plain single-select (manual)
+      // column, since its verdict computation is tied to a playbook run.
+      tool:
+        property.tool.type === "playbook-verdict"
+          ? { version: 1, type: "manual-input" }
+          : property.tool,
+      role: resolveTemplateExportRole(property, workspaceProperties),
+      createIfMissing: creatablePropertyIds.has(property.id),
+    };
+    if (propertyDeps && propertyDeps.length > 0) {
+      templateProperty.dependencies = propertyDeps;
+    }
+    templateProperties.push(templateProperty);
+  }
+  return templateProperties;
 };
 
 const resolveTemplateExportRole = (
@@ -211,6 +216,12 @@ export const resolveTemplateProperties = async ({
     existingDependencyEdges.map((edge) => edge.propertyId),
   );
   const nextPropertyIds = existingProperties.map((property) => property.id);
+  // Keyed as plain string: lookups use templateProperty.sourceId, which is
+  // unbranded (the original .find compared the branded id against it).
+  const existingPropertyById = new Map<
+    string,
+    (typeof existingProperties)[number]
+  >(existingProperties.map((property) => [property.id, property]));
   const propertyIdBySourceId = new Map<string, string>();
   const createdPropertySourceIds = new Set<string>();
   const consumedExistingPropertyIds = new Set<string>();
@@ -218,9 +229,7 @@ export const resolveTemplateProperties = async ({
   let projectedPropertyCount = nextPropertyIds.length;
 
   for (const templateProperty of templateProperties) {
-    const existingById = existingProperties.find(
-      (property) => property.id === templateProperty.sourceId,
-    );
+    const existingById = existingPropertyById.get(templateProperty.sourceId);
     if (
       existingById &&
       canReusePropertyByExactId({
@@ -948,10 +957,11 @@ const collectVisibleTemplatePropertyIds = ({
   layout: ViewLayout;
   properties: readonly WorkspacePropertyTemplateSource[];
 }): Set<string> => {
+  const hiddenPropertyIds = new Set(layout.hiddenProperties);
   const ids = new Set<string>();
 
   for (const property of workspaceProperties) {
-    if (!layout.hiddenProperties.includes(property.id)) {
+    if (!hiddenPropertyIds.has(property.id)) {
       ids.add(property.id);
     }
   }

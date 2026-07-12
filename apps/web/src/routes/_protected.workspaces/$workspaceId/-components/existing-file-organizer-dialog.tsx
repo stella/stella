@@ -1,4 +1,4 @@
-import { useEffectEvent, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -38,6 +38,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -130,7 +131,7 @@ export const ExistingFileOrganizerDialog = ({
     return window.localStorage.getItem(userInstructionsKey) ?? "";
   });
   const [showInstructions, setShowInstructions] = useState(false);
-  const getSuggestionRequestContext = useEffectEvent(() => ({
+  const getSuggestionRequestContext = useLatestCallback(() => ({
     locale,
     userInstructions: userInstructions.trim(),
   }));
@@ -204,7 +205,7 @@ export const ExistingFileOrganizerDialog = ({
       }),
     [existingFolders, files],
   );
-  const getSuggestionRequestState = useEffectEvent(() => ({
+  const getSuggestionRequestState = useLatestCallback(() => ({
     open,
     requestKey,
   }));
@@ -422,7 +423,7 @@ export const ExistingFileOrganizerDialog = ({
         );
 
         if (row.parentId !== targetParentId) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential entity moves share the same query-key cache invalidation and report progress on one toast; concurrent mutations would race and risk rate limits
+          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: sequential entity moves share the same query-key cache invalidation and report progress on one toast; concurrent mutations would race and risk rate limits
           const moveResponse = await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .move.patch({
@@ -970,8 +971,8 @@ const OrganizerTreePreview = ({
   const root = useMemo(() => buildOrganizerTree(rows, locale), [rows, locale]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRootOver, setIsRootOver] = useState(false);
-  const handleMoveFile = useEffectEvent(onMoveFile);
-  const handleMoveFolder = useEffectEvent(onMoveFolder);
+  const handleMoveFile = useLatestCallback(onMoveFile);
+  const handleMoveFolder = useLatestCallback(onMoveFolder);
 
   useMountEffect(() => {
     const el = containerRef.current;
@@ -1074,8 +1075,8 @@ const OrganizerFolderNode = ({
   const [isEditing, setIsEditing] = useState(false);
 
   const t = useTranslations();
-  const handleMoveFile = useEffectEvent(onMoveFile);
-  const handleMoveFolder = useEffectEvent(onMoveFolder);
+  const handleMoveFile = useLatestCallback(onMoveFile);
+  const handleMoveFolder = useLatestCallback(onMoveFolder);
 
   useExternalSyncEffect(() => {
     const el = headerRef.current;
@@ -1127,7 +1128,7 @@ const OrganizerFolderNode = ({
         },
       }),
     );
-  }, [folder.path]);
+  }, [folder.path, handleMoveFolder, handleMoveFile]);
 
   const hasChildren = folder.children.size + folder.rows.length > 0;
 

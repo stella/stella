@@ -193,7 +193,7 @@ function Members() {
       : data.members;
 
     const compareName = compareByLocale(locale);
-    const sorted = [...filtered].sort((a, b) => {
+    const sorted = filtered.toSorted((a, b) => {
       let cmp: number;
       if (sort.key === "name") {
         cmp = compareName(a.user.name, b.user.name);

@@ -1,4 +1,4 @@
-import { useEffectEvent, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
@@ -12,6 +12,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { isNetworkError } from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
@@ -203,7 +204,7 @@ export const DefaultErrorComponent = ({
 
 const UnauthorizedError = () => {
   const { mutate } = useSignOut();
-  const signOut = useEffectEvent(mutate);
+  const signOut = useLatestCallback(mutate);
 
   useMountEffect(() => {
     signOut();

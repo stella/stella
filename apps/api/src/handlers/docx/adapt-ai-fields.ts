@@ -96,15 +96,20 @@ export const adaptAiFields = async ({
       (name) => name === "word/document.xml" || HEADER_FOOTER_RE.test(name),
     )
     .sort();
-  const parts: { name: string; xml: string }[] = [];
-  for (const name of partNames) {
-    const entry = zip.file(name);
-    if (!entry) {
-      continue;
-    }
-    // oxlint-disable-next-line no-await-in-loop -- sequential: builds `parts` in the sorted part order the patch pass relies on so occurrence indices line up
-    parts.push({ name, xml: await entry.async("string") });
-  }
+  // Each part is read independently; `Promise.all(map(...))` preserves the
+  // sorted `partNames` order in the result regardless of completion order, so
+  // the patch pass below still sees `parts` in the same order extraction used.
+  const parts = (
+    await Promise.all(
+      partNames.map(async (name) => {
+        const entry = zip.file(name);
+        if (!entry) {
+          return undefined;
+        }
+        return { name, xml: await entry.async("string") };
+      }),
+    )
+  ).filter((part): part is { name: string; xml: string } => part !== undefined);
 
   const targetPaths = new Set(targets.map((target) => target.field.path));
   const occurrencesByPath = collectOccurrences(parts, targetPaths);
@@ -116,7 +121,7 @@ export const adaptAiFields = async ({
     if (occurrences.length === 0) {
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- sequential: metered per-field AI adaptation call; must not fan out across fields
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential: metered per-field AI adaptation call; must not fan out across fields
     const renderings = await adapt({
       stub,
       fieldPath: field.path,

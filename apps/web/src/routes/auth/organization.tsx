@@ -150,6 +150,7 @@ const completeOrganizationFlow = async ({
   redirectTo: string;
   status: "created" | "selected";
 }) => {
+  // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: the session must be invalidated before navigating away in either branch, so the destination route never reads stale session state
   await invalidateSession.mutateAsync();
 
   if (!isOauthPostLogin) {

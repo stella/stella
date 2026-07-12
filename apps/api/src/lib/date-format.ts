@@ -3,12 +3,13 @@ type FormatDateTimeInTimeZoneProps = {
   timezone: string;
 };
 
-export const formatDateTimeInTimeZone = ({
-  date = new Date(),
-  timezone,
-}: FormatDateTimeInTimeZoneProps) => {
-  try {
-    return new Intl.DateTimeFormat("en-US", {
+// Locale is fixed ("en-US"); only the IANA timezone varies per call, so each
+// formatter shape is cached once per timezone instead of rebuilt every call.
+const dateTimeFormattersByTimeZone = new Map<string, Intl.DateTimeFormat>();
+const getDateTimeFormatter = (timezone: string): Intl.DateTimeFormat => {
+  let formatter = dateTimeFormattersByTimeZone.get(timezone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
       timeZone: timezone,
       weekday: "long",
       year: "numeric",
@@ -17,10 +18,37 @@ export const formatDateTimeInTimeZone = ({
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
-    }).format(date);
+    });
+    dateTimeFormattersByTimeZone.set(timezone, formatter);
+  }
+  return formatter;
+};
+
+export const formatDateTimeInTimeZone = ({
+  date = new Date(),
+  timezone,
+}: FormatDateTimeInTimeZoneProps) => {
+  try {
+    return getDateTimeFormatter(timezone).format(date);
   } catch {
     return date.toISOString();
   }
+};
+
+const dateFormattersByTimeZone = new Map<string, Intl.DateTimeFormat>();
+const getDateFormatter = (timezone: string): Intl.DateTimeFormat => {
+  let formatter = dateFormattersByTimeZone.get(timezone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+    dateFormattersByTimeZone.set(timezone, formatter);
+  }
+  return formatter;
 };
 
 /**
@@ -34,13 +62,7 @@ export const formatDateInTimeZone = ({
   timezone,
 }: FormatDateTimeInTimeZoneProps) => {
   try {
-    return new Intl.DateTimeFormat("en-US", {
-      timeZone: timezone,
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }).format(date);
+    return getDateFormatter(timezone).format(date);
   } catch {
     return date.toISOString().slice(0, 10);
   }

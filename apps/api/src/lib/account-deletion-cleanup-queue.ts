@@ -116,6 +116,7 @@ export const processAccountDeletionCleanupRequest = async (
   }
 
   const s3Keys = request.storageCleanup.s3Keys;
+  // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: attemptCount must increment and status must record "processing" for every attempt, including the empty-s3Keys fast path below
   await deps.rootDb
     .update(accountDeletionRequests)
     .set({

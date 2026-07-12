@@ -30,10 +30,16 @@ export const formatPartialAnswer = (answer: unknown): string | null => {
   }
 
   if (Array.isArray(answer)) {
-    const values = answer
-      .filter((value): value is string => typeof value === "string")
-      .map((value) => value.trim())
-      .filter((value) => value.length > 0);
+    const values: string[] = [];
+    for (const value of answer) {
+      if (typeof value !== "string") {
+        continue;
+      }
+      const trimmed = value.trim();
+      if (trimmed.length > 0) {
+        values.push(trimmed);
+      }
+    }
 
     if (values.length === 0) {
       return null;
@@ -97,7 +103,7 @@ export const consumePartialAnswers = async ({
         continue;
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- partial answers must be emitted in stream arrival order
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: partial answers must be emitted in stream arrival order
       await onPartialAnswer({ propertyId, answer });
     }
   }

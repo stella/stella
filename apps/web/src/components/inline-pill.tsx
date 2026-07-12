@@ -58,7 +58,7 @@ type InlinePillProps = {
   ariaLabel?: string;
   className?: string;
   children: ReactNode;
-} & Pick<HTMLAttributes<HTMLElement>, "style" | "title"> &
+} & Pick<HTMLAttributes<HTMLElement>, "style"> &
   Record<`data-${string}`, string | undefined>;
 
 const TONE_BASE: Record<InlinePillTone, string> = {
@@ -101,7 +101,6 @@ export const InlinePill = ({
   className,
   children,
   style,
-  title,
   ...dataAttrs
 }: InlinePillProps): ReactElement => {
   const clickable = onActivate !== undefined;
@@ -148,7 +147,6 @@ export const InlinePill = ({
       className={sharedClass}
       onClick={onActivate}
       style={style}
-      title={title}
       type="button"
       {...dataAttrs}
     >
@@ -158,8 +156,8 @@ export const InlinePill = ({
     <span
       aria-label={ariaLabel}
       className={sharedClass}
+      role="group"
       style={style}
-      title={title}
       {...dataAttrs}
     >
       {body}

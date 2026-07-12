@@ -135,6 +135,7 @@ export default createSafeHandler(
         }
 
         // Point entity to the new version
+        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (tx) as the workspaces update and recordAuditEvent below; a single connection can't run concurrent statements
         await tx
           .update(entities)
           .set({

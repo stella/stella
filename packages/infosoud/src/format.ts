@@ -29,12 +29,16 @@ const isSameNumericCaseMark = (
   event.znackaId.rocnik === result.rocnik;
 
 const inferPrimaryCaseCourtCode = (result: CaseSearchResult): string | null => {
-  const matchingCourtCodes = result.udalosti
-    .filter((event) => isSameNumericCaseMark(result, event))
-    .map((event) => event.znackaId.organizace.trim())
-    .filter((code) => code.length > 0);
-
-  return matchingCourtCodes.at(0) ?? null;
+  for (const event of result.udalosti) {
+    if (!isSameNumericCaseMark(result, event)) {
+      continue;
+    }
+    const code = event.znackaId.organizace.trim();
+    if (code.length > 0) {
+      return code;
+    }
+  }
+  return null;
 };
 
 export const formatCaseSummary = (result: CaseSearchResult): string => {

@@ -276,7 +276,7 @@ const backfillCaseLaw = async (
     }
 
     for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      // oxlint-disable-next-line no-await-in-loop -- bounded chunked writes: each CONCURRENCY-sized chunk must settle before the next to cap in-flight S3/DB pressure
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- bounded chunked writes: each CONCURRENCY-sized chunk must settle before the next to cap in-flight S3/DB pressure
       const outcomes = await Promise.all(
         rows.slice(i, i + CONCURRENCY).map(backfillRow),
       );
@@ -339,7 +339,7 @@ const backfillLegislation = async (
     }
 
     for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      // oxlint-disable-next-line no-await-in-loop -- bounded chunked writes: each CONCURRENCY-sized chunk must settle before the next to cap in-flight S3/DB pressure
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- bounded chunked writes: each CONCURRENCY-sized chunk must settle before the next to cap in-flight S3/DB pressure
       const outcomes = await Promise.all(
         rows.slice(i, i + CONCURRENCY).map(backfillLegislationRow),
       );
@@ -439,6 +439,7 @@ export const runLegalCorpusStorageBackfill = async (
   );
 
   const caseLaw = await backfillCaseLaw(parsed.options.caseLawLimit);
+  // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: caseLaw and legislation backfills share the same CONCURRENCY-bounded S3/DB write budget; running them in parallel would double in-flight pressure
   const legislation = await backfillLegislation(
     parsed.options.legislationLimit,
   );

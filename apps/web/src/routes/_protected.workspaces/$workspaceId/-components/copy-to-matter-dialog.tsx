@@ -86,7 +86,7 @@ export const CopyToMatterDialog = ({
     let failedCount = 0;
     let firstErrorMessage: string | null = null;
     for (const { entityId } of transferEntities) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential copy/move mutations share query-key cache invalidation and move semantics (deleteSource); concurrent mutations would race and risk rate limits
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: sequential copy/move mutations share query-key cache invalidation and move semantics (deleteSource); concurrent mutations would race and risk rate limits
       const result = await Result.tryPromise(
         async () =>
           await api

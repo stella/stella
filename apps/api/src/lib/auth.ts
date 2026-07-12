@@ -224,6 +224,29 @@ const isMcpResourceScope = (
 ): scope is (typeof MCP_ALL_RESOURCE_SCOPES)[number] =>
   includes(MCP_ALL_RESOURCE_SCOPES, scope);
 
+// Building an `Intl.DateTimeFormat` re-parses its options every call; cache
+// one per language instead of rebuilding it for every new-device-login email.
+const newDeviceLoginDateTimeFormatCache = new Map<
+  string,
+  Intl.DateTimeFormat
+>();
+const getNewDeviceLoginDateTimeFormat = (lang: string): Intl.DateTimeFormat => {
+  let formatter = newDeviceLoginDateTimeFormatCache.get(lang);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(lang, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "UTC",
+      timeZoneName: "short",
+    });
+    newDeviceLoginDateTimeFormatCache.set(lang, formatter);
+  }
+  return formatter;
+};
+
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
@@ -476,6 +499,7 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: check must precede the rest of the middleware for every path, self-host email-OTP gate cannot be skipped
         await assertSelfhostEmailOtpAllowed(ctx.path);
         if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
           return;
@@ -520,19 +544,18 @@ const createAuth = () => {
             return;
           }
 
-          const knownIPs = new Set(
-            previousSessions
-              .map((previous) => previous.ipAddress)
-              .filter(Boolean),
-          );
-          const knownDevices = new Set(
-            previousSessions
-              .map((previous) => {
-                const previousDevice = parseUserAgent(previous.userAgent);
-                return `${previousDevice.browser}|${previousDevice.os}`;
-              })
-              .filter((device) => device !== "null|null"),
-          );
+          const knownIPs = new Set<string>();
+          const knownDevices = new Set<string>();
+          for (const previous of previousSessions) {
+            if (previous.ipAddress) {
+              knownIPs.add(previous.ipAddress);
+            }
+            const previousDevice = parseUserAgent(previous.userAgent);
+            const deviceKey = `${previousDevice.browser}|${previousDevice.os}`;
+            if (deviceKey !== "null|null") {
+              knownDevices.add(deviceKey);
+            }
+          }
 
           const currentDevice = parseUserAgent(session.userAgent);
           const deviceKey = `${currentDevice.browser}|${currentDevice.os}`;
@@ -553,15 +576,9 @@ const createAuth = () => {
               ? `${currentDevice.browser} on ${currentDevice.os}`
               : (currentDevice.browser ?? currentDevice.os ?? "Unknown");
           const lang = extractLangFromRequest(ctx.request);
-          const formattedTime = new Intl.DateTimeFormat(lang, {
-            year: "numeric",
-            month: "short",
-            day: "numeric",
-            hour: "numeric",
-            minute: "2-digit",
-            timeZone: "UTC",
-            timeZoneName: "short",
-          }).format(session.createdAt);
+          const formattedTime = getNewDeviceLoginDateTimeFormat(lang).format(
+            session.createdAt,
+          );
 
           ctx.context.runInBackground(
             sendNewDeviceLoginEmail({
@@ -898,9 +915,15 @@ const resolveValidateAuth = async (
 
   let activeWorkspaceIdsPromise: Promise<SafeId<"workspace">[]> | null = null;
   const getActiveWorkspaceIds = async (): Promise<SafeId<"workspace">[]> => {
-    activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) =>
-      items.filter((item) => item.status !== "deleting").map((item) => item.id),
-    );
+    activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) => {
+      const activeWorkspaceIds: SafeId<"workspace">[] = [];
+      for (const item of items) {
+        if (item.status !== "deleting") {
+          activeWorkspaceIds.push(item.id);
+        }
+      }
+      return activeWorkspaceIds;
+    });
     return await activeWorkspaceIdsPromise;
   };
 

@@ -12,6 +12,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
+import Tooltip from "@/components/tooltip";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { workspaceFoldersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import type { WorkspaceFolder } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -218,16 +219,20 @@ const FolderPicker = ({
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
         >
           {hasChildren ? (
-            <button
-              className="hover:bg-muted rounded p-0.5"
-              aria-expanded={isExpanded}
-              aria-label={folder.name}
-              title={folder.name}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpand(folder.entityId);
-              }}
-              type="button"
+            <Tooltip
+              content={folder.name}
+              render={
+                <button
+                  className="hover:bg-muted rounded p-0.5"
+                  aria-expanded={isExpanded}
+                  aria-label={folder.name}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleExpand(folder.entityId);
+                  }}
+                  type="button"
+                />
+              }
             >
               <DirectionalIcon
                 className={cn(
@@ -237,7 +242,7 @@ const FolderPicker = ({
                 flip={!isExpanded}
                 icon={ChevronRightIcon}
               />
-            </button>
+            </Tooltip>
           ) : (
             <span className="w-4" />
           )}

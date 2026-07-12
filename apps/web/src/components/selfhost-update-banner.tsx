@@ -4,6 +4,7 @@ import { ExternalLinkIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { logDevError } from "@/lib/errors/utils";
@@ -118,15 +119,19 @@ export const SelfhostUpdateBanner = () => {
             <ExternalLinkIcon className="size-3" />
           </a>
         </span>
-        <button
-          aria-label={t("selfhost.dismissUpdate")}
-          title={t("selfhost.dismissUpdate")}
-          className="hover:bg-warning/20 -me-1 rounded-sm p-1"
-          onClick={handleDismiss}
-          type="button"
+        <Tooltip
+          content={t("selfhost.dismissUpdate")}
+          render={
+            <button
+              aria-label={t("selfhost.dismissUpdate")}
+              className="hover:bg-warning/20 -me-1 rounded-sm p-1"
+              onClick={handleDismiss}
+              type="button"
+            />
+          }
         >
           <XIcon className="size-4" />
-        </button>
+        </Tooltip>
       </div>
     </div>
   );

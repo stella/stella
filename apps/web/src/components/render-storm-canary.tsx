@@ -37,11 +37,15 @@ export const RenderStormCanary = ({
 
 const formatPhaseBreakdown = (
   phaseCounts: Record<RenderStormPhase, number>,
-): string =>
-  Object.entries(phaseCounts)
-    .filter(([, count]) => count > 0)
-    .map(([phase, count]) => `${phase}=${count}`)
-    .join(", ");
+): string => {
+  const parts: string[] = [];
+  for (const [phase, count] of Object.entries(phaseCounts)) {
+    if (count > 0) {
+      parts.push(`${phase}=${count}`);
+    }
+  }
+  return parts.join(", ");
+};
 
 const emitRenderStormError = (details: RenderStormDetails) => {
   // eslint-disable-next-line no-console -- dev-only render-storm canary; this is the one sanctioned diagnostic emitter whose entire purpose is to be caught by the e2e browserErrors fixture as a CI-failing signal

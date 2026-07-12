@@ -247,6 +247,7 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
     const id = toEndpointIdentifier(abs, REPO_ROOT);
     let mod: unknown;
     try {
+      // eslint-disable-next-line react-doctor/no-dynamic-import-path -- introspection script walks and imports discovered handler files; paths are inherently dynamic
       mod = await import(abs);
     } catch (error) {
       importErrors.push({

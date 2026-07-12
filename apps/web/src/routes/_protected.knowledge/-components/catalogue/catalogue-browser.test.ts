@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { getToolDetailPayload } from "./catalogue-browser";
 import type { CatalogueSkill } from "./catalogue-types";
+import { getToolDetailPayload } from "./tool-detail";
 
 describe("getToolDetailPayload", () => {
   test("uses the chat skill id when no edit handle is available", () => {

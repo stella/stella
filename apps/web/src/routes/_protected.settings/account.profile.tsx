@@ -748,12 +748,17 @@ function ProfilePageBody() {
                 onClick={() =>
                   verifyDeleteMutation.mutate({
                     code: otpCode,
-                    reassignments: Object.entries(reassignments)
-                      .filter(([_, val]) => !!val)
-                      .map(([entityId, reassignedUserId]) => ({
-                        entityId: toSafeId<"entity">(entityId),
-                        reassignedUserId,
-                      })),
+                    reassignments: Object.entries(reassignments).flatMap(
+                      ([entityId, reassignedUserId]) =>
+                        reassignedUserId
+                          ? [
+                              {
+                                entityId: toSafeId<"entity">(entityId),
+                                reassignedUserId,
+                              },
+                            ]
+                          : [],
+                    ),
                   })
                 }
                 disabled={

@@ -149,8 +149,10 @@ export default createSafeHandler(
       );
     }
 
-    // Download both DOCX files from S3
-    const [baseBuffer, targetBuffer] = await Promise.all([
+    // Download both DOCX files from S3 and look up the target version's
+    // author concurrently; the author query runs in its own safeDb
+    // transaction and does not depend on the file bytes.
+    const [baseBuffer, targetBuffer, targetAuthorResult] = await Promise.all([
       getS3()
         .file(
           createFileKey({
@@ -171,29 +173,27 @@ export default createSafeHandler(
           }),
         )
         .arrayBuffer(),
+      safeDb((tx) =>
+        tx
+          .select({ userName: user.name })
+          .from(desktopEditSessions)
+          .innerJoin(user, eq(desktopEditSessions.createdBy, user.id))
+          .innerJoin(
+            member,
+            and(
+              eq(member.userId, desktopEditSessions.createdBy),
+              eq(member.organizationId, organizationId),
+            ),
+          )
+          .where(
+            and(
+              eq(desktopEditSessions.finalizedVersionId, targetVersionId),
+              eq(desktopEditSessions.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1),
+      ),
     ]);
-
-    // Look up the target version's author
-    const targetAuthorResult = await safeDb((tx) =>
-      tx
-        .select({ userName: user.name })
-        .from(desktopEditSessions)
-        .innerJoin(user, eq(desktopEditSessions.createdBy, user.id))
-        .innerJoin(
-          member,
-          and(
-            eq(member.userId, desktopEditSessions.createdBy),
-            eq(member.organizationId, organizationId),
-          ),
-        )
-        .where(
-          and(
-            eq(desktopEditSessions.finalizedVersionId, targetVersionId),
-            eq(desktopEditSessions.workspaceId, workspaceId),
-          ),
-        )
-        .limit(1),
-    );
     const targetAuthorRows = yield* targetAuthorResult;
     const authorName = targetAuthorRows.at(0)?.userName ?? "Unknown";
 

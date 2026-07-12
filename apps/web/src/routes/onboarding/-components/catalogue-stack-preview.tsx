@@ -59,10 +59,17 @@ export const CatalogueStackPreview = ({
 
   const stack = (() => {
     const bySlug = new Map(entries.map((entry) => [entry.slug, entry]));
-    return selectedSlugs
-      .filter((slug) => !pinnedSlugSet.has(slug))
-      .map((slug) => bySlug.get(slug))
-      .filter((entry): entry is LoadedCatalogueEntry => entry !== undefined);
+    const result: LoadedCatalogueEntry[] = [];
+    for (const slug of selectedSlugs) {
+      if (pinnedSlugSet.has(slug)) {
+        continue;
+      }
+      const entry = bySlug.get(slug);
+      if (entry) {
+        result.push(entry);
+      }
+    }
+    return result;
   })();
 
   const total = pinned.length + stack.length;

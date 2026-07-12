@@ -517,8 +517,7 @@ const startServer = async (): Promise<void> => {
   // request against a stale schema.
   await assertMigrationsApplied();
 
-  await refreshS3();
-  await refreshCorpusS3();
+  await Promise.all([refreshS3(), refreshCorpusS3()]);
   startS3RefreshLoop();
 
   // BullMQ worker for asynchronous file derivatives.

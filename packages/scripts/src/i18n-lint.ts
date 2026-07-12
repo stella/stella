@@ -167,6 +167,7 @@ const pluralCategories = (
   // can't crash the whole lint run (boundary call into a runtime built-in).
   let categories: readonly string[];
   try {
+    // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale+type cache getter; the constructor necessarily runs below top level
     categories = new Intl.PluralRules(locale, {
       type,
     }).resolvedOptions().pluralCategories;
@@ -670,7 +671,7 @@ if (import.meta.main) {
       const target =
         locale === "en"
           ? source
-          : // oxlint-disable-next-line no-await-in-loop -- locales reported in sorted order
+          : // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- locales reported in sorted order
             flatten(await readJson(path.resolve(langsDir, file)));
       const violations = findViolations(source, target, locale, rules);
 

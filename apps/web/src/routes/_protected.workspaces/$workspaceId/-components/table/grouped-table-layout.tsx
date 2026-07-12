@@ -53,12 +53,12 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
+import type { WorkspaceGridStyle } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import {
   addPropertyColId,
   getScrollableAncestor,
   getWorkspaceGridTemplateColumns,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
-import type { WorkspaceGridStyle } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
@@ -86,6 +86,11 @@ const GROUP_EAGER_LOAD_COUNT = 3;
 // flat window query; passed to the kanban-group endpoint so its rows (and the
 // group-counts) stay in sync.
 const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
+
+// Status grouping is rejected before a document table resolves its group
+// options, so it never needs status labels; shared so the empty object isn't
+// rebuilt every render.
+const EMPTY_STATUS_LABELS: Record<string, string> = {};
 
 // Stable key for a group. The null (uncategorized) bucket and real string values
 // live in disjoint namespaces so an option literally named "uncategorized"
@@ -291,7 +296,7 @@ export const GroupedTableLayout = ({
 
   // Status grouping is rejected above (isUnsupportedGrouping), so a document
   // table never needs status labels.
-  const statusLabels = {};
+  const statusLabels = EMPTY_STATUS_LABELS;
   const entityKindLabels = {
     document: t("common.document"),
     folder: t("search.kinds.folder"),

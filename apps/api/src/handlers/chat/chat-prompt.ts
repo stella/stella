@@ -57,6 +57,10 @@ const ACTIVE_SKILL_RESOURCE_LIST_MAX_COUNT = 100;
  */
 const ACTIVE_DOCX_EDIT_BLOCKS_MAX_COUNT = 600;
 
+const REGION_DISPLAY_NAMES = new Intl.DisplayNames(["en"], {
+  type: "region",
+});
+
 type BuildPromptMentionExampleProps = {
   label: string;
   prefix: string;
@@ -1363,21 +1367,17 @@ const buildPracticeJurisdictionLine = (
   if (practiceJurisdictions.length === 0) {
     return "";
   }
-  const names = new Intl.DisplayNames(["en"], { type: "region" });
-  const ordered = [...practiceJurisdictions].sort((a, b) =>
-    (() => {
-      if (a.isPrimary === b.isPrimary) {
-        return 0;
-      }
-      if (a.isPrimary) {
-        return -1;
-      }
-      return 1;
-    })(),
-  );
+  const ordered = practiceJurisdictions.toSorted((a, b) => {
+    if (a.isPrimary === b.isPrimary) {
+      return 0;
+    }
+    return a.isPrimary ? -1 : 1;
+  });
   const annotatePrimary = ordered.length > 1;
   const formatted = ordered.map((jurisdiction) => {
-    const name = names.of(jurisdiction.countryCode) ?? jurisdiction.countryCode;
+    const name =
+      REGION_DISPLAY_NAMES.of(jurisdiction.countryCode) ??
+      jurisdiction.countryCode;
     return annotatePrimary && jurisdiction.isPrimary
       ? `${name} (primary)`
       : name;

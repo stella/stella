@@ -8,6 +8,7 @@ import { Input } from "@stll/ui/components/input";
 import { Separator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { compareByLocale } from "@/lib/collation";
 import { getDisplayName } from "@/routes/_protected.workspaces/-components/team-avatars";
@@ -152,25 +153,29 @@ export const TeamFilterPopover = ({
                       <CheckIcon className="text-primary size-3.5 shrink-0" />
                     )}
                   </button>
-                  <button
-                    className={cn(
-                      "text-muted-foreground hover:text-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem] tracking-tight uppercase",
-                      isLeadUser && "text-primary",
-                    )}
-                    onClick={() =>
-                      onLeadChange(
-                        isLeadUser
-                          ? undefined
-                          : { type: "user", userId: m.userId },
-                      )
+                  <Tooltip
+                    content={t("workspaces.filters.team.filterAsLead")}
+                    render={
+                      <button
+                        className={cn(
+                          "text-muted-foreground hover:text-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem] tracking-tight uppercase",
+                          isLeadUser && "text-primary",
+                        )}
+                        onClick={() =>
+                          onLeadChange(
+                            isLeadUser
+                              ? undefined
+                              : { type: "user", userId: m.userId },
+                          )
+                        }
+                        type="button"
+                      >
+                        {isLeadUser
+                          ? t("workspaces.filters.team.leadActive")
+                          : t("workspaces.filters.team.leadInactive")}
+                      </button>
                     }
-                    title={t("workspaces.filters.team.filterAsLead")}
-                    type="button"
-                  >
-                    {isLeadUser
-                      ? t("workspaces.filters.team.leadActive")
-                      : t("workspaces.filters.team.leadInactive")}
-                  </button>
+                  />
                 </div>
               );
             })

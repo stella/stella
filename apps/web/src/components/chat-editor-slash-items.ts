@@ -91,9 +91,12 @@ export const buildChatSlashItems = ({
       )
     : [];
   const skillRows = [...builtInSkillRows, ...installedSkillRows];
-  const skillItems: SlashItem[] = skillRows
-    .filter((row) => row.enabled)
-    .map((row) => ({
+  const skillItems: SlashItem[] = [];
+  for (const row of skillRows) {
+    if (!row.enabled) {
+      continue;
+    }
+    skillItems.push({
       kind: "skill" as const,
       skill: {
         id: row.id,
@@ -102,7 +105,8 @@ export const buildChatSlashItems = ({
         description: row.description,
         scope: row.scope,
       },
-    }));
+    });
+  }
 
   return [...commandItems, ...promptItems, ...skillItems];
 };

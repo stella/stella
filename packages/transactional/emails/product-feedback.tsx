@@ -11,6 +11,7 @@ import {
 } from "@react-email/components";
 
 import { BRAND_FOOTER_TEXT, brand, sharedStyles } from "./_shared";
+import { KIND_LABELS } from "./product-feedback-subject";
 
 /**
  * Maintainer-facing feedback email filed through the MCP `send_feedback` tool.
@@ -23,13 +24,6 @@ import { BRAND_FOOTER_TEXT, brand, sharedStyles } from "./_shared";
  */
 
 export type ProductFeedbackKind = "bug" | "feature_request" | "docs" | "other";
-
-const KIND_LABELS: Record<ProductFeedbackKind, string> = {
-  bug: "Bug",
-  feature_request: "Feature request",
-  docs: "Documentation",
-  other: "Other",
-};
 
 /**
  * Who filed the feedback. A mutually exclusive union, never a bag of optional
@@ -52,14 +46,6 @@ type Props = {
   body: string;
   reporter: FeedbackReporter;
 };
-
-export const subject = ({
-  kind,
-  title,
-}: {
-  kind: ProductFeedbackKind;
-  title: string;
-}): string => `[stella feedback] ${KIND_LABELS[kind]}: ${title}`.slice(0, 160);
 
 export const Email = ({ body, kind, reporter, title }: Props) => (
   <Html lang="en" dir="ltr">

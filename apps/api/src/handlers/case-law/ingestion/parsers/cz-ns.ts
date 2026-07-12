@@ -113,10 +113,10 @@ export const extractNsMetadata = ($: cheerio.CheerioAPI): MetadataResult => {
   let relatedProceedingsTable: TableCell[][] | null = null;
 
   const splitBrValues = (td: cheerio.Cheerio<AnyNode>) =>
-    ($(td).html() ?? "")
-      .split(/<br\s*\/?>/iu)
-      .map((s) => cheerio.load(s).text().trim())
-      .filter(Boolean);
+    ($(td).html() ?? "").split(/<br\s*\/?>/iu).flatMap((s) => {
+      const trimmed = cheerio.load(s).text().trim();
+      return trimmed ? [trimmed] : [];
+    });
 
   const metaTable = $("#box-table-a");
   metaTable.find("> tbody > tr, > tr").each((_, tr) => {

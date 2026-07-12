@@ -343,8 +343,10 @@ export const hydrateFilePart = async ({
           const extracted = await extractText(bytes);
 
           return extracted.paragraphs
-            .map((paragraph) => paragraph.text.trim())
-            .filter(Boolean)
+            .flatMap((paragraph) => {
+              const trimmed = paragraph.text.trim();
+              return trimmed ? [trimmed] : [];
+            })
             .join("\n")
             .slice(0, LIMITS.chatContextFileMaxChars);
         },

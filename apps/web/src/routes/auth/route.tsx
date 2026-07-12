@@ -33,7 +33,7 @@ function AuthLayout() {
         <header className="flex flex-wrap items-end justify-between gap-4 pt-12">
           <div className="flex items-center gap-3">
             <a
-              aria-label="stella"
+              aria-label="Stella"
               className="inline-flex transition-opacity hover:opacity-80"
               href={landingUrl}
             >

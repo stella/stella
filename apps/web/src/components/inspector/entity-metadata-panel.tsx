@@ -19,6 +19,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
@@ -496,11 +497,19 @@ type ReadOnlyRowProps = {
   title?: string;
 };
 
-const ReadOnlyRow = ({ label, value, title }: ReadOnlyRowProps) => (
-  <div className="flex flex-col gap-1 rounded-md px-2 py-2">
-    <span className="text-muted-foreground text-xs font-medium">{label}</span>
-    <span className="text-foreground text-sm" title={title}>
-      {value ?? <span className="text-muted-foreground">—</span>}
-    </span>
-  </div>
-);
+const ReadOnlyRow = ({ label, value, title }: ReadOnlyRowProps) => {
+  const content = value ?? <span className="text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-col gap-1 rounded-md px-2 py-2">
+      <span className="text-muted-foreground text-xs font-medium">{label}</span>
+      {title === undefined ? (
+        <span className="text-foreground text-sm">{content}</span>
+      ) : (
+        <Tooltip
+          content={title}
+          render={<span className="text-foreground text-sm">{content}</span>}
+        />
+      )}
+    </div>
+  );
+};

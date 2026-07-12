@@ -1,5 +1,27 @@
 import type { OptionColor } from "@stll/api/types";
 
+import type { CreatableContentType } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives";
+import type { SortHint } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+
+export const isCreatableContentType = (t: string): t is CreatableContentType =>
+  t === "text" ||
+  t === "single-select" ||
+  t === "multi-select" ||
+  t === "date" ||
+  t === "int";
+
+/** Map a property content type to a sort hint. */
+export const toSortHint = (contentType: string): SortHint => {
+  switch (contentType) {
+    case "date":
+      return "date";
+    case "int":
+      return "number";
+    default:
+      return "text";
+  }
+};
+
 export type ColorVariants = {
   background: string;
   foreground: string;

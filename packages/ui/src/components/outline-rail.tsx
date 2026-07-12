@@ -25,6 +25,11 @@ import {
   useState,
 } from "react";
 
+import {
+  Tooltip,
+  TooltipPopup,
+  TooltipTrigger,
+} from "@stll/ui/components/tooltip";
 import { cn } from "@stll/ui/lib/utils";
 
 export type OutlineItem = {
@@ -409,17 +414,23 @@ export const OutlineRail = ({
               style={{ background: `var(${node.item.color})` }}
             />
           )}
-          <button
-            className={cn(
-              "min-w-0 flex-1 truncate py-1.5 text-start text-[13px] leading-snug",
-              rowTextClass(isActive, hasChildren),
-            )}
-            onClick={() => jumpTo(node.item.id)}
-            title={node.item.label}
-            type="button"
-          >
-            {node.item.label}
-          </button>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  className={cn(
+                    "min-w-0 flex-1 truncate py-1.5 text-start text-[13px] leading-snug",
+                    rowTextClass(isActive, hasChildren),
+                  )}
+                  onClick={() => jumpTo(node.item.id)}
+                  type="button"
+                />
+              }
+            >
+              {node.item.label}
+            </TooltipTrigger>
+            <TooltipPopup>{node.item.label}</TooltipPopup>
+          </Tooltip>
           {node.item.meta !== undefined && (
             <span className="text-foreground-placeholder shrink-0 ps-2 text-[11px] tabular-nums">
               {node.item.meta}
@@ -456,6 +467,7 @@ export const OutlineRail = ({
     <div
       aria-label={ariaLabel}
       className="absolute end-0 z-20 max-lg:hidden"
+      role="group"
       style={{ top: topOffset, bottom: 0, width: RAIL_WIDTH }}
     >
       <div
@@ -470,31 +482,36 @@ export const OutlineRail = ({
           const isActive = active === item.id;
           const isHovered = hoveredId === item.id;
           return (
-            <button
-              aria-current={isActive ? "true" : undefined}
-              aria-label={item.label}
-              className={cn(
-                "absolute end-0 rounded-full transition-[width,height,opacity,background-color] duration-150",
-                isHovered || isActive
-                  ? "opacity-100"
-                  : "opacity-45 hover:opacity-90",
-              )}
-              key={item.id}
-              onClick={() => jumpTo(item.id)}
-              onMouseEnter={() => setHoveredId(item.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              style={{
-                top: `${pctById[item.id]}%`,
-                transform: "translateY(-50%)",
-                width: isHovered
-                  ? tickWidth(item.level) + 8
-                  : tickWidth(item.level),
-                height: tickHeight(isHovered, isActive),
-                background: tickBackground(item.color, isHovered),
-              }}
-              title={item.label}
-              type="button"
-            />
+            <Tooltip key={item.id}>
+              <TooltipTrigger
+                render={
+                  <button
+                    aria-current={isActive ? "true" : undefined}
+                    aria-label={item.label}
+                    className={cn(
+                      "absolute end-0 rounded-full transition-[width,height,opacity,background-color] duration-150",
+                      isHovered || isActive
+                        ? "opacity-100"
+                        : "opacity-45 hover:opacity-90",
+                    )}
+                    onClick={() => jumpTo(item.id)}
+                    onMouseEnter={() => setHoveredId(item.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    style={{
+                      top: `${pctById[item.id]}%`,
+                      transform: "translateY(-50%)",
+                      width: isHovered
+                        ? tickWidth(item.level) + 8
+                        : tickWidth(item.level),
+                      height: tickHeight(isHovered, isActive),
+                      background: tickBackground(item.color, isHovered),
+                    }}
+                    type="button"
+                  />
+                }
+              />
+              <TooltipPopup>{item.label}</TooltipPopup>
+            </Tooltip>
           );
         })}
         {ghostItem && (

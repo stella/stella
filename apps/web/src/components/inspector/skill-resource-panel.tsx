@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { PencilIcon, SaveIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -10,6 +10,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
+import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
@@ -135,16 +136,16 @@ export const SkillResourcePanel = ({
   // client discards the stale response. Queues are keyed per tab — the panel
   // is not remounted on tab switch, so a single queue would let an in-flight
   // save for one file consume markdown queued for another.
-  const saveQueues = useRef(
-    new Map<string, { inFlight: boolean; pending: string | null }>(),
+  const [saveQueues] = useState(
+    () => new Map<string, { inFlight: boolean; pending: string | null }>(),
   );
   const saveQueueFor = (tabId: string) => {
-    const existing = saveQueues.current.get(tabId);
+    const existing = saveQueues.get(tabId);
     if (existing) {
       return existing;
     }
     const fresh = { inFlight: false, pending: null };
-    saveQueues.current.set(tabId, fresh);
+    saveQueues.set(tabId, fresh);
     return fresh;
   };
   const runSaveLoop = async (editorMarkdown: string) => {
@@ -246,12 +247,14 @@ export const SkillResourcePanel = ({
         }
         label={basenameOf(tab.resourcePath)}
         matter={
-          <span
-            className="text-muted-foreground truncate font-mono text-[10px]"
-            title={`${tab.skillName} · ${tab.resourcePath}`}
-          >
-            {tab.skillName}
-          </span>
+          <Tooltip
+            content={`${tab.skillName} · ${tab.resourcePath}`}
+            render={
+              <span className="text-muted-foreground truncate font-mono text-[10px]">
+                {tab.skillName}
+              </span>
+            }
+          />
         }
         onClose={onClose}
       />

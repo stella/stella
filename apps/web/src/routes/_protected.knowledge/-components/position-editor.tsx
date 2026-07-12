@@ -1,4 +1,4 @@
-import { useEffectEvent, useState } from "react";
+import { useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -64,6 +64,7 @@ import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { Switch } from "@/components/switch";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
 import {
@@ -243,7 +244,7 @@ export const PositionEditor = ({
   const [gripRef, setGripRef] = useState<HTMLButtonElement | null>(null);
   const { sourceId } = position;
   const bodyId = `position-body-${sourceId}`;
-  const handleReorder = useEffectEvent(onReorder);
+  const handleReorder = useLatestCallback(onReorder);
 
   useExternalSyncEffect(() => {
     if (!cardRef || !gripRef) {
@@ -292,7 +293,7 @@ export const PositionEditor = ({
         },
       }),
     );
-  }, [cardRef, gripRef, sourceId]);
+  }, [cardRef, gripRef, sourceId, handleReorder]);
 
   const handleGripKeyDown = (event: React.KeyboardEvent) => {
     if (event.key === "ArrowUp") {
@@ -1142,7 +1143,7 @@ const NegotiationSection = ({
             </Label>
             <div className="space-y-1.5">
               {talkingPoints.map((point, index) => (
-                // eslint-disable-next-line react/no-array-index-key -- talkingPoints is a persisted string[] (playbook negotiation data) with no id field and duplicate values allowed; each Input is fully controlled by its string value, so index-keyed reuse never mismatches rendered content.
+                // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- talkingPoints is a persisted string[] (playbook negotiation data) with no id field and duplicate values allowed; each Input is fully controlled by its string value, so index-keyed reuse never mismatches rendered content.
                 <div className="flex items-center gap-2" key={index}>
                   <Input
                     className="h-8 flex-1 text-sm"
@@ -1682,7 +1683,7 @@ const SelectOptionsEditor = ({
       <Label className="text-xs">{t("knowledge.playbooks.optionsLabel")}</Label>
       <div className="space-y-1.5">
         {content.options.map((option, index) => (
-          // eslint-disable-next-line react/no-array-index-key -- SelectAskContent options have no id and duplicate values are possible (new rows are added blank), but each row is fully controlled by its own value/color so index-keyed reuse never mismatches rendered content.
+          // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- SelectAskContent options have no id and duplicate values are possible (new rows are added blank), but each row is fully controlled by its own value/color so index-keyed reuse never mismatches rendered content.
           <div className="flex items-center gap-2" key={index}>
             <span
               className="size-2.5 shrink-0 rounded-full"

@@ -34,16 +34,17 @@ export const resolveWorkflowTargetEntityIds = ({
   inputEntityIds,
   inputOrder,
 }: ResolveWorkflowTargetEntityIdsArgs) => {
-  const entityIdsByKind = {
-    documents: new Set(
-      entityRows
-        .filter((entity) => entity.kind === "document")
-        .map((entity) => entity.id),
-    ),
-    explicitTargets: new Set(
-      entityRows.filter(isExplicitWorkflowTarget).map((entity) => entity.id),
-    ),
-  };
+  const documents = new Set<SafeId<"entity">>();
+  const explicitTargets = new Set<SafeId<"entity">>();
+  for (const entity of entityRows) {
+    if (entity.kind === "document") {
+      documents.add(entity.id);
+    }
+    if (isExplicitWorkflowTarget(entity)) {
+      explicitTargets.add(entity.id);
+    }
+  }
+  const entityIdsByKind = { documents, explicitTargets };
 
   const targetIds =
     inputEntityIds && inputEntityIds.length > 0

@@ -1,7 +1,6 @@
 import {
   lazy,
   Suspense,
-  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -46,8 +45,10 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
+import Tooltip from "@/components/tooltip";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -55,13 +56,13 @@ import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import {
   PDFProvider,
-  getPDFPageIdByNumber,
   usePDFStore,
   usePDFStoreApi,
 } from "@/lib/pdf/pdf-context";
+import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import { composeRefs } from "@/lib/slot";
+import { composeRefs } from "@/lib/utils";
 import { shouldUseDocxBrowserEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
@@ -375,7 +376,10 @@ function RouteComponentInner({
     (s) => s.setActiveJustification,
   );
   const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
-  const currentFileFieldIdsByPropertyRef = useRef(new Map<string, string>());
+  const currentFileFieldIdsByPropertyRef = useRef<Map<string, string> | null>(
+    null,
+  );
+  currentFileFieldIdsByPropertyRef.current ??= new Map();
   const navigate = Route.useNavigate();
 
   useLayoutEffect(() => {
@@ -436,11 +440,12 @@ function RouteComponentInner({
   // older version (leave alone). Ref-assign during render is the
   // sanctioned latest-value pattern; the write is idempotent.
   if (activeFileField !== undefined) {
-    // eslint-disable-next-line react/react-compiler -- sanctioned latest-value ref mirror: idempotent write consumed only by the version-switch effect below, never during render
+    /* eslint-disable react/react-compiler -- sanctioned latest-value ref mirror: idempotent write consumed only by the version-switch effect below, never during render */
     currentFileFieldIdsByPropertyRef.current.set(
       activeFileField.propertyId,
       activeFileField.id,
     );
+    /* eslint-enable react/react-compiler */
   }
   const activeVersionFile =
     versionData?.versions.find((version) => version.file?.fieldId === fieldId)
@@ -519,7 +524,13 @@ function RouteComponentInner({
       return;
     }
 
-    const previousCurrentFieldId = currentFileFieldIdsByPropertyRef.current.get(
+    // Narrowing from the render-scope `??=` does not survive into this
+    // closure, so re-establish non-null locally.
+    const currentFieldIds = currentFileFieldIdsByPropertyRef.current;
+    if (currentFieldIds === null) {
+      return;
+    }
+    const previousCurrentFieldId = currentFieldIds.get(
       latestFileFieldForProperty.propertyId,
     );
 
@@ -527,7 +538,7 @@ function RouteComponentInner({
       return;
     }
 
-    currentFileFieldIdsByPropertyRef.current.set(
+    currentFieldIds.set(
       latestFileFieldForProperty.propertyId,
       latestFileFieldForProperty.id,
     );
@@ -879,18 +890,22 @@ const RedlineOverlay = ({
         <span className="text-muted-foreground min-w-0 truncate text-xs">
           {t("fileDetail.redlinePreview")}
         </span>
-        <span
-          className="text-success shrink-0 text-xs font-medium tabular-nums"
-          title={`${String(compareState.wordsAdded)} ${t("fileDetail.wordsAdded")}`}
+        <Tooltip
+          content={`${String(compareState.wordsAdded)} ${t("fileDetail.wordsAdded")}`}
+          render={
+            <span className="text-success shrink-0 text-xs font-medium tabular-nums" />
+          }
         >
           +{compareState.wordsAdded}
-        </span>
-        <span
-          className="text-destructive shrink-0 text-xs font-medium tabular-nums"
-          title={`${String(compareState.wordsRemoved)} ${t("fileDetail.wordsRemoved")}`}
+        </Tooltip>
+        <Tooltip
+          content={`${String(compareState.wordsRemoved)} ${t("fileDetail.wordsRemoved")}`}
+          render={
+            <span className="text-destructive shrink-0 text-xs font-medium tabular-nums" />
+          }
         >
           −{compareState.wordsRemoved}
-        </span>
+        </Tooltip>
         <span className="text-muted-foreground shrink-0 text-xs">
           {t("fileDetail.changesDetected", {
             count: compareState.editsApplied,
@@ -955,7 +970,7 @@ const VersionDropZone = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const canStartUpload = useEffectEvent(() => !isUploading);
+  const canStartUpload = useLatestCallback(() => !isUploading);
 
   useExternalSyncEffect(() => {
     const el = dropRef.current;
@@ -1001,7 +1016,7 @@ const VersionDropZone = ({
         })();
       },
     });
-  }, [disabled, entityId, queryClient, workspaceId]);
+  }, [disabled, entityId, queryClient, workspaceId, canStartUpload]);
 
   return (
     <div className="relative flex h-full w-full min-w-0 flex-col" ref={dropRef}>

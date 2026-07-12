@@ -305,9 +305,9 @@ const translateEntity = createSafeHandler(
     }
 
     if (scanResult.value.verdict === "reject") {
-      const reasons = scanResult.value.findings
-        .filter((finding) => finding.severity === "reject")
-        .map((finding) => finding.message);
+      const reasons = scanResult.value.findings.flatMap((finding) =>
+        finding.severity === "reject" ? [finding.message] : [],
+      );
       return Result.err(
         new HandlerError({
           status: 422,

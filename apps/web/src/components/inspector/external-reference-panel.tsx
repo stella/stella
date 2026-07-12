@@ -33,6 +33,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { MessageResponse } from "@/components/ai-elements/message";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
+import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
@@ -359,39 +360,6 @@ export const ExternalSourceLogo = ({
       className={cn("text-muted-foreground size-3.5 shrink-0", className)}
     />
   );
-};
-
-export const findMcpConnectorIconHref = ({
-  connectorSlug,
-  connectors,
-}: {
-  connectorSlug: string;
-  connectors: {
-    iconUrl: string | null;
-    slug: string;
-    url: string;
-  }[];
-}): string | undefined => {
-  const connector = connectors.find(
-    (item) => sanitizeMcpToolNamePart(item.slug) === connectorSlug,
-  );
-  if (!connector) {
-    return undefined;
-  }
-
-  const iconHref = connector.iconUrl ?? fallbackIconUrl(connector.url);
-  return iconHref === undefined ? undefined : sanitizeHref(iconHref);
-};
-
-const sanitizeMcpToolNamePart = (value: string): string =>
-  value.replaceAll(/[^a-zA-Z0-9_-]/gu, "_");
-
-const fallbackIconUrl = (rawUrl: string): string | undefined => {
-  try {
-    return new URL("/favicon.ico", rawUrl).toString();
-  } catch {
-    return undefined;
-  }
 };
 
 type ExternalPdfState =
@@ -826,18 +794,12 @@ export const ExternalReferencePanel = ({
                   </p>
                 )}
                 {connectorSlug && (
-                  <span
-                    className="bg-muted text-muted-foreground max-w-24 truncate rounded px-1.5 py-0.5 font-mono text-[10px]"
-                    title={connectorSlug}
-                  >
+                  <span className="bg-muted text-muted-foreground max-w-24 truncate rounded px-1.5 py-0.5 font-mono text-[10px]">
                     {connectorSlug}
                   </span>
                 )}
                 {sourceToolName && (
-                  <span
-                    className="bg-muted text-muted-foreground min-w-0 truncate rounded px-1.5 py-0.5 font-mono text-[10px]"
-                    title={sourceToolName}
-                  >
+                  <span className="bg-muted text-muted-foreground min-w-0 truncate rounded px-1.5 py-0.5 font-mono text-[10px]">
                     {sourceToolName}
                   </span>
                 )}

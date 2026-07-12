@@ -11,6 +11,7 @@ import { BidiText } from "@stll/ui/components/bidi-text";
 import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import Tooltip from "@/components/tooltip";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -168,16 +169,20 @@ export const ChatBreadcrumb = ({
 
   return (
     <BreadcrumbItem className="min-w-0 shrink">
-      <button
-        className="hover:bg-accent hover:text-accent-foreground -mx-1 flex min-w-0 items-center rounded-sm px-1 py-0.5 transition-colors"
-        onClick={() => inlineRename.startEditing()}
-        title={t("chat.renameThread")}
-        type="button"
-      >
-        <BidiText as="span" className="max-w-64 truncate">
-          {displayTitle}
-        </BidiText>
-      </button>
+      <Tooltip
+        content={t("chat.renameThread")}
+        render={
+          <button
+            className="hover:bg-accent hover:text-accent-foreground -mx-1 flex min-w-0 items-center rounded-sm px-1 py-0.5 transition-colors"
+            onClick={() => inlineRename.startEditing()}
+            type="button"
+          >
+            <BidiText as="span" className="max-w-64 truncate">
+              {displayTitle}
+            </BidiText>
+          </button>
+        }
+      />
     </BreadcrumbItem>
   );
 };

@@ -303,7 +303,7 @@ export const czNsAdapter: SourceAdapter = {
 
           // Fetch detail + print pages in parallel
           try {
-            // oxlint-disable-next-line no-await-in-loop -- polite sequential crawl of one court detail page per entry, rate-limited via Bun.sleep below
+            // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- polite sequential crawl of one court detail page per entry, rate-limited via Bun.sleep below
             const [detailResponse, printResponse] = await Promise.all([
               fetchWithTimeout(webUrl, {
                 signal,
@@ -376,14 +376,14 @@ export const czNsAdapter: SourceAdapter = {
                   ...sourceMetadata,
                   judge,
                   legalSentence: meta["legalSentence"],
-                  keywords: meta["keywords"]
-                    ?.split("\n")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
-                  statutes: meta["statutes"]
-                    ?.split("\n")
-                    .map((s) => s.trim())
-                    .filter(Boolean),
+                  keywords: meta["keywords"]?.split("\n").flatMap((s) => {
+                    const trimmed = s.trim();
+                    return trimmed ? [trimmed] : [];
+                  }),
+                  statutes: meta["statutes"]?.split("\n").flatMap((s) => {
+                    const trimmed = s.trim();
+                    return trimmed ? [trimmed] : [];
+                  }),
                   category: meta["category"]?.trim(),
                 },
                 rawHash: hashContent(raw),

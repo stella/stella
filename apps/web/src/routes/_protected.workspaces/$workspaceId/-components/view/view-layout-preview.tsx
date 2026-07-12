@@ -15,10 +15,8 @@ import type { TranslationKey } from "@/i18n/types";
 import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 import type { ViewLayoutType, WorkspaceEntity } from "@/lib/types";
-import {
-  CalendarEntityChip,
-  TASK_STATUS_DOT_COLORS,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip";
+import { CalendarEntityChip } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip";
+import { TASK_STATUS_DOT_COLORS } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-utils";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import { KanbanCard } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card";
 import type {

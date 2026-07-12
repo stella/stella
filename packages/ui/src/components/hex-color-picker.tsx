@@ -172,9 +172,6 @@ const equalHex = (a: string, b: string): boolean => {
   return ra.r === rb.r && ra.g === rb.g && ra.b === rb.b && ra.a === rb.a;
 };
 
-const equalHsva = (a: HsvaColor, b: HsvaColor): boolean =>
-  a.h === b.h && a.s === b.s && a.v === b.v && a.a === b.a;
-
 // ---------------------------------------------------------------------------
 // useEventCallback — stable ref for callbacks
 // ---------------------------------------------------------------------------
@@ -202,30 +199,24 @@ const useColorManipulation = (
 ): [HsvaColor, (params: Partial<HsvaColor>) => void] => {
   const onChangeCallback = useEventCallback<string>(onChange);
   const [hsva, setHsva] = useState<HsvaColor>(() => hexToHsva(color));
-  const cache = useRef({ color, hsva });
+  const [committedColor, setCommittedColor] = useState(color);
 
-  // Sync inbound color prop → internal HSVA
-  useEffect(() => {
-    if (!equalHex(color, cache.current.color)) {
-      const next = hexToHsva(color);
-      cache.current = { hsva: next, color };
-      setHsva(next);
-    }
-  }, [color]);
-
-  // Sync internal HSVA → outbound onChange
-  useEffect(() => {
-    if (!equalHsva(hsva, cache.current.hsva)) {
-      const hex = hsvaToHex(hsva);
-      if (!equalHex(hex, cache.current.color)) {
-        cache.current = { hsva, color: hex };
-        onChangeCallback(hex);
-      }
-    }
-  }, [hsva, onChangeCallback]);
+  // Adjust internal HSVA when the inbound color prop changes. Comparing
+  // against the last committed color during render (React's "adjusting
+  // state when a prop changes" pattern) avoids a lagging extra-render effect.
+  if (!equalHex(color, committedColor)) {
+    setCommittedColor(color);
+    setHsva(hexToHsva(color));
+  }
 
   const handleChange = (params: Partial<HsvaColor>) => {
-    setHsva((current) => ({ ...current, ...params }));
+    const next = { ...hsva, ...params };
+    setHsva(next);
+    const hex = hsvaToHex(next);
+    if (!equalHex(hex, committedColor)) {
+      setCommittedColor(hex);
+      onChangeCallback(hex);
+    }
   };
 
   return [hsva, handleChange];

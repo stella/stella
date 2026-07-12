@@ -150,9 +150,9 @@ export default createSafeHandler(
     }
 
     if (scanResult.value.verdict === "reject") {
-      const reasons = scanResult.value.findings
-        .filter((finding) => finding.severity === "reject")
-        .map((finding) => finding.message);
+      const reasons = scanResult.value.findings.flatMap((finding) =>
+        finding.severity === "reject" ? [finding.message] : [],
+      );
       return Result.err(
         new HandlerError({
           status: 422,
@@ -245,6 +245,7 @@ export default createSafeHandler(
           workspaceReference: workspace?.reference ?? null,
         });
 
+        // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
         await tx.insert(entityVersions).values({
           createdBy: userId,
           entityId,
@@ -323,6 +324,7 @@ export default createSafeHandler(
           );
         }
 
+        // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
         await tx
           .update(entities)
           .set({

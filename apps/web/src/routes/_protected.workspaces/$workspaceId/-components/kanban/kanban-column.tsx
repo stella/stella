@@ -1,4 +1,4 @@
-import { useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
 import {
@@ -56,6 +56,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type {
   EntityKind,
   WorkspaceEntity,
@@ -184,7 +185,7 @@ export const KanbanColumn = ({
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
 
-  const handleEntityDrop = useEffectEvent(onDrop);
+  const handleEntityDrop = useLatestCallback(onDrop);
 
   const { isDropTarget, isInnerActive } = useExternalFileDrop({
     externalRef: columnRef,
@@ -282,7 +283,7 @@ export const KanbanColumn = ({
     }
 
     return combine(...cleanups);
-  }, [columnValue, isDraggable]);
+  }, [columnValue, isDraggable, handleEntityDrop]);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;

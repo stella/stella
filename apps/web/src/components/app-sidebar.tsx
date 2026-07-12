@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useEffectEvent, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -83,6 +83,7 @@ import {
 import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
@@ -348,6 +349,28 @@ export function AppSidebar(props: AppSidebarProps) {
     void navigate({ to: "/chat" });
   };
 
+  const knowledgeRecents: ContextAction[] = [];
+  for (const s of knowledgeSections) {
+    if (s.key !== "playbooks" || playbooksPreviewEnabled) {
+      const Icon = s.icon;
+      knowledgeRecents.push({
+        id: s.key,
+        label: t(s.titleKey),
+        icon: <Icon />,
+        onClick: () => {
+          if (s.to) {
+            void navigate({ to: s.to });
+            return;
+          }
+          stellaToast.add({
+            title: t("common.comingSoon"),
+            type: "neutral",
+          });
+        },
+      });
+    }
+  }
+
   const fixedNavTargetsById = {
     search: {
       action: () => setSearchOpen(true),
@@ -396,26 +419,7 @@ export function AppSidebar(props: AppSidebarProps) {
         void navigate({ to: "/knowledge" });
       },
       contextMenu: {
-        recents: knowledgeSections
-          .filter((s) => s.key !== "playbooks" || playbooksPreviewEnabled)
-          .map((s) => {
-            const Icon = s.icon;
-            return {
-              id: s.key,
-              label: t(s.titleKey),
-              icon: <Icon />,
-              onClick: () => {
-                if (s.to) {
-                  void navigate({ to: s.to });
-                  return;
-                }
-                stellaToast.add({
-                  title: t("common.comingSoon"),
-                  type: "neutral",
-                });
-              },
-            };
-          }),
+        recents: knowledgeRecents,
       },
     },
     contacts: {
@@ -453,7 +457,7 @@ export function AppSidebar(props: AppSidebarProps) {
     ),
   ];
 
-  const runNavTarget = useEffectEvent((index: number): boolean => {
+  const runNavTarget = useLatestCallback((index: number): boolean => {
     const navTarget = navTargets.at(index);
     if (!navTarget) {
       return false;
@@ -487,7 +491,7 @@ export function AppSidebar(props: AppSidebarProps) {
 
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [showNavBadges]);
+  }, [showNavBadges, runNavTarget]);
 
   return (
     <Sidebar
@@ -962,15 +966,17 @@ const MatterItem = ({
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
 
-  const handleReorder = useEffectEvent(
+  const handleReorder = useLatestCallback(
     (draggedId: string, targetId: string) => {
       onReorder?.(draggedId, targetId);
     },
   );
 
-  const handleEntityDrop = useEffectEvent((entities: CopyToMatterEntity[]) => {
-    onEntityDrop?.(ws.id, entities);
-  });
+  const handleEntityDrop = useLatestCallback(
+    (entities: CopyToMatterEntity[]) => {
+      onEntityDrop?.(ws.id, entities);
+    },
+  );
 
   // Entity drops (files from the open matter's table) are accepted on every
   // matter row; the pinned-reorder draggable + drop target only attaches to
@@ -1043,7 +1049,7 @@ const MatterItem = ({
         }),
       }),
     );
-  }, [ws.id, canDrag]);
+  }, [ws.id, canDrag, handleReorder, handleEntityDrop]);
 
   const relTime = formatRelativeTime(ws.lastActivityAt);
 
@@ -1175,9 +1181,11 @@ const MatterItem = ({
               <BidiText as="span" className="truncate">
                 {ws.name}
               </BidiText>
-              <span
-                className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100"
-                title={formatFullTimestamp(ws.lastActivityAt)}
+              <Tooltip
+                content={formatFullTimestamp(ws.lastActivityAt)}
+                render={
+                  <span className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100" />
+                }
               >
                 <BidiText>
                   {ws.client
@@ -1185,7 +1193,7 @@ const MatterItem = ({
                     : t("workspaces.parties.personalLabel")}
                 </BidiText>
                 {relTime ? ` · ${relTime}` : ""}
-              </span>
+              </Tooltip>
             </span>
           </Link>
         </SidebarMenuButton>
@@ -1196,18 +1204,23 @@ const MatterItem = ({
             className="absolute end-1 top-1.5 flex items-center gap-0.5 opacity-0 group-focus-within/menu-item:opacity-100 group-hover/menu-item:opacity-100 group-data-[collapsible=icon]:hidden data-[pinned]:opacity-100"
             data-pinned={isPinned || undefined}
           >
-            <button
-              className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden"
-              onClick={() => onTogglePin(ws.id)}
-              title={isPinned ? t("common.unpin") : t("common.pin")}
-              type="button"
+            <Tooltip
+              content={isPinned ? t("common.unpin") : t("common.pin")}
+              render={
+                <button
+                  aria-label={isPinned ? t("common.unpin") : t("common.pin")}
+                  className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden"
+                  onClick={() => onTogglePin(ws.id)}
+                  type="button"
+                />
+              }
             >
               {isPinned ? (
                 <PinOffIcon className="size-3.5" />
               ) : (
                 <PinIcon className="size-3.5" />
               )}
-            </button>
+            </Tooltip>
             <Menu
               onOpenChange={(open) => {
                 setMenuOpen(open);
@@ -1387,12 +1400,14 @@ const MatterActivityList = ({
               {title}
             </BidiText>
             {relativeTime ? (
-              <span
-                className="text-muted-foreground shrink-0 tabular-nums"
-                title={formatFullTimestamp(item.activityAt)}
+              <Tooltip
+                content={formatFullTimestamp(item.activityAt)}
+                render={
+                  <span className="text-muted-foreground shrink-0 tabular-nums" />
+                }
               >
                 {relativeTime}
-              </span>
+              </Tooltip>
             ) : null}
           </>
         );

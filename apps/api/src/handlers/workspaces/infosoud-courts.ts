@@ -58,8 +58,10 @@ const infosoudCourts = createSafeHandler(config, async function* ({ request }) {
     Result.tryPromise({
       try: async () => {
         const client = createInfoSoudClient();
-        const courts = await client.getCourts({ signal });
-        const districtCourts = await client.getDistrictCourts({ signal });
+        const [courts, districtCourts] = await Promise.all([
+          client.getCourts({ signal }),
+          client.getDistrictCourts({ signal }),
+        ]);
         const courtMap = buildCourtMapFromEntries([
           ...courts,
           ...districtCourts,

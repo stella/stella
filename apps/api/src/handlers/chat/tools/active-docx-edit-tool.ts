@@ -193,10 +193,13 @@ const deriveOperationVariant = (
     panic("Malformed folio operation variant schema");
   }
   const typeProperty = sourceProperties["type"];
-  const operationType =
+  // Typed as unknown[]: Array.isArray alone narrows to any[], which the
+  // unsafe-any lint rules reject.
+  const typeEnum: unknown[] | undefined =
     isJsonObject(typeProperty) && Array.isArray(typeProperty["enum"])
-      ? typeProperty["enum"].at(0)
+      ? typeProperty["enum"]
       : undefined;
+  const operationType = typeEnum?.at(0);
   if (typeof operationType !== "string") {
     panic("Missing `type` discriminator in folio operation variant schema");
   }
@@ -229,9 +232,12 @@ const deriveOperationVariant = (
     }
   }
 
+  // Typed as unknown[]: Array.isArray alone narrows to any[], which the
+  // unsafe-any lint rules reject.
+  const requiredKeys: unknown[] = sourceRequired;
   const required = [
     // Narrowing: the operation id is optional on this surface.
-    ...sourceRequired.filter((key) => key !== "id"),
+    ...requiredKeys.filter((key) => key !== "id"),
     "severity",
     "area",
   ];
@@ -412,9 +418,9 @@ const narrowOperation = ({
   return stripped;
 };
 
-const validateActiveDocxEditToolInput = async (
+const validateActiveDocxEditToolInput = (
   input: unknown,
-): Promise<StandardSchemaV1.Result<ValidatedActiveDocxEditToolInput>> => {
+): StandardSchemaV1.Result<ValidatedActiveDocxEditToolInput> => {
   if (!isJsonObject(input)) {
     return {
       issues: [
@@ -469,9 +475,10 @@ const validateActiveDocxEditToolInput = async (
     return { issues };
   }
 
-  const folioResult = await folioDocumentOperationBatchSchema[
-    "~standard"
-  ].validate({
+  // No await: folio's batch schema is a synchronous valibot schema, so
+  // `~standard.validate` types (and resolves) synchronously; if folio ever
+  // turns it async the types change and this line fails typecheck.
+  const folioResult = folioDocumentOperationBatchSchema["~standard"].validate({
     version: FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION,
     operations: parseable,
   });
@@ -488,6 +495,7 @@ const validateActiveDocxEditToolInput = async (
       // narrowings (accepted type, required severity/area). The stripped
       // copies differ from the parsed batch only by the generated
       // placeholder ids, which are validation-only.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see the SAFETY note above; the parser validated the exact shape
       operations: stripped as ActiveDocxEditOperation[],
     },
   };

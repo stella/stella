@@ -78,31 +78,35 @@ export const clauseBodyToRichPatch = (body: ClauseBody): RichPatchValue => {
   // (a non-list paragraph) or a level is left and re-entered.
   const counters = new Map<number, number>();
 
-  const paragraphs = body
-    .filter((p) => !p.isDirective)
-    .map((p) => {
-      if (!p.listKind) {
-        counters.clear();
-        return { runs: paragraphRuns(p) };
-      }
+  const paragraphs: { runs: RichRun[] }[] = [];
+  for (const p of body) {
+    if (p.isDirective) {
+      continue;
+    }
 
-      const level = Math.max(0, p.listLevel ?? 0);
-      // Leaving a deeper level invalidates its counter for a fresh restart.
-      for (const key of counters.keys()) {
-        if (key > level) {
-          counters.delete(key);
-        }
-      }
-      const ordinal = (counters.get(level) ?? 0) + 1;
-      counters.set(level, ordinal);
+    if (!p.listKind) {
+      counters.clear();
+      paragraphs.push({ runs: paragraphRuns(p) });
+      continue;
+    }
 
-      return {
-        runs: prefixRuns(
-          paragraphRuns(p),
-          listMarker(p.listKind, level, ordinal),
-        ),
-      };
+    const level = Math.max(0, p.listLevel ?? 0);
+    // Leaving a deeper level invalidates its counter for a fresh restart.
+    for (const key of counters.keys()) {
+      if (key > level) {
+        counters.delete(key);
+      }
+    }
+    const ordinal = (counters.get(level) ?? 0) + 1;
+    counters.set(level, ordinal);
+
+    paragraphs.push({
+      runs: prefixRuns(
+        paragraphRuns(p),
+        listMarker(p.listKind, level, ordinal),
+      ),
     });
+  }
 
   return { paragraphs };
 };

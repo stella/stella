@@ -24,6 +24,7 @@ import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 
@@ -166,19 +167,23 @@ export const VersionRow = ({
             name={author.name}
           />
         )}
-        <span
-          className="text-muted-foreground truncate text-xs"
-          dir="auto"
-          title={author?.name}
+        <Tooltip
+          content={author?.name}
+          render={
+            <span
+              className="text-muted-foreground truncate text-xs"
+              dir="auto"
+            />
+          }
         >
           {author ? firstName(author.name) : ""}
-        </span>
-        <span
-          className="text-muted-foreground shrink-0 text-xs"
-          title={formatFullTimestamp(createdAt)}
+        </Tooltip>
+        <Tooltip
+          content={formatFullTimestamp(createdAt)}
+          render={<span className="text-muted-foreground shrink-0 text-xs" />}
         >
           {formatRelativeTime(createdAt)}
-        </span>
+        </Tooltip>
       </div>
     </>
   );
@@ -282,6 +287,26 @@ export const VersionRow = ({
 
 // ── Diff block ───────────────────────────────────────
 
+// Segments carry no id of their own (they're recomputed fresh from the diff
+// on every fetch), so keys derive from the segment's own kind/text plus an
+// occurrence counter: identical items (repeated gaps, duplicate context
+// lines, the same word deleted twice) stay unique without leaning on the
+// array index.
+const withStableKeys = <T,>(items: readonly T[], base: (item: T) => string) => {
+  const counts = new Map<string, number>();
+  return items.map((item) => {
+    const b = base(item);
+    const n = counts.get(b) ?? 0;
+    counts.set(b, n + 1);
+    return { item, key: `${b}-${n}` };
+  });
+};
+
+const segmentDiffKey = (segment: VersionDiffSegment) =>
+  segment.kind === "changed"
+    ? `changed-${segment.runs.map((run) => run.text).join("")}`
+    : `${segment.kind}-${segment.text}`;
+
 // Also consumed standalone by the template Clauses tab, which renders
 // the same diff/summary visuals for outdated clause links without the
 // full VersionRow chrome.
@@ -318,10 +343,11 @@ export const VersionDiffBlock = ({
   }
   return (
     <div className="bg-muted/50 flex max-h-64 flex-col gap-1 overflow-y-auto rounded-md px-2.5 py-2 text-xs leading-5 whitespace-pre-wrap">
-      {state.value.map((segment, index) => (
-        // eslint-disable-next-line react/no-array-index-key -- read-only version diff fetched once and rendered as a whole batch; never reordered/edited.
-        <DiffSegmentParagraph key={index} segment={segment} />
-      ))}
+      {withStableKeys(state.value, segmentDiffKey).map(
+        ({ item: segment, key }) => (
+          <DiffSegmentParagraph key={key} segment={segment} />
+        ),
+      )}
     </div>
   );
 };
@@ -367,10 +393,11 @@ const DiffSegmentParagraph = ({ segment }: { segment: VersionDiffSegment }) => {
   if (segment.kind === "changed") {
     return (
       <p>
-        {segment.runs.map((run, index) => (
-          // eslint-disable-next-line react/no-array-index-key -- read-only version diff fetched once and rendered as a whole batch; never reordered/edited.
-          <DiffRunSpan key={index} run={run} />
-        ))}
+        {withStableKeys(segment.runs, (run) => `${run.kind}-${run.text}`).map(
+          ({ item: run, key }) => (
+            <DiffRunSpan key={key} run={run} />
+          ),
+        )}
       </p>
     );
   }

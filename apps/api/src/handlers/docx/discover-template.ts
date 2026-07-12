@@ -143,6 +143,7 @@ const buildConditionMapFromRanges = (
       const expr = frame.currentBranchExpr;
       // Wrap in parens if the expression contains `or`
       // to preserve correct precedence when joined
+      // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
       const wrapped = expr.includes(" or ") ? `(${expr})` : expr;
       result = result ? `${result} and ${wrapped}` : wrapped;
     }
@@ -173,6 +174,7 @@ const buildConditionMapFromRanges = (
       }
       // Wrap the elseif expression in parens if it
       // contains `or` to preserve precedence when joined
+      // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
       const exprPart = d.expression.includes(" or ")
         ? `(${d.expression})`
         : d.expression;
@@ -504,7 +506,7 @@ const analyzeHeadersAndFooters = async (
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential to keep running paragraph offsets correct across parts
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential to keep running paragraph offsets correct across parts
     const xml = await entry.async("string");
     const doc = slimdom.parseXmlDocument(xml);
 

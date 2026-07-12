@@ -1,5 +1,7 @@
 "use client";
 
+/* eslint-disable react/no-react-children -- children-walking/slot primitive; the React.Children traversal IS the component's API */
+
 import * as React from "react";
 
 import { Select as SelectPrimitive } from "@base-ui/react/select";

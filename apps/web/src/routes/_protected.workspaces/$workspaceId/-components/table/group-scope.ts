@@ -1,4 +1,4 @@
-import { createContext, useContext } from "react";
+import { createContext, use } from "react";
 
 // Identifies the grouped-view subtable a column header lives in. The shared
 // column definitions are reused across every group, so a header learns its
@@ -18,5 +18,4 @@ const GroupScopeContext = createContext<GroupScope | null>(null);
 
 export const GroupScopeProvider = GroupScopeContext.Provider;
 
-export const useGroupScope = (): GroupScope | null =>
-  useContext(GroupScopeContext);
+export const useGroupScope = (): GroupScope | null => use(GroupScopeContext);

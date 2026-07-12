@@ -324,6 +324,7 @@ const fillByIdHandler = async function* ({
     Result.tryPromise({
       try: async () =>
         await scopedDb(async (tx) => {
+          // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client (single Postgres connection can't run concurrent statements)
           await recordTemplateUse({ tx, templateId });
           await tx.insert(templateFills).values({
             organizationId,

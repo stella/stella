@@ -355,10 +355,11 @@ export const serializeOverrideModels = ({
     RoleValue,
     ModelSelection
   >;
+  const providerSet = new Set(providers);
   for (const role of ROLE_KEYS) {
     const selection = selections[role];
     if (
-      !providers.includes(selection.provider) ||
+      !providerSet.has(selection.provider) ||
       !isKnownModelSelectionForRole({ selection, role })
     ) {
       return null;

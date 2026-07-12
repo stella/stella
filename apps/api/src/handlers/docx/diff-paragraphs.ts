@@ -171,11 +171,12 @@ export const diffParagraphs = (
   const edits: DocxEdit[] = [];
   const skippedRewrites: number[] = [];
   const stats: DiffStats = { wordsAdded: 0, wordsRemoved: 0 };
+  const paragraphsByIndex = new Map(
+    extracted.paragraphs.map((p) => [p.index, p]),
+  );
 
   for (const rewrite of rewrites) {
-    const para = extracted.paragraphs.find(
-      (p) => p.index === rewrite.paragraphIndex,
-    );
+    const para = paragraphsByIndex.get(rewrite.paragraphIndex);
     if (!para) {
       skippedRewrites.push(rewrite.paragraphIndex);
       continue;

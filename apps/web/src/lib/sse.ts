@@ -1,8 +1,7 @@
-import { useEffectEvent } from "react";
-
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 
@@ -55,7 +54,7 @@ export const useWorkspaceSSE = (
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
 
-  const handleParsedEvent = useEffectEvent((event: WorkspaceSSEEvent) => {
+  const handleParsedEvent = useLatestCallback((event: WorkspaceSSEEvent) => {
     options.onEvent?.(event);
 
     if (
@@ -65,7 +64,7 @@ export const useWorkspaceSSE = (
       void queryClient.invalidateQueries({ queryKey: event.data });
     }
   });
-  const captureClosedConnection = useEffectEvent(() => {
+  const captureClosedConnection = useLatestCallback(() => {
     analytics.captureError(
       new Error(`SSE connection closed for workspace ${workspaceId}`),
     );
@@ -106,5 +105,5 @@ export const useWorkspaceSSE = (
       source.removeEventListener("error", handleError);
       source.close();
     };
-  }, [workspaceId]);
+  }, [workspaceId, captureClosedConnection, handleParsedEvent]);
 };

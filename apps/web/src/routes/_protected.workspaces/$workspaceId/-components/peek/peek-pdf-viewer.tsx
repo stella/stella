@@ -33,28 +33,26 @@ import {
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
-import { PDF_MIME_TYPE } from "@/consts";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { apiUrl } from "@/lib/api-url";
 import { DOCX_MIME } from "@/lib/consts";
-import { APIError } from "@/lib/errors/api";
-import { fetchWithTimeout } from "@/lib/fetch";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
-import { composeRefs } from "@/lib/slot";
+import { composeRefs } from "@/lib/utils";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
 import { fileOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization";
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
+import {
+  fetchPrintPdf,
+  printPdfBuffer,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-print";
 
 const DocxEditor = lazy(async () => {
   const m = await import("@/components/docx/app-docx-editor");
   return { default: m.DocxEditor };
 });
-
-const PRINT_IFRAME_CLEANUP_MS = 5 * 60 * 1000;
 
 type PeekPdfViewerProps = {
   workspaceId: string;
@@ -259,61 +257,6 @@ export const PeekPdfControls = ({
   );
 };
 
-export const printPdfBuffer = (buffer: ArrayBuffer) => {
-  const blob = new Blob([buffer], {
-    type: PDF_MIME_TYPE,
-  });
-  const url = URL.createObjectURL(blob);
-  const frame = document.createElement("iframe");
-  frame.style.display = "none";
-  frame.src = url;
-  document.body.append(frame);
-
-  let cleaned = false;
-  const cleanup = () => {
-    if (cleaned) {
-      return;
-    }
-    cleaned = true;
-    frame.remove();
-    URL.revokeObjectURL(url);
-  };
-  setTimeout(cleanup, PRINT_IFRAME_CLEANUP_MS);
-
-  frame.addEventListener("load", () => {
-    if (!frame.contentWindow) {
-      cleanup();
-      return;
-    }
-    frame.contentWindow.addEventListener("afterprint", cleanup, { once: true });
-    frame.contentWindow.print();
-  });
-};
-
-export const fetchPrintPdf = async ({
-  workspaceId,
-  fieldId,
-  signal,
-}: {
-  workspaceId: string;
-  fieldId: string;
-  signal?: AbortSignal | undefined;
-}) => {
-  const response = await fetchWithTimeout(
-    apiUrl(`/files/${workspaceId}/print-pdf/${fieldId}`),
-    { credentials: "include", signal, timeoutMs: 30_000 },
-  );
-
-  if (!response.ok) {
-    throw new APIError({
-      status: response.status,
-      message: "Failed to prepare printable PDF",
-    });
-  }
-
-  return await response.arrayBuffer();
-};
-
 export const PeekPrintButton = () => {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -336,6 +279,7 @@ export const PeekPrintButton = () => {
 
     setIsPrinting(true);
     try {
+      // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: abort can only fire during this await since the controller was just created; the check can't trigger earlier
       const data = await pdfDocument.document.getData();
       if (controller.signal.aborted) {
         return;
@@ -397,6 +341,7 @@ export const PreparedPdfPrintButton = ({
 
     setIsPrinting(true);
     try {
+      // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: abort can only fire during this await since the controller was just created; the check can't trigger earlier
       const data = await fetchPrintPdf({
         workspaceId,
         fieldId,

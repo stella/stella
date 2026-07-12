@@ -305,6 +305,7 @@ export const deleteTemplateCategoryHandler = async ({
     // null). Must happen before the delete; otherwise the
     // FK onDelete: "set null" would null children's
     // parentId instead of promoting to grandparent.
+    // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: this update must precede the delete (FK promotion order above) and shares this tx connection with the delete/recordAuditEvent below
     await tx
       .update(templateCategories)
       .set({ parentId: existing.parentId ?? null })

@@ -125,7 +125,7 @@ if (import.meta.main) {
   let failures = 0;
   for (const [i, key] of keysToUpdate.entries()) {
     process.stdout.write(`  ${key}... `);
-    // oxlint-disable-next-line no-await-in-loop -- sequential per-adapter recording with rate-limit delay between adapters
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential per-adapter recording with rate-limit delay between adapters
     const result = await updateAdapter(key);
 
     if ("error" in result) {

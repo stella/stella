@@ -27,11 +27,13 @@ import {
 } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
 import {
-  createPromptEditorDocument,
-  handlePromptEditorSelectAll,
   PROMPT_EDITOR_SELECTION_CLASS,
   PromptEditorContent,
 } from "@/components/prompt-editor";
+import {
+  createPromptEditorDocument,
+  handlePromptEditorSelectAll,
+} from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 

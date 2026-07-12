@@ -9,6 +9,7 @@ import { Form } from "@stll/ui/components/form";
 import { cn } from "@stll/ui/lib/utils";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import {
   COUNTRY_POINTS,
@@ -314,19 +315,28 @@ export const JurisdictionGlobePreview = ({
                 </span>
               )}
               {onChange && (
-                <button
-                  aria-label={t("onboarding.jurisdictionRemove", { name })}
-                  title={t("onboarding.jurisdictionRemove", { name })}
-                  className="text-muted-foreground hover:text-foreground"
-                  onClick={() =>
-                    onChange(
-                      removeJurisdiction(selected, jurisdiction.countryCode),
-                    )
+                <Tooltip
+                  content={t("onboarding.jurisdictionRemove", { name })}
+                  render={
+                    <button
+                      aria-label={t("onboarding.jurisdictionRemove", {
+                        name,
+                      })}
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() =>
+                        onChange(
+                          removeJurisdiction(
+                            selected,
+                            jurisdiction.countryCode,
+                          ),
+                        )
+                      }
+                      type="button"
+                    >
+                      <XIcon className="size-3" />
+                    </button>
                   }
-                  type="button"
-                >
-                  <XIcon className="size-3" />
-                </button>
+                />
               )}
             </span>
           );

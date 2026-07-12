@@ -1,5 +1,4 @@
-import { useRef } from "react";
-import type { RefObject } from "react";
+import { useState } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { QueryClient } from "@tanstack/react-query";
@@ -159,8 +158,11 @@ function RouteComponent() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
-  const previewClearTimersRef = useRef(
-    new Map<string, ReturnType<typeof setTimeout>>(),
+  // Lazy state singleton (mutated in place, identity stable): avoids both
+  // the render-scope ref write (React Compiler bailout) and per-render
+  // allocation.
+  const [previewClearTimers] = useState(
+    () => new Map<string, ReturnType<typeof setTimeout>>(),
   );
 
   const handleWorkspaceSSEEvent = ({
@@ -191,8 +193,9 @@ function RouteComponent() {
       return;
     }
 
+    const timers = previewClearTimers;
     const key = extractionPreviewKey(data.entityId, data.propertyId);
-    const previousTimer = previewClearTimersRef.current.get(key);
+    const previousTimer = timers.get(key);
     if (previousTimer !== undefined) {
       clearTimeout(previousTimer);
     }
@@ -207,9 +210,9 @@ function RouteComponent() {
       useWorkspaceStore
         .getState()
         .clearExtractionPreview(data.entityId, data.propertyId);
-      previewClearTimersRef.current.delete(key);
+      timers.delete(key);
     }, EXTRACTION_PREVIEW_CLIENT_TTL_MS);
-    previewClearTimersRef.current.set(key, nextTimer);
+    timers.set(key, nextTimer);
   };
 
   // Subscribe to workspace SSE events for real-time query invalidation.
@@ -266,7 +269,7 @@ function RouteComponent() {
     <WorkflowStartConfirmationPromptProvider>
       <WorkspaceLifecycleCleanup
         key={workspaceId}
-        previewClearTimersRef={previewClearTimersRef}
+        previewClearTimers={previewClearTimers}
       />
       <WorkflowServiceTierPromptProvider>
         {content}
@@ -276,12 +279,11 @@ function RouteComponent() {
 }
 
 const WorkspaceLifecycleCleanup = ({
-  previewClearTimersRef,
+  previewClearTimers,
 }: {
-  previewClearTimersRef: RefObject<Map<string, ReturnType<typeof setTimeout>>>;
+  previewClearTimers: Map<string, ReturnType<typeof setTimeout>>;
 }) => {
   useMountEffect(() => () => {
-    const previewClearTimers = previewClearTimersRef.current;
     for (const timer of previewClearTimers.values()) {
       clearTimeout(timer);
     }

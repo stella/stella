@@ -314,9 +314,17 @@ const normalizeNegotiation = (
     return undefined;
   }
   const rationale = negotiation.rationale?.trim();
-  const talkingPoints = negotiation.talkingPoints
-    ?.map((point) => point.trim())
-    .filter((point) => point.length > 0);
+  const rawTalkingPoints = negotiation.talkingPoints;
+  let talkingPoints: string[] | undefined;
+  if (rawTalkingPoints !== undefined) {
+    talkingPoints = [];
+    for (const point of rawTalkingPoints) {
+      const trimmedPoint = point.trim();
+      if (trimmedPoint.length > 0) {
+        talkingPoints.push(trimmedPoint);
+      }
+    }
+  }
   const escalation = negotiation.escalation?.trim();
 
   const next: Negotiation = {
@@ -331,10 +339,16 @@ const normalizeNegotiation = (
   return Object.keys(next).length > 0 ? next : undefined;
 };
 
-const cleanRules = (rules: readonly TierRule[]): TierRule[] =>
-  rules
-    .filter((rule) => rule.text.trim().length > 0)
-    .map((rule) => ({ id: rule.id, text: rule.text.trim() }));
+const cleanRules = (rules: readonly TierRule[]): TierRule[] => {
+  const result: TierRule[] = [];
+  for (const rule of rules) {
+    const text = rule.text.trim();
+    if (text.length > 0) {
+      result.push({ id: rule.id, text });
+    }
+  }
+  return result;
+};
 
 const trimmedEntry = (entry: FallbackEntry): FallbackEntry => {
   const label = entry.label?.trim();
@@ -343,8 +357,15 @@ const trimmedEntry = (entry: FallbackEntry): FallbackEntry => {
     : { id: entry.id, text: entry.text.trim() };
 };
 
-const cleanEntries = (entries: readonly FallbackEntry[]): FallbackEntry[] =>
-  entries.filter((entry) => entry.text.trim().length > 0).map(trimmedEntry);
+const cleanEntries = (entries: readonly FallbackEntry[]): FallbackEntry[] => {
+  const result: FallbackEntry[] = [];
+  for (const entry of entries) {
+    if (entry.text.trim().length > 0) {
+      result.push(trimmedEntry(entry));
+    }
+  }
+  return result;
+};
 
 const normalizeContent = (content: PositionAskContent): PositionAskContent => {
   if (content.type !== "single-select" && content.type !== "multi-select") {

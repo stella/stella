@@ -55,7 +55,7 @@ export const buildArchivePaths = ({
   nodes,
 }: BuildArchivePathsArgs): Map<string, string> => {
   const sanitizedRoot = sanitizeFilename(rootName);
-  const orderedNodes = [...nodes].sort(compareArchiveNode);
+  const orderedNodes = nodes.toSorted(compareArchiveNode);
 
   const nodeById = new Map<string, ArchiveNode>();
   for (const node of orderedNodes) {
@@ -170,7 +170,7 @@ export const mapOrderedConcurrent = async function* <T, R>(
     if (head === undefined) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop -- bounded-concurrency drain: await the in-flight head before refilling the window and yielding
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- bounded-concurrency drain: await the in-flight head before refilling the window and yielding
     const result = await head;
     startNext();
     yield result;

@@ -10,6 +10,7 @@ import type {
   PrhRawCompanyForm,
   PrhRawLocalizedDescription,
   PrhRawName,
+  PrhRawPostOffice,
   PrhSearchResult,
 } from "./types.js";
 
@@ -53,8 +54,14 @@ const pickLocalizedDescription = (
   if (!entries || entries.length === 0) {
     return null;
   }
+  const byLanguage = new Map<string, PrhRawLocalizedDescription>();
+  for (const entry of entries) {
+    if (!byLanguage.has(entry.languageCode)) {
+      byLanguage.set(entry.languageCode, entry);
+    }
+  }
   for (const code of priority) {
-    const hit = entries.find((entry) => entry.languageCode === code);
+    const hit = byLanguage.get(code);
     if (hit?.description) {
       return hit.description;
     }
@@ -67,8 +74,14 @@ const pickCity = (raw: PrhRawAddress): string | null => {
   if (offices.length === 0) {
     return null;
   }
+  const byLanguage = new Map<string, PrhRawPostOffice>();
+  for (const office of offices) {
+    if (!byLanguage.has(office.languageCode)) {
+      byLanguage.set(office.languageCode, office);
+    }
+  }
   for (const code of ADDRESS_CITY_LANGUAGE_PRIORITY) {
-    const hit = offices.find((office) => office.languageCode === code);
+    const hit = byLanguage.get(code);
     if (hit?.city) {
       return hit.city;
     }

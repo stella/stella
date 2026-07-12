@@ -301,7 +301,7 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
         .limit(REINDEX_BATCH_SIZE);
 
       for (const entity of batch) {
-        // oxlint-disable-next-line no-await-in-loop -- sequential per-entity reindex writes bound DB load during rebuild
+        // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: bounds DB load during full-org reindex rebuild
         await indexEntity(entity.id);
       }
 

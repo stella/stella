@@ -97,6 +97,7 @@ const addFormulaFieldReferences = (
   referencedPaths: Set<string>,
 ): void => {
   for (const field of fields) {
+    // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
     if (expr.includes(field.path)) {
       referencedPaths.add(field.path);
     }
@@ -346,32 +347,12 @@ type FormValues = Record<string, unknown>;
 
 /** Form-state key holding an array field's item index list (`number[]`),
  *  bookkeeping rather than a field value. Single source of the array key
- *  naming scheme; hosts tapping `onValuesChange` parse keys through this
- *  and {@link parseArrayItemKey}. */
+ *  naming scheme; hosts tapping `onValuesChange` parse keys through
+ *  {@link parseArrayItemKey} in `template-array-item-key.ts`. */
 export const ARRAY_INDEX_KEY_PREFIX = "__array_";
 
 const arrayIndexKey = (fieldPath: string): string =>
   `${ARRAY_INDEX_KEY_PREFIX}${fieldPath}`;
-
-/** Array item inputs as named by ArrayFieldRenderer: `<path>[<index>].<sub>`. */
-const ARRAY_ITEM_KEY_RE = /^(?<path>.+)\[(?<index>\d+)\]\.(?<sub>.+)$/u;
-
-export type ArrayItemKey = {
-  /** The array field's path. */
-  path: string;
-  index: number;
-  /** The item sub-field's path within the array field. */
-  sub: string;
-};
-
-/** Parse a form-state key into its array item parts; null for scalar keys. */
-export const parseArrayItemKey = (key: string): ArrayItemKey | null => {
-  const { path, index, sub } = ARRAY_ITEM_KEY_RE.exec(key)?.groups ?? {};
-  if (path === undefined || index === undefined || sub === undefined) {
-    return null;
-  }
-  return { path, index: Number(index), sub };
-};
 
 /**
  * Read an `__array_*` key from form state into a `number[]` index list.
@@ -1561,6 +1542,7 @@ export const TemplateForm = ({
       addConditionAstReferences(condition.node, allFields, referencedPaths);
     }
     for (const f of allFields) {
+      // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
       if (condition.expression.includes(f.path)) {
         referencedPaths.add(f.path);
       }
@@ -1818,9 +1800,10 @@ export const TemplateForm = ({
   const applyPrefill = (suggestions: PrefillSuggestionDto[]): number => {
     let applied = 0;
     const nextSnippets: Record<string, string | null> = {};
+    const fieldByPath = new Map(fields.map((f) => [f.path, f]));
 
     for (const suggestion of suggestions) {
-      const def = fields.find((f) => f.path === suggestion.path);
+      const def = fieldByPath.get(suggestion.path);
       if (!def || def.kind === "array") {
         continue;
       }

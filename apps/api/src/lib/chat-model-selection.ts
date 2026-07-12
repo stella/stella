@@ -102,9 +102,13 @@ const configuredChatProviders = (
   orgAIConfig: OrgAIConfig | null,
 ): BYOKProvider[] => {
   if (orgAIConfig) {
-    return orgAIConfig.providers
-      .map((providerConfig) => providerConfig.provider)
-      .filter(isBYOKProviderValue);
+    const providers: BYOKProvider[] = [];
+    for (const providerConfig of orgAIConfig.providers) {
+      if (isBYOKProviderValue(providerConfig.provider)) {
+        providers.push(providerConfig.provider);
+      }
+    }
+    return providers;
   }
   if (!hasTanStackInstanceProvider()) {
     return [];

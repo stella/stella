@@ -73,10 +73,13 @@ const getLatestUserText = (messages: ModelMessage[]): string => {
     return "";
   }
 
-  return content
-    .filter(isTextPart)
-    .map((part) => part.content)
-    .join("");
+  const textParts: string[] = [];
+  for (const part of content) {
+    if (isTextPart(part)) {
+      textParts.push(part.content);
+    }
+  }
+  return textParts.join("");
 };
 
 const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({

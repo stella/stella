@@ -69,8 +69,7 @@ const isTextPart = (part: UIMessagePart): part is UIMessageTextPart =>
 
 const textFromUIMessage = (message: UIMessage): string =>
   message.parts
-    .filter(isTextPart)
-    .map((part) => part.content)
+    .flatMap((part) => (isTextPart(part) ? [part.content] : []))
     .join("");
 
 /**

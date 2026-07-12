@@ -70,15 +70,22 @@ const getMonthDays = (
   return days;
 };
 
+const weekdayFormatters = new Map<string, Intl.DateTimeFormat>();
+
+const getWeekdayFormatter = (locale: string): Intl.DateTimeFormat => {
+  const fmt =
+    weekdayFormatters.get(locale) ??
+    new Intl.DateTimeFormat(locale, { weekday: "short", timeZone: "UTC" });
+  weekdayFormatters.set(locale, fmt);
+  return fmt;
+};
+
 const getWeekdayLabels = (
   locale: string,
   firstDow: number,
   weekendDays: ReadonlySet<number>,
 ): CalendarWeekday[] => {
-  const fmt = new Intl.DateTimeFormat(locale, {
-    weekday: "short",
-    timeZone: "UTC",
-  });
+  const fmt = getWeekdayFormatter(locale);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(Date.UTC(2024, 0, 1 + ((i + firstDow) % 7)));
     return {
@@ -88,36 +95,67 @@ const getWeekdayLabels = (
   });
 };
 
+const monthFormatters = new Map<string, Intl.DateTimeFormat>();
+
+const getMonthFormatter = (
+  locale: string,
+  format: "long" | "short",
+): Intl.DateTimeFormat => {
+  const key = `${locale}:${format}`;
+  const fmt =
+    monthFormatters.get(key) ??
+    new Intl.DateTimeFormat(locale, {
+      month: format,
+      // The picker grid is Gregorian; pin labels so a Hijri locale preference
+      // does not mislabel Gregorian months (numerals still follow the locale).
+      calendar: "gregory",
+      timeZone: "UTC",
+    });
+  monthFormatters.set(key, fmt);
+  return fmt;
+};
+
 const getMonthLabels = (
   locale: string,
   format: "long" | "short" = "long",
 ): string[] => {
-  const fmt = new Intl.DateTimeFormat(locale, {
-    month: format,
-    // The picker grid is Gregorian; pin labels so a Hijri locale preference
-    // does not mislabel Gregorian months (numerals still follow the locale).
-    calendar: "gregory",
-    timeZone: "UTC",
-  });
+  const fmt = getMonthFormatter(locale, format);
   return Array.from({ length: 12 }, (_, i) =>
     fmt.format(new Date(Date.UTC(2024, i, 1))),
   );
 };
 
+const monthYearFormatters = new Map<string, Intl.DateTimeFormat>();
+
+const getMonthYearFormatter = (locale: string): Intl.DateTimeFormat => {
+  const fmt =
+    monthYearFormatters.get(locale) ??
+    new Intl.DateTimeFormat(locale, {
+      month: "long",
+      year: "numeric",
+      calendar: "gregory",
+      timeZone: "UTC",
+    });
+  monthYearFormatters.set(locale, fmt);
+  return fmt;
+};
+
 const formatMonthYear = (locale: string, year: number, month: number): string =>
-  new Intl.DateTimeFormat(locale, {
-    month: "long",
-    year: "numeric",
-    calendar: "gregory",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month, 1)));
+  getMonthYearFormatter(locale).format(new Date(Date.UTC(year, month, 1)));
+
+const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+
+const getRelativeTimeFormatter = (locale: string): Intl.RelativeTimeFormat => {
+  const fmt =
+    relativeTimeFormatters.get(locale) ??
+    new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
+  relativeTimeFormatters.set(locale, fmt);
+  return fmt;
+};
 
 /** Derive a locale-correct "Today" label (e.g., "Dnes", "Heute", "Today"). */
 const deriveTodayLabel = (locale: string): string => {
-  const raw = new Intl.RelativeTimeFormat(locale, { numeric: "auto" }).format(
-    0,
-    "day",
-  );
+  const raw = getRelativeTimeFormatter(locale).format(0, "day");
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 };
 
@@ -698,13 +736,13 @@ const MonthGrid = ({
     <div className="grid grid-cols-3 gap-1 py-1" role="grid">
       {rows.map((row) => (
         <div className="contents" key={row[0]} role="row">
-          {row.map((i) => {
+          {row.map((month) => {
             const isSelected =
               currentMonth !== null &&
               currentYear !== null &&
-              i === currentMonth &&
+              month === currentMonth &&
               viewYear === currentYear;
-            const isNow = i === todayMonth && viewYear === todayYear;
+            const isNow = month === todayMonth && viewYear === todayYear;
             return (
               <button
                 aria-selected={isSelected || undefined}
@@ -716,12 +754,12 @@ const MonthGrid = ({
                   isSelected &&
                     "bg-primary text-primary-foreground hover:bg-primary/90",
                 )}
-                key={i}
-                onClick={() => onSelect(i)}
+                key={month}
+                onClick={() => onSelect(month)}
                 role="gridcell"
                 type="button"
               >
-                {!/^\d/u.test(labels[i] ?? "") && (
+                {!/^\d/u.test(labels[month] ?? "") && (
                   <span
                     aria-hidden="true"
                     className={cn(
@@ -729,10 +767,10 @@ const MonthGrid = ({
                       !isSelected && "text-muted-foreground",
                     )}
                   >
-                    {i + 1}
+                    {month + 1}
                   </span>
                 )}
-                {labels[i]}
+                {labels[month]}
               </button>
             );
           })}

@@ -5,12 +5,13 @@
  * open (acquire lock + presigned URL) → checkpoint (auto-save) → finalize / cancel.
  */
 
-import { useCallback, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -127,7 +128,8 @@ export const useEditSession = ({
     sessionId: string;
     sessionToken: string;
   } | null>(null);
-  const checkpointQueueRef = useRef(Promise.resolve());
+  const checkpointQueueRef = useRef<Promise<void> | null>(null);
+  checkpointQueueRef.current ??= Promise.resolve();
   const releaseContextRef = useRef({ workspaceId, entityId, propertyId });
   // eslint-disable-next-line react/react-compiler -- latest-props mirror; read only in the async open/release paths, never during render
   releaseContextRef.current = { workspaceId, entityId, propertyId };
@@ -268,7 +270,8 @@ export const useEditSession = ({
   };
 
   const saveCheckpoint = async (docxBuffer: ArrayBuffer) => {
-    const checkpoint = checkpointQueueRef.current.then(
+    const queue = checkpointQueueRef.current ?? Promise.resolve();
+    const checkpoint = queue.then(
       async () => await saveCheckpointNow(docxBuffer),
     );
     checkpointQueueRef.current = checkpoint.then(
@@ -281,7 +284,7 @@ export const useEditSession = ({
   const debouncedCheckpoint = useDebouncedCallback((buffer: ArrayBuffer) => {
     void saveCheckpoint(buffer);
   }, CHECKPOINT_DEBOUNCE_MS);
-  const cancelDebouncedCheckpoint = useEffectEvent(() => {
+  const cancelDebouncedCheckpoint = useLatestCallback(() => {
     debouncedCheckpoint.cancel();
   });
 

@@ -132,7 +132,7 @@ const pickLatestHit = (
   // the highest internal id is the live record (or, for terminated
   // entities, the final registry state). Sort descending so the
   // primary lookup path always sees the most recent entry.
-  const sorted = [...hits].sort((a, b) => b.id - a.id);
+  const sorted = hits.toSorted((a, b) => b.id - a.id);
   return sorted.at(0) ?? null;
 };
 

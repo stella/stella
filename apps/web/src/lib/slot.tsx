@@ -19,6 +19,8 @@
  * are not statically known.
  */
 
+/* eslint-disable react/no-react-children, react/no-clone-element -- children-walking/slot primitive; the React.Children traversal IS the component's API */
+
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
@@ -27,51 +29,6 @@ type SlotProps = React.HTMLAttributes<HTMLElement> & {
   children?: React.ReactNode;
   ref?: React.Ref<HTMLElement> | undefined;
 };
-
-/**
- * Compose multiple refs into a single ref callback.
- * Adapted from `@radix-ui/react-compose-refs` (MIT).
- *
- * Collects cleanup functions returned by React 19 ref
- * callbacks and returns a combined cleanup so React can
- * invoke it on unmount instead of re-calling with `null`.
- */
-export const composeRefs =
-  <T,>(
-    ...refs: (React.Ref<T> | undefined)[]
-  ): ((node: T | null) => (() => void) | undefined) =>
-  (node) => {
-    const cleanups: (() => void)[] = [];
-    for (const ref of refs) {
-      if (typeof ref === "function") {
-        const cleanup = ref(node);
-        if (typeof cleanup === "function") {
-          cleanups.push(() => {
-            void cleanup();
-          });
-        } else if (node !== null) {
-          cleanups.push(() => {
-            void ref(null);
-          });
-        }
-      } else if (ref !== undefined && ref !== null) {
-        ref.current = node;
-        if (node !== null) {
-          cleanups.push(() => {
-            ref.current = null;
-          });
-        }
-      }
-    }
-    if (cleanups.length > 0) {
-      return () => {
-        for (const cleanup of cleanups) {
-          cleanup();
-        }
-      };
-    }
-    return undefined;
-  };
 
 const Slot = ({
   ref: parentRef,

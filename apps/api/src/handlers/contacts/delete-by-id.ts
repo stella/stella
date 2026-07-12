@@ -74,6 +74,7 @@ export const deleteContactHandler = async function* ({
       };
     }
 
+    // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (tx)
     const affectedWorkspaces = await tx
       .select({ id: workspaceContacts.workspaceId })
       .from(workspaceContacts)

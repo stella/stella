@@ -1,10 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useRef,
-  useState,
-} from "react";
+import { createContext, use, useCallback, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
@@ -114,4 +108,4 @@ export const WorkflowStartConfirmationPromptProvider = ({
 };
 
 export const useWorkflowStartConfirmationPrompt = () =>
-  useContext(WorkflowStartConfirmationPromptContext);
+  use(WorkflowStartConfirmationPromptContext);

@@ -1,4 +1,27 @@
+import type { Facet } from "@/components/inspector/file-facets";
 import { isEmailFile, isMarkdownFile } from "@/lib/consts";
+
+// Sidepeek shows every facet, including Preview (the file viewer
+// itself). Fullscreen drops Preview entirely — the main view IS
+// the preview, so a duplicate chip would be confusing; the
+// FullViewPreviewGuard handles users who land in Full view with a
+// stale "preview" facet by swapping to Metadata + flashing the
+// Minimize button.
+export const FACETS: readonly Facet[] = [
+  "preview",
+  "metadata",
+  "versions",
+  "suggestions",
+  "playbook",
+  "anonymization",
+];
+export const FULLVIEW_FACETS: readonly Facet[] = [
+  "metadata",
+  "versions",
+  "suggestions",
+  "playbook",
+  "anonymization",
+];
 
 export type FileTabNativePreviewKind = "email" | "markdown" | "pdf";
 

@@ -208,7 +208,7 @@ const rewriteNumberingRanges = (
     replaceParagraphTextRanges(paragraph, ranges);
     return;
   }
-  for (const edit of [...edits].sort((a, b) => b.from - a.from)) {
+  for (const edit of edits.toSorted((a, b) => b.from - a.from)) {
     const text = edit.node.textContent ?? "";
     edit.node.textContent =
       text.slice(0, edit.from) + edit.value + text.slice(edit.to);

@@ -17,6 +17,7 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { contentTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 export type CreatableContentType =
@@ -25,13 +26,6 @@ export type CreatableContentType =
   | "multi-select"
   | "date"
   | "int";
-
-export const isCreatableContentType = (t: string): t is CreatableContentType =>
-  t === "text" ||
-  t === "single-select" ||
-  t === "multi-select" ||
-  t === "date" ||
-  t === "int";
 
 export type ChipDefinition = {
   type: CreatableContentType;
@@ -241,15 +235,19 @@ const ReadingChip = ({ label, onRemove }: ReadingChipProps) => {
       <FileTextIcon className="size-3" />
       {label}
       {onRemove && (
-        <button
-          aria-label={t("common.remove")}
-          title={t("common.remove")}
-          className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
-          onClick={onRemove}
-          type="button"
+        <Tooltip
+          content={t("common.remove")}
+          render={
+            <button
+              aria-label={t("common.remove")}
+              className="text-foreground-placeholder hover:text-foreground ms-0.5 -me-1 inline-flex size-3.5 items-center justify-center opacity-0 group-hover:opacity-100"
+              onClick={onRemove}
+              type="button"
+            />
+          }
         >
           <XIcon className="size-2.5" />
-        </button>
+        </Tooltip>
       )}
     </span>
   );

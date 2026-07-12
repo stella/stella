@@ -87,12 +87,14 @@ const createMcpConnector = createSafeRootHandler(
     const probe = probeResult.value;
     const displayName =
       input.displayName?.trim() || new URL(normalizedUrl).hostname;
-    const slug = await nextSlug({
-      base: slugify(displayName),
-      organizationId: session.activeOrganizationId,
-      safeDb,
-    });
-    const iconUrl = await discoverMcpIconUrl(normalizedUrl);
+    const [slug, iconUrl] = await Promise.all([
+      nextSlug({
+        base: slugify(displayName),
+        organizationId: session.activeOrganizationId,
+        safeDb,
+      }),
+      discoverMcpIconUrl(normalizedUrl),
+    ]);
 
     const inserted = yield* Result.await(
       safeDb(async (tx) => {
