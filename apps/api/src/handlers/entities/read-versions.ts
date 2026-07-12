@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -101,6 +101,7 @@ const readVersionsHandler = async function* ({
           and(
             eq(entityVersions.entityId, entityId),
             eq(entityVersions.workspaceId, workspaceId),
+            isNull(entityVersions.deletedAt),
             keyset,
           ),
         )

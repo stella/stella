@@ -5,6 +5,7 @@ import {
   eq,
   inArray,
   isNotNull,
+  isNull,
   notInArray,
   or,
   sql,
@@ -424,6 +425,7 @@ const internalSortKey = ({
         expr: sql`(
           SELECT COUNT(*) FROM ${entityVersions}
           WHERE ${entityVersions.entityId} = ${entities.id}
+            AND ${entityVersions.deletedAt} IS NULL
         )`,
       });
     case "_kind":
@@ -834,7 +836,12 @@ const queryEntitiesGenerator = async function* ({
           versionCount: count(),
         })
         .from(entityVersions)
-        .where(inArray(entityVersions.entityId, pageIds))
+        .where(
+          and(
+            inArray(entityVersions.entityId, pageIds),
+            isNull(entityVersions.deletedAt),
+          ),
+        )
         .groupBy(entityVersions.entityId),
     ),
     safeDb((tx) =>

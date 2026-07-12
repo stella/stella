@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -65,7 +65,10 @@ const fileFieldQuery = async (
           eq(entities.workspaceId, workspaceId),
         ),
       )
-      .where(eq(fields.id, fieldId))
+      // Exclude tombstoned versions: a withdrawn version's bytes are retained
+      // under legal hold but must be unreachable, even to a client that
+      // captured the fieldId before the version was tombstoned.
+      .where(and(eq(fields.id, fieldId), isNull(entityVersions.deletedAt)))
       .limit(1),
   );
 

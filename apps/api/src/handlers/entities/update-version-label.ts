@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -57,6 +57,7 @@ export const updateVersionLabelHandler = async function* ({
             eq(entityVersions.id, params.versionId),
             eq(entityVersions.entityId, params.entityId),
             eq(entityVersions.workspaceId, workspaceId),
+            isNull(entityVersions.deletedAt),
           ),
         )
         .limit(1);

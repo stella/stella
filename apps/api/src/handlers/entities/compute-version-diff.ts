@@ -1,4 +1,4 @@
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, isNull, lt } from "drizzle-orm";
 
 import { compareDocxVersions } from "@stll/folio-core/server";
 
@@ -39,6 +39,7 @@ export const computeVersionDiffStats = async ({
       where: {
         id: { eq: versionId },
         workspaceId: { eq: workspaceId },
+        deletedAt: { isNull: true },
       },
       columns: { versionNumber: true },
     }),
@@ -58,6 +59,7 @@ export const computeVersionDiffStats = async ({
           eq(entityVersions.entityId, entityId),
           eq(entityVersions.workspaceId, workspaceId),
           lt(entityVersions.versionNumber, newVersion.versionNumber),
+          isNull(entityVersions.deletedAt),
         ),
       )
       .orderBy(desc(entityVersions.versionNumber))

@@ -141,6 +141,8 @@ const resolveVersionDocx = async (
       where: {
         id: { eq: versionId },
         workspaceId: { in: toolWorkspaceIds },
+        // Tombstoned versions are withdrawn: never resolvable for AI compare.
+        deletedAt: { isNull: true },
       },
       columns: { entityId: true, workspaceId: true },
     }),

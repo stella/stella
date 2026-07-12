@@ -1,13 +1,8 @@
 import { panic, Result } from "better-result";
-import { and, desc, eq, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions } from "@/api/db/schema";
-import {
-  extractFieldFileRefs,
-  filterUnreferencedFieldFileRefs,
-} from "@/api/handlers/files/field-file-refs";
-import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -31,24 +26,25 @@ const config = {
 
 type DeleteEntityVersionHandlerProps = {
   safeDb: SafeDb;
-  organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   versionId: SafeId<"entityVersion">;
+  deletedByUserId: string;
   recordAuditEvent: AuditRecorder;
 };
 
 export const deleteEntityVersionHandler = async function* ({
   safeDb,
-  organizationId,
   workspaceId,
   entityId,
   versionId,
+  deletedByUserId,
   recordAuditEvent,
 }: DeleteEntityVersionHandlerProps) {
   const params = { entityId, versionId };
 
-  // Verify the version belongs to this entity in this workspace
+  // Verify the version belongs to this entity in this workspace and is not
+  // already tombstoned (re-deleting a tombstoned version is a no-op 404).
   const version = yield* Result.await(
     safeDb((tx) =>
       tx.query.entityVersions.findFirst({
@@ -56,6 +52,7 @@ export const deleteEntityVersionHandler = async function* ({
           id: { eq: params.versionId },
           entityId: { eq: params.entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: { id: true, versionNumber: true },
       }),
@@ -68,7 +65,7 @@ export const deleteEntityVersionHandler = async function* ({
     );
   }
 
-  // Count total versions — can't delete the last one
+  // Count live (non-tombstoned) versions — can't delete the last one
   const allVersions = yield* Result.await(
     safeDb((tx) =>
       tx
@@ -81,6 +78,7 @@ export const deleteEntityVersionHandler = async function* ({
           and(
             eq(entityVersions.entityId, params.entityId),
             eq(entityVersions.workspaceId, workspaceId),
+            isNull(entityVersions.deletedAt),
           ),
         )
         .orderBy(desc(entityVersions.versionNumber))
@@ -123,48 +121,16 @@ export const deleteEntityVersionHandler = async function* ({
 
   const isDeletingCurrent = entity.currentVersionId === params.versionId;
 
-  // Get file fields for S3 cleanup
-  const versionFields = yield* Result.await(
-    safeDb((tx) =>
-      // SAFETY: one entity version's fields, bounded by LIMITS.propertiesCount via the unique (propertyId, entityVersionId) index
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: { entityVersionId: { eq: params.versionId } },
-        columns: { content: true },
-      }),
-    ),
-  );
-
-  const fileRefs = versionFields.flatMap((row) =>
-    extractFieldFileRefs(row.content),
-  );
-  const unreferencedFileRefs = yield* Result.await(
-    safeDb(
-      async (tx) =>
-        await filterUnreferencedFieldFileRefs({
-          tx,
-          workspaceId,
-          fileRows: fileRefs,
-          excludedEntityVersionIds: [params.versionId],
-        }),
-    ),
-  );
-
-  // Delete S3 objects first (idempotent on retry)
-  if (unreferencedFileRefs.length > 0) {
-    Result.unwrap(
-      await deleteS3Objects({
-        fileRows: unreferencedFileRefs,
-        organizationId,
-        workspaceId,
-      }),
-    );
-  }
-
+  // Chain-of-custody: a prior version is never hard-deleted, and its S3 objects
+  // are retained under legal hold. Tombstone the row (server clock + actor) so
+  // every read / list / restore / download path excludes it while the bytes and
+  // audit trail survive. The `fields` rows are deliberately kept: they keep the
+  // version's files "referenced" so unrelated cleanup paths cannot GC them.
   yield* Result.await(
     safeDb(async (tx) => {
-      // If deleting the current version, promote the next latest FIRST
-      // (FK constraint on entities.currentVersionId is RESTRICT)
+      // If tombstoning the current version, promote the next live version FIRST
+      // (FK constraint on entities.currentVersionId is RESTRICT). The live-count
+      // guard above guarantees at least one other non-tombstoned version exists.
       let promotedVersionId: typeof params.versionId | null = null;
       if (isDeletingCurrent) {
         const nextLatest = await tx
@@ -175,6 +141,7 @@ export const deleteEntityVersionHandler = async function* ({
               eq(entityVersions.entityId, params.entityId),
               eq(entityVersions.workspaceId, workspaceId),
               ne(entityVersions.id, params.versionId),
+              isNull(entityVersions.deletedAt),
             ),
           )
           .orderBy(desc(entityVersions.versionNumber))
@@ -193,9 +160,11 @@ export const deleteEntityVersionHandler = async function* ({
         }
       }
 
-      // Now safe to delete the version (cascade removes fields)
+      // Tombstone the version instead of deleting it. `fields` and S3 objects
+      // stay; the row is hidden by the deletedAt filter on every read path.
       await tx
-        .delete(entityVersions)
+        .update(entityVersions)
+        .set({ deletedAt: new Date(), deletedBy: deletedByUserId })
         .where(
           and(
             eq(entityVersions.id, params.versionId),
@@ -246,13 +215,13 @@ export const deleteEntityVersionHandler = async function* ({
 
 export default createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, session, recordAuditEvent }) {
+  async function* ({ safeDb, workspaceId, params, user, recordAuditEvent }) {
     return yield* deleteEntityVersionHandler({
       safeDb,
-      organizationId: session.activeOrganizationId,
       workspaceId,
       entityId: params.entityId,
       versionId: params.versionId,
+      deletedByUserId: user.id,
       recordAuditEvent,
     });
   },

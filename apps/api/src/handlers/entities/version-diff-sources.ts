@@ -8,7 +8,7 @@
  */
 
 import { Result } from "better-result";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, isNull, lt } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityVersions } from "@/api/db/schema";
@@ -53,6 +53,7 @@ export const loadEntityVersionDiffSources = async function* ({
           id: { eq: versionId },
           entityId: { eq: entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: { versionNumber: true },
       }),
@@ -75,6 +76,7 @@ export const loadEntityVersionDiffSources = async function* ({
             eq(entityVersions.entityId, entityId),
             eq(entityVersions.workspaceId, workspaceId),
             lt(entityVersions.versionNumber, version.versionNumber),
+            isNull(entityVersions.deletedAt),
           ),
         )
         .orderBy(desc(entityVersions.versionNumber))
@@ -181,6 +183,7 @@ export const loadEntityVersionDocxText = async function* ({
           id: { eq: versionId },
           entityId: { eq: entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: { id: true },
       }),

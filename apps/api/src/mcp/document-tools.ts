@@ -1,5 +1,16 @@
 import { panic, Result } from "better-result";
-import { and, asc, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import * as v from "valibot";
 
 import { roles } from "@stll/permissions";
@@ -1017,6 +1028,7 @@ const loadVersionHistory = async ({
         and(
           eq(entityVersions.entityId, entityId),
           eq(entityVersions.workspaceId, workspaceId),
+          isNull(entityVersions.deletedAt),
           keyset,
         ),
       )
@@ -1133,6 +1145,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
           id: { eq: versionId },
           entityId: { eq: entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: {
           id: true,
@@ -1438,6 +1451,7 @@ const validateUpdateDocumentTargets = async ({
           id: { eq: versionId },
           entityId: { eq: entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: { id: true },
       }),
@@ -1661,10 +1675,10 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
     const deleted = await Result.gen(() =>
       deleteEntityVersionHandler({
         safeDb: context.safeDb,
-        organizationId: context.organizationId,
         workspaceId,
         entityId,
         versionId,
+        deletedByUserId: context.userId,
         recordAuditEvent,
       }),
     );

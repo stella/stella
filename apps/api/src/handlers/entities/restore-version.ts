@@ -35,6 +35,7 @@ export default createSafeHandler(
             id: { eq: params.versionId },
             entityId: { eq: params.entityId },
             workspaceId: { eq: workspaceId },
+            deletedAt: { isNull: true },
           },
           columns: { id: true, versionNumber: true },
           with: {

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { entityVersions } from "@/api/db/schema";
@@ -62,6 +62,7 @@ const readVersionByIdHandler = async function* ({
             eq(entityVersions.id, versionId),
             eq(entityVersions.entityId, entityId),
             eq(entityVersions.workspaceId, workspaceId),
+            isNull(entityVersions.deletedAt),
           ),
         )
         .limit(1),
