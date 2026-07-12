@@ -1,7 +1,9 @@
+import { FetchBoundaryError } from "@stll/errors";
+
 import { env } from "@/env";
 import { api } from "@/lib/api";
 import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
-import { FetchBoundaryError, toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 

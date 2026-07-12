@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { Static } from "elysia";
 import { t } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { entities, workspaces } from "@/api/db/schema";
 import {
   collectFileCopySources,
@@ -22,7 +22,7 @@ import {
 } from "@/api/handlers/files/field-file-refs";
 import { deleteS3Objects } from "@/api/handlers/files/utils";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -416,12 +416,14 @@ const copyToWorkspaceHandler = async function* ({
     sourceEntities,
     propertyIdMap,
   );
-  const sourceFileRefs = sourceEntities.flatMap(
-    (entity) =>
-      entity.currentVersion?.fields.flatMap((field) =>
-        extractFieldFileRefs(field.content),
-      ) ?? [],
-  );
+  const sourceFileRefs = sourceEntities.flatMap((entity) => {
+    const currentVersion =
+      entity.currentVersion ??
+      panic("Source entity is missing its current version");
+    return currentVersion.fields.flatMap((field) =>
+      extractFieldFileRefs(field.content),
+    );
+  });
 
   // Collect file objects for S3 copy after property remapping, so
   // files from dropped fields do not leave orphaned target objects.

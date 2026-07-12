@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { status } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 

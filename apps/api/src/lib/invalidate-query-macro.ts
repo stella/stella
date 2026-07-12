@@ -1,5 +1,6 @@
 import Elysia, { t } from "elysia";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { authMacro } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
@@ -54,7 +55,10 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
       }
       const workspaceId =
         "workspaceId" in ctx ? String(ctx.workspaceId) : undefined;
-      const queryKeys = [ctx.body.queryKey, ...(ctx.body.queryKeys ?? [])];
+      const queryKeys = [
+        ctx.body.queryKey,
+        ...arrayOrEmpty(ctx.body.queryKeys),
+      ];
 
       for (const queryKey of queryKeys) {
         const event = createInvalidateQueryEvent(queryKey);
@@ -73,7 +77,10 @@ export const invalidateQuery = new Elysia({ name: "invalidateQueryMacro" })
       if (!didAuthResolve(ctx)) {
         return;
       }
-      const queryKeys = [ctx.body.queryKey, ...(ctx.body.queryKeys ?? [])];
+      const queryKeys = [
+        ctx.body.queryKey,
+        ...arrayOrEmpty(ctx.body.queryKeys),
+      ];
       for (const queryKey of queryKeys) {
         broadcastQueryInvalidationToOrganization(
           ctx.session.activeOrganizationId,

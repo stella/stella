@@ -24,7 +24,7 @@ import {
 } from "@/components/responsive-action-toolbar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import {
   CategoryFormDialog,
   CategoryMobileFilterBar,

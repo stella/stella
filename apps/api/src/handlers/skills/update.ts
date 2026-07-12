@@ -14,6 +14,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
+import { includes } from "@/api/lib/type-guards";
 
 import { hashAuthoredSkillContent } from "./authored-content-hash";
 import { requireEditableSkillOrigin } from "./origin";
@@ -114,7 +115,7 @@ const validateRequestedCommand = (
       }),
     );
   }
-  if ((RESERVED_AGENT_SKILL_COMMANDS as readonly string[]).includes(command)) {
+  if (includes(RESERVED_AGENT_SKILL_COMMANDS, command)) {
     return Result.err(
       new HandlerError({
         status: 400,

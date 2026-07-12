@@ -6,7 +6,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { SkillMetadata } from "@stll/skills";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
@@ -112,7 +112,7 @@ import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -171,6 +171,13 @@ const areSubagentToolsAvailableForTurn = (
   areSubagentToolsRegistered({ delegationDepth: 0 }) &&
   (toolScope === undefined ||
     scopeAllowsTool(toolScope, SPAWN_SUBAGENTS_TOOL_NAME));
+
+const normalizeOptionalArray = <T>(value: T[] | undefined): T[] => {
+  if (value === undefined) {
+    return [];
+  }
+  return value;
+};
 
 const config = {
   permissions: { chat: ["create"] },
@@ -239,7 +246,9 @@ const sendMessage = createSafeRootHandler(
       ),
     );
     const disabledNativeToolSlugs = getDisabledNativeToolSlugs({
-      practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
+      practiceJurisdictions: normalizeOptionalArray(
+        orgSettingsForChat?.practiceJurisdictions,
+      ),
       nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
     });
 
@@ -250,7 +259,9 @@ const sendMessage = createSafeRootHandler(
     // Empty (or omitted) means "no matters pinned" — the AI is
     // expected to discover relevant matters via the readonly
     // Stella API instead of being preloaded with thousands of IDs.
-    const requestedContextMatterIds = body.contextMatterIds ?? [];
+    const requestedContextMatterIds = normalizeOptionalArray(
+      body.contextMatterIds,
+    );
     const accessibleSet = new Set<string>(accessibleWorkspaceIds);
     if (!requestedContextMatterIds.every((id) => accessibleSet.has(id))) {
       return Result.err(
@@ -1745,7 +1756,9 @@ const prepareChatContext = async ({
         }),
       ),
     );
-    const practiceJurisdictions = orgSettingsRow?.practiceJurisdictions ?? [];
+    const practiceJurisdictions = normalizeOptionalArray(
+      orgSettingsRow?.practiceJurisdictions,
+    );
 
     const [systemResult, hydratedMessagesResult] = await Promise.all([
       buildChatSystemPromptParts({
@@ -2037,11 +2050,10 @@ const resolveAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
     const resolved = refRegistry.resolveAssistantValueRefs(part);
-
-    // SAFETY: resolveAssistantValueRefs preserves the message part shape and
-    // only replaces string values containing session-scoped refs.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return resolved as ChatMessage["parts"][number];
+    if (!isChatMessagePart(resolved)) {
+      panic("Resolving assistant refs changed the message part shape");
+    }
+    return resolved;
   };
 
   return messages.map((message) =>
@@ -2067,12 +2079,10 @@ const hydrateAssistantMessageRefs = ({
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
     const hydrated = refRegistry.hydrateAssistantValueRefs(part);
-
-    // SAFETY: hydrateAssistantValueRefs preserves the message part shape and
-    // only replaces stable persisted IDs in ref-shaped fields with
-    // request-local short refs for model context.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    return hydrated as ChatMessage["parts"][number];
+    if (!isChatMessagePart(hydrated)) {
+      panic("Hydrating assistant refs changed the message part shape");
+    }
+    return hydrated;
   };
 
   return messages.map((message) =>
@@ -2084,6 +2094,14 @@ const hydrateAssistantMessageRefs = ({
       : message,
   );
 };
+
+const isChatMessagePart = (
+  value: unknown,
+): value is ChatMessage["parts"][number] =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  typeof value.type === "string";
 
 const insertMessages = async ({
   acceptedSendMode,

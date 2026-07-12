@@ -77,7 +77,7 @@ export const useDocxBlockScroll = ({
       if (typeof detail !== "object" || detail === null) {
         return;
       }
-      const blockId: unknown = (detail as { blockId?: unknown }).blockId;
+      const blockId: unknown = "blockId" in detail ? detail.blockId : undefined;
       if (typeof blockId !== "string" || blockId.length === 0) {
         return;
       }

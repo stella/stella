@@ -20,7 +20,7 @@ const loadAnonymizationGazetteerEntriesMock = mock();
 const realAnonymizationBlacklist =
   await import("@/api/lib/anonymization-blacklist");
 
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
   getAnalytics: () => ({ capture: mock(), flush: mock(async () => undefined) }),

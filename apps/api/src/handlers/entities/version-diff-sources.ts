@@ -10,7 +10,7 @@
 import { Result } from "better-result";
 import { and, desc, eq, lt } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { entityVersions } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { extractText } from "@/api/handlers/docx/extract-text";

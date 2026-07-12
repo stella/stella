@@ -40,7 +40,7 @@ type FormulaEditorProps = {
 // Built-in formula functions are not field references; mirror the evaluator's
 // identifier grammar (compute.ts) so the "not a field" check matches what the
 // engine will actually resolve.
-const FORMULA_FUNCTIONS = new Set([
+const FORMULA_FUNCTIONS: readonly string[] = Object.freeze([
   "min",
   "max",
   "round",
@@ -114,7 +114,7 @@ export const FormulaEditor = ({
     ...new Set(
       [...value.matchAll(FORMULA_IDENT_RE)]
         .map((match) => match[0])
-        .filter((id) => !FORMULA_FUNCTIONS.has(id)),
+        .filter((id) => !FORMULA_FUNCTIONS.includes(id)),
     ),
   ];
   const unknown = referenced.filter((name) => !knownRefs.has(name));

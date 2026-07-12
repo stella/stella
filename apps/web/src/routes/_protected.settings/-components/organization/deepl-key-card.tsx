@@ -21,7 +21,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { deepLConfigOptions, deepLKeys } from "@/lib/deepl/queries";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 export const DeepLKeyCard = () => {
   const t = useTranslations("translate.settings");
@@ -63,7 +64,7 @@ export const DeepLKeyCard = () => {
       analytics.captureError(error);
       stellaToast.add({
         title: tErrors("actionFailed"),
-        description: error instanceof Error ? error.message : undefined,
+        description: userErrorFromThrown(error, tErrors("actionFailed")),
         type: "error",
       });
     },

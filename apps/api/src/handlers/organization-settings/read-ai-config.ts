@@ -6,7 +6,7 @@ import {
   providerResponseExtras,
   providerResponseRegion,
 } from "@/api/lib/ai-config-response";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";

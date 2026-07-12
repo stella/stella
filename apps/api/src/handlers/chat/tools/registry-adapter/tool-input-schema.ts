@@ -1,4 +1,4 @@
-import type { SchemaInput } from "@tanstack/ai";
+import type { JSONSchema } from "@tanstack/ai";
 
 import type { JsonSchema } from "@/api/mcp/tool-types";
 
@@ -13,7 +13,8 @@ import type { JsonSchema } from "@/api/mcp/tool-types";
  * Shared by the read projection (`chat-code-mode.ts`) and the write projection
  * (`registry-write-tools.ts`) so this stays the single such boundary cast.
  */
-export const toToolInputSchema = (schema: JsonSchema): SchemaInput =>
-  // SAFETY: JSON-Schema-to-SchemaInput boundary; see the note above.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see note above
-  schema as unknown as SchemaInput;
+export const toToolInputSchema = (schema: JsonSchema): JSONSchema => ({
+  type: schema.type,
+  ...(schema.properties === undefined ? {} : { properties: schema.properties }),
+  ...(schema.required === undefined ? {} : { required: schema.required }),
+});

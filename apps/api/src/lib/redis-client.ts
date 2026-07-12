@@ -7,11 +7,9 @@ import { connectionErrorFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { redisConnectionOptions } from "@/api/lib/redis-options";
 
-type StellaRedisClient = RedisClient & {
-  readonly url: string;
-};
-
-class ConfiguredRedisClient extends RedisClient {
+class ConfiguredRedisClient extends RedisClient implements BunRedisRawClient {
+  override onclose: (error?: Error) => void = () => undefined;
+  override onconnect: () => void = () => undefined;
   readonly url: string;
 
   constructor(url = env.REDIS_URL, overrides?: RedisOptions) {
@@ -22,7 +20,7 @@ class ConfiguredRedisClient extends RedisClient {
 
 export const createRedisClient = (
   overrides?: RedisOptions,
-): StellaRedisClient => new ConfiguredRedisClient(env.REDIS_URL, overrides);
+): ConfiguredRedisClient => new ConfiguredRedisClient(env.REDIS_URL, overrides);
 
 // On a Railway cold start the API container can win the race against its
 // own Redis/Valkey service, so the very first connection attempt hits
@@ -84,14 +82,7 @@ export const createBullMqConnection = (): ReturnType<
   typeof createBunRedisClient
 > => {
   const raw = createRedisClient();
-  // SAFETY: structural mismatch between BullMQ's BunRedisRawClient
-  // (callback properties are optional functions) and Bun's RedisClient
-  // (callback properties may be null). ConfiguredRedisClient also
-  // exposes `url`, which BullMQ's Bun adapter uses when duplicating or
-  // reconnecting raw clients, so TLS/options from redisConnectionOptions
-  // are preserved by the subclass constructor.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- bridges BullMQ vs Bun RedisClient structural callback mismatch (see above)
-  const connection = createBunRedisClient(raw as unknown as BunRedisRawClient, {
+  const connection = createBunRedisClient(raw, {
     // Railway's Redis proxy can trigger Bun's eager adapter read path before
     // BullMQ has completed its own readiness flow. Let BullMQ connect lazily.
     lazyConnect: true,

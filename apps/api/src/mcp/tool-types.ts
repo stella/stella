@@ -317,16 +317,6 @@ export const defineMcpToolSet = <
 export type McpTextFieldSpec<TPayload> = {
   /** Documentation-only path, mirroring today's hand-written textFields entries. */
   path: string;
-  /** Extracts this field's target items live from the payload about to be returned. */
-  items: (payload: TPayload) => readonly unknown[];
-  /**
-   * Anonymization scope for one item: a real workspace id for
-   * matter/document-shaped items, or the organization id for org-scoped
-   * items (contacts, templates, clauses).
-   */
-  scope: (item: unknown, index: number) => string;
-  /** Reads the current text value off one item; null/undefined/empty is skipped. */
-  read: (item: unknown, index: number) => string | null | undefined;
-  /** Writes the redacted value back onto the item (or an owning array, by index). */
-  apply: (item: unknown, value: string, index: number) => void;
+  /** Collects live text fields while retaining the private item shape in its closure. */
+  collect: (payload: TPayload) => McpStructuredTextField[];
 };

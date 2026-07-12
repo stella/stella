@@ -1,11 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -19,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { FetchBoundaryError } from "@stll/errors";
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -46,8 +40,9 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { BoundedSet } from "@/lib/bounded-set";
 import { createChatThreadId, toChatThreadId } from "@/lib/chat-thread-ref";
-import { APIError, FetchBoundaryError, toAPIError } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
@@ -57,7 +52,7 @@ import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 
 const SERVER_PREVIEW_ERROR_THRESHOLD = 500;
 
-const toastedPreviewFailures = new Set<string>();
+const toastedPreviewFailures = new BoundedSet<string>(100);
 
 export type ExternalReferencePanelProps = {
   onClose: () => void;
@@ -605,11 +600,8 @@ export const ExternalReferencePanel = ({
       tab.sourceToolName !== undefined ||
       storedSource?.connectorSlug !== undefined ||
       storedSource?.sourceToolName !== undefined);
-  const {
-    data: fetchedPreview,
-    isLoading: previewLoading,
-    error: previewError,
-  } = useQuery({
+  // oxlint-disable-next-line @tanstack/query/exhaustive-deps -- translation function is a stable runtime service, not preview cache identity
+  const { data: fetchedPreview, isLoading: previewLoading } = useQuery({
     queryKey: ["external-preview", tab.url],
     queryFn: async ({ signal }) => {
       const response = await api["external-preview"].get({
@@ -618,7 +610,22 @@ export const ExternalReferencePanel = ({
       });
 
       if (response.error) {
-        throw toAPIError(response.error);
+        const error = toAPIError(response.error);
+        if (
+          APIError.is(error) &&
+          error.status >= SERVER_PREVIEW_ERROR_THRESHOLD
+        ) {
+          const toastKey = `${tab.url}|${error.status}`;
+          if (!toastedPreviewFailures.has(toastKey)) {
+            toastedPreviewFailures.add(toastKey);
+            stellaToast.add({
+              title: t("common.somethingWentWrong"),
+              description: error.message,
+              type: "error",
+            });
+          }
+        }
+        throw error;
       }
 
       return response.data;
@@ -628,36 +635,6 @@ export const ExternalReferencePanel = ({
     staleTime: 1000 * 60 * 10,
   });
 
-  // Surface upstream-induced failures (e.g. the source returned 5xx)
-  // as a toast — without this the panel just falls through to the
-  // generic "preview unavailable" view and the user has no signal
-  // that anything went wrong.
-  //
-  // Two filters keep this from being noisy:
-  // 1. Only 5xx — 4xx errors (422 unsupported content type / too
-  //    little readable text) are expected outcomes the fallback
-  //    already handles.
-  // 2. Dedupe by (url, status) across the inspector's lifetime so
-  //    flipping between tabs doesn't re-toast a cached error.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- toast on a 5xx preview error, deduped by (url, status) across the inspector's lifetime. useQuery has no onError in v5; folding this into the queryFn or a global QueryCache handler would change the dedup/timing semantics. Keep.
-  useEffect(() => {
-    if (!previewError || !APIError.is(previewError)) {
-      return;
-    }
-    if (previewError.status < SERVER_PREVIEW_ERROR_THRESHOLD) {
-      return;
-    }
-    const key = `${tab.url}|${previewError.status}`;
-    if (toastedPreviewFailures.has(key)) {
-      return;
-    }
-    toastedPreviewFailures.add(key);
-    stellaToast.add({
-      title: t("common.somethingWentWrong"),
-      description: previewError.message,
-      type: "error",
-    });
-  }, [previewError, tab.url, t]);
   const previewTitle = fetchedPreview?.title ?? storedSource?.title;
   const previewText = tab.text ?? storedSource?.text ?? fetchedPreview?.text;
   const previewSnippet = tab.snippet ?? storedSource?.snippet;
@@ -732,13 +709,16 @@ export const ExternalReferencePanel = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: connectorSlug !== undefined,
   });
+  const availableConnectors = mcpConnectorsData
+    ? mcpConnectorsData.connectors
+    : [];
   const iconHref =
     storedIconHref ??
     (connectorSlug === undefined
       ? undefined
       : findMcpConnectorIconHref({
           connectorSlug,
-          connectors: mcpConnectorsData?.connectors ?? [],
+          connectors: availableConnectors,
         }));
   const requestOpenExternal = useCallback(
     (href: string) => {

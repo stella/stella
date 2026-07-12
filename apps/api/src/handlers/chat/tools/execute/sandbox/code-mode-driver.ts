@@ -76,13 +76,44 @@ const buildBindingAliasPrelude = (
 
 const toExecutionSuccess = <T>(value: unknown): ExecutionResult<T> => ({
   success: true,
-  // SAFETY: the sandbox returns a dynamically-typed JSON value; `T` is the
-  // caller's unchecked claim about its shape. The assertion is confined to this
-  // third-party `execute<T>` boundary and is unavoidable given the interface.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- JSON-value boundary; see note above
-  value: value as T,
+  value: validateSandboxOutput<T>(value),
   logs: [],
 });
+
+// eslint-disable-next-line typescript/no-unnecessary-type-parameters -- T is imposed by the third-party IsolateDriver.execute<T> contract; runtime validation is JSON-shape only
+const validateSandboxOutput = <T>(value: unknown): T => {
+  if (!isJsonValue<T>(value)) {
+    throw new TypeError("Sandbox output must be JSON-compatible");
+  }
+  return value;
+};
+
+// eslint-disable-next-line typescript/no-unnecessary-type-parameters -- carries the IsolateDriver's erased result type after JSON validation
+const isJsonValue = <T>(value: unknown): value is T => {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return true;
+  }
+  if (Array.isArray(value)) {
+    return value.every(isJsonValue);
+  }
+  if (typeof value !== "object") {
+    return false;
+  }
+  // Reject non-plain objects (RegExp, Map, Set, Date, class instances): their
+  // own enumerable values are empty, so `every` would vacuously pass and the
+  // value would later serialize to `{}` or be lost. Only plain and null-proto
+  // objects are JSON-safe.
+  const prototype = Reflect.getPrototypeOf(value);
+  if (prototype !== Object.prototype && prototype !== null) {
+    return false;
+  }
+  return Object.values(value).every(isJsonValue);
+};
 
 // eslint-disable-next-line typescript/promise-function-async -- IsolateContext.dispose must return a promise, but a per-call isolate has nothing to tear down; `async` would only trip require-await
 const disposeIsolate = (): Promise<void> => Promise.resolve();

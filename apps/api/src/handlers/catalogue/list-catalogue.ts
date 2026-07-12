@@ -21,6 +21,7 @@ import {
 import { NATIVE_TOOL_SLUGS } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
@@ -263,7 +264,7 @@ const listCatalogue = createSafeRootHandler(
     } = reads;
     const curatedMcpUrlSet = new Set(mcpUrls);
 
-    const practiceJurisdictions = settings?.practiceJurisdictions ?? [];
+    const practiceJurisdictions = arrayOrEmpty(settings?.practiceJurisdictions);
     const nativeToolOverrides = settings?.nativeToolOverrides ?? {};
     const practiceCountryCodes = new Set(
       practiceJurisdictions.map((jurisdiction) =>
@@ -477,8 +478,8 @@ const buildCustomMcpCatalogueEntry = (
     jurisdictions: [],
     url: connector.url,
     authType: catalogueAuthType,
-    oauthRequestedScopes: connector.oauthRequestedScopes ?? [],
-    allowedTools: connector.allowedTools ?? [],
+    oauthRequestedScopes: arrayOrEmpty(connector.oauthRequestedScopes),
+    allowedTools: arrayOrEmpty(connector.allowedTools),
     ...(connector.documentationUrl !== null
       ? { documentationUrl: connector.documentationUrl }
       : {}),

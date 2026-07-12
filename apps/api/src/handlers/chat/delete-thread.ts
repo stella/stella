@@ -3,7 +3,7 @@ import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
-import { defaultDatabaseRetry } from "@/api/db";
+import { defaultDatabaseRetry } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";

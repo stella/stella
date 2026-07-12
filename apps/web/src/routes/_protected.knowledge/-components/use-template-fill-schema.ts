@@ -4,7 +4,7 @@ import { panic, TaggedError } from "better-result";
 
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import {
   knowledgeKeys,

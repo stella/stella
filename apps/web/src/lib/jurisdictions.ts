@@ -53,12 +53,19 @@ export const COUNTRY_POINTS: readonly CountryPoint[] = COUNTRY_CODES.map(
   },
 );
 
-const COUNTRY_CODE_BY_EMAIL_TLD = new Map<string, CountryCode>(
-  COUNTRY_CODES.map((code) => [code.toLowerCase(), code]),
-);
-COUNTRY_CODE_BY_EMAIL_TLD.set("uk", "GB");
-
 const LOCALE_REGION_PATTERN = /[-_](?<region>[A-Za-z]{2})\b/u;
+
+const countryCodeFromEmailTld = (
+  emailTld: string | undefined,
+): CountryCode | undefined => {
+  if (emailTld === undefined) {
+    return undefined;
+  }
+  if (emailTld === "uk") {
+    return "GB";
+  }
+  return COUNTRY_CODES.find((code) => code.toLowerCase() === emailTld);
+};
 
 export const createCountryOptions = (locale: string): CountryOption[] => {
   const names = new Intl.DisplayNames([locale], { type: "region" });
@@ -95,9 +102,7 @@ export const suggestedCountryCodes = ({
     suggestions.push(regionFromLocale.toUpperCase());
   }
 
-  const countryCodeFromEmail = emailTld
-    ? COUNTRY_CODE_BY_EMAIL_TLD.get(emailTld)
-    : undefined;
+  const countryCodeFromEmail = countryCodeFromEmailTld(emailTld);
 
   if (countryCodeFromEmail) {
     suggestions.push(countryCodeFromEmail);

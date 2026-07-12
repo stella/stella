@@ -129,29 +129,29 @@ type SaosReferencedCourtCase = {
 };
 
 type SaosItem = {
-  id?: number | null;
-  href?: string | null;
-  courtType?: string | null;
-  courtCases?: SaosCourtCase[] | null;
-  judgmentType?: string | null;
-  judgmentDate?: string | null;
-  judges?: SaosJudge[] | null;
-  textContent?: string | null;
-  keywords?: string[] | null;
-  division?: SaosDivision | null;
-  source?: SaosSource | null;
-  ecli?: string | null;
-  courtReporters?: string[] | null;
-  decision?: string | null;
-  summary?: string | null;
-  legalBases?: string[] | null;
-  referencedRegulations?: SaosReferencedRegulation[] | null;
-  referencedCourtCases?: SaosReferencedCourtCase[] | null;
-  receiptDate?: string | null;
-  meansOfAppeal?: string | null;
-  judgmentResult?: string | null;
-  lowerCourtJudgments?: SaosCourtCase[] | null;
-  dissentingOpinions?: unknown[] | null;
+  id?: number | null | undefined;
+  href?: string | null | undefined;
+  courtType?: string | null | undefined;
+  courtCases?: SaosCourtCase[] | null | undefined;
+  judgmentType?: string | null | undefined;
+  judgmentDate?: string | null | undefined;
+  judges?: SaosJudge[] | null | undefined;
+  textContent?: string | null | undefined;
+  keywords?: string[] | null | undefined;
+  division?: SaosDivision | null | undefined;
+  source?: SaosSource | null | undefined;
+  ecli?: string | null | undefined;
+  courtReporters?: string[] | null | undefined;
+  decision?: string | null | undefined;
+  summary?: string | null | undefined;
+  legalBases?: string[] | null | undefined;
+  referencedRegulations?: SaosReferencedRegulation[] | null | undefined;
+  referencedCourtCases?: SaosReferencedCourtCase[] | null | undefined;
+  receiptDate?: string | null | undefined;
+  meansOfAppeal?: string | null | undefined;
+  judgmentResult?: string | null | undefined;
+  lowerCourtJudgments?: SaosCourtCase[] | null | undefined;
+  dissentingOpinions?: unknown[] | null | undefined;
 };
 
 type SaosDumpResponse = {
@@ -271,6 +271,64 @@ const isSaosItem = (value: unknown): value is SaosItem =>
   (value["dissentingOpinions"] === undefined ||
     value["dissentingOpinions"] === null ||
     Array.isArray(value["dissentingOpinions"]));
+
+const validOrUndefined = <T>(
+  value: unknown,
+  guard: (candidate: unknown) => candidate is T,
+): T | undefined => (guard(value) ? value : undefined);
+
+/** Normalize one dump item without rejecting the page for a malformed field. */
+export const normalizeSaosDumpItem = (
+  value: Record<string, unknown>,
+): SaosItem => ({
+  id: validOrUndefined(value["id"], isNullishNumber),
+  href: validOrUndefined(value["href"], isNullishString),
+  courtType: validOrUndefined(value["courtType"], isNullishString),
+  courtCases: validOrUndefined(value["courtCases"], (candidate) =>
+    isNullishArrayOf(candidate, isSaosCourtCase),
+  ),
+  judgmentType: validOrUndefined(value["judgmentType"], isNullishString),
+  judgmentDate: validOrUndefined(value["judgmentDate"], isNullishString),
+  judges: validOrUndefined(value["judges"], (candidate) =>
+    isNullishArrayOf(candidate, isSaosJudge),
+  ),
+  textContent: validOrUndefined(value["textContent"], isNullishString),
+  keywords: validOrUndefined(value["keywords"], isOptionalStringArray),
+  division: validOrUndefined(value["division"], (candidate) =>
+    isNullishValue(candidate, isSaosDivision),
+  ),
+  source: validOrUndefined(value["source"], (candidate) =>
+    isNullishValue(candidate, isSaosSource),
+  ),
+  ecli: validOrUndefined(value["ecli"], isNullishString),
+  courtReporters: validOrUndefined(
+    value["courtReporters"],
+    isOptionalStringArray,
+  ),
+  decision: validOrUndefined(value["decision"], isNullishString),
+  summary: validOrUndefined(value["summary"], isNullishString),
+  legalBases: validOrUndefined(value["legalBases"], isOptionalStringArray),
+  referencedRegulations: validOrUndefined(
+    value["referencedRegulations"],
+    (candidate) => isNullishArrayOf(candidate, isSaosReferencedRegulation),
+  ),
+  referencedCourtCases: validOrUndefined(
+    value["referencedCourtCases"],
+    (candidate) => isNullishArrayOf(candidate, isSaosReferencedCourtCase),
+  ),
+  receiptDate: validOrUndefined(value["receiptDate"], isNullishString),
+  meansOfAppeal: validOrUndefined(value["meansOfAppeal"], isNullishString),
+  judgmentResult: validOrUndefined(value["judgmentResult"], isNullishString),
+  lowerCourtJudgments: validOrUndefined(
+    value["lowerCourtJudgments"],
+    (candidate) => isNullishArrayOf(candidate, isSaosCourtCase),
+  ),
+  dissentingOpinions: validOrUndefined(
+    value["dissentingOpinions"],
+    (candidate): candidate is unknown[] | null | undefined =>
+      candidate === undefined || candidate === null || Array.isArray(candidate),
+  ),
+});
 
 const isSaosDumpResponse = (value: unknown): value is SaosDumpResponse =>
   isRecord(value) && isNullishArrayOf(value["items"], isRecord);
@@ -442,6 +500,19 @@ const courtNameForItem = (item: SaosItem): string | undefined =>
         : undefined),
   );
 
+const normalizeOptionalArray = <T>(
+  primary: T[] | null | undefined,
+  fallback?: T[] | null,
+): T[] => {
+  if (primary) {
+    return primary;
+  }
+  if (fallback) {
+    return fallback;
+  }
+  return [];
+};
+
 const parseItemWithDetail = async (
   raw: unknown,
   signal?: AbortSignal,
@@ -455,7 +526,7 @@ const parseItemWithDetail = async (
   // Full isSaosItem validation was moved out of the hot path because
   // a single unexpected field type (e.g. dissentingOpinions as object)
   // would reject the entire page, blocking all ingestion.
-  const dumpItem = raw as SaosItem;
+  const dumpItem = normalizeSaosDumpItem(raw);
   const detail =
     dumpItem.id !== undefined && dumpItem.id !== null
       ? await fetchDetail(dumpItem.id, signal)
@@ -484,8 +555,8 @@ const parseItemWithDetail = async (
     item.judgmentDate ?? dumpItem.judgmentDate,
     content,
   );
-  const keywords = item.keywords ?? dumpItem.keywords ?? [];
-  const statutes = item.legalBases ?? dumpItem.legalBases ?? [];
+  const keywords = normalizeOptionalArray(item.keywords, dumpItem.keywords);
+  const statutes = normalizeOptionalArray(item.legalBases, dumpItem.legalBases);
   const ecli = toOptionalValue(item.ecli ?? dumpItem.ecli);
   const documentUrl = toOptionalValue(
     item.source?.judgmentUrl ?? dumpItem.source?.judgmentUrl,
@@ -558,19 +629,26 @@ const parseItemWithDetail = async (
       judges: effectiveJudges?.map((judge) => ({
         name: judge.name,
         function: toOptionalValue(judge.function),
-        specialRoles: judge.specialRoles ?? [],
+        specialRoles: normalizeOptionalArray(judge.specialRoles),
       })),
       keywords,
       division: effectiveDivision,
       source: effectiveSource,
-      courtReporters: item.courtReporters ?? dumpItem.courtReporters ?? [],
+      courtReporters: normalizeOptionalArray(
+        item.courtReporters,
+        dumpItem.courtReporters,
+      ),
       decision: toOptionalValue(item.decision ?? dumpItem.decision),
       summary: toOptionalValue(item.summary ?? dumpItem.summary),
       legalBases: statutes,
-      referencedRegulations:
-        item.referencedRegulations ?? dumpItem.referencedRegulations ?? [],
-      referencedCourtCases:
-        item.referencedCourtCases ?? dumpItem.referencedCourtCases ?? [],
+      referencedRegulations: normalizeOptionalArray(
+        item.referencedRegulations,
+        dumpItem.referencedRegulations,
+      ),
+      referencedCourtCases: normalizeOptionalArray(
+        item.referencedCourtCases,
+        dumpItem.referencedCourtCases,
+      ),
       receiptDate: toOptionalValue(item.receiptDate ?? dumpItem.receiptDate),
       meansOfAppeal: toOptionalValue(
         item.meansOfAppeal ?? dumpItem.meansOfAppeal,
@@ -578,10 +656,15 @@ const parseItemWithDetail = async (
       judgmentResult: toOptionalValue(
         item.judgmentResult ?? dumpItem.judgmentResult,
       ),
-      lowerCourtJudgments:
-        item.lowerCourtJudgments ?? dumpItem.lowerCourtJudgments ?? [],
+      lowerCourtJudgments: normalizeOptionalArray(
+        item.lowerCourtJudgments,
+        dumpItem.lowerCourtJudgments,
+      ),
       dissentingOpinions: normalizeDissentingOpinions(
-        item.dissentingOpinions ?? dumpItem.dissentingOpinions ?? [],
+        normalizeOptionalArray(
+          item.dissentingOpinions,
+          dumpItem.dissentingOpinions,
+        ),
       ),
       ingestion: {
         dumpHash: rawHash,
@@ -669,7 +752,7 @@ export const plCourtsAdapter: SourceAdapter = {
     },
 
     extractItems: (data) => ({
-      items: data.items ?? [],
+      items: normalizeOptionalArray(data.items),
     }),
 
     parseItem: parseItemWithDetail,

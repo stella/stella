@@ -1,4 +1,4 @@
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { documentTypes } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 

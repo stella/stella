@@ -579,6 +579,14 @@ type PDFStoreApi = ReturnType<typeof createPDFStore>["store"];
 
 const PDFStoreContext = createContext<PDFStoreApi | null>(null);
 
+export const usePDFStoreApi = (): PDFStoreApi => {
+  const store = use(PDFStoreContext);
+  if (!store) {
+    panic("usePDFStoreApi must be used within PDFProvider");
+  }
+  return store;
+};
+
 export const usePDFStore = <T,>(selector: (state: PDFStore) => T): T => {
   const store = use(PDFStoreContext);
   if (!store) {

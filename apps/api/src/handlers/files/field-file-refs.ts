@@ -1,6 +1,6 @@
 import { and, eq, inArray, not, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";

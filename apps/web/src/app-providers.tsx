@@ -90,14 +90,9 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // completes; the persisted locale then swaps in place.
   const preHydrationEnglish = onPublicSsrPath && !hydrated;
 
-  // SAFETY: locale JSON files are shape-checked in i18n-store.ts; this
-  // cast is only at the provider boundary because use-intl's Messages
-  // type preserves English literal message values while translated
-  // locale JSONs necessarily contain different strings.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- i18n provider boundary; locale JSON shape-checked in i18n-store, use-intl's Messages keeps English literal values
-  const activeMessages = (
-    preHydrationEnglish ? bundledEnglishMessages : messages
-  ) as Messages;
+  const activeMessages = preHydrationEnglish
+    ? bundledEnglishMessages
+    : messages;
 
   // Plurals and message lookup key off the base language; the -u- extensions
   // only steer number/date formatting. preHydrationEnglish forces the plain
@@ -115,7 +110,17 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   return (
     <IntlProvider
       locale={formattingLocale}
-      messages={activeMessages}
+      // SAFETY: activeMessages is the fully-populated catalog for the active
+      // locale. use-intl types its `messages` prop with the generated Messages
+      // schema (literal string leaves, which also drives `t()` ICU-argument
+      // inference app-wide), but locales load as dynamic JSON so LocaleMessages
+      // widens every leaf to `string`. The runtime values conform to the
+      // schema; only the literal-vs-string widening differs at this boundary.
+      // This is the single sanctioned as-cast in app source (ratchet baseline).
+      messages={
+        // eslint-disable-next-line typescript/no-unsafe-type-assertion -- documented i18n provider boundary (see comment above); translated locale JSON widens leaves to string vs use-intl's literal Messages schema
+        activeMessages as Messages
+      }
       timeZone={resolveAppTimeZone()}
     >
       {children}

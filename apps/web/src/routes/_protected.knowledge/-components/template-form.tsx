@@ -51,8 +51,9 @@ import type { MatterTarget } from "@/components/matter-target-picker";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -407,7 +408,7 @@ const collectSourceOptionValues = (
 
   for (const field of fields) {
     if (field.kind === "array") {
-      const sub = (field.itemFields ?? []).find(
+      const sub = field.itemFields?.find(
         (item) => `${field.path}.${item.path}` === sourcePath,
       );
       if (!sub) {
@@ -443,7 +444,10 @@ const dependentOptions = (
     fields,
     values,
   );
-  return sourceValues.length > 0 ? sourceValues : (field.options ?? []);
+  if (sourceValues.length > 0) {
+    return sourceValues;
+  }
+  return optionalArray(field.options);
 };
 
 /** Label of the top-level field that supplies a dependent select's options
@@ -456,9 +460,7 @@ const sourceFieldLabel = (
     (f) =>
       f.path === sourcePath ||
       (f.kind === "array" &&
-        (f.itemFields ?? []).some(
-          (item) => `${f.path}.${item.path}` === sourcePath,
-        )),
+        f.itemFields?.some((item) => `${f.path}.${item.path}` === sourcePath)),
   );
   return source?.label ?? sourcePath;
 };
@@ -495,9 +497,12 @@ const groupFieldsByPrefix = (fields: readonly ResolvedField[]) => {
   for (const field of fields) {
     const dotIndex = field.path.indexOf(".");
     const prefix = dotIndex > 0 ? field.path.slice(0, dotIndex) : "";
-    const existing = groups.get(prefix) ?? [];
-    existing.push(field);
-    groups.set(prefix, existing);
+    const existing = groups.get(prefix);
+    if (existing) {
+      existing.push(field);
+    } else {
+      groups.set(prefix, [field]);
+    }
   }
 
   return groups;
@@ -890,7 +895,7 @@ const FieldRenderer = ({
   // A dependent select keeps its select rendering even while it has no
   // options yet (the source field is still empty): a text input would lift
   // the subset constraint, so the trigger is disabled instead.
-  const selectOptions = derivedOptions ?? field.options ?? [];
+  const selectOptions = optionalArray(derivedOptions ?? field.options);
   if (
     inputType === "select" &&
     (selectOptions.length > 0 || field.optionsFrom !== undefined)
@@ -1041,7 +1046,7 @@ const ArrayFieldRenderer = ({
   onEditField?: ((path: string) => void) | undefined;
 }) => {
   const t = useTranslations();
-  const itemFields: ResolvedField[] = field.itemFields ?? [];
+  const itemFields = optionalArray(field.itemFields);
   const arrayKey = arrayIndexKey(field.path);
   const items = readArrayIndices(values, arrayKey);
   const maxItems = field.validation?.maxItems;
@@ -1183,7 +1188,7 @@ const buildSubmitValues = (
     if (field.kind === "array") {
       const arrayKey = arrayIndexKey(field.path);
       const items = readArrayIndices(values, arrayKey);
-      const itemFields: ResolvedField[] = field.itemFields ?? [];
+      const itemFields = optionalArray(field.itemFields);
       const arrayValues: Record<string, unknown>[] = [];
 
       for (let i = 0; i < items.length; i++) {
@@ -1298,7 +1303,7 @@ const collectValidatableFields = (
     if (field.kind === "array") {
       const arrayKey = arrayIndexKey(field.path);
       const items = readArrayIndices(values, arrayKey);
-      const itemFields: ResolvedField[] = field.itemFields ?? [];
+      const itemFields = optionalArray(field.itemFields);
 
       for (let i = 0; i < items.length; i++) {
         for (const sub of itemFields) {
@@ -1355,7 +1360,8 @@ const collectEmptyArrayFields = (
     return;
   }
   for (let i = 0; i < items.length; i++) {
-    for (const sub of field.itemFields ?? []) {
+    const itemFields = optionalArray(field.itemFields);
+    for (const sub of itemFields) {
       if (isFieldRequired(sub)) {
         continue;
       }
@@ -2047,14 +2053,8 @@ export const TemplateForm = ({
         return;
       }
 
-      const data = response.data;
       const mimeType = format === "pdf" ? PDF_MIME : DOCX_MIME;
-      const blob =
-        data instanceof Response
-          ? await data.blob()
-          : new Blob([data], {
-              type: mimeType,
-            });
+      const blob = await normalizeBinaryResponse(response.data, mimeType);
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -2510,6 +2510,28 @@ export const TemplateForm = ({
       </Dialog>
     </form>
   );
+};
+
+const normalizeBinaryResponse = async (
+  data: unknown,
+  mimeType: string,
+): Promise<Blob> => {
+  if (data instanceof Response) {
+    return await data.blob();
+  }
+  if (data instanceof Blob) {
+    return data;
+  }
+  if (data instanceof ArrayBuffer) {
+    return new Blob([data], { type: mimeType });
+  }
+  if (ArrayBuffer.isView(data)) {
+    const bytes = Uint8Array.from(
+      new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+    );
+    return new Blob([bytes], { type: mimeType });
+  }
+  return panic("Template fill returned a non-binary response");
 };
 
 /**

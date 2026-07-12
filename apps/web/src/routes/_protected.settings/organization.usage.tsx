@@ -12,7 +12,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
 import type { UsageEntitlement } from "@/routes/_protected.settings/-queries/usage";
@@ -193,7 +194,7 @@ function ManageUsageButton() {
       setPending(false);
       stellaToast.add({
         title: t("settings.organization.usageManageError"),
-        description: error instanceof Error ? error.message : undefined,
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
       });
     },

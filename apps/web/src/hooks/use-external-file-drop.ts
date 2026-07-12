@@ -11,7 +11,7 @@ import {
   type DroppedFileTree,
 } from "@/hooks/external-file-drop.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { ClientOperationError } from "@/lib/errors";
+import { ClientOperationError } from "@/lib/errors/client";
 
 type ExternalFileDropOptions = {
   onDrop: (files: File[]) => void;

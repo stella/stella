@@ -20,7 +20,7 @@ import {
   getPlaybookDefinitionHandler,
   listPlaybookDefinitionsHandler,
 } from "@/api/handlers/playbooks/read";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";

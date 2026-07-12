@@ -16,6 +16,7 @@
  */
 
 import { eq, isNull, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { rootDb } from "@/api/db/root";
 import {
@@ -139,9 +140,16 @@ const seedRules = async () => {
  * The only way to obtain this type is through `validateTemporalOrder`,
  * making temporally impossible citations a compile error at the update site.
  */
-type ValidCitedDecisionId = SafeId<"caseLawDecision"> & {
-  readonly __brand: "ValidCitedDecisionId";
-};
+const validCitedDecisionIdSchema = v.pipe(
+  v.custom<SafeId<"caseLawDecision">>((value) =>
+    typeof value === "string"
+      ? v.is(v.pipe(v.string(), v.uuid()), value)
+      : false,
+  ),
+  v.brand("ValidCitedDecisionId"),
+);
+
+type ValidCitedDecisionId = v.InferOutput<typeof validCitedDecisionIdSchema>;
 
 const validateTemporalOrder = (
   citingDate: string | null,
@@ -150,15 +158,11 @@ const validateTemporalOrder = (
 ): ValidCitedDecisionId | null => {
   // If either date is unknown, allow the match (can't validate)
   if (!citingDate || !citedDate) {
-    // SAFETY: branded-type constructor — date is missing so we can't disprove temporal order
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- branded-type construction at the validated temporal boundary
-    return matchedId as ValidCitedDecisionId;
+    return v.parse(validCitedDecisionIdSchema, matchedId);
   }
   // ISO dates sort lexicographically; citing must be on or after cited
   if (citingDate >= citedDate) {
-    // SAFETY: branded-type constructor — temporal order verified above
-    // eslint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- branded-type construction at the validated temporal boundary
-    return matchedId as ValidCitedDecisionId;
+    return v.parse(validCitedDecisionIdSchema, matchedId);
   }
   return null;
 };

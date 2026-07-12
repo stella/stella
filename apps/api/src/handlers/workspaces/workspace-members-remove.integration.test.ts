@@ -10,7 +10,7 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { auditLogs, workspaceMembers, workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,

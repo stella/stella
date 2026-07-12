@@ -6,7 +6,7 @@ import { ElysiaCustomStatusResponse } from "elysia";
 
 import type { PermissionInput } from "@stll/permissions";
 
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getCurrentRequestId } from "@/api/lib/observability/request-context";
 import {

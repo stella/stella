@@ -1,3 +1,4 @@
+import { normalizeOptionalArray } from "@/lib/arrays";
 import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
@@ -109,7 +110,7 @@ export const buildDocTypeGateLabels = ({
     ) {
       continue;
     }
-    const dependencies = property.tool.dependencies ?? [];
+    const dependencies = normalizeOptionalArray(property.tool.dependencies);
     const labels = new Set<string>();
     for (const dependency of dependencies) {
       const label = docTypeGateLabel(dependency, classifierPropertyId);

@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
-import type { SafeDb, Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
@@ -52,9 +53,9 @@ let nextAssertUsageAvailableResult:
   available: 1000,
 };
 
-const realUsage = await import("@/api/lib/usage");
+const realUsage = await import("@/api/lib/usage/usage-ledger");
 
-void mock.module("@/api/lib/usage", () => ({
+void mock.module("@/api/lib/usage/usage-ledger", () => ({
   ...realUsage,
   assertUsageAvailable: async ({
     organizationId,

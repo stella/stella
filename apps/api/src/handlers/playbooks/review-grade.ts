@@ -15,6 +15,7 @@ import type {
 import type { VerdictTier } from "@/api/handlers/playbooks/verdict-tiers";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -257,7 +258,7 @@ export const buildFindings = async ({
     const extraction = contentBySourceId.get(position.sourceId);
     const askContent = extraction?.content;
     const tiers = tiersBySourceId.get(position.sourceId);
-    const citations = extraction?.citations ?? [];
+    const citations = arrayOrEmpty(extraction?.citations);
 
     const { verdict, rationale, matchedRef } = await gradePosition({
       position,

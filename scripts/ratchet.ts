@@ -51,6 +51,7 @@ const isExcludedSource = (file: string): boolean =>
   /\.gen\./u.test(file) ||
   /\.test\./u.test(file) ||
   /\.spec\./u.test(file) ||
+  file.includes("/tests/") ||
   file.includes("/e2e/") ||
   file.includes("/__tests__/");
 
@@ -66,6 +67,11 @@ const AS_UNKNOWN_AS = /\bas\s+unknown\s+as\b/gu;
 // A type assertion: ` as ` not immediately followed by `const`.
 const AS_CAST = /\bas\s+(?!const\b)/gu;
 const AS_UNKNOWN_PLACEHOLDER = "as  ";
+const MAPPED_TYPE_REMAP_PLACEHOLDER = "remap ";
+// Mapped types use `as` to remap keys (`[K in keyof T as F<K>]`). This is
+// type-level syntax, not a value assertion. The `in` before `as` distinguishes
+// it from computed array/index expressions that may contain a real assertion.
+const MAPPED_TYPE_KEY_REMAP = /(?<mappedPrefix>\[[^\]]*\bin\b[^\]]*)\bas\s+/gu;
 
 // Module syntax carries alias `as` (`import { x as y }`, `import * as ns`,
 // `export { x as y }`, `export * as ns`) that is NOT a type assertion. These
@@ -176,14 +182,47 @@ const stripLine = (
   return { code: code.replace(LINE_COMMENT_TAIL, ""), state: nextState };
 };
 
+const stripBlockComments = (
+  code: string,
+  inBlockComment: boolean,
+): { code: string; inBlockComment: boolean } => {
+  let output = "";
+  let cursor = 0;
+  let inside = inBlockComment;
+  while (cursor < code.length) {
+    if (inside) {
+      const close = code.indexOf("*/", cursor);
+      if (close === -1) {
+        return { code: output, inBlockComment: true };
+      }
+      cursor = close + 2;
+      inside = false;
+      continue;
+    }
+    const open = code.indexOf("/*", cursor);
+    if (open === -1) {
+      output += code.slice(cursor);
+      break;
+    }
+    output += code.slice(cursor, open);
+    cursor = open + 2;
+    inside = true;
+  }
+  return { code: output, inBlockComment: inside };
+};
+
 const countAsCasts = (content: string): number => {
   let total = 0;
   let inModuleStmt = false;
+  let inBlockComment = false;
   let literalState = NO_OPEN_TEMPLATE;
 
   for (const raw of content.split("\n")) {
-    const { code, state } = stripLine(raw, literalState);
+    const { code: lineCode, state } = stripLine(raw, literalState);
     literalState = state;
+    const blockResult = stripBlockComments(lineCode, inBlockComment);
+    const code = blockResult.code;
+    inBlockComment = blockResult.inBlockComment;
 
     if (inModuleStmt) {
       if (MODULE_STMT_TERMINATOR.test(code)) {
@@ -200,7 +239,12 @@ const countAsCasts = (content: string): number => {
       }
       continue;
     }
-    const scanned = code.replace(AS_UNKNOWN_AS, AS_UNKNOWN_PLACEHOLDER);
+    const scanned = code
+      .replace(AS_UNKNOWN_AS, AS_UNKNOWN_PLACEHOLDER)
+      .replace(
+        MAPPED_TYPE_KEY_REMAP,
+        `$<mappedPrefix>${MAPPED_TYPE_REMAP_PLACEHOLDER}`,
+      );
     total += (scanned.match(AS_CAST) ?? []).length;
   }
   return total;
@@ -213,11 +257,15 @@ const NULLISH_ARRAY = /\?\?\s*\[\]/gu;
 // stripLine helper by construction, so it gets the same fix for free.
 const countNullishArrayFallback = (content: string): number => {
   let total = 0;
+  let inBlockComment = false;
   let literalState = NO_OPEN_TEMPLATE;
 
   for (const raw of content.split("\n")) {
-    const { code, state } = stripLine(raw, literalState);
+    const { code: lineCode, state } = stripLine(raw, literalState);
     literalState = state;
+    const blockResult = stripBlockComments(lineCode, inBlockComment);
+    const code = blockResult.code;
+    inBlockComment = blockResult.inBlockComment;
     if (COMMENT_LINE.test(code)) {
       continue;
     }
@@ -486,6 +534,7 @@ const formatDelta = (delta: number): string => {
 const runReport = (): number => {
   const current = scanAll(REPO_ROOT);
   const baseline = readBaseline();
+  const showDetails = process.argv.includes("--details");
   console.log("ratchet: current metric counts (vs baseline)\n");
   for (const metric of RATCHET_METRICS) {
     const c = current[metric.id];
@@ -496,6 +545,11 @@ const runReport = (): number => {
       `  ${metric.id.padEnd(24)} ${String(c.count).padStart(5)}  (baseline ${b}, ${sign})`,
     );
     console.log(`  ${" ".repeat(24)} ${metric.description}`);
+    if (showDetails) {
+      for (const [file, count] of Object.entries(c.files)) {
+        console.log(`  ${" ".repeat(24)} ${count}  ${file}`);
+      }
+    }
   }
   return 0;
 };
@@ -590,6 +644,7 @@ const AS_CAST_FIXTURE_LINES = [
   "const tmpl = `first line: as if it mattered",
   "second line: also as filler",
   "end` as Widget;",
+  `type Remapped<T> = { [K in keyof T as \`get\${K & string}\`]: T[K] };`,
 ];
 const SELF_TEST_AS_CASTS = `${AS_CAST_FIXTURE_LINES.join("\n")}\n`;
 // Expected as-casts: `a`(1), `c` collapsed(1), `d`(1), `real`'s two casts(2),

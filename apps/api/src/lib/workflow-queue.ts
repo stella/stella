@@ -4,9 +4,9 @@ import type { RedisClient } from "bun";
 import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
 import { jsonField } from "@/api/db/json-utils";
 import { rootDb } from "@/api/db/root";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   cellMetadata,
   fields,
@@ -24,7 +24,7 @@ import {
   loadOrgAIConfig,
   loadPromptCachingPreference,
 } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLocks } from "@/api/lib/cell-lock";

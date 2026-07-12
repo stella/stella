@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -44,10 +44,12 @@ import {
   useInspectorStore,
 } from "@/components/inspector/inspector-store";
 import { MarkdownIcon } from "@/components/markdown-icon";
+import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";
-import { APIError, toAPIError, userErrorFromThrown } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import {
   knowledgeKeys,
@@ -136,10 +138,16 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   // Highlights the row whose file is open in the inspector.
   const [selected, setSelected] = useState<SelectedFile>({ type: "body" });
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [enabled, setEnabled] = useState(false);
-  const [command, setCommand] = useState("");
+  const [name, setName] = useState(detail.data?.name ?? "");
+  const [description, setDescription] = useState(
+    detail.data?.description ?? "",
+  );
+  const [enabled, setEnabled] = useState(detail.data?.enabled ?? false);
+  const [command, setCommand] = useState(() =>
+    detail.data
+      ? (detail.data.command ?? slugifyCommand(detail.data.name))
+      : "",
+  );
   const [commandError, setCommandError] = useState<string | null>(null);
   const [renamingResourceId, setRenamingResourceId] = useState<string | null>(
     null,
@@ -166,21 +174,21 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return next;
     });
   };
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconciles editable form fields (name/description/enabled/command, all user-edited via their own setters elsewhere) with server data on load and after each save-refetch; not pure derived state, and the only-rendering-parent that could carry a key isn't in scope, so kept
-  useEffect(() => {
-    if (!detail.data) {
-      return;
-    }
-    // eslint-disable-next-line react/react-compiler -- reconciles editable form fields with the server detail query on load and after each save-refetch; fields are user-edited via their own setters, so this is not pure derived state
+  const [lastDetailData, setLastDetailData] = useState(detail.data);
+  // A new server snapshot replaces the editable draft, including after save.
+  // Comparing the query object's identity preserves dirty edits between
+  // refetches while applying a changed snapshot before children render.
+  if (detail.data && detail.data !== lastDetailData) {
+    setLastDetailData(detail.data);
     setName(detail.data.name);
     setDescription(detail.data.description);
     setEnabled(detail.data.enabled);
     // Default the command to the skill's name (slugified) so it's written under
     // the / by default; the user can edit or clear it. Persisted on blur.
     setCommand(detail.data.command ?? slugifyCommand(detail.data.name));
-  }, [detail.data]);
+  }
 
-  const resources: SkillResource[] = detail.data?.resources ?? [];
+  const resources: SkillResource[] = detail.data ? detail.data.resources : [];
 
   const existingPaths = new Set(resources.map((entry) => entry.path));
 
@@ -305,26 +313,6 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // Land with SKILL.md open in the inspector so the editor is immediately
   // editable — blank and blueprint drafts arrive here straight from the
   // gallery with nothing else to click first.
-  const autoOpenedSkillId = useRef<string | null>(null);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot tab-open relayed off the query's first data load (no single setter call-site to host it, and useExternalSyncEffect forbids event relays); the only-rendering-parent that could carry a key isn't in scope, so kept
-  useEffect(() => {
-    if (!detail.data || autoOpenedSkillId.current === skillId) {
-      return;
-    }
-    autoOpenedSkillId.current = skillId;
-    setSelected({ type: "body" });
-    openSkillResourceTab({
-      skillName: detail.data.name,
-      skillId,
-      origin: detail.data.origin,
-      target: "body",
-      resourcePath: SKILL_BODY_FILE_NAME,
-      label: SKILL_BODY_FILE_NAME,
-      mimeType: MARKDOWN_MIME,
-      content: detail.data.body,
-    });
-  }, [detail.data, skillId, openSkillResourceTab]);
-
   // Mutations
   const patchMetadata = useMutation({
     mutationFn: async (payload: {
@@ -493,7 +481,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       for (const node of siblings) {
         if (node.kind === "folder") {
           ids.add(node.id);
-          walk(node.children ?? []);
+          if (node.children) {
+            walk(node.children);
+          }
         }
       }
     };
@@ -636,6 +626,24 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
 
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col">
+      {detail.data && (
+        <SkillAutoOpenLifecycle
+          key={skillId}
+          onOpen={() => {
+            setSelected({ type: "body" });
+            openSkillResourceTab({
+              skillName: detail.data.name,
+              skillId,
+              origin: detail.data.origin,
+              target: "body",
+              resourcePath: SKILL_BODY_FILE_NAME,
+              label: SKILL_BODY_FILE_NAME,
+              mimeType: MARKDOWN_MIME,
+              content: detail.data.body,
+            });
+          }}
+        />
+      )}
       {/* Identity, status, and how the skill runs. The files below are the main
           surface; editing happens in the inspector. */}
       <div className="border-b p-4">
@@ -919,7 +927,9 @@ function SkillFileTree({
         if (!collapsedFolders.has(node.id)) {
           ids.add(node.id);
         }
-        walk(node.children ?? []);
+        if (node.children) {
+          walk(node.children);
+        }
       }
     };
     walk(nodes);
@@ -1328,7 +1338,9 @@ function RootAddMenu({
         className="hidden"
         multiple
         onChange={(event) => {
-          const files = [...(event.currentTarget.files ?? [])];
+          const files = event.currentTarget.files
+            ? Array.from(event.currentTarget.files)
+            : [];
           event.currentTarget.value = "";
           if (files.length > 0) {
             onUploadFiles(files);
@@ -1376,20 +1388,27 @@ function RootAddMenu({
   );
 }
 
-const CODE_EXTENSIONS = new Set([
-  "json",
-  "yml",
-  "yaml",
-  "toml",
-  "ts",
-  "tsx",
-  "js",
-  "jsx",
-  "py",
-  "rb",
-  "sh",
-]);
-const TEXT_EXTENSIONS = new Set(["mdx", "txt", "csv", "tsv"]);
+const SkillAutoOpenLifecycle = ({ onOpen }: { onOpen: () => void }) => {
+  useMountEffect(() => {
+    onOpen();
+  });
+  return null;
+};
+
+const CODE_EXTENSIONS = {
+  json: true,
+  yml: true,
+  yaml: true,
+  toml: true,
+  ts: true,
+  tsx: true,
+  js: true,
+  jsx: true,
+  py: true,
+  rb: true,
+  sh: true,
+} as const;
+const TEXT_EXTENSIONS = { mdx: true, txt: true, csv: true, tsv: true } as const;
 
 const fileIcon = (fileName: string) => {
   // Recognise markdown via the shared MIME/extension helper so the file view,
@@ -1399,10 +1418,10 @@ const fileIcon = (fileName: string) => {
   }
   const dotIndex = fileName.lastIndexOf(".");
   const ext = dotIndex === -1 ? "" : fileName.slice(dotIndex + 1).toLowerCase();
-  if (TEXT_EXTENSIONS.has(ext)) {
+  if (Object.hasOwn(TEXT_EXTENSIONS, ext)) {
     return <FileTextIcon className="size-4 shrink-0" />;
   }
-  if (CODE_EXTENSIONS.has(ext)) {
+  if (Object.hasOwn(CODE_EXTENSIONS, ext)) {
     return <FileCodeIcon className="size-4 shrink-0" />;
   }
   return <FileIcon className="size-4 shrink-0" />;

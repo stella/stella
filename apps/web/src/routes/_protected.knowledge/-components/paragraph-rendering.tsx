@@ -46,12 +46,12 @@ export const HighlightedText = ({ text }: { text: string }) => {
   return parts;
 };
 
-export const CONDITIONAL_KINDS = new Set<BlockDirectiveKind>([
+export const CONDITIONAL_KINDS: readonly BlockDirectiveKind[] = [
   "if",
   "elseif",
   "else",
   "endif",
-]);
+];
 
 export const DirectiveLabel = ({
   kind,
@@ -61,7 +61,7 @@ export const DirectiveLabel = ({
   expression: string;
 }) => {
   const t = useTranslations("templates");
-  const isConditional = CONDITIONAL_KINDS.has(kind);
+  const isConditional = CONDITIONAL_KINDS.includes(kind);
 
   const label = (() => {
     switch (kind) {

@@ -2,16 +2,18 @@ import { Result } from "better-result";
 import { eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb, Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   clauseCategories,
   clauses,
   clauseVariants,
   clauseVersions,
 } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -197,7 +199,7 @@ const importHandler = async function* ({
         // imported rows beyond the cap become hidden — never listed by normal
         // clause reads. Truncate and surface a per-item notice instead of
         // failing the whole import.
-        const allVariants = item.variants ?? [];
+        const allVariants = arrayOrEmpty(item.variants);
         const variants = allVariants.slice(0, LIMITS.clauseVariantsPerClause);
         if (allVariants.length > variants.length) {
           errors.push(

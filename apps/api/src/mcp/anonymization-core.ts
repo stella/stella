@@ -8,7 +8,7 @@ import type {
   PipelineContext,
 } from "@stll/anonymize-wasm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { buildFieldMarkers } from "@/api/mcp/field-markers";

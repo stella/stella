@@ -56,10 +56,12 @@ export const buildWorkspaceMentionOptions = ({
   return items;
 };
 
-export const getMentionViewScope = (layout: ViewLayout | null | undefined) => ({
-  filters: layout?.filters ?? [],
-  sorts: layout?.sorts ?? [],
-});
+export const getMentionViewScope = (layout: ViewLayout | null | undefined) => {
+  if (!layout) {
+    return { filters: [], sorts: [] };
+  }
+  return { filters: layout.filters, sorts: layout.sorts };
+};
 
 export const buildEntityMentionOption = ({
   entity,

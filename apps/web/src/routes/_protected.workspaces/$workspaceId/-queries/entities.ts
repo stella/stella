@@ -7,7 +7,9 @@ import {
 } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { normalizeOptionalArray } from "@/lib/arrays";
+import { toAPIError } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -127,7 +129,7 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
             filters: key.filters,
             sorts: key.sorts,
             ...(key.search?.trim() && { search: key.search.trim() }),
-            excludedKinds: key.excludedKinds ?? [],
+            excludedKinds: normalizeOptionalArray(key.excludedKinds),
             fieldMode,
             fieldIds:
               fieldMode === "visible"
@@ -165,7 +167,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
             sorts: key.sorts,
             ...(key.search?.trim() && { search: key.search.trim() }),
             limit: key.limit ?? DEFAULT_ENTITY_WINDOW_SIZE,
-            excludedKinds: key.excludedKinds ?? [],
+            excludedKinds: normalizeOptionalArray(key.excludedKinds),
             fieldMode,
             fieldIds:
               fieldMode === "visible"
@@ -188,7 +190,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
 
       return { ...rest, entities };
     },
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -260,7 +262,7 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
                 ? key.groupByPropertyId
                 : toSafeId<"property">(key.groupByPropertyId),
             groupValue: key.groupValue,
-            excludedKinds: key.excludedKinds ?? [],
+            excludedKinds: normalizeOptionalArray(key.excludedKinds),
             ...(key.optionValues !== undefined && {
               optionValues: key.optionValues,
             }),
@@ -278,7 +280,7 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
 
       return { ...rest, entities };
     },
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     // The key carries the visible fieldIds, so showing/hiding a column changes
     // it and refetches. Keep the previous rows on screen during that refetch

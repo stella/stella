@@ -13,7 +13,7 @@ import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-p
 type RecordedRequest = { path: string; body: string };
 
 let requests: RecordedRequest[];
-let responseBody: Record<string, unknown>;
+let responseBody: unknown;
 const originalFetch = globalThis.fetch;
 
 beforeEach(() => {
@@ -65,6 +65,36 @@ test("search sends the documented sort_by parameter", async () => {
   // The engine ignores unknown keys, so the old misnamed parameter would
   // silently fall back to document-id order.
   expect(body).not.toHaveProperty("sort_by_field");
+});
+
+test("search rejects a malformed external response", async () => {
+  responseBody = [];
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid response");
+  }
+});
+
+test("search rejects a malformed object response", async () => {
+  responseBody = { error: "index unavailable" };
+
+  const result = await getCorpusIndexClient().search({
+    indexId: "legal_corpus_v1_cze",
+    query: "text:smlouva",
+    maxHits: 10,
+  });
+
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error.message).toContain("invalid response");
+  }
 });
 
 test("search pagination always requests BM25 relevance order", async () => {

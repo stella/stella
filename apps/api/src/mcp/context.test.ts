@@ -7,7 +7,7 @@ import {
   test,
 } from "bun:test";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
 import { loadAccessibleMcpWorkspaces } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

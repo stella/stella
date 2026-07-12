@@ -1,7 +1,10 @@
+import * as v from "valibot";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Secret, SecretKind } from "@/api/lib/secret-brands";
+import { secretSchema } from "@/api/lib/secret-brands";
 
 type SecretPurpose =
   | "mcp_access_token"
@@ -27,8 +30,7 @@ type DecryptedFor<P extends SecretPurpose> = Secret<DecryptedKind<P>>;
 // The only MCP secret brand-mint boundary. This module decrypts and validates
 // the envelope before applying the nominal brand selected by SecretPurpose.
 const toDecryptedSecret = <K extends SecretKind>(value: string): Secret<K> =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- sole MCP secret brand-mint boundary; brand applied after envelope validation
-  value as Secret<K>;
+  v.parse(secretSchema, value);
 
 type SecretEnvelope = {
   connectorId: SafeId<"mcpConnector">;

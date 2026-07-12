@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
+import type { SafeDb } from "@/api/db/safe-db";
 import { templates } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

@@ -14,7 +14,7 @@ import { StellaMark } from "@/components/stella-mark";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
-import { isMemberError, isUnauthorizedError } from "@/lib/errors";
+import { isMemberError, isUnauthorizedError } from "@/lib/errors/auth";
 
 type DefaultErrorComponentProps = ErrorComponentProps & {
   className?: string;

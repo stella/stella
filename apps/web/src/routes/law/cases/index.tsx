@@ -131,9 +131,8 @@ export const Route = createFileRoute("/law/cases/")({
       ensureRouteQueryData(queryClient, decisionFacetsOptions()),
     ]);
 
-    return {
-      decisions: decisionPages.pages.at(0)?.decisions ?? [],
-    };
+    const firstPage = decisionPages.pages.at(0);
+    return { decisions: firstPage ? firstPage.decisions : [] };
   },
   head: ({ loaderData, match }) => {
     const search = match.search;
@@ -146,22 +145,23 @@ export const Route = createFileRoute("/law/cases/")({
       jsonLd: createCaseLawCollectionJsonLd({
         canonicalUrl: createPublicLawCanonicalUrl(path),
         description,
-        items:
-          loaderData?.decisions.map((decision) => ({
-            name: decision.caseNumber,
-            url: createPublicLawCanonicalUrl(
-              createCaseLawDecisionPath(
-                createCaseLawDecisionRouteParams({
-                  caseNumber: decision.caseNumber,
-                  country: decision.country,
-                  court: decision.court,
-                  language: decision.language,
-                  languageAlternateCount: decision.languageAlternateCount,
-                  slug: decision.slug,
-                }),
+        items: loaderData
+          ? loaderData.decisions.map((decision) => ({
+              name: decision.caseNumber,
+              url: createPublicLawCanonicalUrl(
+                createCaseLawDecisionPath(
+                  createCaseLawDecisionRouteParams({
+                    caseNumber: decision.caseNumber,
+                    country: decision.country,
+                    court: decision.court,
+                    language: decision.language,
+                    languageAlternateCount: decision.languageAlternateCount,
+                    slug: decision.slug,
+                  }),
+                ),
               ),
-            ),
-          })) ?? [],
+            }))
+          : [],
         name: title,
       }),
       path,
@@ -239,8 +239,10 @@ function PublicCaseLawIndex() {
     });
 
   const decisions: Decision[] = [];
-  for (const page of data?.pages ?? []) {
-    decisions.push(...page.decisions);
+  if (data) {
+    for (const page of data.pages) {
+      decisions.push(...page.decisions);
+    }
   }
 
   const facets: SearchFacets = data?.pages.at(0)?.facets ?? null;

@@ -183,7 +183,7 @@ const ParagraphContent = ({ paragraph }: { paragraph: ClauseParagraph }) => {
 
 const ClauseParagraphRow = ({ paragraph }: { paragraph: ClauseParagraph }) => {
   if (paragraph.isDirective && paragraph.directiveKind) {
-    const isConditional = CONDITIONAL_KINDS.has(paragraph.directiveKind);
+    const isConditional = CONDITIONAL_KINDS.includes(paragraph.directiveKind);
 
     return (
       <div

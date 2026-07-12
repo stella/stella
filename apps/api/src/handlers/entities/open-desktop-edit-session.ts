@@ -3,7 +3,8 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb, SafeDbError, Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   desktopEditSessions,
   entityVersions,

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import { rootDb, rlsDb } from "@/api/db/root";
 /**
  * The legal-atlas-runner's single sanctioned database surface.
  *
@@ -14,10 +15,9 @@ import { sql } from "drizzle-orm";
  * only way the daemons can reach the database — no caller can construct
  * an unbounded handle.
  */
-import type { ScopedDb } from "@/api/db";
-import { createIngestionDb } from "@/api/db";
-import { rootDb, rlsDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
+import { createIngestionDb } from "@/api/db/scoped";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 import { LEGAL_ATLAS_RUNNER_ENV } from "./env";

@@ -1,14 +1,21 @@
+import * as v from "valibot";
+
 import type { FieldContent } from "@/api/db/schema-validators";
 
-declare const __fileObjectId: unique symbol;
+const mintedFileIdSchema = v.pipe(
+  v.string(),
+  v.uuid(),
+  v.brand("MintedFileId"),
+);
+const reusedFileIdSchema = v.pipe(
+  v.string(),
+  v.uuid(),
+  v.brand("ReusedFileId"),
+);
 
-export type MintedFileId = string & {
-  readonly [__fileObjectId]: "MintedFileId";
-};
+export type MintedFileId = v.InferOutput<typeof mintedFileIdSchema>;
 
-type ReusedFileId = string & {
-  readonly [__fileObjectId]: "ReusedFileId";
-};
+type ReusedFileId = v.InferOutput<typeof reusedFileIdSchema>;
 
 type WritableFileId = MintedFileId | ReusedFileId;
 
@@ -73,11 +80,7 @@ export const reuseFileObjectWithinEntity = (
 };
 
 const brandMintedFileId = (id: string): MintedFileId =>
-  // SAFETY: allocateFileObject is the only public minting boundary for new field-backed file object IDs.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  id as MintedFileId;
+  v.parse(mintedFileIdSchema, id);
 
 const brandReusedFileId = (id: string): ReusedFileId =>
-  // SAFETY: reuseFileObjectWithinEntity is the explicit escape hatch for same-entity version history.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  id as ReusedFileId;
+  v.parse(reusedFileIdSchema, id);

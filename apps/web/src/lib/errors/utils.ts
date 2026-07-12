@@ -1,4 +1,4 @@
-import { ClientUnknownError } from "@/lib/errors";
+import { ClientUnknownError } from "@/lib/errors/client";
 
 export const transformUnknownError = (error: unknown) => {
   if (error instanceof Error) {

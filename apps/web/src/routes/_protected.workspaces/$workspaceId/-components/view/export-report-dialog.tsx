@@ -32,7 +32,8 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -297,8 +298,8 @@ const ExportReportDialogBody = ({
     },
   });
 
-  const builtins = data?.builtins ?? [];
-  const stored = data?.stored ?? [];
+  const builtins = data ? data.builtins : [];
+  const stored = data ? data.stored : [];
   const hasTemplates = builtins.length + stored.length > 0;
 
   // Derive the selected value during render (Rule 1): default to the first

@@ -197,13 +197,17 @@ export const buildSearchResults = ({
       const originalEnd = normalizedPiece.endMap[matchEnd - 1];
 
       if (originalStart !== undefined && originalEnd !== undefined) {
-        const ranges = rangesByPieceId[piece.id] ?? [];
-        ranges.push({
+        const existingRanges = rangesByPieceId[piece.id];
+        const range = {
           start: originalStart,
           end: originalEnd,
           matchIndex: matchCount,
-        });
-        rangesByPieceId[piece.id] = ranges;
+        };
+        if (existingRanges) {
+          existingRanges.push(range);
+        } else {
+          rangesByPieceId[piece.id] = [range];
+        }
         matchCount += 1;
       }
 

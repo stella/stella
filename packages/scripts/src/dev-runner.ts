@@ -1414,7 +1414,7 @@ const buildPersistentSteps = ({
         "--preload",
         "./src/dev/register-mock-ai.ts",
         "--watch",
-        "src/index.ts",
+        "src/server.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
       env: apiEnv,

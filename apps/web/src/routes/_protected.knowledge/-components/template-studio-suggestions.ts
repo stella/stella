@@ -71,9 +71,9 @@ export const buildReplacementSuggestions = (
   const haystack = positional.text;
   const suggestions: AISuggestion[] = [];
   const placedSpecIds = new Set<string>();
-  const occupied: { from: number; to: number }[] = [
-    ...(options?.occupiedRanges ?? []),
-  ];
+  const occupied: { from: number; to: number }[] = options?.occupiedRanges
+    ? [...options.occupiedRanges]
+    : [];
 
   for (const spec of specs) {
     if (spec.literalText.length === 0) {
@@ -299,7 +299,11 @@ export const extractCompletedStreamingOperations = (
   return operations;
 };
 
-const OPERATION_SEVERITIES = new Set(["low", "medium", "high"]);
+const OPERATION_SEVERITIES: readonly string[] = Object.freeze([
+  "low",
+  "medium",
+  "high",
+]);
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
@@ -314,7 +318,7 @@ const isStreamedOperation = (value: unknown): value is DocxEditOperation => {
     !isNonEmptyString(Reflect.get(value, "blockId")) ||
     !isNonEmptyString(Reflect.get(value, "area")) ||
     typeof severity !== "string" ||
-    !OPERATION_SEVERITIES.has(severity)
+    !OPERATION_SEVERITIES.includes(severity)
   ) {
     return false;
   }

@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { TextSeparator } from "@stll/ui/components/separator";
 
+import { optionalArray } from "@/lib/arrays";
 import {
   CONDITIONAL_KINDS,
   DirectiveLabel,
@@ -47,8 +48,11 @@ type BlockSpan = {
   isConditional: boolean;
 };
 
-const OPENERS = new Set<BlockDirectiveKind>(["if", "each"]);
-const CLOSERS = new Set<BlockDirectiveKind>(["endif", "endeach"]);
+const OPENERS: readonly BlockDirectiveKind[] = Object.freeze(["if", "each"]);
+const CLOSERS: readonly BlockDirectiveKind[] = Object.freeze([
+  "endif",
+  "endeach",
+]);
 
 /**
  * Compute per-paragraph depths and block spans (for
@@ -70,7 +74,7 @@ const computeLayout = (
 
     const kind = p.directiveKind;
 
-    if (kind && OPENERS.has(kind)) {
+    if (kind && OPENERS.includes(kind)) {
       depths.push(depth);
       stack.push({
         idx: i,
@@ -80,7 +84,7 @@ const computeLayout = (
       depth = Math.min(depth + 1, MAX_DEPTH);
     } else if (kind === "elseif" || kind === "else") {
       depths.push(Math.max(depth - 1, 0));
-    } else if (kind && CLOSERS.has(kind)) {
+    } else if (kind && CLOSERS.includes(kind)) {
       depth = Math.max(depth - 1, 0);
       depths.push(depth);
       const open = stack.pop();
@@ -196,7 +200,7 @@ const PreviewParagraph = ({
     : undefined;
 
   if (paragraph.isDirective && paragraph.directiveKind) {
-    const isConditional = CONDITIONAL_KINDS.has(paragraph.directiveKind);
+    const isConditional = CONDITIONAL_KINDS.includes(paragraph.directiveKind);
 
     return (
       <div className="relative">
@@ -345,11 +349,12 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
           return t("templates.previewSectionBody");
         })();
 
+        const storedActiveSpans = activeLines.get(i);
         return (
           <div key={p.index}>
             {showDivider && <SectionDivider label={sectionLabel} />}
             <PreviewParagraph
-              activeSpans={activeLines.get(i) ?? []}
+              activeSpans={optionalArray(storedActiveSpans)}
               depth={depths[i] ?? 0}
               error={errorsByIndex.get(p.index)}
               paragraph={p}

@@ -1,4 +1,6 @@
-declare const __brand: unique symbol;
+import * as v from "valibot";
+
+const safeIdSchema = v.pipe(v.string(), v.brand("SafeId"));
 
 export type SafeIdType =
   | "accountDeletionRequest"
@@ -86,14 +88,15 @@ export type SafeIdType =
   | "workspaceViewTemplate"
   | "entityLink";
 
-export type SafeId<T extends SafeIdType> = string & {
-  readonly [__brand]: T;
+export type SafeId<T extends SafeIdType> = v.InferOutput<
+  typeof safeIdSchema
+> & {
+  /** Compile-time resource discriminator; boundary-specific schemas validate syntax. */
+  readonly __safeIdType?: T;
 };
 
-// SAFETY: SafeId is a nominal brand; runtime validation happens at call sites
 export const toSafeId = <T extends SafeIdType>(value: string): SafeId<T> =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- canonical brand-application helper; the brand is phantom-only
-  value as SafeId<T>;
+  v.parse(safeIdSchema, value);
 
 export const createSafeId = <T extends SafeIdType>(): SafeId<T> =>
   toSafeId<T>(Bun.randomUUIDv7());

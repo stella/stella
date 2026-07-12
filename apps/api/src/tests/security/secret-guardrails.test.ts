@@ -36,6 +36,7 @@ describe("secret guardrails", () => {
 
     expect(secretBrandsSource).not.toContain("export const toSecret");
     expect(cryptoSource).toContain("const toDecryptedSecret");
-    expect(cryptoSource).toContain("value as Secret<K>");
+    expect(cryptoSource).toContain("v.parse(secretSchema, value)");
+    expect(cryptoSource).not.toContain("value as Secret<K>");
   });
 });

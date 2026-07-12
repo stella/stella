@@ -80,7 +80,7 @@ export const entitiesKeys = {
           normalizedFieldMode === "visible"
             ? normalizeVisibleFieldIds(fieldIds)
             : [],
-        excludedKinds: excludedKinds?.toSorted() ?? [],
+        excludedKinds: excludedKinds ? excludedKinds.toSorted() : [],
         previewableForAi: previewableForAi ?? false,
       },
     ];
@@ -110,7 +110,7 @@ export const entitiesKeys = {
           normalizedFieldMode === "visible"
             ? normalizeVisibleFieldIds(fieldIds)
             : [],
-        excludedKinds: excludedKinds?.toSorted() ?? [],
+        excludedKinds: excludedKinds ? excludedKinds.toSorted() : [],
         previewableForAi: previewableForAi ?? false,
       },
     ];
@@ -164,7 +164,7 @@ export const entitiesKeys = {
           normalizedFieldMode === "visible"
             ? normalizeVisibleFieldIds(fieldIds)
             : [],
-        excludedKinds: excludedKinds?.toSorted() ?? [],
+        excludedKinds: excludedKinds ? excludedKinds.toSorted() : [],
         groupByPropertyId,
         groupValue,
         optionValues: optionValues?.toSorted(),

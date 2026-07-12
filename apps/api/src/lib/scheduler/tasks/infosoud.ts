@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
 import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import { infoSoudTrackedCases } from "@/api/db/schema";
 import { createInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
 import { errorTag } from "@/api/lib/errors/utils";

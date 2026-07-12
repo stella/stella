@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, TransactionRollbackError } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
 import { organization, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
 import {
   handleHostedAllocation,
@@ -15,7 +15,7 @@ import type {
 } from "@/api/handlers/hosted-usage-webhook/event-schemas";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { getRemainingUsageUnits } from "@/api/lib/usage";
+import { getRemainingUsageUnits } from "@/api/lib/usage/usage-ledger";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";

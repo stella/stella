@@ -8,7 +8,7 @@ import type { MCPClient } from "@tanstack/ai-mcp";
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   mcpConnectors,
   mcpOAuthClients,
@@ -23,7 +23,7 @@ import {
   refreshOAuthToken,
   tokenExpiresAt,
 } from "@/api/handlers/mcp-connectors/oauth";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import {

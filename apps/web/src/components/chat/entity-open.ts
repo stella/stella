@@ -4,7 +4,8 @@ import { isEntityActiveInMainRoute } from "@/components/chat/entity-route-detect
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -175,7 +176,7 @@ export const openEntityInInspector = async (
     getAnalytics().captureError(error);
     const t = getTranslator();
     stellaToast.add({
-      title: error instanceof Error ? error.message : t("errors.actionFailed"),
+      title: userErrorFromThrown(error, t("errors.actionFailed")),
       type: "error",
     });
     return { type: "unsupported" };

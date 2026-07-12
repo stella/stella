@@ -25,7 +25,7 @@ export type OverallRisk = "critical" | "high" | "medium" | "low" | "none";
 // A compliant or unset (extract-only positions carry no verdict) finding has
 // nothing worth raising with the counterparty; only these three verdicts are
 // ever "flagged".
-const FLAGGED_VERDICTS = new Set<PlaybookVerdict>([
+const FLAGGED_VERDICTS: readonly PlaybookVerdict[] = Object.freeze([
   "deviation",
   "fallback",
   "missing",
@@ -55,7 +55,7 @@ export type RiskRollup = {
 const TOP_ISSUES_LIMIT = 5;
 
 const isFlagged = (finding: PlaybookFinding): finding is FlaggedFinding =>
-  finding.verdict !== null && FLAGGED_VERDICTS.has(finding.verdict);
+  finding.verdict !== null && FLAGGED_VERDICTS.includes(finding.verdict);
 
 export const computeRiskRollup = (
   findings: readonly PlaybookFinding[],

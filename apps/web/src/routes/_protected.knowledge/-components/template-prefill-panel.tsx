@@ -21,8 +21,9 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { api } from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { workspaceFilesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -46,7 +47,10 @@ type PrefillData = Exclude<
 
 export type PrefillSuggestionDto = PrefillData["fields"][number];
 
-const ACCEPTED_MIME_TYPES = new Set<string>([DOCX_MIME, PDF_MIME]);
+const ACCEPTED_MIME_TYPES: readonly string[] = Object.freeze([
+  DOCX_MIME,
+  PDF_MIME,
+]);
 const MAX_MATTER_DOCUMENTS = 30;
 const MAX_PICKED_DOCUMENTS = 5;
 
@@ -77,7 +81,7 @@ export const TemplatePrefillPanel = ({
     if (!candidate) {
       return;
     }
-    if (!ACCEPTED_MIME_TYPES.has(candidate.type)) {
+    if (!ACCEPTED_MIME_TYPES.includes(candidate.type)) {
       stellaToast.add({
         type: "error",
         title: t("templates.invalidFileType"),
@@ -273,7 +277,8 @@ const MatterDocumentPicker = ({
   const t = useTranslations();
   const { data: files } = useQuery(workspaceFilesOptions(workspaceId));
 
-  const documents = (files ?? [])
+  const availableFiles = optionalArray(files);
+  const documents = availableFiles
     .filter((f) => f.mimeType === DOCX_MIME || f.mimeType === PDF_MIME)
     .slice(0, MAX_MATTER_DOCUMENTS);
 

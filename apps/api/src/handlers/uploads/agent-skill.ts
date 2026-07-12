@@ -11,7 +11,7 @@
 import { Result, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   pendingUploads,
   type PendingUploadFinalizedResult,

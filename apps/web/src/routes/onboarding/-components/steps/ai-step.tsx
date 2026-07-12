@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -72,6 +72,24 @@ const INITIAL_ROW_STATES: RowStateMap = {
   bedrock: { status: "idle" },
 };
 
+export const createProviderPreview = (
+  providers: readonly ProviderCredentialDraft[],
+  rowStates: RowStateMap,
+): ProviderPreview[] => {
+  const items: ProviderPreview[] = [];
+  for (const draft of providers) {
+    const state = rowStates[draft.provider];
+    if (state.status === "checking" || state.status === "invalid") {
+      items.push({ provider: draft.provider, status: state.status });
+      continue;
+    }
+    if (state.status === "valid" || draft.apiKeyMasked !== undefined) {
+      items.push({ provider: draft.provider, status: "valid" });
+    }
+  }
+  return items;
+};
+
 export const AIStep = ({
   providers,
   roleModels,
@@ -88,6 +106,14 @@ export const AIStep = ({
 
   const providerValues = getProviderValues(providers);
   const [rowStates, setRowStates] = useState<RowStateMap>(INITIAL_ROW_STATES);
+  const rowStatesRef = useRef(rowStates);
+  const commitRowStates = (next: RowStateMap) => {
+    rowStatesRef.current = next;
+    setRowStates(next);
+  };
+  useLayoutEffect(() => {
+    onPreviewChange?.(createProviderPreview(providers, rowStates));
+  }, [onPreviewChange, providers, rowStates]);
 
   // Every provider in the list is either explicitly saved (valid)
   // or carries a previously-stored masked key.
@@ -113,48 +139,10 @@ export const AIStep = ({
     canEnterModelsPhase &&
     serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
 
-  // Drop back to providers phase if a previously-confirmed key
-  // was edited after entering the models phase.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- `canEnterModelsPhase` recomputes from row-state resets that land post-commit (via the reset effect below) and from new `providers` props, so there is no single edit handler that owns the transition back to the providers phase.
-  useEffect(() => {
-    if (phase === "models" && !canEnterModelsPhase) {
-      onPhaseChange("providers");
-    }
-  }, [canEnterModelsPhase, phase, onPhaseChange]);
-
   const toastedRef = useRef(new Set<string>());
 
   // Whenever a key changes against its saved fingerprint, reset
   // that row to idle so the user must save again.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- `rowStates` is not pure derived state: it is also written by saveRow and updateProviders, so it cannot be deleted and computed in render. This effect reconciles validation status against the latest key fingerprints.
-  useEffect(() => {
-    // eslint-disable-next-line react/react-compiler -- reconciles row validation status against the latest key fingerprints; rowStates is also written by saveRow/updateProviders, so it is not pure-derivable in render
-    setRowStates((prev) => {
-      let changed = false;
-      const next: RowStateMap = { ...prev };
-      for (const draft of providers) {
-        const fp = fingerprintDraft(draft);
-        const state = prev[draft.provider];
-        // Edited away from the saved key — reset the row.
-        if (
-          state.savedKey &&
-          fp !== null &&
-          fp !== state.savedKey &&
-          state.status !== "idle"
-        ) {
-          next[draft.provider] = { status: "idle" };
-          changed = true;
-        }
-        // Cleared the input — reset.
-        if (fp === null && state.status !== "idle" && !draft.apiKeyMasked) {
-          next[draft.provider] = { status: "idle" };
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [providers]);
-
   const saveRow = async (index: number) => {
     const draft = providers[index];
     if (!draft) {
@@ -168,10 +156,10 @@ export const AIStep = ({
     if (!fp) {
       return;
     }
-    setRowStates((prev) => ({
-      ...prev,
+    commitRowStates({
+      ...rowStatesRef.current,
       [draft.provider]: { status: "checking", savedKey: fp },
-    }));
+    });
 
     const response = await api["ai-config"]["validate-provider"].post({
       provider: draft.provider,
@@ -183,16 +171,16 @@ export const AIStep = ({
       // Provider unreachable (502) — treat as soft pass so the
       // user can proceed; otherwise show invalid.
       if (response.error.status === 502) {
-        setRowStates((prev) => ({
-          ...prev,
+        commitRowStates({
+          ...rowStatesRef.current,
           [draft.provider]: { status: "valid", savedKey: fp },
-        }));
+        });
         return;
       }
-      setRowStates((prev) => ({
-        ...prev,
+      commitRowStates({
+        ...rowStatesRef.current,
         [draft.provider]: { status: "invalid", savedKey: fp },
-      }));
+      });
       stellaToast.add({
         title: tOrganization("aiConfig.providerKeyInvalid", {
           provider: PROVIDER_LABELS[draft.provider],
@@ -203,10 +191,10 @@ export const AIStep = ({
     }
 
     if (!response.data.valid) {
-      setRowStates((prev) => ({
-        ...prev,
+      commitRowStates({
+        ...rowStatesRef.current,
         [draft.provider]: { status: "invalid", savedKey: fp },
-      }));
+      });
       const toastKey = `${draft.provider}:${fp}`;
       if (!toastedRef.current.has(toastKey)) {
         toastedRef.current.add(toastKey);
@@ -221,40 +209,16 @@ export const AIStep = ({
       return;
     }
 
-    setRowStates((prev) => ({
-      ...prev,
+    commitRowStates({
+      ...rowStatesRef.current,
       [draft.provider]: { status: "valid", savedKey: fp },
-    }));
+    });
   };
 
-  // Push the preview list (provider + status) to the wizard so
-  // the sidebar mock can render an accurate per-provider state.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pushes a preview derived from the locally-owned `rowStates` validation status up to the parent. The computation cannot be lifted without hoisting `rowStates` (which saveRow mutates) into the parent.
-  useEffect(() => {
-    if (!onPreviewChange) {
-      return;
-    }
-    const items: ProviderPreview[] = [];
-    for (const draft of providers) {
-      const state = rowStates[draft.provider];
-      const hasConfirmed =
-        state.status === "valid" || draft.apiKeyMasked !== undefined;
-      if (state.status === "checking") {
-        items.push({ provider: draft.provider, status: "checking" });
-        continue;
-      }
-      if (state.status === "invalid") {
-        items.push({ provider: draft.provider, status: "invalid" });
-        continue;
-      }
-      if (hasConfirmed) {
-        items.push({ provider: draft.provider, status: "valid" });
-      }
-    }
-    onPreviewChange(items);
-  }, [providers, rowStates, onPreviewChange]);
-
   const updateProviders = (next: ProviderCredentialDraft[]) => {
+    if (phase === "models") {
+      onPhaseChange("providers");
+    }
     onProvidersChange(next);
     onRoleModelsChange(
       ensureRoleModelsForProviders({
@@ -264,18 +228,38 @@ export const AIStep = ({
     );
     // Drop validation entries for providers no longer in the draft list.
     const stillPresent = new Set(getProviderValues(next));
-    setRowStates((prev) => ({
-      google: stillPresent.has("google") ? prev.google : { status: "idle" },
+    const current = rowStatesRef.current;
+    const nextRowStates: RowStateMap = {
+      google: stillPresent.has("google") ? current.google : { status: "idle" },
       anthropic: stillPresent.has("anthropic")
-        ? prev.anthropic
+        ? current.anthropic
         : { status: "idle" },
-      openai: stillPresent.has("openai") ? prev.openai : { status: "idle" },
+      openai: stillPresent.has("openai") ? current.openai : { status: "idle" },
       openrouter: stillPresent.has("openrouter")
-        ? prev.openrouter
+        ? current.openrouter
         : { status: "idle" },
-      mistral: stillPresent.has("mistral") ? prev.mistral : { status: "idle" },
-      bedrock: stillPresent.has("bedrock") ? prev.bedrock : { status: "idle" },
-    }));
+      mistral: stillPresent.has("mistral")
+        ? current.mistral
+        : { status: "idle" },
+      bedrock: stillPresent.has("bedrock")
+        ? current.bedrock
+        : { status: "idle" },
+    };
+    for (const draft of next) {
+      const fingerprint = fingerprintDraft(draft);
+      const state = nextRowStates[draft.provider];
+      const changedSavedKey =
+        state.savedKey !== undefined &&
+        fingerprint !== null &&
+        fingerprint !== state.savedKey &&
+        state.status !== "idle";
+      const clearedKey =
+        fingerprint === null && state.status !== "idle" && !draft.apiKeyMasked;
+      if (changedSavedKey || clearedKey) {
+        nextRowStates[draft.provider] = { status: "idle" };
+      }
+    }
+    commitRowStates(nextRowStates);
   };
 
   const setRoleModel = (role: RoleValue, model: ModelSelection | null) => {

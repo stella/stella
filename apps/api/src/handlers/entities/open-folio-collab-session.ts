@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { desktopEditSessions, folioCollabSessions } from "@/api/db/schema";
 import {
   lockDocxEditTarget,

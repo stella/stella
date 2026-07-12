@@ -8,7 +8,7 @@ import {
   createDeleteAccountOtp,
   getUserEmail,
 } from "@/api/lib/delete-account";
-import { sendOTPEmail } from "@/api/lib/email";
+import { sendOTPEmail } from "@/api/lib/email/email";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { extractLangFromRequest } from "@/api/lib/locale";
 

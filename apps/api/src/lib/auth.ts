@@ -1,5 +1,4 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
-import type { BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
@@ -18,13 +17,16 @@ import Elysia, { t } from "elysia";
 import { ac, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 
-import { createMembershipSafeDb, createMembershipScopedDb } from "@/api/db";
 import { authSchema, member } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+} from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -37,7 +39,7 @@ import {
   sendNewDeviceLoginEmail,
   sendOrganizationInvitation,
   sendOTPEmail,
-} from "@/api/lib/email";
+} from "@/api/lib/email/email";
 import {
   AUTH_RATE_LIMIT_MAX_WINDOW,
   AUTH_RATE_LIMITS,
@@ -59,6 +61,7 @@ import {
   isSelfhostLocalPasswordAuthEnabled,
   shouldHandleSelfhostBootstrapPath,
 } from "@/api/lib/selfhost-auth";
+import { includes } from "@/api/lib/type-guards";
 import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
@@ -219,7 +222,7 @@ const readInitialWorkspaceId = (
 const isMcpResourceScope = (
   scope: string,
 ): scope is (typeof MCP_ALL_RESOURCE_SCOPES)[number] =>
-  (MCP_ALL_RESOURCE_SCOPES as readonly string[]).includes(scope);
+  includes(MCP_ALL_RESOURCE_SCOPES, scope);
 
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
@@ -469,7 +472,7 @@ const createAuth = () => {
         silenceWarnings: {
           oauthAuthServerConfig: true,
         },
-      }) as BetterAuthPlugin,
+      }),
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {

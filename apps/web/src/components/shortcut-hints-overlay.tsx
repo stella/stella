@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
-import { useHotkey, useKeyHold } from "@tanstack/react-hotkeys";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
 import { useMatch } from "@tanstack/react-router";
 import { useDebouncedCallback } from "use-debounce";
@@ -36,11 +36,9 @@ export function ShortcutHintsOverlay() {
 
 function ShortcutHintsOverlayContent() {
   const t = useTranslations();
-  const isModHeld = useKeyHold(MOD_KEY);
   const isMountedRef = useRef(false);
+  const isSuppressedUntilReleaseRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
-  const [isSuppressedUntilRelease, setIsSuppressedUntilRelease] =
-    useState(false);
 
   const showDialog = useDebouncedCallback(() => {
     if (isMountedRef.current) {
@@ -67,30 +65,32 @@ function ShortcutHintsOverlayContent() {
     };
 
     const suppressUntilRelease = () => {
-      setIsSuppressedUntilRelease(true);
+      isSuppressedUntilReleaseRef.current = true;
       cancel();
     };
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) {
+      if (e.key === MOD_KEY) {
+        if (!e.repeat && !isSuppressedUntilReleaseRef.current) {
+          showDialog();
+        }
         return;
       }
-      const { key } = e;
-      if (key === "Meta" || key === "Control") {
+      if (!(e.metaKey || e.ctrlKey)) {
         return;
       }
       suppressUntilRelease();
     };
 
     const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === "Meta" || e.key === "Control") {
-        setIsSuppressedUntilRelease(false);
+      if (e.key === MOD_KEY) {
+        isSuppressedUntilReleaseRef.current = false;
         cancel();
       }
     };
 
     const onBlur = () => {
-      setIsSuppressedUntilRelease(false);
+      isSuppressedUntilReleaseRef.current = false;
       cancel();
     };
 
@@ -120,20 +120,9 @@ function ShortcutHintsOverlayContent() {
     };
   }, [showDialog]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reacts to the useKeyHold(MOD_KEY) hook output plus suppression state; the trigger is a hook return value with no setter call-site to relay into, so it stays an effect
-  useEffect(() => {
-    if (isModHeld && !isSuppressedUntilRelease) {
-      showDialog();
-    } else {
-      showDialog.cancel();
-      // eslint-disable-next-line react/react-compiler -- effect reacts to the useKeyHold hook output and drives a debounced dialog side effect; not derivable in render
-      setIsVisible(false);
-    }
-  }, [isModHeld, isSuppressedUntilRelease, showDialog]);
-
   const handleOpenChange = (open: boolean) => {
     if (!open) {
-      setIsSuppressedUntilRelease(true);
+      isSuppressedUntilReleaseRef.current = true;
       showDialog.cancel();
     }
     setIsVisible(open);

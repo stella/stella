@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import type { ConditionNode } from "@/lib/types";
 import { normalizeVisibleFieldIds } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 import type { ViewSort } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";

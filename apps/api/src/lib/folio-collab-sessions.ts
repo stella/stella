@@ -2,9 +2,10 @@ import { and, eq } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
 
-import type { ScopedDb, Transaction } from "@/api/db";
 import { member } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import { rootDb } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { FolioCollabTokenPermissions } from "@/api/db/schema";
 import {
   folioCollabSessions,
@@ -13,7 +14,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isMemberRole } from "@/api/lib/member-roles";

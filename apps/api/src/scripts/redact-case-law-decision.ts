@@ -1,3 +1,4 @@
+import { rlsDb } from "@/api/db/root";
 /**
  * GDPR redaction / takedown for a single case-law decision: strips
  * personal text from corpus index, the pg-fts index, object storage, and the
@@ -5,8 +6,7 @@
  *
  *   bun run src/scripts/redact-case-law-decision.ts <decisionId>
  */
-import { createIngestionDb } from "@/api/db";
-import { rlsDb } from "@/api/db/root";
+import { createIngestionDb } from "@/api/db/scoped";
 import { redactCaseLawDecision } from "@/api/handlers/case-law/erasure";
 // eslint-disable-next-line no-restricted-imports -- CLI boundary: brands the decision id parsed from argv
 import { toSafeId } from "@/api/lib/branded-types";

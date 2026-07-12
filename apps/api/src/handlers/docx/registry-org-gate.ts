@@ -10,9 +10,10 @@
  * read is not buried inside the per-value resolution loop.
  */
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { LookupRegistry } from "@/api/handlers/docx/types";
 import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 
@@ -45,7 +46,7 @@ export const buildIsRegistryEnabledForOrg = async ({
       },
     }),
   );
-  const practiceJurisdictions = settings?.practiceJurisdictions ?? [];
+  const practiceJurisdictions = arrayOrEmpty(settings?.practiceJurisdictions);
   const nativeToolOverrides = settings?.nativeToolOverrides ?? {};
 
   return (registry: LookupRegistry): boolean =>

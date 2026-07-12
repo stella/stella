@@ -1,4 +1,4 @@
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 
 export type StorageFetchPurpose = "display" | "download" | "native-display";

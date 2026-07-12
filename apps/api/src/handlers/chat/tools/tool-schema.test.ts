@@ -6,7 +6,7 @@ import {
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,

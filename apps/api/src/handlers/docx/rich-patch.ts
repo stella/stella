@@ -207,9 +207,9 @@ const createInlineRuns = (
   // never reach this function. If one does (defensive), join its text so the
   // run-replacement path stays well-formed rather than dropping content.
   if (value.paragraphs.length <= 1) {
-    return (value.paragraphs.at(0)?.runs ?? []).map((run) =>
-      createRun(doc, run.text, sourceRunProps, run),
-    );
+    const firstParagraph = value.paragraphs.at(0);
+    const runs = firstParagraph === undefined ? [] : firstParagraph.runs;
+    return runs.map((run) => createRun(doc, run.text, sourceRunProps, run));
   }
 
   return [createRun(doc, valueText(value), sourceRunProps)];
@@ -289,7 +289,9 @@ const setStandaloneValue = (
   if (paragraphs.length <= 1) {
     const sourceRunProps = firstRunProps(paragraph);
     clearParagraphContent(paragraph);
-    for (const run of paragraphs.at(0)?.runs ?? []) {
+    const firstParagraph = paragraphs.at(0);
+    const runs = firstParagraph === undefined ? [] : firstParagraph.runs;
+    for (const run of runs) {
       paragraph.append(createRun(doc, run.text, sourceRunProps, run));
     }
     return;

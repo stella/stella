@@ -1,6 +1,6 @@
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { clauses, clauseVariants, clauseVersions } from "@/api/db/schema";
 import { clauseBodyToPlainText } from "@/api/handlers/clauses/clause-to-patch";
 import type { GradedPosition } from "@/api/handlers/playbooks/position-runtime";

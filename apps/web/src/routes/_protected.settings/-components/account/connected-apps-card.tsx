@@ -34,7 +34,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,

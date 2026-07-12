@@ -2,8 +2,8 @@ import {
   createContext,
   use,
   useCallback,
-  useEffect,
   useEffectEvent,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -79,21 +79,22 @@ const TEXT_PLAIN_MIME_TYPE = "text/plain";
 const TEXT_CSV_MIME_TYPE = "text/csv";
 const TEXT_MARKDOWN_MIME_TYPE = "text/markdown";
 
-const ALLOWED_CHAT_FILE_MIME_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/webp",
-  "image/gif",
-  "application/pdf",
-  DOCX_MIME_TYPE,
-  TEXT_PLAIN_MIME_TYPE,
-  TEXT_CSV_MIME_TYPE,
-  TEXT_MARKDOWN_MIME_TYPE,
-]);
+const ALLOWED_CHAT_FILE_MIME_TYPES = {
+  "image/png": true,
+  "image/jpeg": true,
+  "image/webp": true,
+  "image/gif": true,
+  "application/pdf": true,
+  [DOCX_MIME_TYPE]: true,
+  [TEXT_PLAIN_MIME_TYPE]: true,
+  [TEXT_CSV_MIME_TYPE]: true,
+  [TEXT_MARKDOWN_MIME_TYPE]: true,
+} as const;
 
 export const CHAT_FILE_INPUT_ACCEPT =
   ".png,.jpg,.jpeg,.webp,.gif,.pdf,.docx,.txt,.csv,.md";
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
+const EMPTY_SENT_MESSAGE_HISTORY: readonly string[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
 
 // Wrap an interpolated value in Unicode directional isolates (FSI…PDI) so an
@@ -130,6 +131,8 @@ export type ChatInputMentionSource = {
   getItems: () => ChatMentionOption[] | Promise<ChatMentionOption[]>;
   searchItems?: ((query: string) => Promise<ChatMentionOption[]>) | undefined;
 };
+
+const EMPTY_MENTION_SOURCES: readonly ChatInputMentionSource[] = [];
 
 export type ChatInputPluginRegistration = {
   key: string | PluginKey;
@@ -259,7 +262,8 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const getMentionItems = useCallback(async () => {
     const items: ChatMentionOption[] = [];
     const sources = Array.from(registrationsRef.current.values()).flatMap(
-      ({ registration }) => registration.mentionSources ?? [],
+      ({ registration }) =>
+        registration.mentionSources ?? EMPTY_MENTION_SOURCES,
     );
     const results = await Promise.all(
       sources.map(
@@ -299,7 +303,8 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     // Mention sources are independent; query them in parallel and append
     // results in registration/source order (preserved by Promise.all).
     const sources = Array.from(registrationsRef.current.values()).flatMap(
-      ({ registration }) => registration.mentionSources ?? [],
+      ({ registration }) =>
+        registration.mentionSources ?? EMPTY_MENTION_SOURCES,
     );
     const results = await Promise.all(
       sources.map(
@@ -576,7 +581,8 @@ export const useChatEditor = ({
   const messageHistoryIndexRef = useRef<number | null>(null);
   const markDraftStartedRef = useRef<(() => void) | null>(null);
   // eslint-disable-next-line react/react-compiler -- latest-ref mirror: the message-history key handler reads this out-of-render, must reflect this render's prop
-  sentMessageHistoryHtmlRef.current = sentMessageHistoryHtml ?? [];
+  sentMessageHistoryHtmlRef.current =
+    sentMessageHistoryHtml ?? EMPTY_SENT_MESSAGE_HISTORY;
   const threadKey = getChatThreadKey(threadRef);
   const {
     getMentionItems,
@@ -614,24 +620,17 @@ export const useChatEditor = ({
   // eslint-disable-next-line react/react-compiler -- latest-ref mirror: editor plugins invoke markDraftStartedRef.current out-of-render, must point at this render's callback
   markDraftStartedRef.current = markDraftStarted;
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref reset on id change, not external-system sync
-  useEffect(() => {
+  const committedThreadKeyRef = useRef(threadKey);
+  useLayoutEffect(() => {
     messageHistoryIndexRef.current = null;
+    if (committedThreadKeyRef.current !== threadKey) {
+      // Authored marks are per-thread. Do not clear them when only sent history
+      // changes after a send: that could let draft synchronization revert an
+      // in-flight keystroke.
+      editorAuthoredDocsRef.current = new WeakSet();
+      committedThreadKeyRef.current = threadKey;
+    }
   }, [sentMessageHistoryHtml, threadKey]);
-
-  // Authored marks are per-thread; one mounted editor serves many threads, so a
-  // thread switch must forget the outgoing thread's docs. Reset the set here so
-  // the incoming thread's stored draft counts as external and is restored.
-  // Keyed on `threadKey` alone and declared before the draft-apply effect: it
-  // runs first in the same commit, so the reset lands before that effect reads
-  // membership. Deliberately not folded into the `messageHistoryIndexRef` reset
-  // above (which also fires on `sentMessageHistoryHtml`): clearing marks
-  // mid-thread right after a send could let the lagging draft-apply effect
-  // revert an in-flight keystroke, the exact loop this set prevents.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref reset on id change, not external-system sync
-  useEffect(() => {
-    editorAuthoredDocsRef.current = new WeakSet();
-  }, [threadKey]);
 
   const fetchWorkspaceEntities = useCallback(
     async (workspace: ChatMentionOption, query: string) => {
@@ -1237,7 +1236,7 @@ export const useChatEditor = ({
         }
 
         if (
-          !ALLOWED_CHAT_FILE_MIME_TYPES.has(file.type) ||
+          !Object.hasOwn(ALLOWED_CHAT_FILE_MIME_TYPES, file.type) ||
           file.size > CHAT_MAX_FILE_BYTES
         ) {
           continue;

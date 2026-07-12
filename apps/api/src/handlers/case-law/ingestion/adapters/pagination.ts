@@ -19,7 +19,7 @@ import {
   adapterCatch,
   isTimeoutError,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 

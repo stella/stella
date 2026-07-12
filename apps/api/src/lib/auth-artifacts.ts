@@ -1,12 +1,12 @@
 import { and, eq, isNull } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
 import {
   oauthAccessToken,
   oauthConsent,
   oauthRefreshToken,
   session as sessionTable,
 } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type RevokeOrganizationMemberAuthArtifactsOptions = {

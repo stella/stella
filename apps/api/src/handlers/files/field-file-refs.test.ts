@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { THUMBNAIL_MIME_TYPE } from "@/api/handlers/files/image-derivative";
 import { toSafeId } from "@/api/lib/branded-types";

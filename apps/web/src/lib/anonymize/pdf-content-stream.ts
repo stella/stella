@@ -293,9 +293,9 @@ export const neutraliseTextOperators = (
   return output.join("");
 };
 
-const HEX_DIGITS = new Set("0123456789abcdefABCDEF");
+const HEX_DIGITS = "0123456789abcdefABCDEF";
 const isHexDigit = (c: string | undefined): boolean =>
-  c !== undefined && HEX_DIGITS.has(c);
+  c !== undefined && HEX_DIGITS.includes(c);
 
 /**
  * Replace the content of PDF string literals with spaces.

@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffectEvent, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
 import {
@@ -162,18 +162,25 @@ export const KanbanColumn = ({
     overscan: KANBAN_CARD_OVERSCAN,
   });
   const virtualCards = cardVirtualizer.getVirtualItems();
-  const lastVirtualCard = virtualCards.at(-1);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- load-more trigger; virtualizer onChange isn't equivalent because the re-check must also fire on prop changes (isLoadingMore flipping false, entities.length growing, hasMore toggling), which onChange wouldn't observe
-  useEffect(() => {
-    if (!hasMore || isLoadingMore || !onLoadMore || !lastVirtualCard) {
-      return;
+  useExternalSyncEffect(() => {
+    const sentinel = loadMoreSentinelRef.current;
+    const scrollRoot = scrollRef.current;
+    if (!hasMore || isLoadingMore || !onLoadMore || !sentinel || !scrollRoot) {
+      return undefined;
     }
-
-    if (lastVirtualCard.index >= entities.length - KANBAN_CARD_OVERSCAN) {
-      onLoadMore();
-    }
-  }, [entities.length, hasMore, isLoadingMore, lastVirtualCard, onLoadMore]);
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          onLoadMore();
+        }
+      },
+      { root: scrollRoot, rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [entities.length, hasMore, isLoadingMore, onLoadMore]);
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
 
@@ -516,6 +523,10 @@ export const KanbanColumn = ({
               </div>
             );
           })}
+          <div
+            className="absolute inset-x-0 bottom-0 h-px"
+            ref={loadMoreSentinelRef}
+          />
         </div>
       </div>
       {onCreate && (

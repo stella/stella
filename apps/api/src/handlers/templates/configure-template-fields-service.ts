@@ -14,7 +14,7 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { templates, templateVersions } from "@/api/db/schema";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import {

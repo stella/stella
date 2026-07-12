@@ -3,7 +3,7 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/sdk/types.js";
 
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import {
   isExternalMcpToolName,
   isSkillToolName,

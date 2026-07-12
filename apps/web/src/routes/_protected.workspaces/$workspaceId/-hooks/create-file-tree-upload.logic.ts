@@ -2,7 +2,7 @@ import type {
   DroppedFileTree,
   DroppedFileTreeFile,
 } from "@/hooks/external-file-drop.logic";
-import { ClientOperationError } from "@/lib/errors";
+import { ClientOperationError } from "@/lib/errors/client";
 
 const DIRECTORY_PATH_SEPARATOR = "\0";
 

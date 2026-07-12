@@ -1,4 +1,5 @@
 import type { EntityKind } from "@/api/db/schema-validators";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type WorkflowTargetEntityRow = {
@@ -54,7 +55,7 @@ export const resolveWorkflowTargetEntityIds = ({
       : [...entityIdsByKind.documents];
 
   const targetSet = new Set(targetIds);
-  const prioritized = dedupeEntityIds(inputOrder ?? []).filter((id) =>
+  const prioritized = dedupeEntityIds(arrayOrEmpty(inputOrder)).filter((id) =>
     targetSet.has(id),
   );
   const prioritizedSet = new Set(prioritized);

@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import type { ScopedDb, Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { ResolvedTiers } from "@/api/handlers/playbooks/positions";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { VerdictBatchProperty } from "@/api/lib/workflow/get-execution-plan";

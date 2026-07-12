@@ -4,7 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { templateRecipes } from "@/api/db/schema";
 import { templateRecipeDefinitionSchema } from "@/api/handlers/template-recipes/definition";
 import type { AuditRecorder } from "@/api/lib/audit-log";

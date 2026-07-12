@@ -33,7 +33,8 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   aiConfigKeys,
   aiConfigOptions,
@@ -163,7 +164,7 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.add({
-        title: error instanceof Error ? error.message : tErrors("actionFailed"),
+        title: userErrorFromThrown(error, tErrors("actionFailed")),
         type: "error",
       });
     },

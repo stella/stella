@@ -39,6 +39,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { buildLineDiffSegments } from "@/api/lib/text-diff";
 import type { VersionDiffSegment } from "@/api/lib/text-diff";
+import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   defineTextFieldSpec,
@@ -666,7 +667,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
 type DocumentEntityKind = (typeof LISTABLE_ENTITY_KINDS)[number];
 
 const isDocumentEntityKind = (kind: string): kind is DocumentEntityKind =>
-  (LISTABLE_ENTITY_KINDS as readonly string[]).includes(kind);
+  includes(LISTABLE_ENTITY_KINDS, kind);
 
 /**
  * Outcome of resolving an entity for a document tool. `wrong-kind` is kept

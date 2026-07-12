@@ -76,7 +76,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
@@ -733,11 +733,15 @@ const TemplateStudioChatInner = ({
   const collectOperationBlockTexts = (): Map<string, string> => {
     const blockTextById = new Map<string, string>();
     const freshSnapshot = editorRef.current?.createAIEditSnapshot() ?? null;
-    for (const block of freshSnapshot?.blocks ?? []) {
-      blockTextById.set(block.id, block.text);
+    if (freshSnapshot) {
+      for (const block of freshSnapshot.blocks) {
+        blockTextById.set(block.id, block.text);
+      }
     }
-    for (const block of lastSentSnapshotRef.current?.blocks ?? []) {
-      blockTextById.set(block.id, block.text);
+    if (lastSentSnapshotRef.current) {
+      for (const block of lastSentSnapshotRef.current.blocks) {
+        blockTextById.set(block.id, block.text);
+      }
     }
     return blockTextById;
   };
@@ -952,8 +956,10 @@ const TemplateStudioChatInner = ({
         // Provisional placements were made against a view that has
         // since gone away; drop them so nothing dangles unreported.
         const provisionalIds: string[] = [];
-        for (const outcome of record?.outcomes.values() ?? []) {
-          provisionalIds.push(...outcome.suggestionIds);
+        if (record) {
+          for (const outcome of record.outcomes.values()) {
+            provisionalIds.push(...outcome.suggestionIds);
+          }
         }
         removePendingSuggestions(provisionalIds);
         return {
@@ -971,17 +977,19 @@ const TemplateStudioChatInner = ({
       // for re-placement.
       const reusable = new Map<number, OperationPlacementOutcome>();
       const driftedIds = new Set<string>();
-      for (const [index, prior] of record?.outcomes ?? []) {
-        const operation = input.operations.at(index);
-        if (
-          operation !== undefined &&
-          prior.fingerprint === operationFingerprint(operation)
-        ) {
-          reusable.set(index, prior);
-          continue;
-        }
-        for (const id of prior.suggestionIds) {
-          driftedIds.add(id);
+      if (record) {
+        for (const [index, prior] of record.outcomes) {
+          const operation = input.operations.at(index);
+          if (
+            operation !== undefined &&
+            prior.fingerprint === operationFingerprint(operation)
+          ) {
+            reusable.set(index, prior);
+            continue;
+          }
+          for (const id of prior.suggestionIds) {
+            driftedIds.add(id);
+          }
         }
       }
       if (driftedIds.size > 0) {

@@ -7,7 +7,7 @@ import {
   formatVersionDiffForLLM,
 } from "@stll/folio-agents";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";

@@ -64,8 +64,8 @@ const wrapInlineCode = (text: string): string => {
     return "``";
   }
   let longestRun = 0;
-  for (const run of text.match(/`+/g) ?? []) {
-    longestRun = Math.max(longestRun, run.length);
+  for (const match of text.matchAll(/`+/g)) {
+    longestRun = Math.max(longestRun, match[0].length);
   }
   const fence = "`".repeat(longestRun + 1);
   const padded =

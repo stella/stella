@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { loadCatalogue } from "@stll/catalogue";
+import {
+  isToggleableNativeToolBackendSlug,
+  loadCatalogue,
+  recommendedSlugsForJurisdictions,
+} from "@stll/catalogue";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import {
@@ -25,7 +29,8 @@ import { ThemePicker } from "@/components/theme-picker";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAPIError, toAuthClientError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { toAuthClientError } from "@/lib/errors/auth";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import { suggestedCountryCodes as getSuggestedCountryCodes } from "@/lib/jurisdictions";
 import { rootKeys, sessionOptions } from "@/routes/-queries";
@@ -33,6 +38,7 @@ import { aiConfigKeys } from "@/routes/_protected.organization/-ai-config-querie
 import { CatalogueDetailPreview } from "@/routes/onboarding/-components/catalogue-detail-preview";
 import { CatalogueStackPreview } from "@/routes/onboarding/-components/catalogue-stack-preview";
 import {
+  createCatalogueAutoSelectionPlan,
   createCatalogueSetupPlan,
   isCatalogueEntryAvailableDuringOnboarding,
   reconcileCatalogueSlugsForJurisdictions,
@@ -154,32 +160,60 @@ export const OnboardingWizard = () => {
       ),
     [unavailableNativeToolBackendSlugs],
   );
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot default apply: waits for async session-derived suggestedCountryCodes, then sets data.practiceJurisdictions + the applied latch once; moving the dual setState into render would be a state-update-during-render hazard
-  useEffect(() => {
-    const suggestedCountryCode = suggestedCountryCodes.at(0);
-
-    if (
-      jurisdictionSuggestionApplied ||
-      data.practiceJurisdictions.length > 0 ||
-      !suggestedCountryCode
-    ) {
+  useLayoutEffect(() => {
+    if (step !== "catalogue") {
       return;
     }
+    // eslint-disable-next-line react/react-compiler -- commit-safe parent-owned reconciliation; the functional update rechecks current selections so stale renders cannot overwrite user edits
+    setData((currentData) => {
+      const practiceCountryCodes = new Set(
+        currentData.practiceJurisdictions.map((jurisdiction) =>
+          jurisdiction.countryCode.toUpperCase(),
+        ),
+      );
+      const recommendedSlugs =
+        recommendedSlugsForJurisdictions(practiceCountryCodes);
+      const recommendedEntries = onboardingCatalogueEntries.filter(
+        (entry) =>
+          (entry.kind !== "native-tool" ||
+            isToggleableNativeToolBackendSlug(entry.backendSlug)) &&
+          !(entry.kind === "native-tool" && entry.pinned) &&
+          recommendedSlugs.has(entry.slug),
+      );
+      const autoSelectionPlan = createCatalogueAutoSelectionPlan({
+        recommendedEntries,
+        removedSlugs: catalogueRemovedSlugs,
+        selectedSlugs: currentData.catalogueSlugs,
+      });
+      if (autoSelectionPlan.addedSlugs.length === 0) {
+        return currentData;
+      }
+      return {
+        ...currentData,
+        catalogueSlugs: [...autoSelectionPlan.selectedSlugs],
+      };
+    });
+  }, [catalogueRemovedSlugs, onboardingCatalogueEntries, step]);
 
-    // eslint-disable-next-line react/react-compiler -- one-shot apply of an async, session-derived default once suggestedCountryCodes resolves; setting this during render would be a state-update-during-render hazard
-    setData((currentData) => ({
-      ...currentData,
-      practiceJurisdictions: [
-        { countryCode: suggestedCountryCode, isPrimary: true },
-      ],
-    }));
+  const suggestedCountryCode = suggestedCountryCodes.at(0);
+  useLayoutEffect(() => {
+    if (jurisdictionSuggestionApplied || !suggestedCountryCode) {
+      return;
+    }
+    // eslint-disable-next-line react/react-compiler -- commit-safe one-shot latch for an async suggestion; user edits are rechecked in the functional data update below
     setJurisdictionSuggestionApplied(true);
-  }, [
-    data.practiceJurisdictions.length,
-    jurisdictionSuggestionApplied,
-    suggestedCountryCodes,
-  ]);
+    setData((currentData) => {
+      if (currentData.practiceJurisdictions.length > 0) {
+        return currentData;
+      }
+      return {
+        ...currentData,
+        practiceJurisdictions: [
+          { countryCode: suggestedCountryCode, isPrimary: true },
+        ],
+      };
+    });
+  }, [jurisdictionSuggestionApplied, suggestedCountryCode]);
 
   const continueFromJurisdiction = () => {
     setData((currentData) => ({
@@ -491,7 +525,14 @@ export const OnboardingWizard = () => {
 
       setStep("download");
     },
-    [analytics, queryClient, t, unavailableNativeToolBackendSlugs],
+    [
+      analytics,
+      queryClient,
+      setCreatingPhase,
+      setCreatingProgress,
+      t,
+      unavailableNativeToolBackendSlugs,
+    ],
   );
 
   const showPrices = step === "ai" && aiPhase === "models";
@@ -645,9 +686,6 @@ export const OnboardingWizard = () => {
                 return { ...d, catalogueSlugs: [...d.catalogueSlugs, slug] };
               });
             }}
-            onChange={(catalogueSlugs) =>
-              setData((d) => ({ ...d, catalogueSlugs: [...catalogueSlugs] }))
-            }
             onFocusChange={setCatalogueFocusedSlug}
             onNext={() => setStep("ai")}
             onRemove={(slug) => {
@@ -666,7 +704,6 @@ export const OnboardingWizard = () => {
               setStep("ai");
             }}
             practiceJurisdictions={data.practiceJurisdictions}
-            removedSlugs={catalogueRemovedSlugs}
             selectedSlugs={data.catalogueSlugs}
             unavailableNativeToolBackendSlugs={
               unavailableNativeToolBackendSlugs

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,

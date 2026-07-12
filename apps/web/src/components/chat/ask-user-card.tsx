@@ -1,5 +1,5 @@
 import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   CheckIcon,
@@ -181,30 +181,25 @@ export const AskUserCard = ({
     }
     return defaults;
   });
+  const [defaultsSeeded, setDefaultsSeeded] = useState(input !== null);
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
   // still be null. `answers` is user-mutated interactive state set in
   // several handlers, so this is a one-shot prop-arrival merge into
-  // existing state, not a plain compute-in-render or key reset.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot merge of question defaults into shared user-edited answers state once input arrives; setter is shared across handlers so it cannot be derived in render or lifted to a key
-  useEffect(() => {
-    if (!input) {
-      return;
-    }
-    // eslint-disable-next-line react/react-compiler -- one-shot merge of question defaults into shared user-edited answers state once the streamed `input` prop arrives; the setter is shared across handlers, so this is not pure derived state
-    setAnswers((prev) => {
-      let seeded: Record<number, string> | null = null;
-      for (let i = 0; i < input.questions.length; i++) {
-        const question = input.questions[i];
-        const def = question?.default;
-        if (def && !(i in prev)) {
-          seeded ??= { ...prev };
-          seeded[i] = def;
-        }
+  // existing state, not plain derived state. Guarded render-time adjustment
+  // applies the transition before children render and avoids an extra commit.
+  if (input !== null && !defaultsSeeded) {
+    setDefaultsSeeded(true);
+    const seeded = { ...answers };
+    for (let i = 0; i < input.questions.length; i++) {
+      const question = input.questions[i];
+      const defaultAnswer = question?.default;
+      if (defaultAnswer && !(i in seeded)) {
+        seeded[i] = defaultAnswer;
       }
-      return seeded ?? prev;
-    });
-  }, [input]);
+    }
+    setAnswers(seeded);
+  }
 
   const [customMode, setCustomMode] = useState<Record<number, boolean>>({});
   const [submitted, setSubmitted] = useState(false);

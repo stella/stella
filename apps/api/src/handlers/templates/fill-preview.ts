@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
 import {
   buildAiConditionDecider,

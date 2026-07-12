@@ -9,7 +9,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { VersionList, VersionRow } from "@/components/versions/version-list";
 import type { VersionDiffSegment } from "@/components/versions/version-list";
 import { api } from "@/lib/api";
-import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { templateVersionsOptions } from "@/routes/_protected.knowledge/-queries";
 
@@ -42,7 +43,7 @@ export const TemplateVersionsTab = ({
     templateVersionsOptions(activeOrganizationId, templateId),
   );
 
-  const versions = data?.pages.flatMap((page) => page.items) ?? [];
+  const versions = data ? data.pages.flatMap((page) => page.items) : [];
   // Pages are newest-first; the first loaded row is the current
   // version (saves always append the highest version number).
   const currentVersionId = data?.pages.at(0)?.items.at(0)?.id;

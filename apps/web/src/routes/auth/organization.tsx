@@ -31,8 +31,10 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { optionalArray } from "@/lib/arrays";
 import { authClient } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   getOauthHashFragment,
   getOauthRedirectUrl,
@@ -121,7 +123,7 @@ function Organization() {
       {hasOrganizations ? (
         <OrganizationList
           isOauthPostLogin={isOauthPostLogin}
-          organizations={organizations ?? []}
+          organizations={optionalArray(organizations)}
         />
       ) : (
         <CreateOrganizationForm isOauthPostLogin={isOauthPostLogin} />
@@ -189,7 +191,10 @@ const OrganizationList = ({
 
       if (error) {
         stellaToast.add({
-          title: error.message ?? t("errors.actionFailed"),
+          title: userErrorFromThrown(
+            toAuthClientError(error),
+            t("errors.actionFailed"),
+          ),
           type: "error",
         });
         throw toAuthClientError(error);
@@ -351,8 +356,7 @@ const CreateOrganizationForm = ({
       } catch (error) {
         analytics.captureError(error);
         stellaToast.add({
-          title:
-            error instanceof Error ? error.message : t("errors.actionFailed"),
+          title: userErrorFromThrown(error, t("errors.actionFailed")),
           type: "error",
         });
       }

@@ -4,7 +4,7 @@ import { t } from "elysia";
 
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import type { LinkMetadata } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";

@@ -38,7 +38,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { DOCX_MIME } from "@/lib/consts";
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";

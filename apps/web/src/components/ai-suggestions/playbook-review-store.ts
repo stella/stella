@@ -18,7 +18,8 @@ import { create } from "zustand";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { api } from "@/lib/api";
-import { type toAPIError, userErrorMessage } from "@/lib/errors";
+import type { toAPIError } from "@/lib/errors/api";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
 // Bound the client wait slightly above the server's 120s cap so a
@@ -157,6 +158,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     if (existing?.status === "reviewing") {
       return { ok: true };
     }
+    const existingFindings = existing ? existing.findings : [];
 
     set((state) => ({
       sessions: {
@@ -164,7 +166,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
         [key]: {
           status: "reviewing",
           playbookId,
-          findings: existing?.findings ?? [],
+          findings: existingFindings,
           fixState: existing?.fixState ?? {},
           error: null,
           reviewedAt: existing?.reviewedAt ?? null,

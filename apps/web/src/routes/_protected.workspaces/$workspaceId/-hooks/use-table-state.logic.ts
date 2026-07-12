@@ -9,9 +9,12 @@ import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-u
 
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");
-const utilityColumnIds = new Set<string>([selectColId, addPropertyColId]);
+const utilityColumnIds: readonly string[] = Object.freeze([
+  selectColId,
+  addPropertyColId,
+]);
 
-const isPersistableColumnId = (id: string) => !utilityColumnIds.has(id);
+const isPersistableColumnId = (id: string) => !utilityColumnIds.includes(id);
 
 export const omitUtilityColumnSizing = (
   sizing: ColumnSizingState,

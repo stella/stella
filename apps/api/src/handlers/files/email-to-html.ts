@@ -17,6 +17,7 @@ import { type Element, isTag } from "domhandler";
 import PostalMime, { type Address } from "postal-mime";
 
 import { parseOutlookMsg } from "@/api/handlers/files/outlook-msg";
+import { arrayOrEmpty } from "@/api/lib/array";
 
 export const EML_MIME_TYPE = "message/rfc822";
 export const MSG_MIME_TYPE = "application/vnd.ms-outlook";
@@ -181,8 +182,8 @@ const parseEml = async (fileBuffer: ArrayBuffer): Promise<ParsedEmail> => {
   return {
     subject: email.subject ?? null,
     from: email.from ? formatAddress(email.from) : null,
-    to: (email.to ?? []).map(formatAddress).filter(nonEmpty),
-    cc: (email.cc ?? []).map(formatAddress).filter(nonEmpty),
+    to: arrayOrEmpty(email.to).map(formatAddress).filter(nonEmpty),
+    cc: arrayOrEmpty(email.cc).map(formatAddress).filter(nonEmpty),
     date: email.date ?? null,
     body: email.html
       ? { type: "html", html: email.html }

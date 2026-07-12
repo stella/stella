@@ -15,6 +15,7 @@ import type {
 } from "@/components/inspector/view-registry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
+import { BoundedSet } from "@/lib/bounded-set";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
@@ -48,11 +49,49 @@ const LazyToolDetailRailIcon = lazy(async () => {
 // Tool-detail tabs live next to a route; they auto-close when the
 // user navigates away from `/knowledge/tools` so the rail doesn't
 // keep stale entries for a page the user has left.
+const isToolDetailPayload = (value: unknown): value is ToolDetailPayload => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  if (
+    !("kind" in value) ||
+    !("slug" in value) ||
+    !("organizationId" in value) ||
+    !("iconHint" in value)
+  ) {
+    return false;
+  }
+  if (
+    value.kind !== "skill" &&
+    value.kind !== "mcp" &&
+    value.kind !== "native-tool"
+  ) {
+    return false;
+  }
+  if (
+    typeof value.slug !== "string" ||
+    typeof value.organizationId !== "string"
+  ) {
+    return false;
+  }
+  const iconHint = value.iconHint;
+  if (typeof iconHint !== "object" || iconHint === null) {
+    return false;
+  }
+  return (
+    "icon" in iconHint &&
+    (iconHint.icon === null || typeof iconHint.icon === "string") &&
+    "iconUrl" in iconHint &&
+    (iconHint.iconUrl === null || typeof iconHint.iconUrl === "string")
+  );
+};
+
 registerInspectorView<ToolDetailPayload>({
   type: "tool-detail",
   render: ToolDetailViewRenderer,
   railIcon: ToolDetailRailIconRenderer,
   navigationPolicy: "close-on-route-leave",
+  validate: isToolDetailPayload,
 });
 
 function ToolDetailViewRenderer(
@@ -86,7 +125,7 @@ const searchSchema = v.object({
 // slash-command skill already exists for the user), but a wasted
 // round trip on every Tools navigation still hurts; this gates it
 // to the first visit.
-const seededThisSession = new Set<string>();
+const seededThisSession = new BoundedSet<string>(20);
 
 export const Route = createFileRoute("/_protected/knowledge/tools")({
   validateSearch: searchSchema,

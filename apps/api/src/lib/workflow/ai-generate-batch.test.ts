@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { toSafeId } from "@/api/lib/branded-types";
 import { buildWorkflowAIAnalyticsProps } from "@/api/lib/workflow/ai-generate-batch";

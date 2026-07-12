@@ -67,7 +67,8 @@ import {
 } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { normalizeOptionalArray } from "@/lib/arrays";
+import { toAPIError } from "@/lib/errors/api";
 import { routeQueryOptions } from "@/lib/react-query";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -384,7 +385,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           const hours = entry.durationMinutes / 60;
           daily[dayIdx] = (daily[dayIdx] ?? 0) + hours;
 
-          const entries = dailyEntries[dayIdx] ?? [];
+          const storedEntries = dailyEntries[dayIdx];
+          const entries = normalizeOptionalArray(storedEntries);
           entries.push({
             id: entry.id,
             description: entry.narrative || entry.taskCode || "—",
@@ -779,7 +781,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                       </div>
                       {member.daily.map((hours, dayIdx) => {
                         const opacity = maxDaily > 0 ? hours / maxDaily : 0;
-                        const entries = member.dailyEntries[dayIdx] ?? [];
+                        const storedEntries = member.dailyEntries[dayIdx];
+                        const entries = normalizeOptionalArray(storedEntries);
                         const dayLabel = getLocaleDayLabel(
                           dayIdx,
                           lang,

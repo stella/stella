@@ -2,7 +2,7 @@ import { Component } from "react";
 import type { ErrorInfo, ReactNode } from "react";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { ClientTelemetryError } from "@/lib/errors";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 type PDFErrorBoundaryProps = {
   fallback: ReactNode;

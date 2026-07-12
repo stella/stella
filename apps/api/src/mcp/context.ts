@@ -1,10 +1,13 @@
 import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { createMembershipSafeDb, createMembershipScopedDb } from "@/api/db";
-import type { SafeDb, ScopedDb } from "@/api/db";
 import { rlsDb } from "@/api/db/root";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
+import {
+  createMembershipSafeDb,
+  createMembershipScopedDb,
+} from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveMemberAuthorization } from "@/api/lib/auth";

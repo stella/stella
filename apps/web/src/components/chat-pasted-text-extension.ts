@@ -23,7 +23,7 @@ export type PastedTextAttrs = {
 
 const isPastedTextSource = (value: unknown): value is PastedTextSource =>
   typeof value === "string" &&
-  (PASTED_TEXT_SOURCES as readonly string[]).includes(value);
+  PASTED_TEXT_SOURCES.some((source) => source === value);
 
 type InsertPastedTextChipOptions = {
   /** When set, replace this range (e.g. the `/skill` trigger). */

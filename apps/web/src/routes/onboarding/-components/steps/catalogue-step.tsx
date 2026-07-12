@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   CheckIcon,
@@ -40,10 +40,7 @@ import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import type { ContextMenuAction } from "@/components/context-menu";
 import { compareByLocale } from "@/lib/collation";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
-import {
-  createCatalogueAutoSelectionPlan,
-  isCatalogueEntryAvailableDuringOnboarding,
-} from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
+import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
 const toRowDisplay = (entry: LoadedCatalogueEntry): CatalogueRowDisplay => ({
   slug: entry.slug,
@@ -61,10 +58,8 @@ const toRowDisplay = (entry: LoadedCatalogueEntry): CatalogueRowDisplay => ({
 type CatalogueStepProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
   selectedSlugs: readonly string[];
-  removedSlugs: readonly string[];
   focusedSlug: string | null;
   onFocusChange: (slug: string | null) => void;
-  onChange: (slugs: readonly string[]) => void;
   onAdd: (slug: string) => void;
   onRemove: (slug: string) => void;
   onNext: () => void;
@@ -78,10 +73,8 @@ const PROPOSE_TOOL_URL =
 export const CatalogueStep = ({
   practiceJurisdictions,
   selectedSlugs,
-  removedSlugs,
   focusedSlug,
   onFocusChange,
-  onChange,
   onAdd,
   onRemove,
   onNext,
@@ -212,24 +205,6 @@ export const CatalogueStep = ({
     }
     onFocusChange(focusedSlug === entry.slug ? null : entry.slug);
   };
-
-  // Auto-select first-party recommended entries on first reach of
-  // this step. Third-party entries always require the per-entry
-  // acknowledgement via the detail panel and are never auto-added.
-  // Explicit removals are tracked by the parent wizard so remounting
-  // this step cannot re-add a recommendation the user removed.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconciles recommended-entry auto-selection up to the parent whenever recommendedEntries (driven by async deploy-availability), selectedSlugs, or removedSlugs change; no single event to relocate into and a mount-only effect would miss the async availability update
-  useEffect(() => {
-    const autoSelectionPlan = createCatalogueAutoSelectionPlan({
-      recommendedEntries,
-      removedSlugs,
-      selectedSlugs,
-    });
-
-    if (autoSelectionPlan.addedSlugs.length > 0) {
-      onChange(autoSelectionPlan.selectedSlugs);
-    }
-  }, [onChange, recommendedEntries, removedSlugs, selectedSlugs]);
 
   return (
     <>

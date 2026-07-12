@@ -2,7 +2,7 @@ import { t } from "elysia";
 
 import { createDocx, createEmptyDocument } from "@stll/folio-core/server";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   type CreatedTemplate,
   createStoredTemplate,

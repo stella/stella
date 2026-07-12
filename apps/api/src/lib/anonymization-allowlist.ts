@@ -1,6 +1,6 @@
 import { and, eq, isNull, or } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";

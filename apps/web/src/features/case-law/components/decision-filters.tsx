@@ -71,8 +71,8 @@ export const DecisionFilters = ({
     updateFilter("country", value);
   }, 300);
 
-  const courtBuckets = facets?.court ?? [];
-  const countryBuckets = facets?.country ?? [];
+  const courtBuckets = facets ? facets.court : [];
+  const countryBuckets = facets ? facets.country : [];
 
   return (
     <div className="flex flex-wrap items-center gap-2">

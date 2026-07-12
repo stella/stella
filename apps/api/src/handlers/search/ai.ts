@@ -4,7 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawSearchDocuments,
   chatMessages,
@@ -18,7 +18,7 @@ import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import {
   createTanStackAIAnalyticsCallbacks,
   type TanStackAIAnalyticsCallbacks,

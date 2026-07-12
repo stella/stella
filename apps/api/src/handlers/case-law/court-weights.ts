@@ -5,6 +5,7 @@
  * with database-driven weights per jurisdiction.
  */
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { readCourtWeightRows } from "@/api/lib/case-law/case-law-config-store";
 
 // -- Types ---------------------------------------------------------------
@@ -35,7 +36,8 @@ export const loadCourtWeights = async (): Promise<CourtWeightMap> => {
 
   const map: CourtWeightMap = new Map();
   for (const row of rows) {
-    const entries = map.get(row.country) ?? [];
+    const storedEntries = map.get(row.country);
+    const entries = arrayOrEmpty(storedEntries);
     entries.push({
       pattern: new RegExp(row.courtPattern, "iu"),
       tier: row.tier,
@@ -106,5 +108,6 @@ export const loadCourtWeightsForCountry = async (
   country: string,
 ): Promise<CourtWeightEntry[]> => {
   const map = await loadCourtWeights();
-  return map.get(country) ?? [];
+  const entries = map.get(country);
+  return arrayOrEmpty(entries);
 };

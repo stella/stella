@@ -1,7 +1,7 @@
 import { Result, panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitations,
   caseLawDecisions,
@@ -22,7 +22,7 @@ import {
 import { isDocumentAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { EMPTY_AST } from "@/api/handlers/case-law/ingestion/adapter";
-import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters";
+import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import {
   extractCitations,
   isSelfCitation,
@@ -34,7 +34,7 @@ import {
   stripDangerousChars,
 } from "@/api/handlers/case-law/ingestion/sanitize";
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";

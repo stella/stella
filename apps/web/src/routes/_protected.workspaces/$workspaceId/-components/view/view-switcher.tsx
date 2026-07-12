@@ -70,7 +70,7 @@ import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queri
 
 const VIEW_DRAG_TYPE = "stella/view-id";
 
-const REQUIRED_VIEW_LAYOUTS = new Set<ViewLayoutType>([
+const REQUIRED_VIEW_LAYOUTS: readonly ViewLayoutType[] = Object.freeze([
   "overview",
   "table",
   "filesystem",
@@ -217,7 +217,7 @@ export const ViewSwitcher = ({
         <TabsList variant="underline">
           {views.map((view) => {
             const isLastOfLayout =
-              REQUIRED_VIEW_LAYOUTS.has(view.layout.type) &&
+              REQUIRED_VIEW_LAYOUTS.includes(view.layout.type) &&
               views.filter((v) => v.layout.type === view.layout.type).length <=
                 1;
 

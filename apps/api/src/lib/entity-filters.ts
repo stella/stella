@@ -18,6 +18,7 @@ import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { compareByLocale } from "@/api/lib/collation";
 import { typedPgArray } from "@/api/lib/search/sql";
+import { includes } from "@/api/lib/type-guards";
 
 // -- Types --
 
@@ -398,7 +399,7 @@ const ENTITY_KINDS: readonly EntityKind[] = [
 ];
 
 const isEntityKind = (value: string): value is EntityKind =>
-  (ENTITY_KINDS as readonly string[]).includes(value);
+  includes(ENTITY_KINDS, value);
 
 const asValueArray = (value: string | string[] | undefined): string[] => {
   if (Array.isArray(value)) {

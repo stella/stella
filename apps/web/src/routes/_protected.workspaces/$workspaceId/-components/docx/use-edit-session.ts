@@ -13,7 +13,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
-import { userErrorMessage } from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { filesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";

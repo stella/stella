@@ -123,7 +123,7 @@ const normalizeAnonymizationBlacklistEntriesMock = (
   return Result.ok(normalized);
 };
 
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
   getAnalytics: getAnalyticsMock,

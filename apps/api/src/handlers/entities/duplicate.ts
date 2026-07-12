@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   collectFileCopySources,
   copyEntities,
@@ -13,7 +13,7 @@ import {
   remapFileIds,
   rollbackS3Copies,
 } from "@/api/handlers/entities/copy-utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";

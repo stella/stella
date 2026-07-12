@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { entities, fields } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -48,7 +49,8 @@ type FacetValueRow = {
 const readPropertyFacets = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, body }) {
-    const filterConditions = buildFilterConditions(body.filters ?? []);
+    const filters = arrayOrEmpty(body.filters);
+    const filterConditions = buildFilterConditions(filters);
     const whereClause = and(
       eq(entities.workspaceId, workspaceId),
       ...filterConditions,

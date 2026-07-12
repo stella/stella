@@ -19,9 +19,6 @@
  * are not statically known.
  */
 
-/* eslint-disable typescript-eslint/no-unsafe-type-assertion -- dynamic prop/ref merge onto an unknown child element; each cast guarded by a typeof/SAFETY check below */
-/* eslint-disable typescript/no-unsafe-type-assertion -- dynamic prop/ref merge onto an unknown child element; each cast guarded by a typeof/SAFETY check below */
-
 import { Children, Fragment, cloneElement, isValidElement } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
@@ -85,7 +82,7 @@ const Slot = ({
 }: SlotProps): React.ReactNode => {
   const child = Children.only(children);
 
-  if (!isValidElement(child)) {
+  if (!isValidElement<Record<string, unknown>>(child)) {
     return child;
   }
 
@@ -95,9 +92,7 @@ const Slot = ({
     return child;
   }
 
-  // SAFETY: React element props are always a plain object
-  // at runtime; the generic type is erased.
-  const childProps = child.props as Record<string, unknown>;
+  const childProps = child.props;
   // Spread parent props first, then child props, so child-
   // provided data-*, aria-*, id, role, etc. take precedence
   // (matching Radix Slot behaviour). Explicitly merged keys
@@ -111,18 +106,18 @@ const Slot = ({
   // Compose refs so neither parent nor child ref is dropped.
   // In React 19, ref lives in element.props (element.ref is
   // deprecated and triggers console warnings in dev).
-  // SAFETY: childProps is typed as Record<string, unknown>;
-  // React guarantees ref is either a Ref or undefined.
-  const childRef = childProps["ref"] as React.Ref<unknown> | undefined;
-  if (parentRef || childRef) {
-    mergedProps["ref"] = composeRefs(parentRef, childRef);
+  const childRef = childProps["ref"];
+  if (parentRef !== undefined || childRef !== undefined) {
+    mergedProps["ref"] = composeSlotRefs(parentRef, childRef);
   }
 
   // Merge className via cn()
   const childClassName = childProps["className"];
   if (className || typeof childClassName === "string") {
-    // SAFETY: guarded by the typeof check above.
-    mergedProps["className"] = cn(className, childClassName as string);
+    mergedProps["className"] = cn(
+      className,
+      typeof childClassName === "string" ? childClassName : undefined,
+    );
   }
 
   // Merge style objects
@@ -130,10 +125,9 @@ const Slot = ({
   if (style || (typeof childStyle === "object" && childStyle !== null)) {
     mergedProps["style"] = {
       ...style,
-      // SAFETY: guarded by the typeof === "object" check
-      // above; CSSProperties is the only object-typed
-      // style value React accepts.
-      ...(childStyle as React.CSSProperties | undefined),
+      ...(typeof childStyle === "object" && childStyle !== null
+        ? childStyle
+        : {}),
     };
   }
 
@@ -141,28 +135,38 @@ const Slot = ({
   // This matches Radix's Slot behaviour: because handlers
   // are merged (not DOM-propagated), the child can inspect
   // the event before the parent acts on it.
-  // SAFETY: rest is typed as React.HTMLAttributes<HTMLElement>
-  // which is structurally a plain object at runtime.
-  const restRecord = rest as Record<string, unknown>;
-  for (const key of Object.keys(restRecord)) {
-    const parentValue: unknown = restRecord[key];
+  const restEntries: [string, unknown][] = Object.entries(rest);
+  for (const [key, parentValue] of restEntries) {
     if (key.startsWith("on") && typeof parentValue === "function") {
-      // SAFETY: narrowed by typeof === "function" above.
-      const parentHandler = parentValue as (...args: unknown[]) => void;
       const childValue = childProps[key];
 
       if (typeof childValue === "function") {
-        // SAFETY: narrowed by typeof === "function" above.
-        const childHandler = childValue as (...args: unknown[]) => void;
         mergedProps[key] = (...args: unknown[]) => {
-          childHandler(...args);
-          parentHandler(...args);
+          Reflect.apply(childValue, undefined, args);
+          Reflect.apply(parentValue, undefined, args);
         };
       }
     }
   }
 
   return cloneElement(child, mergedProps);
+};
+
+const composeSlotRefs =
+  (parentRef: React.Ref<HTMLElement> | undefined, childRef: unknown) =>
+  (node: HTMLElement | null) => {
+    setSlotRef(parentRef, node);
+    setSlotRef(childRef, node);
+  };
+
+const setSlotRef = (ref: unknown, node: HTMLElement | null): void => {
+  if (typeof ref === "function") {
+    Reflect.apply(ref, undefined, [node]);
+    return;
+  }
+  if (typeof ref === "object" && ref !== null && "current" in ref) {
+    ref.current = node;
+  }
 };
 
 export { Slot };

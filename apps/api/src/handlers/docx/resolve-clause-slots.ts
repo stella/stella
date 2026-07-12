@@ -5,7 +5,7 @@
  * clauseVersion.
  */
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   clauseBodyToPlainText,
   clauseBodyToRichPatch,

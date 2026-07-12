@@ -15,6 +15,7 @@
 
 import { resolvePath } from "@stll/template-conditions";
 
+import { arrayOrEmpty } from "@/api/lib/array";
 import { isRecord } from "@/api/lib/type-guards";
 
 import { mapRepeatablePath, readRowSubPath } from "./repeatable-paths";
@@ -142,8 +143,8 @@ export const validateDependentFields = ({
     }
 
     const sourceValues = collectSourceValues(source, values);
-    const allowed =
-      sourceValues.length > 0 ? sourceValues : (field.options ?? []);
+    const fallbackOptions = arrayOrEmpty(field.options);
+    const allowed = sourceValues.length > 0 ? sourceValues : fallbackOptions;
 
     const repeatable = mapRepeatablePath(
       values,

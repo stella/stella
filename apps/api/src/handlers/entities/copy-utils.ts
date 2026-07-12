@@ -1,7 +1,7 @@
 import { panic, TaggedError } from "better-result";
 import { and, eq, isNull, like } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import {
@@ -435,7 +435,11 @@ export const getFolderSubtree = (
 
   for (const entity of queue) {
     subtree.push(entity);
-    for (const child of childrenByParentId.get(entity.id) ?? []) {
+    const children = childrenByParentId.get(entity.id);
+    if (!children) {
+      continue;
+    }
+    for (const child of children) {
       queue.push(child);
     }
   }

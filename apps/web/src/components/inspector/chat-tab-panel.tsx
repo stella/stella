@@ -15,7 +15,7 @@
  *   - render the shared `PromptBar` for the composer
  */
 
-import { useEffect, useEffectEvent } from "react";
+import { useEffectEvent } from "react";
 import type { MouseEvent } from "react";
 
 import {
@@ -55,10 +55,13 @@ import type { ChatTab } from "@/components/inspector/inspector-store";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
-import { useAIKeyGate } from "@/components/require-ai-key";
+import {
+  AIUnavailableDialogTrigger,
+  useAIKeyGate,
+} from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
@@ -131,12 +134,7 @@ export const ChatTabPanel = ({
   const tabActiveSkill = tab.activeSkill;
   const getActiveSkill = useEffectEvent(() => tabActiveSkill);
   const t = useTranslations();
-  const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- opens the AI-gate dialog once the availability query resolves; no single event triggers it (driven by query state across consumers), so there is no handler call-site to fold it into
-  useEffect(() => {
-    openIfAIUnavailable();
-  }, [openIfAIUnavailable]);
+  const { ensureAIAvailable } = useAIKeyGate();
 
   // Read live tab state on every send. The Chat instance is created
   // once and cached per `threadRef`, so a plain closure over `tab`
@@ -293,7 +291,9 @@ export const ChatTabPanel = ({
       threadRef,
     }),
   );
-  const suggestedPrompts = suggestedPromptsData?.prompts ?? [];
+  const suggestedPrompts = suggestedPromptsData
+    ? suggestedPromptsData.prompts
+    : [];
   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
   const editorController = useChatEditor({
     placeholder: t("chat.contextPlaceholder", { context: chatContextLabel }),
@@ -351,16 +351,18 @@ export const ChatTabPanel = ({
   // ribbon label) dispatches `requestRename(tabId)` to the store.
   // PDF tabs read that flag in InspectorPanel; chat tabs own their
   // rename state locally so they consume the flag here.
-  const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
-  const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
   const startRenameFromStore = labelRename.startEditing;
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- store rename-request flag is consumed by multiple tab types (PDF tabs in use-file-tab-rename, chat tabs here) and dispatched generically from the shared context menu; the rename action cannot be folded into the single setter call-site
-  useEffect(() => {
-    if (pendingRenameTabId === tab.id) {
+  const consumeRenameRequest = useEffectEvent(() => {
+    const store = useInspectorStore.getState();
+    if (store.pendingRenameTabId === tab.id) {
       startRenameFromStore();
-      clearRenameRequest();
+      store.clearRenameRequest();
     }
-  }, [pendingRenameTabId, tab.id, startRenameFromStore, clearRenameRequest]);
+  });
+  useMountEffect(() => {
+    consumeRenameRequest();
+    return useInspectorStore.subscribe(consumeRenameRequest);
+  });
 
   return (
     <ChatMattersContext
@@ -369,6 +371,7 @@ export const ChatTabPanel = ({
         isLoadingCreateDocumentMatters,
       }}
     >
+      <AIUnavailableDialogTrigger />
       <ChatApprovalContext
         value={{
           activeOrganizationId,

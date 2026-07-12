@@ -3,8 +3,9 @@ import { and, asc, eq, isNull, or } from "drizzle-orm";
 
 import type { GazetteerEntry } from "@stll/anonymize-wasm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -39,7 +40,7 @@ export const normalizeAnonymizationBlacklistEntry = ({
   canonical: normalizeTerm(canonical),
   enabled: enabled ?? true,
   label: normalizeTerm(label),
-  variants: normalizeVariants(variants ?? []),
+  variants: normalizeVariants(arrayOrEmpty(variants)),
 });
 
 export const normalizeAnonymizationBlacklistEntries = (

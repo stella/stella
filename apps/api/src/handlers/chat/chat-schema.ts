@@ -10,7 +10,7 @@ import { t } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
 import {
   validateChatFileParts,
@@ -728,7 +728,7 @@ const parseToolArguments = (
   value: string,
 ): Result<unknown, HandlerError<400>> => {
   const parsed = Result.try({
-    try: () => JSON.parse(value) as unknown,
+    try: () => parseJsonUnknown(value),
     catch: (cause) =>
       new HandlerError({
         status: 400,
@@ -754,7 +754,7 @@ const parseToolResultContent = (
   }
 
   const parsed = Result.try({
-    try: () => JSON.parse(content) as unknown,
+    try: () => parseJsonUnknown(content),
     catch: () => content,
   });
   if (Result.isError(parsed)) {
@@ -762,6 +762,8 @@ const parseToolResultContent = (
   }
   return Result.ok(parsed.value);
 };
+
+const parseJsonUnknown = (value: string): unknown => JSON.parse(value);
 
 const validateToolPayload = ({
   payload,

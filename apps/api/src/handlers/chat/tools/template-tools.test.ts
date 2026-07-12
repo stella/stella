@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { SafeDb, ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {

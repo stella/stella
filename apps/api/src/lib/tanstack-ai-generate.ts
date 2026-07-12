@@ -513,12 +513,16 @@ const parseStructuredOutputPartial = <TOutput>(
     return undefined;
   }
 
-  // SAFETY: TanStack derives StructuredOutputPart<T>.partial the same way:
-  // parse the accumulated JSON prefix and expose it as DeepPartial<T> until
-  // the final structured-output.complete event validates the complete object.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return parsed as TanStackStructuredOutputPartial<TOutput>;
+  if (!isStructuredOutputPartial<TOutput>(parsed)) {
+    return undefined;
+  }
+  return parsed;
 };
+
+const isStructuredOutputPartial = <TOutput>(
+  value: unknown,
+): value is TanStackStructuredOutputPartial<TOutput> =>
+  typeof value === "object" && value !== null;
 
 export const resolveTanStackTextModel = ({
   modelId,

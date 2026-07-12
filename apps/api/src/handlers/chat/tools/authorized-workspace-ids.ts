@@ -1,15 +1,20 @@
+import * as v from "valibot";
+
 import type { SafeId } from "@/api/lib/branded-types";
 
-declare const __authorizedToolWorkspaceIdsBrand: unique symbol;
+const authorizedToolWorkspaceIdsSchema = v.pipe(
+  v.array(v.custom<SafeId<"workspace">>((value) => typeof value === "string")),
+  v.brand("AuthorizedToolWorkspaceIds"),
+);
 
 // A list of workspace IDs that has been verified, in this request, to be
 // a subset of the user's currently accessible workspaces. The chat tool
 // surface accepts only this branded type so a stale persisted pin or a
 // raw body field cannot reach the AI's tools without going through
 // `resolveToolWorkspaceIds`.
-export type AuthorizedToolWorkspaceIds = SafeId<"workspace">[] & {
-  readonly [__authorizedToolWorkspaceIdsBrand]: true;
-};
+export type AuthorizedToolWorkspaceIds = v.InferOutput<
+  typeof authorizedToolWorkspaceIdsSchema
+>;
 
 type ResolveToolWorkspaceIdsInput = {
   // Workspace IDs the user pinned for this thread, either fresh from
@@ -34,8 +39,7 @@ type ResolveToolWorkspaceIdsInput = {
 // other code path may construct a value of this brand without
 // going through this function or `intersectAccessibleWorkspaceIds`.
 const brand = (ids: SafeId<"workspace">[]): AuthorizedToolWorkspaceIds =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- sole brand-mint boundary; callers verified ids against the accessible set (see SAFETY above)
-  ids as AuthorizedToolWorkspaceIds;
+  v.parse(authorizedToolWorkspaceIdsSchema, ids);
 
 export const resolveToolWorkspaceIds = ({
   pinnedIds,

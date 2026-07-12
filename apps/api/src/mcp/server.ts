@@ -1,4 +1,4 @@
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { authenticateMcpRequest } from "@/api/mcp/auth";
 import { resolveMcpSessionContext } from "@/api/mcp/context";
 import { listMcpResources, readMcpResource } from "@/api/mcp/resources";

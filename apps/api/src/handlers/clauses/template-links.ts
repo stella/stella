@@ -5,7 +5,7 @@ import type { Static } from "elysia";
 
 import { isClauseSlotName } from "@stll/template-conditions";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { templateClauses } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

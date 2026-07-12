@@ -86,9 +86,6 @@ export type SerializedProviderConfig = {
   region: RegionValue;
 };
 
-const PROVIDER_VALUES = new Set<string>(PROVIDER_KEYS);
-const ROLE_VALUES = new Set<string>(ROLE_KEYS);
-
 // Catalog data is the single source of truth in @stll/ai-catalog,
 // shared with the API runtime. The `satisfies` guards also cross-check
 // that the package's provider/role sets still match the UI's
@@ -124,10 +121,10 @@ export const getModelOptionsForRole = ({
 };
 
 export const isProviderValue = (value: string | null): value is ProviderValue =>
-  value !== null && PROVIDER_VALUES.has(value);
+  value !== null && PROVIDER_KEYS.some((provider) => provider === value);
 
 export const isRoleValue = (value: string): value is RoleValue =>
-  ROLE_VALUES.has(value);
+  ROLE_KEYS.some((role) => role === value);
 
 export const createProviderCredentialDraft = (
   provider: ProviderValue = "google",

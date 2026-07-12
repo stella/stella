@@ -3,7 +3,7 @@ import * as v from "valibot";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { JustificationContent, VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type {

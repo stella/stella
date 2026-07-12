@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { decryptContent } from "@/api/lib/content-encryption";
-import { maskDeepLKey, resolveDeepLBaseUrl } from "@/api/lib/deepl";
+import { maskDeepLKey, resolveDeepLBaseUrl } from "@/api/lib/deepl/deepl";
 
 const FREE_BASE_URL = "https://api-free.deepl.com";
 

@@ -6,6 +6,7 @@ import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { CellMetadata } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { FieldDiffs } from "@/api/lib/audit-log";
 import { acquireCellLock } from "@/api/lib/cell-lock";
@@ -154,7 +155,7 @@ const updateCellMetadata = createSafeHandler(
           .for("update");
         const existingMetadata = existingMetadataRows.at(0)?.metadata;
         const currentManualFlags = normalizeManualFlags(
-          existingMetadata?.manualFlags ?? [],
+          arrayOrEmpty(existingMetadata?.manualFlags),
         );
         const requestedManualFlags = normalizeManualFlags(body.manualFlags);
         const baseManualFlags =

@@ -58,6 +58,62 @@ type PdfRedactionResult = {
   redaction: NativeStaticRedactionResult["redaction"];
 };
 
+type BuildPageRedactionsOptions = {
+  placeholderByOriginalAndLabel: ReadonlyMap<string, string>;
+  redactString: string;
+  resolvedEntities: NativePipelineEntity[];
+  spans: CharSpan[];
+};
+
+const buildPageRedactions = ({
+  placeholderByOriginalAndLabel,
+  redactString,
+  resolvedEntities,
+  spans,
+}: BuildPageRedactionsOptions): Map<number, PageRedaction[]> => {
+  const sorted = resolvedEntities.toSorted((a, b) => a.start - b.start);
+  const nonOverlapping: NativePipelineEntity[] = [];
+  let lastEnd = 0;
+  for (const entity of sorted) {
+    if (entity.start >= lastEnd) {
+      nonOverlapping.push(entity);
+      lastEnd = entity.end;
+    }
+  }
+
+  const pageRedactions = new Map<number, PageRedaction[]>();
+  for (const entity of nonOverlapping) {
+    const bboxes = getEntityBBoxes({
+      spans,
+      entityStart: entity.start,
+      entityEnd: entity.end,
+    });
+    const overlayText =
+      placeholderByOriginalAndLabel.get(
+        redactionLookupKey(entity.label, entity.text),
+      ) ?? redactString;
+
+    for (let index = 0; index < bboxes.length; index++) {
+      const bbox = bboxes.at(index);
+      if (bbox === undefined) {
+        continue;
+      }
+      const pageRedaction = {
+        bbox,
+        overlayText: index === 0 ? overlayText : "",
+        label: entity.label,
+      };
+      const existing = pageRedactions.get(bbox.pageIndex);
+      if (existing) {
+        existing.push(pageRedaction);
+      } else {
+        pageRedactions.set(bbox.pageIndex, [pageRedaction]);
+      }
+    }
+  }
+  return pageRedactions;
+};
+
 // ── Main ───────────────────────────────────────────────
 
 /**
@@ -112,51 +168,12 @@ export const redactPdf = async (
     }
   }
 
-  // Sort and de-overlap (same first-occurrence-wins logic the
-  // native pipeline uses internally to build `redaction`).
-  const sorted = resolvedEntities.toSorted((a, b) => a.start - b.start);
-  const nonOverlapping: NativePipelineEntity[] = [];
-  let lastEnd = 0;
-  for (const entity of sorted) {
-    if (entity.start >= lastEnd) {
-      nonOverlapping.push(entity);
-      lastEnd = entity.end;
-    }
-  }
-
-  // Build per-page redaction regions
-  const pageRedactions = new Map<number, PageRedaction[]>();
-
-  for (const entity of nonOverlapping) {
-    const bboxes = getEntityBBoxes({
-      spans,
-      entityStart: entity.start,
-      entityEnd: entity.end,
-    });
-    if (bboxes.length === 0) {
-      continue;
-    }
-
-    const overlayText =
-      placeholderByOriginalAndLabel.get(
-        redactionLookupKey(entity.label, entity.text),
-      ) ?? redactString;
-
-    // First bbox gets the text overlay; all get white boxes
-    for (let i = 0; i < bboxes.length; i++) {
-      const bbox = bboxes[i];
-      if (bbox === undefined) {
-        continue;
-      }
-      const list = pageRedactions.get(bbox.pageIndex) ?? [];
-      list.push({
-        bbox,
-        overlayText: i === 0 ? overlayText : "",
-        label: entity.label,
-      });
-      pageRedactions.set(bbox.pageIndex, list);
-    }
-  }
+  const pageRedactions = buildPageRedactions({
+    placeholderByOriginalAndLabel,
+    redactString,
+    resolvedEntities,
+    spans,
+  });
 
   // Load PDF with @libpdf/core and draw overlays
   const pdfDoc = await PDF.load(pdfBytes);

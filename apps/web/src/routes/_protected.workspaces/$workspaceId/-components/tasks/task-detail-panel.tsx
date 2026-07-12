@@ -17,7 +17,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   isTaskPriority,
@@ -128,7 +128,7 @@ export const TaskDetailPanel = ({
       if (!didAutoAssign.current) {
         didAutoAssign.current = true;
         const alreadyAssigned = task.assignees.some(
-          (a) => a.user.id === userId,
+          (a) => a.user?.id === userId,
         );
         if (!alreadyAssigned) {
           void (async () => {
@@ -318,6 +318,27 @@ export const TaskDetailPanel = ({
     currentStatus !== "cancelled" &&
     dueDateISO < new Date().toISOString().slice(0, 10);
 
+  // Drop assignees/links whose related record is null (e.g. a deleted user or
+  // entity) so downstream components can rely on a non-null relation.
+  const assignees = task.assignees.filter(
+    (a): a is typeof a & { user: NonNullable<typeof a.user> } =>
+      a.user !== null,
+  );
+  const linkedFrom = task.linksAsSource.filter(
+    (
+      link,
+    ): link is typeof link & {
+      targetEntity: NonNullable<typeof link.targetEntity>;
+    } => link.targetEntity !== null,
+  );
+  const linkedTo = task.linksAsTarget.filter(
+    (
+      link,
+    ): link is typeof link & {
+      sourceEntity: NonNullable<typeof link.sourceEntity>;
+    } => link.sourceEntity !== null,
+  );
+
   return (
     <div className="bg-background flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
@@ -366,7 +387,7 @@ export const TaskDetailPanel = ({
                 }
                 if (e.key === "Escape") {
                   setIsEditingName(false);
-                  setEditNameValue(task.name ?? "");
+                  setEditNameValue(task.name);
                 }
               }}
               placeholder={t("untitled")}
@@ -407,7 +428,7 @@ export const TaskDetailPanel = ({
 
           <MetadataRow label={t("assignees")}>
             <AssigneePicker
-              assignees={task.assignees}
+              assignees={assignees}
               taskId={taskId}
               workspaceId={workspaceId}
             />
@@ -421,10 +442,7 @@ export const TaskDetailPanel = ({
         />
 
         {/* Links */}
-        <LinksSection
-          linkedFrom={task.linksAsSource}
-          linkedTo={task.linksAsTarget}
-        />
+        <LinksSection linkedFrom={linkedFrom} linkedTo={linkedTo} />
       </ScrollArea>
     </div>
   );

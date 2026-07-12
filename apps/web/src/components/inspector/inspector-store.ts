@@ -7,6 +7,7 @@ import {
   getInspectorView,
   type StructuredCloneable,
 } from "@/components/inspector/view-registry";
+import { normalizeOptionalArray } from "@/lib/arrays";
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 
@@ -1081,9 +1082,6 @@ const isInspectorTab = (value: unknown): value is InspectorTab => {
   if (registration === undefined) {
     return false;
   }
-  if (registration.validate === undefined) {
-    return true;
-  }
   return registration.validate(value["payload"]);
 };
 
@@ -1455,7 +1453,7 @@ export const useInspectorStore = create<State & Actions>()(
             id,
             label: args.label ?? "New chat",
             workspaceId: args.workspaceId,
-            contextMatterIds: args.contextMatterIds ?? [],
+            contextMatterIds: normalizeOptionalArray(args.contextMatterIds),
             activeDecisionId: args.activeDecisionId,
             activeSkill: args.activeSkill,
           });

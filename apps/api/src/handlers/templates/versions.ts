@@ -1,8 +1,8 @@
 import { and, desc, eq, lt } from "drizzle-orm";
 import { status } from "elysia";
 
-import type { ScopedDb } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { templateVersions } from "@/api/db/schema";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import type { SafeId } from "@/api/lib/branded-types";

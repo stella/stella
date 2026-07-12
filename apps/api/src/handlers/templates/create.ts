@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { isFieldMeta } from "@/api/handlers/docx/types";
 import {
   type ClientTemplateManifest,

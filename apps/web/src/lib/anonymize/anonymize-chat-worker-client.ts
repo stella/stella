@@ -27,7 +27,29 @@ type Pending = {
 
 let worker: Worker | null = null;
 let nextRequestId = 0;
-const pending = new Map<number, Pending>();
+
+class PendingWorkerRequests {
+  private readonly entries = new Map<number, Pending>();
+
+  add(id: number, entry: Pending) {
+    this.entries.set(id, entry);
+  }
+
+  take(id: number): Pending | undefined {
+    const entry = this.entries.get(id);
+    this.entries.delete(id);
+    return entry;
+  }
+
+  rejectAll(error: Error) {
+    for (const entry of this.entries.values()) {
+      entry.reject(error);
+    }
+    this.entries.clear();
+  }
+}
+
+const pendingRequests = new PendingWorkerRequests();
 
 const ensureWorker = (): Worker => {
   if (worker !== null) {
@@ -39,11 +61,10 @@ const ensureWorker = (): Worker => {
   );
   created.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
     const message = event.data;
-    const entry = pending.get(message.id);
+    const entry = pendingRequests.take(message.id);
     if (entry === undefined) {
       return;
     }
-    pending.delete(message.id);
     if (message.ok) {
       entry.resolve({
         redactedText: message.redactedText,
@@ -59,10 +80,7 @@ const ensureWorker = (): Worker => {
     // The worker crashed — reject every in-flight request and
     // drop the singleton so the next call recreates it.
     const errored = new Error("anonymize-chat worker crashed");
-    for (const [, entry] of pending) {
-      entry.reject(errored);
-    }
-    pending.clear();
+    pendingRequests.rejectAll(errored);
     worker = null;
   });
   worker = created;
@@ -88,7 +106,7 @@ export const anonymizeChatTextInWorker = ({
   nextRequestId += 1;
   const id = nextRequestId;
   return new Promise((resolve, reject) => {
-    pending.set(id, { resolve, reject });
+    pendingRequests.add(id, { resolve, reject });
     const request: WorkerRequest =
       excludedCanonicals === undefined
         ? { id, text, workspaceId }

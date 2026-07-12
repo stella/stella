@@ -32,7 +32,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, revokeAuthSession } from "@/lib/auth";
 import type { SessionRevocationToken } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { parseUserAgent } from "@/lib/parse-user-agent";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { sessionOptions } from "@/routes/-queries";
@@ -134,7 +135,10 @@ const RevokeSessionButton = ({ token }: RevokeSessionButtonProps) => {
 
       if (result.error) {
         stellaToast.add({
-          title: result.error.message ?? t("errors.actionFailed"),
+          title: userErrorFromThrown(
+            toAuthClientError(result.error),
+            t("errors.actionFailed"),
+          ),
           type: "error",
         });
         throw toAuthClientError(result.error);
@@ -180,7 +184,10 @@ const RevokeAllDialog = () => {
 
       if (result.error) {
         stellaToast.add({
-          title: result.error.message ?? t("errors.actionFailed"),
+          title: userErrorFromThrown(
+            toAuthClientError(result.error),
+            t("errors.actionFailed"),
+          ),
           type: "error",
         });
         throw toAuthClientError(result.error);

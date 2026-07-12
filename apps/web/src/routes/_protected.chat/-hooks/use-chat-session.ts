@@ -46,7 +46,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
-import { internalToolErrorMessage, toAPIError } from "@/lib/errors";
+import { internalToolErrorMessage, toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import {
@@ -619,18 +619,19 @@ export const useChatSession = ({
   const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
     workspacesNavigationOptions(organizationId),
   );
-  const createDocumentMatters: readonly NeedsMatterMatter[] = useMemo(
-    () =>
-      workspacesNavigation?.workspaces.map((w) => ({
-        id: w.id,
-        name: w.name,
-        color: w.color,
-        client: w.client?.displayName
-          ? { displayName: w.client.displayName }
-          : null,
-      })) ?? [],
-    [workspacesNavigation],
-  );
+  const createDocumentMatters: readonly NeedsMatterMatter[] = useMemo(() => {
+    if (!workspacesNavigation) {
+      return [];
+    }
+    return workspacesNavigation.workspaces.map((w) => ({
+      id: w.id,
+      name: w.name,
+      color: w.color,
+      client: w.client?.displayName
+        ? { displayName: w.client.displayName }
+        : null,
+    }));
+  }, [workspacesNavigation]);
 
   const queryClient = useQueryClient();
   const handleCreateDocumentResolve = useCallback(

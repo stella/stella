@@ -1,7 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import type { ScopedDb, Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";

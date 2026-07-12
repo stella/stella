@@ -3,7 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
@@ -13,7 +13,7 @@ import {
   stripDangerousChars,
 } from "@/api/handlers/case-law/ingestion/sanitize";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**

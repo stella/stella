@@ -7,7 +7,7 @@ import {
   test,
 } from "bun:test";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBillingCodes from "@/api/handlers/billing-codes/read";
 import readContactById from "@/api/handlers/contacts/read-by-id";

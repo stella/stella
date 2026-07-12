@@ -1,7 +1,7 @@
 import * as realTanStackAI from "@tanstack/ai";
 import { afterAll, describe, expect, mock, test } from "bun:test";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";

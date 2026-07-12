@@ -16,7 +16,7 @@ import {
   hashContent,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import {
   AdapterFetchError,
   TelemetryError,

@@ -1,6 +1,7 @@
 import { useDeferredValue, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
@@ -147,10 +148,14 @@ export const ChatMatterPicker = ({
     for (const m of filtered) {
       let group = map.get(m.clientKey);
       if (!group) {
+        const allMatters = mattersByClient.get(m.clientKey);
+        if (!allMatters) {
+          panic(`Missing matter group for client ${m.clientKey}`);
+        }
         group = {
           key: m.clientKey,
           label: m.clientLabel,
-          allMatters: mattersByClient.get(m.clientKey) ?? [],
+          allMatters,
           matters: [],
         };
         map.set(m.clientKey, group);

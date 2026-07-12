@@ -1,4 +1,5 @@
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
+import { normalizeOptionalArray } from "@/lib/arrays";
 
 import type { CalendarDay } from "./calendar-utils";
 import { formatMonthYearLabel } from "./calendar-utils";
@@ -150,9 +151,10 @@ export const getMonthWeekRows = (
     weekStart = addUTCDays(weekStart, 7)
   ) {
     const key = toUTCDateKey(weekStart);
+    const storedAnchors = anchorsByWeek.get(key);
     rows.push({
       key,
-      anchors: anchorsByWeek.get(key) ?? [],
+      anchors: normalizeOptionalArray(storedAnchors),
       days: getContinuousWeekDays(weekStart, weekend),
     });
   }

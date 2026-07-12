@@ -58,7 +58,8 @@ import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { userErrorMessage } from "@/lib/errors";
+import { optionalArray } from "@/lib/arrays";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
@@ -509,7 +510,7 @@ const InsertAtCaretButton = ({
   onInsert: (formatKey?: string) => void;
 }) => {
   const t = useTranslations();
-  const formats = field.lookup?.formats ?? [];
+  const formats = optionalArray(field.lookup?.formats);
   const className =
     "absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100";
   if (formats.length <= 1) {

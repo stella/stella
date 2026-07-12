@@ -2,7 +2,6 @@ import {
   Fragment,
   useCallback,
   useDeferredValue,
-  useEffect,
   useEffectEvent,
   useMemo,
   useRef,
@@ -535,20 +534,22 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   };
 
   const setFolderState = useWorkspaceStore((s) => s.setFolderState);
-  const toggleVersion = useWorkspaceStore((s) => s.folderState.toggleVersion);
 
-  // Toggle all folders when the header button is clicked.
-  // Only react to `toggleVersion` changes; `toggleAll` is
-  // intentionally excluded to avoid an infinite loop
-  // (toggleAll → allExpanded → setFolderState → re-render).
   const handleToggleAll = useEffectEvent(toggleAll);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (toggleVersion bump → toggleAll); the trigger is in ViewToolbar's FolderExpandToggle (separate file), but the toggle reads local expandedIds/allFolderIds here, so the action can't be lifted to the button without threading local state up
-  useEffect(() => {
-    if (toggleVersion === 0) {
-      return;
-    }
-    handleToggleAll();
-  }, [toggleVersion]);
+  useExternalSyncEffect(() => {
+    let previousToggleVersion =
+      useWorkspaceStore.getState().folderState.toggleVersion;
+    return useWorkspaceStore.subscribe((state) => {
+      const nextToggleVersion = state.folderState.toggleVersion;
+      if (nextToggleVersion === previousToggleVersion) {
+        return;
+      }
+      previousToggleVersion = nextToggleVersion;
+      if (nextToggleVersion > 0) {
+        handleToggleAll();
+      }
+    });
+  }, []);
 
   useExternalSyncEffect(() => {
     setFolderState({

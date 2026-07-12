@@ -1,12 +1,5 @@
 import type { PropsWithChildren } from "react";
-import {
-  createContext,
-  use,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { createContext, use, useCallback, useMemo, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -45,10 +38,12 @@ import type {
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   aiAvailabilityOptions,
   aiConfigOptions,
@@ -64,6 +59,7 @@ type AIAvailabilityContextValue = {
 const AIAvailabilityContext = createContext<AIAvailabilityContextValue | null>(
   null,
 );
+const AIUnavailableContext = createContext(false);
 
 export function AIAvailabilityProvider({ children }: PropsWithChildren) {
   const [open, setOpen] = useState(false);
@@ -97,6 +93,7 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
       setOpen(true);
     }
   }, [data, isFetching]);
+  const aiUnavailable = Boolean(data && !data.available && !isFetching);
 
   // Force-close the dialog whenever the availability query flips to available
   // (e.g. keys configured elsewhere and refetched). Adjust-state-during-render on
@@ -121,8 +118,10 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
 
   return (
     <AIAvailabilityContext value={value}>
-      {children}
-      <AIKeyRequiredDialog onOpenChange={setOpen} open={open} />
+      <AIUnavailableContext value={aiUnavailable}>
+        {children}
+        <AIKeyRequiredDialog onOpenChange={setOpen} open={open} />
+      </AIUnavailableContext>
     </AIAvailabilityContext>
   );
 }
@@ -135,6 +134,22 @@ export const useAIKeyGate = () => {
   }
 
   return context;
+};
+
+const OpenAIKeyDialogOnMount = ({ open }: { open: () => void }) => {
+  useMountEffect(() => {
+    open();
+  });
+  return null;
+};
+
+export const AIUnavailableDialogTrigger = () => {
+  const aiUnavailable = use(AIUnavailableContext);
+  const { openAIKeyDialog } = useAIKeyGate();
+  if (!aiUnavailable) {
+    return null;
+  }
+  return <OpenAIKeyDialogOnMount open={openAIKeyDialog} />;
 };
 
 /**
@@ -163,12 +178,7 @@ export function RequireAIKey({ children }: PropsWithChildren) {
   const { data, isFetching, isPending, isError } = useChromeQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
-  const { openAIKeyDialog, openIfAIUnavailable } = useAIKeyGate();
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- opens the key dialog once the availability query resolves to unavailable; driven by query state, not a user event, so there is no handler call-site to fold it into
-  useEffect(() => {
-    openIfAIUnavailable();
-  }, [openIfAIUnavailable]);
+  const { openAIKeyDialog } = useAIKeyGate();
 
   if (isPending || (isFetching && data?.available === false)) {
     return null;
@@ -180,6 +190,7 @@ export function RequireAIKey({ children }: PropsWithChildren) {
 
   return (
     <div className="flex h-full w-full flex-1 items-center justify-center p-6">
+      <AIUnavailableDialogTrigger />
       <div className="border-border bg-card text-card-foreground flex max-w-md flex-col gap-4 rounded-lg border p-6 shadow-sm">
         <div className="flex flex-col gap-1">
           <h2 className="text-foreground text-lg font-semibold">
@@ -343,7 +354,7 @@ export function AIKeyRequiredDialog({
     onError: (error) => {
       analytics.captureError(error);
       stellaToast.add({
-        title: error instanceof Error ? error.message : tErrors("actionFailed"),
+        title: userErrorFromThrown(error, tErrors("actionFailed")),
         type: "error",
       });
     },

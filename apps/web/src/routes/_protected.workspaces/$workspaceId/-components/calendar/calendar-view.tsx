@@ -9,7 +9,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { normalizeOptionalArray } from "@/lib/arrays";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -225,6 +226,10 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
     datePropertyId,
     endDatePropertyId,
   });
+  const entriesForDate = (date: string) => {
+    const entries = entitiesByDate.get(date);
+    return normalizeOptionalArray(entries);
+  };
 
   const navigatePrev = () => {
     if (mode === "month") {
@@ -609,7 +614,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
                       {week.days.map((day) => (
                         <CalendarDayCell
                           day={day}
-                          entries={entitiesByDate.get(day.date) ?? []}
+                          entries={entriesForDate(day.date)}
                           isEditable={isEditable}
                           key={day.date}
                           mode="month"
@@ -643,7 +648,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
               {days.map((day) => (
                 <CalendarDayCell
                   day={day}
-                  entries={entitiesByDate.get(day.date) ?? []}
+                  entries={entriesForDate(day.date)}
                   isEditable={isEditable}
                   key={day.date}
                   mode={mode}

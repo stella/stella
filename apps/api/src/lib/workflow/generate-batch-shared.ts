@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";

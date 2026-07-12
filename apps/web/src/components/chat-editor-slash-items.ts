@@ -84,10 +84,12 @@ export const buildChatSlashItems = ({
   // by slug and would return the installed skill, so showing the
   // built-in description here would mislead the user about what the
   // slash item actually inserts.
-  const builtInSkillRows =
-    skillPages
-      ?.at(0)
-      ?.builtIn.filter((row) => !enabledInstalledSlugs.has(row.slug)) ?? [];
+  const firstSkillPage = skillPages?.at(0);
+  const builtInSkillRows = firstSkillPage
+    ? firstSkillPage.builtIn.filter(
+        (row) => !enabledInstalledSlugs.has(row.slug),
+      )
+    : [];
   const skillRows = [...builtInSkillRows, ...installedSkillRows];
   const skillItems: SlashItem[] = skillRows
     .filter((row) => row.enabled)
@@ -109,7 +111,9 @@ export const commandShortcutRowsFromSkillPages = (
   skillPages: readonly SlashSkillPage[] | undefined,
 ): SlashShortcutRow[] => {
   const rows: SlashShortcutRow[] = [];
-  const installedRows = skillPages?.flatMap((page) => page.installed) ?? [];
+  const installedRows = skillPages
+    ? skillPages.flatMap((page) => page.installed)
+    : [];
 
   for (const row of installedRows) {
     if (!row.enabled || !row.command || row.body === null || !row.body) {
@@ -133,7 +137,9 @@ export const commandShortcutRowsFromSkillPages = (
 const getChatVisibleInstalledSkillRows = (
   skillPages: readonly SlashSkillPage[] | undefined,
 ): { visibleRows: SlashSkillRow[]; shadowSlugs: Set<string> } => {
-  const installedRows = skillPages?.flatMap((page) => page.installed) ?? [];
+  const installedRows = skillPages
+    ? skillPages.flatMap((page) => page.installed)
+    : [];
   const visibleRows: SlashSkillRow[] = [];
   const seenSlugs = new Set<string>();
   // Apply the chat-metadata cap to enabled installed rows BEFORE

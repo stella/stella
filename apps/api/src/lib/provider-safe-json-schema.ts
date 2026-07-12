@@ -1,4 +1,4 @@
-/**
+import { arrayOrEmpty } from "@/api/lib/array"; /**
  * Provider-safe JSON Schema projection.
  *
  * Chat tool JSON Schemas are handed to model providers verbatim by the
@@ -272,7 +272,8 @@ const mergeRequired = (target: JsonObject, value: unknown): boolean => {
     return false;
   }
 
-  const existing = stringArrayFrom(target["required"]) ?? [];
+  const parsedExisting = stringArrayFrom(target["required"]);
+  const existing = arrayOrEmpty(parsedExisting);
   target["required"] = Array.from(new Set([...existing, ...required]));
   return true;
 };

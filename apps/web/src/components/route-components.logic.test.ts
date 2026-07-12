@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
 import { CriticalQueryTimeoutError } from "@/lib/react-query";
 
 import { isNetworkError } from "./route-components.logic";

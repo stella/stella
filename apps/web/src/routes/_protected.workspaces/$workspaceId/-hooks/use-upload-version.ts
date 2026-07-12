@@ -5,7 +5,9 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { ClientOperationError, toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { extensionMatches } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -68,7 +70,7 @@ export const useUploadVersion = () => {
       analytics.captureError(error);
       stellaToast.add({
         title: t("workspaces.files.versionUploadFailed"),
-        description: error instanceof Error ? error.message : undefined,
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
       });
     },

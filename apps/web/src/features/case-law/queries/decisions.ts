@@ -1,7 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -189,9 +190,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
       const { items, ...page } = data;
       return { ...page, decisions: items, facets };
     },
-    // SAFETY: TanStack Query needs the initial param typed as
-    // string | null; `null` alone infers `null`.
-    initialPageParam: null as string | null,
+    initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

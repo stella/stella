@@ -15,7 +15,7 @@ const sendFeedbackEmailMock = mock(
   }): Promise<undefined> => undefined,
 );
 let transactionalEmailConfigured = true;
-void mock.module("@/api/lib/email", () => ({
+void mock.module("@/api/lib/email/email", () => ({
   isTransactionalEmailConfigured: () => transactionalEmailConfigured,
   sendOTPEmail: mock(async () => undefined),
   sendNewDeviceLoginEmail: mock(async () => undefined),

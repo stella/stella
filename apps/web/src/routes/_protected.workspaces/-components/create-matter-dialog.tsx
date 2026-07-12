@@ -40,6 +40,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
@@ -51,11 +52,8 @@ import {
 } from "@/routes/_protected.workspaces/-components/create-matter-dialog.logic";
 import { useCreateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
-import type { WorkspacesData } from "@/routes/_protected.workspaces/-queries";
 import type { MatterDraftClient } from "@/routes/_protected.workspaces/-store/create-matter-store";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
-
-type ExistingWorkspace = WorkspacesData["workspaces"][number];
 
 const routeApi = getRouteApi("/_protected");
 
@@ -153,7 +151,7 @@ const toActionErrorTitle = ({
 }: {
   error: unknown;
   fallback: string;
-}) => (error instanceof Error ? error.message : fallback);
+}) => userErrorFromThrown(error, fallback);
 
 export const CreateMatterDialog = () => {
   const { closeDialog, dialog } = useCreateMatterStore(
@@ -339,11 +337,11 @@ const CreateMatterDialogBody = ({
   const clientInvalid =
     submitAttempted && ownerType === "client" && selectedClient === null;
   const nameInvalid = submitAttempted && name.trim().length === 0;
-  const organizationMembers = organization?.members ?? [];
+  const organizationMembers = organization ? organization.members : [];
   const selectedMemberUserIdSet = new Set(selectedMemberUserIds);
   const collaboratorStats = buildCollaboratorStats({
     currentUserId: currentUser.id,
-    workspaces: workspacesData?.workspaces ?? [],
+    workspaces: workspacesData ? workspacesData.workspaces : [],
   });
   const availableMembers = organizationMembers
     .filter(
@@ -379,14 +377,14 @@ const CreateMatterDialogBody = ({
   const hasAdditionalOrganizationMembers = organizationMembers.length > 1;
   const possibleDuplicates = (() => {
     if (ownerType === "personal" || selectedClient === null) {
-      return [] as ExistingWorkspace[];
+      return [];
     }
 
     return getPossibleDuplicateMatters({
       clientId: selectedClient.id,
       limit: 3,
       name,
-      workspaces: workspacesData?.workspaces ?? [],
+      workspaces: workspacesData ? workspacesData.workspaces : [],
     });
   })();
 

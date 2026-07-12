@@ -49,15 +49,16 @@ const ChipIcon = ({ source }: { source: PastedTextSource }) => {
   return <ClipboardPasteIcon className={className} />;
 };
 
-const PASTED_TEXT_SOURCE_VALUES: ReadonlySet<string> = new Set([
+const PASTED_TEXT_SOURCE_VALUES: readonly string[] = [
   "paste",
   "prompt",
   "skill",
   "command",
-]);
+];
 
 const isPastedTextSource = (value: unknown): value is PastedTextSource =>
-  typeof value === "string" && PASTED_TEXT_SOURCE_VALUES.has(value);
+  typeof value === "string" &&
+  PASTED_TEXT_SOURCE_VALUES.some((source) => source === value);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;

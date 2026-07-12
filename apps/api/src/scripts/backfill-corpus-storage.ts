@@ -12,13 +12,13 @@ import type { SQL } from "drizzle-orm";
  */
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { createIngestionDb } from "@/api/db";
 import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
+import { createIngestionDb } from "@/api/db/scoped";
 import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 

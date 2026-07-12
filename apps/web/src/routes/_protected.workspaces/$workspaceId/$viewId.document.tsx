@@ -1,7 +1,6 @@
 import {
   lazy,
   Suspense,
-  useEffect,
   useEffectEvent,
   useLayoutEffect,
   useMemo,
@@ -52,11 +51,13 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { APIError, ClientOperationError, toAPIError } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors/api";
+import { ClientOperationError } from "@/lib/errors/client";
 import {
   PDFProvider,
   getPDFPageIdByNumber,
   usePDFStore,
+  usePDFStoreApi,
 } from "@/lib/pdf/pdf-context";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -177,41 +178,101 @@ export const Route = createFileRoute(
 
 const AnonymizeScrollSync = () => {
   const pageNumber = Route.useSearch({ select: (s) => s.pdfPage ?? 1 });
-  const setScrollTo = usePDFStore((s) => s.setScrollTo);
-  const pageId = usePDFStore((s) =>
-    getPDFPageIdByNumber({
-      fieldId: s.fieldId,
-      pages: s.pages,
-      pageNumber,
-    }),
-  );
-  const pendingAnonymizeEntityId = useWorkspaceStore(
-    (s) => s.pdfViewer.pendingAnonymizeEntityId,
-  );
-  const setPendingAnonymizeEntityId = useWorkspaceStore(
-    (s) => s.setPendingAnonymizeEntityId,
-  );
+  const pdfStore = usePDFStoreApi();
+  useExternalSyncEffect(() => {
+    const applyPendingScroll = () => {
+      const pdfState = pdfStore.getState();
+      const workspaceState = useWorkspaceStore.getState();
+      const pageId = getPDFPageIdByNumber({
+        fieldId: pdfState.fieldId,
+        pages: pdfState.pages,
+        pageNumber,
+      });
+      const pendingAnonymizeEntityId =
+        workspaceState.pdfViewer.pendingAnonymizeEntityId;
+      if (pendingAnonymizeEntityId === null || pageId === undefined) {
+        return;
+      }
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pendingAnonymizeEntityId is set from page-anonymization.tsx (out of scope), and the scroll-to action depends on pageId resolving as PDF pages load asynchronously, so it cannot move into that setter's call-site
-  useEffect(() => {
-    if (pendingAnonymizeEntityId === null || pageId === undefined) {
-      return;
+      // Claim the one-shot request before writing the PDF store. Zustand
+      // subscriptions run synchronously; writing `scrollTo` first would
+      // re-enter this callback while the request was still pending.
+      workspaceState.setPendingAnonymizeEntityId(null);
+      pdfState.setScrollTo({
+        pageId,
+        target: {
+          kind: "anonymizeEntity",
+          entityId: pendingAnonymizeEntityId,
+        },
+      });
+    };
+
+    applyPendingScroll();
+    const unsubscribePdf = pdfStore.subscribe(applyPendingScroll);
+    const unsubscribeWorkspace =
+      useWorkspaceStore.subscribe(applyPendingScroll);
+    return () => {
+      unsubscribePdf();
+      unsubscribeWorkspace();
+    };
+  }, [pageNumber, pdfStore]);
+
+  return null;
+};
+
+const InspectorFieldLifecycle = ({ fieldId }: { fieldId: string }) => {
+  useMountEffect(() => () => {
+    const inspectorState = useInspectorStore.getState();
+    for (const tab of inspectorState.tabs) {
+      if (tab.type !== "pdf" || tab.id !== fieldId) {
+        continue;
+      }
+
+      if (tab.metadataLane === "expanded" && tab.facet === "suggestions") {
+        inspectorState.setFileFacet(fieldId, "metadata");
+      }
+      break;
     }
 
-    setScrollTo({
-      pageId,
-      target: {
-        kind: "anonymizeEntity",
-        entityId: pendingAnonymizeEntityId,
-      },
+    inspectorState.setFileMetadataLane(fieldId, "closed");
+  });
+
+  return null;
+};
+
+type InspectorFileOpenLifecycleProps = {
+  entityId: string;
+  fieldId: string;
+  fileLabel: string;
+  mimeType: string;
+  pdfFileId: string | null;
+  propertyId: string;
+  workspaceId: string;
+};
+
+const InspectorFileOpenLifecycle = ({
+  entityId,
+  fieldId,
+  fileLabel,
+  mimeType,
+  pdfFileId,
+  propertyId,
+  workspaceId,
+}: InspectorFileOpenLifecycleProps) => {
+  const openFileForEntity = useInspectorStore((s) => s.openFileForEntity);
+  useMountEffect(() => {
+    openFileForEntity({
+      id: fieldId,
+      entityId,
+      label: fileLabel,
+      fileName: fileLabel,
+      workspaceId,
+      mimeType,
+      pdfFileId,
+      propertyId,
+      metadataLane: "expanded",
     });
-    setPendingAnonymizeEntityId(null);
-  }, [
-    pageId,
-    pendingAnonymizeEntityId,
-    setPendingAnonymizeEntityId,
-    setScrollTo,
-  ]);
+  });
 
   return null;
 };
@@ -314,7 +375,6 @@ function RouteComponentInner({
     (s) => s.setActiveJustification,
   );
   const resetPdfViewerState = useWorkspaceStore((s) => s.resetPdfViewerState);
-  const openFileForEntity = useInspectorStore((s) => s.openFileForEntity);
   const currentFileFieldIdsByPropertyRef = useRef(new Map<string, string>());
   const navigate = Route.useNavigate();
 
@@ -334,26 +394,6 @@ function RouteComponentInner({
     setActiveJustification(null);
     resetPdfViewerState();
   });
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- inspector-store cleanup keyed on fieldId; fieldId changes mid-mount (setActiveFieldId on version switch/save), so the cleanup must re-run on every fieldId change with the previous value, which useMountEffect cannot do
-  useEffect(
-    () => () => {
-      const inspectorState = useInspectorStore.getState();
-      for (const tab of inspectorState.tabs) {
-        if (tab.type !== "pdf" || tab.id !== fieldId) {
-          continue;
-        }
-
-        if (tab.metadataLane === "expanded" && tab.facet === "suggestions") {
-          inspectorState.setFileFacet(fieldId, "metadata");
-        }
-        break;
-      }
-
-      inspectorState.setFileMetadataLane(fieldId, "closed");
-    },
-    [fieldId],
-  );
 
   // Compare mode state
   const [compareState, setCompareState] = useState<{
@@ -505,36 +545,21 @@ function RouteComponentInner({
     });
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- opens the file in the inspector store as derived file metadata (propertyId/mimeType/label) resolves from async entity+version queries; there is no single user open-event call-site to relay this into
-  useEffect(() => {
-    if (!filePropertyId || activeMimeType === undefined) {
-      return;
-    }
-
-    openFileForEntity({
-      id: fieldId,
-      entityId,
-      label: activeFileLabel,
-      fileName: activeFileLabel,
-      workspaceId,
-      mimeType: activeMimeType,
-      pdfFileId: activePdfFileId,
-      propertyId: filePropertyId,
-      metadataLane: "expanded",
-    });
-  }, [
-    activeFileLabel,
-    activeMimeType,
-    activePdfFileId,
-    entityId,
-    fieldId,
-    filePropertyId,
-    openFileForEntity,
-    workspaceId,
-  ]);
-
   return (
     <div className="bg-secondary relative flex h-full max-h-[calc(100vh-3rem)] flex-1 overflow-hidden border-t">
+      <InspectorFieldLifecycle fieldId={fieldId} key={fieldId} />
+      {filePropertyId && activeMimeType !== undefined && (
+        <InspectorFileOpenLifecycle
+          entityId={entityId}
+          fieldId={fieldId}
+          fileLabel={activeFileLabel}
+          key={`${fieldId}:${filePropertyId}:${activeMimeType}:${activePdfFileId}:${activeFileLabel}`}
+          mimeType={activeMimeType}
+          pdfFileId={activePdfFileId}
+          propertyId={filePropertyId}
+          workspaceId={workspaceId}
+        />
+      )}
       <div className="flex h-full w-full min-w-0">
         {/*
          * The version history, metadata, and AI-suggestions surfaces
@@ -906,11 +931,11 @@ const RedlineOverlay = ({
 
 // -- Version drop zone for uploading by drag-and-drop --
 
-const ACCEPTED_MIME_TYPES = new Set([
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/msword",
-]);
+const ACCEPTED_MIME_TYPES = {
+  "application/pdf": true,
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": true,
+  "application/msword": true,
+} as const;
 
 type VersionDropZoneProps = React.PropsWithChildren<{
   workspaceId: string;
@@ -948,7 +973,9 @@ const VersionDropZone = ({
           return;
         }
         const files = getFiles({ source });
-        const file = files.find((f) => ACCEPTED_MIME_TYPES.has(f.type));
+        const file = files.find((f) =>
+          Object.hasOwn(ACCEPTED_MIME_TYPES, f.type),
+        );
         if (!file) {
           return;
         }

@@ -42,7 +42,7 @@ RUN bun build \
     --compile \
     --target bun \
     --outfile /app/server \
-    apps/api/src/index.ts
+    apps/api/src/server.ts
 # One-off maintenance tool: assigns public slugs to legacy case-law rows that
 # predate slug-at-ingest. Bundled to a single JS file (like the workers above,
 # not --compile) so it reuses the container's Bun runtime instead of embedding

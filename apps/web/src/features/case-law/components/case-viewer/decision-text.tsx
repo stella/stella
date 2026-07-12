@@ -8,11 +8,20 @@ import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { normalizeOptionalArray } from "@/lib/arrays";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 import type { SearchMatchRange, SearchPiece } from "./decision-search";
 import { buildSearchResults } from "./decision-search";
 import "./reader.css";
+
+const rangesForPiece = (
+  rangesByPieceId: Record<string, SearchMatchRange[]>,
+  pieceId: string,
+): SearchMatchRange[] => {
+  const ranges = rangesByPieceId[pieceId];
+  return normalizeOptionalArray(ranges);
+};
 
 type Decision = {
   caseNumber: string;
@@ -373,7 +382,10 @@ const EditorialSupplement = ({
             <HighlightedText
               activeMatchIndex={activeMatchIndex}
               pieceId={SUPPLEMENT_LEGAL_SENTENCE_ID}
-              ranges={rangesByPieceId[SUPPLEMENT_LEGAL_SENTENCE_ID] ?? []}
+              ranges={rangesForPiece(
+                rangesByPieceId,
+                SUPPLEMENT_LEGAL_SENTENCE_ID,
+              )}
               text={legalSentence}
             />
           </p>
@@ -388,7 +400,7 @@ const EditorialSupplement = ({
             <HighlightedText
               activeMatchIndex={activeMatchIndex}
               pieceId={SUPPLEMENT_ABSTRACT_ID}
-              ranges={rangesByPieceId[SUPPLEMENT_ABSTRACT_ID] ?? []}
+              ranges={rangesForPiece(rangesByPieceId, SUPPLEMENT_ABSTRACT_ID)}
               text={abstract}
             />
           </p>
@@ -426,7 +438,7 @@ const BlockRenderer = ({
           activeMatchIndex={activeMatchIndex}
           inlines={block.inlines}
           pieceId={block.id}
-          ranges={rangesByPieceId[block.id] ?? []}
+          ranges={rangesForPiece(rangesByPieceId, block.id)}
         />
       </Tag>
     );
@@ -466,7 +478,7 @@ const BlockRenderer = ({
           activeMatchIndex={activeMatchIndex}
           inlines={block.inlines}
           pieceId={block.id}
-          ranges={rangesByPieceId[block.id] ?? []}
+          ranges={rangesForPiece(rangesByPieceId, block.id)}
         />
       </p>
     );
@@ -497,7 +509,7 @@ const BlockRenderer = ({
                     activeMatchIndex={activeMatchIndex}
                     inlines={cell.inlines}
                     pieceId={pieceId}
-                    ranges={rangesByPieceId[pieceId] ?? []}
+                    ranges={rangesForPiece(rangesByPieceId, pieceId)}
                   />
                 </td>
               );
@@ -533,7 +545,7 @@ const FulltextFallback = ({
             <HighlightedText
               activeMatchIndex={activeMatchIndex}
               pieceId={pieceId}
-              ranges={rangesByPieceId[pieceId] ?? []}
+              ranges={rangesForPiece(rangesByPieceId, pieceId)}
               text={paragraph}
             />
           </p>
@@ -766,7 +778,10 @@ export const DecisionText = ({
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
             pieceId={DECISION_REFERENCE_ID}
-            ranges={searchResults.rangesByPieceId[DECISION_REFERENCE_ID] ?? []}
+            ranges={rangesForPiece(
+              searchResults.rangesByPieceId,
+              DECISION_REFERENCE_ID,
+            )}
             text={`${decision.court}, ${displayRef}`}
           />
         </p>
@@ -803,7 +818,10 @@ export const DecisionText = ({
           <HighlightedText
             activeMatchIndex={activeMatchIndex}
             pieceId={DECISION_REFERENCE_ID}
-            ranges={searchResults.rangesByPieceId[DECISION_REFERENCE_ID] ?? []}
+            ranges={rangesForPiece(
+              searchResults.rangesByPieceId,
+              DECISION_REFERENCE_ID,
+            )}
             text={`${decision.court}, ${displayRef}`}
           />
         </p>

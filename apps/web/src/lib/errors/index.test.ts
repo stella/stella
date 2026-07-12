@@ -1,16 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
+import { APIError, internalToolErrorMessage, toAPIError } from "./api";
 import {
-  APIError,
   AuthClientError,
-  internalToolErrorMessage,
   isMemberError,
   isUnauthorizedError,
-  toAPIError,
   toAuthClientError,
-  userErrorFromThrown,
-  userErrorMessage,
-} from "./index";
+} from "./auth";
+import { userErrorFromThrown, userErrorMessage } from "./user-safe";
 
 describe("toAPIError", () => {
   test("localizes string payloads by status and preserves the raw message", () => {

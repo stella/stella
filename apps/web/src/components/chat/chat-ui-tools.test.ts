@@ -892,6 +892,32 @@ describe("withParsedToolCallInputs", () => {
     expect(normalized).toBe(part);
   });
 
+  test("rejects non-object input for a registered UI tool", () => {
+    const part = {
+      arguments: '"not-an-object"',
+      id: "tool-call-1",
+      name: "ask-user",
+      state: "input-complete",
+      type: "tool-call",
+    } satisfies ChatPart;
+
+    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
+    expect(message?.parts[0]).toBe(part);
+  });
+
+  test("leaves dynamic MCP input opaque when no UI validator is registered", () => {
+    const part = {
+      arguments: JSON.stringify({ query: "consumer credit" }),
+      id: "tool-call-1",
+      name: "mcp__salvia__search_decisions",
+      state: "input-complete",
+      type: "tool-call",
+    } satisfies ChatPart;
+
+    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
+    expect(message?.parts[0]).toBe(part);
+  });
+
   test("does not parse arguments while the tool call is still streaming", () => {
     const part = {
       arguments: '{"questions":[{"quest',

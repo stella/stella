@@ -22,7 +22,9 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAPIError, toAuthClientError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { toAuthClientError } from "@/lib/errors/auth";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   getOauthHashFragment,
   getOauthClientDisplayName,
@@ -141,7 +143,7 @@ function ConsentPage() {
     jurisdictionsQuery.data !== undefined &&
     jurisdictionsQuery.data.length === 0;
 
-  const scopes = scope?.split(" ").filter(Boolean) ?? [];
+  const scopes = scope ? scope.split(" ").filter(Boolean) : [];
   const clientName =
     getOauthClientDisplayName(clientQuery.data) ??
     t("consent.defaultClientName");
@@ -164,7 +166,10 @@ function ConsentPage() {
       setHasError(true);
       setIsPending(false);
       stellaToast.add({
-        title: result.error.message ?? t("consent.error"),
+        title: userErrorFromThrown(
+          toAuthClientError(result.error),
+          t("consent.error"),
+        ),
         type: "error",
       });
       return;

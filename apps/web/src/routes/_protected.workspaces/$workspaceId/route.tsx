@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
+import type { RefObject } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { QueryClient } from "@tanstack/react-query";
@@ -12,10 +13,11 @@ import {
 
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { APIError, toAPIError } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
@@ -220,30 +222,6 @@ function RouteComponent() {
   // view, but the underlying query needs one to scope the fetch.
   useWorkspaceChatMentionRegistration(workspaceId);
 
-  // Reset workspace-bound visualisation state on matter switch
-  // (PDF viewer page state, justification overlays). Inspector
-  // tabs are intentionally NOT cleared — leaving them open lets
-  // the user pop back into a matter and find their tabs where
-  // they left them. PDF tabs from another matter will refetch
-  // with their own workspaceId; chat tabs are workspace-tagged
-  // so they only render under the matter they belong to.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id: clears timers + workspace store on matter switch (cleanup re-runs per workspaceId, not just unmount). This is a route component, so it can't take a key from a parent, and useMountEffect would only clean up on unmount.
-  useEffect(
-    () => () => {
-      for (const timer of previewClearTimersRef.current.values()) {
-        clearTimeout(timer);
-      }
-      previewClearTimersRef.current.clear();
-
-      const workspaceStore = useWorkspaceStore.getState();
-      workspaceStore.clearJustifications();
-      workspaceStore.clearExtractionPreviews();
-      workspaceStore.setActiveJustification(null);
-      workspaceStore.resetPdfViewerState();
-    },
-    [workspaceId],
-  );
-
   const timesheetsMatch = useMatch({
     from: "/_protected/workspaces/$workspaceId/timesheets",
     shouldThrow: false,
@@ -286,9 +264,34 @@ function RouteComponent() {
 
   return (
     <WorkflowStartConfirmationPromptProvider>
+      <WorkspaceLifecycleCleanup
+        key={workspaceId}
+        previewClearTimersRef={previewClearTimersRef}
+      />
       <WorkflowServiceTierPromptProvider>
         {content}
       </WorkflowServiceTierPromptProvider>
     </WorkflowStartConfirmationPromptProvider>
   );
 }
+
+const WorkspaceLifecycleCleanup = ({
+  previewClearTimersRef,
+}: {
+  previewClearTimersRef: RefObject<Map<string, ReturnType<typeof setTimeout>>>;
+}) => {
+  useMountEffect(() => () => {
+    const previewClearTimers = previewClearTimersRef.current;
+    for (const timer of previewClearTimers.values()) {
+      clearTimeout(timer);
+    }
+    previewClearTimers.clear();
+
+    const workspaceStore = useWorkspaceStore.getState();
+    workspaceStore.clearJustifications();
+    workspaceStore.clearExtractionPreviews();
+    workspaceStore.setActiveJustification(null);
+    workspaceStore.resetPdfViewerState();
+  });
+  return null;
+};

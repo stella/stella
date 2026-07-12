@@ -1,7 +1,7 @@
 import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { SafeId } from "@/api/lib/branded-types";
 

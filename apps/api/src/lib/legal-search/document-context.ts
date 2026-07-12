@@ -4,7 +4,7 @@ import {
   readCorpusAst,
   readCorpusText,
 } from "@/api/handlers/case-law/corpus-storage";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { LegalDocumentContext } from "@/api/lib/legal-search/types";
 

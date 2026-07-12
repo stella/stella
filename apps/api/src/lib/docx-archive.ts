@@ -74,7 +74,10 @@ const collectStreamBounded = async (
     ) => {
       // `destroy` exists on Node Readables; JSZip returns one but the
       // type is the parent NodeJS.ReadableStream interface.
-      (stream as NodeJS.ReadableStream & { destroy?: () => void }).destroy?.();
+      const destroy: unknown = Reflect.get(stream, "destroy");
+      if (typeof destroy === "function") {
+        Reflect.apply(destroy, stream, []);
+      }
       reject(new DocxArchiveError({ message, reason }));
     };
     stream.on("data", (chunk: Buffer | string) => {
@@ -132,12 +135,13 @@ export const loadDocxArchive = async (
   // The `_data.uncompressedSize` property is internal; if a future
   // JSZip release moves it the pre-flight degrades to a no-op and the
   // streaming read caps below remain the authoritative defence.
-  type EntryWithInternals = JSZip.JSZipObject & {
-    _data?: { uncompressedSize?: unknown };
-  };
   let declaredTotal = 0;
   for (const entry of Object.values(zip.files)) {
-    const declared = (entry as EntryWithInternals)._data?.uncompressedSize;
+    const data = "_data" in entry ? entry._data : undefined;
+    const declared =
+      typeof data === "object" && data !== null && "uncompressedSize" in data
+        ? data.uncompressedSize
+        : undefined;
     if (typeof declared !== "number" || !Number.isFinite(declared)) {
       declaredTotal = Number.NaN;
       break;

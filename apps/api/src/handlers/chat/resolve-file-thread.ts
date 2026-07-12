@@ -2,7 +2,8 @@ import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDbError, Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, fileChatThreads } from "@/api/db/schema";
 import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";

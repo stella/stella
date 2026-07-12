@@ -19,13 +19,13 @@
 
 import { and, desc, eq, isNull } from "drizzle-orm";
 
-import { createScopedDb } from "@/api/db";
 import { rootDb, rlsDb } from "@/api/db/root";
 import {
   caseLawCitations,
   caseLawDecisions,
   caseLawPolarityRules,
 } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
 import {
   classifyCitation,
   extractContext,

@@ -51,7 +51,8 @@ import {
 } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAPIError, toAuthClientError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { toAuthClientError } from "@/lib/errors/auth";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -316,8 +317,8 @@ function ProfilePageBody() {
     },
   });
 
-  const activeTasks = pendingTasksData?.tasks ?? [];
-  const activeTaskMembers = pendingTasksData?.members ?? [];
+  const activeTasks = pendingTasksData ? pendingTasksData.tasks : [];
+  const activeTaskMembers = pendingTasksData ? pendingTasksData.members : [];
   type ActiveTask = (typeof activeTasks)[number];
   type ActiveTaskMember = (typeof activeTaskMembers)[number];
   type ActiveTaskGroup = {

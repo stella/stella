@@ -761,7 +761,7 @@ const LeafValueEditor = ({
           <SelectValue placeholder={t("templates.conditionValue")} />
         </SelectTrigger>
         <SelectPopup alignItemWithTrigger={false}>
-          {(field.options ?? []).map((option) => (
+          {field.options?.map((option) => (
             <SelectItem key={option.value} value={option.value}>
               {option.label}
             </SelectItem>

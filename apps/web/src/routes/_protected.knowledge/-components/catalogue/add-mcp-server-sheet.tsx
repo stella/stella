@@ -17,7 +17,8 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError, userErrorFromThrown } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 

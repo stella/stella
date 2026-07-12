@@ -194,7 +194,7 @@ const getOperationComment = (
 // Trim a leading `@directive` token from a line. Pure string-walking
 // to avoid the regex backtracking warning the linter flags on
 // `\s*`-flanked patterns even when the alternatives are fixed.
-const DIRECTIVE_NAMES = new Set([
+const DIRECTIVE_NAMES: readonly string[] = Object.freeze([
   "pagebreak",
   "signature",
   "signatures",
@@ -226,7 +226,7 @@ const stripDirectivePrefix = (line: string): string => {
     return line;
   }
   const directive = trimmed.slice(1, nameEnd).toLowerCase();
-  if (!DIRECTIVE_NAMES.has(directive)) {
+  if (!DIRECTIVE_NAMES.includes(directive)) {
     return line;
   }
   // Require a word boundary (whitespace or end-of-line) right after
@@ -641,25 +641,31 @@ const queueReviewSuggestions = ({
 // edit requests on the active file (in favour of
 // apply-active-docx-edits); blocking it outright robbed users of
 // the legitimate "create a new document from this chat" flow.
-const ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS = new Set<ApprovalToolName>();
-
 // The folio-agents comment MUTATION tools: client-executed against the live
 // editor bridge, but behind approval (unlike the auto-run read tools). After
 // the user approves, the overlay executes them via `executeFolioToolCall`, the
 // same shape as `apply-active-docx-edits`. Names mirror the server-side
 // registration in `folio-agent-tools.ts`; kept as local literals like the
 // other tool names this surface matches on.
-const FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES = new Set<string>([
-  "add_comment",
-  "reply_comment",
-  "resolve_comment",
-]);
+const FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES: readonly string[] =
+  Object.freeze(["add_comment", "reply_comment", "resolve_comment"]);
 
 // Stable empty context returned by `getContextMatterIds` before the picker
 // has seeded (its state is `string[] | null`). A named constant, not a `?? []`
 // literal: an unseeded thread has no selected matters, which is a real state,
 // not a structural invariant to panic on.
 const UNSEEDED_CONTEXT_MATTER_IDS: string[] = [];
+const EMPTY_DOCX_COMMENTS: DocxComments = [];
+const EMPTY_SNAPSHOT_BLOCKS: FolioAIEditSnapshot["blocks"] = [];
+
+const normalizeDocxComments = (
+  comments: DocxComments | null | undefined,
+): DocxComments => {
+  if (comments === null || comments === undefined) {
+    return EMPTY_DOCX_COMMENTS;
+  }
+  return comments;
+};
 
 type FileChatOverlayProps = {
   /** Workspace this viewer belongs to. Scopes the thread + mention sources. */
@@ -872,9 +878,11 @@ const FileChatOverlayInner = ({
     () => contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
   );
   const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
-  const latestDocxCommentsRef = useRef<DocxComments>(docxComments ?? []);
+  const latestDocxCommentsRef = useRef<DocxComments>(
+    normalizeDocxComments(docxComments),
+  );
   useLayoutEffect(() => {
-    latestDocxCommentsRef.current = docxComments ?? [];
+    latestDocxCommentsRef.current = normalizeDocxComments(docxComments);
   }, [docxComments]);
   const hasDocxEditSurface =
     activeFile !== undefined && docxEditorRef !== undefined;
@@ -1023,7 +1031,9 @@ const FileChatOverlayInner = ({
       const { queuedIds, skipped } = queueReviewSuggestions({
         entityId: activeFile.entityId,
         prepared,
-        snapshotBlocks: lastSnapshot?.blocks ?? [],
+        snapshotBlocks: lastSnapshot
+          ? lastSnapshot.blocks
+          : EMPTY_SNAPSHOT_BLOCKS,
         snapshot: lastSnapshot,
       });
       return {
@@ -1033,9 +1043,9 @@ const FileChatOverlayInner = ({
       };
     },
   );
-  const blockedApprovalTools = activeFile
-    ? ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS
-    : undefined;
+  // Active-file mode currently adds no approval blocks. Leave the context
+  // value absent until a real blocked tool exists.
+  const blockedApprovalTools = undefined;
 
   const chatThreadContext = {
     allowMissingThread: true,
@@ -1194,7 +1204,9 @@ const FileChatOverlayInner = ({
       threadRef,
     }),
   );
-  const suggestedPrompts = suggestedPromptsData?.prompts ?? [];
+  const suggestedPrompts = suggestedPromptsData
+    ? suggestedPromptsData.prompts
+    : [];
   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
 
   const editorController = useChatEditor({
@@ -1343,7 +1355,7 @@ const FileChatOverlayInner = ({
     approve: () => Promise<void>;
     toolName: ApprovalToolName;
   }) => {
-    if (!FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.has(toolName)) {
+    if (!FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.includes(toolName)) {
       await approve();
       return;
     }
@@ -1387,7 +1399,7 @@ const FileChatOverlayInner = ({
     // the user approves, run the operation against the live editor bridge and
     // answer the tool call with its result (same shape as apply-active-docx-
     // edits). The read tools never reach here — they are auto-run, no approval.
-    if (FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.has(toolName)) {
+    if (FOLIO_AGENT_COMMENT_MUTATION_TOOL_NAMES.includes(toolName)) {
       await approveAndRunFolioAgentCommentMutation({
         approvalId,
         approve: async () => await handleApprove(approvalId, toolName),

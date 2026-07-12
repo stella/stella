@@ -52,9 +52,9 @@ export const MatterTargetPicker = ({
 
   // The endpoint returns matters ordered by most recent activity; keep that
   // order so the matter the user just touched is on top.
-  const matters = (data?.workspaces ?? []).filter(
-    (w) => w.id !== excludeWorkspaceId,
-  );
+  const matters = data
+    ? data.workspaces.filter((w) => w.id !== excludeWorkspaceId)
+    : [];
 
   const query = search.trim().toLowerCase();
   const visibleMatters =
@@ -191,7 +191,7 @@ const FolderPicker = ({
     );
   }
 
-  const rootFolders = folders?.filter((f) => f.parentId === null) ?? [];
+  const rootFolders = folders ? folders.filter((f) => f.parentId === null) : [];
 
   const toggleExpand = (folderId: string) => {
     setExpandedFolders((prev) => {

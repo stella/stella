@@ -56,7 +56,8 @@ import {
   buildAccountDeletionTaskReassignmentTargets,
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -274,6 +275,11 @@ export const getPendingTasksAndMembers = async (
         });
       }
 
+      const tasks = userAssignments.map((assignment) => ({
+        ...assignment,
+        role: assignment.role,
+      }));
+
       const workspaceIds = [
         ...new Set(userAssignments.map((a) => a.workspaceId)),
       ];
@@ -320,7 +326,7 @@ export const getPendingTasksAndMembers = async (
       }
 
       return {
-        tasks: userAssignments,
+        tasks,
         members: otherMembers,
       };
     },
@@ -514,7 +520,7 @@ export const verifyAndDeleteUser = async (
 
         // 5. Active task assignee records require handoff. Completed/cancelled
         // assignments remain as historical activity on the deleted user row.
-        const reassignmentItems = [...(reassignments ?? [])];
+        const reassignmentItems = [...arrayOrEmpty(reassignments)];
         const currentTaskAssignments = await tx
           .select({
             entityId: taskAssignees.entityId,

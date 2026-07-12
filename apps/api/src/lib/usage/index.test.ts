@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { TransactionRollbackError } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
 import { organization, user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ALLOCATION_REASONS,
   USAGE_ALLOCATION_SOURCES,
@@ -16,7 +16,7 @@ import {
   allocateUsage,
   getRemainingUsageUnits,
   recordUsageEvent,
-} from "@/api/lib/usage";
+} from "@/api/lib/usage/usage-ledger";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 

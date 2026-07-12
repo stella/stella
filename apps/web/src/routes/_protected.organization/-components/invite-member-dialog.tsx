@@ -33,6 +33,7 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { emailSchema, toFormErrors } from "@/lib/schema";
 import { roleOptions } from "@/routes/-queries";
 import {
@@ -106,10 +107,10 @@ export const InviteMemberDialog = ({
       );
 
       if (Result.isError(inviteResult)) {
-        const message =
-          inviteResult.error instanceof Error
-            ? inviteResult.error.message
-            : t("errors.actionFailed");
+        const message = userErrorFromThrown(
+          inviteResult.error,
+          t("errors.actionFailed"),
+        );
         formApi.setErrorMap({
           onSubmit: { fields: { email: message } },
         });

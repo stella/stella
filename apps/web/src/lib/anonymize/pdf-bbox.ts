@@ -1,5 +1,5 @@
 import type { CharSpan, PDFBBox } from "@/lib/anonymize/pdf-coords";
-import { ClientCapabilityError } from "@/lib/errors";
+import { ClientCapabilityError } from "@/lib/errors/client";
 
 export type MeasureWidthFn = (cssFont: string, text: string) => number;
 

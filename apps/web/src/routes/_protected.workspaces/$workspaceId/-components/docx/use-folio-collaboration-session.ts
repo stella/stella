@@ -4,16 +4,18 @@ import type { HocuspocusProvider } from "@hocuspocus/provider";
 import type * as HocuspocusProviderModule from "@hocuspocus/provider";
 import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
+import { useTranslations } from "use-intl";
 import type * as YProseMirror from "y-prosemirror";
 import type * as Yjs from "yjs";
 
+import { FetchBoundaryError } from "@stll/errors";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
 
 import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
-import { FetchBoundaryError, userErrorMessage } from "@/lib/errors";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import { filesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
@@ -119,6 +121,7 @@ export const useFolioCollaborationSession = ({
   user,
   workspaceId,
 }: UseFolioCollaborationSessionOptions): FolioCollaborationSessionState => {
+  const t = useTranslations();
   const queryClient = useQueryClient();
   const [state, setState] = useState<FolioCollaborationSessionState>({
     status: "idle",
@@ -403,10 +406,7 @@ export const useFolioCollaborationSession = ({
       setState({
         status: "error",
         collaboration: null,
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to open collaborative editing.",
+        message: userErrorFromThrown(error, t("errors.actionFailed")),
       });
     });
 
@@ -422,6 +422,7 @@ export const useFolioCollaborationSession = ({
     fieldId,
     propertyId,
     queryClient,
+    t,
     user.color,
     user.name,
     workspaceId,

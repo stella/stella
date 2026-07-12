@@ -10,7 +10,7 @@ import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   organizationSettingsKeys,
@@ -25,7 +25,7 @@ export const OrganizationJurisdictionsCard = () => {
   const { data: settings } = useQuery(
     organizationSettingsOptions(activeOrganizationId),
   );
-  const serverSelected = settings?.practiceJurisdictions ?? [];
+  const serverSelected = settings ? settings.practiceJurisdictions : [];
 
   // `useOptimistic` mirrors the server value and applies the latest user
   // intent until the wrapping transition settles. When the mutation

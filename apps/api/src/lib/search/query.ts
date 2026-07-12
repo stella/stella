@@ -299,10 +299,11 @@ const toSearchLexemes = (
   query: string,
   mode: ArabicFoldMode = "folded",
 ): string[] =>
-  (
+  Array.from(
     removeSearchDiacritics(normalizeTextForLexemes(query))
       .normalize("NFKC")
-      .match(/[\p{L}\p{N}]+/gu) ?? []
+      .matchAll(/[\p{L}\p{N}]+/gu),
+    (match) => match[0],
   )
     .map((token) => (mode === "folded" ? applyArabicFolds(token) : token))
     .filter((token) => token.length > 0)

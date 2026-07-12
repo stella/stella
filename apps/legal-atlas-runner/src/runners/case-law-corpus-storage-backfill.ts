@@ -9,7 +9,7 @@ import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import {

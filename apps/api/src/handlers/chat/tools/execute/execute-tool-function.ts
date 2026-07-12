@@ -2,7 +2,7 @@ import type { Err } from "better-result";
 import { Panic, Result, UnhandledException } from "better-result";
 import * as v from "valibot";
 
-import type { SafeDbError } from "@/api/db";
+import type { SafeDbError } from "@/api/db/safe-db";
 import {
   ChatToolError,
   ChatToolValidationError,

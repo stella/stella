@@ -1,4 +1,5 @@
 import type { CellMetadata } from "@/api/db/schema-validators";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -79,7 +80,9 @@ export const buildColumnFlagMutation = ({
 
   for (const target of targets) {
     const existing = existingByVersionId.get(target.entityVersionId);
-    const existingFlags = normalizeManualFlags(existing?.manualFlags ?? []);
+    const existingFlags = normalizeManualFlags(
+      arrayOrEmpty(existing?.manualFlags),
+    );
 
     if (set) {
       if (existingFlags.includes(flag)) {

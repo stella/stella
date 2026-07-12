@@ -1,6 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sandbox/sandbox-test-hygiene";
@@ -14,7 +14,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 registerSandboxTestHygiene();
 
 const captureErrorMock = mock();
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
   getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),

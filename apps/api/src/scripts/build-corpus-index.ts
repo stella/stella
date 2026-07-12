@@ -1,3 +1,4 @@
+import { rlsDb } from "@/api/db/root";
 /**
  * Full backfill of the legal corpus into corpus index. Per-jurisdiction
  * indexes (`case_law_v1_<country>`) are created on demand by the indexer,
@@ -12,8 +13,7 @@
  *   CORPUS_INDEX_ENDPOINT=... CORPUS_STORAGE_ENABLED=true \
  *     bun run src/scripts/build-corpus-index.ts [generation]
  */
-import { createIngestionDb } from "@/api/db";
-import { rlsDb } from "@/api/db/root";
+import { createIngestionDb } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
 import { LIMITS } from "@/api/lib/limits";

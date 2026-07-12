@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   mcpConnectors,
   mcpOAuthClients,

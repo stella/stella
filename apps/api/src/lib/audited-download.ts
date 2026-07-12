@@ -1,4 +1,4 @@
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder, AuditResourceType } from "@/api/lib/audit-log";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

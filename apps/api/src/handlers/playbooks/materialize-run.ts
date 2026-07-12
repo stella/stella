@@ -3,7 +3,7 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import type {
   PlaybookVerdictTool,

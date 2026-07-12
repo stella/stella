@@ -11,7 +11,7 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import {
   InMemoryRateLimitContext,
   scopedGenerator,
-} from "@/api/lib/rate-limit";
+} from "@/api/lib/rate-limit/rate-limit";
 
 const isDeleteAccountOtpSendPath = (pathname: string): boolean =>
   pathname === "/v1/me/delete/send-otp";

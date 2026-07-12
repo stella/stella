@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { ClientUnknownError } from "@/lib/errors";
+import { ClientUnknownError } from "@/lib/errors/client";
 
 import { transformUnknownError } from "./utils";
 

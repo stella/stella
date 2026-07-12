@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import type { ReactNode } from "react";
 
 /**
@@ -92,23 +93,23 @@ export type InspectorViewRegistration<P = unknown> = {
   type: InspectorViewKind;
   render: (props: InspectorViewRenderProps<P>) => ReactNode;
   railIcon: (props: InspectorRailIconProps<P>) => ReactNode;
-  navigationPolicy?: InspectorNavigationPolicy;
+  navigationPolicy?: InspectorNavigationPolicy | undefined;
   /**
    * Runtime payload validator. Required for kinds whose payloads
    * cross the BroadcastChannel sync (otherwise re-hydrated tabs
    * with the new kind would be dropped by the receiver). Optional
    * for view kinds whose tabs are never broadcast.
    */
-  validate?: (payload: unknown) => payload is P;
-  canRename?: boolean;
-  ariaLabel?: (tab: InspectorViewTab<P>) => string;
+  validate: (payload: unknown) => payload is P;
+  canRename?: boolean | undefined;
+  ariaLabel?: ((tab: InspectorViewTab<P>) => string) | undefined;
   /**
    * Cap on simultaneously-mounted instances. Used by view kinds
    * that hold heavy DOM/WebGL state (PDF viewer) to bound memory.
    * The active tab is always mounted; the most recently viewed
    * remaining tabs fill the rest of the slots up to the cap.
    */
-  maxMounted?: number;
+  maxMounted?: number | undefined;
 };
 
 // Registry stores registrations keyed by `type`. The payload-typed
@@ -124,18 +125,65 @@ export type InspectorViewRegistration<P = unknown> = {
 // "heterogeneous registry" pattern; the structural variance is sound.
 type StoredRegistration = InspectorViewRegistration;
 
-const registry = new Map<InspectorViewKind, StoredRegistration>();
+class InspectorViewRegistry {
+  private readonly registrations = new Map<
+    InspectorViewKind,
+    StoredRegistration
+  >();
+
+  register(type: InspectorViewKind, registration: StoredRegistration) {
+    this.registrations.set(type, registration);
+  }
+
+  get(type: InspectorViewKind) {
+    return this.registrations.get(type);
+  }
+
+  kinds() {
+    return [...this.registrations.keys()];
+  }
+}
+
+const registry = new InspectorViewRegistry();
 
 export const registerInspectorView = <P>(
   registration: InspectorViewRegistration<P>,
 ): void => {
-  // SAFETY: storage erases `P` — each registration's `render` /
-  // `railIcon` capture their typed `P` via closure at registration
-  // time, and `validate` re-narrows the payload at retrieval. The
-  // assertion is the boundary between the typed registration API
-  // and the heterogeneous-registry storage shape.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- heterogeneous-registry boundary; render/railIcon capture typed P via closure, validate re-narrows at retrieval
-  registry.set(registration.type, registration as StoredRegistration);
+  const Render = registration.render;
+  const RailIcon = registration.railIcon;
+  const stored: StoredRegistration = {
+    ...registration,
+    render: ({ tab, onClose }) => {
+      if (!registration.validate(tab.payload)) {
+        return null;
+      }
+      return createElement(Render, {
+        tab: { ...tab, payload: tab.payload },
+        onClose,
+      });
+    },
+    railIcon: ({ tab, active }) => {
+      if (!registration.validate(tab.payload)) {
+        return null;
+      }
+      return createElement(RailIcon, {
+        tab: { ...tab, payload: tab.payload },
+        active,
+      });
+    },
+    // Set unconditionally (function or undefined) so it replaces the
+    // `InspectorViewTab<P>`-typed ariaLabel carried in by `...registration`;
+    // a conditional spread would leave that narrower signature in the type and
+    // clash with StoredRegistration's `InspectorViewTab<unknown>` erasure.
+    ariaLabel: registration.ariaLabel
+      ? (tab: InspectorViewTab<unknown>) =>
+          registration.validate(tab.payload)
+            ? (registration.ariaLabel?.({ ...tab, payload: tab.payload }) ?? "")
+            : ""
+      : undefined,
+    validate: (payload): payload is unknown => registration.validate(payload),
+  };
+  registry.register(registration.type, stored);
 };
 
 export const getInspectorView = (
@@ -143,5 +191,5 @@ export const getInspectorView = (
 ): StoredRegistration | undefined => registry.get(type);
 
 export const getRegisteredKinds = (): readonly InspectorViewKind[] => [
-  ...registry.keys(),
+  ...registry.kinds(),
 ];

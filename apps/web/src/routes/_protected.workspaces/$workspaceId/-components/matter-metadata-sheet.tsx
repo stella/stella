@@ -25,7 +25,8 @@ import { MatterNumberHint } from "@/components/matter-number-hint";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { APIError } from "@/lib/errors";
+import { APIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { LeadSection } from "@/routes/_protected.workspaces/$workspaceId/-components/lead-section";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
 import { MembersSection } from "@/routes/_protected.workspaces/$workspaceId/-components/members-section";
@@ -126,10 +127,7 @@ export const MatterMetadataPanel = ({
           setNameDirty(false);
         },
         onError: (error) => {
-          const message =
-            APIError.is(error) && error.status < 500
-              ? error.message
-              : t("errors.actionFailed");
+          const message = userErrorFromThrown(error, t("errors.actionFailed"));
           stellaToast.add({ title: message, type: "error" });
           setNameValue(fallbackName);
           setNameDirty(false);
@@ -169,10 +167,7 @@ export const MatterMetadataPanel = ({
             return;
           }
 
-          const message =
-            APIError.is(error) && error.status < 500
-              ? error.message
-              : t("errors.actionFailed");
+          const message = userErrorFromThrown(error, t("errors.actionFailed"));
           stellaToast.add({ title: message, type: "error" });
           setReferenceDirty(false);
         },

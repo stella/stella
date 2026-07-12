@@ -16,7 +16,7 @@ import {
   openDocxInDesktop,
 } from "@/lib/desktop-bridge";
 import { showDesktopEditOpenResultToast } from "@/lib/desktop-edit-status-toast";
-import { isUnauthorizedError } from "@/lib/errors";
+import { isUnauthorizedError } from "@/lib/errors/auth";
 
 export const DocxDesktopOpenButton = ({
   entityId,

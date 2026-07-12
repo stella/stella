@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 
 import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
@@ -12,7 +12,7 @@ import {
   useAIKeyGate,
 } from "@/components/require-ai-key";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { SafeId } from "@/lib/safe-id";
@@ -81,19 +81,8 @@ function CaseLawInspector({
 }) {
   const tabs = useInspectorStore((s) => s.tabs);
   const minimized = useInspectorStore((s) => s.minimized);
-  const openChat = useInspectorStore((s) => s.openChat);
   const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
   const isDragging = useRef(false);
-  const lastAutoOpenedDecisionRef = useRef<string | null>(null);
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id: fires openChat once per decisionId change via a ref guard. A key prop would remount this pane and reset the user's resized `width`, so keep the in-place effect.
-  useEffect(() => {
-    if (lastAutoOpenedDecisionRef.current === decisionId) {
-      return;
-    }
-    lastAutoOpenedDecisionRef.current = decisionId;
-    openChat({ activeDecisionId: decisionId });
-  }, [decisionId, openChat]);
 
   const showPaneContent = tabs.length > 0 && !minimized;
   const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
@@ -114,42 +103,57 @@ function CaseLawInspector({
   }, [widthPx]);
 
   return (
-    <div
-      className="text-sidebar-foreground hidden md:block"
-      data-side="right"
-      data-state={showPaneContent ? "expanded" : "collapsed"}
-    >
-      <div className="bg-sidebar relative" style={{ width: widthPx }} />
+    <>
+      <AutoOpenDecisionChat decisionId={decisionId} key={decisionId} />
       <div
-        className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"
-        style={{ width: widthPx }}
+        className="text-sidebar-foreground hidden md:block"
+        data-side="right"
+        data-state={showPaneContent ? "expanded" : "collapsed"}
       >
-        {showPaneContent && (
-          <div
-            className="hover:bg-border active:bg-border absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s"
-            onPointerDown={(event) => {
-              event.preventDefault();
-              isDragging.current = true;
-              event.currentTarget.setPointerCapture(event.pointerId);
-            }}
-            onPointerMove={(event) => {
-              if (!isDragging.current) {
-                return;
-              }
-              const nextWidth = globalThis.innerWidth - event.clientX;
-              setWidth(Math.min(800, Math.max(320, nextWidth)));
-            }}
-            onPointerUp={() => {
-              isDragging.current = false;
-            }}
-          />
-        )}
-        <div className="bg-sidebar flex h-full w-full flex-col">
-          <Suspense fallback={null}>
-            <InspectorPanel />
-          </Suspense>
+        <div className="bg-sidebar relative" style={{ width: widthPx }} />
+        <div
+          className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"
+          style={{ width: widthPx }}
+        >
+          {showPaneContent && (
+            <div
+              className="hover:bg-border active:bg-border absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                isDragging.current = true;
+                event.currentTarget.setPointerCapture(event.pointerId);
+              }}
+              onPointerMove={(event) => {
+                if (!isDragging.current) {
+                  return;
+                }
+                const nextWidth = globalThis.innerWidth - event.clientX;
+                setWidth(Math.min(800, Math.max(320, nextWidth)));
+              }}
+              onPointerUp={() => {
+                isDragging.current = false;
+              }}
+            />
+          )}
+          <div className="bg-sidebar flex h-full w-full flex-col">
+            <Suspense fallback={null}>
+              <InspectorPanel />
+            </Suspense>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
+
+const AutoOpenDecisionChat = ({
+  decisionId,
+}: {
+  decisionId: SafeId<"caseLawDecision">;
+}) => {
+  const openChat = useInspectorStore((state) => state.openChat);
+  useMountEffect(() => {
+    openChat({ activeDecisionId: decisionId });
+  });
+  return null;
+};

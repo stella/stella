@@ -602,9 +602,12 @@ const collectAnonRestorations = (
   // single assistant message so the rehype plugin builds one
   // pattern per stream.
   const seen = new Map<string, string>();
-  for (const pair of message.metadata?.anonRestorations?.pairs ?? []) {
-    if (!seen.has(pair.placeholder)) {
-      seen.set(pair.placeholder, pair.original);
+  const restorationPairs = message.metadata?.anonRestorations?.pairs;
+  if (restorationPairs) {
+    for (const pair of restorationPairs) {
+      if (!seen.has(pair.placeholder)) {
+        seen.set(pair.placeholder, pair.original);
+      }
     }
   }
   return [...seen.entries()].map(([placeholder, original]) => ({
@@ -700,7 +703,7 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
   return result;
 };
 
-const IMAGE_MEDIA_TYPES = new Set([
+const IMAGE_MEDIA_TYPES = Object.freeze([
   "image/png",
   "image/jpeg",
   "image/webp",
@@ -745,7 +748,7 @@ const UserAttachments = ({
         const key = `${filename ?? "attachment"}-${index}`;
         const contentUrl = getUserFileContentUrl(url) ?? url;
         const fallbackLabel = t("chat.attachment");
-        if (IMAGE_MEDIA_TYPES.has(mimeType)) {
+        if (IMAGE_MEDIA_TYPES.includes(mimeType)) {
           // The backend sets `placeholder` (a blur data URL) only when a
           // thumbnail was generated, so its presence doubles as "serve the
           // smaller thumbnail instead of the full original."

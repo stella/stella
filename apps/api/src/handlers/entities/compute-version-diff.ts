@@ -1,7 +1,7 @@
 import { diffArrays } from "diff";
 import { and, desc, eq, lt } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { entityVersions } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { tokenize } from "@/api/handlers/docx/diff-paragraphs";

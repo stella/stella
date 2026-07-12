@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import { invoices } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";

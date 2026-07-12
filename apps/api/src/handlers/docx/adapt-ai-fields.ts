@@ -20,6 +20,8 @@ import JSZip from "jszip";
 
 import { placeholderPattern, resolvePath } from "@stll/template-conditions";
 
+import { arrayOrEmpty } from "@/api/lib/array";
+
 import { HEADER_FOOTER_RE } from "./ooxml";
 import { partParagraphTexts, patchXmlPartPerOccurrence } from "./rich-patch";
 import type { FieldMeta } from "./types";
@@ -109,7 +111,8 @@ export const adaptAiFields = async ({
 
   const renderingsByPath = new Map<string, readonly string[]>();
   for (const { field, stub } of targets) {
-    const occurrences = occurrencesByPath.get(field.path) ?? [];
+    const storedOccurrences = occurrencesByPath.get(field.path);
+    const occurrences = arrayOrEmpty(storedOccurrences);
     if (occurrences.length === 0) {
       continue;
     }
@@ -176,7 +179,8 @@ const collectOccurrences = (
           Math.max(0, start - CONTEXT_RADIUS),
           Math.min(joined.length, end + CONTEXT_RADIUS),
         );
-        const occurrences = result.get(key) ?? [];
+        const storedOccurrences = result.get(key);
+        const occurrences = arrayOrEmpty(storedOccurrences);
         occurrences.push({ context });
         result.set(key, occurrences);
       }

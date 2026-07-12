@@ -45,7 +45,8 @@ import {
   type DeepLTargetLanguageCode,
 } from "@/lib/deepl/languages";
 import { deepLAvailabilityOptions } from "@/lib/deepl/queries";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -149,8 +150,7 @@ export const TranslateDocumentDialog = ({
       analytics.captureError(error);
       stellaToast.add({
         title: t("translate.error.title"),
-        description:
-          error instanceof Error ? error.message : t("errors.actionFailed"),
+        description: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
       });
     },

@@ -45,20 +45,7 @@ export const runTextFieldSpecs = <TPayload>(
   const fields: McpStructuredTextField[] = [];
 
   for (const spec of specs) {
-    const items = spec.items(payload);
-    for (const [index, item] of items.entries()) {
-      const value = spec.read(item, index);
-      if (typeof value !== "string" || value.length === 0) {
-        continue;
-      }
-      fields.push({
-        apply: (next) => {
-          spec.apply(item, next, index);
-        },
-        value,
-        workspaceId: spec.scope(item, index),
-      });
-    }
+    fields.push(...spec.collect(payload));
   }
 
   return fields;
@@ -89,6 +76,21 @@ export const defineTextFieldSpec = <TPayload, TItem>(spec: {
   scope: (item: TItem, index: number) => string;
   read: (item: TItem, index: number) => string | null | undefined;
   apply: (item: TItem, value: string, index: number) => void;
-}): McpTextFieldSpec<TPayload> =>
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- sound item-shape erasure, see the SAFETY note above
-  spec as McpTextFieldSpec<TPayload>;
+}): McpTextFieldSpec<TPayload> => ({
+  path: spec.path,
+  collect: (payload) => {
+    const fields: McpStructuredTextField[] = [];
+    for (const [index, item] of spec.items(payload).entries()) {
+      const value = spec.read(item, index);
+      if (typeof value !== "string" || value.length === 0) {
+        continue;
+      }
+      fields.push({
+        apply: (next) => spec.apply(item, next, index),
+        value,
+        workspaceId: spec.scope(item, index),
+      });
+    }
+    return fields;
+  },
+});

@@ -23,7 +23,9 @@ import { stellaToast } from "@stll/ui/components/toast";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { normalizeOptionalArray } from "@/lib/arrays";
+import { toAPIError } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   organizationAnonymizationBlacklistKeys,
   organizationAnonymizationBlacklistOptions,
@@ -92,7 +94,7 @@ const LABEL_TRANSLATION_KEY = {
 } as const satisfies Record<LabelOption, TranslationKey>;
 
 const isKnownLabel = (label: string): label is LabelOption =>
-  (LABEL_OPTIONS as readonly string[]).includes(label);
+  LABEL_OPTIONS.some((option) => option === label);
 
 /**
  * Best-effort parse of an uploaded deny list. Supports:
@@ -305,7 +307,7 @@ export const AnonymizationDenyListCard = () => {
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
 
   const entries = blacklistQuery.data?.entries;
-  const renderedEntries = entries ?? [];
+  const renderedEntries = normalizeOptionalArray(entries);
 
   const submitTerm = async () => {
     const canonical = pendingCanonical.trim();
@@ -333,7 +335,7 @@ export const AnonymizationDenyListCard = () => {
       });
     } catch (error) {
       stellaToast.add({
-        title: error instanceof Error ? error.message : String(error),
+        title: userErrorFromThrown(error, t("errors.actionFailed")),
         type: "error",
       });
     }
@@ -357,7 +359,7 @@ export const AnonymizationDenyListCard = () => {
       {
         onError: (error) => {
           stellaToast.add({
-            title: error instanceof Error ? error.message : String(error),
+            title: userErrorFromThrown(error, t("errors.actionFailed")),
             type: "error",
           });
         },
@@ -401,7 +403,7 @@ export const AnonymizationDenyListCard = () => {
         },
         onError: (error) => {
           stellaToast.add({
-            title: error instanceof Error ? error.message : String(error),
+            title: userErrorFromThrown(error, t("errors.actionFailed")),
             type: "error",
           });
         },

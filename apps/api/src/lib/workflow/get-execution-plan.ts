@@ -2,13 +2,14 @@ import { panic } from "better-result";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { ScopedDb } from "@/api/db";
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { PropertyStatus } from "@/api/db/schema";
 import type {
   AIModelTool,
   PlaybookVerdictTool,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { LIMITS } from "@/api/lib/limits";
@@ -229,7 +230,9 @@ export const buildLevelBatches = (
       continue;
     }
 
-    const dependencies = graph.propertyDependenciesMap.get(propId) ?? [];
+    const dependencies = arrayOrEmpty(
+      graph.propertyDependenciesMap.get(propId),
+    );
     const base = {
       id: property.id,
       status: property.status,
@@ -285,7 +288,8 @@ export const getPropertyExecutionPlan = ({
 
     const nextLevelIds: string[] = [];
     for (const current of currentLevelIds) {
-      for (const dependent of graph.dependents.get(current) ?? []) {
+      const dependents = graph.dependents.get(current) ?? new Set<string>();
+      for (const dependent of dependents) {
         const newDegree = (graph.inDegree.get(dependent) ?? 1) - 1;
         graph.inDegree.set(dependent, newDegree);
         if (newDegree === 0) {

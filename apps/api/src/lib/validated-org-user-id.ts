@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import * as v from "valibot";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -10,9 +11,16 @@ import type { SafeId } from "@/api/lib/branded-types";
  * accept a userId from user input must call `validateOrgUserId` first,
  * and the branded return type proves the check happened.
  */
-export type ValidatedOrgUserId = SafeId<"user"> & {
-  readonly __orgValidated: true;
-};
+const validatedOrgUserIdSchema = v.pipe(
+  v.custom<SafeId<"user">>((value) =>
+    typeof value === "string"
+      ? v.is(v.pipe(v.string(), v.uuid()), value)
+      : false,
+  ),
+  v.brand("ValidatedOrgUserId"),
+);
+
+export type ValidatedOrgUserId = v.InferOutput<typeof validatedOrgUserIdSchema>;
 
 /**
  * Verify that `userId` is a member of `organizationId`.
@@ -37,7 +45,5 @@ export const validateOrgUserId = async (
     return null;
   }
 
-  // SAFETY: We verified org membership above; the brand attests to that check.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- branding a server-validated membership at the boundary
-  return row.userId as ValidatedOrgUserId;
+  return v.parse(validatedOrgUserIdSchema, row.userId);
 };

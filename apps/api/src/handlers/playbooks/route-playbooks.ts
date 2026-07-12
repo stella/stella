@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { ScopedDb, Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { documentTypes, fields } from "@/api/db/schema";
 import type { DocTypeClassifier } from "@/api/handlers/playbooks/materialize-run";
 import {
@@ -12,7 +13,7 @@ import type {
   PlaybookScope,
   PlaybookTrigger,
 } from "@/api/handlers/playbooks/positions";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -241,7 +242,8 @@ export const routeClassifiedDocuments = async ({
     // app code too, and is cheap over the already-narrowed set.
     const onClassified = selectRoutablePlaybooks(routable);
     if (onClassified.length === 0) {
-      return [] as SafeId<"property">[];
+      const emptyPropertyIds: SafeId<"property">[] = [];
+      return emptyPropertyIds;
     }
 
     const applicable = await resolveApplicablePlaybooks({
@@ -252,7 +254,8 @@ export const routeClassifiedDocuments = async ({
       classifier,
     });
     if (applicable.length === 0) {
-      return [] as SafeId<"property">[];
+      const emptyPropertyIds: SafeId<"property">[] = [];
+      return emptyPropertyIds;
     }
 
     const recordAuditEvent = createBackgroundAuditRecorder({

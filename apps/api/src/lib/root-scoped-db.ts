@@ -1,5 +1,5 @@
-import { createSafeDb, createScopedDb } from "@/api/db";
 import { rlsDb } from "@/api/db/root";
+import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const createRootScopedDb = ({

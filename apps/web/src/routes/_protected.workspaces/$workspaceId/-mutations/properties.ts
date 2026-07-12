@@ -4,7 +4,7 @@ import type { PropertyContentType } from "@stll/api/types";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,

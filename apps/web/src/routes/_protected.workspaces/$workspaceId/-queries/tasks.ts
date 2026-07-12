@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 export const taskKeys = {
@@ -17,96 +17,6 @@ const getTaskEndpoint = (workspaceId: string, taskId: string) =>
     taskId: toSafeId<"entity">(taskId),
   });
 
-type TaskDetailAssignee = {
-  user: {
-    id: string;
-    name: string | null;
-    image: string | null;
-    deletedAt: Date | null;
-  };
-};
-
-type TaskDetailChild = {
-  id: string;
-  name: string | null;
-  status: string | null;
-  priority: string | null;
-  dueDate: string | null;
-  agendaKind: string | null;
-  startAt: Date | null;
-  endAt: Date | null;
-  occurredAt: Date | null;
-  remindAt: Date | null;
-  allDay: boolean;
-  timeZone: string | null;
-  location: string | null;
-  onlineMeetingUrl: string | null;
-  availability: string | null;
-  sensitivity: string | null;
-  organizer: unknown;
-  attendees: unknown;
-  recurrence: unknown;
-  agendaSource: string | null;
-  externalSource: string | null;
-  externalId: string | null;
-  externalChangeKey: string | null;
-  externalICalUid: string | null;
-  readOnly: boolean;
-  sortOrder: string | null;
-  createdAt: Date;
-};
-
-type TaskDetailLink = {
-  targetEntity: {
-    id: string;
-    name: string | null;
-    kind: string;
-  };
-};
-
-type TaskDetailLinkReverse = {
-  sourceEntity: {
-    id: string;
-    name: string | null;
-    kind: string;
-  };
-};
-
-type TaskDetail = {
-  id: string;
-  name: string | null;
-  kind: string;
-  status: string | null;
-  priority: string | null;
-  dueDate: string | null;
-  agendaKind: string | null;
-  startAt: Date | null;
-  endAt: Date | null;
-  occurredAt: Date | null;
-  remindAt: Date | null;
-  allDay: boolean;
-  timeZone: string | null;
-  location: string | null;
-  onlineMeetingUrl: string | null;
-  availability: string | null;
-  sensitivity: string | null;
-  organizer: unknown;
-  attendees: unknown;
-  recurrence: unknown;
-  agendaSource: string | null;
-  externalSource: string | null;
-  externalId: string | null;
-  externalChangeKey: string | null;
-  externalICalUid: string | null;
-  readOnly: boolean;
-  sortOrder: string | null;
-  createdAt: Date;
-  assignees: TaskDetailAssignee[];
-  children: TaskDetailChild[];
-  linksAsSource: TaskDetailLink[];
-  linksAsTarget: TaskDetailLinkReverse[];
-};
-
 export const taskDetailOptions = (workspaceId: string, taskId: string) =>
   queryOptions({
     queryKey: taskKeys.detail(workspaceId, taskId),
@@ -118,8 +28,7 @@ export const taskDetailOptions = (workspaceId: string, taskId: string) =>
       if (response.error) {
         throw toAPIError(response.error);
       }
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- narrows Eden's nested relational-query shape to the curated TaskDetail consumed by the panel
-      return response.data as TaskDetail;
+      return response.data;
     },
     enabled: !!taskId,
   });

@@ -3,9 +3,9 @@ import { pushSchema } from "drizzle-kit/api-postgres";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
-import type { ScopedDb } from "@/api/db";
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
+import type { ScopedDb } from "@/api/db/safe-db";
 import * as schema from "@/api/db/schema";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";

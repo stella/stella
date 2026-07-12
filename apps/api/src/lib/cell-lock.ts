@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
+import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 
 // Postgres' `SELECT … FOR UPDATE` only locks rows that already exist.

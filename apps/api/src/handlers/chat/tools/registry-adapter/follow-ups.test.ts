@@ -11,7 +11,7 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-void mock.module("@/api/lib/analytics", () => ({
+void mock.module("@/api/lib/analytics/capture", () => ({
   captureError: mock(),
   captureRequestError: mock(),
   getAnalytics: mock(() => ({ capture: mock(), flush: mock() })),

@@ -10,6 +10,7 @@ import {
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -86,7 +87,9 @@ const previewProperty = createSafeHandler(
     // scopedDb already scopes queries, but verifying explicitly keeps
     // the contract consistent across endpoints.
     const dependencyIds = [
-      ...new Set((body.dependencies ?? []).map((d) => d.dependsOnPropertyId)),
+      ...new Set(
+        arrayOrEmpty(body.dependencies).map((d) => d.dependsOnPropertyId),
+      ),
     ];
     if (dependencyIds.length > 0) {
       const dependencyRows = yield* Result.await(
@@ -119,7 +122,7 @@ const previewProperty = createSafeHandler(
       const optionsValid = Value.Check(propertyContentSchema, {
         version: 1,
         type: body.contentType,
-        options: body.options ?? [],
+        options: arrayOrEmpty(body.options),
         fallback: null,
       });
       if (!optionsValid) {
@@ -135,7 +138,7 @@ const previewProperty = createSafeHandler(
     const propertyId = createSafeId<"property">();
 
     const batchProperty = ((): BatchProperty => {
-      const dependencies = (body.dependencies ?? []).map((d) => ({
+      const dependencies = arrayOrEmpty(body.dependencies).map((d) => ({
         dependsOnPropertyId: d.dependsOnPropertyId,
         condition: null,
       }));
@@ -164,7 +167,7 @@ const previewProperty = createSafeHandler(
           content: {
             version: 1,
             type: body.contentType,
-            options: body.options ?? [],
+            options: arrayOrEmpty(body.options),
             fallback: null,
           },
           dependencies,

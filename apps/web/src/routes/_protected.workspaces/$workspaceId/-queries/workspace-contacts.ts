@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 
 export const workspaceContactsKeys = {
   all: (workspaceId: string) => ["workspace-contacts", workspaceId],

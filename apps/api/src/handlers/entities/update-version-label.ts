@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -62,7 +62,7 @@ export const updateVersionLabelHandler = async function* ({
         .limit(1);
       const previous = existing.at(0);
       if (!previous) {
-        return [] as { id: typeof params.versionId }[];
+        return [];
       }
 
       const updated = await tx

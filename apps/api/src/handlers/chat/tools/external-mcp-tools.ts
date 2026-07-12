@@ -1,7 +1,7 @@
 import type { MCPToolSource, ServerTool } from "@tanstack/ai";
 import type { MCPClient } from "@tanstack/ai-mcp";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import type {
   ChatTool,
   ChatToolMap,
@@ -11,7 +11,7 @@ import {
   selectAllowedExternalMcpToolDefinitions,
 } from "@/api/handlers/chat/tools/external-mcp-tool-definitions";
 import { normalizeExternalMcpToolsForChat } from "@/api/handlers/chat/tools/external-mcp-tools-normalization";
-import { captureError } from "@/api/lib/analytics";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   createMcpClientForConnection,

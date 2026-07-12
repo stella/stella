@@ -19,6 +19,7 @@ import { readWorkspaceHandler } from "@/api/handlers/workspaces/read-by-id";
 import { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
+import { arrayOrEmpty } from "@/api/lib/array";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isUuid } from "@/api/lib/custom-schema";
@@ -676,7 +677,7 @@ const loadPracticeJurisdictions = async (
       columns: { practiceJurisdictions: true },
     }),
   );
-  return row?.practiceJurisdictions ?? [];
+  return arrayOrEmpty(row?.practiceJurisdictions);
 };
 
 const buildOnboardingHintText = () =>
@@ -1230,6 +1231,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
   // anonymized read redacts the whole document before slicing (slicing raw text
   // first could split an entity name across the window boundary and leak its
   // prefix). Default mode leaves name/text as-is and windows the same way.
+  const initialNextCursor = (): string | null => null;
   const payload = {
     charCount: plaintext.length,
     entityId,
@@ -1237,7 +1239,7 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     name: row.entity.name,
     text: plaintext,
     truncated: false,
-    nextCursor: null as string | null,
+    nextCursor: initialNextCursor(),
     workspaceId,
   };
 
@@ -1600,8 +1602,8 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
     organizationName: contact.organizationName,
     // The rows are request-scoped and owned by this handler, so the address /
     // number fields are anonymized in place below.
-    emails: contact.emails ?? [],
-    phones: contact.phones ?? [],
+    emails: arrayOrEmpty(contact.emails),
+    phones: arrayOrEmpty(contact.phones),
   };
 
   const textFields = runTextFieldSpecs(

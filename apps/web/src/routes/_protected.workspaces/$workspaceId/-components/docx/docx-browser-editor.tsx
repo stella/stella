@@ -230,15 +230,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const anonymizationTermsQuery = useQuery(
     anonymizationTermsOptions(workspaceId),
   );
-  const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(
-    () =>
-      anonymizationTermsQuery.data?.entries.map((entry) => ({
-        canonical: entry.canonical,
-        label: entry.label,
-        variants: entry.variants,
-      })) ?? [],
-    [anonymizationTermsQuery.data],
-  );
+  const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
+    if (!anonymizationTermsQuery.data) {
+      return [];
+    }
+    return anonymizationTermsQuery.data.entries.map((entry) => ({
+      canonical: entry.canonical,
+      label: entry.label,
+      variants: entry.variants,
+    }));
+  }, [anonymizationTermsQuery.data]);
   // Detected-entity highlights — runs the wasm anonymization
   // pipeline against the live doc text and exposes each detected
   // entity as a Folio decoration term. Combined with workspace
@@ -401,7 +402,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     enabled: isAnonymizationActive,
   });
   const excludedCanonicalsSet = useMemo(
-    () => buildExcludedCanonicalsSet(allowlistQuery.data?.entries ?? []),
+    () =>
+      buildExcludedCanonicalsSet(
+        allowlistQuery.data ? allowlistQuery.data.entries : [],
+      ),
     [allowlistQuery.data],
   );
   // Hold the latest list in a ref so the chat-anon polling effect

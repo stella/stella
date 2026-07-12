@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import type { SkillMetadata } from "@stll/skills";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillOrigin } from "@/api/db/schema";
 import {

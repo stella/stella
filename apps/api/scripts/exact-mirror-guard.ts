@@ -10,7 +10,7 @@
 // typecheck and lint both pass.
 //
 // This guard constructs the real app (every route mounted, exactly as
-// `src/index.ts` builds it — importing the module is side-effect-free thanks
+// `src/server.ts` builds it — importing the module is side-effect-free thanks
 // to its `import.meta.main` boot guard, so no DB/Redis/S3/listen), then forces
 // every route's schema mirror to build by calling `route.compile()` on each
 // entry of `app.routes`. Per-route schema validators compile lazily, so this
@@ -29,7 +29,7 @@
 
 // Side-effect import: seed env defaults so the app constructs without real
 // services. The app's own boot (migrations, S3, workers, listen) stays behind
-// `import.meta.main` in src/index.ts and never runs here.
+// `import.meta.main` in src/server.ts and never runs here.
 import "../src/tests/setup-env";
 import { Type } from "@sinclair/typebox";
 import { Result } from "better-result";
@@ -267,7 +267,7 @@ const main = async (): Promise<number> => {
   }
 
   const report = await findExactMirrorFailures(
-    async () => (await import("../src/index")).default,
+    async () => (await import("../src/server")).default,
   );
   return reportToExitCode(report);
 };

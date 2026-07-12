@@ -1,7 +1,6 @@
 import { ChatClient } from "@tanstack/ai-client";
 import type {
   ChatClientState,
-  ChatClientOptions,
   MultimodalContent,
   UIMessage,
 } from "@tanstack/ai-client";
@@ -15,7 +14,6 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type {
   ChatClientTools,
-  ChatMessageMetadata,
   ChatUITools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
@@ -30,8 +28,9 @@ import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
-import { APIError, toAPIError } from "@/lib/errors";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -578,7 +577,10 @@ export const mergeGroupedChatThreadPages = (
   >();
   const seenThreadIds = new Set<string>();
 
-  for (const page of pages ?? []) {
+  if (!pages) {
+    return { global, workspaces: [] };
+  }
+  for (const page of pages) {
     for (const thread of page.global) {
       if (seenThreadIds.has(thread.id)) {
         continue;
@@ -621,169 +623,6 @@ const getChatApiPath = () => apiUrl("/chat");
 // CHAT_METERED_AI_TIMEOUT_MS) so the client doesn't cut a slow-but-healthy
 // model response off before the server would.
 const CHAT_FETCH_TIMEOUT_MS = 600_000;
-
-type ChatDevtoolsBridgeFactory = NonNullable<
-  ChatClientOptions<ChatClientTools>["devtoolsBridgeFactory"]
->;
-type ChatDevtoolsBridge = ReturnType<ChatDevtoolsBridgeFactory>;
-
-type ChatRunEventContext = {
-  runId: string;
-  threadId: string;
-  toolCallId?: string | undefined;
-};
-
-type ChatEventContext = Partial<ChatRunEventContext>;
-
-type StellaNoopChatClientEvents = {
-  approvalRequested: (...args: unknown[]) => void;
-  clientCreated: (...args: unknown[]) => void;
-  errorChanged: (...args: unknown[]) => void;
-  loadingChanged: (...args: unknown[]) => void;
-  messageAppended: (...args: unknown[]) => void;
-  messageSent: (...args: unknown[]) => void;
-  messagesCleared: (...args: unknown[]) => void;
-  reloaded: (...args: unknown[]) => void;
-  stopped: (...args: unknown[]) => void;
-  structuredOutputChanged: (...args: unknown[]) => void;
-  textUpdated: (...args: unknown[]) => void;
-  thinkingUpdated: (...args: unknown[]) => void;
-  toolApprovalResponded: (...args: unknown[]) => void;
-  toolCallStateChanged: (...args: unknown[]) => void;
-  toolFixtureApplied: (...args: unknown[]) => void;
-  toolResultAdded: (...args: unknown[]) => void;
-};
-
-type StellaNoopChatDevtoolsBridge = {
-  applyFixture: (...args: unknown[]) => Promise<void>;
-  beginRun: (runId: string, threadId: string) => void;
-  deactivate: () => void;
-  dispose: () => void;
-  emitRegistered: () => void;
-  emitRunLifecycle: (...args: unknown[]) => void;
-  emitSnapshot: () => void;
-  emitToolsRegistered: () => void;
-  emitUpdated: () => void;
-  events: StellaNoopChatClientEvents;
-  findToolCallContext: (toolCallId: string) => ChatEventContext;
-  getCurrentOrLastRunEventContext: () => ChatRunEventContext | undefined;
-  getCurrentRunEventContext: () => ChatRunEventContext | undefined;
-  getCurrentStreamId: () => string | null;
-  getLastStreamId: () => string | null;
-  mountWithTools: (initialMessageCount: number) => void;
-  notifyToolsChanged: () => void;
-  observeChunk: (chunk: {
-    runId?: string | undefined;
-    threadId?: string | undefined;
-    type: string;
-  }) => void;
-  resolveStreamId: () => string;
-  setCurrentStreamId: (streamId: string | null) => void;
-  supersede: () => void;
-};
-
-const ignoreNoopDevtoolsEvent = (...args: readonly unknown[]): void => {
-  void args;
-};
-
-const resolveNoopDevtoolsEvent = async (
-  ...args: readonly unknown[]
-): Promise<void> => {
-  void args;
-  await Promise.resolve();
-};
-
-const createNoopChatClientEvents = (): StellaNoopChatClientEvents => ({
-  approvalRequested: ignoreNoopDevtoolsEvent,
-  clientCreated: ignoreNoopDevtoolsEvent,
-  errorChanged: ignoreNoopDevtoolsEvent,
-  loadingChanged: ignoreNoopDevtoolsEvent,
-  messageAppended: ignoreNoopDevtoolsEvent,
-  messageSent: ignoreNoopDevtoolsEvent,
-  messagesCleared: ignoreNoopDevtoolsEvent,
-  reloaded: ignoreNoopDevtoolsEvent,
-  stopped: ignoreNoopDevtoolsEvent,
-  structuredOutputChanged: ignoreNoopDevtoolsEvent,
-  textUpdated: ignoreNoopDevtoolsEvent,
-  thinkingUpdated: ignoreNoopDevtoolsEvent,
-  toolApprovalResponded: ignoreNoopDevtoolsEvent,
-  toolCallStateChanged: ignoreNoopDevtoolsEvent,
-  toolFixtureApplied: ignoreNoopDevtoolsEvent,
-  toolResultAdded: ignoreNoopDevtoolsEvent,
-});
-
-const createStellaNoopChatDevtoolsBridge: ChatDevtoolsBridgeFactory = (
-  options,
-) => {
-  let currentStreamId: string | null = null;
-  let lastStreamId: string | null = null;
-  let currentRunContext: ChatRunEventContext | undefined;
-  let lastRunContext: ChatRunEventContext | undefined;
-
-  const bridge = {
-    events: createNoopChatClientEvents(),
-    applyFixture: resolveNoopDevtoolsEvent,
-    beginRun: (runId: string, threadId: string) => {
-      currentRunContext = { runId, threadId };
-      lastRunContext = currentRunContext;
-    },
-    deactivate: ignoreNoopDevtoolsEvent,
-    dispose: ignoreNoopDevtoolsEvent,
-    emitRegistered: ignoreNoopDevtoolsEvent,
-    emitRunLifecycle: ignoreNoopDevtoolsEvent,
-    emitSnapshot: ignoreNoopDevtoolsEvent,
-    emitToolsRegistered: ignoreNoopDevtoolsEvent,
-    emitUpdated: ignoreNoopDevtoolsEvent,
-    findToolCallContext: (toolCallId: string) => ({
-      ...lastRunContext,
-      toolCallId,
-    }),
-    getCurrentOrLastRunEventContext: () => currentRunContext ?? lastRunContext,
-    getCurrentRunEventContext: () => currentRunContext,
-    getCurrentStreamId: () => currentStreamId,
-    getLastStreamId: () => lastStreamId,
-    mountWithTools: ignoreNoopDevtoolsEvent,
-    notifyToolsChanged: ignoreNoopDevtoolsEvent,
-    observeChunk: (chunk: {
-      runId?: string | undefined;
-      threadId?: string | undefined;
-      type: string;
-    }) => {
-      if (chunk.type === "RUN_STARTED" && chunk.runId && chunk.threadId) {
-        currentRunContext = {
-          runId: chunk.runId,
-          threadId: chunk.threadId,
-        };
-        lastRunContext = currentRunContext;
-        return;
-      }
-
-      if (
-        (chunk.type === "RUN_FINISHED" || chunk.type === "RUN_ERROR") &&
-        (!chunk.runId || chunk.runId === currentRunContext?.runId)
-      ) {
-        currentRunContext = undefined;
-      }
-    },
-    resolveStreamId: () =>
-      currentStreamId ?? lastStreamId ?? options.generateId("stream"),
-    setCurrentStreamId: (streamId: string | null) => {
-      currentStreamId = streamId;
-      if (streamId) {
-        lastStreamId = streamId;
-      }
-    },
-    supersede: ignoreNoopDevtoolsEvent,
-  } satisfies StellaNoopChatDevtoolsBridge;
-
-  // SAFETY: TanStack's ChatDevtoolsBridge return type is a concrete class with
-  // private implementation details, so a consumer-side no-op cannot satisfy it
-  // structurally. This object implements the public bridge surface that
-  // ChatClient calls, including beta methods missing from TanStack's bundled
-  // no-op bridge (`mountWithTools`, `notifyToolsChanged`).
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return bridge as unknown as ChatDevtoolsBridge;
-};
 
 type CreateChatRuntimeProps = {
   context: ChatThreadOptionsContext | undefined;
@@ -868,7 +707,6 @@ export const createChatRuntime = ({
     id: getChatThreadKey(key),
     threadId: key.threadId,
     initialMessages,
-    devtoolsBridgeFactory: createStellaNoopChatDevtoolsBridge,
     fetcher: async (input, { signal }) => {
       const response = await fetchWithTimeout(getChatApiPath(), {
         method: "POST",
@@ -1012,37 +850,8 @@ export const createChatRuntime = ({
 };
 
 const toPersistedChatMessages = (
-  messages: readonly UIMessage[],
-): PersistedChatMessage[] =>
-  messages.map((message) => {
-    const metadata = readChatMessageMetadata(message);
-    return {
-      id: message.id,
-      role: message.role,
-      // SAFETY: ChatClient is constructed with Stella ChatClientTools and every
-      // message entering this runtime is either server-normalized ChatMessage
-      // history or a message created by that typed TanStack client. TanStack's
-      // fetcher callback currently exposes non-generic UIMessage[], so this
-      // is the single runtime boundary where we reattach the stricter tool
-      // tuple type.
-      // eslint-disable-next-line typescript/no-unsafe-type-assertion
-      parts: message.parts as PersistedChatMessage["parts"],
-      ...(metadata === undefined ? {} : { metadata }),
-    };
-  });
-
-const readChatMessageMetadata = (
-  message: UIMessage,
-): ChatMessageMetadata | undefined => {
-  if (!("metadata" in message) || typeof message.metadata !== "object") {
-    return undefined;
-  }
-
-  // SAFETY: metadata only exists on Stella ChatMessage objects. TanStack keeps
-  // unknown extra fields intact at runtime but does not type them on UIMessage.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return message.metadata as ChatMessageMetadata;
-};
+  messages: readonly UIMessage<ChatClientTools>[],
+): PersistedChatMessage[] => [...messages];
 
 export const buildSendRequestBody = ({
   context,
@@ -1192,7 +1001,35 @@ const getLatestUserMessageId = (
   return null;
 };
 
-const activeTurnSendModes = new Map<
+class LifecycleRegistry<K, V> {
+  private readonly entries = new Map<K, V>();
+
+  get(key: K) {
+    return this.entries.get(key);
+  }
+
+  set(key: K, value: V) {
+    this.entries.set(key, value);
+  }
+
+  delete(key: K) {
+    return this.entries.delete(key);
+  }
+
+  clear() {
+    this.entries.clear();
+  }
+
+  values() {
+    return this.entries.values();
+  }
+
+  [Symbol.iterator]() {
+    return this.entries[Symbol.iterator]();
+  }
+}
+
+const activeTurnSendModes = new LifecycleRegistry<
   string,
   { sendMode: ChatSendMode; userMessageId: string }
 >();
@@ -1645,7 +1482,10 @@ const isChatRuntimeBusy = (runtime: ChatRuntime): boolean => {
  * once and never revisited doesn't hold its runtime — and every message
  * it ever streamed — in memory indefinitely.
  */
-const chatRuntimeRegistry = new Map<string, ChatRuntimeRegistryEntry>();
+const chatRuntimeRegistry = new LifecycleRegistry<
+  string,
+  ChatRuntimeRegistryEntry
+>();
 
 /**
  * Registry key: query-key string + capability fingerprint. IDLE entries
@@ -2012,7 +1852,7 @@ export const groupedChatThreadsOptions = (activeOrganizationId: string) =>
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({ cursor: pageParam, signal }),
-    initialPageParam: undefined as string | undefined,
+    initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
 

@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
 import type { CorpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Thin lazy HTTP client over corpus index's REST API. Built on first use
@@ -82,11 +83,11 @@ const toCorpusIndexError = (error: unknown): CorpusIndexError =>
         cause: error,
       });
 
-const requestJson = async <T>(
+const requestJson = async (
   path: string,
   init: RequestInit,
   timeoutMs: number,
-): Promise<T> => {
+): Promise<unknown> => {
   const response = await fetch(`${baseUrl()}${path}`, {
     ...init,
     signal: AbortSignal.timeout(timeoutMs),
@@ -98,17 +99,29 @@ const requestJson = async <T>(
       status: response.status,
     });
   }
-  // SAFETY: the JSON shape is the caller's declared contract at the
-  // corpus index HTTP boundary; callers read fields defensively.
-  // eslint-disable-next-line typescript/no-unsafe-type-assertion
-  return (await response.json()) as T;
+  return await response.json();
+};
+
+const parseRecordArray = (value: unknown): Record<string, unknown>[] | null => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const records: Record<string, unknown>[] = [];
+  for (const item of value) {
+    if (!isRecord(item)) {
+      return null;
+    }
+    records.push(item);
+  }
+  return records;
 };
 
 const buildClient = (): CorpusIndexClient => ({
   createIndex: async (config) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson<unknown>(
+        await requestJson(
           "/api/v1/indexes",
           {
             method: "POST",
@@ -124,7 +137,7 @@ const buildClient = (): CorpusIndexClient => ({
   deleteIndex: async (indexId) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson<unknown>(
+        await requestJson(
           `/api/v1/indexes/${indexId}`,
           { method: "DELETE" },
           ADMIN_TIMEOUT_MS,
@@ -160,11 +173,7 @@ const buildClient = (): CorpusIndexClient => ({
         const sentDocs = ndjson
           .split("\n")
           .filter((line) => line.trim().length > 0).length;
-        const response = await requestJson<{
-          num_docs_for_processing?: number;
-          num_rejected_docs?: number;
-          parse_failures?: unknown[];
-        }>(
+        const response = await requestJson(
           `/api/v1/${indexId}/ingest?commit=auto`,
           {
             method: "POST",
@@ -173,21 +182,30 @@ const buildClient = (): CorpusIndexClient => ({
           },
           INGEST_TIMEOUT_MS,
         );
+        if (!isRecord(response)) {
+          throw new CorpusIndexError({
+            message: "corpus index ingest returned an invalid response",
+          });
+        }
         // The engine can accept the HTTP request while dropping documents.
         // v0.8 only reports num_docs_for_processing (per-document parse
         // failures surface in server logs, not the response); newer engines
         // report rejections explicitly. Fail the batch on any signal that
         // not every document was accepted so the backfill retries instead
         // of committing indexedHash for documents that never landed.
-        const rejected =
-          response.num_rejected_docs ?? response.parse_failures?.length ?? 0;
+        let rejected = 0;
+        if (typeof response["num_rejected_docs"] === "number") {
+          rejected = response["num_rejected_docs"];
+        } else if (Array.isArray(response["parse_failures"])) {
+          rejected = response["parse_failures"].length;
+        }
         if (rejected > 0) {
           throw new CorpusIndexError({
             message: `corpus index ingest rejected ${rejected} of ${sentDocs} documents`,
           });
         }
-        const accepted = response.num_docs_for_processing;
-        if (accepted !== undefined && accepted < sentDocs) {
+        const accepted = response["num_docs_for_processing"];
+        if (typeof accepted === "number" && accepted < sentDocs) {
           throw new CorpusIndexError({
             message: `corpus index ingest accepted ${accepted} of ${sentDocs} documents`,
           });
@@ -219,11 +237,7 @@ const buildClient = (): CorpusIndexClient => ({
         if (snippetFields !== undefined && snippetFields.length > 0) {
           body["snippet_fields"] = snippetFields.join(",");
         }
-        const response = await requestJson<{
-          num_hits?: number;
-          hits?: CorpusIndexHit[];
-          snippets?: Record<string, unknown>[];
-        }>(
+        const response = await requestJson(
           `/api/v1/${indexId}/search`,
           {
             method: "POST",
@@ -232,10 +246,29 @@ const buildClient = (): CorpusIndexClient => ({
           },
           SEARCH_TIMEOUT_MS,
         );
+        if (!isRecord(response)) {
+          throw new CorpusIndexError({
+            message: "corpus index search returned an invalid response",
+          });
+        }
+        const numHits = response["num_hits"];
+        const hits = parseRecordArray(response["hits"]);
+        const snippets = parseRecordArray(response["snippets"]);
+        if (
+          typeof numHits !== "number" ||
+          !Number.isFinite(numHits) ||
+          numHits < 0 ||
+          hits === null ||
+          snippets === null
+        ) {
+          throw new CorpusIndexError({
+            message: "corpus index search returned an invalid response",
+          });
+        }
         return {
-          numHits: response.num_hits ?? 0,
-          hits: response.hits ?? [],
-          snippets: response.snippets ?? [],
+          numHits,
+          hits,
+          snippets,
         };
       },
       catch: toCorpusIndexError,
@@ -244,7 +277,7 @@ const buildClient = (): CorpusIndexClient => ({
   deleteByQuery: async (indexId, query) =>
     await Result.tryPromise({
       try: async () => {
-        await requestJson<unknown>(
+        await requestJson(
           `/api/v1/${indexId}/delete-tasks`,
           {
             method: "POST",

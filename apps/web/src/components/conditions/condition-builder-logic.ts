@@ -65,13 +65,10 @@ export const CONDITION_OPERATORS = [
 
 export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 
-const CONDITION_OPERATOR_SET: ReadonlySet<string> = new Set(
-  CONDITION_OPERATORS,
-);
-
 export const isConditionOperator = (
   value: string,
-): value is ConditionOperator => CONDITION_OPERATOR_SET.has(value);
+): value is ConditionOperator =>
+  CONDITION_OPERATORS.some((operator) => operator === value);
 
 const COMPARE_OPERATORS = ["eq", "neq", "gt", "lt", "gte", "lte"] as const;
 

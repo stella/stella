@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { playbookDefinitions } from "@/api/db/schema";
 import { deriveAutoAsks } from "@/api/handlers/playbooks/derive-ask";
 import type {

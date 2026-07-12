@@ -22,7 +22,7 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {

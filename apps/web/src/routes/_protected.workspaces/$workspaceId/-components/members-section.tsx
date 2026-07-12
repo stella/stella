@@ -33,7 +33,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/routes/_protected.workspaces/$workspaceId/-components/matter-info-layout";
@@ -240,8 +240,9 @@ export const AddMemberDialog = ({
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   const existingUserIds = new Set(existingMembers.map((m) => m.userId));
-  const availableMembers =
-    org?.members.filter((m) => !existingUserIds.has(m.userId)) ?? [];
+  const availableMembers = org
+    ? org.members.filter((m) => !existingUserIds.has(m.userId))
+    : [];
 
   const memberItems = availableMembers.map((m) => ({
     email: m.user.email,

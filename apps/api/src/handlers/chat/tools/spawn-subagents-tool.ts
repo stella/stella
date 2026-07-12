@@ -2,7 +2,7 @@ import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { createChatTextPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
@@ -17,8 +17,8 @@ import {
   isAllowedBYOKModelForRole,
   resolveEffectiveServiceTierForProvider,
 } from "@/api/lib/tanstack-ai-models";
-import { assertUsageAvailable } from "@/api/lib/usage";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
+import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 
 export const SPAWN_SUBAGENTS_TOOL_NAME = "spawn_subagents";
 

@@ -1,9 +1,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import type { SafeDb, SafeDbError } from "@/api/db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { isNativeToolEnabledForOrg } from "@/api/handlers/mcp-connectors/catalog-metadata";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   BUSINESS_REGISTRY_DISPATCH,
@@ -65,7 +66,7 @@ export const lookupBusinessRegistryShared = async ({
 
   const enabled = isNativeToolEnabledForOrg({
     slug: handler.nativeToolSlug,
-    practiceJurisdictions: settings?.practiceJurisdictions ?? [],
+    practiceJurisdictions: arrayOrEmpty(settings?.practiceJurisdictions),
     nativeToolOverrides: settings?.nativeToolOverrides ?? {},
   });
   if (!enabled) {
