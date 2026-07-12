@@ -1,3 +1,4 @@
+import { clampSearchLimit } from "../shared/search.js";
 import {
   RechercheEntreprisesAPIError,
   RechercheEntreprisesRequestError,
@@ -241,7 +242,7 @@ export const searchByName = async (
     );
   }
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
-  const perPage = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
+  const perPage = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const params = new URLSearchParams({
     q: trimmed,
     per_page: String(perPage),

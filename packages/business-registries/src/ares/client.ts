@@ -1,3 +1,4 @@
+import { clampSearchLimit } from "../shared/search.js";
 import {
   AresAPIError,
   AresRequestError,
@@ -23,6 +24,10 @@ const SEARCH_URL = `${BASE}/ekonomicke-subjekty/vyhledat`;
 
 const TIMEOUT_MS = 10_000;
 const DEFAULT_SEARCH_LIMIT = 50;
+// ARES documents `pocet` as a plain non-negative integer with no
+// published upper bound. Mirror the brreg/gcis/prh/orsr ceiling so a
+// runaway caller cannot ask ARES for an unbounded result page.
+const MAX_SEARCH_LIMIT = 100;
 
 // ---------------------------------------------------------------------------
 // Internal fetch helpers
@@ -315,7 +320,8 @@ export const searchByName = async (
     throw new AresValidationError("Search name must not be empty");
   }
 
-  const limit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const limit = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
 
   const payload = {
     obchodniJmeno: trimmed,

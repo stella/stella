@@ -1,3 +1,4 @@
+import { clampSearchLimit } from "../shared/search.js";
 import {
   OrsrAPIError,
   OrsrRequestError,
@@ -248,7 +249,7 @@ export const searchByName = async (
     throw new OrsrValidationError("Search name must not be empty");
   }
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
-  const take = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
+  const take = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const searchTake = Math.min(
     Math.max(take, DEFAULT_SEARCH_LIMIT),
     MAX_SEARCH_LIMIT,

@@ -1,3 +1,4 @@
+import { clampSearchLimit } from "../shared/search.js";
 import {
   BrregAPIError,
   BrregRequestError,
@@ -247,7 +248,7 @@ export const searchByName = async (
   }
 
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
-  const size = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
+  const size = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
 
   const params = new URLSearchParams({
     navn: trimmed,

@@ -1,3 +1,4 @@
+import { clampSearchLimit } from "../shared/search.js";
 import {
   CompaniesHouseAPIError,
   CompaniesHouseAuthError,
@@ -296,7 +297,7 @@ export const searchByName = async (
     throw new CompaniesHouseValidationError("Search query must not be empty");
   }
   const requested = options?.limit ?? DEFAULT_SEARCH_LIMIT;
-  const itemsPerPage = Math.min(Math.max(requested, 1), MAX_SEARCH_LIMIT);
+  const itemsPerPage = clampSearchLimit(requested, MAX_SEARCH_LIMIT);
   const startIndex = Math.max(options?.startIndex ?? 0, 0);
 
   const params = new URLSearchParams({
