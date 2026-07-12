@@ -1,18 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
 import type { FolioAIEditAppliedOperation } from "@stll/folio-core/ai-edits";
-import { parseFolioDocumentOperationBatch } from "@stll/folio-core/server";
 
 import { createActiveDocxEditTool } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 
 /**
- * Contract-parity suite: the tool's valibot input schema is a mechanical
- * mirror of folio's versioned document-operation contract
- * (`parseFolioDocumentOperationBatch` in `@stll/folio-core`). The type
- * system cannot see that the two RUNTIME validators agree, so this suite
- * round-trips every operation shape the tool accepts through folio's own
- * strict parser — if folio changes an operation's fields, the mirror must
- * change too or this fails.
+ * The tool's input schema is derived from folio's exported contract schemas
+ * and validation delegates per-operation shape checking to folio's own
+ * strict batch parser, so contract conformance is folio's responsibility —
+ * the old mirror-parity round-trips are gone. This suite pins what is
+ * STELLA behavior: the narrowings applied on top of the folio contract
+ * (required `severity`/`area`, no `formatRange`, no `precondition`,
+ * optional operation id, strict stella-shaped envelope) and the
+ * liberal-mode stripping of stray keys.
  */
 
 const textRange = {
@@ -107,31 +107,19 @@ const validateOutput = async (output: unknown) => {
   return await tool.outputSchema["~standard"].validate(output);
 };
 
-describe("apply-active-docx-edits folio contract parity", () => {
-  test("every accepted operation parses under folio's batch parser", async () => {
+describe("apply-active-docx-edits stella narrowings", () => {
+  test("accepts every operation variant available on this surface", async () => {
     const result = await validateInput({
       version: 1,
       operations: ACCEPTED_OPERATIONS,
     });
     expect(result.issues).toBeUndefined();
-    if (result.issues !== undefined) {
-      return;
+    if (result.issues === undefined) {
+      expect(result.value.operations).toHaveLength(ACCEPTED_OPERATIONS.length);
     }
-
-    // Folio requires per-operation ids; the executor fills them in the
-    // same way when the model omits them.
-    const operations: unknown[] = [];
-    for (const [index, operation] of result.value.operations.entries()) {
-      operations.push({ id: `op-${String(index + 1)}`, ...operation });
-    }
-    const batch = {
-      version: result.value.version,
-      operations,
-    };
-    expect(() => parseFolioDocumentOperationBatch(batch)).not.toThrow();
   });
 
-  test("model-supplied operation ids survive validation and folio parsing", async () => {
+  test("model-supplied operation ids survive validation", async () => {
     const result = await validateInput({
       version: 1,
       operations: [
@@ -146,16 +134,26 @@ describe("apply-active-docx-edits folio contract parity", () => {
       ],
     });
     expect(result.issues).toBeUndefined();
-    if (result.issues !== undefined) {
-      return;
+    if (result.issues === undefined) {
+      expect(result.value.operations.at(0)?.id).toBe("fix-penalty");
     }
-    expect(result.value.operations.at(0)?.id).toBe("fix-penalty");
-    expect(() =>
-      parseFolioDocumentOperationBatch({
-        version: 1,
-        operations: result.value.operations,
-      }),
-    ).not.toThrow();
+  });
+
+  test("an omitted operation id stays absent (executor generates it)", async () => {
+    const result = await validateInput({
+      version: 1,
+      operations: [
+        {
+          ...reviewMeta,
+          type: "deleteBlock",
+          blockId: "b-0010",
+        },
+      ],
+    });
+    expect(result.issues).toBeUndefined();
+    if (result.issues === undefined) {
+      expect(result.value.operations.at(0)?.id).toBeUndefined();
+    }
   });
 
   test("defaults a missing version to the current contract version", async () => {
@@ -188,6 +186,30 @@ describe("apply-active-docx-edits folio contract parity", () => {
     expect(result.issues).toBeDefined();
   });
 
+  test("drops batch options the review flow cannot honor (repair layer strips the envelope)", async () => {
+    // The strict envelope rejects `mode`/`atomic`/`dryRun`, then the repair
+    // layer strips everything but `version`/`operations` and revalidates —
+    // so the batch is accepted WITHOUT the option rather than honoring it.
+    const result = await validateInput({
+      version: 1,
+      mode: "direct",
+      operations: [
+        {
+          ...reviewMeta,
+          type: "deleteBlock",
+          blockId: "b-0010",
+        },
+      ],
+    });
+    expect(result.issues).toBeUndefined();
+    if (result.issues === undefined) {
+      expect(result.value).toEqual({
+        version: 1,
+        operations: [{ ...reviewMeta, type: "deleteBlock", blockId: "b-0010" }],
+      });
+    }
+  });
+
   test("rejects formatRange (deliberately outside this surface's contract subset)", async () => {
     const result = await validateInput({
       version: 1,
@@ -201,6 +223,86 @@ describe("apply-active-docx-edits folio contract parity", () => {
       ],
     });
     expect(result.issues).toBeDefined();
+  });
+
+  test("rejects an unknown operation type", async () => {
+    const result = await validateInput({
+      version: 1,
+      operations: [
+        {
+          ...reviewMeta,
+          type: "renameBlock",
+          blockId: "b-0010",
+        },
+      ],
+    });
+    expect(result.issues).toBeDefined();
+  });
+
+  test("requires severity and area on every operation", async () => {
+    const missingSeverity = await validateInput({
+      version: 1,
+      operations: [{ area: "Names", type: "deleteBlock", blockId: "b-0010" }],
+    });
+    expect(missingSeverity.issues).toBeDefined();
+
+    const missingArea = await validateInput({
+      version: 1,
+      operations: [{ severity: "low", type: "deleteBlock", blockId: "b-0010" }],
+    });
+    expect(missingArea.issues).toBeDefined();
+
+    const emptyArea = await validateInput({
+      version: 1,
+      operations: [
+        { severity: "low", area: "", type: "deleteBlock", blockId: "b-0010" },
+      ],
+    });
+    expect(emptyArea.issues).toBeDefined();
+  });
+
+  test("rejects an invalid severity value (via folio's parser)", async () => {
+    const result = await validateInput({
+      version: 1,
+      operations: [
+        {
+          severity: "critical",
+          area: "Names",
+          type: "deleteBlock",
+          blockId: "b-0010",
+        },
+      ],
+    });
+    expect(result.issues).toBeDefined();
+  });
+
+  test("strips precondition and stray cross-variant keys instead of bouncing the batch", async () => {
+    const result = await validateInput({
+      version: 1,
+      operations: [
+        {
+          ...reviewMeta,
+          type: "insertAfterBlock",
+          blockId: "b-0010",
+          text: "Inserted paragraph",
+          // Rejected on this surface: stripped, not bounced.
+          precondition: { blockTextHash: "h1a2b3" },
+          // Valid on insertSignatureTable, not here: stripped.
+          position: "after",
+        },
+      ],
+    });
+    expect(result.issues).toBeUndefined();
+    if (result.issues === undefined) {
+      expect(result.value.operations).toEqual([
+        {
+          ...reviewMeta,
+          type: "insertAfterBlock",
+          blockId: "b-0010",
+          text: "Inserted paragraph",
+        },
+      ]);
+    }
   });
 
   test("accepts a folio-shaped result with receipts and every skip reason", async () => {
