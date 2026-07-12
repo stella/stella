@@ -155,11 +155,28 @@ const summarizeOperation = (
       const names = operation.parties.map((p) => p.name).join(", ");
       return `Insert signature table for ${names}`;
     }
+    case "replaceRange":
+      return `Replace selected text with “${operation.replace}”`;
+    case "commentOnRange":
+      return "Comment on selected text";
+    case "formatRange":
+      return "Format selected text";
     default:
       operation satisfies never;
       return "";
   }
 };
+
+/** The block a folio operation anchors to; range ops carry it on the handle. */
+const folioOperationBlockId = (operation: FolioAIEditOperation): string =>
+  operation.type === "replaceRange" ||
+  operation.type === "commentOnRange" ||
+  operation.type === "formatRange"
+    ? operation.range.blockId
+    : operation.blockId;
+
+const folioOperationComment = (operation: FolioAIEditOperation) =>
+  operation.type === "formatRange" ? undefined : operation.comment;
 
 type PreparedOperation = {
   folio: FolioAIEditOperation;
@@ -460,9 +477,16 @@ const buildPreview = (
   operation: FolioAIEditOperation,
   blocksById: Map<string, SnapshotBlock>,
 ): ReviewSuggestionPreview | null => {
-  const block = blocksById.get(operation.blockId);
+  const block = blocksById.get(folioOperationBlockId(operation));
   const blockText = block?.text ?? "";
   switch (operation.type) {
+    // Range-addressed operations are folio-native; stella's
+    // apply-active-docx-edits tool never emits them, so a prepared
+    // suggestion cannot carry one. Skip defensively if one appears.
+    case "replaceRange":
+    case "commentOnRange":
+    case "formatRange":
+      return null;
     case "replaceInBlock": {
       const idx = blockText.indexOf(operation.find);
       if (idx === -1) {
@@ -596,7 +620,7 @@ const queueReviewSuggestions = ({
     queuedIds.push(id);
     const base: ReviewSuggestion = {
       id,
-      blockId: folio.blockId,
+      blockId: folioOperationBlockId(folio),
       type: folio.type,
       summary: summarizeOperation(folio),
       preview,
@@ -612,8 +636,9 @@ const queueReviewSuggestions = ({
     if (label !== undefined) {
       base.blockLabel = label;
     }
-    if (folio.comment) {
-      base.comment = folio.comment.text;
+    const folioComment = folioOperationComment(folio);
+    if (folioComment) {
+      base.comment = folioComment.text;
     }
     return [base];
   });

@@ -1,18 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyEdits } from "./apply-edits";
 import { diffParagraphs } from "./diff-paragraphs";
-import { createIdGenerator } from "./ooxml";
-import type {
-  ExtractedDocument,
-  ParagraphRewrite,
-  RevisionAuthor,
-} from "./types";
-
-const AUTHOR: RevisionAuthor = {
-  name: "stella AI",
-  date: "2026-02-17T12:00:00Z",
-};
+import type { ExtractedDocument, ParagraphRewrite } from "./types";
 
 const extracted: ExtractedDocument = {
   paragraphs: [
@@ -204,88 +193,5 @@ describe("diffParagraphs", () => {
       (e) => e.kind === "replace" || e.kind === "delete",
     );
     expect(hasChanges).toBe(true);
-  });
-});
-
-// ── Integration: diffParagraphs → applyEdits ──────────────
-
-describe("diffParagraphs → applyEdits integration", () => {
-  const WRAP = (body: string) =>
-    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
-    `<w:body>${body}</w:body></w:document>`;
-
-  const P = (text: string) =>
-    `<w:p><w:r><w:t xml:space="preserve">${text}</w:t></w:r></w:p>`;
-
-  test("diff-generated edits produce valid tracked changes", () => {
-    const xml = WRAP(
-      P("The price is one million dollars.") + P("The date is 31 March 2026."),
-    );
-    const ext: ExtractedDocument = {
-      paragraphs: [
-        {
-          index: 0,
-          text: "The price is one million dollars.",
-        },
-        { index: 1, text: "The date is 31 March 2026." },
-      ],
-      charCount: 58,
-      view: "accepted",
-    };
-
-    const rewrites: ParagraphRewrite[] = [
-      {
-        paragraphIndex: 0,
-        newText: "The price is two million dollars.",
-      },
-      {
-        paragraphIndex: 1,
-        newText: "The date is 30 June 2026.",
-      },
-    ];
-
-    const { edits } = diffParagraphs(ext, rewrites);
-    const idGen = createIdGenerator(new Set());
-    const result = applyEdits(xml, edits, AUTHOR, idGen);
-
-    expect(result).toContain("w:del");
-    expect(result).toContain("w:ins");
-    // "one" deleted, "two" inserted
-    expect(result).toContain("one");
-    expect(result).toContain("two");
-    // "31 March" deleted, "30 June" inserted
-    expect(result).toContain("31 March");
-    expect(result).toContain("30 June");
-  });
-
-  test("deletion produces valid tracked changes", () => {
-    const xml = WRAP(
-      P("The party shall not disclose information without prior consent."),
-    );
-    const ext: ExtractedDocument = {
-      paragraphs: [
-        {
-          index: 0,
-          text: "The party shall not disclose information without prior consent.",
-        },
-      ],
-      charCount: 62,
-      view: "accepted",
-    };
-
-    const rewrites: ParagraphRewrite[] = [
-      {
-        paragraphIndex: 0,
-        newText: "The party shall not disclose information.",
-      },
-    ];
-
-    const { edits } = diffParagraphs(ext, rewrites);
-    const idGen = createIdGenerator(new Set());
-    const result = applyEdits(xml, edits, AUTHOR, idGen);
-
-    expect(result).toContain("w:del");
-    expect(result).toContain("w:delText");
   });
 });

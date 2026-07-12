@@ -12,12 +12,6 @@ import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch"
 
 // ── Common ────────────────────────────────────────────────
 
-export type RevisionAuthor = {
-  name: string;
-  /** ISO 8601 date string, e.g. "2026-02-17T12:00:00Z" */
-  date: string;
-};
-
 export type TextFormat = {
   bold?: boolean;
   italic?: boolean;
@@ -70,19 +64,6 @@ export type DocxEdit =
       format?: TextFormat;
     };
 
-export type DocxComment = {
-  paragraphIndex: number;
-  charOffset: number;
-  length: number;
-  text: string;
-};
-
-export type DocxEditSet = {
-  edits: DocxEdit[];
-  comments: DocxComment[];
-  author: RevisionAuthor;
-};
-
 export type DiffStats = {
   wordsAdded: number;
   wordsRemoved: number;
@@ -94,22 +75,6 @@ export type DiffResult = {
    *  extracted paragraph (typo or stale index). */
   skippedRewrites: number[];
   stats: DiffStats;
-};
-
-export type EditWithTrackingResult = {
-  buffer: Buffer;
-  /** Edit paragraph indices that didn't exist in the document. */
-  skippedEdits: number[];
-  /** Comment paragraph indices that didn't exist. */
-  skippedComments: number[];
-  /** OOXML structural violations (non-blocking warnings). */
-  validationViolations?:
-    | {
-        rule: string;
-        message: string;
-        element?: string | undefined;
-      }[]
-    | undefined;
 };
 
 export type ParagraphRewrite = {

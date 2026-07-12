@@ -76,7 +76,7 @@
   "resolutions": {
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
-    "@stll/folio-core": "0.3.1",
+    "@stll/folio-core": "0.5.0",
     "prosemirror-model": "1.25.9",
     "prosemirror-transform": "1.12.0",
     "prosemirror-view": "1.42.0"

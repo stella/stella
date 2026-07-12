@@ -43,7 +43,7 @@ const compareVersionsOutputSchema = v.strictObject({
     v.description(
       "Compact, block-level redline between the two versions, formatted " +
         "for reading: a summary-count header line, then one line per added, " +
-        "deleted, or modified block.",
+        "deleted, modified, format-changed, or moved block.",
     ),
   ),
 });
@@ -223,8 +223,9 @@ export const createVersionCompareTools = ({
       "Compare two versions of the active document's DOCX file and report " +
       "what changed. Pass the entity version ids for the earlier (base) and " +
       "later (revised) versions; returns a block-level redline (added / " +
-      "deleted / modified blocks) as readable text. Use when the user asks " +
-      "what changed between two versions of the active DOCX.",
+      "deleted / modified / format-changed / moved blocks) as readable " +
+      "text. Use when the user asks what changed between two versions of " +
+      "the active DOCX.",
     inputSchema: toTanStackToolSchema(compareVersionsInputSchema),
     outputSchema: toTanStackToolSchema(compareVersionsOutputSchema),
   }).server(async ({ baseVersionId, revisedVersionId }) => {
