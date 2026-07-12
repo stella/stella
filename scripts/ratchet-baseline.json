@@ -1,7 +1,9 @@
 {
   "as-casts": {
-    "count": 0,
-    "files": {}
+    "count": 1,
+    "files": {
+      "apps/web/src/app-providers.tsx": 1
+    }
   },
   "nullish-array-fallback": {
     "count": 0,

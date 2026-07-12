@@ -9,6 +9,7 @@ import {
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { toAPIError } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -153,12 +154,8 @@ export const entitiesOptions = (key: EntitiesOptionsInput) =>
     },
   });
 
-export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) => {
-  // Widen the page-param type so TanStack infers TPageParam as the cursor's
-  // `string | undefined` (from `undefined` alone it collapses to the literal
-  // `undefined`, which then clashes with the queryFn/getNextPageParam cursor).
-  const initialPageParam: string | undefined = undefined;
-  return infiniteQueryOptions({
+export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
+  infiniteQueryOptions({
     queryKey: entitiesKeys.window(key),
     queryFn: async ({ signal, pageParam }) => {
       const fieldMode = key.fieldMode ?? "full";
@@ -193,11 +190,10 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) => {
 
       return { ...rest, entities };
     },
-    initialPageParam,
+    initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
-};
 
 export const filesystemEntitiesOptions = (
   key: FilesystemEntitiesOptionsInput,
@@ -241,9 +237,8 @@ export const filesystemEntitiesOptions = (
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) => {
-  const initialPageParam: string | undefined = undefined;
-  return infiniteQueryOptions({
+export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
+  infiniteQueryOptions({
     queryKey: entitiesKeys.kanbanGroup(key),
     queryFn: async ({ signal, pageParam }) => {
       const fieldMode = key.fieldMode ?? "full";
@@ -285,7 +280,7 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) => {
 
       return { ...rest, entities };
     },
-    initialPageParam,
+    initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     // The key carries the visible fieldIds, so showing/hiding a column changes
     // it and refetches. Keep the previous rows on screen during that refetch
@@ -293,7 +288,6 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) => {
     // skeleton — the rows already exist, only the column set changed.
     placeholderData: keepPreviousData,
   });
-};
 
 // Per-group entity counts in one query, so the grouped table can skip
 // firing a row query for empty groups.

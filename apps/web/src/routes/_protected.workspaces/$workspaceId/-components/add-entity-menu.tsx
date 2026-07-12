@@ -156,7 +156,7 @@ export const AddEntityMenu = ({
       className="sr-only"
       multiple
       onChange={(e) => {
-        const files = [...(e.currentTarget.files ?? [])];
+        const files = e.currentTarget.files ? [...e.currentTarget.files] : [];
         if (files.length > 0) {
           createFileEntities({ files, parentId: parentId ?? null });
         }

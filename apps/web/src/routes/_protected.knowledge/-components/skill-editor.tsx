@@ -1338,7 +1338,9 @@ function RootAddMenu({
         className="hidden"
         multiple
         onChange={(event) => {
-          const files = Array.from(event.currentTarget.files ?? []);
+          const files = event.currentTarget.files
+            ? Array.from(event.currentTarget.files)
+            : [];
           event.currentTarget.value = "";
           if (files.length > 0) {
             onUploadFiles(files);

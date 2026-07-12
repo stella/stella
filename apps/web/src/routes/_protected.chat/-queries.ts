@@ -29,6 +29,7 @@ import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
 import { APIError, toAPIError } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
@@ -1837,18 +1838,16 @@ export const modelOptionsOptions = (activeOrganizationId: string) =>
     queryFn: async () => await fetchChatModelOptions(),
   });
 
-export const groupedChatThreadsOptions = (activeOrganizationId: string) => {
-  const initialPageParam: string | undefined = undefined;
-  return infiniteQueryOptions({
+export const groupedChatThreadsOptions = (activeOrganizationId: string) =>
+  infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads(activeOrganizationId),
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     refetchOnWindowFocus: false,
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({ cursor: pageParam, signal }),
-    initialPageParam,
+    initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
-};
 
 const fetchChatThreadTitle = async ({
   threadId,

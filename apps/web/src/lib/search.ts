@@ -8,6 +8,7 @@ import type { EntityKind, GlobalSearchResultType } from "@stll/api/types";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
+import { stringCursorSeed } from "@/lib/infinite-query";
 import { toSafeId } from "@/lib/safe-id";
 import { DAY_IN_MS } from "@/lib/time";
 
@@ -111,9 +112,8 @@ const searchKeys = {
     ] as const,
 };
 
-export const searchInfiniteOptions = (params: SearchParams) => {
-  const initialPageParam: string | undefined = undefined;
-  return infiniteQueryOptions({
+export const searchInfiniteOptions = (params: SearchParams) =>
+  infiniteQueryOptions({
     queryKey: searchKeys.query(params),
     queryFn: async ({ signal, pageParam }) => {
       const response = await api.search.post(
@@ -140,12 +140,11 @@ export const searchInfiniteOptions = (params: SearchParams) => {
 
       return response.data;
     },
-    initialPageParam,
+    initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     placeholderData: keepPreviousData,
     enabled: params.query.length > 0,
   });
-};
 
 export const searchFacetOptions = (params: SearchFacetParams) =>
   queryOptions({

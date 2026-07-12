@@ -37,6 +37,7 @@ import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
+import { optionalArray } from "@/lib/arrays";
 import {
   getChatSendMode,
   useChatAnonymized,
@@ -122,7 +123,9 @@ export const ChatThreadPage = ({
     null,
   );
   const anonymized = useChatAnonymized(threadRef);
-  const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
+  const getContextMatterIds = useEffectEvent(() =>
+    optionalArray(contextMatterIds),
+  );
   const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
 
   // A thread can be opened (e.g. via "Move to main" from the inspector)

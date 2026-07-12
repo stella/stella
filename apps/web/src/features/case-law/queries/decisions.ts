@@ -2,6 +2,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
+import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
@@ -83,11 +84,8 @@ export const decisionFacetsOptions = () =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) => {
-  // Widen so TanStack infers TPageParam as the cursor's `string | null`;
-  // `null` alone collapses to the literal `null` type.
-  const initialPageParam: string | null = null;
-  return infiniteQueryOptions({
+export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
+  infiniteQueryOptions({
     queryKey: caseLawDecisionKeys.list(filters),
     queryFn: async ({ pageParam, signal }) => {
       const { search, ...listFilters } = filters;
@@ -192,11 +190,10 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) => {
       const { items, ...page } = data;
       return { ...page, decisions: items, facets };
     },
-    initialPageParam,
+    initialPageParam: nullableStringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
-};
 
 export const decisionOptions = (decisionId: string) =>
   queryOptions({
