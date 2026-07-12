@@ -157,6 +157,9 @@ const duplicateEntityHandler = async function* ({
         recordAuditEvent,
         sourceEntityId,
         sourceEntities: remappedEntities,
+        // Same-workspace duplicate never deletes the source; the
+        // lock set is target-only regardless (see `copyEntities`).
+        deleteSource: false,
       }),
   );
 

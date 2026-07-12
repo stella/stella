@@ -64,6 +64,40 @@ type ResolveFileNameProps = {
 
 const MAX_FILENAME_LENGTH = 255;
 
+type CleanupUploadedS3KeysOptions = {
+  keys: string[];
+  fileId: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Best-effort delete of S3 objects written before an authoritative
+ * cap check (or an unexpected error) aborts the upload. Every key's
+ * delete is attempted independently (`allSettled`, not `all`) so one
+ * rejection doesn't stop cleanup of the rest; any rejection is
+ * captured instead of silently dropped, since a swallowed failure
+ * here leaves an orphaned S3 object with no telemetry trail.
+ */
+const cleanupUploadedS3Keys = async ({
+  keys,
+  fileId,
+  workspaceId,
+}: CleanupUploadedS3KeysOptions): Promise<void> => {
+  const results = await Promise.allSettled(
+    keys.map(async (key) => await getS3().delete(key)),
+  );
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      captureError(result.reason, {
+        operation: "upload-s3-cleanup",
+        fileId,
+        workspaceId,
+      });
+    }
+  }
+};
+
 const resolveFileName = async ({
   tx,
   propertyId,
@@ -319,9 +353,7 @@ const uploadEntityHandler = async function* ({
     );
 
     if (!writeResult.ok) {
-      await Promise.allSettled(
-        s3Keys.map(async (key) => await getS3().delete(key)),
-      );
+      await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
       return Result.err(
         new HandlerError({ status: 400, message: "Entities limit reached" }),
       );
@@ -372,11 +404,7 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } catch (error) {
-    // Settled, not `Promise.all`: one failed delete must not stop
-    // cleanup of the remaining keys and orphan them in S3.
-    await Promise.allSettled(
-      s3Keys.map(async (key) => await getS3().delete(key)),
-    );
+    await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
     throw error;
   }
 };

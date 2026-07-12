@@ -484,6 +484,13 @@ type CopyEntitiesProps = {
   sourceEntities: WritableEntitySnapshot[];
   /** Source workspace ID for audit log (cross-workspace only). */
   sourceWorkspaceId?: SafeId<"workspace">;
+  /**
+   * Whether the caller will delete the source rows in the same
+   * transaction (a move) as opposed to leaving them untouched (a
+   * copy). Only a move mutates the source workspace, so only a move
+   * needs the source row locked — see the lock-set comment below.
+   */
+  deleteSource: boolean;
 };
 
 /**
@@ -499,16 +506,22 @@ export const copyEntities = async ({
   sourceEntityId,
   sourceEntities,
   sourceWorkspaceId,
+  deleteSource,
 }: CopyEntitiesProps): Promise<CopyEntitiesResult> => {
-  // Same-workspace duplicate locks the target only; cross-workspace
-  // copy/move also locks the source (needed when the caller deletes
-  // source rows afterward). Both ids go through
+  // Same-workspace duplicate and cross-workspace copy both lock the
+  // target only: a pure copy never mutates the source workspace's
+  // rows or its cap, so locking the source would only add unrelated
+  // contention (blocking uploads/tasks/clips there) for no
+  // correctness benefit. Only a cross-workspace MOVE
+  // (`deleteSource`) also locks the source, since the caller deletes
+  // source rows in the same transaction and that must serialize with
+  // concurrent source-side inserts. Both ids go through
   // `lockWorkspacesForEntityCap`, which sorts them ascending before
   // locking — see that function for why this closes the
   // cross-workspace ABBA between an A->B and a concurrent B->A move.
   await lockWorkspacesForEntityCap(
     tx,
-    sourceWorkspaceId
+    sourceWorkspaceId && deleteSource
       ? [sourceWorkspaceId, targetWorkspaceId]
       : [targetWorkspaceId],
   );

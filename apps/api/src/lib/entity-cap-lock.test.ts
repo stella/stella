@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { TransactionRollbackError } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -28,17 +29,29 @@ import { lockWorkspacesForEntityCap } from "./entity-cap-lock";
  * form an ABBA cycle — which is the actual property #1139 asks for.
  */
 
-// A raw string interpolated into a drizzle `sql` template shows up
-// verbatim in `SQL.queryChunks`; every other chunk in this query
-// (the literal text, the `workspaces` table reference) is a class
-// instance, not a plain string, so this reliably extracts the one
-// interpolated workspace id per call regardless of exact SQL text.
+// Reading `SQL.queryChunks` directly is fragile: whether a literal
+// or interpolated part shows up as a raw string vs. a wrapper object
+// (`StringChunk`, `Param`, ...) is a Drizzle internal that has
+// already changed across versions. `PgDialect#sqlToQuery` is the
+// same public compilation step Drizzle itself uses to build the
+// query sent to Postgres, so it stays correct however chunks are
+// represented internally — it returns the driver-bound `params`
+// array, and this lock query interpolates exactly one value (the
+// workspace id) per call.
+const pgDialect = new PgDialect();
+
 const lockedWorkspaceId = (query: SQL): string => {
-  const chunk = query.queryChunks.find((c) => typeof c === "string");
-  if (typeof chunk !== "string") {
+  const { params } = pgDialect.sqlToQuery(query);
+  if (params.length !== 1) {
+    throw new TypeError(
+      `Expected the lock query to bind exactly one param, got ${params.length}`,
+    );
+  }
+  const [id] = params;
+  if (typeof id !== "string") {
     throw new TypeError("Lock query did not interpolate a workspace id");
   }
-  return chunk;
+  return id;
 };
 
 const createOrderTrackingTx = () => {

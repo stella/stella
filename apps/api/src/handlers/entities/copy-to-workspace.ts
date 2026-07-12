@@ -472,6 +472,7 @@ const copyToWorkspaceHandler = async function* ({
       sourceEntityId,
       sourceEntities: remappedEntities,
       sourceWorkspaceId,
+      deleteSource,
     });
 
     if (!copyResult.ok) {
