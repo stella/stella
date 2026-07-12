@@ -376,6 +376,14 @@ const createAuth = () => {
       jwt({ disableSettingJwtHeader: true }),
       lastLoginMethod(),
       emailOTP({
+        // Pin the security-relevant OTP parameters explicitly rather than
+        // inheriting library defaults, so a better-auth upgrade cannot
+        // silently widen the guessing window. These match the current
+        // defaults (6 digits, 5-minute expiry, 3 attempts before the code
+        // is invalidated); change deliberately, not by dependency drift.
+        otpLength: 6,
+        expiresIn: 5 * 60,
+        allowedAttempts: 3,
         async sendVerificationOTP({ email, otp, type }, ctx) {
           if (env.isDev) {
             // eslint-disable-next-line no-console -- dev-only OTP echo for local testing (env.isDev gated; value printed verbatim by design)
@@ -398,6 +406,10 @@ const createAuth = () => {
         ac,
         roles,
         membershipLimit: LIMITS.organizationMembersCount,
+        // Pin the invitation lifetime explicitly (48h) so a dependency
+        // upgrade cannot silently extend how long an invite token stays
+        // valid. Single-use is enforced by the plugin's invitation status.
+        invitationExpiresIn: 60 * 60 * 48,
         organizationHooks: {
           async afterRemoveMember({
             member: removedMember,
