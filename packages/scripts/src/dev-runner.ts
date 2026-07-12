@@ -1289,10 +1289,10 @@ const waitForHttpReadiness = async ({
   let settled = false;
   const watchForCrash = child.exited.then((exitCode) => {
     if (settled || isShuttingDown) {
-      return;
+      return "watched-exit-ignored" as const;
     }
 
-    panic(
+    return panic(
       `${label} exited with code ${String(exitCode)} before it became ready.`,
     );
   });
