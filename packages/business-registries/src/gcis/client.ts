@@ -1,3 +1,4 @@
+import { clampSearchLimit } from "../shared/search.js";
 import {
   GcisAPIError,
   GcisRequestError,
@@ -214,7 +215,7 @@ export const searchByName = async (
     throw new GcisValidationError("Search name must not be empty");
   }
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
-  const top = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
+  const top = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const activeOnly = options?.activeOnly ?? true;
   if (!activeOnly) {
     const rows = await gcisGet(buildSearchUrl({ name: trimmed, limit: top }));

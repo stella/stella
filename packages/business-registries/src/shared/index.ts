@@ -11,5 +11,6 @@ export {
   RegistryUnavailableError,
 } from "./errors.js";
 export type { EntityNotFound } from "./errors.js";
+export { clampSearchLimit } from "./search.js";
 export type { EntityStatus } from "./status.js";
 export { mapEntityStatus } from "./status.js";

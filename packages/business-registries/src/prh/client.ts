@@ -1,3 +1,4 @@
+import { clampSearchLimit } from "../shared/search.js";
 import { PrhAPIError, PrhRequestError, PrhValidationError } from "./errors.js";
 import { parseCompany, parseSearchEntry } from "./parse.js";
 import type {
@@ -168,7 +169,7 @@ export const searchByName = async (
     throw new PrhValidationError("Search name must not be empty");
   }
   const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
-  const limit = Math.min(Math.max(requestedLimit, 1), MAX_SEARCH_LIMIT);
+  const limit = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const params = new URLSearchParams({
     name: trimmed,
     maxResults: limit.toString(),
