@@ -56,13 +56,22 @@ END
 $$;
 `;
 
+// Resolve migrationsFolder relative to *this module's own location*, not
+// `process.cwd()`. The entrypoint ships in two shapes that run with
+// different working directories: the loose source file
+// (apps/api/src/db/migrate.ts, cwd = /app/apps/api) and the bundled
+// single-file build (apps/api/src/db/migrate.js, invoked directly with
+// `bun <path>` and no fixed cwd). `import.meta.dir` tracks the file's own
+// directory in both shapes — including inside a `bun build --target bun`
+// bundle, which preserves the entrypoint's original build-time path — so
+// walking up two levels (src/db -> src -> apps/api) and into `drizzle`
+// lands on the same migrations folder either way. Keep the bundle's COPY
+// destination two directories above its drizzle/ copy to preserve this.
+const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
+
 try {
   await client.unsafe(bootstrapRoleSql);
-  await migrate(drizzle({ client }), {
-    // cwd is the migrate task's workingDirectory (/app/apps/api); mirrors
-    // the path that assert-migrations-applied.ts checks at startup.
-    migrationsFolder: nodePath.resolve(process.cwd(), "drizzle"),
-  });
+  await migrate(drizzle({ client }), { migrationsFolder });
   // eslint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface (no app logger in this minimal-env task)
   console.info("[migrate] migrations applied");
 } catch (error) {

@@ -1034,7 +1034,7 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         # Overlay pruned source the same way apps/api/Dockerfile copies
         # /app/out/full/ onto the dependency layer, then compile the API
-        # binary and runtime workers.
+        # binary, migration bundle, and runtime workers.
         run: |
           set -euo pipefail
           cd api-install
@@ -1047,6 +1047,11 @@ jobs:
             --target bun \
             --outfile /tmp/server \
             apps/api/src/server.ts
+          bun build \
+            --target bun \
+            --outfile apps/api/src/db/migrate.js \
+            apps/api/src/db/migrate.ts
+          test -s apps/api/src/db/migrate.js
           mkdir -p /tmp/runtime-workers
           bun build \
             --target bun \

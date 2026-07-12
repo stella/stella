@@ -18,7 +18,7 @@
     "drainingSeconds": 15,
     "healthcheckPath": "/health",
     "healthcheckTimeout": 300,
-    "preDeployCommand": ["bun src/db/migrate.ts"],
+    "preDeployCommand": ["bun /app/apps/api/src/db/migrate.js"],
     "restartPolicyMaxRetries": 10,
     "restartPolicyType": "ON_FAILURE"
   }
