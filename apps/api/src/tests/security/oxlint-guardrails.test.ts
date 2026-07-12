@@ -522,7 +522,7 @@ describe("custom oxlint guardrails", () => {
     // "Export ... not found", an order-dependent failure. For modules other
     // test files import for real, the mock MUST spread the real module first
     // (`...realX`) so nothing is dropped. Add modules here as leaks surface.
-    const leakyModules = ["@/api/lib/s3"];
+    const leakyModules = ["@/api/lib/s3", "@/api/lib/redis-client", "bullmq"];
     const root = path.join(import.meta.dir, "../../../../..");
     const offenders: string[] = [];
 

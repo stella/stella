@@ -2,7 +2,11 @@ import { describe, expect, mock, test } from "bun:test";
 
 const createBunRedisClientCalls: unknown[] = [];
 
+// Spread the real module: mock.module is process-global; a partial mock would
+// delete bullmq's other exports for later test files.
+const realBullmq = await import("bullmq");
 void mock.module("bullmq", () => ({
+  ...realBullmq,
   createBunRedisClient: (...args: unknown[]) => {
     createBunRedisClientCalls.push(args);
     return { connect: async () => undefined };

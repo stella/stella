@@ -14,8 +14,13 @@ class MockQueue {
   }
 }
 
-void mock.module("bullmq", () => ({ Queue: MockQueue }));
+// Spread the real modules: mock.module is process-global; a partial mock would
+// delete the module's other exports for later test files.
+const realBullmq = await import("bullmq");
+void mock.module("bullmq", () => ({ ...realBullmq, Queue: MockQueue }));
+const realRedisClient = await import("@/api/lib/redis-client");
 void mock.module("@/api/lib/redis-client", () => ({
+  ...realRedisClient,
   createBullMqConnection: () => ({}),
   createRedisClient: () => ({}),
 }));
