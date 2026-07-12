@@ -24,6 +24,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { acquireWorkspaceEntityCapLock } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -215,8 +216,24 @@ const uploadEntityHandler = async function* ({
     const entityVersionId = createSafeId<"entityVersion">();
     const fieldId = createSafeId<"field">();
 
-    const fileName = yield* Result.await(
+    const writeResult = yield* Result.await(
       safeDb(async (tx) => {
+        // A workspace-scoped advisory lock serializes this
+        // count-then-insert sequence against concurrent creations;
+        // same-transaction placement alone does not prevent TOCTOU
+        // races under READ COMMITTED. The earlier `entityCount`
+        // check above is a non-authoritative fast-fail to avoid
+        // wasted upload/scan work; this is the authoritative check.
+        await acquireWorkspaceEntityCapLock(tx, workspaceId);
+
+        const authoritativeEntityCount = await tx.$count(
+          entities,
+          eq(entities.workspaceId, workspaceId),
+        );
+        if (authoritativeEntityCount >= LIMITS.entitiesCount) {
+          return { ok: false as const };
+        }
+
         const resolvedName = await resolveFileName({ tx, propertyId, name });
 
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -294,9 +311,20 @@ const uploadEntityHandler = async function* ({
           },
         });
 
-        return resolvedName;
+        return { ok: true as const, resolvedName };
       }),
     );
+
+    if (!writeResult.ok) {
+      await Promise.allSettled(
+        s3Keys.map(async (key) => await getS3().delete(key)),
+      );
+      return Result.err(
+        new HandlerError({ status: 400, message: "Entities limit reached" }),
+      );
+    }
+
+    const fileName = writeResult.resolvedName;
 
     await processExtraction(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
