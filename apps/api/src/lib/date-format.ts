@@ -79,7 +79,7 @@ export const formatIsoDateForDisplay = ({
 }: FormatIsoDateForDisplayProps) => {
   const [year, month, day] = isoDate.split("-");
 
-  if (countryCode === "IN") {
+  if (countryCode === "IN" && year && month && day) {
     return `${day}-${month}-${year}`;
   }
 
