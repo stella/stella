@@ -92,3 +92,92 @@ function assertNonNegativeInteger(name: string, value: number) {
     throw new TypeError(`${name} must be a finite non-negative integer`);
   }
 }
+
+declare const __currency: unique symbol;
+
+/**
+ * A `CentsAmount` additionally branded with its ISO 4217-ish currency code
+ * `C`. This makes cross-currency addition a compile error instead of a
+ * runtime bug: `addCents` only accepts two `CurrencyCents` sharing the same
+ * `C`, so `addCents(usdAmount, eurAmount)` fails to typecheck rather than
+ * silently producing a meaningless sum.
+ *
+ * Mint one with `currencyCents()`; there is no unsafe escape hatch because
+ * the underlying `CentsAmount` validation (`cents()`) is cheap and the
+ * currency code is a plain string carried alongside it, so there is no
+ * boundary that needs to skip it.
+ */
+export type CurrencyCents<C extends string = string> = CentsAmount & {
+  readonly [__currency]: C;
+};
+
+/**
+ * Construct a `CurrencyCents<C>` from a currency code and a minor-unit
+ * amount. The only producer of `CurrencyCents`; downstream code narrows `C`
+ * from the literal `currency` argument (e.g. `currencyCents("USD", 100)`
+ * infers `CurrencyCents<"USD">`).
+ */
+export const currencyCents = <C extends string>(
+  currency: C,
+  amount: number,
+): CurrencyCents<C> => {
+  if (!currency) {
+    throw new TypeError("currencyCents(): currency must be a non-empty code");
+  }
+  // SAFETY: cents() validates the minor-unit integer; the currency brand
+  // is nominal and carried only at the type level.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  return cents(amount) as CurrencyCents<C>;
+};
+
+/**
+ * Add two `CurrencyCents` amounts of the SAME currency. The second
+ * parameter's currency `B` is constrained to `extends A`, so passing a
+ * different currency literal (e.g. `addCents(usdAmount, eurAmount)`) is a
+ * compile error, not a runtime bug — see `packages/money/src/index.test.ts`
+ * for the `@ts-expect-error` proof.
+ */
+export const addCents = <A extends string, B extends A = A>(
+  a: CurrencyCents<A>,
+  b: CurrencyCents<B>,
+): CurrencyCents<A> =>
+  // SAFETY: the currency brand is phantom-only (never materialized at
+  // runtime, same as CentsAmount itself); the result is just a + b with
+  // A's brand reattached, which is sound because the parameter types
+  // already proved both operands share currency A.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion
+  cents(a + b) as CurrencyCents<A>;
+
+/**
+ * Per-currency accumulator for aggregating money across rows that may carry
+ * different currencies (e.g. time entries across matters, expenses across
+ * clients). There is deliberately no method that returns a single combined
+ * number: the only way to read totals out is `entries()`, which groups by
+ * currency and sorts deterministically by currency code. This keeps
+ * cross-currency summation structurally unreachable through this package's
+ * API — callers must handle each currency's total explicitly.
+ */
+export type MoneyTotalsEntry = {
+  currency: string;
+  amountCents: CentsAmount;
+};
+
+export class MoneyTotals {
+  readonly #totals = new Map<string, CentsAmount>();
+
+  /** Add `amountCents` to the running total for `currency`. */
+  add(currency: string, amountCents: CentsAmount): void {
+    const running = this.#totals.get(currency) ?? cents(0);
+    this.#totals.set(currency, cents(running + amountCents));
+  }
+
+  /**
+   * Per-currency totals, sorted deterministically by currency code so
+   * output (PDF lines, API responses) does not depend on insertion order.
+   */
+  entries(): MoneyTotalsEntry[] {
+    return [...this.#totals.entries()]
+      .sort(([currencyA], [currencyB]) => currencyA.localeCompare(currencyB))
+      .map(([currency, amountCents]) => ({ currency, amountCents }));
+  }
+}

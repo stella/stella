@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
-import { applyMarkupCents, cents, prorateHourlyCents, unsafeCents } from ".";
+import {
+  addCents,
+  applyMarkupCents,
+  cents,
+  currencyCents,
+  MoneyTotals,
+  prorateHourlyCents,
+  unsafeCents,
+} from ".";
+import type { CentsAmount } from ".";
 
 describe("minor-unit billing arithmetic", () => {
   test("rounds prorated hourly rates without floating point cent drift", () => {
@@ -223,3 +232,148 @@ describe("applyMarkupCents invariants", () => {
     ).toThrow(TypeError);
   });
 });
+
+describe("currencyCents() and addCents()", () => {
+  test("currencyCents mints a CentsAmount-compatible value", () => {
+    expect(currencyCents("USD", 1234)).toBe(currencyCents("USD", 1234));
+  });
+
+  test("currencyCents rejects an empty currency code", () => {
+    expect(() => currencyCents("", 100)).toThrow(TypeError);
+  });
+
+  test("addCents sums two amounts of the same currency", () => {
+    const a = currencyCents("USD", 150);
+    const b = currencyCents("USD", 275);
+    expect(addCents(a, b)).toBe(currencyCents("USD", 425));
+  });
+
+  test("addCents rejects a bad minor-unit amount at construction", () => {
+    expect(() => currencyCents("USD", 1.5)).toThrow(TypeError);
+  });
+
+  test("COMPILE ERROR: addCents rejects mismatched currencies", () => {
+    const usd = currencyCents("USD", 100);
+    const eur = currencyCents("EUR", 100);
+    // @ts-expect-error - addCents must not accept two different currencies
+    addCents(usd, eur);
+  });
+
+  test("INVARIANT: addCents is commutative and associative", () => {
+    const rand = makePrng(4_611_812);
+    for (let n = 0; n < 2000; n++) {
+      const x = currencyCents("USD", Math.floor(rand() * 1_000_000));
+      const y = currencyCents("USD", Math.floor(rand() * 1_000_000));
+      const z = currencyCents("USD", Math.floor(rand() * 1_000_000));
+      expect(addCents(x, y)).toBe(addCents(y, x));
+      expect(addCents(addCents(x, y), z)).toBe(addCents(x, addCents(y, z)));
+    }
+  });
+});
+
+describe("MoneyTotals", () => {
+  test("groups amounts by currency", () => {
+    const totals = new MoneyTotals();
+    totals.add("USD", cents(100));
+    totals.add("EUR", cents(200));
+    totals.add("USD", cents(50));
+
+    expect(totals.entries()).toEqual([
+      { currency: "EUR", amountCents: cents(200) },
+      { currency: "USD", amountCents: cents(150) },
+    ]);
+  });
+
+  test("entries() is sorted deterministically by currency code", () => {
+    const totals = new MoneyTotals();
+    totals.add("USD", cents(1));
+    totals.add("CZK", cents(1));
+    totals.add("EUR", cents(1));
+    totals.add("AUD", cents(1));
+
+    expect(totals.entries().map((e) => e.currency)).toEqual([
+      "AUD",
+      "CZK",
+      "EUR",
+      "USD",
+    ]);
+  });
+
+  test("an empty accumulator has no entries", () => {
+    expect(new MoneyTotals().entries()).toEqual([]);
+  });
+
+  test("INVARIANT: entries() total per currency equals the sum of that currency's rows, regardless of insertion order", () => {
+    const rand = makePrng(7_310_552);
+    const currencies = ["USD", "EUR", "CZK", "GBP"];
+
+    for (let trial = 0; trial < 200; trial++) {
+      const rows: { currency: string; amount: number }[] = [];
+      const rowCount = Math.floor(rand() * 40);
+      for (let i = 0; i < rowCount; i++) {
+        rows.push({
+          currency: pickCurrency(currencies, rand),
+          amount: Math.floor(rand() * 10_000),
+        });
+      }
+
+      const expected = new Map<string, CentsAmount>();
+      for (const row of rows) {
+        expected.set(
+          row.currency,
+          cents((expected.get(row.currency) ?? 0) + row.amount),
+        );
+      }
+
+      // Two independent random permutations of the same rows must produce
+      // identical totals: MoneyTotals must be permutation-invariant.
+      const shuffled = shuffle(rows, rand);
+      const totals = new MoneyTotals();
+      for (const row of shuffled) {
+        totals.add(row.currency, cents(row.amount));
+      }
+
+      const actual = new Map(
+        totals.entries().map((e) => [e.currency, e.amountCents]),
+      );
+      expect(actual.size).toBe(expected.size);
+      for (const [currency, sum] of expected) {
+        expect(actual.get(currency)).toBe(sum);
+      }
+
+      // entries() itself is always sorted, independent of insertion order.
+      const currenciesOut = totals.entries().map((e) => e.currency);
+      expect(currenciesOut).toEqual([...currenciesOut].sort());
+    }
+  });
+});
+
+function pickCurrency(
+  currencies: readonly string[],
+  rand: () => number,
+): string {
+  const currency = currencies.at(Math.floor(rand() * currencies.length));
+  if (currency === undefined) {
+    throw new Error("pickCurrency: index out of bounds");
+  }
+  return currency;
+}
+
+function shuffle<T>(items: readonly T[], rand: () => number): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    const itemAtI = at(result, i);
+    result[i] = at(result, j);
+    result[j] = itemAtI;
+  }
+  return result;
+}
+
+function at<T>(items: readonly T[], index: number): T {
+  const value = items.at(index);
+  if (value === undefined) {
+    throw new Error(`at: index ${index} out of bounds`);
+  }
+  return value;
+}
