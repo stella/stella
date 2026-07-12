@@ -127,10 +127,11 @@ describe("searchByName validation", () => {
 });
 
 describe("searchByName limit clamping", () => {
-  let restore: () => void;
+  let restore: (() => void) | undefined;
 
   afterEach(() => {
-    restore();
+    restore?.();
+    restore = undefined;
   });
 
   test("defaults pocet to 50 when no limit is given", async () => {
