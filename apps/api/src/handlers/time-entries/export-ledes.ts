@@ -3,7 +3,8 @@ import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { prorateHourlyCents } from "@stll/money";
+import { MoneyTotals, prorateHourlyCents } from "@stll/money";
+import type { CentsAmount } from "@stll/money";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntryStatusSchema } from "@/api/db/billing-validators";
@@ -13,6 +14,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 export const exportLedesQuerySchema = t.Object({
@@ -39,6 +41,20 @@ type ExportLedesHandlerProps = {
  */
 export const escapeLedesField = (value: string): string =>
   value.replace(/[\r\n|]/gu, " ");
+
+type LedesLineItem = {
+  matterId: SafeId<"entity">;
+  dateWorked: string;
+  totalCents: CentsAmount;
+  currency: string;
+  hours: number;
+  taskCode: string;
+  activityCode: string;
+  userId: string;
+  narrative: string;
+  rateAtEntry: number;
+  userName: string;
+};
 
 /**
  * Generates a LEDES 1998B formatted export.
@@ -139,6 +155,81 @@ export const exportLedesHandler = async ({
     "|LINE_ITEM_TASK_DESCRIPTION" +
     "|LINE_ITEM_ACTIVITY_DESCRIPTION[]";
 
+  // First pass: apply the same billing-integrity guard as the SQL filter
+  // (defensive: a non-billable, no-charge, or written-off entry must never
+  // produce a charged line), then collect the per-line data needed both to
+  // compute the invoice-level aggregates and to emit each row.
+  const lineItems: LedesLineItem[] = [];
+
+  for (const row of rows) {
+    if (
+      !row.billable ||
+      row.noCharge ||
+      row.status === BILLING_STATUS.WRITTEN_OFF
+    ) {
+      continue;
+    }
+    const totalCents = prorateHourlyCents({
+      billedMinutes: row.billedMinutes,
+      hourlyRateCents: row.rateAtEntry,
+    });
+    const userName = escapeLedesField(
+      row.userId ? (userMap.get(row.userId) ?? "") : "",
+    );
+    const narrative = escapeLedesField(row.invoiceNarrative ?? row.narrative);
+
+    lineItems.push({
+      matterId: row.matterId,
+      dateWorked: row.dateWorked,
+      totalCents,
+      currency: row.currency,
+      hours: row.billedMinutes / 60,
+      taskCode: escapeLedesField(row.taskCode ?? ""),
+      activityCode: escapeLedesField(row.activityCode ?? ""),
+      userId: row.userId ?? "",
+      narrative,
+      rateAtEntry: row.rateAtEntry,
+      userName,
+    });
+  }
+
+  // Invoice-level aggregates: INVOICE_TOTAL is the total for the whole
+  // invoice/batch (not a single line), and BILLING_START_DATE/
+  // BILLING_END_DATE are the min/max dates across the included lines. Per
+  // the LEDES 1998B spec, both are repeated identically on every row.
+  // Currency is a per-entry column, so accumulate through MoneyTotals: it
+  // buckets by currency and makes a cross-currency sum structurally
+  // unreachable.
+  let billingStart = "";
+  let billingEnd = "";
+  const invoiceTotals = new MoneyTotals();
+  for (const item of lineItems) {
+    if (!billingStart || item.dateWorked < billingStart) {
+      billingStart = item.dateWorked;
+    }
+    if (!billingEnd || item.dateWorked > billingEnd) {
+      billingEnd = item.dateWorked;
+    }
+    invoiceTotals.add(item.currency, item.totalCents);
+  }
+
+  // LEDES 1998B has no currency field, so a mixed-currency batch cannot be
+  // represented at all: there is no honest value to put in INVOICE_TOTAL.
+  const totalsEntries = invoiceTotals.entries();
+  if (totalsEntries.length > 1) {
+    const currencies = totalsEntries.map((entry) => entry.currency).join(", ");
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `LEDES 1998B cannot represent a batch spanning multiple currencies (${currencies}); export a single currency at a time by narrowing the date or matter filters`,
+      }),
+    );
+  }
+  const invoiceTotalCents = totalsEntries.at(0)?.amountCents ?? 0;
+  const invoiceTotalFormatted = (invoiceTotalCents / 100).toFixed(2);
+  const billingStartFormatted = billingStart.replace(/-/gu, "");
+  const billingEndFormatted = billingEnd.replace(/-/gu, "");
+
   const lines = ["LEDES1998B[]", header];
   const now = new Date();
   const invoiceDate = (now.toISOString().split("T")[0] ?? "").replace(
@@ -148,60 +239,41 @@ export const exportLedesHandler = async ({
 
   let lineItemNumber = 0;
 
-  for (const row of rows) {
-    // Defensive billing-integrity guard alongside the SQL filter: a
-    // non-billable, no-charge, or written-off entry must never produce a
-    // charged line.
-    if (
-      !row.billable ||
-      row.noCharge ||
-      row.status === BILLING_STATUS.WRITTEN_OFF
-    ) {
-      continue;
-    }
+  for (const item of lineItems) {
     lineItemNumber++;
-    const hours = row.billedMinutes / 60;
-    const total = prorateHourlyCents({
-      billedMinutes: row.billedMinutes,
-      hourlyRateCents: row.rateAtEntry,
-    });
-    const dateFormatted = row.dateWorked.replace(/-/gu, "");
-    const userName = escapeLedesField(
-      row.userId ? (userMap.get(row.userId) ?? "") : "",
-    );
-    const narrative = escapeLedesField(row.invoiceNarrative ?? row.narrative);
+    const dateFormatted = item.dateWorked.replace(/-/gu, "");
 
     lines.push(
       `${[
         invoiceDate,
         "", // INVOICE_NUMBER
         "", // CLIENT_ID
-        row.matterId,
-        (total / 100).toFixed(2),
-        dateFormatted,
-        dateFormatted,
+        item.matterId,
+        invoiceTotalFormatted,
+        billingStartFormatted,
+        billingEndFormatted,
         "", // INVOICE_DESCRIPTION
         String(lineItemNumber),
         "F", // FEE type
-        hours.toFixed(2),
+        item.hours.toFixed(2),
         "0.00", // ADJUSTMENT
-        (total / 100).toFixed(2),
+        (item.totalCents / 100).toFixed(2),
         dateFormatted,
-        escapeLedesField(row.taskCode ?? ""),
+        item.taskCode,
         "", // EXPENSE_CODE
-        escapeLedesField(row.activityCode ?? ""),
-        row.userId ?? "",
-        narrative,
+        item.activityCode,
+        item.userId,
+        item.narrative,
         "", // LAW_FIRM_ID
-        (row.rateAtEntry / 100).toFixed(2),
-        userName,
+        (item.rateAtEntry / 100).toFixed(2),
+        item.userName,
         "", // TASK_DESCRIPTION
         "", // ACTIVITY_DESCRIPTION
       ].join("|")}[]`,
     );
   }
 
-  return lines.join("\n");
+  return Result.ok(lines.join("\n"));
 };
 
 const config = {
@@ -225,7 +297,7 @@ const exportLedes = createSafeHandler(
       ),
     );
 
-    return Result.ok(response);
+    return response;
   },
 );
 
