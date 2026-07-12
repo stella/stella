@@ -84,9 +84,7 @@ details unless they are already public in the repository.
   aggressively.
 - **Vertical slices over horizontal layers.** Features are independent end-to-end
   slices (own routes, components, handlers). New capabilities land in their own slice;
-  existing code stays untouched. Cross-slice imports (API handler domains, web
-  route-private `-` paths, web features) are frozen by the convention ratchet
-  (`scripts/ratchet.ts`) and may only decrease.
+  existing code stays untouched.
 
 ## Scalability
 
@@ -108,18 +106,14 @@ a CI failure or a reviewable diff, never silently. The guards:
   manifest, waterfall depth, and per-endpoint DB query budgets, checked by the
   route-smoke e2e suite.
 - Bundle-size budgets (`scripts/bundle-baseline.json`), enforced after the web build.
-- Typecheck-cost baseline (`scripts/typecheck-baseline.json`): per-project tsgo
-  Types/Instantiations counters with headroom, checked in the CI typecheck job
-  (`bun scripts/typecheck-baseline.ts`).
 - `require-loader-prefetch` oxlint rule: route suspense queries must start in the
   route loader, not on component mount.
 - `x-db-queries` response header (dev/CI only): per-request DB query counter that
   feeds the network baseline's query budgets.
 
 Fix the regression first. Reseeding a baseline (the route-smoke e2e suite run with
-`E2E_NETWORK_BASELINE=write` set, `bun scripts/bundle-baseline.ts
---write-baseline`, or `bun scripts/typecheck-baseline.ts --write-baseline`) is a
-product decision that must
+`E2E_NETWORK_BASELINE=write` set, or `bun scripts/bundle-baseline.ts
+--write-baseline`) is a product decision that must
 be justified in the PR description; it is not a mechanical way to make CI green.
 Start route data in loaders (`ensureRouteQueryData`), batch DB work instead of
 growing a query budget, and tighten baselines after a perf fix. Full guidelines,
@@ -451,3 +445,15 @@ only the non-obvious caveats for this environment.
   of the base checkout; run `git submodule update --init .ai/shared` first, otherwise
   the "AI skill sync" step errors out.
 - Optional demo data: `bun --filter @stll/api db:seed-test-user` and `db:seed-dev`.
+
+## Convention & Type-Cost Guards
+
+- Whole-repo convention metrics that may only decrease live in
+  `scripts/ratchet.ts` (`RATCHET_METRICS`); this includes cross-slice imports
+  (API handler domains, route-private `-` paths, web features), which
+  structurally enforce the vertical-slice principle.
+- Typecheck cost is guarded by `scripts/typecheck-baseline.ts`: per-project
+  tsc `--extendedDiagnostics` Types/Instantiations counters with headroom,
+  checked in the CI typecheck job. Reseeding either baseline
+  (`--write` / `--write-baseline`) must be justified in the PR description;
+  it is not a mechanical way to make CI green.

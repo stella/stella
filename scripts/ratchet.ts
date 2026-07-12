@@ -410,8 +410,17 @@ const WEB_FEATURES_PREFIX = "apps/web/src/features/";
 const WEB_ALIAS_PREFIX = "@/";
 const WEB_ALIAS_ROOT = "apps/web/src";
 
+const API_ALIAS_PREFIX = "@/api/";
+const API_ALIAS_ROOT = "apps/api/src";
+
 // Repo-relative path a specifier resolves to, or null for package imports.
+// `@/api/*` must resolve before the generic `@/` prefix: BOTH apps alias it
+// to apps/api/src (api's own tsconfig and web's Eden path), so treating it as
+// a web path would silently miss every alias-form cross-handler import.
 const resolveSpecifier = (file: string, spec: string): string | null => {
+  if (spec.startsWith(API_ALIAS_PREFIX)) {
+    return path.posix.join(API_ALIAS_ROOT, spec.slice(API_ALIAS_PREFIX.length));
+  }
   if (spec.startsWith(WEB_ALIAS_PREFIX)) {
     return path.posix.join(WEB_ALIAS_ROOT, spec.slice(WEB_ALIAS_PREFIX.length));
   }
@@ -421,6 +430,36 @@ const resolveSpecifier = (file: string, spec: string): string | null => {
     );
   }
   return null;
+};
+
+// Truncate `raw` at a trailing `//` comment without blanking string literals
+// (import specifiers ARE strings, so stripLine cannot be reused here). Walks
+// the line with quote state; a `//` inside a quoted literal survives.
+// Per-line only: template-literal state is not carried across lines, which is
+// fine for import extraction (an import statement never sits inside one).
+const truncateAtLineComment = (raw: string): string => {
+  let quote: string | null = null;
+  for (let i = 0; i < raw.length; i += 1) {
+    const ch = raw[i];
+    if (ch === "\\") {
+      i += 1;
+      continue;
+    }
+    if (quote !== null) {
+      if (ch === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") {
+      quote = ch;
+      continue;
+    }
+    if (ch === "/" && raw[i + 1] === "/") {
+      return raw.slice(0, i);
+    }
+  }
+  return raw;
 };
 
 // First path segment of `p` after `prefix` (the slice name), or null when `p`
@@ -483,7 +522,8 @@ const countCrossSliceImports =
       if (COMMENT_LINE.test(raw)) {
         continue;
       }
-      for (const match of raw.matchAll(MODULE_SPECIFIER)) {
+      const code = truncateAtLineComment(raw);
+      for (const match of code.matchAll(MODULE_SPECIFIER)) {
         const spec = match[1];
         if (spec === undefined) {
           continue;
@@ -938,14 +978,20 @@ const CROSS_HANDLER_FIXTURE_LINES = [
   'import { schema } from "../pagination-limit-schema";',
   'import { db } from "../../db";',
   'const lazy = await import("../docx/extract-text");',
+  'import { viaAlias } from "@/api/handlers/docx/extract-text";',
+  'import { own } from "@/api/handlers/catalogue/local-helper";',
+  'import { shared } from "@/api/lib/object";',
+  'import { trailing } from "./other-local"; // import { c } from "../skills/in-a-trailing-comment";',
   '// import { c } from "../skills/commented";',
 ];
 const SELF_TEST_CROSS_HANDLER = `${CROSS_HANDLER_FIXTURE_LINES.join("\n")}\n`;
-// Expected (file lives in handlers/catalogue/): the ../skills/ static import
-// and the ../docx/ dynamic import = 2. Same-domain, slice-root (a loose
-// shared file directly under handlers/ resolves with an empty rest and is
-// excluded on purpose), outside-handlers, and commented imports don't count.
-const EXPECTED_CROSS_HANDLER = 2;
+// Expected (file lives in handlers/catalogue/): the ../skills/ static import,
+// the ../docx/ dynamic import, and the @/api/-alias cross-import = 3.
+// Same-domain (relative and alias forms), slice-root (a loose shared file
+// directly under handlers/ resolves with an empty rest and is excluded on
+// purpose), outside-handlers, trailing-comment, and comment-line imports
+// don't count.
+const EXPECTED_CROSS_HANDLER = 3;
 
 const CROSS_ROUTE_FIXTURE_LINES = [
   'import { w } from "@/routes/_protected.alpha/-components/widget";',
