@@ -349,6 +349,22 @@ const envApi = createEnv({
     AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
 
     /**
+     * Agent-sandbox engine config (plan 050). All optional: when
+     * AGENT_SANDBOX_RUNS_ENABLED is true, a run is dispatched to the sandbox
+     * only if the required fields below are present; otherwise the run falls
+     * back to the normal server-side model path. Harness credential sourcing
+     * from org BYOK is a follow-up; for now the harness key is env-provided.
+     */
+    AGENT_SANDBOX_IMAGE: v.optional(v.string()),
+    AGENT_SANDBOX_HARNESS_MODEL: v.optional(v.string()),
+    AGENT_SANDBOX_HARNESS_API_KEY: v.optional(v.string()),
+    AGENT_SANDBOX_HARNESS_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
+    /** Container-reachable MCP base URL, e.g. http://host.docker.internal:3001/mcp */
+    AGENT_SANDBOX_MCP_URL: v.optional(v.pipe(v.string(), v.url())),
+    /** Docker daemon socket; Linux default is /var/run/docker.sock. */
+    AGENT_SANDBOX_DOCKER_SOCKET: v.optional(v.string()),
+
+    /**
      * Break-glass diagnostics. When true, 5xx responses additionally
      * log the full `error.msg` and `error.stack` so a deployment can be
      * made fully diagnosable by flipping one env var, no rebuild needed.
