@@ -130,7 +130,7 @@ const collectDirectory = async ({
   const entries = await readAllDirectoryEntries(entry);
   for (const child of entries) {
     if (isDirectoryEntry(child)) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered traversal: children append to a shared tree in deterministic order
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- ordered traversal: children append to a shared tree in deterministic order
       await collectDirectory({
         entry: child,
         path: pathWithSegment(path, child.name),
@@ -167,7 +167,7 @@ export const collectDroppedFileTree = async ({
 
     const entry = item.webkitGetAsEntry?.();
     if (isDirectoryEntry(entry)) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered traversal: dropped items append to a shared tree in deterministic order
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- ordered traversal: dropped items append to a shared tree in deterministic order
       await collectDirectory({
         entry,
         path: pathWithSegment([], entry.name),

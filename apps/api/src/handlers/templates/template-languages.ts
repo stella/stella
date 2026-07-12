@@ -33,12 +33,14 @@ export const normalizeTemplateLanguages = (
   input: readonly string[],
 ): NormalizeTemplateLanguagesResult => {
   const languages: LanguageCode[] = [];
+  const seenLanguages = new Set<LanguageCode>();
   for (const raw of input) {
     const code = toLanguageCode(raw);
     if (code === null) {
       continue;
     }
-    if (!languages.includes(code)) {
+    if (!seenLanguages.has(code)) {
+      seenLanguages.add(code);
       languages.push(code);
     }
   }
@@ -127,10 +129,14 @@ export const detectTemplateLanguages = (text: string): string[] => {
     }
   }
 
-  const scored = [...hitsByTag.entries()]
-    .map(([tag, hits]) => ({ tag, hits, score: hits / tokens.length }))
-    .filter((entry) => entry.hits >= MIN_HITS && entry.score >= MIN_SCORE)
-    .sort((a, b) => b.hits - a.hits);
+  const scored: { tag: string; hits: number; score: number }[] = [];
+  for (const [tag, hits] of hitsByTag.entries()) {
+    const score = hits / tokens.length;
+    if (hits >= MIN_HITS && score >= MIN_SCORE) {
+      scored.push({ tag, hits, score });
+    }
+  }
+  scored.sort((a, b) => b.hits - a.hits);
 
   const top = scored.at(0);
   if (!top) {

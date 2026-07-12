@@ -128,6 +128,7 @@ export const useDocxWheelZoom = (
       editor.setZoom(nextZoom);
     };
 
+    // eslint-disable-next-line github/require-passive-events -- handler calls preventDefault (pinch-zoom); passive:false is required and set
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => {
       container.removeEventListener("wheel", handleWheel);

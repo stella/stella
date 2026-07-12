@@ -223,36 +223,33 @@ export const buildExportColumns = (
     }
   }
 
-  const propertyColumns = properties
-    .filter(
-      (property) =>
-        !hiddenIds.has(property.id) && !verdictPropertyIds.has(property.id),
-    )
-    .map((property) => {
-      const column: Extract<ExportColumn, { type: "property" }> = {
-        type: "property",
-        id: property.id,
-        propertyId: property.id,
-        header: property.name,
-      };
+  const propertyColumns: Extract<ExportColumn, { type: "property" }>[] = [];
+  for (const property of properties) {
+    if (hiddenIds.has(property.id) || verdictPropertyIds.has(property.id)) {
+      continue;
+    }
+    const column: Extract<ExportColumn, { type: "property" }> = {
+      type: "property",
+      id: property.id,
+      propertyId: property.id,
+      header: property.name,
+    };
 
-      const verdict = verdictByAskPropertyId.get(property.id);
-      if (verdict) {
-        column.verdictPropertyId = verdict.id;
-        column.commentPropertyId = verdict.id;
-      } else if (property.tool.type === "ai-model") {
-        column.commentPropertyId = property.id;
-      }
+    const verdict = verdictByAskPropertyId.get(property.id);
+    if (verdict) {
+      column.verdictPropertyId = verdict.id;
+      column.commentPropertyId = verdict.id;
+    } else if (property.tool.type === "ai-model") {
+      column.commentPropertyId = property.id;
+    }
 
-      return column;
-    });
-  const metadataColumns = METADATA_COLUMNS.filter(
-    (column) => !hiddenIds.has(column.id),
-  ).map((column) => ({
-    type: "metadata" as const,
-    id: column.id,
-    header: column.header,
-  }));
+    propertyColumns.push(column);
+  }
+  const metadataColumns = METADATA_COLUMNS.flatMap((column) =>
+    hiddenIds.has(column.id)
+      ? []
+      : [{ type: "metadata" as const, id: column.id, header: column.header }],
+  );
   const defaultColumns: ExportColumn[] = [
     ...propertyColumns,
     ...metadataColumns,
@@ -276,18 +273,68 @@ export const buildExportColumns = (
   return [...ordered, ...byId.values()];
 };
 
+const exportDateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** `Intl.DateTimeFormat` for `locale`, cached per locale (bounded by the
+ *  app's supported locales) instead of rebuilt on every export row. */
+const getExportDateFormatter = (locale: string): Intl.DateTimeFormat => {
+  const formatter =
+    exportDateFormatters.get(locale) ??
+    new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    });
+  exportDateFormatters.set(locale, formatter);
+  return formatter;
+};
+
 export const formatExportDate = (value: string, locale: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
   }
 
-  return new Intl.DateTimeFormat(locale, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  }).format(date);
+  return getExportDateFormatter(locale).format(date);
+};
+
+const exportNumberFormatters = new Map<string, Intl.NumberFormat>();
+
+/** `Intl.NumberFormat` for `locale` (no currency), cached per locale. */
+const getExportNumberFormatter = (locale: string): Intl.NumberFormat => {
+  const formatter =
+    exportNumberFormatters.get(locale) ?? new Intl.NumberFormat(locale);
+  exportNumberFormatters.set(locale, formatter);
+  return formatter;
+};
+
+const exportCurrencyFormatters = new Map<string, Intl.NumberFormat>();
+
+/** `Intl.NumberFormat` for `locale` + `currency`, cached per pair. Currency
+ *  construction can throw on an invalid ISO code, so callers get a `Result`. */
+const getExportCurrencyFormatter = (
+  locale: string,
+  currency: string,
+): Result<Intl.NumberFormat, unknown> => {
+  const key = `${locale}:${currency}`;
+  const cached = exportCurrencyFormatters.get(key);
+  if (cached) {
+    return Result.ok(cached);
+  }
+  const created = Result.try(
+    () =>
+      // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale/currency cache getter; the constructor necessarily runs below top level
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency,
+        minimumFractionDigits: 0,
+      }),
+  );
+  if (!Result.isError(created)) {
+    exportCurrencyFormatters.set(key, created.value);
+  }
+  return created;
 };
 
 const formatExportNumber = (
@@ -296,21 +343,15 @@ const formatExportNumber = (
   locale: string,
 ): string => {
   if (!currency) {
-    return new Intl.NumberFormat(locale).format(value);
+    return getExportNumberFormatter(locale).format(value);
   }
 
-  const formattedCurrency = Result.try(() =>
-    new Intl.NumberFormat(locale, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 0,
-    }).format(value),
-  );
-  if (!Result.isError(formattedCurrency)) {
-    return formattedCurrency.value;
+  const formatter = getExportCurrencyFormatter(locale, currency);
+  if (!Result.isError(formatter)) {
+    return formatter.value.format(value);
   }
 
-  return `${new Intl.NumberFormat(locale).format(value)} ${currency}`;
+  return `${getExportNumberFormatter(locale).format(value)} ${currency}`;
 };
 
 export const formatFieldContent = (
@@ -772,9 +813,9 @@ const exportTableView = createSafeHandler(
         loadedPropertyIds.add(column.verdictPropertyId);
       }
     }
-    const fieldIds = properties
-      .filter((property) => loadedPropertyIds.has(property.id))
-      .map((property) => property.id);
+    const fieldIds = properties.flatMap((property) =>
+      loadedPropertyIds.has(property.id) ? [property.id] : [],
+    );
 
     // Export the same persisted table shape the user sees: visible
     // columns in saved order, saved filters/sorts, and visible field
@@ -824,7 +865,7 @@ const exportTableView = createSafeHandler(
             commentFieldIds,
             JUSTIFICATION_FIELD_ID_BATCH,
           )) {
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential reads on the same transaction connection (one in-flight query per tx); the batch caps each `IN (...)` below the bound-parameter limit
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop -- sequential reads on the same transaction connection (one in-flight query per tx); the batch caps each `IN (...)` below the bound-parameter limit
             const batchRows = await tx.query.justifications.findMany({
               where: {
                 workspaceId: { eq: workspaceId },

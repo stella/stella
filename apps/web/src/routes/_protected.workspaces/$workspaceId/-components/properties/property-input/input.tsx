@@ -80,9 +80,12 @@ export const PropertyPromptInput = ({
   const didAutoPopulate = useRef(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const suggestionOptions = properties
-    .map((item) => ({ id: item.id, label: item.name }))
-    .filter((item) => item.id !== propertyId);
+  const suggestionOptions: { id: string; label: string }[] = [];
+  for (const item of properties) {
+    if (item.id !== propertyId) {
+      suggestionOptions.push({ id: item.id, label: item.name });
+    }
+  }
   const fileProperty = properties.find((p) => p.content.type === "file");
 
   const mentionExtension = createCustomMention(workspaceId).configure({

@@ -29,14 +29,6 @@ const TASK_STATUS_BORDER_COLORS: Record<string, string> = {
   cancelled: "border-s-destructive",
 };
 
-export const TASK_STATUS_DOT_COLORS: Record<string, string> = {
-  open: "var(--option-gray)",
-  in_progress: "var(--option-blue)",
-  in_review: "var(--option-amber)",
-  done: "var(--option-emerald)",
-  cancelled: "var(--option-red)",
-};
-
 type CalendarEntityChipProps = {
   entity: CalendarTask;
   isEditable: boolean;

@@ -70,12 +70,12 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
           entries.value.map((entry) => entry.canonical.toLocaleLowerCase()),
         );
 
-        const idsToDelete = existingRows
-          .filter(
-            (row) =>
-              !incomingCanonicalKeys.has(row.canonical.toLocaleLowerCase()),
-          )
-          .map((row) => row.id);
+        const idsToDelete: (typeof existingRows)[number]["id"][] = [];
+        for (const row of existingRows) {
+          if (!incomingCanonicalKeys.has(row.canonical.toLocaleLowerCase())) {
+            idsToDelete.push(row.id);
+          }
+        }
 
         if (idsToDelete.length > 0) {
           await tx
@@ -104,7 +104,7 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
           );
 
           if (existing) {
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential blacklist upserts inside one transaction
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: sequential blacklist upserts inside one transaction
             await tx
               .update(anonymizationBlacklistEntries)
               .set({

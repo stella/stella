@@ -73,6 +73,7 @@ export const moveEntityHandler = async function* ({
 
       if (body.parentId === null) {
         const oldParentId = entity.parentId;
+        // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
         await tx
           .update(entities)
           .set({ parentId: null, updatedAt: new Date() })
@@ -155,6 +156,7 @@ export const moveEntityHandler = async function* ({
 
       const oldParentId = entity.parentId;
 
+      // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
       await tx
         .update(entities)
         .set({ parentId: body.parentId, updatedAt: new Date() })

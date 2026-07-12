@@ -1346,7 +1346,7 @@ const waitForReadinessChecks = async (
       panic(
         `No running process found for readiness check "${readinessCheck.label}".`,
       );
-    // oxlint-disable-next-line no-await-in-loop -- ordered startup: each service in this group must be ready before the next is awaited
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- ordered startup: each service in this group must be ready before the next is awaited
     await waitForHttpReadiness({ ...readinessCheck, child: runningStep.child });
   }
 };
@@ -1947,16 +1947,18 @@ const main = async () => {
     );
     await shutdown(firstExit.exitCode);
   } catch (error) {
-    await stopChildren();
     // A shutdown that interrupted startup already has its own shutdown(0)
     // call in flight from the signal handler (stopChildren + process.exit).
     // Returning here instead of rethrowing lets that call own the exit;
     // rethrowing would reach the top-level catch below and misreport a
     // clean shutdown as a crash (wrong message, wrong exit code, and a race
-    // against the signal handler's own process.exit).
+    // against the signal handler's own process.exit). stopChildren() is a
+    // no-op once isShuttingDown is set (which it already is on this path),
+    // so it's skipped here rather than awaited for nothing.
     if (isDevRunnerShutdownSignal(error)) {
       return;
     }
+    await stopChildren();
     throw error;
   }
 };

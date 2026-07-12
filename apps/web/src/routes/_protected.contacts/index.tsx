@@ -615,6 +615,17 @@ type BusinessRegistryAddress = {
   textAddress: string | null;
 };
 
+const CREATE_CONTACT_DEFAULT_VALUES: v.InferInput<
+  ReturnType<typeof createContactSchema>
+> = {
+  type: "person",
+  displayName: "",
+  firstName: "",
+  lastName: "",
+  organizationName: "",
+  registrationNumber: "",
+};
+
 const normalizeIcoInput = (value: string) => value.replaceAll(/\D/gu, "");
 
 const toBillingAddress = (
@@ -654,14 +665,6 @@ const CreateContactDialog = ({
     useState<BillingAddress | null>(null);
   const createContact = useCreateContact();
   const schema = createContactSchema(t("common.required"));
-  const defaultValues: v.InferInput<typeof schema> = {
-    type: "person",
-    displayName: "",
-    firstName: "",
-    lastName: "",
-    organizationName: "",
-    registrationNumber: "",
-  };
   const { data: mcpCatalog } = useQuery(
     mcpConnectorsOptions(activeOrganizationId),
   );
@@ -670,7 +673,7 @@ const CreateContactDialog = ({
       ?.enabled ?? false;
 
   const form = useForm({
-    defaultValues,
+    defaultValues: CREATE_CONTACT_DEFAULT_VALUES,
     validators: { onDynamic: schema },
     onSubmit: async ({ value }) => {
       const result = v.safeParse(schema, value);

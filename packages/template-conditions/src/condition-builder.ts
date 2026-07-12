@@ -79,9 +79,13 @@ const serializePredicate = (node: PredicateNode): string => {
 };
 
 const serializeGroup = (group: GroupNode, top: boolean): string => {
-  const parts = group.children
-    .map((child) => serializeNode(child, false))
-    .filter((part) => part.length > 0);
+  const parts: string[] = [];
+  for (const child of group.children) {
+    const part = serializeNode(child, false);
+    if (part.length > 0) {
+      parts.push(part);
+    }
+  }
 
   if (parts.length === 0) {
     return "";

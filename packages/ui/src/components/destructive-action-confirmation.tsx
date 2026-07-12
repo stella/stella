@@ -91,8 +91,4 @@ function isDestructiveActionConfirmed({
   return value === confirmation;
 }
 
-export {
-  DestructiveActionConfirmation,
-  isDestructiveActionConfirmed,
-  useDestructiveActionConfirmation,
-};
+export { DestructiveActionConfirmation, useDestructiveActionConfirmation };

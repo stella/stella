@@ -6,19 +6,22 @@ import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
 import { optionalArray } from "@/lib/arrays";
+import { includesValue } from "@/lib/utils";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
+import {
+  defaultCompositeFormat,
+  isLookupRegistry,
+} from "@/routes/_protected.knowledge/-components/template-field-manifest";
 import {
   defaultStudioField,
   type OutlineNode,
   type StudioField,
 } from "@/routes/_protected.knowledge/-components/template-studio-store";
-import {
-  defaultCompositeFormat,
-  type EditableLookupFormat,
-  type EditablePart,
-  type FieldValidation,
-  isLookupRegistry,
-  type TemplateEditableField,
+import type {
+  EditableLookupFormat,
+  EditablePart,
+  FieldValidation,
+  TemplateEditableField,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 // ── Manifest <-> state ───────────────────────────────────
 
@@ -120,82 +123,84 @@ const parseValidation = (raw: unknown): FieldValidation | undefined => {
   return Object.keys(validation).length > 0 ? validation : undefined;
 };
 
+const parseField = (raw: Record<string, unknown>): StudioField => {
+  const rawType = raw["inputType"];
+  const inputType =
+    typeof rawType === "string" && isInputType(rawType) ? rawType : "text";
+  const field: StudioField = {
+    path: typeof raw["path"] === "string" ? raw["path"] : "",
+    kind: typeof raw["kind"] === "string" ? raw["kind"] : "string",
+    label: typeof raw["label"] === "string" ? raw["label"] : "",
+    inputType,
+    required: raw["required"] === true,
+    options: Array.isArray(raw["options"])
+      ? raw["options"].filter((o): o is string => typeof o === "string")
+      : [],
+    aiPrompt: typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
+    aiAdapt: raw["aiAdapt"] === true,
+    aiSeesDocument: raw["aiSeesDocument"] === true,
+  };
+  if (typeof raw["optionsFrom"] === "string") {
+    field.optionsFrom = raw["optionsFrom"];
+  }
+  const rawLookup = raw["lookup"];
+  if (isRecord(rawLookup) && isLookupRegistry(rawLookup["registry"])) {
+    const formats = parseEditableLookupFormats(rawLookup["formats"]);
+    if (formats.length > 0) {
+      field.lookup = { registry: rawLookup["registry"], formats };
+    }
+  }
+  if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {
+    field.parts = parseEditableParts(raw["parts"]);
+    field.format = raw["format"];
+  }
+  if (typeof raw["formula"] === "string") {
+    field.formula = raw["formula"];
+  }
+  // A boolean field's value rule: derived by this expression rather than
+  // asked. Only meaningful on boolean fields (a condition-field).
+  if (typeof raw["condition"] === "string" && inputType === "boolean") {
+    field.condition = raw["condition"];
+  }
+  // AST-backed condition rule (authoritative; the only form for rules that
+  // contain a formula operand). Validate against the canonical node schema
+  // so a malformed manifest entry is dropped rather than carried verbatim.
+  if (raw["conditionAst"] !== undefined && inputType === "boolean") {
+    const parsed = v.safeParse(conditionNodeSchema, raw["conditionAst"]);
+    if (parsed.success) {
+      field.conditionAst = parsed.output;
+    }
+  }
+  if (typeof raw["hint"] === "string") {
+    field.hint = raw["hint"];
+  }
+  const rawDateFormat = raw["dateFormat"];
+  if (isRecord(rawDateFormat) && typeof rawDateFormat["locale"] === "string") {
+    const rawStyle = rawDateFormat["style"];
+    if (
+      typeof rawStyle === "string" &&
+      includesValue(DATE_FORMAT_STYLES, rawStyle)
+    ) {
+      field.dateFormat = { locale: rawDateFormat["locale"], style: rawStyle };
+    }
+  }
+  const validation = parseValidation(raw["validation"]);
+  if (validation !== undefined) {
+    field.validation = validation;
+  }
+  return field;
+};
+
 export const parseFields = (manifest: unknown): StudioField[] => {
   if (!isRecord(manifest) || !Array.isArray(manifest["fields"])) {
     return [];
   }
-  const fields: StudioField[] = manifest["fields"]
-    .filter(isRecord)
-    .map((raw) => {
-      const rawType = raw["inputType"];
-      const inputType =
-        typeof rawType === "string" && isInputType(rawType) ? rawType : "text";
-      const field: StudioField = {
-        path: typeof raw["path"] === "string" ? raw["path"] : "",
-        kind: typeof raw["kind"] === "string" ? raw["kind"] : "string",
-        label: typeof raw["label"] === "string" ? raw["label"] : "",
-        inputType,
-        required: raw["required"] === true,
-        options: Array.isArray(raw["options"])
-          ? raw["options"].filter((o): o is string => typeof o === "string")
-          : [],
-        aiPrompt:
-          typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
-        aiAdapt: raw["aiAdapt"] === true,
-        aiSeesDocument: raw["aiSeesDocument"] === true,
-      };
-      if (typeof raw["optionsFrom"] === "string") {
-        field.optionsFrom = raw["optionsFrom"];
-      }
-      const rawLookup = raw["lookup"];
-      if (isRecord(rawLookup) && isLookupRegistry(rawLookup["registry"])) {
-        const formats = parseEditableLookupFormats(rawLookup["formats"]);
-        if (formats.length > 0) {
-          field.lookup = { registry: rawLookup["registry"], formats };
-        }
-      }
-      if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {
-        field.parts = parseEditableParts(raw["parts"]);
-        field.format = raw["format"];
-      }
-      if (typeof raw["formula"] === "string") {
-        field.formula = raw["formula"];
-      }
-      // A boolean field's value rule: derived by this expression rather than
-      // asked. Only meaningful on boolean fields (a condition-field).
-      if (typeof raw["condition"] === "string" && inputType === "boolean") {
-        field.condition = raw["condition"];
-      }
-      // AST-backed condition rule (authoritative; the only form for rules that
-      // contain a formula operand). Validate against the canonical node schema
-      // so a malformed manifest entry is dropped rather than carried verbatim.
-      if (raw["conditionAst"] !== undefined && inputType === "boolean") {
-        const parsed = v.safeParse(conditionNodeSchema, raw["conditionAst"]);
-        if (parsed.success) {
-          field.conditionAst = parsed.output;
-        }
-      }
-      if (typeof raw["hint"] === "string") {
-        field.hint = raw["hint"];
-      }
-      const rawDateFormat = raw["dateFormat"];
-      if (
-        isRecord(rawDateFormat) &&
-        typeof rawDateFormat["locale"] === "string"
-      ) {
-        const style = DATE_FORMAT_STYLES.find(
-          (s) => s === rawDateFormat["style"],
-        );
-        if (style !== undefined) {
-          field.dateFormat = { locale: rawDateFormat["locale"], style };
-        }
-      }
-      const validation = parseValidation(raw["validation"]);
-      if (validation !== undefined) {
-        field.validation = validation;
-      }
-      return field;
-    });
+  const fields: StudioField[] = [];
+  for (const raw of manifest["fields"]) {
+    if (isRecord(raw)) {
+      fields.push(parseField(raw));
+    }
+  }
 
   // Mirror the server merge: namespace parents (a path that is only a dotted
   // prefix of others) are not fillable inputs. This keeps the display clean
@@ -211,16 +216,25 @@ export const parseFields = (manifest: unknown): StudioField[] => {
   );
 };
 
-const parseEditableParts = (raw: unknown[]): EditablePart[] =>
-  raw.filter(isRecord).map((part) => ({
-    key: typeof part["key"] === "string" ? part["key"] : "",
-    label: typeof part["label"] === "string" ? part["label"] : undefined,
-    inputType: part["inputType"] === "select" ? "select" : "text",
-    options: Array.isArray(part["options"])
-      ? part["options"].filter((o): o is string => typeof o === "string")
-      : [],
-    pattern: typeof part["pattern"] === "string" ? part["pattern"] : undefined,
-  }));
+const parseEditableParts = (raw: unknown[]): EditablePart[] => {
+  const parts: EditablePart[] = [];
+  for (const part of raw) {
+    if (!isRecord(part)) {
+      continue;
+    }
+    parts.push({
+      key: typeof part["key"] === "string" ? part["key"] : "",
+      label: typeof part["label"] === "string" ? part["label"] : undefined,
+      inputType: part["inputType"] === "select" ? "select" : "text",
+      options: Array.isArray(part["options"])
+        ? part["options"].filter((o): o is string => typeof o === "string")
+        : [],
+      pattern:
+        typeof part["pattern"] === "string" ? part["pattern"] : undefined,
+    });
+  }
+  return parts;
+};
 
 /** Parse the persisted lookup `formats` list (the sole carrier of renderings;
  *  the first entry is the default). Rows missing a key or template are
@@ -351,7 +365,9 @@ export const buildManifest = (original: unknown, fields: StudioField[]) => {
       : 1;
   return {
     version,
-    fields: fields.filter((f) => f.path).map(studioFieldToManifestField),
+    fields: fields.flatMap((f) =>
+      f.path ? [studioFieldToManifestField(f)] : [],
+    ),
   };
 };
 

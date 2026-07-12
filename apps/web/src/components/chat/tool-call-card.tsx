@@ -24,6 +24,7 @@ import {
   getChatToolTitleKey,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
+import Tooltip from "@/components/tooltip";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -457,13 +458,17 @@ export const ToolCallCard = ({
 
   return (
     <div className="my-1 text-xs">
-      <div
-        className={cn(
-          "bg-muted/30 inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 align-top",
-          hasError &&
-            "bg-destructive/10 border-destructive/60 text-destructive border",
-        )}
-        title={errorMessage}
+      <Tooltip
+        content={errorMessage}
+        render={
+          <div
+            className={cn(
+              "bg-muted/30 inline-flex max-w-full items-center gap-1.5 rounded-md px-2 py-1 align-top",
+              hasError &&
+                "bg-destructive/10 border-destructive/60 text-destructive border",
+            )}
+          />
+        }
       >
         <button
           className={cn(
@@ -528,7 +533,6 @@ export const ToolCallCard = ({
         {canExpand && (!headerOpensSkillResource || showDetails) && (
           <button
             aria-label={t("chat.toolCall.toggleDetails")}
-            title={t("chat.toolCall.toggleDetails")}
             className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 shrink-0 rounded focus-visible:ring-2 focus-visible:outline-none"
             onClick={() => {
               setExpanded((e) => !e);
@@ -543,7 +547,7 @@ export const ToolCallCard = ({
             />
           </button>
         )}
-      </div>
+      </Tooltip>
       {expanded &&
         (showMcpExactCall ||
           codeToolSource !== undefined ||

@@ -37,11 +37,10 @@ const exportHandler = async function* ({
   const conditions = [eq(clauses.organizationId, organizationId)];
 
   if (query.ids) {
-    const idList = query.ids
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map(brandPersistedClauseId);
+    const idList = query.ids.split(",").flatMap((s) => {
+      const trimmed = s.trim();
+      return trimmed ? [brandPersistedClauseId(trimmed)] : [];
+    });
     if (idList.length > 0) {
       conditions.push(inArray(clauses.id, idList));
     }
@@ -102,7 +101,7 @@ const exportHandler = async function* ({
       : [];
 
   const variantsByClause = new Map<SafeId<"clause">, ClauseExportVariant[]>();
-  for (const variant of [...variantRows].sort(
+  for (const variant of variantRows.toSorted(
     (a, b) => a.sortOrder - b.sortOrder,
   )) {
     const storedVariants = variantsByClause.get(variant.clauseId);

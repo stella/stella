@@ -191,6 +191,19 @@ const config = {
   requiresUsage: { actionType: "chat" },
 } satisfies HandlerConfig;
 
+/** IDs of workspaces the chat may touch; deleting workspaces are excluded. */
+const usableWorkspaceIds = (
+  workspaces: readonly AccessibleWorkspace[],
+): AccessibleWorkspace["id"][] => {
+  const ids: AccessibleWorkspace["id"][] = [];
+  for (const workspace of workspaces) {
+    if (workspace.status !== "deleting") {
+      ids.push(workspace.id);
+    }
+  }
+  return ids;
+};
+
 const sendMessage = createSafeRootHandler(
   config,
   async function* ({
@@ -219,9 +232,7 @@ const sendMessage = createSafeRootHandler(
     const accessibleWorkspaces = yield* Result.await(
       Result.tryPromise(async () => await getAccessibleWorkspaces()),
     );
-    const accessibleWorkspaceIds = accessibleWorkspaces
-      .filter((workspace) => workspace.status !== "deleting")
-      .map((workspace) => workspace.id);
+    const accessibleWorkspaceIds = usableWorkspaceIds(accessibleWorkspaces);
     // Real per-workspace statuses for the projected write tools' MCP context.
     // The usable ID set includes archived workspaces, so the write handlers'
     // `ensureActiveWorkspace` gate must see the true status (not a default) to
@@ -2202,6 +2213,7 @@ const insertMessages = async ({
   }
 
   const insertResult = await safeDb(async (tx) => {
+    // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -2304,7 +2316,7 @@ const runPersistMessage = async ({
           );
 
         for (const deletedMessageId of deleteMessageIds) {
-          // oxlint-disable-next-line no-await-in-loop -- sequential audit writes on the same transaction connection (one in-flight query per tx)
+          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential audit writes on the same transaction connection (one in-flight query per tx)
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,

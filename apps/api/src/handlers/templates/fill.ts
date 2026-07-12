@@ -180,7 +180,6 @@ export const fillHandler = async ({
     );
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
   if (!isTemplateData(parsed)) {
     return new Response(
       JSON.stringify({
@@ -191,6 +190,8 @@ export const fillHandler = async ({
       { status: 400, headers: { "Content-Type": "application/json" } },
     );
   }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
 
   // Draft any AI-fillable fields (manifest fields with an aiPrompt) before fill,
   // so an AI placeholder like "the scope of this power of attorney" is filled on

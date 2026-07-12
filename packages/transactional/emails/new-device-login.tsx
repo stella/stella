@@ -22,9 +22,6 @@ type Props = {
   lang: SupportedLang;
 };
 
-export const subject = (lang: SupportedLang) =>
-  getTranslator(lang)("newDeviceLogin.subject");
-
 export const Email = ({
   device,
   ipAddress,

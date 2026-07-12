@@ -52,7 +52,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
-import { Button, buttonVariants } from "@stll/ui/components/button";
+import { Button } from "@stll/ui/components/button";
+import { buttonVariants } from "@stll/ui/components/button-variants";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { ColorPicker } from "@stll/ui/components/color-picker";
 import {
@@ -261,6 +262,32 @@ const TABLE_ROWS = [
   },
 ] as const;
 
+const showPromiseToast = () => {
+  void stellaToast.promise(
+    new Promise<string>((resolve) => {
+      setTimeout(() => resolve("complete"), 900);
+    }),
+    {
+      loading: { title: "Saving draft" },
+      success: { title: "Draft saved" },
+      error: { title: "Save failed" },
+    },
+  );
+};
+
+const showUpdatingToast = () => {
+  const toastId = stellaToast.loading("Uploading bundle", {
+    description: "Preparing files",
+  });
+  setTimeout(() => {
+    stellaToast.update(toastId, {
+      title: "Upload complete",
+      description: "Three files were added to the matter.",
+      type: "success",
+    });
+  }, 900);
+};
+
 export function UiPlayground() {
   const [checkboxChecked, setCheckboxChecked] = useState(true);
   const [selectValue, setSelectValue] = useState("litigation");
@@ -282,32 +309,6 @@ export function UiPlayground() {
       .toLowerCase()
       .includes(comboboxQuery.toLowerCase()),
   );
-
-  const showPromiseToast = () => {
-    void stellaToast.promise(
-      new Promise<string>((resolve) => {
-        setTimeout(() => resolve("complete"), 900);
-      }),
-      {
-        loading: { title: "Saving draft" },
-        success: { title: "Draft saved" },
-        error: { title: "Save failed" },
-      },
-    );
-  };
-
-  const showUpdatingToast = () => {
-    const toastId = stellaToast.loading("Uploading bundle", {
-      description: "Preparing files",
-    });
-    setTimeout(() => {
-      stellaToast.update(toastId, {
-        title: "Upload complete",
-        description: "Three files were added to the matter.",
-        type: "success",
-      });
-    }, 900);
-  };
 
   return (
     <main className="bg-background min-h-0 flex-1 overflow-y-auto">
@@ -1634,40 +1635,42 @@ function SourceChipMock(props: { label: string; kind: "case-law" | "entity" }) {
   );
 }
 
+const CHAT_BUBBLE_INVENTORY_ROWS: { name: string; status: string }[] = [
+  { name: "User text", status: "✓ unified" },
+  { name: "User file attachment", status: "✗ not in unified" },
+  { name: "Assistant text + markdown", status: "✓ unified (Streamdown)" },
+  {
+    name: "Assistant with entity-mention links",
+    status: "✗ not in unified",
+  },
+  {
+    name: "Tool-approval card (create-document)",
+    status: "✗ not in unified",
+  },
+  {
+    name: "Tool-approval card (update-entity-fields)",
+    status: "✗ not in unified",
+  },
+  { name: "Ask-user card", status: "✗ not in unified" },
+  {
+    name: "Tool-call result card (non-approval)",
+    status: "✗ not in unified",
+  },
+  { name: "Chat send error", status: "✓ unified" },
+  {
+    name: "Source chips (case-law + entity)",
+    status: "partial — own model",
+  },
+  { name: "Thinking indicator", status: "partial — simpler spinner" },
+  { name: "Edit-suggestion review queue", status: "✓ unified only" },
+  {
+    name: "In-document citations (folio + pdf)",
+    status: "✓ unified only",
+  },
+];
+
 function ChatBubbleInventory() {
-  const rows: { name: string; status: string }[] = [
-    { name: "User text", status: "✓ unified" },
-    { name: "User file attachment", status: "✗ not in unified" },
-    { name: "Assistant text + markdown", status: "✓ unified (Streamdown)" },
-    {
-      name: "Assistant with entity-mention links",
-      status: "✗ not in unified",
-    },
-    {
-      name: "Tool-approval card (create-document)",
-      status: "✗ not in unified",
-    },
-    {
-      name: "Tool-approval card (update-entity-fields)",
-      status: "✗ not in unified",
-    },
-    { name: "Ask-user card", status: "✗ not in unified" },
-    {
-      name: "Tool-call result card (non-approval)",
-      status: "✗ not in unified",
-    },
-    { name: "Chat send error", status: "✓ unified" },
-    {
-      name: "Source chips (case-law + entity)",
-      status: "partial — own model",
-    },
-    { name: "Thinking indicator", status: "partial — simpler spinner" },
-    { name: "Edit-suggestion review queue", status: "✓ unified only" },
-    {
-      name: "In-document citations (folio + pdf)",
-      status: "✓ unified only",
-    },
-  ];
+  const rows = CHAT_BUBBLE_INVENTORY_ROWS;
   return (
     <ul className="text-sm">
       {rows.map((row) => (

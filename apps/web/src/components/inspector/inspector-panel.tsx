@@ -590,7 +590,9 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
 
 const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
   const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
-  const currentFileFieldIdsByPropertyRef = useRef(new Map<string, string>());
+  const [currentFileFieldIdsByProperty] = useState(
+    () => new Map<string, string>(),
+  );
   const { data: entity } = useQuery(
     entityOptions(tab.workspaceId, tab.entityId),
   );
@@ -612,7 +614,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
 
   useLayoutEffect(() => {
     if (activeFileField !== undefined) {
-      currentFileFieldIdsByPropertyRef.current.set(
+      currentFileFieldIdsByProperty.set(
         activeFileField.propertyId,
         activeFileField.id,
       );
@@ -625,7 +627,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     ) {
       return;
     }
-    const previousCurrentFieldId = currentFileFieldIdsByPropertyRef.current.get(
+    const previousCurrentFieldId = currentFileFieldIdsByProperty.get(
       latestFileFieldForProperty.propertyId,
     );
     if (previousCurrentFieldId !== tab.id) {
@@ -633,7 +635,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     }
 
     const latestFileContent = latestFileFieldForProperty.content;
-    currentFileFieldIdsByPropertyRef.current.set(
+    currentFileFieldIdsByProperty.set(
       latestFileFieldForProperty.propertyId,
       latestFileFieldForProperty.id,
     );
@@ -645,7 +647,13 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
       pdfFileId: latestFileContent.pdfFileId,
       propertyId: latestFileFieldForProperty.propertyId,
     });
-  }, [activeFileField, latestFileFieldForProperty, replaceFileFieldId, tab.id]);
+  }, [
+    activeFileField,
+    currentFileFieldIdsByProperty,
+    latestFileFieldForProperty,
+    replaceFileFieldId,
+    tab.id,
+  ]);
 
   return null;
 };

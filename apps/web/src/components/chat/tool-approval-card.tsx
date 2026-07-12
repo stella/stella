@@ -25,15 +25,14 @@ import {
   isNonPersistentGrantChatToolName,
   isPublicOfficialChatToolName,
   isRegistryWriteSummaryToolName,
-  isToolApprovedByGrant,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   ApprovalToolPart,
   ChatUITools,
-  ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
 import { SpawnSubagentsSubtaskList } from "@/components/chat/spawn-subagents-card";
+import { hasAutomaticApproval } from "@/components/chat/tool-approval-card.logic";
 import {
   buildRegistryWriteSummaryRows,
   getReadableInputRows,
@@ -263,27 +262,6 @@ const AutomaticApprovalResponse = ({ respond }: { respond: () => void }) => {
 
   return null;
 };
-
-export const hasAutomaticApproval = ({
-  alwaysApprovedTools,
-  canAlwaysAllow,
-  conversationApprovedTools,
-  isDocxEditBatch,
-  isPublicOfficialApproval,
-  name,
-}: {
-  alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;
-  canAlwaysAllow: boolean;
-  conversationApprovedTools: ReadonlySet<ToolApprovalGrant>;
-  isDocxEditBatch: boolean;
-  isPublicOfficialApproval: boolean;
-  name: ApprovalToolName;
-}) =>
-  !isNonPersistentGrantChatToolName(name) &&
-  (isDocxEditBatch ||
-    isPublicOfficialApproval ||
-    isToolApprovedByGrant(conversationApprovedTools, name) ||
-    (canAlwaysAllow && isToolApprovedByGrant(alwaysApprovedTools, name)));
 
 export const ToolApprovalCard = ({
   part,

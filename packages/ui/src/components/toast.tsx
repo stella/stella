@@ -13,7 +13,7 @@ import {
   XIcon,
 } from "lucide-react";
 
-import { buttonVariants } from "@stll/ui/components/button";
+import { buttonVariants } from "@stll/ui/components/button-variants";
 import { cn } from "@stll/ui/lib/utils";
 
 type ToastData = {

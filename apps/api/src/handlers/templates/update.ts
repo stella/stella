@@ -145,7 +145,12 @@ const updateTemplateHandler = async function* ({
 
   if (body.tags !== undefined) {
     updates.tags = [
-      ...new Set(body.tags.map((tag) => tag.trim()).filter(Boolean)),
+      ...new Set(
+        body.tags.flatMap((tag) => {
+          const trimmed = tag.trim();
+          return trimmed.length > 0 ? [trimmed] : [];
+        }),
+      ),
     ];
   }
   if (body.whenToUse !== undefined) {
@@ -245,6 +250,7 @@ const updateTemplateHandler = async function* ({
         // Under the lock: only concurrent updates of this same template
         // wait, and they must serialize anyway so vN's bytes aren't
         // overwritten before the version row commits.
+        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: each await depends on the previous one's output (S3 read -> manifest re-embed -> versioned S3 write), and the write must land before the tx.update below commits the row
         await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
 
         const [r] = await tx

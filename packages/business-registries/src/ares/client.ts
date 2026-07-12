@@ -331,7 +331,7 @@ export const searchByName = async (
 
   const data = await aresPost(SEARCH_URL, payload, isAresSearchResponse);
 
-  return data.ekonomickeSubjekty
-    .filter((entry) => entry.ico)
-    .map(parseSearchEntry);
+  return data.ekonomickeSubjekty.flatMap((entry) =>
+    entry.ico ? [parseSearchEntry(entry)] : [],
+  );
 };

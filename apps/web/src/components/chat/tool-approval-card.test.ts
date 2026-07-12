@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 process.env["VITE_API_URL"] ??= "https://api.example.test";
 const { hasAutomaticApproval } =
-  await import("@/components/chat/tool-approval-card");
+  await import("@/components/chat/tool-approval-card.logic");
 
 const noGrants = new Set<never>();
 

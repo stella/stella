@@ -151,11 +151,12 @@ export const normalizeJustification = ({
 }: NormalizeJustificationProps): Result<ParsedJustification | null, never> => {
   const blocks: JustificationBlock[] = [];
   const fileFieldIdSet = new Set<SafeId<"field">>();
+  const filenamesBySimplified = new Map(
+    filenames.map((filename) => [filename.simplified, filename]),
+  );
 
   for (const block of justification) {
-    const file = filenames.find(
-      (filename) => filename.simplified === block.file,
-    );
+    const file = filenamesBySimplified.get(block.file);
 
     if (!file) {
       continue;

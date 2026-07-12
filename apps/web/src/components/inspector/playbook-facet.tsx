@@ -993,7 +993,7 @@ const NegotiationBlock = ({
           </span>
           <ul className="text-muted-foreground ms-4 list-disc">
             {talkingPoints.map((point, index) => (
-              // eslint-disable-next-line react/no-array-index-key -- plain authored strings with no stable id; this list is read-only and never reordered from the review facet.
+              // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- plain authored strings with no stable id; this list is read-only and never reordered from the review facet.
               <li key={index}>{point}</li>
             ))}
           </ul>

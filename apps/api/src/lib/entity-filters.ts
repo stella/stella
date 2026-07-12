@@ -257,8 +257,7 @@ export const applyFilters = <T extends FilterableEntity>(
   // Prune incomplete leaves first, exactly as the SQL compiler drops them, so
   // both paths see the same shape (an incomplete leaf must not match under OR).
   const prepared = filters
-    .map(expandKindNode)
-    .map(pruneIncomplete)
+    .map((node) => pruneIncomplete(expandKindNode(node)))
     .filter((node): node is ConditionNode => node !== null);
 
   return items.filter((entity) => {

@@ -575,7 +575,7 @@ export const detectContextFidelityFeatures = (source: string): string[] => {
       features.add(feature);
     }
   }
-  return [...features].sort();
+  return [...features].toSorted();
 };
 
 export type ContextFidelityViolation = { id: string; features: string[] };
@@ -1008,8 +1008,8 @@ const renderDomainSection = ({
   entries: readonly CoverageDocEntry[];
   cliCommandPathById: ReadonlyMap<string, readonly string[]>;
 }): string => {
-  const rows = [...entries]
-    .sort((a, b) => a.id.localeCompare(b.id))
+  const rows = entries
+    .toSorted((a, b) => a.id.localeCompare(b.id))
     .map(
       (entry) =>
         `| \`${entry.id}\` | ${renderAccessCell(entry)} | ${entry.scope} | ${entry.feature ?? "—"} | ${renderReachableViaCell(entry, cliCommandPathById)} |`,

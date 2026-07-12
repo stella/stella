@@ -50,7 +50,6 @@ export const ScrollToTop = ({
       onClick={() =>
         scrollContainerRef.current?.scrollTo({ top: 0, behavior: "instant" })
       }
-      title={label}
       type="button"
     >
       <svg

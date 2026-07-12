@@ -2,10 +2,14 @@ import { render } from "@react-email/render";
 import { panic } from "better-result";
 
 import * as BetterAuthOTP from "@stll/transactional/emails/better-auth-otp";
+import { subject as betterAuthOTPSubject } from "@stll/transactional/emails/better-auth-otp-subject";
 import * as NewDeviceLogin from "@stll/transactional/emails/new-device-login";
+import { subject as newDeviceLoginSubject } from "@stll/transactional/emails/new-device-login-subject";
 import * as OrganizationInvitation from "@stll/transactional/emails/organization-invitation";
+import { subject as organizationInvitationSubject } from "@stll/transactional/emails/organization-invitation-subject";
 import * as ProductFeedback from "@stll/transactional/emails/product-feedback";
 import type { ProductFeedbackKind } from "@stll/transactional/emails/product-feedback";
+import { subject as productFeedbackSubject } from "@stll/transactional/emails/product-feedback-subject";
 
 import { env } from "@/api/env";
 import type { SupportedLang } from "@/api/lib/locale";
@@ -111,7 +115,7 @@ export const sendOTPEmail = async ({
   await getTransport().send({
     from: getTransactionalEmailFrom(),
     to: email,
-    subject: BetterAuthOTP.subject(lang),
+    subject: betterAuthOTPSubject(lang),
     html,
     text,
   });
@@ -151,7 +155,7 @@ export const sendNewDeviceLoginEmail = async ({
   await getTransport().send({
     from: getTransactionalEmailFrom(),
     to: email,
-    subject: NewDeviceLogin.subject(lang),
+    subject: newDeviceLoginSubject(lang),
     html,
     text,
   });
@@ -188,7 +192,7 @@ export const sendOrganizationInvitation = async ({
   await getTransport().send({
     from: getTransactionalEmailFrom(),
     to: email,
-    subject: OrganizationInvitation.subject(lang, {
+    subject: organizationInvitationSubject(lang, {
       organizationName,
     }),
     html,
@@ -227,7 +231,7 @@ export const sendFeedbackEmail = async ({
   await getTransport().send({
     from: getTransactionalEmailFrom(),
     to,
-    subject: ProductFeedback.subject({ kind, title }),
+    subject: productFeedbackSubject({ kind, title }),
     html,
     text,
   });

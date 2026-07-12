@@ -452,6 +452,7 @@ const createFileChatThread = async (
 
   const chatThreadId = createSafeId<"chatThread">();
 
+  // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client; recordAuditEvent and insertFileChatThread below also depend on chatThreadId just inserted
   await tx.insert(chatThreads).values({
     id: chatThreadId,
     organizationId,
@@ -517,6 +518,7 @@ const resolveFileThread = createSafeHandler(
         tx,
         input.organizationId,
       );
+      // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client
       const existing = await findFileChatThread(tx, input);
 
       if (existing) {
@@ -563,6 +565,7 @@ const resolveFileThread = createSafeHandler(
             tx,
             input.organizationId,
           );
+          // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client
           const found = await findFileChatThread(tx, input);
           if (!found) {
             return null;

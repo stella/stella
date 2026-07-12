@@ -18,6 +18,7 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
@@ -43,13 +44,13 @@ import {
   AddPropertyCell,
   RowEndFillerCell,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/end-fillers";
+import { PinnedBoundary } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import {
   addPropertyColId,
   getGridPinningStyles,
   isPinnedBoundaryColumn,
-  PinnedBoundary,
   selectColId,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
@@ -797,11 +798,15 @@ const FolderCell = ({
         paddingLeft: depth > 0 ? `${depth * 20}px` : undefined,
       }}
     >
-      <button
-        aria-label={rowToggleLabel}
-        className="flex shrink-0 items-center"
-        title={rowToggleLabel}
-        type="button"
+      <Tooltip
+        content={rowToggleLabel}
+        render={
+          <button
+            aria-label={rowToggleLabel}
+            className="flex shrink-0 items-center"
+            type="button"
+          />
+        }
       >
         <DirectionalIcon
           className={cn(
@@ -811,7 +816,7 @@ const FolderCell = ({
           flip={!isExpanded}
           icon={ChevronRightIcon}
         />
-      </button>
+      </Tooltip>
       {isExpanded ? (
         <FolderOpenIcon className="text-muted-foreground size-4 shrink-0" />
       ) : (

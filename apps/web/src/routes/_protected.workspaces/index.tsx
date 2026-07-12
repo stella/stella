@@ -1,4 +1,4 @@
-import { Fragment, useEffectEvent, useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
@@ -36,11 +36,10 @@ import {
 } from "@stll/ui/components/table";
 import { cn } from "@stll/ui/lib/utils";
 
-import {
-  EMPTY_SCREEN_MATTERS_VIDEO,
-  EmptyScreen,
-} from "@/components/empty-screen";
+import { EmptyScreen } from "@/components/empty-screen";
+import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { pageTitle } from "@/lib/page-title";
@@ -226,7 +225,7 @@ const MattersContent = ({
     return () => document.removeEventListener("keydown", handler);
   }, [displayed]);
 
-  const focusOnClient = useEffectEvent((clientId: string) => {
+  const focusOnClient = useLatestCallback((clientId: string) => {
     if (collapsedSet.has(clientId)) {
       toggleGroupCollapsed(clientId);
     }
@@ -258,7 +257,7 @@ const MattersContent = ({
     if (focusClient) {
       focusOnClient(focusClient);
     }
-  }, [focusClient]);
+  }, [focusClient, focusOnClient]);
 
   return (
     <MattersPageContextMenu canCreateMatter={canOpenCreateMatter}>
@@ -449,13 +448,12 @@ const MattersTableSkeleton = () => {
   );
 
   const hiddenColumnSet = new Set(hiddenColumns);
-  const columns: SkeletonColumn[] = [
-    { id: "name" },
-    ...ALL_COLUMNS.filter((id) => !hiddenColumnSet.has(id)).map((id) => ({
-      id,
-      width: SKELETON_COLUMN_WIDTHS[id],
-    })),
-  ];
+  const columns: SkeletonColumn[] = [{ id: "name" }];
+  for (const id of ALL_COLUMNS) {
+    if (!hiddenColumnSet.has(id)) {
+      columns.push({ id, width: SKELETON_COLUMN_WIDTHS[id] });
+    }
+  }
 
   const headerLabel = (id: SkeletonColumn["id"]): string =>
     id === "name" ? sortLabels.name : columnLabels[id];

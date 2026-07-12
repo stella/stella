@@ -1,8 +1,9 @@
-import { useCallback, useEffectEvent, useRef } from "react";
+import { useCallback, useRef } from "react";
 import type { RefCallback, RefObject } from "react";
 
 import { useThrottledCallback } from "use-debounce";
 
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { PAGE_ID_ATTRIBUTE } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 
@@ -14,6 +15,15 @@ type UsePageVisibilityProps = {
 type UsePageVisibilityResult = {
   containerRef: RefCallback<HTMLDivElement>;
   lastReportedPageRef: RefObject<number | null>;
+};
+
+/** Lazily initializes the ref-held ratios Map on first use instead of
+ *  allocating a fresh (and discarded) instance on every render. */
+const getOrCreateRatiosMap = (ref: {
+  current: Map<string, number> | null;
+}): Map<string, number> => {
+  ref.current ??= new Map();
+  return ref.current;
 };
 
 /**
@@ -32,10 +42,10 @@ export const usePageVisibility = ({
 }: UsePageVisibilityProps): UsePageVisibilityResult => {
   const updateVisiblePages = usePDFStore((s) => s.updateVisiblePages);
 
-  const visiblePageRatiosRef = useRef(new Map<string, number>());
+  const visiblePageRatiosRef = useRef<Map<string, number> | null>(null);
   const lastReportedPageRef = useRef<number | null>(null);
 
-  const onPageChangedEvent = useEffectEvent((page: number) => {
+  const onPageChangedEvent = useLatestCallback((page: number) => {
     lastReportedPageRef.current = page;
     onPageChanged?.(page);
   });
@@ -43,7 +53,6 @@ export const usePageVisibility = ({
   const throttledUpdate = useThrottledCallback(updateVisiblePages, 150);
 
   const containerRef = useCallback(
-    // eslint-disable-next-line react/react-compiler -- effect-event read inside a load-bearing useCallback: onPageChangedEvent is a useEffectEvent (stable, always-latest) that must stay out of the dep array, but the compiler infers it as a dependency it cannot reconcile, so it cannot preserve this memo
     (container: HTMLDivElement | null) => {
       if (!container || pageIds.length === 0) {
         return undefined;
@@ -51,7 +60,7 @@ export const usePageVisibility = ({
 
       const observer = new IntersectionObserver(
         (entries) => {
-          const ratios = visiblePageRatiosRef.current;
+          const ratios = getOrCreateRatiosMap(visiblePageRatiosRef);
 
           for (const entry of entries) {
             const pageId = entry.target.getAttribute(PAGE_ID_ATTRIBUTE);
@@ -101,7 +110,7 @@ export const usePageVisibility = ({
         observer.observe(pageElement);
       }
 
-      const ratios = visiblePageRatiosRef.current;
+      const ratios = getOrCreateRatiosMap(visiblePageRatiosRef);
 
       return () => {
         observer.disconnect();
@@ -109,9 +118,7 @@ export const usePageVisibility = ({
         ratios.clear();
       };
     },
-    // onPageChangedEvent is a useEffectEvent (stable, always-latest) so it is
-    // intentionally not a dependency.
-    [pageIds, throttledUpdate],
+    [pageIds, throttledUpdate, onPageChangedEvent],
   );
 
   return { containerRef, lastReportedPageRef };

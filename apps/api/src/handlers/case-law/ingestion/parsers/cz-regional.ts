@@ -222,8 +222,7 @@ export const parseRegionalDecision = (
   }
 
   const fulltext = blocks
-    .map((b) => b.plainText)
-    .filter(Boolean)
+    .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
   // Build validation HTML from the structured sections so word

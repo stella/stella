@@ -111,24 +111,29 @@ const updateRateTable = createSafeHandler(
           }
         }
 
-        await recordAuditEvent(tx, [
+        const auditEvents = [
           {
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.RATE_TABLE,
             resourceId: body.id,
             changes,
           },
-          ...previousDefaults
-            .filter((row) => row.id !== body.id)
-            .map((row) => ({
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.RATE_TABLE,
-              resourceId: row.id,
-              changes: {
-                isDefault: { old: true, new: false },
-              },
-            })),
-        ]);
+        ];
+        for (const row of previousDefaults) {
+          if (row.id === body.id) {
+            continue;
+          }
+          auditEvents.push({
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.RATE_TABLE,
+            resourceId: row.id,
+            changes: {
+              isDefault: { old: true, new: false },
+            },
+          });
+        }
+
+        await recordAuditEvent(tx, auditEvents);
       }),
     );
 

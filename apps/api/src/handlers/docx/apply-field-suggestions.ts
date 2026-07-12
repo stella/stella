@@ -71,7 +71,7 @@ export const applyFieldSuggestions = (
   // longer one, but record only which suggestions actually matched — the
   // emitted fields/unapplied keep document (original) order below.
   const applied = new Set<FieldSuggestion>();
-  for (const suggestion of [...suggestions].sort(
+  for (const suggestion of suggestions.toSorted(
     (a, b) => b.literalText.length - a.literalText.length,
   )) {
     if (!suggestion.literalText || !suggestion.fieldPath) {

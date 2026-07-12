@@ -116,6 +116,7 @@ describe("Map serialization roundtrip", () => {
       },
       version: 0,
     };
+    // eslint-disable-next-line react-doctor/no-json-parse-stringify-clone -- test asserts the persisted wire format through the custom replacer
     const wire: unknown = JSON.parse(JSON.stringify(data, replacer));
 
     expect(wire).toEqual({

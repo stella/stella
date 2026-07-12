@@ -2,7 +2,6 @@ import {
   createContext,
   use,
   useCallback,
-  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -50,9 +49,10 @@ import {
   PromptSlash,
   type SlashItem,
 } from "@/components/chat/prompt-slash-extension";
-import { createPromptEditorDocument } from "@/components/prompt-editor";
+import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
@@ -254,14 +254,40 @@ const isSelectionAtStart = ({ selection }: EditorState) =>
 const isSelectionAtEnd = ({ doc, selection }: EditorState) =>
   selection.empty && selection.to >= doc.content.size - 1;
 
+const handleDragOver = (event: React.DragEvent) => {
+  event.preventDefault();
+};
+
+/** Lazily initializes a ref-held Map on first use instead of allocating a
+ *  fresh (and discarded) instance on every render. Module-scope so callers can
+ *  reference it inside memoized callbacks without listing it as a dependency. */
+const getOrCreateMap = <K, V>(ref: {
+  current: Map<K, V> | null;
+}): Map<K, V> => {
+  ref.current ??= new Map();
+  return ref.current;
+};
+
+/** Same lazy-init pattern as {@link getOrCreateMap}, for a ref-held WeakSet. */
+const getOrCreateWeakSet = <T extends object>(ref: {
+  current: WeakSet<T> | null;
+}): WeakSet<T> => {
+  ref.current ??= new WeakSet();
+  return ref.current;
+};
+
 export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
-  const registrationsRef = useRef(new Map<string, RegisteredExtension>());
+  const registrationsRef = useRef<Map<string, RegisteredExtension> | null>(
+    null,
+  );
   const activeEditorRef = useRef<ActiveChatEditorHandle | null>(null);
   const [extensionVersion, setExtensionVersion] = useState(0);
 
   const getMentionItems = useCallback(async () => {
     const items: ChatMentionOption[] = [];
-    const sources = Array.from(registrationsRef.current.values()).flatMap(
+    const sources = Array.from(
+      getOrCreateMap(registrationsRef).values(),
+    ).flatMap(
       ({ registration }) =>
         registration.mentionSources ?? EMPTY_MENTION_SOURCES,
     );
@@ -286,7 +312,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const getPluginRegistrations = useCallback(() => {
     const plugins: ChatInputPluginRegistration[] = [];
 
-    for (const { registration } of registrationsRef.current.values()) {
+    for (const { registration } of getOrCreateMap(registrationsRef).values()) {
       if (!registration.plugins) {
         continue;
       }
@@ -302,7 +328,9 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
 
     // Mention sources are independent; query them in parallel and append
     // results in registration/source order (preserved by Promise.all).
-    const sources = Array.from(registrationsRef.current.values()).flatMap(
+    const sources = Array.from(
+      getOrCreateMap(registrationsRef).values(),
+    ).flatMap(
       ({ registration }) =>
         registration.mentionSources ?? EMPTY_MENTION_SOURCES,
     );
@@ -331,19 +359,19 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const registerExtension = useCallback(
     (id: string, registration: ChatInputExtensionRegistration) => {
       const token = Symbol(id);
-      registrationsRef.current.set(id, {
+      getOrCreateMap(registrationsRef).set(id, {
         registration,
         token,
       });
       setExtensionVersion((value) => value + 1);
 
       return () => {
-        const current = registrationsRef.current.get(id);
+        const current = getOrCreateMap(registrationsRef).get(id);
         if (current === undefined || current.token !== token) {
           return;
         }
 
-        registrationsRef.current.delete(id);
+        getOrCreateMap(registrationsRef).delete(id);
         setExtensionVersion((value) => value + 1);
       };
     },
@@ -574,7 +602,7 @@ export const useChatEditor = ({
   // switch resets this set (see the reset effect below). The stored draft for
   // the incoming thread was authored under the previous thread's set, so it
   // counts as external and gets restored into the editor.
-  const editorAuthoredDocsRef = useRef(new WeakSet<JSONContent>());
+  const editorAuthoredDocsRef = useRef<WeakSet<JSONContent> | null>(null);
   const isNavigatingHistoryRef = useRef(false);
   const draftStartedThreadKeyRef = useRef<string | null>(null);
   const sentMessageHistoryHtmlRef = useRef<readonly string[]>([]);
@@ -771,7 +799,7 @@ export const useChatEditor = ({
     [debouncedFetchWorkspaceEntities],
   );
 
-  const handleEditorUpdate = useEffectEvent((nextEditor: Editor) => {
+  const handleEditorUpdate = useLatestCallback((nextEditor: Editor) => {
     setIsEmpty(nextEditor.isEmpty);
 
     if (isApplyingStoredDraftRef.current) {
@@ -800,7 +828,7 @@ export const useChatEditor = ({
     // Mark this doc as editor-authored so the (lagging) draft-apply effect
     // never reverts the editor to it. `nextDraft.doc` is the exact object the
     // store will hand back as `draftDoc`, so identity membership is reliable.
-    editorAuthoredDocsRef.current.add(nextDraft.doc);
+    getOrCreateWeakSet(editorAuthoredDocsRef).add(nextDraft.doc);
     setDraft(threadKey, nextDraft);
 
     if (!nextEditor.isEmpty) {
@@ -1132,7 +1160,9 @@ export const useChatEditor = ({
     if (
       !shouldApplyStoredDraftToEditor({
         draftDoc,
-        editorAuthoredDraft: editorAuthoredDocsRef.current.has(draftDoc),
+        editorAuthoredDraft: getOrCreateWeakSet(editorAuthoredDocsRef).has(
+          draftDoc,
+        ),
         editorDoc: editor.getJSON(),
       })
     ) {
@@ -1269,10 +1299,6 @@ export const useChatEditor = ({
     }
 
     addFiles(event.dataTransfer.files);
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
   };
 
   const handlePaste = (event: React.ClipboardEvent) => {

@@ -18,6 +18,7 @@ export const revokeOrganizationMemberAuthArtifacts = async (
   tx: Transaction,
   { organizationId, userId }: RevokeOrganizationMemberAuthArtifactsOptions,
 ): Promise<void> => {
+  // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (tx) as the refreshToken/consent/session deletes below; a single connection can't run concurrent statements
   await tx
     .delete(oauthAccessToken)
     .where(

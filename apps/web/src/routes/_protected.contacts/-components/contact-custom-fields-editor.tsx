@@ -35,6 +35,9 @@ export const ContactCustomFieldsEditor = ({
       return;
     }
 
+    // Captured before the optimistic clear below so the rollback callback
+    // can restore what the user had typed.
+    const previousValueDraft = valueDraft;
     saveContactPatch(
       {
         metadata: {
@@ -51,7 +54,7 @@ export const ContactCustomFieldsEditor = ({
       },
       () => {
         setLabelDraft(label);
-        setValueDraft(valueDraft);
+        setValueDraft(previousValueDraft);
       },
     );
     setLabelDraft("");

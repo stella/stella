@@ -65,7 +65,7 @@ import {
 import { AddMcpServerSheet } from "./add-mcp-server-sheet";
 import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
 import { InstallPackButton } from "./install-pack-button";
-import { toolDetailTabId, type ToolDetailPayload } from "./tool-detail-view";
+import { getToolDetailPayload, toolDetailTabId } from "./tool-detail";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";
 
@@ -114,30 +114,6 @@ const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
   iconUrl: entry.iconUrl,
   jurisdictions: entry.jurisdictions,
 });
-
-export const getToolDetailPayload = (
-  entry: CatalogueEntry,
-  organizationId: string,
-): ToolDetailPayload => {
-  const activeSkill =
-    entry.kind === "skill" && entry.chatSkillId !== null
-      ? {
-          skillId: entry.chatSkillId,
-          skillName: entry.displayName,
-        }
-      : undefined;
-
-  return {
-    kind: entry.kind,
-    slug: entry.slug,
-    organizationId,
-    ...(activeSkill === undefined ? {} : { activeSkill }),
-    iconHint: {
-      icon: entry.icon,
-      iconUrl: entry.iconUrl ?? null,
-    },
-  };
-};
 
 export const CatalogueBrowser = ({
   organizationId,
@@ -240,7 +216,7 @@ export const CatalogueBrowser = ({
         set.add(code);
       }
     }
-    return [...set].sort();
+    return [...set].toSorted();
   })();
 
   const onRowFocus = (entry: CatalogueEntry) => {
@@ -346,7 +322,7 @@ export const CatalogueBrowser = ({
               <span className="min-w-0 truncate">
                 {jurisdictionFilter.size === 0
                   ? t("common.all")
-                  : [...jurisdictionFilter].sort().join(", ")}
+                  : [...jurisdictionFilter].toSorted().join(", ")}
               </span>
               <ChevronDownIcon className="size-3.5" />
             </PopoverTrigger>
@@ -476,7 +452,7 @@ export const CatalogueBrowser = ({
       {jurisdictionFilter.size > 0 && (
         <p className="text-muted-foreground -mt-3 text-xs">
           {t("catalogue.filterHint", {
-            codes: [...jurisdictionFilter].sort().join(", "),
+            codes: [...jurisdictionFilter].toSorted().join(", "),
           })}{" "}
           <button
             className="hover:text-foreground underline underline-offset-2"
@@ -732,10 +708,11 @@ const CatalogueEntryRow = ({
     // (e.g. anonymisation that gates AI access).
     actions = (
       <span
+        aria-label={t("catalogue.installedShort")}
         className="text-muted-foreground inline-flex items-center gap-1 text-xs"
-        title={t("catalogue.installedShort")}
+        role="img"
       >
-        <CheckIcon className="size-3.5" />
+        <CheckIcon aria-hidden className="size-3.5" />
       </span>
     );
   } else if (entry.installState === "unavailable") {

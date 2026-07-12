@@ -183,25 +183,27 @@ export const getLabeledEventAttributes = (
 
 export const collectUnknownEventAttributeTypes = (
   detail: Pick<EventDetailResult, "atributy">,
-): string[] =>
-  Array.from(
-    new Set(
-      detail.atributy
-        .map(({ typ }) => typ)
-        .filter((attributeType) => !isKnownEventAttributeType(attributeType)),
-    ),
-  ).toSorted();
+): string[] => {
+  const unknownTypes: string[] = [];
+  for (const { typ } of detail.atributy) {
+    if (!isKnownEventAttributeType(typ)) {
+      unknownTypes.push(typ);
+    }
+  }
+  return Array.from(new Set(unknownTypes)).toSorted();
+};
 
 export const collectUnknownEventTypes = (
   events: readonly Pick<CaseEvent | CaseEventWithDetail, "udalost">[],
-): string[] =>
-  Array.from(
-    new Set(
-      events
-        .map(({ udalost }) => udalost)
-        .filter((eventType) => !isKnownEventType(eventType)),
-    ),
-  ).toSorted();
+): string[] => {
+  const unknownTypes: string[] = [];
+  for (const { udalost } of events) {
+    if (!isKnownEventType(udalost)) {
+      unknownTypes.push(udalost);
+    }
+  }
+  return Array.from(new Set(unknownTypes)).toSorted();
+};
 
 export const collectUnknownInfoSoudCodes = ({
   details = [],

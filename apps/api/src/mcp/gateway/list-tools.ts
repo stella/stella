@@ -79,11 +79,12 @@ export const listGatewayMcpToolDefinitions = async ({
 
   if (hasGrantedScope(scopes, "stella:external_mcps")) {
     for (const tool of await listGatewayExternalMcpTools({ context })) {
+      const { readOnlyHint } = tool.cachedTool;
       definitions.push({
-        access: externalMcpToolAccess(tool.cachedTool.readOnlyHint),
-        ...(tool.cachedTool.readOnlyHint === undefined
+        access: externalMcpToolAccess(readOnlyHint),
+        ...(readOnlyHint === undefined
           ? {}
-          : { annotations: { readOnlyHint: tool.cachedTool.readOnlyHint } }),
+          : { annotations: { readOnlyHint } }),
         anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: externalToolDescription({
           connectorDisplayName: tool.connectorDisplayName,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-node";
-import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor";
+import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-extension";
+import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
 import type { ClauseParagraph } from "./clause-editor-types";
 
 const directive = (

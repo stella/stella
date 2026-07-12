@@ -70,8 +70,10 @@ const extractPdfPlaintext = async (pdfBytes: Uint8Array): Promise<string> => {
   for (const page of pages) {
     const result = page.extractText();
     const pageText = result.lines
-      .map((line) => line.text.trim())
-      .filter(Boolean)
+      .flatMap((line) => {
+        const trimmed = line.text.trim();
+        return trimmed ? [trimmed] : [];
+      })
       .join("\n");
     if (pageText) {
       parts.push(pageText);
@@ -157,7 +159,7 @@ const extractEmailPlaintext = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential recursive extraction preserves attachment order and bounds memory
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential recursive extraction preserves attachment order and bounds memory
     const text = await extractAttachmentPlaintext({
       bytes: attachment.bytes,
       maxChars,

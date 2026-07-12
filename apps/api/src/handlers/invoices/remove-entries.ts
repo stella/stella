@@ -205,6 +205,7 @@ const removeEntries = createSafeHandler(
             ),
           );
 
+        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client (tx)
         const remainingExpenses = await tx
           .select({
             amount: expenses.amount,

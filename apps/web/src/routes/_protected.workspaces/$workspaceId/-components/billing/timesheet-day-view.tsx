@@ -13,13 +13,13 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { BatchActionBar } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar";
 import {
-  formatDecimalHours,
-  formatMinutes,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
-import {
   DEFAULT_CURRENCY,
   formatCurrencyAmount,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
+import {
+  formatDecimalHours,
+  formatMinutes,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import { TimeEntryForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import type { TimeEntryFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";

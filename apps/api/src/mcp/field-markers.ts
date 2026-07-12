@@ -30,6 +30,7 @@ export const buildFieldMarkers = ({
       }),
     );
     const hasCollision = markers.some((marker) =>
+      // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
       fields.some((field) => field.includes(marker)),
     );
 

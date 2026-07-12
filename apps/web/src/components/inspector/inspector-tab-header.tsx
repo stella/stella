@@ -190,7 +190,6 @@ export const MatterOriginLink = ({
   <button
     className="text-muted-foreground hover:text-foreground hover:bg-accent inline-flex max-w-[220px] items-center gap-1 truncate rounded-md px-1.5 py-0.5 text-[11px] transition-colors"
     onClick={onClick}
-    title={name}
     type="button"
   >
     <MatterIcon className="size-3 shrink-0" matter={{ id, color }} />

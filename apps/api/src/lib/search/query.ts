@@ -305,8 +305,10 @@ const toSearchLexemes = (
       .matchAll(/[\p{L}\p{N}]+/gu),
     (match) => match[0],
   )
-    .map((token) => (mode === "folded" ? applyArabicFolds(token) : token))
-    .filter((token) => token.length > 0)
+    .flatMap((token) => {
+      const next = mode === "folded" ? applyArabicFolds(token) : token;
+      return next.length > 0 ? [next] : [];
+    })
     .slice(0, PREFIX_QUERY_TOKEN_LIMIT);
 
 const toSearchLexemeGroups = (

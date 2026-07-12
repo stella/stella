@@ -155,7 +155,7 @@ export const FilterChips = ({
             <AdvancedFilterChip
               facetContext={facetContext}
               fields={fields}
-              // eslint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
+              // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
               key={index}
               node={node}
               onChange={(next) => replaceAt(index, next)}
@@ -169,7 +169,7 @@ export const FilterChips = ({
           <FilterChip
             facetContext={facetContext}
             fields={fields}
-            // eslint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
+            // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit); popover-open state is lifted to the parent's `openIndex` (see removeAt) instead of living on this row, so index-keyed reuse never mismatches rendered content.
             key={index}
             node={node}
             onChange={(next) => replaceAt(index, next)}
@@ -771,19 +771,17 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
   ];
 
   for (const property of properties) {
-    if (property.content.type === "file") {
+    const content = property.content;
+    if (content.type === "file") {
       continue;
     }
-    if (
-      property.content.type === "single-select" ||
-      property.content.type === "multi-select"
-    ) {
+    if (content.type === "single-select" || content.type === "multi-select") {
       fields.push({
         operand: { type: "property", propertyId: property.id },
         label: property.name,
-        valueType: property.content.type,
-        type: property.content.type,
-        options: property.content.options.map((option) => ({
+        valueType: content.type,
+        type: content.type,
+        options: content.options.map((option) => ({
           value: option.value,
           label: option.value,
           color: option.color,
@@ -794,8 +792,8 @@ const useFilterFields = (properties: WorkspaceProperty[]): FieldOption[] => {
     fields.push({
       operand: { type: "property", propertyId: property.id },
       label: property.name,
-      valueType: property.content.type,
-      type: property.content.type,
+      valueType: content.type,
+      type: content.type,
     });
   }
 

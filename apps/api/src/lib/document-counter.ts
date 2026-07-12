@@ -60,6 +60,7 @@ export const allocateEntityStamp = async (
 ): Promise<EntityStamp> => {
   const docSequence = await allocateDocSequence(tx, workspaceId);
 
+  // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client (tx) as allocateDocSequence above; a single connection can't run concurrent statements
   const ws = await tx.query.workspaces.findFirst({
     where: { id: { eq: workspaceId } },
     columns: { reference: true },

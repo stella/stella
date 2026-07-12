@@ -117,11 +117,11 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const treeData = useMemo(
     () =>
       toTableEntities(
-        data.pages
-          .flatMap((window) => window.entities)
-          .filter(
+        data.pages.flatMap((window) =>
+          window.entities.filter(
             (entity) => entity.kind !== "folder" && entity.kind !== "task",
           ),
+        ),
       ),
     [data.pages],
   );

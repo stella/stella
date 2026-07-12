@@ -54,11 +54,10 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
-import {
-  EMPTY_SCREEN_MATTERS_VIDEO,
-  EmptyScreen,
-} from "@/components/empty-screen";
+import { EmptyScreen } from "@/components/empty-screen";
+import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { PersonMentionLabel } from "@/components/person-mention-label";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import {
   getFormatter,
@@ -1304,12 +1303,14 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
         </BidiText>
       </span>
       {relTime && (
-        <span
-          className="text-muted-foreground shrink-0 text-xs tabular-nums"
-          title={formatFullTimestamp(entity.updatedAt ?? entity.createdAt)}
-        >
-          {relTime}
-        </span>
+        <Tooltip
+          content={formatFullTimestamp(entity.updatedAt ?? entity.createdAt)}
+          render={
+            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+              {relTime}
+            </span>
+          }
+        />
       )}
       {/* oxlint-disable-next-line jsx_a11y/click-events-have-key-events, jsx_a11y/no-static-element-interactions -- non-interactive wrapper; only stops row-open clicks bubbling from the already-keyboard-accessible RowActions trigger */}
       <span className="shrink-0" onClick={(e) => e.stopPropagation()}>

@@ -1,5 +1,5 @@
 import type React from "react";
-import { Children, useState } from "react";
+import { Fragment, isValidElement, useState } from "react";
 
 import { skipToken, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -64,17 +64,33 @@ const ENTITY_EXTENSION_RE = /\.(?<ext>[A-Za-z0-9]{1,8})$/u;
 const FOLDER_LABEL_RE = /^(?:folder|složka|priečinok)\b/iu;
 const TASK_LABEL_RE = /^(?:task|úkol|úloha)\b/iu;
 
+const SKILL_CHIP_ICON = <WandSparklesIcon className="size-3 shrink-0" />;
+
+const isReactNodeArray = (
+  node: React.ReactNode,
+): node is readonly React.ReactNode[] => Array.isArray(node);
+
 const getPlainText = (node: React.ReactNode): string | null => {
   if (typeof node === "string" || typeof node === "number") {
     return String(node);
   }
 
-  if (!Array.isArray(node)) {
+  if (
+    isValidElement<{ children?: React.ReactNode }>(node) &&
+    node.type === Fragment
+  ) {
+    return getPlainText(node.props.children);
+  }
+
+  if (!isReactNodeArray(node)) {
     return null;
   }
 
   const parts: string[] = [];
-  for (const child of Children.toArray(node)) {
+  for (const child of node) {
+    if (child === null || child === undefined || typeof child === "boolean") {
+      continue;
+    }
     const text = getPlainText(child);
     if (text === null) {
       return null;
@@ -295,17 +311,16 @@ const SkillRefChip = ({
   interactive: boolean;
 }) => {
   const navigate = useNavigate();
-  const icon = <WandSparklesIcon className="size-3 shrink-0" />;
   if (!interactive) {
     return (
-      <InlinePill leadingIcon={icon} truncate>
+      <InlinePill leadingIcon={SKILL_CHIP_ICON} truncate>
         {label}
       </InlinePill>
     );
   }
   return (
     <InlinePill
-      leadingIcon={icon}
+      leadingIcon={SKILL_CHIP_ICON}
       onActivate={() =>
         void navigate({ to: "/knowledge/tools", search: { kind: "skill" } })
       }
@@ -692,13 +707,13 @@ const collectChipText = (node: React.ReactNode): string => {
   if (Array.isArray(node)) {
     return node.map(collectChipText).join("");
   }
-  return Children.toArray(node)
-    .map((child) =>
-      typeof child === "string" || typeof child === "number"
-        ? String(child)
-        : "",
-    )
-    .join("");
+  if (
+    isValidElement<{ children?: React.ReactNode }>(node) &&
+    node.type === Fragment
+  ) {
+    return collectChipText(node.props.children);
+  }
+  return "";
 };
 
 const pickActiveDocxTabId = (
@@ -774,11 +789,6 @@ const FaviconCitationChip = ({
           "inline-flex items-center gap-1",
         )}
         onClick={handleClick}
-        title={
-          hoverTitle && hoverTitle !== hostname
-            ? `${hoverTitle} — ${hostname}`
-            : hostname
-        }
         type="button"
       >
         <span>{children}</span>

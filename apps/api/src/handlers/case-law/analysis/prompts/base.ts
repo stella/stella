@@ -45,6 +45,7 @@ export const formatDecisionForPrompt = (
   blocks: { anchorId: string; plainText: string; type: string }[],
 ): string =>
   blocks
-    .filter((b) => b.plainText.trim().length > 0)
-    .map((b) => `[${b.anchorId}] ${b.plainText}`)
+    .flatMap((b) =>
+      b.plainText.trim().length > 0 ? [`[${b.anchorId}] ${b.plainText}`] : [],
+    )
     .join("\n\n");

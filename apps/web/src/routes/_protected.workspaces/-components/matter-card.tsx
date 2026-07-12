@@ -13,6 +13,7 @@ import {
 } from "@stll/ui/components/preview-card";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
@@ -196,18 +197,18 @@ export const MatterCard = ({
                     textSize="text-[0.5rem]"
                   />
                 )}
-                <span
-                  className={cn("shrink-0", recencyClass)}
-                  title={new Date(workspace.lastActivityAt).toLocaleString(
+                <Tooltip
+                  content={new Date(workspace.lastActivityAt).toLocaleString(
                     getFormattingLocale(),
                     {
                       dateStyle: "full",
                       timeStyle: "medium",
                     },
                   )}
+                  render={<span className={cn("shrink-0", recencyClass)} />}
                 >
                   {lastActivityAt}
-                </span>
+                </Tooltip>
               </div>
             </div>
           </PreviewCardTrigger>
@@ -305,12 +306,12 @@ const PreviewPopupContent = ({ preview }: PreviewPopupContentProps) => {
             )}
             <span className="min-w-0 flex-1 truncate">{entity.name}</span>
             {entity.updatedAt && (
-              <span
-                className="text-muted-foreground shrink-0"
-                title={formatFullTimestamp(entity.updatedAt)}
+              <Tooltip
+                content={formatFullTimestamp(entity.updatedAt)}
+                render={<span className="text-muted-foreground shrink-0" />}
               >
                 {formatRelativeTime(entity.updatedAt)}
-              </span>
+              </Tooltip>
             )}
           </div>
         ))}

@@ -18,7 +18,7 @@ import {
 } from "@/components/docx-preview-zoom";
 import { DocxEditor } from "@/components/docx/app-docx-editor";
 import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
-import { composeRefs } from "@/lib/slot";
+import { composeRefs } from "@/lib/utils";
 
 // Flatten Word constructs markdown can't carry so the emitted markdown stays
 // clean: drop comments/annotations, flatten tracked changes, inline links,

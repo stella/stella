@@ -52,9 +52,9 @@ export const acquireCellLocks = async ({
   // Sort so concurrent callers with overlapping candidate sets
   // acquire locks in the same order; otherwise interleaved batches
   // can deadlock.
-  const sorted = [...propertyIds].sort();
+  const sorted = propertyIds.toSorted();
   for (const propertyId of sorted) {
-    // oxlint-disable-next-line no-await-in-loop -- locks acquired in sorted order within one tx to avoid deadlock
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: locks acquired in sorted order within one tx to avoid deadlock; parallelizing would defeat the ordering
     await acquireCellLock({ tx, entityVersionId, propertyId });
   }
 };

@@ -75,6 +75,7 @@ export const usePdfTabZoom = ({
       });
     };
 
+    // eslint-disable-next-line github/require-passive-events -- handler calls preventDefault (pinch-zoom); passive:false is required and set
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [activeId, activeTabType]);

@@ -115,21 +115,22 @@ export const collectFileCopySources = ({
       continue;
     }
     for (const field of entity.currentVersion.fields) {
-      if (field.content.type === "file" && field.content.id) {
-        const { mimeType } = field.content;
-        sources.push({
-          sourceEntityId: entity.id,
-          sourceFileId: field.content.id,
-          sourcePropertyId: field.propertyId,
-          mimeType,
-          sourceKey: createFileKey({
-            organizationId,
-            workspaceId: sourceWorkspaceId,
-            fileId: field.content.id,
-            mimeType,
-          }),
-        });
+      if (field.content.type !== "file" || !field.content.id) {
+        continue;
       }
+      const { mimeType, id: fileId } = field.content;
+      sources.push({
+        sourceEntityId: entity.id,
+        sourceFileId: fileId,
+        sourcePropertyId: field.propertyId,
+        mimeType,
+        sourceKey: createFileKey({
+          organizationId,
+          workspaceId: sourceWorkspaceId,
+          fileId,
+          mimeType,
+        }),
+      });
     }
   }
 
@@ -592,17 +593,6 @@ export const copyEntities = async ({
     const newParentId =
       source.id === sourceEntityId ? targetParentId : mappedParentId;
 
-    const copyName =
-      source.id === sourceEntityId
-        ? // oxlint-disable-next-line no-await-in-loop -- copy steps depend on prior-created parent IDs in idMap; iterations must run sequentially in order
-          await resolveEntityName({
-            tx,
-            workspaceId: targetWorkspaceId,
-            parentId: newParentId ?? null,
-            name: source.name,
-          })
-        : source.name;
-
     if (source.id !== sourceEntityId && newParentId === undefined) {
       return {
         ok: false,
@@ -611,13 +601,24 @@ export const copyEntities = async ({
       };
     }
 
+    const copyName =
+      source.id === sourceEntityId
+        ? // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: copy steps depend on prior-created parent IDs in idMap; iterations must run sequentially in order
+          await resolveEntityName({
+            tx,
+            workspaceId: targetWorkspaceId,
+            parentId: newParentId ?? null,
+            name: source.name,
+          })
+        : source.name;
+
     const entityStamp =
       source.kind === "document"
         ? // oxlint-disable-next-line no-await-in-loop -- stamp allocation is a sequential per-workspace counter; must run in order within the transaction
           await allocateEntityStamp(tx, targetWorkspaceId)
         : null;
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential inserts; children reference parent IDs created in earlier iterations
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-parallel -- sequential by design: same DB transaction client; children reference parent IDs created in earlier iterations, and the version insert/currentVersionId update just below depend on this row
     await tx.insert(entities).values({
       id: newEntityId,
       workspaceId: targetWorkspaceId,

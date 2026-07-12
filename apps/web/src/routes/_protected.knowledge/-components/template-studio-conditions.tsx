@@ -16,7 +16,7 @@ import * as v from "valibot";
 import type { ConditionNode, GroupNode, Operand } from "@stll/conditions";
 import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
 import type { DirectiveRange } from "@stll/folio-react";
-import { isFieldPath, serializeCondition } from "@stll/template-conditions";
+import { serializeCondition } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
@@ -31,12 +31,18 @@ import { TextSeparator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
+import { ConditionGroupEditor } from "@/routes/_protected.knowledge/-components/condition-builder";
 import {
-  ConditionGroupEditor,
   emptyGroup,
   toRuleFields,
-} from "@/routes/_protected.knowledge/-components/condition-builder";
-import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
+} from "@/routes/_protected.knowledge/-components/condition-builder-fields";
+import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention-extension";
+import {
+  booleanFieldForExpr,
+  conditionSourceOf,
+  reusableConditions,
+} from "@/routes/_protected.knowledge/-components/template-studio-condition-source";
+import type { ConditionSource } from "@/routes/_protected.knowledge/-components/template-studio-condition-source";
 import {
   nextFreePath,
   sanitizeFieldPath,
@@ -88,50 +94,6 @@ const ScopeHeader = ({
     </div>
   );
 };
-
-export const booleanFieldForExpr = (
-  expr: string,
-  fields: readonly StudioField[],
-): StudioField | undefined => {
-  const trimmed = expr.trim();
-  if (trimmed === "" || !isFieldPath(trimmed)) {
-    return undefined;
-  }
-  const field = fields.find((f) => f.path === trimmed);
-  return field?.inputType === "boolean" ? field : undefined;
-};
-
-// ── Conditions = boolean fields ──────────────────────────
-
-/** How a boolean field's yes/no value arises. The three are mutually
- *  exclusive (backend-validated):
- *   - asked: a plain boolean, answered Yes/No in the fill form (a question).
- *   - rule:  DERIVED from `condition` (a `@stll/template-conditions` rule).
- *   - ai:    decided by the model from `aiPrompt`.
- *  A boolean field is always a reusable condition; this discriminates only
- *  *how* it resolves. */
-type ConditionSource =
-  | { kind: "asked" }
-  | { kind: "rule"; expr: string; node?: ConditionNode }
-  | { kind: "ai"; prompt: string };
-
-const conditionSourceOf = (field: StudioField): ConditionSource => {
-  // An AST is authoritative when set (formula rules have no `{{#if}}` string
-  // form, so they only ever round-trip as the AST).
-  if (field.conditionAst !== undefined) {
-    return { kind: "rule", expr: "", node: field.conditionAst };
-  }
-  if (field.condition !== undefined && field.condition.trim() !== "") {
-    return { kind: "rule", expr: field.condition };
-  }
-  if (field.aiPrompt !== undefined && field.aiPrompt.trim() !== "") {
-    return { kind: "ai", prompt: field.aiPrompt };
-  }
-  return { kind: "asked" };
-};
-
-const isBooleanField = (field: StudioField): boolean =>
-  field.inputType === "boolean";
 
 /** Seed a rule editor's working group from a derived source: an AST-backed rule
  *  reopens with its own node (wrapped into a group when it is a leaf); anything
@@ -212,55 +174,6 @@ const persistRuleGroup = (
 const canPersistRuleGroup = (group: GroupNode): boolean =>
   conditionHasLeaf(group) &&
   (!conditionHasFormula(group) || isPersistableFormulaGroup(group));
-
-/** One reusable condition the picker can insert: every boolean field (its bare
- *  path is the gate). Shown in plain language; inserting references it by path
- *  so editing the source once updates every `{{#if}}` that points at it. */
-type ReusableCondition = {
-  /** The token a marker references: the field path. */
-  ref: string;
-  /** Plain-language reading for the list. */
-  label: string;
-  source: "asked" | "rule" | "ai";
-};
-
-/** Plain-language label for a condition-field: its own label, else the
- *  humanized rule, else the field path. */
-const conditionFieldLabel = (
-  field: StudioField,
-  fields: readonly StudioField[],
-  operatorWord: (key: OperatorWordKey) => string,
-): string => {
-  if (field.label.trim() !== "") {
-    return field.label;
-  }
-  const source = conditionSourceOf(field);
-  if (source.kind === "rule") {
-    return humanizeConditionExpr(source.expr, fields, operatorWord);
-  }
-  return field.path;
-};
-
-/** Enumerate reusable conditions from the session: every boolean field is a
- *  condition addressed by its own path. */
-export const reusableConditions = (
-  fields: readonly StudioField[],
-  operatorWord: (key: OperatorWordKey) => string,
-): ReusableCondition[] => {
-  const out: ReusableCondition[] = [];
-  for (const field of fields) {
-    if (!isBooleanField(field)) {
-      continue;
-    }
-    const source = conditionSourceOf(field);
-    out.push({
-      ref: field.path,
-      label: conditionFieldLabel(field, fields, operatorWord),
-      source: source.kind,
-    });
-  }
-  return out;
-};
 
 /** Auto-derive a human label for a freshly built condition-field from its
  *  expression ("Client type is company"), so the reuse picker reads in plain
@@ -528,9 +441,9 @@ const ConditionFieldEditor = ({
   const ruleFields = toRuleFields(fields);
 
   const fieldMention = createTemplateFieldMention(
-    fields
-      .filter((f) => f.path !== field.path)
-      .map((f) => ({ id: f.path, label: f.label || f.path })),
+    fields.flatMap((f) =>
+      f.path === field.path ? [] : [{ id: f.path, label: f.label || f.path }],
+    ),
   );
 
   const setAsked = () => {
@@ -813,7 +726,6 @@ const ConditionReusePicker = ({
                 }
                 setOpen(false);
               }}
-              title={option.ref}
               type="button"
             >
               <span className="min-w-0 flex-1 truncate">{option.label}</span>

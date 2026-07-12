@@ -64,15 +64,3 @@ export const SortProperty = ({ column, sortHint }: SortPropertyProps) => {
     </div>
   );
 };
-
-/** Map a property content type to a sort hint. */
-export const toSortHint = (contentType: string): SortHint => {
-  switch (contentType) {
-    case "date":
-      return "date";
-    case "int":
-      return "number";
-    default:
-      return "text";
-  }
-};

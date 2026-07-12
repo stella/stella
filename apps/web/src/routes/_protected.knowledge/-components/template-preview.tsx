@@ -6,12 +6,12 @@ import { useTranslations } from "use-intl";
 import { TextSeparator } from "@stll/ui/components/separator";
 
 import { optionalArray } from "@/lib/arrays";
+import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
+import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import {
-  CONDITIONAL_KINDS,
   DirectiveLabel,
   HighlightedText,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
-import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
 import { templatePreviewOptions } from "@/routes/_protected.knowledge/-queries";
 
 // ── Types ────────────────────────────────────────────────
@@ -48,11 +48,8 @@ type BlockSpan = {
   isConditional: boolean;
 };
 
-const OPENERS: readonly BlockDirectiveKind[] = Object.freeze(["if", "each"]);
-const CLOSERS: readonly BlockDirectiveKind[] = Object.freeze([
-  "endif",
-  "endeach",
-]);
+const OPENERS: ReadonlySet<BlockDirectiveKind> = new Set(["if", "each"]);
+const CLOSERS: ReadonlySet<BlockDirectiveKind> = new Set(["endif", "endeach"]);
 
 /**
  * Compute per-paragraph depths and block spans (for
@@ -74,7 +71,7 @@ const computeLayout = (
 
     const kind = p.directiveKind;
 
-    if (kind && OPENERS.includes(kind)) {
+    if (kind && OPENERS.has(kind)) {
       depths.push(depth);
       stack.push({
         idx: i,
@@ -84,7 +81,7 @@ const computeLayout = (
       depth = Math.min(depth + 1, MAX_DEPTH);
     } else if (kind === "elseif" || kind === "else") {
       depths.push(Math.max(depth - 1, 0));
-    } else if (kind && CLOSERS.includes(kind)) {
+    } else if (kind && CLOSERS.has(kind)) {
       depth = Math.max(depth - 1, 0);
       depths.push(depth);
       const open = stack.pop();
@@ -326,7 +323,9 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   );
 
   // Detect whether the response contains multiple sections
-  const sources = new Set(paragraphs.map((p) => p.source).filter(Boolean));
+  const sources = new Set(
+    paragraphs.flatMap((p) => (p.source ? [p.source] : [])),
+  );
   const hasMultipleSections = sources.size > 1;
 
   return (

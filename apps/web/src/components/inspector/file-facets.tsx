@@ -16,28 +16,6 @@ import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspace
 
 export type Facet = NonNullable<FileTab["facet"]>;
 
-// Sidepeek shows every facet, including Preview (the file viewer
-// itself). Fullscreen drops Preview entirely — the main view IS
-// the preview, so a duplicate chip would be confusing; the
-// FullViewPreviewGuard handles users who land in Full view with a
-// stale "preview" facet by swapping to Metadata + flashing the
-// Minimize button.
-export const FACETS: readonly Facet[] = [
-  "preview",
-  "metadata",
-  "versions",
-  "suggestions",
-  "playbook",
-  "anonymization",
-];
-export const FULLVIEW_FACETS: readonly Facet[] = [
-  "metadata",
-  "versions",
-  "suggestions",
-  "playbook",
-  "anonymization",
-];
-
 /**
  * Mounted only inside the fullscreen branch. If the user enters Full
  * view while their tab still holds `facet: "preview"` (carried over

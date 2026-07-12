@@ -259,7 +259,7 @@ const kmsSigningActionsForS3Actions = (
 const scopedClientCacheKey = (
   scope: S3SigningScope,
   actions: readonly S3SigningAction[],
-): string => `${s3SigningScopePrefix(scope)}|${[...actions].sort().join(",")}`;
+): string => `${s3SigningScopePrefix(scope)}|${actions.toSorted().join(",")}`;
 
 export const hasScopedSessionTimeForPresign = ({
   expiresAt,

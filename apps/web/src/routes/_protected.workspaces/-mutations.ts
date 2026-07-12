@@ -118,6 +118,7 @@ export const useUpdateWorkspace = () => {
       }
     },
     onSuccess: async (_data, { workspaceId }) => {
+      // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: invalidation (refetchType: "none") must land before the explicit refetch below, and the refetch must settle before router.invalidate() re-runs loaders reading the same query cache
       await Promise.all(
         workspaceUpdateInvalidationKeys().map(async (queryKey) => {
           await queryClient.invalidateQueries({

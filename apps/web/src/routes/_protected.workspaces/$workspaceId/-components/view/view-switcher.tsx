@@ -1,4 +1,4 @@
-import { useEffectEvent, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -51,6 +51,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
@@ -380,7 +381,7 @@ const ViewTab = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const updateView = useUpdateView(workspaceId);
   const containerRef = useRef<HTMLDivElement>(null);
-  const handleReorder = useEffectEvent(onReorder);
+  const handleReorder = useLatestCallback(onReorder);
 
   // Seed the draft from the current name each time rename begins,
   // since the trigger now lives in the parent (menu or double-click).
@@ -425,7 +426,7 @@ const ViewTab = ({
         },
       }),
     );
-  }, [id, canUpdateView]);
+  }, [id, canUpdateView, handleReorder]);
 
   const handleRename = () => {
     const trimmed = renameValue.trim();
@@ -616,9 +617,10 @@ const useViewActionsMenu = ({
                   />
                 }
               >
-                {LAYOUT_OPTIONS.filter(
-                  (l) => l !== layout.type && l !== "overview",
-                ).map((l) => {
+                {LAYOUT_OPTIONS.flatMap((l) => {
+                  if (l === layout.type || l === "overview") {
+                    return [];
+                  }
                   const LayoutIcon = layoutIcons[l];
                   return (
                     <MenuItem

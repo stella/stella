@@ -18,7 +18,7 @@ export const ClauseDiffView = ({ diffs }: ClauseDiffViewProps) => (
     {diffs.map((para, i) => (
       <p
         className={cn("text-sm leading-relaxed", statusBorder[para.status])}
-        // eslint-disable-next-line react/no-array-index-key -- diffs is a read-only paragraph diff recomputed fresh on every render (whole-list replace); paragraphs are non-interactive with no per-item state.
+        // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- diffs is a read-only paragraph diff recomputed fresh on every render (whole-list replace); paragraphs are non-interactive with no per-item state.
         key={i}
       >
         {para.segments.map((seg, j) => (

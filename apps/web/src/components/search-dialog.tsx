@@ -56,6 +56,7 @@ import type {
   SearchFilters,
   TimeFilter,
 } from "@/components/search-filters.logic";
+import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -244,9 +245,9 @@ const mergeSelectedBuckets = (
   getLabel: (value: string) => string,
 ): { value: string; label?: string; count: number }[] => {
   const present = new Set(buckets.map((bucket) => bucket.value));
-  const missing = selected
-    .filter((value) => !present.has(value))
-    .map((value) => ({ value, label: getLabel(value), count: 0 }));
+  const missing = selected.flatMap((value) =>
+    present.has(value) ? [] : [{ value, label: getLabel(value), count: 0 }],
+  );
   return [...buckets, ...missing];
 };
 
@@ -1202,18 +1203,22 @@ const SummaryBody = ({
 
     if (citation) {
       parts.push(
-        <button
-          className="text-foreground hover:bg-muted mx-0.5 rounded px-1 font-medium"
+        <Tooltip
+          content={`${citation.title}\n${citation.reason}`}
           key={`${citation.id}-${start}`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onCitationClick(citation.id);
-          }}
-          title={`${citation.title}\n${citation.reason}`}
-          type="button"
-        >
-          [{citation.number}]
-        </button>,
+          render={
+            <button
+              className="text-foreground hover:bg-muted mx-0.5 rounded px-1 font-medium"
+              onClick={(event) => {
+                event.stopPropagation();
+                onCitationClick(citation.id);
+              }}
+              type="button"
+            >
+              [{citation.number}]
+            </button>
+          }
+        />,
       );
     } else {
       parts.push(match[0]);
@@ -1226,7 +1231,7 @@ const SummaryBody = ({
     parts.push(text.slice(cursor));
   }
 
-  return <>{parts}</>;
+  return parts;
 };
 
 type SearchRecentsProps = {
@@ -1595,14 +1600,12 @@ const SearchableFacetGroup = ({
     label: resolveLabel(bucket),
   }));
   const present = new Set(visible.map((bucket) => bucket.value));
-  const missingSelected: FacetBucket[] = selected
-    .filter((id) => !present.has(id))
-    // eslint-disable-next-line react/react-compiler -- reads the deliberate render-time label cache mutated above; ref reads don't affect render correctness here
-    .map((id) => ({
-      value: id,
-      label: labelCacheRef.current[id] ?? id,
-      count: 0,
-    }));
+  // eslint-disable-next-line react/react-compiler -- reads the deliberate render-time label cache mutated above; ref reads don't affect render correctness here
+  const missingSelected: FacetBucket[] = selected.flatMap((id) =>
+    present.has(id)
+      ? []
+      : [{ value: id, label: labelCacheRef.current[id] ?? id, count: 0 }],
+  );
   const buckets: FacetBucket[] = [...visible, ...missingSelected];
 
   if (buckets.length === 0 && !isSearching && searchData === undefined) {

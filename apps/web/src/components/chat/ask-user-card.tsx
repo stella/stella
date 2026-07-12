@@ -97,7 +97,7 @@ const renderAnonPills = (
   if (pairs.length === 0 || text.length === 0) {
     return text;
   }
-  const sorted = [...pairs].sort(
+  const sorted = pairs.toSorted(
     (a, b) => b.original.length - a.original.length,
   );
   const lookup = new Map(
@@ -284,11 +284,8 @@ export const AskUserCard = ({
     for (let i = 0; i < input.questions.length; i++) {
       const question = input.questions[i];
       const previous = answeredOutput.answers[i]?.answer;
-      if (
-        question?.options &&
-        previous &&
-        !question.options.includes(previous)
-      ) {
+      const optionsSet = question?.options ? new Set(question.options) : null;
+      if (optionsSet && previous && !optionsSet.has(previous)) {
         nextCustom[i] = true;
       }
     }

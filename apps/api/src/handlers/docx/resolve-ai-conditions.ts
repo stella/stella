@@ -56,7 +56,7 @@ export const resolveAiConditions = async ({
     if (prompt === undefined) {
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop -- sequential: metered AI condition call that reads the shared `resolved` accumulator each iteration; must not fan out
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential: metered AI condition call that reads the shared `resolved` accumulator each iteration; must not fan out
     const value = await decide({
       prompt,
       fieldPath: field.path,

@@ -309,6 +309,7 @@ export function AutocompletePlayground() {
         }
         let firstToken = true;
         const streamError: { value: string | null } = { value: null };
+        // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: streamError.value is only set by consumeStream's onStreamError callback during this await, so the early-return check below cannot run before the stream settles
         await consumeStream(response.body, {
           onToken: (text) => {
             const live = viewRef.current;

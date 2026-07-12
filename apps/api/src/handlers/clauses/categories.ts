@@ -376,6 +376,7 @@ export const deleteCategoryHandler = async function* ({
       // This must happen before the delete; otherwise the FK
       // onDelete: "set null" would set children's parentId to
       // null instead of the grandparent.
+      // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client; reassign, delete, and audit must run in this order (reassign before delete per the FK note above; audit after the mutation it records)
       await tx
         .update(clauseCategories)
         .set({ parentId: existing.parentId ?? null })

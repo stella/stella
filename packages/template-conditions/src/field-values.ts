@@ -43,6 +43,28 @@ const STYLE_OPTIONS: Record<
   short: { dateStyle: "short" },
 };
 
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+/** `Intl.DateTimeFormat` for a locale + style pair, cached per pair so it
+ *  isn't rebuilt on every {@link formatDate} call. */
+const getDateFormatter = (
+  locale: string,
+  style: Exclude<FieldDateFormat["style"], "iso">,
+): Intl.DateTimeFormat => {
+  const key = `${locale}:${style}`;
+  const cached = dateFormatters.get(key);
+  if (cached) {
+    return cached;
+  }
+  // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale+style cache getter; the constructor necessarily runs below top level
+  const formatter = new Intl.DateTimeFormat(locale, {
+    ...STYLE_OPTIONS[style],
+    timeZone: "UTC",
+  });
+  dateFormatters.set(key, formatter);
+  return formatter;
+};
+
 /**
  * Parse a strict YYYY-MM-DD calendar date; null when malformed or not a real
  * date. UTC-anchored so the rendered day never shifts with the timezone.
@@ -78,10 +100,7 @@ export const formatDate = (
   if (dateFormat.style === "iso") {
     return value;
   }
-  return new Intl.DateTimeFormat(dateFormat.locale, {
-    ...STYLE_OPTIONS[dateFormat.style],
-    timeZone: "UTC",
-  }).format(date);
+  return getDateFormatter(dateFormat.locale, dateFormat.style).format(date);
 };
 
 // ── Composite ─────────────────────────────────────────────

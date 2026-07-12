@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
 
-import { getFormatter } from "@/i18n/i18n-store";
+import { formatMinutes } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
 
 const BILLING_INCREMENT = 6;
 
@@ -58,24 +58,6 @@ const parseDuration = (raw: string): number | null => {
 
 const snapToIncrement = (minutes: number): number =>
   Math.ceil(minutes / BILLING_INCREMENT) * BILLING_INCREMENT;
-
-export const formatMinutes = (minutes: number): string => {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  if (h > 0 && m > 0) {
-    return `${h}h ${m}m`;
-  }
-  if (h > 0) {
-    return `${h}h`;
-  }
-  return `${m}m`;
-};
-
-export const formatDecimalHours = (minutes: number): string =>
-  getFormatter().number(minutes / 60, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
 
 /**
  * ASCII decimal hours for the editable input hint. The hint must round-trip

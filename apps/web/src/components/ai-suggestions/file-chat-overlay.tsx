@@ -13,14 +13,7 @@
  * extracts and renders accept/reject cards). That work is Phase E.
  */
 
-import {
-  Suspense,
-  useEffectEvent,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
@@ -72,6 +65,7 @@ import type {
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import {
@@ -826,6 +820,15 @@ type FileChatOverlayProps = {
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+const fallback = (
+  <div
+    aria-hidden="true"
+    className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+  >
+    <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
+  </div>
+);
+
 export const FileChatOverlay = ({
   workspaceId,
   chatThreadId,
@@ -838,15 +841,6 @@ export const FileChatOverlay = ({
   onNewThread,
   requestDocxEditMode,
 }: FileChatOverlayProps) => {
-  const fallback = (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-    >
-      <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-    </div>
-  );
-
   if (chatThreadId === undefined) {
     const fileFieldId = activeFile?.fileFieldId;
     if (
@@ -963,7 +957,7 @@ const FileChatOverlayInner = ({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const userContext = useChatUserContext();
-  const getUserContext = useEffectEvent(() => userContext);
+  const getUserContext = useLatestCallback(() => userContext);
   const threadRef = useMemo<ChatThreadRef>(
     () =>
       workspaceId === undefined
@@ -984,7 +978,7 @@ const FileChatOverlayInner = ({
   // `getChatSendMode(threadRef)`, and `ChatAnonymizationLayer` drives the
   // in-editor highlight cue — one source, so display and send agree.
   const anonymized = useChatAnonymized(threadRef);
-  const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
+  const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
   // Context matters this file chat draws on. Same plumbing as the main
   // chat and inspector: local state is seeded from the server's persisted
   // set (or, for a fresh thread, the file's own matter), the picker mutates
@@ -997,13 +991,14 @@ const FileChatOverlayInner = ({
   const [seededContextForThreadId, setSeededContextForThreadId] = useState<
     string | null
   >(null);
-  const getContextMatterIds = useEffectEvent(
+  const getContextMatterIds = useLatestCallback(
     () => contextMatterIds ?? UNSEEDED_CONTEXT_MATTER_IDS,
   );
   const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
-  const latestDocxCommentsRef = useRef<DocxComments>(
-    normalizeDocxComments(docxComments),
-  );
+  // Seeded with the shared empty constant instead of normalizing during
+  // render (the initializer would rebuild and discard the value every
+  // render); the layout effect below fills it before anything reads it.
+  const latestDocxCommentsRef = useRef<DocxComments>(EMPTY_DOCX_COMMENTS);
   useLayoutEffect(() => {
     latestDocxCommentsRef.current = normalizeDocxComments(docxComments);
   }, [docxComments]);
@@ -1080,13 +1075,13 @@ const FileChatOverlayInner = ({
     // `createAIEditSnapshot` yet), unlock the input anyway —
     // `canSubmitWithCurrentDocxSnapshot` runs at submit time and re-checks
     // the snapshot, so a stale unlock can't send unanchored edits.
-    const fallback = window.setTimeout(() => {
+    const fallbackTimer = window.setTimeout(() => {
       window.clearInterval(id);
       setEditorReady(true);
     }, 3000);
     return () => {
       window.clearInterval(id);
-      window.clearTimeout(fallback);
+      window.clearTimeout(fallbackTimer);
     };
   }, [editorReady, hasDocxEditSurface, docxEditorRef]);
 
@@ -1095,7 +1090,7 @@ const FileChatOverlayInner = ({
   const attentionPulseSeq = useReviewStore((state) =>
     activeFile ? state.chatInputPulse[activeFile.entityId] : undefined,
   );
-  const getActiveFile = useEffectEvent(() => {
+  const getActiveFile = useLatestCallback(() => {
     if (!activeFile) {
       lastSentDocxEditSnapshotRef.current = null;
       return undefined;
@@ -1121,8 +1116,8 @@ const FileChatOverlayInner = ({
       supportsDocxEdits: true,
     };
   });
-  const getActiveExternal = useEffectEvent(() => activeExternal);
-  const handleActiveDocxEditToolCall = useEffectEvent(
+  const getActiveExternal = useLatestCallback(() => activeExternal);
+  const handleActiveDocxEditToolCall = useLatestCallback(
     (input: ApplyActiveDocxEditsInput): ApplyActiveDocxEditsOutput => {
       // All edit batches — single direct edits and structured
       // reviews alike — are queued for the user. The editor is not
@@ -1258,7 +1253,7 @@ const FileChatOverlayInner = ({
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
   const [panelOpen, setPanelOpen] = useState(false);
-  const handlePromptSubmit = useEffectEvent(
+  const handlePromptSubmit = useLatestCallback(
     async ({
       prompt,
       files,
@@ -1379,7 +1374,7 @@ const FileChatOverlayInner = ({
       cancelAnimationFrame(id);
     };
   }, [chatThreadId, editorInstance, focusController]);
-  const canSubmitWithCurrentDocxSnapshot = useEffectEvent(() => {
+  const canSubmitWithCurrentDocxSnapshot = useLatestCallback(() => {
     if (!hasDocxEditSurface) {
       return true;
     }
@@ -1402,7 +1397,7 @@ const FileChatOverlayInner = ({
   // write. Returns null before the editor view mounts. The comments ref is
   // updated synchronously on writes so back-to-back approved mutations compose
   // before React commits the parent controlled-state update.
-  const createFolioAgentBridge = useEffectEvent(() => {
+  const createFolioAgentBridge = useLatestCallback(() => {
     const ref = docxEditorRef?.current;
     if (!ref) {
       return null;
@@ -1486,6 +1481,7 @@ const FileChatOverlayInner = ({
     }
 
     const part = findFolioAgentApprovalPart(approvalId, toolName);
+    // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: approve() must complete on both paths (the !part early return still approves the tool call), and the mutation tool may only run after approval settles; the part is captured before approve() mutates message state
     await approve();
     if (!part) {
       return;
@@ -1566,8 +1562,9 @@ const FileChatOverlayInner = ({
   // tracks which `toolCallId`s it has already dispatched itself. The comment
   // MUTATION tools are approval-gated and never flow through here (they are
   // excluded from `selectUnresolvedFolioAgentDocToolCallParts`).
-  const executedFolioAgentDocToolCallIdsRef = useRef<Set<string>>(new Set());
-  const runFolioAgentDocToolCall = useEffectEvent(
+  const executedFolioAgentDocToolCallIdsRef = useRef<Set<string> | null>(null);
+  executedFolioAgentDocToolCallIdsRef.current ??= new Set<string>();
+  const runFolioAgentDocToolCall = useLatestCallback(
     async (part: UnresolvedFolioAgentDocToolCallPart) => {
       try {
         // Read the ref fresh on every call rather than capturing it in a
@@ -1597,7 +1594,7 @@ const FileChatOverlayInner = ({
       } catch (toolCallError) {
         // Allow a retry: a later render of the same unresolved part should
         // be dispatched again instead of hanging forever.
-        executedFolioAgentDocToolCallIdsRef.current.delete(part.id);
+        executedFolioAgentDocToolCallIdsRef.current?.delete(part.id);
         getAnalytics().captureError(toolCallError);
         try {
           await addToolResult({
@@ -1623,15 +1620,20 @@ const FileChatOverlayInner = ({
       return;
     }
 
+    const executedIds = executedFolioAgentDocToolCallIdsRef.current;
+    if (!executedIds) {
+      return;
+    }
+
     const partsToRun = selectUnresolvedFolioAgentDocToolCallParts(
       message.parts,
-      executedFolioAgentDocToolCallIdsRef.current,
+      executedIds,
     );
     for (const part of partsToRun) {
-      executedFolioAgentDocToolCallIdsRef.current.add(part.id);
+      executedIds.add(part.id);
       void runFolioAgentDocToolCall(part);
     }
-  }, [messages]);
+  }, [messages, runFolioAgentDocToolCall]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;

@@ -238,7 +238,7 @@ export const RowActions = ({
   const handleZipDownload = async () => {
     if (isBulk) {
       for (const e of selectedEntities) {
-        // oxlint-disable-next-line no-await-in-loop -- each iteration triggers a browser download; parallelizing would fire many concurrent downloads and lose ordering
+        // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: each iteration triggers a browser download; parallelizing would fire many concurrent downloads and lose ordering
         await downloadEntityAsZip(workspaceId, e, msg);
       }
       return;
@@ -252,7 +252,7 @@ export const RowActions = ({
       for (const e of selectedEntities) {
         const f = getFirstFile(e);
         if (f) {
-          // oxlint-disable-next-line no-await-in-loop -- each iteration triggers a browser download; parallelizing would fire many concurrent downloads and lose ordering
+          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: each iteration triggers a browser download; parallelizing would fire many concurrent downloads and lose ordering
           await downloadSingleFile(workspaceId, f, asPdf, msg);
         }
       }
@@ -457,7 +457,7 @@ export const RowActions = ({
 
     let failedCount = 0;
     for (const e of targets) {
-      // oxlint-disable-next-line no-await-in-loop -- sequential duplicate mutations share the same query-key cache invalidation and risk rate limits if fired concurrently
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: duplicate mutations share the same query-key cache invalidation and risk rate limits if fired concurrently
       const result = await Result.tryPromise(
         async () =>
           await api

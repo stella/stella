@@ -108,7 +108,7 @@ const prepareFolderTreeUpload = async ({
       name: placement.file.name,
       mimeType: placement.file.type || "application/octet-stream",
       size: placement.file.size,
-      // oxlint-disable-next-line no-await-in-loop -- hashing files one at a time bounds peak memory; reading every dropped file into memory concurrently could exhaust it for large folder trees
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: hashing files one at a time bounds peak memory; reading every dropped file into memory concurrently could exhaust it for large folder trees
       sha256Hex: await hashFileSha256Hex(placement.file),
     });
   }
@@ -215,7 +215,7 @@ const abortPreparedUploadsForFiles = async ({
   for (const file of files) {
     const preparedUpload = preparedUploadForFile(file);
     if (preparedUpload) {
-      // oxlint-disable-next-line no-await-in-loop -- best-effort sequential cleanup of presigned uploads; keeps abort load bounded and avoids a concurrent burst against the API during failure handling
+      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: best-effort sequential cleanup of presigned uploads; keeps abort load bounded and avoids a concurrent burst against the API during failure handling
       await abortUpload(workspaceId, preparedUpload.uploadId);
     }
   }
@@ -325,7 +325,10 @@ const uploadPreparedFileEntity = async ({
       timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
     });
   } catch (error) {
-    await abortUpload(workspaceId, uploadId);
+    // Best-effort cleanup: abortUpload swallows its own errors and its
+    // result is never used, so don't block surfacing the original
+    // network error on it completing.
+    void abortUpload(workspaceId, uploadId);
     if (error instanceof Error) {
       throw error;
     }

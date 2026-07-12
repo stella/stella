@@ -10,6 +10,7 @@ export const destroyPDFDocument = async (data: {
   await Promise.all([
     data.loadingTask.destroy(),
     // oxlint requires promise-returning functions to be async (promise-function-async).
+    // oxlint-disable-next-line react-doctor/async-await-in-loop -- already parallel: every task's destroy() runs concurrently inside this Promise.all via .map; the inner await only satisfies promise-function-async, it is not a sequencing point
     ...data.attachmentLoadingTasks.map(async (task) => await task.destroy()),
   ]);
 };

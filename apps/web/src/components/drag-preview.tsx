@@ -8,143 +8,19 @@
  */
 
 import { createElement } from "react";
+// eslint-disable-next-line react-doctor/no-flush-sync -- drag preview must paint before dragstart returns; browser snapshots the drag image synchronously
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 
-import { FolderIcon } from "lucide-react";
-
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import {
+  MultiPreviewContent,
+  PreviewContent,
+} from "@/components/drag-preview-content";
 
 export type DragPreviewData = {
   name: string;
   kind: string;
   mimeType: string | null;
-};
-
-const cardStyle = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "4px 10px",
-  borderRadius: 6,
-  background: "var(--color-card)",
-  border: "1px solid var(--color-border)",
-  boxShadow:
-    "0 2px 8px color-mix(in srgb, var(--color-foreground) 12%, transparent)",
-  fontSize: 13,
-  fontFamily: "system-ui, sans-serif",
-  maxWidth: 220,
-  whiteSpace: "nowrap" as const,
-  color: "var(--color-foreground)",
-} as const;
-
-const ItemIcon = ({ data }: { data: DragPreviewData }) => {
-  if (data.kind === "folder") {
-    return createElement(FolderIcon, {
-      className: "size-3.5 shrink-0 text-muted-foreground",
-    });
-  }
-  if (data.mimeType) {
-    return createElement(DocumentIcon, {
-      mimeType: data.mimeType,
-      className: "size-3.5 shrink-0",
-    });
-  }
-  return null;
-};
-
-const PreviewContent = ({ data }: { data: DragPreviewData }) =>
-  createElement(
-    "div",
-    { style: cardStyle },
-    createElement(ItemIcon, { data }),
-    createElement(
-      "span",
-      { style: { overflow: "hidden", textOverflow: "ellipsis" } },
-      data.name,
-    ),
-  );
-
-const badgeStyle = {
-  position: "absolute" as const,
-  top: -6,
-  right: -6,
-  minWidth: 18,
-  height: 18,
-  borderRadius: 9,
-  background: "var(--color-primary)",
-  color: "var(--color-primary-foreground)",
-  fontSize: 11,
-  fontWeight: 600,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "0 5px",
-  border: "2px solid var(--color-card)",
-} as const;
-
-const MultiPreviewContent = ({
-  items,
-}: {
-  items: readonly DragPreviewData[];
-}) => {
-  const first = items[0];
-  if (!first) {
-    return null;
-  }
-  const count = items.length;
-
-  // Stacked cards effect: two offset cards behind the front one.
-  return createElement(
-    "div",
-    {
-      style: {
-        position: "relative" as const,
-        padding: "6px 8px 2px 2px",
-      },
-    },
-    // Back card (offset down-right)
-    count > 2 &&
-      createElement("div", {
-        style: {
-          ...cardStyle,
-          position: "absolute" as const,
-          top: 10,
-          left: 6,
-          right: 4,
-          height: 28,
-          opacity: 0.4,
-        },
-      }),
-    // Middle card (offset slightly)
-    count > 1 &&
-      createElement("div", {
-        style: {
-          ...cardStyle,
-          position: "absolute" as const,
-          top: 6,
-          left: 3,
-          right: 6,
-          height: 28,
-          opacity: 0.6,
-        },
-      }),
-    // Front card (the actual item)
-    createElement(
-      "div",
-      { style: { ...cardStyle, position: "relative" as const } },
-      createElement(ItemIcon, { data: first }),
-      createElement(
-        "span",
-        {
-          style: { overflow: "hidden", textOverflow: "ellipsis" },
-        },
-        first.name,
-      ),
-      // Count badge
-      createElement("div", { style: badgeStyle }, String(count)),
-    ),
-  );
 };
 
 /**

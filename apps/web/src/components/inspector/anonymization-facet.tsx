@@ -13,7 +13,7 @@
  * actions, and "download anonymized" land in follow-up commits.
  */
 
-import { useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -52,7 +52,9 @@ import {
   useAnonymizationMatchesReady,
   useInspectorStore,
 } from "@/components/inspector/inspector-store";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -348,7 +350,7 @@ export const AnonymizationFacet = ({
   // selected text here on every selection-bearing
   // transaction.
   const lastConsumedSelectionRef = useRef<unknown>(null);
-  const consumeFolioSelection = useEffectEvent(() => {
+  const consumeFolioSelection = useLatestCallback(() => {
     if (activeFieldId === null) {
       return;
     }
@@ -368,7 +370,7 @@ export const AnonymizationFacet = ({
   useExternalSyncEffect(() => {
     consumeFolioSelection();
     return useInspectorStore.subscribe(consumeFolioSelection);
-  }, [activeFieldId]);
+  }, [activeFieldId, consumeFolioSelection]);
 
   const addTerm = async (canonical: string, label: LabelOption) => {
     const trimmed = canonical.trim();
@@ -809,19 +811,24 @@ export const AnonymizationFacet = ({
               </button>
               <div className="flex items-center gap-1">
                 {hitCount !== undefined && hitCount > 0 && (
-                  <span
-                    className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
-                    aria-label={t(
+                  <Tooltip
+                    content={t(
                       "inspector.anonymization.termMatchCountAriaLabel",
                       { count: String(hitCount) },
                     )}
-                    title={t(
-                      "inspector.anonymization.termMatchCountAriaLabel",
-                      { count: String(hitCount) },
-                    )}
+                    render={
+                      <span
+                        className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
+                        aria-label={t(
+                          "inspector.anonymization.termMatchCountAriaLabel",
+                          { count: String(hitCount) },
+                        )}
+                        role="group"
+                      />
+                    }
                   >
                     {format.number(hitCount)}
-                  </span>
+                  </Tooltip>
                 )}
                 <Button
                   disabled={deleteMutation.isPending}
@@ -899,19 +906,24 @@ export const AnonymizationFacet = ({
                         </button>
                         <div className="flex items-center gap-1">
                           {!row.isExcluded && row.count > 0 && (
-                            <span
-                              aria-label={t(
+                            <Tooltip
+                              content={t(
                                 "inspector.anonymization.termMatchCountAriaLabel",
                                 { count: String(row.count) },
                               )}
-                              className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
-                              title={t(
-                                "inspector.anonymization.termMatchCountAriaLabel",
-                                { count: String(row.count) },
-                              )}
+                              render={
+                                <span
+                                  aria-label={t(
+                                    "inspector.anonymization.termMatchCountAriaLabel",
+                                    { count: String(row.count) },
+                                  )}
+                                  className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums"
+                                  role="group"
+                                />
+                              }
                             >
                               {format.number(row.count)}
-                            </span>
+                            </Tooltip>
                           )}
                           {row.isExcluded ? (
                             <Button

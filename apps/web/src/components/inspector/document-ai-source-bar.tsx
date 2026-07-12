@@ -22,10 +22,8 @@ import type { Citation } from "@/lib/citations";
 import { iterateJustificationCitations } from "@/lib/citations";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
-import {
-  getPDFPageIdByNumber,
-  useOptionalPDFStore,
-} from "@/lib/pdf/pdf-context";
+import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
+import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import { toSafeId } from "@/lib/safe-id";
 import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
@@ -390,7 +388,6 @@ export const DocumentAiSourceBar = ({
           aria-expanded={isAnswerExpanded}
           className="min-w-0 flex-1 truncate text-start"
           onClick={() => setIsAnswerExpanded((expanded) => !expanded)}
-          title={shortAnswer ?? undefined}
           type="button"
         >
           {propertyName && (
@@ -623,7 +620,6 @@ const DocxSourceCitationChip = ({
       aria-label={tooltip}
       className={SOURCE_CITATION_CHIP_CLASS}
       onClick={onClick}
-      title={tooltip}
       type="button"
     >
       {label}

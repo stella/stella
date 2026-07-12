@@ -138,7 +138,10 @@ const tokenizeCourtValue = (value: string): string[] => {
 const isTokenSubset = (
   queryTokens: readonly string[],
   candidateTokens: readonly string[],
-): boolean => queryTokens.every((token) => candidateTokens.includes(token));
+): boolean => {
+  const candidateSet = new Set(candidateTokens);
+  return queryTokens.every((token) => candidateSet.has(token));
+};
 
 export const resolveCourtCode = (
   query: string,
@@ -183,6 +186,7 @@ export const resolveCourtCode = (
         queryTokens.length / Math.max(nameTokens.length, queryTokens.length);
     } else if (canFuzzyMatch && normalizedName.startsWith(normalizedQuery)) {
       score = 800 + normalizedQuery.length / normalizedName.length;
+      // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
     } else if (canFuzzyMatch && normalizedName.includes(normalizedQuery)) {
       score = 600 + normalizedQuery.length / normalizedName.length;
     }

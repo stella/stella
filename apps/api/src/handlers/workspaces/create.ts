@@ -234,6 +234,7 @@ export const createWorkspaceHandler = async function* ({
 
       const workspaceId = body.id;
 
+      // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client (single Postgres connection can't run concurrent statements)
       await tx.insert(workspaceMembers).values(
         workspaceMemberUserIds.map((memberUserId: SafeId<"user">) => ({
           workspaceId,

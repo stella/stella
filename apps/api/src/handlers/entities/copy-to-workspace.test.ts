@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { auditLogs, documentCounters, entities, fields } from "@/api/db/schema";
+import { documentCounters, entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -246,7 +246,6 @@ describe("copy-to-workspace", () => {
   test("copies document with matching property, skips non-matching property", async () => {
     const insertedEntities: InsertedEntity[] = [];
     const insertedFields: InsertedField[] = [];
-    const insertedAuditLogs: unknown[] = [];
     let nextDocumentSequence = 0;
 
     // Source entity has two fields: one file (matches target), one text (no match)
@@ -352,8 +351,6 @@ describe("copy-to-workspace", () => {
             } else if (isInsertedField(value)) {
               insertedFields.push(value);
             }
-          } else if (table === auditLogs) {
-            insertedAuditLogs.push(value);
           }
 
           return undefined;

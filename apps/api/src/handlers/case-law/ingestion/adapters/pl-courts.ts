@@ -362,10 +362,10 @@ const normalizeDecisionType = (
   }
 
   const text = stripHtml(content);
-  const lines = text
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const lines = text.split("\n").flatMap((line) => {
+    const trimmed = line.trim();
+    return trimmed ? [trimmed] : [];
+  });
 
   for (const line of lines.slice(0, 6)) {
     const lowered = line.toLocaleLowerCase("pl-PL");

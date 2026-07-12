@@ -92,6 +92,16 @@ import {
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+// Generic helper preserves the union discriminant. A bare
+// `{ ...layout, ...partial }` would collapse to an invalid union.
+const mergeLayout = <L extends ViewLayout>(
+  layout: L,
+  changes: Partial<L>,
+): L => ({
+  ...layout,
+  ...changes,
+});
+
 type ViewToolbarProps = {
   view: WorkspaceView;
   workspaceId: string;
@@ -105,15 +115,6 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   const toggleAllFolders = useWorkspaceStore((s) => s.toggleAllFolders);
   const selectedEntities = useTableStore((s) => s.selectedEntities[view.id]);
 
-  // Generic helper preserves the union discriminant. A bare
-  // `{ ...layout, ...partial }` would collapse to an invalid union.
-  const mergeLayout = <L extends ViewLayout>(
-    layout: L,
-    changes: Partial<L>,
-  ): L => ({
-    ...layout,
-    ...changes,
-  });
   const handleUpdate = (changes: Partial<ViewLayout>) => {
     updateView.mutate({
       viewId: view.id,
@@ -1157,12 +1158,12 @@ const AdditionalDatesControl = ({
   // Eligible: internal date options + custom date properties,
   // excluding the primary one (already shown separately)
   const eligible = [
-    ...INTERNAL_DATE_OPTIONS.filter((o) => o.id !== primaryDatePropertyId).map(
-      (o) => ({ id: o.id, name: t(o.labelKey) }),
+    ...INTERNAL_DATE_OPTIONS.flatMap((o) =>
+      o.id !== primaryDatePropertyId ? [{ id: o.id, name: t(o.labelKey) }] : [],
     ),
-    ...dateProperties
-      .filter((p) => p.id !== primaryDatePropertyId)
-      .map((p) => ({ id: p.id, name: p.name })),
+    ...dateProperties.flatMap((p) =>
+      p.id !== primaryDatePropertyId ? [{ id: p.id, name: p.name }] : [],
+    ),
   ];
 
   if (eligible.length === 0) {

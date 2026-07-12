@@ -301,8 +301,9 @@ export const redactPdf = async (
             } else {
               // Try initials: [P1] or [CBN1]
               const initials = parts
-                .filter((p) => p.length > 0)
-                .map((p) => (p[0] ?? "").toUpperCase())
+                .flatMap((p) =>
+                  p.length > 0 ? [(p[0] ?? "").toUpperCase()] : [],
+                )
                 .join("");
               const shortInit = `[${initials}${suffix}]`;
 

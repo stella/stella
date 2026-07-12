@@ -48,6 +48,8 @@ const FORMULA_FUNCTIONS: readonly string[] = Object.freeze([
   "floor",
   "ceil",
 ]);
+// Constant-time membership check for the loop below.
+const FORMULA_FUNCTION_SET: ReadonlySet<string> = new Set(FORMULA_FUNCTIONS);
 const FORMULA_IDENT_RE = /[\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*/gu;
 
 // Math tokens the toolbar can insert. The glyph is what the author sees; the
@@ -110,13 +112,14 @@ export const FormulaEditor = ({
   // True when at least one in-scope field is non-numeric, so the editor can
   // remind the author that only numbers are usable in a formula.
   const hasNonNumberFields = knownRefs.size > numberRefs.size;
-  const referenced = [
-    ...new Set(
-      [...value.matchAll(FORMULA_IDENT_RE)]
-        .map((match) => match[0])
-        .filter((id) => !FORMULA_FUNCTIONS.includes(id)),
-    ),
-  ];
+  const referencedIds: string[] = [];
+  for (const match of value.matchAll(FORMULA_IDENT_RE)) {
+    const id = match[0];
+    if (!FORMULA_FUNCTION_SET.has(id)) {
+      referencedIds.push(id);
+    }
+  }
+  const referenced = [...new Set(referencedIds)];
   const unknown = referenced.filter((name) => !knownRefs.has(name));
   // Known fields referenced but not numbers: the evaluator coerces them to NaN.
   const nonNumber = referenced.filter(
@@ -187,9 +190,15 @@ export const FormulaEditor = ({
   // Worked example: assign each referenced number field a distinct made-up
   // integer (100, 200, 300…) keyed by its reference name, then evaluate the
   // expression against that flat data object. The evaluator resolves exact keys.
-  const exampleFields = referenced
-    .filter((name) => numberRefs.has(name))
-    .map((name, index) => ({ path: name, value: (index + 1) * 100 }));
+  const exampleFields: { path: string; value: number }[] = [];
+  for (const name of referenced) {
+    if (numberRefs.has(name)) {
+      exampleFields.push({
+        path: name,
+        value: (exampleFields.length + 1) * 100,
+      });
+    }
+  }
   const exampleData: Record<string, number> = {};
   for (const entry of exampleFields) {
     exampleData[entry.path] = entry.value;
@@ -281,11 +290,13 @@ export const FormulaEditor = ({
           className="flex flex-wrap items-center gap-0.5 font-mono text-xs"
           dir="ltr"
         >
-          {previewTokens.map((tok, index) => (
+          {withStableKeys(
+            previewTokens,
+            (tok) => `${tok.isField}-${tok.text}`,
+          ).map(({ item: tok, key }) => (
             <FormulaPreviewToken
               isField={tok.isField}
-              // eslint-disable-next-line react/no-array-index-key -- previewTokens is re-tokenized from the formula string on every render (whole-list replace); tokens are stateless spans with no add/remove/reorder interaction.
-              key={index}
+              key={key}
               text={tok.text}
             />
           ))}
@@ -406,6 +417,20 @@ export const FormulaCell = ({
       </PopoverPopup>
     </Popover>
   );
+};
+
+// Preview tokens carry no id of their own (re-tokenized from the formula
+// string on every render), so keys derive from the token's own fields plus an
+// occurrence counter: repeated tokens (`a + b + c` has two `+`) stay unique
+// without leaning on the array index.
+const withStableKeys = <T,>(items: readonly T[], base: (item: T) => string) => {
+  const counts = new Map<string, number>();
+  return items.map((item) => {
+    const b = base(item);
+    const n = counts.get(b) ?? 0;
+    counts.set(b, n + 1);
+    return { item, key: `${b}-${n}` };
+  });
 };
 
 /** One token in the read-only formula preview strip: a known field path becomes

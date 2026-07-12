@@ -1,4 +1,4 @@
-import { useEffectEvent, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
@@ -20,6 +20,7 @@ import type { OptionColor } from "@stll/api/types";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -362,6 +363,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return;
     }
 
+    // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: files must upload regardless of columnValue; the guard below only skips the optional column-value assignment, not the upload
     const results = await uploadFileEntitiesBatched({
       files,
       workspaceId,
@@ -686,7 +688,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   // Track the last valid drop position so drops in the
   // gap between columns still work (monitors always fire).
   const lastPosition = useRef<ColumnDragPosition | null>(null);
-  const handleColumnReorder = useEffectEvent(
+  const handleColumnReorder = useLatestCallback(
     (sourceValue: string, targetValue: string, edge: Edge | null) => {
       onReorderColumn?.(sourceValue, targetValue, edge);
     },

@@ -87,7 +87,7 @@ const anonymizeTextFieldsByWorkspace = async ({
   }
 
   for (const [workspaceId, group] of byWorkspace) {
-    // oxlint-disable-next-line no-await-in-loop -- per-workspace anonymization bounds gazetteer/DB load across tenants
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- per-workspace anonymization bounds gazetteer/DB load across tenants
     const anonymized = await anonymizeTextFields({
       fields: group.map((field) => field.value),
       gazetteerEntries,

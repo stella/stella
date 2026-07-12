@@ -175,14 +175,20 @@ export const resolveTiers = (
 ): ResolvedTiers => {
   const { tiers } = position;
 
-  const acceptableRules = tiers.acceptable.rules
-    .map((rule) => ({ id: rule.id, text: rule.text.trim() }))
-    .filter((rule) => rule.text.length > 0)
-    .map((rule) => ({ id: rule.id, text: capText(rule.text) }));
-  const notAcceptableRules = tiers.notAcceptable.rules
-    .map((rule) => ({ id: rule.id, text: rule.text.trim() }))
-    .filter((rule) => rule.text.length > 0)
-    .map((rule) => ({ id: rule.id, text: capText(rule.text) }));
+  const acceptableRules: ResolvedTiers["acceptableRules"] = [];
+  for (const rule of tiers.acceptable.rules) {
+    const trimmed = rule.text.trim();
+    if (trimmed.length > 0) {
+      acceptableRules.push({ id: rule.id, text: capText(trimmed) });
+    }
+  }
+  const notAcceptableRules: ResolvedTiers["notAcceptableRules"] = [];
+  for (const rule of tiers.notAcceptable.rules) {
+    const trimmed = rule.text.trim();
+    if (trimmed.length > 0) {
+      notAcceptableRules.push({ id: rule.id, text: capText(trimmed) });
+    }
+  }
 
   let ideal: string | undefined;
   let idealClauseVariants: { rank: number; text: string }[] = [];

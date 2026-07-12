@@ -72,6 +72,23 @@ type DisplayLanguageNameOptions = {
   displayLocale?: string;
 };
 
+const languageDisplayNamesFormatters = new Map<string, Intl.DisplayNames>();
+
+/** `Intl.DisplayNames` (type: "language") for `locale`, cached per locale so
+ *  it isn't rebuilt on every {@link displayLanguageName} call. */
+const getLanguageDisplayNamesFormatter = (
+  locale: string,
+): Intl.DisplayNames => {
+  const cached = languageDisplayNamesFormatters.get(locale);
+  if (cached) {
+    return cached;
+  }
+  // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale cache getter; the constructor necessarily runs below top level
+  const formatter = new Intl.DisplayNames([locale], { type: "language" });
+  languageDisplayNamesFormatters.set(locale, formatter);
+  return formatter;
+};
+
 /**
  * Human-readable name for a language tag. Prefers the canonical-list entry
  * (`endonym` by default, `englishName` on request); for tags outside the
@@ -91,9 +108,7 @@ export const displayLanguageName = (
   }
 
   try {
-    const intlName = new Intl.DisplayNames([displayLocale], {
-      type: "language",
-    }).of(tag);
+    const intlName = getLanguageDisplayNamesFormatter(displayLocale).of(tag);
     if (intlName) {
       return intlName;
     }

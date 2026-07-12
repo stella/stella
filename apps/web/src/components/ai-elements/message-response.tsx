@@ -10,6 +10,8 @@ import { Streamdown } from "streamdown";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { messageComponents } from "@/components/ai-elements/message-response-components";
+
 export type MessageResponseProps = ComponentProps<typeof Streamdown>;
 
 const streamdownPlugins = { cjk, math, mermaid };
@@ -20,20 +22,6 @@ const streamdownPlugins = { cjk, math, mermaid };
 // to let it through. The `ph` attribute carries the placeholder
 // the model actually saw (`[PERSON_1]`, …).
 const ANON_TAG_ALLOWED: { "stll-anon": string[] } = { "stll-anon": ["ph"] };
-
-export const messageComponents = {
-  img: (props: unknown) => {
-    if (
-      typeof props !== "object" ||
-      props === null ||
-      !("alt" in props) ||
-      typeof props.alt !== "string"
-    ) {
-      return <span />;
-    }
-    return <span>{props.alt}</span>;
-  },
-} satisfies NonNullable<MessageResponseProps["components"]>;
 
 export const MessageResponseImpl = memo(
   ({

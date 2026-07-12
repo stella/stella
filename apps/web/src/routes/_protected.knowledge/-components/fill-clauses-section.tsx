@@ -88,12 +88,15 @@ export const FillClausesSection = ({
   );
 };
 
-const bodyToText = (body: ClauseBody): string =>
-  body
-    .filter((paragraph) => paragraph.isDirective !== true)
-    .map((paragraph) => paragraph.text)
-    .join("\n")
-    .trim();
+const bodyToText = (body: ClauseBody): string => {
+  const lines: string[] = [];
+  for (const paragraph of body) {
+    if (paragraph.isDirective !== true) {
+      lines.push(paragraph.text);
+    }
+  }
+  return lines.join("\n").trim();
+};
 
 type ClauseFillItemProps = {
   slot: ClauseSlot;

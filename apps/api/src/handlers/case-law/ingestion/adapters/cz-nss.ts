@@ -227,6 +227,7 @@ const parseResultRows = (html: string): ParsedRow[] => {
 
   while ((tbodyMatch = tbodyPattern.exec(html)) !== null) {
     const block = tbodyMatch.groups?.["block"];
+    // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
     if (!block?.includes("Citace")) {
       continue;
     }

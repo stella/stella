@@ -43,12 +43,16 @@ const deletePlaybookDefinition = createSafeRootHandler(
           .select({ id: properties.id, tool: properties.tool })
           .from(properties)
           .where(eq(properties.playbookDefinitionId, params.playbookId));
-        const verdictIds = owned
-          .filter((property) => property.tool.type === "playbook-verdict")
-          .map((property) => property.id);
-        const askIds = owned
-          .filter((property) => property.tool.type !== "playbook-verdict")
-          .map((property) => property.id);
+        type OwnedProperty = (typeof owned)[number];
+        const verdictIds: OwnedProperty["id"][] = [];
+        const askIds: OwnedProperty["id"][] = [];
+        for (const property of owned) {
+          if (property.tool.type === "playbook-verdict") {
+            verdictIds.push(property.id);
+          } else {
+            askIds.push(property.id);
+          }
+        }
         if (verdictIds.length > 0) {
           await tx.delete(properties).where(inArray(properties.id, verdictIds));
         }

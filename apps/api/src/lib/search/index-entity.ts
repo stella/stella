@@ -111,14 +111,9 @@ const buildSearchDocument = async (
     const text = extractFieldText(field.content);
     if (text) {
       // Use file name or first text value as title fallback
-      if (
-        !title &&
-        (field.content.type === "file" || field.content.type === "text")
-      ) {
-        title =
-          field.content.type === "file"
-            ? field.content.fileName
-            : text.slice(0, 256);
+      const content = field.content;
+      if (!title && (content.type === "file" || content.type === "text")) {
+        title = content.type === "file" ? content.fileName : text.slice(0, 256);
       }
       fieldTexts.push(text);
     }

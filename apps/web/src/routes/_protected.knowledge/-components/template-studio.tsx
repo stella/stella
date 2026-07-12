@@ -69,8 +69,8 @@ import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
+import { reusableConditions } from "@/routes/_protected.knowledge/-components/template-studio-condition-source";
 import "@/routes/_protected.knowledge/-components/template-studio-inspector";
-import { reusableConditions } from "@/routes/_protected.knowledge/-components/template-studio-conditions";
 import {
   protectedRouteApi,
   TEMPLATE_STUDIO_VIEW,
@@ -416,6 +416,61 @@ const enrichmentKnownPaths = (fields: readonly StudioField[]): string[] => {
     paths.push(field.path);
   }
   return paths;
+};
+
+// True when the caret sits inside an `{{#each}}…{{/each}}` body, paired by
+// walking sorted directives with a stack. An `each` opener encloses the
+// caret when `opener.to <= head` and its matching `endeach.from >= head`.
+const caretInEachBlock = (state: EditorState): boolean => {
+  const head = state.selection.from;
+  const directives = getTemplateDirectives(state).toSorted(
+    (a, b) => a.from - b.from,
+  );
+  const stack: DirectiveRange[] = [];
+  for (const d of directives) {
+    if (d.kind === "each") {
+      stack.push(d);
+    } else if (d.kind === "endeach") {
+      const open = stack.pop();
+      if (open !== undefined && open.to <= head && d.from >= head) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
+// The innermost opener/closer pair (e.g. `{{#if}}`/`{{/if}}` or
+// `{{#each}}`/`{{/each}}`) that encloses this field's marker, paired by
+// walking the sorted directives like buildOutline does. Returns null when the
+// marker is not inside any matching block.
+const enclosingDirectivePair = (
+  state: EditorState,
+  path: string,
+  openKind: DirectiveKind,
+  closeKind: DirectiveKind,
+): { opener: DirectiveRange; closer: DirectiveRange } | null => {
+  const directives = getTemplateDirectives(state).toSorted(
+    (a, b) => a.from - b.from,
+  );
+  const marker = directives.find(
+    (d) => d.kind === "placeholder" && d.expr === path,
+  );
+  if (marker === undefined) {
+    return null;
+  }
+  const stack: DirectiveRange[] = [];
+  for (const d of directives) {
+    if (d.kind === openKind) {
+      stack.push(d);
+    } else if (d.kind === closeKind) {
+      const open = stack.pop();
+      if (open !== undefined && open.to <= marker.from && d.from >= marker.to) {
+        return { opener: open, closer: d };
+      }
+    }
+  }
+  return null;
 };
 
 /**
@@ -1033,9 +1088,9 @@ export const TemplateStudioPage = ({
     const seed = base === "" ? "clause" : base;
     const taken = new Set([
       ...(view
-        ? getTemplateDirectives(view.state)
-            .filter((d) => d.kind === "clause")
-            .map((d) => d.expr)
+        ? getTemplateDirectives(view.state).flatMap((d) =>
+            d.kind === "clause" ? [d.expr] : [],
+          )
         : []),
       ...useTemplateStudioStore
         .getState()
@@ -1440,11 +1495,16 @@ export const TemplateStudioPage = ({
     };
     const dismiss = () => hideGesture();
     window.addEventListener("keydown", onKeyDown);
-    host?.addEventListener("scroll", dismiss, { capture: true });
+    host?.addEventListener("scroll", dismiss, {
+      capture: true,
+      passive: true,
+    });
     host?.addEventListener("contextmenu", dismiss, { capture: true });
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-      host?.removeEventListener("scroll", dismiss, { capture: true });
+      host?.removeEventListener("scroll", dismiss, {
+        capture: true,
+      });
       host?.removeEventListener("contextmenu", dismiss, { capture: true });
     };
   }, [gestureShown, hideGesture]);
@@ -2029,7 +2089,7 @@ export const TemplateStudioPage = ({
           // after markSaved() would leave the pending steps stranded with the
           // Save affordance (gated on isDirty) gone.
           try {
-            // eslint-disable-next-line no-await-in-loop -- sequencing is the point: steps must replay in recorded order so each rename lands against the state the prior steps produced, respecting the unique-slot constraint.
+            // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: steps must replay in recorded order so each rename lands against the state the prior steps produced, respecting the unique-slot constraint.
             const patched = await api
               .templates({ templateId: toSafeId<"template">(templateId) })
               .clauses({ linkId: toSafeId<"templateClause">(step.linkId) })
@@ -2206,65 +2266,6 @@ export const TemplateStudioPage = ({
       actionsRef.current?.focusPosition(reopened.from);
     }
     return true;
-  };
-
-  // True when the caret sits inside an `{{#each}}…{{/each}}` body, paired by
-  // walking sorted directives with a stack. An `each` opener encloses the
-  // caret when `opener.to <= head` and its matching `endeach.from >= head`.
-  const caretInEachBlock = (state: EditorState): boolean => {
-    const head = state.selection.from;
-    const directives = getTemplateDirectives(state).toSorted(
-      (a, b) => a.from - b.from,
-    );
-    const stack: DirectiveRange[] = [];
-    for (const d of directives) {
-      if (d.kind === "each") {
-        stack.push(d);
-      } else if (d.kind === "endeach") {
-        const open = stack.pop();
-        if (open !== undefined && open.to <= head && d.from >= head) {
-          return true;
-        }
-      }
-    }
-    return false;
-  };
-
-  // The innermost opener/closer pair (e.g. `{{#if}}`/`{{/if}}` or
-  // `{{#each}}`/`{{/each}}`) that encloses this field's marker, paired by
-  // walking the sorted directives like buildOutline does. Returns null when the
-  // marker is not inside any matching block.
-  const enclosingDirectivePair = (
-    state: EditorState,
-    path: string,
-    openKind: DirectiveKind,
-    closeKind: DirectiveKind,
-  ): { opener: DirectiveRange; closer: DirectiveRange } | null => {
-    const directives = getTemplateDirectives(state).toSorted(
-      (a, b) => a.from - b.from,
-    );
-    const marker = directives.find(
-      (d) => d.kind === "placeholder" && d.expr === path,
-    );
-    if (marker === undefined) {
-      return null;
-    }
-    const stack: DirectiveRange[] = [];
-    for (const d of directives) {
-      if (d.kind === openKind) {
-        stack.push(d);
-      } else if (d.kind === closeKind) {
-        const open = stack.pop();
-        if (
-          open !== undefined &&
-          open.to <= marker.from &&
-          d.from >= marker.to
-        ) {
-          return { opener: open, closer: d };
-        }
-      }
-    }
-    return null;
   };
 
   // Delete the innermost opener/closer paragraphs enclosing this field's marker,

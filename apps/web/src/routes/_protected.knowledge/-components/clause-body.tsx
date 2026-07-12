@@ -1,9 +1,9 @@
+import { CONDITIONAL_KINDS } from "@/routes/_protected.knowledge/-components/directive-kinds";
+import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/directive-kinds";
 import {
-  CONDITIONAL_KINDS,
   DirectiveLabel,
   HighlightedText,
 } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
-import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
 
 // ── Types ────────────────────────────────────────────
 
@@ -60,10 +60,12 @@ const renderRows = (paragraphs: ClauseParagraph[]): React.ReactNode[] => {
     }
     if (p.listKind && !p.isDirective) {
       const built = buildListTree(paragraphs, i, p.listLevel ?? 0, p.listKind);
+      // eslint-disable-next-line react-doctor/no-array-index-as-key -- rows is rebuilt wholesale from `paragraphs` on every render; list runs have no stable id and are never reordered/removed in place.
       rows.push(<ClauseList key={i} node={built.node} />);
       i += built.consumed;
       continue;
     }
+    // eslint-disable-next-line react-doctor/no-array-index-as-key -- rows is rebuilt wholesale from `paragraphs` on every render; paragraphs have no stable id and are never reordered/removed in place.
     rows.push(<ClauseParagraphRow key={i} paragraph={p} />);
     i += 1;
   }
@@ -149,7 +151,7 @@ const ClauseList = ({ node }: { node: ListTree }) => {
 const ClauseListItems = ({ items }: { items: ListTreeItem[] }) => (
   <>
     {items.map((item, idx) => (
-      // eslint-disable-next-line react/no-array-index-key -- read-only clause list content parsed from source on every render (whole-list replace); items are non-interactive with no per-item state.
+      // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- read-only clause list content parsed from source on every render (whole-list replace); items are non-interactive with no per-item state.
       <li className="leading-relaxed" key={idx}>
         <ParagraphContent paragraph={item.paragraph} />
         {item.children ? <ClauseList node={item.children} /> : null}

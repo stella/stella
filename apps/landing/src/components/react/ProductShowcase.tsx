@@ -148,6 +148,7 @@ function ReviewIllustration() {
   const lines = Array.from({ length: 6 }, (_, i) => 80 + i * 28);
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 320 280"
       fill="none"
       className="review-line h-full w-full"
@@ -181,16 +182,17 @@ function ReviewIllustration() {
   );
 }
 
+const lineSpec: { y: number; words: number[] }[] = [
+  { y: 100, words: [20, 14, 28, 12, 22, 16] },
+  { y: 130, words: [16, 26, 14, 32, 12, 20] },
+  { y: 160, words: [22, 16, 28, 14, 18, 26] },
+  { y: 190, words: [18, 28, 14, 22] },
+];
+
 /** Drafting: short dashes grouped as "words" appear one at a time, building paragraphs. */
 function DraftIllustration() {
   const startX = 60;
   const gap = 8;
-  const lineSpec: { y: number; words: number[] }[] = [
-    { y: 100, words: [20, 14, 28, 12, 22, 16] },
-    { y: 130, words: [16, 26, 14, 32, 12, 20] },
-    { y: 160, words: [22, 16, 28, 14, 18, 26] },
-    { y: 190, words: [18, 28, 14, 22] },
-  ];
 
   type Word = { idx: number; y: number; x1: number; x2: number };
   const words: Word[] = [];
@@ -205,7 +207,12 @@ function DraftIllustration() {
   }
 
   return (
-    <svg viewBox="0 0 320 280" fill="none" className="draft-line h-full w-full">
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 320 280"
+      fill="none"
+      className="draft-line h-full w-full"
+    >
       {words.map((w) => (
         <line
           key={w.idx}
@@ -233,6 +240,7 @@ function ResearchIllustration() {
   const inner = 20;
   return (
     <svg
+      aria-hidden="true"
       viewBox="0 0 320 280"
       fill="none"
       className="research-burst h-full w-full"

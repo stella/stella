@@ -680,7 +680,7 @@ export const runIngestionPipeline = async ({
           break;
         }
         try {
-          // oxlint-disable-next-line no-await-in-loop -- sequential decision inserts: consecutive-failure halting and per-page counters depend on ordering
+          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential decision inserts: consecutive-failure halting and per-page counters depend on ordering
           const outcome = await processDecision(result, source.id, scopedDb);
 
           if (outcome.inserted) {

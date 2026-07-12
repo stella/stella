@@ -1060,11 +1060,7 @@ function SkillFileTree({
             />
           );
         }
-        return (
-          <span className="truncate" title={node.name}>
-            {node.name}
-          </span>
-        );
+        return <span className="truncate">{node.name}</span>;
       }}
       selectedId={selectedId}
     />

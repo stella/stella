@@ -250,6 +250,7 @@ export const finalizeEntityVersion = async function* ({
       workspaceReference: workspace?.reference ?? null,
     });
 
+    // eslint-disable-next-line react-doctor/async-parallel -- sequential by design: all writes share one tx client; a single transaction connection can't run concurrent statements
     await tx.insert(entityVersions).values({
       createdBy: userId,
       entityId,
@@ -330,6 +331,7 @@ export const finalizeEntityVersion = async function* ({
       );
     }
 
+    // eslint-disable-next-line react-doctor/async-parallel -- sequential by design: all writes share one tx client; a single transaction connection can't run concurrent statements
     await tx
       .update(entities)
       .set({

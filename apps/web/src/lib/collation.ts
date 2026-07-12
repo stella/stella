@@ -56,6 +56,7 @@ export const getCollator = (locale: string): Intl.Collator => {
   if (cached) {
     return cached;
   }
+  // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale cache getter; the constructor necessarily runs below top level
   const collator = new Intl.Collator(locale);
   collatorCache.set(locale, collator);
   return collator;

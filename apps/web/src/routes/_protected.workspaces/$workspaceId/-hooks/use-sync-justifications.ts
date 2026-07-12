@@ -78,12 +78,14 @@ export const useSyncJustificationChunks = (
   const syncJustifications = useWorkspaceStore(
     (state) => state.syncJustifications,
   );
-  const syncedResultsRef = useRef(new Set<string>());
+  const syncedResultsRef = useRef<Set<string> | null>(null);
+  syncedResultsRef.current ??= new Set<string>();
   const normalizedChunks = useMemo(
     () =>
-      entityIdChunks
-        .map((entityIds) => normalizeEntityIds(entityIds))
-        .filter((entityIds) => entityIds.length > 0),
+      entityIdChunks.flatMap((entityIds) => {
+        const normalized = normalizeEntityIds(entityIds);
+        return normalized.length > 0 ? [normalized] : [];
+      }),
     [entityIdChunks],
   );
   const queries = useMemo(
@@ -127,6 +129,11 @@ export const useSyncJustificationChunks = (
   });
 
   useExternalSyncEffect(() => {
+    const syncedKeys = syncedResultsRef.current;
+    if (!syncedKeys) {
+      return;
+    }
+
     for (const result of syncedResults) {
       if (!result.data || result.entityIds.length === 0) {
         continue;
@@ -137,11 +144,11 @@ export const useSyncJustificationChunks = (
         result.dataUpdatedAt,
         result.entityIds.join(","),
       ].join(":");
-      if (syncedResultsRef.current.has(syncKey)) {
+      if (syncedKeys.has(syncKey)) {
         continue;
       }
 
-      syncedResultsRef.current.add(syncKey);
+      syncedKeys.add(syncKey);
       syncJustifications(result.data);
     }
   }, [syncJustifications, syncedResults, workspaceId]);

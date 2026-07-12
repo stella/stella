@@ -26,9 +26,9 @@ import { fetchWithTimeout } from "@/lib/fetch";
 import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import {
   fetchPrintPdf,
-  PeekPdfControls,
   printPdfBuffer,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
+} from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-print";
+import { PeekPdfControls } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 

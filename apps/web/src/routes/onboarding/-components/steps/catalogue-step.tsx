@@ -191,7 +191,7 @@ export const CatalogueStep = ({
         set.add(code);
       }
     }
-    return [...set].sort();
+    return Array.from(set).sort();
   })();
 
   // Clicking a row focuses it on the left and surfaces the iOS
@@ -205,6 +205,39 @@ export const CatalogueStep = ({
     }
     onFocusChange(focusedSlug === entry.slug ? null : entry.slug);
   };
+
+  const renderCatalogueRow = (entry: LoadedCatalogueEntry) => (
+    <OnboardingCatalogueRow
+      addLabel={t("common.add")}
+      entry={entry}
+      focused={focusedSlug === entry.slug}
+      key={`${entry.kind}-${entry.slug}`}
+      onClick={() => handleRowClick(entry)}
+      onToggleSelection={
+        pinnedSlugSet.has(entry.slug)
+          ? undefined
+          : () => {
+              if (selectedSet.has(entry.slug)) {
+                onRemove(entry.slug);
+              } else {
+                onAdd(entry.slug);
+              }
+            }
+      }
+      removeLabel={t("common.remove")}
+      selected={selectedSet.has(entry.slug)}
+    />
+  );
+
+  const recommendedRows: React.ReactNode[] = [];
+  const otherRows: React.ReactNode[] = [];
+  for (const entry of filteredEntries) {
+    if (recommendedSet.has(entry.slug)) {
+      recommendedRows.push(renderCatalogueRow(entry));
+    } else {
+      otherRows.push(renderCatalogueRow(entry));
+    }
+  }
 
   return (
     <>
@@ -262,7 +295,7 @@ export const CatalogueStep = ({
               <GlobeIcon className="size-3.5" />
               {jurisdictionFilter.size === 0
                 ? t("common.all")
-                : [...jurisdictionFilter].sort().join(", ")}
+                : Array.from(jurisdictionFilter).sort().join(", ")}
               <ChevronDownIcon className="size-3.5" />
             </PopoverTrigger>
             <PopoverPopup align="end" className="w-60" side="bottom">
@@ -382,67 +415,16 @@ export const CatalogueStep = ({
             </div>
           ) : (
             <>
-              {filteredEntries
-                .filter((entry) => recommendedSet.has(entry.slug))
-                .map((entry) => (
-                  <OnboardingCatalogueRow
-                    addLabel={t("common.add")}
-                    entry={entry}
-                    focused={focusedSlug === entry.slug}
-                    key={`${entry.kind}-${entry.slug}`}
-                    onClick={() => handleRowClick(entry)}
-                    onToggleSelection={
-                      pinnedSlugSet.has(entry.slug)
-                        ? undefined
-                        : () => {
-                            if (selectedSet.has(entry.slug)) {
-                              onRemove(entry.slug);
-                            } else {
-                              onAdd(entry.slug);
-                            }
-                          }
-                    }
-                    removeLabel={t("common.remove")}
-                    selected={selectedSet.has(entry.slug)}
-                  />
-                ))}
-              {filteredEntries.some(
-                (entry) => !recommendedSet.has(entry.slug),
-              ) &&
-                filteredEntries.some((entry) =>
-                  recommendedSet.has(entry.slug),
-                ) && (
-                  <TextSeparator
-                    className="my-2"
-                    labelClassName="text-[10px] font-medium tracking-wider uppercase"
-                  >
-                    {t("onboarding.catalogueCommunityHeading")}
-                  </TextSeparator>
-                )}
-              {filteredEntries
-                .filter((entry) => !recommendedSet.has(entry.slug))
-                .map((entry) => (
-                  <OnboardingCatalogueRow
-                    addLabel={t("common.add")}
-                    entry={entry}
-                    focused={focusedSlug === entry.slug}
-                    key={`${entry.kind}-${entry.slug}`}
-                    onClick={() => handleRowClick(entry)}
-                    onToggleSelection={
-                      pinnedSlugSet.has(entry.slug)
-                        ? undefined
-                        : () => {
-                            if (selectedSet.has(entry.slug)) {
-                              onRemove(entry.slug);
-                            } else {
-                              onAdd(entry.slug);
-                            }
-                          }
-                    }
-                    removeLabel={t("common.remove")}
-                    selected={selectedSet.has(entry.slug)}
-                  />
-                ))}
+              {recommendedRows}
+              {otherRows.length > 0 && recommendedRows.length > 0 && (
+                <TextSeparator
+                  className="my-2"
+                  labelClassName="text-[10px] font-medium tracking-wider uppercase"
+                >
+                  {t("onboarding.catalogueCommunityHeading")}
+                </TextSeparator>
+              )}
+              {otherRows}
               {jurisdictionFilter.size > 0 && (
                 <div className="flex justify-center py-2">
                   <Button

@@ -30,6 +30,7 @@ export const useDocxTabEditSession = ({
   const flashDocxEditTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  // eslint-disable-next-line react-doctor/rerender-lazy-ref-init -- ref is threaded as RefObject<Map> into file-tab-panel; lazy init would widen the type to Map | null
   const docxActionsRef = useRef(new Map<string, DocxBrowserEditorActions>());
   const [docxScrollTopByTab, setDocxScrollTopByTab] = useState<
     Map<string, number>

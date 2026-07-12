@@ -20,7 +20,7 @@
  * suggestions without context-switching.
  */
 
-import { useEffectEvent, useRef } from "react";
+import { useRef } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
@@ -32,6 +32,7 @@ import {
 } from "@/components/ai-suggestions/active-docx-store";
 import { ReviewPanel } from "@/components/ai-suggestions/review-panel";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 type SuggestionsFacetProps = {
   entityId: string;
@@ -64,7 +65,7 @@ export const SuggestionsFacet = ({
   // can no-op on.
   const fallbackEditorRef = useRef<DocxEditorRef | null>(null);
 
-  const dispatchMissingEditor = useEffectEvent(() => {
+  const dispatchMissingEditor = useLatestCallback(() => {
     onMissingEditor?.();
   });
   // Latch the dispatch itself: once we've kicked the caller for a
@@ -101,7 +102,7 @@ export const SuggestionsFacet = ({
     }
     dispatchedTargetRef.current = targetKey;
     dispatchMissingEditor();
-  }, [registration, hasOnMissingEditor, targetKey]);
+  }, [registration, hasOnMissingEditor, targetKey, dispatchMissingEditor]);
 
   return (
     <ReviewPanel

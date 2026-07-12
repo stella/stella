@@ -83,9 +83,10 @@ export const buildColumnFlagMutation = ({
     const existingFlags = normalizeManualFlags(
       arrayOrEmpty(existing?.manualFlags),
     );
+    const existingFlagSet = new Set(existingFlags);
 
     if (set) {
-      if (existingFlags.includes(flag)) {
+      if (existingFlagSet.has(flag)) {
         continue;
       }
 
@@ -148,7 +149,7 @@ export const buildColumnFlagMutation = ({
       continue;
     }
 
-    if (!(existing && existingFlags.includes(flag))) {
+    if (!(existing && existingFlagSet.has(flag))) {
       continue;
     }
 

@@ -27,9 +27,9 @@ export const getScanWarnings = (scanResult: ScanResult): string[] | null => {
     return null;
   }
 
-  return scanResult.findings
-    .filter((finding) => finding.severity === "warn")
-    .map((finding) => finding.message);
+  return scanResult.findings.flatMap((finding) =>
+    finding.severity === "warn" ? [finding.message] : [],
+  );
 };
 
 export const scanFile = async ({

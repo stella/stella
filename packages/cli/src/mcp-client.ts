@@ -326,11 +326,6 @@ export const fetchToolsListRaw = async ({
     );
   }
   const httpResponse = response.value;
-  const rawText = await Result.tryPromise({
-    try: async () => await httpResponse.text(),
-    catch: (cause) => cause,
-  });
-  const text = Result.isOk(rawText) ? rawText.value : "";
   if (!httpResponse.ok) {
     return Result.err(
       new McpClientError({
@@ -340,6 +335,11 @@ export const fetchToolsListRaw = async ({
       }),
     );
   }
+  const rawText = await Result.tryPromise({
+    try: async () => await httpResponse.text(),
+    catch: (cause) => cause,
+  });
+  const text = Result.isOk(rawText) ? rawText.value : "";
   const out: RawToolsList = { rawBody: text };
   const cliLatest = httpResponse.headers.get(CLI_LATEST_HEADER);
   if (cliLatest !== null) {

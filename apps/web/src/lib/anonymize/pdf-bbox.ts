@@ -55,6 +55,8 @@ export const getEntityBBoxes = ({
       continue;
     }
 
+    const { x: bboxX, width: bboxWidth, fontSize: bboxFontSize } = span.bbox;
+
     const overlapStart = Math.max(span.start, entityStart);
     const overlapEnd = Math.min(span.end, entityEnd);
 
@@ -64,19 +66,19 @@ export const getEntityBBoxes = ({
     // (pdfjs width includes visual column gaps, pushing
     // ratio to 3x+).
     const MAX_SCALE = 1.5;
-    const rawScale = measuredTotal > 0 ? span.bbox.width / measuredTotal : 1;
+    const rawScale = measuredTotal > 0 ? bboxWidth / measuredTotal : 1;
     const scale = Math.min(rawScale, MAX_SCALE);
     const effectiveWidth = measuredTotal * scale;
 
     if (overlapStart === span.start && overlapEnd === span.end) {
-      const pad = span.bbox.fontSize * 0.75;
+      const pad = bboxFontSize * 0.75;
       const paddedEnd = Math.min(
-        span.bbox.x + span.bbox.width,
-        span.bbox.x + effectiveWidth + pad,
+        bboxX + bboxWidth,
+        bboxX + effectiveWidth + pad,
       );
       result.push({
         ...span.bbox,
-        width: paddedEnd - span.bbox.x,
+        width: paddedEnd - bboxX,
       });
       continue;
     }
@@ -94,12 +96,12 @@ export const getEntityBBoxes = ({
       measureWidth(span.cssFont, span.text.slice(0, localEnd)) * rawScale -
       prefixWidth;
 
-    const pad = span.bbox.fontSize * 0.75;
+    const pad = bboxFontSize * 0.75;
 
-    const rawX = span.bbox.x + prefixWidth;
+    const rawX = bboxX + prefixWidth;
     const rawEnd = rawX + overlapWidth;
-    const paddedX = Math.max(span.bbox.x, rawX - pad);
-    const paddedEnd = Math.min(span.bbox.x + span.bbox.width, rawEnd + pad);
+    const paddedX = Math.max(bboxX, rawX - pad);
+    const paddedEnd = Math.min(bboxX + bboxWidth, rawEnd + pad);
 
     result.push({
       pageIndex: span.bbox.pageIndex,
@@ -107,7 +109,7 @@ export const getEntityBBoxes = ({
       y: span.bbox.y,
       width: paddedEnd - paddedX,
       height: span.bbox.height,
-      fontSize: span.bbox.fontSize,
+      fontSize: bboxFontSize,
     });
   }
 

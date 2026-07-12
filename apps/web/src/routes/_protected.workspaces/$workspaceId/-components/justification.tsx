@@ -3,11 +3,10 @@ import { produce } from "immer";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import type { Citation } from "@/lib/citations";
-import {
-  getPDFPageIdByNumber,
-  useOptionalPDFStore,
-} from "@/lib/pdf/pdf-context";
+import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
+import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { renderJustificationContent } from "@/lib/render-justification-content";
 import type { WorkspaceJustification } from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -146,25 +145,29 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
       ? `${trimmed.slice(0, DOCX_CHIP_PREVIEW_CHARS).trimEnd()}…`
       : trimmed || "¶";
   return (
-    <button
-      className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
-      data-block-id={citation.blockId}
-      onClick={() => {
-        // Inspector peek path reads `pendingBlockScroll` from the
-        // store; the full-view DocxBrowserEditor listens for the
-        // window event (see docx-browser-editor.tsx). Fire both so
-        // both surfaces respond.
-        requestBlockScroll(citation.fileFieldId, citation.blockId);
-        window.dispatchEvent(
-          new CustomEvent<{ blockId: string }>("folio:scroll-to-block", {
-            detail: { blockId: citation.blockId },
-          }),
-        );
-      }}
-      title={trimmed || undefined}
-      type="button"
-    >
-      “{preview}”
-    </button>
+    <Tooltip
+      content={trimmed || undefined}
+      render={
+        <button
+          className={cn(CITATION_CHIP_CLASSES, "max-w-[16rem] truncate")}
+          data-block-id={citation.blockId}
+          onClick={() => {
+            // Inspector peek path reads `pendingBlockScroll` from the
+            // store; the full-view DocxBrowserEditor listens for the
+            // window event (see docx-browser-editor.tsx). Fire both so
+            // both surfaces respond.
+            requestBlockScroll(citation.fileFieldId, citation.blockId);
+            window.dispatchEvent(
+              new CustomEvent<{ blockId: string }>("folio:scroll-to-block", {
+                detail: { blockId: citation.blockId },
+              }),
+            );
+          }}
+          type="button"
+        >
+          “{preview}”
+        </button>
+      }
+    />
   );
 };

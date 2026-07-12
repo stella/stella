@@ -183,10 +183,7 @@ export const validateAst = (
   const originalText = normalize(originalParts.join(" "));
 
   const astText = normalize(
-    blocks
-      .map((b) => b.plainText)
-      .filter(Boolean)
-      .join(" "),
+    blocks.flatMap((b) => (b.plainText ? [b.plainText] : [])).join(" "),
   );
 
   const retainedPct =
@@ -383,6 +380,11 @@ export const validateAndLog = (
  * boundaries between paragraphs.
  */
 export const buildValidationHtml = (paragraphs: readonly string[]): string => {
-  const parts = paragraphs.filter((p) => p.trim()).map((p) => `<p>${p}</p>`);
+  const parts: string[] = [];
+  for (const p of paragraphs) {
+    if (p.trim()) {
+      parts.push(`<p>${p}</p>`);
+    }
+  }
   return `<body>${parts.join("")}</body>`;
 };

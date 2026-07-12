@@ -6,11 +6,11 @@ import { cn } from "@stll/ui/lib/utils";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { normalizeOptionalArray } from "@/lib/arrays";
 import { addDays } from "@/lib/dates";
+import { formatCurrencyCompact } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import {
   formatDecimalHours,
   formatMinutes,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
-import { formatCurrencyCompact } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
+} from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-duration";
 import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-name-map";
 import {
   summarizeBillableAmountByMatterAndCurrency,

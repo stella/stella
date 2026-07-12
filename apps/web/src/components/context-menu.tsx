@@ -40,9 +40,15 @@ type ContextMenuProps = {
  * Renders only the children when `actions` is empty so callers can
  * pass conditionally.
  */
-export const ContextMenu = ({ actions, children }: ContextMenuProps) => {
+// Explicit ReactNode: returning bare `children` infers a type containing
+// React 19's Promise<AwaitedReactNode> member, which promise-function-async
+// would otherwise flag on this intentionally sync component.
+export const ContextMenu = ({
+  actions,
+  children,
+}: ContextMenuProps): React.ReactNode => {
   if (actions.length === 0) {
-    return <>{children}</>;
+    return children;
   }
 
   return (

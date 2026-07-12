@@ -199,9 +199,12 @@ const uploadEntityHandler = async function* ({
   }
 
   if (scanResult.value.verdict === "reject") {
-    const reasons = scanResult.value.findings
-      .filter((f) => f.severity === "reject")
-      .map((f) => f.message);
+    const reasons: string[] = [];
+    for (const f of scanResult.value.findings) {
+      if (f.severity === "reject") {
+        reasons.push(f.message);
+      }
+    }
     return Result.err(
       new HandlerError({
         status: 422,
@@ -210,12 +213,15 @@ const uploadEntityHandler = async function* ({
     );
   }
 
-  const scanWarnings =
-    scanResult.value.verdict === "warn"
-      ? scanResult.value.findings
-          .filter((f) => f.severity === "warn")
-          .map((f) => f.message)
-      : undefined;
+  let scanWarnings: string[] | undefined;
+  if (scanResult.value.verdict === "warn") {
+    scanWarnings = [];
+    for (const f of scanResult.value.findings) {
+      if (f.severity === "warn") {
+        scanWarnings.push(f.message);
+      }
+    }
+  }
 
   let encrypted = false;
   if (file.type === PDF_MIME_TYPE) {
@@ -273,6 +279,7 @@ const uploadEntityHandler = async function* ({
 
         const resolvedName = await resolveFileName({ tx, propertyId, name });
 
+        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client (tx) as resolveFileName above; a single connection can't run concurrent statements
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
         await tx.insert(entities).values({

@@ -73,14 +73,16 @@ export const generateImageThumbnail = async (
   return await Result.tryPromise({
     try: async () => {
       const image = new Bun.Image(source);
-      const webp = await image
-        .resize(THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE, {
-          fit: "inside",
-          withoutEnlargement: true,
-        })
-        .webp({ quality: THUMBNAIL_WEBP_QUALITY })
-        .bytes();
-      const placeholder = await image.placeholder();
+      const [webp, placeholder] = await Promise.all([
+        image
+          .resize(THUMBNAIL_MAX_EDGE, THUMBNAIL_MAX_EDGE, {
+            fit: "inside",
+            withoutEnlargement: true,
+          })
+          .webp({ quality: THUMBNAIL_WEBP_QUALITY })
+          .bytes(),
+        image.placeholder(),
+      ]);
       return { webp, placeholder } satisfies ImageThumbnailResult;
     },
     catch: (error) =>

@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 
+import Tooltip from "@/components/tooltip";
 import { OnboardingProgress } from "@/routes/onboarding/-components/onboarding-progress";
 
 type OnboardingLayoutProps = {
@@ -43,16 +44,20 @@ export const OnboardingLayout = ({
           style={{ maxWidth: contentMaxWidth }}
         >
           {onBack && (
-            <button
-              aria-label={t("common.goBack")}
-              title={t("common.goBack")}
-              className="text-muted-foreground hover:text-foreground absolute -top-12 flex size-8 items-center justify-center rounded-md transition-colors"
-              onClick={onBack}
-              style={{ insetInlineStart: "-12px" }}
-              type="button"
-            >
-              <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-            </button>
+            <Tooltip
+              content={t("common.goBack")}
+              render={
+                <button
+                  aria-label={t("common.goBack")}
+                  className="text-muted-foreground hover:text-foreground absolute -top-12 flex size-8 items-center justify-center rounded-md transition-colors"
+                  onClick={onBack}
+                  style={{ insetInlineStart: "-12px" }}
+                  type="button"
+                >
+                  <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
+                </button>
+              }
+            />
           )}
           <OnboardingProgress
             currentStep={currentStep}

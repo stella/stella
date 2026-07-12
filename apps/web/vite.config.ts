@@ -30,6 +30,7 @@ const readCommitSha = () => {
   }
 
   try {
+    // eslint-disable-next-line sonarjs/no-os-command-from-path -- build-time `git rev-parse` on the developer/CI machine; the build environment's PATH is trusted
     return execFileSync("git", ["rev-parse", "HEAD"], {
       cwd: path.resolve(APP_ROOT, "../.."),
       encoding: "utf-8",

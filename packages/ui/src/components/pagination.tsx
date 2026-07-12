@@ -10,15 +10,15 @@ import {
   MoreHorizontalIcon,
 } from "lucide-react";
 
-import { buttonVariants } from "@stll/ui/components/button";
 import type { Button } from "@stll/ui/components/button";
+import { buttonVariants } from "@stll/ui/components/button-variants";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 function Pagination({ className, ...props }: React.ComponentProps<"nav">) {
   return (
     <nav
-      aria-label="pagination"
+      aria-label="Pagination"
       className={cn("mx-auto flex w-full justify-center", className)}
       data-slot="pagination"
       {...props}

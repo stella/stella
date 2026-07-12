@@ -117,6 +117,23 @@ effect only when the component does not own the node/ref API yet, or when the
 work is truly "push a changing React value into an already-attached external
 system."
 
+### `useLatestCallback(fn)` — latest-values callbacks for external systems
+
+When a callback must be handed to something that outlives the render that
+created it (a listener registered inside `useExternalSyncEffect`, a query
+context object, an imperative editor/runtime bridge) and it should read the
+**latest committed state** without re-triggering the subscription, wrap it in
+`useLatestCallback` from `@/hooks/use-latest-callback`: stable identity,
+always invokes the latest closure, creates no reactivity.
+
+Do not reach for React's `useEffectEvent`: its contract restricts calls to
+raw `useEffect` bodies of the same component, which the wrapper-only policy
+above makes unsatisfiable — `react-hooks/rules-of-hooks` flags every such
+use. `useLatestCallback` has the same semantics minus that restriction. Two
+contract points: never call the result during render, and list it in the
+`useExternalSyncEffect` deps array when used there (its identity is stable,
+so it never causes re-runs; the entry only satisfies `exhaustive-deps`).
+
 ## Feedback loops on imperative-editor boundaries
 
 Any state write triggered by an external editor or subscription callback
@@ -219,10 +236,11 @@ In-repo exemplars: `apps/web/src/components/inspector/versions-facet.tsx`
 (`seededDataRef`) and
 `apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts`
 (`seededChatRef`). This is a narrow, explicitly allowlisted exception to
-`no-ref-mirror` (not a general recipe to reach for) — `useEffectEvent` does
-not protect this window because the write must happen during render, not in
-an effect. A new call site needs its own justified entry in that rule's
-`allowedFiles` in `oxlint.config.ts`.
+`no-ref-mirror` (not a general recipe to reach for) — `useLatestCallback`
+(and React's `useEffectEvent`) do not protect this window because their
+updates are effect-timed while the write must happen during render. A new
+call site needs its own justified entry in that rule's `allowedFiles` in
+`oxlint.config.ts`.
 
 ## Escape hatch
 

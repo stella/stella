@@ -94,9 +94,12 @@ const listCatalogue = createSafeRootHandler(
   config,
   async function* ({ memberRole, safeDb, session, user }) {
     const entries = loadCatalogue();
-    const skillSlugs = entries
-      .filter((entry) => entry.kind === "skill")
-      .map((entry) => entry.slug);
+    const skillSlugs: string[] = [];
+    for (const entry of entries) {
+      if (entry.kind === "skill") {
+        skillSlugs.push(entry.slug);
+      }
+    }
     const mcpUrls = filterCatalogueByKind("mcp").map((entry) => entry.url);
 
     // One shared scoped transaction for the catalogue's read-only sequence:

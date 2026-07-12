@@ -53,7 +53,7 @@ afterEach(() => {
 });
 
 class FakeBroadcastChannel {
-  static channels = new Map<string, Set<FakeBroadcastChannel>>();
+  static readonly channels = new Map<string, Set<FakeBroadcastChannel>>();
 
   readonly name: string;
 

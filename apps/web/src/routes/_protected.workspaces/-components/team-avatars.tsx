@@ -7,6 +7,7 @@ import {
 } from "@stll/ui/components/avatar";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import type { Workspace } from "@/routes/_protected.workspaces/-types";
 
 export const getDisplayName = (name: string | null, userId: string): string =>
@@ -43,12 +44,13 @@ export const TeamAvatars = ({
   textSize = "text-[0.625rem]",
   maxVisible = 3,
   emptyFallback,
-}: TeamAvatarsProps) => {
+  // Explicit ReactNode: `emptyFallback` widens the inferred return to a type
+  // containing React 19's Promise<AwaitedReactNode> member, which
+  // promise-function-async would otherwise flag on this sync component.
+}: TeamAvatarsProps): React.ReactNode => {
   const t = useTranslations();
   if (members.length === 0) {
-    return (
-      <>{emptyFallback ?? <span className="text-muted-foreground">—</span>}</>
-    );
+    return emptyFallback ?? <span className="text-muted-foreground">—</span>;
   }
   const visible = members.slice(0, maxVisible);
   const overflow = members.length - visible.length;
@@ -79,20 +81,24 @@ export const TeamAvatars = ({
         );
       })}
       {overflow > 0 && (
-        <span
-          className={cn(
-            "bg-muted text-muted-foreground ring-background relative z-10",
-            "flex items-center justify-center rounded-full font-medium tabular-nums ring-2",
-            size,
-            textSize,
-          )}
-          title={members
+        <Tooltip
+          content={members
             .slice(maxVisible)
             .map((m) => getDisplayName(m.userName, m.userId))
             .join(", ")}
-        >
-          +{overflow}
-        </span>
+          render={
+            <span
+              className={cn(
+                "bg-muted text-muted-foreground ring-background relative z-10",
+                "flex items-center justify-center rounded-full font-medium tabular-nums ring-2",
+                size,
+                textSize,
+              )}
+            >
+              +{overflow}
+            </span>
+          }
+        />
       )}
     </div>
   );

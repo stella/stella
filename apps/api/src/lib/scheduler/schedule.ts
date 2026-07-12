@@ -72,17 +72,29 @@ const validateDailySchedule = ({
   }
 };
 
+// Locale and format shape are fixed; only the IANA timeZone varies per call,
+// so each formatter is cached once per timeZone instead of rebuilt every call.
+const dateTimeFormatByTimeZone = new Map<string, Intl.DateTimeFormat>();
+const getDateTimeFormat = (timeZone: string): Intl.DateTimeFormat => {
+  let formatter = dateTimeFormatByTimeZone.get(timeZone);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hourCycle: "h23",
+    });
+    dateTimeFormatByTimeZone.set(timeZone, formatter);
+  }
+  return formatter;
+};
+
 const getLocalDateTime = (instant: Date, timeZone: string): LocalDateTime => {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(instant);
+  const parts = getDateTimeFormat(timeZone).formatToParts(instant);
 
   return {
     year: getDatePart(parts, "year"),

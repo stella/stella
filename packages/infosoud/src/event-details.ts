@@ -402,46 +402,45 @@ export const getNextHearingCaseEvent = (
     return Date.now();
   })();
 
-  const futureHearings = events
-    .filter((event) => HEARING_EVENT_TYPES.has(event.udalost))
-    .filter((event) => {
-      if ("decodedDetail" in event && event.decodedDetail?.kind === "hearing") {
-        // `cancelled` is null when the JED_ZRUS attribute is absent or
-        // unrecognised; fall back to the event-level `zruseno` flag so a
-        // cancelled hearing whose detail omits JED_ZRUS is still excluded.
-        return event.decodedDetail.hearing.cancelled !== true && !event.zruseno;
+  const futureHearingCandidates: {
+    event: EventWithMaybeDetail;
+    sortUnixMs: number;
+    cutoffUnixMs: number;
+  }[] = [];
+  for (const event of events) {
+    if (!HEARING_EVENT_TYPES.has(event.udalost)) {
+      continue;
+    }
+    if ("decodedDetail" in event && event.decodedDetail?.kind === "hearing") {
+      // `cancelled` is null when the JED_ZRUS attribute is absent or
+      // unrecognised; fall back to the event-level `zruseno` flag so a
+      // cancelled hearing whose detail omits JED_ZRUS is still excluded.
+      if (event.decodedDetail.hearing.cancelled === true || event.zruseno) {
+        continue;
       }
+    } else if (event.zruseno) {
+      continue;
+    }
 
-      return !event.zruseno;
-    })
-    .map((event) => {
-      const timedUnixMs =
-        "decodedDetail" in event && event.decodedDetail?.kind === "hearing"
-          ? event.decodedDetail.hearing.startsAtDateTime.unixMs
-          : null;
-      if (timedUnixMs !== null) {
-        return { event, sortUnixMs: timedUnixMs, cutoffUnixMs: timedUnixMs };
-      }
-      const dayUnixMs = parseEventDate(event.datum).unixMs;
-      return {
-        event,
-        sortUnixMs: dayUnixMs,
-        cutoffUnixMs: getDateOnlyHearingCutoffUnixMs(event.datum),
-      };
-    })
-    .filter(
-      (
-        value,
-      ): value is {
-        event: EventWithMaybeDetail;
-        sortUnixMs: number;
-        cutoffUnixMs: number;
-      } =>
-        value.sortUnixMs !== null &&
-        value.cutoffUnixMs !== null &&
-        value.cutoffUnixMs >= nowUnixMs,
-    )
-    .toSorted((left, right) => left.sortUnixMs - right.sortUnixMs);
+    const timedUnixMs =
+      "decodedDetail" in event && event.decodedDetail?.kind === "hearing"
+        ? event.decodedDetail.hearing.startsAtDateTime.unixMs
+        : null;
+    const sortUnixMs = timedUnixMs ?? parseEventDate(event.datum).unixMs;
+    const cutoffUnixMs =
+      timedUnixMs ?? getDateOnlyHearingCutoffUnixMs(event.datum);
+    if (
+      sortUnixMs === null ||
+      cutoffUnixMs === null ||
+      cutoffUnixMs < nowUnixMs
+    ) {
+      continue;
+    }
+    futureHearingCandidates.push({ event, sortUnixMs, cutoffUnixMs });
+  }
+  const futureHearings = futureHearingCandidates.toSorted(
+    (left, right) => left.sortUnixMs - right.sortUnixMs,
+  );
 
   return futureHearings.at(0)?.event ?? null;
 };
@@ -449,21 +448,25 @@ export const getNextHearingCaseEvent = (
 export const getLatestDecisionCaseEvent = (
   events: readonly EventWithMaybeDetail[],
 ): EventWithMaybeDetail | null => {
-  const matchingEvents = events
-    .filter((event) => event.udalost === "VYD_ROZH")
-    .map((event) => ({
-      event,
-      unixMs:
-        "decodedDetail" in event && event.decodedDetail?.kind === "decision"
-          ? (event.decodedDetail.decision.issuedOn.unixMs ??
-            getCaseEventDateUnixMs(event))
-          : getCaseEventDateUnixMs(event),
-    }))
-    .filter(
-      (value): value is { event: EventWithMaybeDetail; unixMs: number } =>
-        value.unixMs !== null,
-    )
-    .toSorted((left, right) => right.unixMs - left.unixMs);
+  const matchingCandidates: { event: EventWithMaybeDetail; unixMs: number }[] =
+    [];
+  for (const event of events) {
+    if (event.udalost !== "VYD_ROZH") {
+      continue;
+    }
+    const unixMs =
+      "decodedDetail" in event && event.decodedDetail?.kind === "decision"
+        ? (event.decodedDetail.decision.issuedOn.unixMs ??
+          getCaseEventDateUnixMs(event))
+        : getCaseEventDateUnixMs(event);
+    if (unixMs === null) {
+      continue;
+    }
+    matchingCandidates.push({ event, unixMs });
+  }
+  const matchingEvents = matchingCandidates.toSorted(
+    (left, right) => right.unixMs - left.unixMs,
+  );
 
   return matchingEvents.at(0)?.event ?? null;
 };
@@ -471,17 +474,21 @@ export const getLatestDecisionCaseEvent = (
 export const getLatestMaterialCaseEvent = (
   events: readonly EventWithMaybeDetail[],
 ): EventWithMaybeDetail | null => {
-  const matchingEvents = events
-    .filter(isMaterialCaseEvent)
-    .map((event) => ({
-      event,
-      unixMs: getCaseEventDateUnixMs(event),
-    }))
-    .filter(
-      (value): value is { event: EventWithMaybeDetail; unixMs: number } =>
-        value.unixMs !== null,
-    )
-    .toSorted((left, right) => right.unixMs - left.unixMs);
+  const matchingCandidates: { event: EventWithMaybeDetail; unixMs: number }[] =
+    [];
+  for (const event of events) {
+    if (!isMaterialCaseEvent(event)) {
+      continue;
+    }
+    const unixMs = getCaseEventDateUnixMs(event);
+    if (unixMs === null) {
+      continue;
+    }
+    matchingCandidates.push({ event, unixMs });
+  }
+  const matchingEvents = matchingCandidates.toSorted(
+    (left, right) => right.unixMs - left.unixMs,
+  );
 
   return matchingEvents.at(0)?.event ?? null;
 };

@@ -10,14 +10,14 @@ import {
   WorkspaceGridCell,
   WorkspaceGridRow,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
+import { PinnedBoundary } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import {
   getEndFillerGridColumn,
   getGridPinningStyles,
   isPinnedBoundaryColumn,
-  PinnedBoundary,
   tableEndFillerCellStyle,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
-import type { EndFillerInput } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
+import type { EndFillerInput } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals-helpers";
 
 type TableEndFillerProps = {
   renderColumns: TableColumn[];

@@ -203,10 +203,12 @@ const coerceArrayFlag = (
     return Result.ok(raw);
   }
   if (flagSpec.kind === "enum-array") {
+    const enumValues = flagSpec.enum;
+    const allowedValues = enumValues ? new Set(enumValues) : null;
     for (const element of raw) {
-      if (flagSpec.enum && !flagSpec.enum.includes(element)) {
+      if (allowedValues && !allowedValues.has(element)) {
         return Result.err(
-          `${flagSpec.flag} values must each be one of ${flagSpec.enum.join(", ")}`,
+          `${flagSpec.flag} values must each be one of ${enumValues?.join(", ")}`,
         );
       }
     }

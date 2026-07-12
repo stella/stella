@@ -139,6 +139,7 @@ const getMessages = createSafeRootHandler(
         // row read serves both the native-tool-override computation below
         // and web-search provider resolution — replacing a second,
         // independent read of the same organizationSettings row.
+        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same tx client (single Postgres connection can't run concurrent statements)
         const orgSettingsForChat =
           await tx.query.organizationSettings.findFirst({
             where: {

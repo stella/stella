@@ -21,7 +21,8 @@ import {
 } from "@/i18n/i18n-store";
 import type Messages from "@/i18n/langs/messages.gen";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
-import { AnalyticsProvider, useAnalytics } from "@/lib/analytics/provider";
+import { AnalyticsProvider } from "@/lib/analytics/analytics-provider";
+import { useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 

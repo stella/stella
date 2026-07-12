@@ -19,11 +19,14 @@ import type {
   ModelSelection,
   ProviderCredentialDraft,
   ProviderPreview,
-  ProviderValue,
   RoleModelSelections,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { api } from "@/lib/api";
+import {
+  createProviderPreview,
+  type RowStateMap,
+} from "@/routes/onboarding/-components/steps/ai-step.logic";
 
 export type AIStepPhase = "providers" | "models";
 
@@ -53,16 +56,6 @@ const fingerprintDraft = (draft: ProviderCredentialDraft): string | null => {
   return keyFingerprint;
 };
 
-type RowState = {
-  status: ProviderRowStatus;
-  // Fingerprint of the key the user explicitly saved. The row
-  // becomes "saved" only if the current key matches; any edit
-  // resets the row to "idle".
-  savedKey?: string;
-};
-
-type RowStateMap = Record<ProviderValue, RowState>;
-
 const INITIAL_ROW_STATES: RowStateMap = {
   google: { status: "idle" },
   anthropic: { status: "idle" },
@@ -70,24 +63,6 @@ const INITIAL_ROW_STATES: RowStateMap = {
   openrouter: { status: "idle" },
   mistral: { status: "idle" },
   bedrock: { status: "idle" },
-};
-
-export const createProviderPreview = (
-  providers: readonly ProviderCredentialDraft[],
-  rowStates: RowStateMap,
-): ProviderPreview[] => {
-  const items: ProviderPreview[] = [];
-  for (const draft of providers) {
-    const state = rowStates[draft.provider];
-    if (state.status === "checking" || state.status === "invalid") {
-      items.push({ provider: draft.provider, status: state.status });
-      continue;
-    }
-    if (state.status === "valid" || draft.apiKeyMasked !== undefined) {
-      items.push({ provider: draft.provider, status: "valid" });
-    }
-  }
-  return items;
 };
 
 export const AIStep = ({
@@ -139,7 +114,10 @@ export const AIStep = ({
     canEnterModelsPhase &&
     serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
 
-  const toastedRef = useRef(new Set<string>());
+  // Created once and mutated in place (never reassigned), so a stable
+  // useState value works without the rebuild-every-render cost of
+  // `useRef(new Set())`.
+  const [toasted] = useState(() => new Set<string>());
 
   // Whenever a key changes against its saved fingerprint, reset
   // that row to idle so the user must save again.
@@ -196,8 +174,8 @@ export const AIStep = ({
         [draft.provider]: { status: "invalid", savedKey: fp },
       });
       const toastKey = `${draft.provider}:${fp}`;
-      if (!toastedRef.current.has(toastKey)) {
-        toastedRef.current.add(toastKey);
+      if (!toasted.has(toastKey)) {
+        toasted.add(toastKey);
         stellaToast.add({
           title: tOrganization("aiConfig.providerKeyInvalid", {
             provider: PROVIDER_LABELS[draft.provider],

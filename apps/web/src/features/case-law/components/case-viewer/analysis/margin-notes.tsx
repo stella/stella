@@ -38,7 +38,10 @@ export const MarginNotes = ({
 }: MarginNotesProps) => {
   const [positioned, setPositioned] = useState<PositionedItem[]>([]);
   const containerRef = useRef<HTMLDivElement>(null);
-  const heights = useRef(new Map<string, number>());
+  // Lazy state singleton (mutated in place, identity stable): avoids both
+  // the render-scope ref write (React Compiler bailout) and per-render
+  // allocation.
+  const [heights] = useState(() => new Map<string, number>());
 
   // Added/removed from scroll + resize listeners by reference.
   const recalc = useCallback(() => {
@@ -61,7 +64,7 @@ export const MarginNotes = ({
       const elRect = el.getBoundingClientRect();
       let top = elRect.top - wrapperRect.top;
 
-      const h = heights.current.get(item.id) ?? 48;
+      const h = heights.get(item.id) ?? 48;
       if (top < lastBottom + 8) {
         top = lastBottom + 8;
       }
@@ -71,15 +74,15 @@ export const MarginNotes = ({
     }
 
     setPositioned(result);
-  }, [scrollContainerRef, items]);
+  }, [scrollContainerRef, items, heights]);
 
   const measureRef = (el: HTMLElement | null, id: string) => {
     if (!el) {
       return;
     }
     const h = el.offsetHeight;
-    if (heights.current.get(id) !== h) {
-      heights.current.set(id, h);
+    if (heights.get(id) !== h) {
+      heights.set(id, h);
       requestAnimationFrame(recalc);
     }
   };

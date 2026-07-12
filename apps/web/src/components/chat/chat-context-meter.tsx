@@ -82,6 +82,7 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
       <span
         aria-label={t("triggerLabel", { percent: format.number(0) })}
         className="text-muted-foreground inline-flex items-center gap-1 px-1.5 text-xs font-normal"
+        role="status"
       >
         <span aria-hidden="true" className="text-xs">
           {t("percent", { percent: format.number(0) })}
@@ -263,15 +264,17 @@ const ContextBar = ({ parts, usage }: ContextBarProps) => {
       aria-hidden="true"
       className="bg-muted flex h-1.5 overflow-hidden rounded-full"
     >
-      {parts
-        .filter((part) => part.tokens > 0)
-        .map((part) => (
-          <div
-            className={part.swatch}
-            key={part.id}
-            style={{ width: width(part.tokens) }}
-          />
-        ))}
+      {parts.flatMap((part) =>
+        part.tokens > 0
+          ? [
+              <div
+                className={part.swatch}
+                key={part.id}
+                style={{ width: width(part.tokens) }}
+              />,
+            ]
+          : [],
+      )}
     </div>
   );
 };

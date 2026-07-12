@@ -172,7 +172,10 @@ export function useAIAvailable(): boolean {
  * the org has not supplied their own. Send-time surfaces should
  * use `useAIKeyGate()` so every AI action opens the same dialog.
  */
-export function RequireAIKey({ children }: PropsWithChildren) {
+// Explicit ReactNode: returning bare `children` infers a type containing
+// React 19's Promise<AwaitedReactNode> member, which promise-function-async
+// would otherwise flag on this intentionally sync component.
+export function RequireAIKey({ children }: PropsWithChildren): React.ReactNode {
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data, isFetching, isPending, isError } = useChromeQuery(
@@ -185,7 +188,7 @@ export function RequireAIKey({ children }: PropsWithChildren) {
   }
 
   if (!isError && data.available) {
-    return <>{children}</>;
+    return children;
   }
 
   return (
@@ -219,6 +222,12 @@ type AIKeyRequiredDialogProps = {
   open: boolean;
 };
 
+// A fresh, empty provider draft. No dependency on props/state, so it's built
+// once at module scope instead of on every render/dialog-open.
+const DEFAULT_PROVIDER_DRAFTS: ProviderCredentialDraft[] = [
+  createProviderCredentialDraft(),
+];
+
 export function AIKeyRequiredDialog({
   onOpenChange,
   open,
@@ -235,9 +244,9 @@ export function AIKeyRequiredDialog({
     ...aiConfigOptions({ organizationId: activeOrganizationId }),
     enabled: open,
   });
-  const [providers, setProviders] = useState<ProviderCredentialDraft[]>(() => [
-    createProviderCredentialDraft(),
-  ]);
+  const [providers, setProviders] = useState<ProviderCredentialDraft[]>(
+    DEFAULT_PROVIDER_DRAFTS,
+  );
   const [roleModels, setRoleModels] = useState<RoleModelSelections>(
     createDefaultRoleModels,
   );
@@ -271,7 +280,7 @@ export function AIKeyRequiredDialog({
           }),
         );
       } else {
-        const nextProviders = [createProviderCredentialDraft()];
+        const nextProviders = DEFAULT_PROVIDER_DRAFTS;
         setProviders(nextProviders);
         setRoleModels(
           createDefaultRoleModels(getProviderValues(nextProviders)),

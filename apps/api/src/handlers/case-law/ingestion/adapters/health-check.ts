@@ -30,29 +30,26 @@ type LoadResult =
   | { adapter: SourceAdapter; key: string }
   | { key: string; importError: string };
 
-const loadAllAdapters = async (): Promise<LoadResult[]> => {
-  const results: LoadResult[] = [];
-  for (const key of Object.keys(ADAPTER_MODULES)) {
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- sequential adapter module loads preserve deterministic result ordering
-      const adapter = await loadAdapterByKey(key);
-      if (adapter) {
-        results.push({ adapter, key });
-      } else {
-        results.push({
+const loadAllAdapters = async (): Promise<LoadResult[]> =>
+  await Promise.all(
+    Object.keys(ADAPTER_MODULES).map(async (key): Promise<LoadResult> => {
+      try {
+        const adapter = await loadAdapterByKey(key);
+        if (adapter) {
+          return { adapter, key };
+        }
+        return {
           key,
           importError: "Module loaded but no SourceAdapter export found",
-        });
+        };
+      } catch (error) {
+        return {
+          key,
+          importError: error instanceof Error ? error.message : String(error),
+        };
       }
-    } catch (error) {
-      results.push({
-        key,
-        importError: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-  return results;
-};
+    }),
+  );
 
 export type FieldCheck = {
   field: string;
@@ -223,7 +220,7 @@ export const checkAllAdapters = async (
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential health probes avoid hammering multiple court servers concurrently
+    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: sequential health probes avoid hammering multiple court servers concurrently
     const result = await checkAdapterHealth(entry.adapter, timeoutMs);
     results.push(result);
   }

@@ -249,14 +249,23 @@ export const closestToolNames = (
   target: string,
   candidates: readonly string[],
   limit = 3,
-): string[] =>
-  candidates
-    .map((name) => ({ name, distance: levenshtein(target, name) }))
-    .filter(({ distance, name }) => distance <= Math.ceil(name.length / 2))
-    // oxlint-disable-next-line require-cached-collator/require-cached-collator -- tool names are machine identifiers (agent-facing "did you mean"), not display text
-    .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name))
-    .slice(0, limit)
-    .map(({ name }) => name);
+): string[] => {
+  const scored: { name: string; distance: number }[] = [];
+  for (const name of candidates) {
+    const distance = levenshtein(target, name);
+    if (distance <= Math.ceil(name.length / 2)) {
+      scored.push({ name, distance });
+    }
+  }
+
+  return (
+    scored
+      // oxlint-disable-next-line require-cached-collator/require-cached-collator -- tool names are machine identifiers (agent-facing "did you mean"), not display text
+      .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name))
+      .slice(0, limit)
+      .map(({ name }) => name)
+  );
+};
 
 const levenshtein = (a: string, b: string): number => {
   // Rolling single-row DP. `previous` always holds `b.length + 1` entries and

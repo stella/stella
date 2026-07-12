@@ -5,6 +5,21 @@ import { approximateFraction, floorToMultiple } from "@/lib/pdf/pdfjs-utils";
 export const getPageId = (instanceId: string, pageNumber: number): string =>
   `${instanceId}-page-${pageNumber}`;
 
+type GetPDFPageIdByNumberArgs = {
+  fieldId: string;
+  pages: Map<string, unknown>;
+  pageNumber: number;
+};
+
+export const getPDFPageIdByNumber = ({
+  fieldId,
+  pages,
+  pageNumber,
+}: GetPDFPageIdByNumberArgs): string | undefined => {
+  const pageId = getPageId(fieldId, pageNumber);
+  return pages.has(pageId) ? pageId : undefined;
+};
+
 export const getDevicePixelRatio = () => {
   if (typeof window.devicePixelRatio !== "number") {
     return 1;

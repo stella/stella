@@ -108,21 +108,27 @@ export const checkpointDesktopEditSessionHandler = async ({
   }
 
   if (scanResult.value.verdict === "reject") {
-    const reasons = scanResult.value.findings
-      .filter((finding) => finding.severity === "reject")
-      .map((finding) => finding.message);
+    const reasons: string[] = [];
+    for (const finding of scanResult.value.findings) {
+      if (finding.severity === "reject") {
+        reasons.push(finding.message);
+      }
+    }
 
     return status(422, {
       message: `File rejected: ${reasons.join("; ")}`,
     });
   }
 
-  const scanWarnings =
-    scanResult.value.verdict === "warn"
-      ? scanResult.value.findings
-          .filter((finding) => finding.severity === "warn")
-          .map((finding) => finding.message)
-      : null;
+  let scanWarnings: string[] | null = null;
+  if (scanResult.value.verdict === "warn") {
+    scanWarnings = [];
+    for (const finding of scanResult.value.findings) {
+      if (finding.severity === "warn") {
+        scanWarnings.push(finding.message);
+      }
+    }
+  }
 
   const recordAuditEvent = createAuditRecorder({
     organizationId: authorizedSession.value.organizationId,

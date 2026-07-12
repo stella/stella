@@ -60,7 +60,7 @@ const buildDecorations = (
   }
   // Sort longest first so a placeholder original that's a prefix
   // of another (rare) doesn't get partially matched first.
-  const sorted = [...pairs].sort(
+  const sorted = pairs.toSorted(
     (a, b) => b.original.length - a.original.length,
   );
   const pattern = new RegExp(

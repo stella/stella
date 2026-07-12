@@ -118,6 +118,7 @@ function RouteComponent() {
 
     // Result.tryPromise instead of try/finally: the try/finally form trips the
     // React Compiler bailout guard, and the request can throw on abort.
+    // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: the abort check only makes sense once the request settles (detects a superseding load), so it cannot move before the await
     const result = await Result.tryPromise(
       async () =>
         await api.playbooks.get({

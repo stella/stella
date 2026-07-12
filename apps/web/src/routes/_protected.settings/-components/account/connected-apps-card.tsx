@@ -47,6 +47,24 @@ import {
   connectedAppsOptions,
 } from "@/routes/_protected.settings/-queries/connections";
 
+const conjunctionListFormatters = new Map<string, Intl.ListFormat>();
+
+/** `Intl.ListFormat` (style: "short", type: "conjunction") for `locale`,
+ *  cached per locale so it isn't rebuilt on every {@link ScopeList} render. */
+const getConjunctionListFormatter = (locale: string): Intl.ListFormat => {
+  const cached = conjunctionListFormatters.get(locale);
+  if (cached) {
+    return cached;
+  }
+  // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale cache getter; the constructor necessarily runs below top level
+  const formatter = new Intl.ListFormat(locale, {
+    style: "short",
+    type: "conjunction",
+  });
+  conjunctionListFormatters.set(locale, formatter);
+  return formatter;
+};
+
 export const ConnectedAppsCard = () => {
   const t = useTranslations();
   const { data } = useSuspenseQuery(connectedAppsOptions);
@@ -184,10 +202,7 @@ const ScopeList = ({ entries }: { entries: OAuthScopeDisplayEntry[] }) => {
   // conjunction follow the active locale's conventions.
   return (
     <span>
-      {new Intl.ListFormat(getFormattingLocale(), {
-        style: "short",
-        type: "conjunction",
-      }).format(labels)}
+      {getConjunctionListFormatter(getFormattingLocale()).format(labels)}
     </span>
   );
 };

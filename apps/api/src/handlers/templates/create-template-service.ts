@@ -215,6 +215,7 @@ export const createStoredTemplate = async function* ({
         return { ok: false as const };
       }
 
+      // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (tx) as the advisory lock/count above and templateVersions insert/recordAuditEvent below; lock->count->insert order also prevents a TOCTOU race on the template limit
       const [row] = await tx
         .insert(templates)
         .values({

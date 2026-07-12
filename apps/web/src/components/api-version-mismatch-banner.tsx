@@ -4,6 +4,7 @@ import { RefreshCwIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { fetchWithTimeout } from "@/lib/fetch";
@@ -16,6 +17,10 @@ const healthSchema = v.object({
   status: v.literal("ok"),
   version: v.pipe(v.string(), v.minLength(1)),
 });
+
+const handleRefresh = () => {
+  window.location.reload();
+};
 
 export const ApiVersionMismatchBanner = () => {
   const t = useTranslations();
@@ -76,10 +81,6 @@ export const ApiVersionMismatchBanner = () => {
     setDismissedVersion(serverVersion);
   };
 
-  const handleRefresh = () => {
-    window.location.reload();
-  };
-
   return (
     <div className="bg-accent text-foreground border-b px-4 py-2 text-sm">
       <div className="flex items-center justify-between gap-3">
@@ -97,15 +98,19 @@ export const ApiVersionMismatchBanner = () => {
             {t("app.versionMismatch.refresh")}
           </button>
         </span>
-        <button
-          aria-label={t("app.versionMismatch.dismiss")}
-          title={t("app.versionMismatch.dismiss")}
-          className="hover:bg-accent-foreground/10 -me-1 rounded-sm p-1"
-          onClick={handleDismiss}
-          type="button"
+        <Tooltip
+          content={t("app.versionMismatch.dismiss")}
+          render={
+            <button
+              aria-label={t("app.versionMismatch.dismiss")}
+              className="hover:bg-accent-foreground/10 -me-1 rounded-sm p-1"
+              onClick={handleDismiss}
+              type="button"
+            />
+          }
         >
           <XIcon className="size-4" />
-        </button>
+        </Tooltip>
       </div>
     </div>
   );

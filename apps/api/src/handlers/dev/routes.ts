@@ -104,6 +104,7 @@ export const devRoute = new Elysia({ prefix: "/dev" })
         .innerJoin(workspaces, eq(properties.workspaceId, workspaces.id))
         .where(eq(workspaces.organizationId, orgId));
 
+      // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (tx); a single tx connection cannot run concurrent queries
       await tx
         .delete(propertyDependencies)
         .where(inArray(propertyDependencies.propertyId, orgPropertyIds));

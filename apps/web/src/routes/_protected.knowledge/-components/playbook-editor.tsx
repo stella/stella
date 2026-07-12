@@ -41,6 +41,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -399,9 +400,12 @@ const PlaybookEditorForm = ({
 
     // Reuse the render-time validation map instead of re-running validatePosition
     // per position twice more on the save path.
-    const invalidIds = [...errorsById]
-      .filter(([, positionErrors]) => hasErrors(positionErrors))
-      .map(([id]) => id);
+    const invalidIds: string[] = [];
+    for (const [id, positionErrors] of errorsById) {
+      if (hasErrors(positionErrors)) {
+        invalidIds.push(id);
+      }
+    }
     if (invalidIds.length > 0) {
       setAttemptedSave(true);
       // Expand every position that still has an error so the inline messages
@@ -815,9 +819,8 @@ const PlaybookStatusBadge = ({
 
   if (status === "approved") {
     return (
-      <span
-        className="bg-success/15 text-success inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase"
-        title={
+      <Tooltip
+        content={
           approvedAt
             ? t("knowledge.playbooks.approval.approvedOn", {
                 date: format.dateTime(new Date(approvedAt), {
@@ -826,9 +829,12 @@ const PlaybookStatusBadge = ({
               })
             : undefined
         }
+        render={
+          <span className="bg-success/15 text-success inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase" />
+        }
       >
         {t("knowledge.playbooks.approval.statusApproved")}
-      </span>
+      </Tooltip>
     );
   }
 

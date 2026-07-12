@@ -491,7 +491,9 @@ const collapsePass = ({
   existingPaths,
 }: CollapsePassOptions): Map<string, GeneratedSuggestion> | null => {
   const tree = buildFolderTree(suggestions);
-  const sorted = [...tree.allFolderPaths].sort((a, b) => b.length - a.length);
+  const sorted = Array.from(tree.allFolderPaths).toSorted(
+    (a, b) => b.length - a.length,
+  );
   for (const path of sorted) {
     if (existingPaths.has(path)) {
       continue;
@@ -858,7 +860,10 @@ const normalizeFolderDeletions = ({
     emptyFolders.map((folder) => [folder.entityId, folder]),
   );
   const reusedFolders = new Set(
-    suggestedFolders.map((folderPath) => folderPath.trim()).filter(Boolean),
+    suggestedFolders.flatMap((folderPath) => {
+      const trimmed = folderPath.trim();
+      return trimmed.length > 0 ? [trimmed] : [];
+    }),
   );
   const normalized: GeneratedFolderDeletion[] = [];
   const seenIds = new Set<string>();
@@ -939,8 +944,10 @@ const normalizeLanguage = (language: string | null): string | null => {
 const normalizeAiFolderPath = (value: string): string =>
   value
     .split("/")
-    .map((segment) => segment.trim())
-    .filter(Boolean)
+    .flatMap((segment) => {
+      const trimmed = segment.trim();
+      return trimmed.length > 0 ? [trimmed] : [];
+    })
     .join("/");
 
 const normalizeIsoDate = (value: string | null): string | null => {

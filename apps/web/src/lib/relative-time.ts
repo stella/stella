@@ -7,6 +7,26 @@ const WEEK = 604_800;
 const MONTH = 2_592_000;
 const YEAR = 31_536_000;
 
+const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+
+/** `Intl.RelativeTimeFormat` for `locale`, cached per locale so it isn't
+ *  rebuilt on every `formatRelativeTime` call. */
+export const getRelativeTimeFormatter = (
+  locale: string,
+): Intl.RelativeTimeFormat => {
+  const cached = relativeTimeFormatters.get(locale);
+  if (cached) {
+    return cached;
+  }
+  // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale cache getter; the constructor necessarily runs below top level
+  const formatter = new Intl.RelativeTimeFormat(locale, {
+    numeric: "auto",
+    style: "narrow",
+  });
+  relativeTimeFormatters.set(locale, formatter);
+  return formatter;
+};
+
 /**
  * Format a date as a relative time string using
  * `Intl.RelativeTimeFormat`. Returns short forms like
@@ -22,10 +42,7 @@ export const formatRelativeTime = (date: Date | string): string => {
   const diff = Math.round((then - now) / 1000);
   const absDiff = Math.abs(diff);
 
-  const rtf = new Intl.RelativeTimeFormat(getFormattingLocale(), {
-    numeric: "auto",
-    style: "narrow",
-  });
+  const rtf = getRelativeTimeFormatter(getFormattingLocale());
 
   if (absDiff < MINUTE) {
     // "just now" / "1 min. ago" — sub-minute precision is noise

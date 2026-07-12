@@ -73,8 +73,7 @@ export const parseNssDecisionHtml = (
   validateAndLog("cz-nss", input.caseNumber, input.html, blocks);
 
   const fulltext = blocks
-    .map((b) => b.plainText)
-    .filter(Boolean)
+    .flatMap((b) => (b.plainText ? [b.plainText] : []))
     .join("\n\n");
 
   const ast: DocumentAst = {
