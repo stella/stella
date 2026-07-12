@@ -26,6 +26,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseNsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -222,7 +223,11 @@ export const czNsAdapter: SourceAdapter = {
         `${BASE_URL}/WebSearch?ReadViewEntries` +
         `&Count=1&Start=1&OutputFormat=JSON`;
 
-      const response = await fetch(url, { signal, headers: COMMON_HEADERS });
+      const response = await fetchWithTimeout(url, {
+        signal,
+        headers: COMMON_HEADERS,
+        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      });
       if (!response.ok) {
         return null;
       }
@@ -254,14 +259,10 @@ export const czNsAdapter: SourceAdapter = {
           `&Start=${start}` +
           `&OutputFormat=JSON`;
 
-        const listResponse = await fetch(listUrl, {
+        const listResponse = await fetchWithTimeout(listUrl, {
           headers: COMMON_HEADERS,
-          signal: signal
-            ? AbortSignal.any([
-                signal,
-                AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-              ])
-            : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+          signal,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
 
         if (!listResponse.ok) {
@@ -302,19 +303,17 @@ export const czNsAdapter: SourceAdapter = {
 
           // Fetch detail + print pages in parallel
           try {
-            const requestSignal = signal
-              ? AbortSignal.any([
-                  signal,
-                  AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-                ])
-              : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
-
             // oxlint-disable-next-line no-await-in-loop -- polite sequential crawl of one court detail page per entry, rate-limited via Bun.sleep below
             const [detailResponse, printResponse] = await Promise.all([
-              fetch(webUrl, { signal: requestSignal, headers: COMMON_HEADERS }),
-              fetch(printUrl, {
-                signal: requestSignal,
+              fetchWithTimeout(webUrl, {
+                signal,
                 headers: COMMON_HEADERS,
+                timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+              }),
+              fetchWithTimeout(printUrl, {
+                signal,
+                headers: COMMON_HEADERS,
+                timeoutMs: ADAPTER_TIMEOUT.REQUEST,
               }),
             ]);
 

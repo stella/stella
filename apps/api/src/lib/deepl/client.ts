@@ -24,6 +24,7 @@ import {
   DeepLTimeoutError,
   DeepLUpstreamError,
 } from "@/api/lib/deepl/errors";
+import { fetchWithTimeout, type FetchWithTimeoutInit } from "@/api/lib/fetch";
 
 const PRO_BASE_URL = "https://api.deepl.com";
 const FREE_BASE_URL = "https://api-free.deepl.com";
@@ -127,10 +128,10 @@ const authHeader = (apiKey: string): Record<string, string> => ({
  */
 const deeplFetch = async (
   url: string,
-  init: RequestInit,
+  init: FetchWithTimeoutInit,
 ): Promise<Response> => {
   try {
-    return await fetch(url, init);
+    return await fetchWithTimeout(url, init);
   } catch (error) {
     throw new DeepLUpstreamError({
       message: "DeepL request failed before a response was received",
@@ -288,7 +289,7 @@ const uploadDocument = async (
       method: "POST",
       headers: authHeader(input.apiKey),
       body: form,
-      signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+      timeoutMs: UPLOAD_TIMEOUT_MS,
     },
   );
 
@@ -318,7 +319,7 @@ const fetchStatus = async (
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body,
-      signal: AbortSignal.timeout(STATUS_TIMEOUT_MS),
+      timeoutMs: STATUS_TIMEOUT_MS,
     },
   );
 
@@ -355,7 +356,7 @@ const downloadResult = async (
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body,
-      signal: AbortSignal.timeout(RESULT_TIMEOUT_MS),
+      timeoutMs: RESULT_TIMEOUT_MS,
     },
   );
 
@@ -429,7 +430,7 @@ export const fetchTargetLanguages = async (
     `${resolveDeepLBaseUrl(apiKey)}/v2/languages?type=target`,
     {
       headers: authHeader(apiKey),
-      signal: AbortSignal.timeout(STATUS_TIMEOUT_MS),
+      timeoutMs: STATUS_TIMEOUT_MS,
     },
   );
 

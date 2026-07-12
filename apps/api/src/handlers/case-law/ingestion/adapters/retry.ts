@@ -8,6 +8,7 @@
 import { panic } from "better-result";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
@@ -94,12 +95,11 @@ export const fetchWithRetry = async (
 
     try {
       // oxlint-disable-next-line no-await-in-loop -- retry-with-backoff: each attempt must await the previous attempt's outcome
-      const response = await fetch(url, {
+      const response = await fetchWithTimeout(url, {
         ...init,
         headers,
-        signal: signal
-          ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
-          : AbortSignal.timeout(timeoutMs),
+        timeoutMs,
+        signal,
       });
 
       if (!isRetryableStatus(response.status) || attempt >= maxRetries) {

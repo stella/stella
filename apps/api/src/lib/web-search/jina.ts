@@ -1,3 +1,4 @@
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import type {
   FetchUrlOutput,
   UrlFetcher,
@@ -8,6 +9,10 @@ import { WebSearchProviderError } from "@/api/lib/web-search/types";
 const JINA_READER_BASE = "https://r.jina.ai";
 const VALIDATE_TIMEOUT_MS = 15_000;
 const VALIDATE_PROBE_URL = "https://example.com";
+// The caller (createFetchUrlTool in web-search-tools.ts) already composes
+// its own AbortSignal.timeout into `signal` before calling fetch(); this
+// is a backstop matching that caller's FETCH_URL_TIMEOUT_MS budget.
+const READER_TIMEOUT_MS = 20_000;
 
 type CreateJinaFetcherArgs = {
   apiKey: string | undefined;
@@ -20,13 +25,16 @@ type CreateJinaFetcherArgs = {
  * (carrying the HTTP status) on rejection.
  */
 export const validateJinaKey = async (apiKey: string): Promise<void> => {
-  const response = await fetch(`${JINA_READER_BASE}/${VALIDATE_PROBE_URL}`, {
-    headers: {
-      accept: "text/plain",
-      authorization: `Bearer ${apiKey}`,
+  const response = await fetchWithTimeout(
+    `${JINA_READER_BASE}/${VALIDATE_PROBE_URL}`,
+    {
+      headers: {
+        accept: "text/plain",
+        authorization: `Bearer ${apiKey}`,
+      },
+      timeoutMs: VALIDATE_TIMEOUT_MS,
     },
-    signal: AbortSignal.timeout(VALIDATE_TIMEOUT_MS),
-  });
+  );
   if (!response.ok) {
     throw new WebSearchProviderError({
       provider: "jina",
@@ -57,7 +65,7 @@ export const createJinaFetcher = ({
     // parse step. Keyless usage is rate-limited; an API key
     // bumps the budget.
     const readerUrl = `${JINA_READER_BASE}/${url}`;
-    const response = await fetch(readerUrl, {
+    const response = await fetchWithTimeout(readerUrl, {
       headers: {
         accept: "text/plain",
         "x-with-generated-alt": "false",
@@ -65,6 +73,7 @@ export const createJinaFetcher = ({
         ...(apiKey ? { authorization: `Bearer ${apiKey}` } : {}),
       },
       signal,
+      timeoutMs: READER_TIMEOUT_MS,
     });
     if (!response.ok) {
       throw new WebSearchProviderError({

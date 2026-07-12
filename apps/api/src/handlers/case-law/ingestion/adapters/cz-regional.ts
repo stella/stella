@@ -29,6 +29,7 @@ import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers
 import { captureError } from "@/api/lib/analytics/capture";
 import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -553,17 +554,13 @@ export const czRegionalAdapter: SourceAdapter = {
 
           try {
             // oxlint-disable-next-line no-await-in-loop -- sequential retry loop; each attempt awaits the previous attempt's outcome before retrying
-            response = await fetch(url, {
-              signal: signal
-                ? AbortSignal.any([
-                    signal,
-                    AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-                  ])
-                : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+            response = await fetchWithTimeout(url, {
+              signal,
               headers: {
                 Accept: "application/json",
                 "User-Agent": INGESTION_USER_AGENT,
               },
+              timeoutMs: ADAPTER_TIMEOUT.REQUEST,
             });
           } catch (fetchError) {
             if (isTimeoutError(fetchError) && !signal?.aborted) {

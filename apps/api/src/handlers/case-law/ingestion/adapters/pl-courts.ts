@@ -21,6 +21,7 @@ import {
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -427,13 +428,9 @@ const fetchDetail = async (
 ): Promise<SaosItem | null> => {
   let response: Response;
   try {
-    response = await fetch(`${DETAIL_URL}/${id}`, {
-      signal: signal
-        ? AbortSignal.any([
-            signal,
-            AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-          ])
-        : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+    response = await fetchWithTimeout(`${DETAIL_URL}/${id}`, {
+      signal,
+      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
       headers: {
         Accept: "application/json",
         "User-Agent": INGESTION_USER_AGENT,
@@ -693,7 +690,7 @@ export const plCourtsAdapter: SourceAdapter = {
 
   async getTotalCount(signal) {
     try {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${SEARCH_URL}?${new URLSearchParams({
           pageSize: "1",
           pageNumber: "0",
@@ -701,10 +698,8 @@ export const plCourtsAdapter: SourceAdapter = {
           sortingDirection: "DESC",
         }).toString()}`,
         {
-          signal: AbortSignal.any([
-            signal,
-            AbortSignal.timeout(ADAPTER_TIMEOUT.LIST),
-          ]),
+          signal,
+          timeoutMs: ADAPTER_TIMEOUT.LIST,
           headers: {
             Accept: "application/json",
             "User-Agent": INGESTION_USER_AGENT,

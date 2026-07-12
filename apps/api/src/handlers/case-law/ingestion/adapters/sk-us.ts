@@ -43,6 +43,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseSkDecisionPdf } from "@/api/handlers/case-law/ingestion/parsers/sk-courts";
 import { FetchBoundaryError } from "@/api/lib/errors/tagged-errors";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Constants ─────────────────────────────────────────────
@@ -126,16 +127,15 @@ const getToken = async (signal?: AbortSignal): Promise<string> => {
     return cachedToken.value;
   }
 
-  const response = await fetch(TOKEN_URL, {
+  const response = await fetchWithTimeout(TOKEN_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       "User-Agent": INGESTION_USER_AGENT,
     },
     body: `grant_type=client_credentials&client_id=${CLIENT_ID}&client_secret=${CLIENT_SECRET}`,
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST)])
-      : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
 
   if (!response.ok) {
@@ -247,12 +247,14 @@ const fetchPdfBytes = async (
   signal?: AbortSignal,
 ): Promise<Uint8Array | undefined> => {
   try {
-    const response = await fetch(`${DOC_DOWNLOAD_URL}/${documentId}`, {
-      headers: { "User-Agent": INGESTION_USER_AGENT },
-      signal: signal
-        ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-        : AbortSignal.timeout(30_000),
-    });
+    const response = await fetchWithTimeout(
+      `${DOC_DOWNLOAD_URL}/${documentId}`,
+      {
+        headers: { "User-Agent": INGESTION_USER_AGENT },
+        signal,
+        timeoutMs: 30_000,
+      },
+    );
     if (!response.ok) {
       return undefined;
     }
@@ -376,7 +378,7 @@ const executeSearch = async (
 ): Promise<SearchResponse | null> => {
   const token = await getToken(signal);
 
-  const response = await fetch(SEARCH_URL, {
+  const response = await fetchWithTimeout(SEARCH_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -404,9 +406,8 @@ const executeSearch = async (
       fieldsToReturn: FIELDS_TO_RETURN,
       clustering: false,
     }),
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST)])
-      : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
   });
 
   if (!response.ok) {

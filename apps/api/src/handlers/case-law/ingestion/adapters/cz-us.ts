@@ -22,6 +22,7 @@ import {
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { parseUsDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-us";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const COMMON_HEADERS = {
   "User-Agent": INGESTION_USER_AGENT,
@@ -350,14 +351,10 @@ export const czUsAdapter: SourceAdapter = {
             Array.from({ length: PROBE_CONCURRENCY }, async (_, i) => {
               const num = state.number + i;
               const url = `${BASE_URL}?sz=I-${num}-${yearSuffix}_1`;
-              const response = await fetch(url, {
+              const response = await fetchWithTimeout(url, {
                 headers: COMMON_HEADERS,
-                signal: callerSignal
-                  ? AbortSignal.any([
-                      callerSignal,
-                      AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-                    ])
-                  : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+                signal: callerSignal,
+                timeoutMs: ADAPTER_TIMEOUT.REQUEST,
               });
               if (response.status === 429) {
                 return { num, status: "rate-limited" as const };
@@ -428,17 +425,15 @@ export const czUsAdapter: SourceAdapter = {
             // Fetch abstract + legal sentence (separate endpoint)
             try {
               const szParam = `I-${probe.num}-${yearSuffix}_1`;
-              const absSignal = callerSignal
-                ? AbortSignal.any([
-                    callerSignal,
-                    AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-                  ])
-                : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST);
               // oxlint-disable-next-line no-await-in-loop -- sequential per-decision abstract fetch within the ordered result-processing loop
-              const absResp = await fetch(`${ABSTRACT_URL}?sz=${szParam}`, {
-                headers: COMMON_HEADERS,
-                signal: absSignal,
-              });
+              const absResp = await fetchWithTimeout(
+                `${ABSTRACT_URL}?sz=${szParam}`,
+                {
+                  headers: COMMON_HEADERS,
+                  signal: callerSignal,
+                  timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+                },
+              );
               if (absResp.ok) {
                 // oxlint-disable-next-line no-await-in-loop -- reads the body of the per-decision abstract fetch in this ordered loop
                 const absHtml = await absResp.text();
