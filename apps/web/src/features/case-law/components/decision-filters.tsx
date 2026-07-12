@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 
 import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
@@ -24,6 +24,77 @@ type DecisionFiltersProps = {
   facets: SearchFacets;
 };
 
+/**
+ * Matches `updateFilter`'s own normalization exactly: empty becomes
+ * `undefined`. Shared so the debounced-write marker (below) can never drift
+ * from what actually lands in `filters`.
+ */
+const normalizeFilterValue = (value: string | null): string | undefined =>
+  value || undefined;
+
+/**
+ * One-shot marker for the value a debounced writer last pushed up, so the
+ * resync-during-render branch can tell that write's echo apart from external
+ * navigation. Wrapped in an object because `undefined` is itself a legitimate
+ * written value (a cleared field); `null` means "no unconsumed write".
+ */
+type WrittenMarker = { value: string | undefined } | null;
+
+/**
+ * Keeps a local controlled-input value snappy while debouncing an external
+ * write, and resyncs from `externalValue` when it changes for a reason other
+ * than this hook's own write (e.g. a "browse by court/country" link updating
+ * the route without remounting the filter bar).
+ *
+ * Adjusting state during render: when `externalValue` changes to a value the
+ * local mirror has not seen, decide echo vs. external change. The echo of
+ * this hook's own debounced write must NOT cancel or reset local state: the
+ * user may have resumed typing during the parent re-render gap, and a reset
+ * would drop those keystrokes plus their newly-scheduled debounced write.
+ * Only a genuinely external change (route navigation) replaces the input.
+ * The marker is consumed on every transition so a stale one cannot
+ * misclassify a later external change as an echo.
+ *
+ * `normalize` must match how `writeValue` actually persists the value (e.g.
+ * empty string becomes `undefined`). The marker stores the *normalized*
+ * written value, so a write whose raw input differs from its persisted form
+ * still echoes back equal to the marker instead of being misread as an
+ * external change.
+ */
+const useDebouncedSyncedInput = (
+  externalValue: string | undefined,
+  writeValue: (value: string) => void,
+  normalize: (value: string) => string | undefined,
+): [string, (value: string) => void] => {
+  const [localValue, setLocalValue] = useState(externalValue ?? "");
+  const [lastSeenValue, setLastSeenValue] = useState(externalValue);
+  const [lastWrittenValue, setLastWrittenValue] = useState<WrittenMarker>(null);
+
+  const debouncedWrite = useDebouncedCallback((value: string) => {
+    setLastWrittenValue({ value: normalize(value) });
+    writeValue(value);
+  }, 300);
+
+  if (externalValue !== lastSeenValue) {
+    setLastSeenValue(externalValue);
+    setLastWrittenValue(null);
+    if (lastWrittenValue === null || lastWrittenValue.value !== externalValue) {
+      debouncedWrite.cancel();
+      setLocalValue(externalValue ?? "");
+    }
+  }
+
+  const onChange = useCallback(
+    (value: string) => {
+      setLocalValue(value);
+      debouncedWrite(value);
+    },
+    [debouncedWrite],
+  );
+
+  return [localValue, onChange];
+};
+
 export const DecisionFilters = ({
   filters,
   onFiltersChange,
@@ -36,7 +107,7 @@ export const DecisionFilters = ({
   const updateFilter = useCallback(
     (key: keyof DecisionListFilters, value: string | null) => {
       const { [key]: _, ...rest } = filters;
-      const trimmed = value || undefined;
+      const trimmed = normalizeFilterValue(value);
       onFiltersChange({
         ...rest,
         ...(trimmed && { [key]: trimmed }),
@@ -56,9 +127,15 @@ export const DecisionFilters = ({
     [updateFilter],
   );
 
-  const handleCourtInputChange = useDebouncedCallback((value: string) => {
-    updateFilter("court", value);
-  }, 300);
+  const writeCourt = useCallback(
+    (value: string) => updateFilter("court", value),
+    [updateFilter],
+  );
+  const [localCourt, handleCourtInputChange] = useDebouncedSyncedInput(
+    filters.court,
+    writeCourt,
+    normalizeFilterValue,
+  );
 
   const handleCountrySelectChange = useCallback(
     (value: string | null) => {
@@ -67,9 +144,15 @@ export const DecisionFilters = ({
     [updateFilter],
   );
 
-  const handleCountryInputChange = useDebouncedCallback((value: string) => {
-    updateFilter("country", value);
-  }, 300);
+  const writeCountry = useCallback(
+    (value: string) => updateFilter("country", value),
+    [updateFilter],
+  );
+  const [localCountry, handleCountryInputChange] = useDebouncedSyncedInput(
+    filters.country,
+    writeCountry,
+    normalizeFilterValue,
+  );
 
   const courtBuckets = facets ? facets.court : [];
   const countryBuckets = facets ? facets.country : [];
@@ -103,9 +186,9 @@ export const DecisionFilters = ({
       ) : (
         <Input
           className="max-w-32"
-          defaultValue={filters.country ?? ""}
           onChange={(e) => handleCountryInputChange(e.currentTarget.value)}
           placeholder={t("common.country")}
+          value={localCountry}
         />
       )}
 
@@ -129,9 +212,9 @@ export const DecisionFilters = ({
       ) : (
         <Input
           className="max-w-48"
-          defaultValue={filters.court ?? ""}
           onChange={(e) => handleCourtInputChange(e.currentTarget.value)}
           placeholder={t("caseLaw.filters.court")}
+          value={localCourt}
         />
       )}
 
