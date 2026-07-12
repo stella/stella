@@ -431,7 +431,7 @@ const useExternalPdfBuffer = ({
       const response = await fetchWithTimeout(url, {
         credentials: "include",
         signal,
-        timeoutMs: 15_000,
+        timeoutMs: 60_000,
       });
 
       if (!response.ok) {
