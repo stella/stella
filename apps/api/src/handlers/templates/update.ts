@@ -175,38 +175,39 @@ const updateTemplateHandler = async function* ({
       );
     }
 
-    // Re-embed the manifest in the DOCX so the S3 file
-    // stays in sync with the DB.
-    const docxBuffer = await getS3().file(existing.s3Key).arrayBuffer();
-    const updatedDocx = await writeManifest(Buffer.from(docxBuffer), manifest);
-
-    updates.manifest = manifest;
-    updates.fieldCount = manifest.fields.length;
-    updates.sizeBytes = updatedDocx.byteLength;
-
-    const newVersion = existing.currentVersion + 1;
-    updates.currentVersion = newVersion;
-
-    // Each version gets its own immutable S3 key so
-    // historical snapshots remain downloadable.
-    const versionS3Key = buildVersionS3Key(
-      organizationId,
-      templateId,
-      newVersion,
-    );
-    updates.s3Key = versionS3Key;
-
-    // Write to the new version-specific key (outside
-    // the transaction to keep it short).
-    await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
-
-    // Advisory lock + version count + update + insert in one
-    // transaction to prevent TOCTOU on the version limit.
+    // Advisory lock, then re-read s3Key/currentVersion fresh, transform the
+    // DOCX, allocate the version, write its S3 object, and commit the row +
+    // version insert — all under the lock. Reading the stored DOCX and
+    // allocating/writing the new version's S3 object *outside* the lock let
+    // two overlapping updates read the same currentVersion, compute the same
+    // versionS3Key, and clobber each other's bytes (last write wins,
+    // non-transactionally) while the loser's version insert lost to the
+    // (templateId, version) unique index. Mirrors save-document.ts /
+    // configure-template-fields-service.ts.
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
         );
+
+        // Re-read under the lock: a concurrent update that already committed
+        // will have bumped currentVersion and rotated s3Key, so both are read
+        // fresh here.
+        const [locked] = await tx
+          .select({
+            currentVersion: templates.currentVersion,
+            s3Key: templates.s3Key,
+          })
+          .from(templates)
+          .where(
+            and(
+              eq(templates.id, templateId),
+              eq(templates.organizationId, organizationId),
+            ),
+          );
+        if (!locked) {
+          return { ok: false as const, reason: "not-found" as const };
+        }
 
         const versionCount = await tx.$count(
           templateVersions,
@@ -214,8 +215,37 @@ const updateTemplateHandler = async function* ({
         );
 
         if (versionCount >= LIMITS.templateVersionsPerTemplate) {
-          return { ok: false as const };
+          return { ok: false as const, reason: "limit" as const };
         }
+
+        // Re-embed the manifest in the DOCX so the S3 file
+        // stays in sync with the DB.
+        const docxBuffer = await getS3().file(locked.s3Key).arrayBuffer();
+        const updatedDocx = await writeManifest(
+          Buffer.from(docxBuffer),
+          manifest,
+        );
+
+        updates.manifest = manifest;
+        updates.fieldCount = manifest.fields.length;
+        updates.sizeBytes = updatedDocx.byteLength;
+
+        const newVersion = locked.currentVersion + 1;
+        updates.currentVersion = newVersion;
+
+        // Each version gets its own immutable S3 key so
+        // historical snapshots remain downloadable.
+        const versionS3Key = buildVersionS3Key(
+          organizationId,
+          templateId,
+          newVersion,
+        );
+        updates.s3Key = versionS3Key;
+
+        // Under the lock: only concurrent updates of this same template
+        // wait, and they must serialize anyway so vN's bytes aren't
+        // overwritten before the version row commits.
+        await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
 
         const [r] = await tx
           .update(templates)
@@ -251,19 +281,29 @@ const updateTemplateHandler = async function* ({
           workspaceId: null,
           changes: {
             currentVersion: {
-              old: existing.currentVersion,
+              old: locked.currentVersion,
               new: newVersion,
             },
-            s3Key: { old: existing.s3Key, new: versionS3Key },
+            s3Key: { old: locked.s3Key, new: versionS3Key },
             fieldCount: { old: null, new: manifest.fields.length },
           },
         });
 
+        if (!r) {
+          // The update targeted a row the locked re-read just confirmed
+          // exists; a missing returning row means it vanished mid-transaction.
+          return { ok: false as const, reason: "not-found" as const };
+        }
         return { ok: true as const, row: r };
       }),
     );
 
     if (!txResult.ok) {
+      if (txResult.reason === "not-found") {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Template not found" }),
+        );
+      }
       return Result.err(
         new HandlerError({
           status: 400,
@@ -272,12 +312,7 @@ const updateTemplateHandler = async function* ({
       );
     }
 
-    const row = txResult.row;
-    if (!row) {
-      panic("Failed to update template");
-    }
-
-    return Result.ok(row);
+    return Result.ok(txResult.row);
   }
 
   const updated = yield* Result.await(
