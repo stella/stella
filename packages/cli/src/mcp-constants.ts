@@ -79,5 +79,8 @@ export const mapHttpStatusExit = (httpStatus: number | undefined): ExitCode => {
   if (httpStatus === 404) {
     return EXIT_CODES.notFound;
   }
+  if (httpStatus === 409) {
+    return EXIT_CODES.conflict;
+  }
   return EXIT_CODES.server;
 };

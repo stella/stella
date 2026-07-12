@@ -521,6 +521,16 @@ describe("error tiers -> exit codes (S4)", () => {
     server.stop();
     expect(result.exitCode).toBe(8);
   });
+  test("HTTP 409 -> exit 10", async () => {
+    const server = startMockServer(() => ({ httpStatus: 409 }));
+    const result = await runCli({
+      args: ["matter", "list"],
+      url: server.url,
+      token: READ,
+    });
+    server.stop();
+    expect(result.exitCode).toBe(10);
+  });
 
   test("MCP InvalidParams (-32602) -> exit 2", async () => {
     const server = startMockServer(() => ({
