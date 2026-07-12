@@ -451,6 +451,7 @@ export const checkEntityCreateCapacityForInsert = async ({
 
   // See `lockWorkspacesForEntityCap` for the canonical lock order
   // every entity-creating path follows (issue #1139).
+  // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client, and the cap lock must be held before the counts below read
   await lockWorkspacesForEntityCap(tx, [workspaceId]);
 
   const existingEntityCount = await tx.$count(
