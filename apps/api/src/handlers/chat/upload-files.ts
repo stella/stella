@@ -14,6 +14,7 @@ import {
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
   TEXT_PLAIN_MIME_TYPE,
+  USER_FILE_ALLOWED_MIME_TYPES,
 } from "@/api/handlers/chat/attachment-validation";
 import {
   createChatAttachmentPart,
@@ -404,6 +405,20 @@ export const uploadUserFile = async ({
   workspaceId,
 }: UploadUserFileInput) =>
   await Result.gen(async function* () {
+    // Enforce the MIME allowlist at the storage boundary, not only in
+    // validateChatFileParts at message-send: user files are later served
+    // inline (Content-Disposition without a filename), so a stored
+    // text/html or image/svg+xml would render in the bucket origin. Any
+    // caller reaching this function must be held to the same allowlist.
+    if (!USER_FILE_ALLOWED_MIME_TYPES.has(file.mimeType)) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: "Unsupported file type",
+        }),
+      );
+    }
+
     const sanitizedFileName = sanitizeFilename(file.fileName);
     const sha256Hex = new Bun.CryptoHasher("sha256")
       .update(file.bytes)
