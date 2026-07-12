@@ -47,7 +47,9 @@ const baseFileMetadataSchema = {
   name: tDefaultVarchar,
   mimeType: t.String({ minLength: 1, maxLength: 255 }),
   size: t.Integer({
-    minimum: 0,
+    // A zero-byte document is never a legitimate upload; require at least
+    // one byte so an empty object can't be presigned and finalized.
+    minimum: 1,
     // S3 enforces this via the signed Content-Length; finalize
     // re-checks via S3.HEAD. Pinning it at the schema level lets
     // the API refuse oversized requests before even minting a URL.

@@ -92,10 +92,12 @@ export const decryptAIConfig = async (
 };
 
 /**
- * Mask an API key for safe display. Shows at most half
- * the key (capped at 8 chars) followed by asterisks.
+ * Mask an API key for safe display. Shows at most a 4-char prefix
+ * followed by asterisks. Capped at a small constant (not a fraction
+ * of the length) so a short or misconfigured key can never reveal a
+ * meaningful portion of the secret.
  */
 export const maskApiKey = (key: string): string => {
-  const visibleChars = Math.min(8, Math.floor(key.length / 2));
+  const visibleChars = Math.min(4, Math.floor(key.length / 2));
   return `${key.slice(0, visibleChars)}${"*".repeat(16)}`;
 };
