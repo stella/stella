@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import type { BoeSearchQuery } from "./query.js";
 import { buildSearchQuery } from "./query.js";
 
 describe("BOE search query builder", () => {
@@ -128,8 +127,14 @@ describe("BOE search query builder", () => {
     }
   });
 
+  const CODIGO_FIELD_NAMES = {
+    departmentCode: "departamento@codigo",
+    legalRangeCode: "rango@codigo",
+    matterCode: "materia@codigo",
+  } as const;
+
   test("INVARIANT: code fields cannot inject field clauses, booleans, or unbalanced parens", () => {
-    const attacks: Array<[keyof BoeSearchQuery, string]> = [
+    const attacks: [keyof typeof CODIGO_FIELD_NAMES, string][] = [
       ["departmentCode", "1000) OR titulo:(*"],
       ["legalRangeCode", '1300" OR rango@codigo:"*'],
       ["matterCode", "2765 OR (a"],
@@ -143,12 +148,7 @@ describe("BOE search query builder", () => {
       // proof: the attacker-controlled value must stay inside a single
       // quoted phrase, with any inner quotes/backslashes escaped, and no
       // unescaped injected "OR"/"titulo:"/parens reaching the DSL.
-      const codigoField =
-        field === "departmentCode"
-          ? "departamento@codigo"
-          : field === "legalRangeCode"
-            ? "rango@codigo"
-            : "materia@codigo";
+      const codigoField = CODIGO_FIELD_NAMES[field];
       const escapedValue = value
         .replaceAll("\\", "\\\\")
         .replaceAll('"', '\\"');
