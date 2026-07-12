@@ -129,6 +129,13 @@ type HttpReadinessCheck = {
   ) => Promise<string | undefined> | string | undefined;
 };
 
+// The process backing this readiness check: if it dies before the check
+// passes, waitForHttpReadiness fails fast with the crash instead of
+// polling until the HTTP timeout.
+type HttpReadinessWaitOptions = HttpReadinessCheck & {
+  child: Bun.Subprocess;
+};
+
 export type DockerComposeServiceStatus = {
   exitCode: number | undefined;
   health: string | undefined;
@@ -1221,41 +1228,127 @@ const validateDesktopBridgeHealth =
     return undefined;
   };
 
+// Set by main()'s shutdown handler as soon as a shutdown (Ctrl+C, SIGTERM,
+// or a sibling child exiting) starts. waitForHttpReadiness's crash watcher
+// checks this so a child killed as part of an intentional shutdown during
+// startup is treated as a clean exit, not a crash.
+let isShuttingDown = false;
+
+// Thrown when a shutdown interrupts an in-progress startup step (a readiness
+// wait, or spawning the next batch of persistent children). main()'s startup
+// try/catch treats this as "stop the startup sequence" rather than a crash:
+// it does not rethrow to the top-level handler (which would log a crash
+// message and call process.exit(1)), and it does not call process.exit
+// itself. The signal handler's own in-flight shutdown() call already owns
+// tearing down children and exiting the process; this just stops main()
+// from racing it by continuing to start more steps.
+class DevRunnerShutdownSignalError extends Error {
+  constructor() {
+    super("Dev runner shutdown requested during startup.");
+    this.name = "DevRunnerShutdownSignalError";
+  }
+}
+
+const isDevRunnerShutdownSignal = (
+  error: unknown,
+): error is DevRunnerShutdownSignalError =>
+  error instanceof DevRunnerShutdownSignalError;
+
 const waitForHttpReadiness = async ({
+  child,
   label,
   timeoutMs = DEFAULT_HTTP_READY_TIMEOUT_MS,
   url,
   validate,
-}: HttpReadinessCheck) => {
-  const startedAt = Date.now();
-  let lastFailure = "service did not respond yet";
+}: HttpReadinessWaitOptions) => {
+  const pollUntilReady = async () => {
+    const startedAt = Date.now();
+    let lastFailure = "service did not respond yet";
 
-  while (Date.now() - startedAt < timeoutMs) {
-    try {
-      // oxlint-disable-next-line no-await-in-loop -- sequential readiness poll: probe the URL once per retry until it responds or timeout
-      const response = await fetch(url, {
-        method: "GET",
-        signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),
-      });
-      // oxlint-disable-next-line no-await-in-loop -- reads the body of this poll's response before validating it
-      const bodyText = await response.text();
-      // oxlint-disable-next-line no-await-in-loop -- validates this poll's response and returns early once it passes
-      const validationFailure = await validate(response, bodyText);
+    while (Date.now() - startedAt < timeoutMs) {
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- sequential readiness poll: probe the URL once per retry until it responds or timeout
+        const response = await fetch(url, {
+          method: "GET",
+          signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),
+        });
+        // oxlint-disable-next-line no-await-in-loop -- reads the body of this poll's response before validating it
+        const bodyText = await response.text();
+        // oxlint-disable-next-line no-await-in-loop -- validates this poll's response and returns early once it passes
+        const validationFailure = await validate(response, bodyText);
 
-      if (!validationFailure) {
-        return;
+        if (!validationFailure) {
+          return;
+        }
+
+        lastFailure = validationFailure;
+      } catch (error) {
+        lastFailure = error instanceof Error ? error.message : String(error);
       }
 
-      lastFailure = validationFailure;
-    } catch (error) {
-      lastFailure = error instanceof Error ? error.message : String(error);
+      // oxlint-disable-next-line no-await-in-loop -- sequential poll: back off between readiness probes until the service is up or timeout
+      await Bun.sleep(300);
     }
 
-    // oxlint-disable-next-line no-await-in-loop -- sequential poll: back off between readiness probes until the service is up or timeout
-    await Bun.sleep(300);
-  }
+    panic(`Timed out waiting for ${label}: ${lastFailure}.`);
+  };
 
-  panic(`Timed out waiting for ${label}: ${lastFailure}.`);
+  // Races the HTTP poll against the child's own exit: a child that dies at
+  // spawn (bad env var, port conflict, etc.) should fail immediately with
+  // its exit code instead of burning the full readiness timeout.
+  //
+  // `child.exited` keeps resolving long after readiness is decided (e.g. when
+  // the runner kills the child during a later, normal shutdown), so the
+  // `.then` below must check `settled` first and bail out without acting;
+  // otherwise it would fire on every post-readiness exit, including clean
+  // ones, after nothing is racing against it anymore.
+  //
+  // It must also check `isShuttingDown`: a SIGINT/SIGTERM during startup
+  // kills every child (including this one) before readiness is settled. That
+  // intentional kill must NOT resolve the race as if readiness succeeded
+  // (which would let the caller proceed to the next startup step while
+  // shutdown is tearing children down) and must NOT be misreported as a
+  // crash panic. So it rejects with a distinct shutdown signal instead,
+  // which the caller propagates so the startup sequence stops.
+  let settled = false;
+  const watchForCrash = child.exited.then((exitCode) => {
+    if (settled) {
+      return "watched-exit-ignored" as const;
+    }
+
+    if (isShuttingDown) {
+      throw new DevRunnerShutdownSignalError();
+    }
+
+    return panic(
+      `${label} exited with code ${String(exitCode)} before it became ready.`,
+    );
+  });
+
+  try {
+    await Promise.race([pollUntilReady(), watchForCrash]);
+  } finally {
+    settled = true;
+  }
+};
+
+// Readiness checks and their running steps are built in the same mode-gated
+// order (see buildPersistentSteps / buildReadinessChecks), so they line up
+// positionally; pairing them here is what lets waitForHttpReadiness watch
+// the right child for a crash.
+const waitForReadinessChecks = async (
+  runningSteps: readonly RunningStep[],
+  checks: readonly HttpReadinessCheck[],
+) => {
+  for (const [index, readinessCheck] of checks.entries()) {
+    const runningStep =
+      runningSteps[index] ??
+      panic(
+        `No running process found for readiness check "${readinessCheck.label}".`,
+      );
+    // oxlint-disable-next-line no-await-in-loop -- ordered startup: each service in this group must be ready before the next is awaited
+    await waitForHttpReadiness({ ...readinessCheck, child: runningStep.child });
+  }
 };
 
 const spawnPersistentStep = (step: Step): RunningStep => {
@@ -1770,13 +1863,12 @@ const main = async () => {
   }
 
   const children: RunningStep[] = [];
-  let shuttingDown = false;
 
   const stopChildren = async () => {
-    if (shuttingDown) {
+    if (isShuttingDown) {
       return;
     }
-    shuttingDown = true;
+    isShuttingDown = true;
 
     for (const runningStep of children) {
       runningStep.child.kill();
@@ -1792,10 +1884,25 @@ const main = async () => {
     process.exit(exitCode);
   };
 
-  const startSteps = (steps: readonly Step[]) => {
-    for (const step of steps) {
-      children.push(spawnPersistentStep(step));
+  const startSteps = (steps: readonly Step[]): RunningStep[] => {
+    // A shutdown can land between two startup steps (e.g. right after the
+    // primary readiness checks resolve, before the secondary steps spawn),
+    // outside of any readiness wait. Refuse to start more children once
+    // shutdown has begun instead of racing stopChildren().
+    if (isShuttingDown) {
+      throw new DevRunnerShutdownSignalError();
     }
+
+    // Push each child into `children` as soon as it spawns, not after the
+    // whole batch finishes: if a later step's spawn throws mid-map, the
+    // already-started children must already be tracked so stopChildren()
+    // (called from the outer catch) can still clean them up instead of
+    // leaving them orphaned.
+    return steps.map((step) => {
+      const runningStep = spawnPersistentStep(step);
+      children.push(runningStep);
+      return runningStep;
+    });
   };
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -1805,19 +1912,11 @@ const main = async () => {
   }
 
   try {
-    startSteps(persistentSteps.primary);
+    const primaryChildren = startSteps(persistentSteps.primary);
+    await waitForReadinessChecks(primaryChildren, readinessChecks.primary);
 
-    for (const readinessCheck of readinessChecks.primary) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered startup: each primary service must be ready before the next is awaited
-      await waitForHttpReadiness(readinessCheck);
-    }
-
-    startSteps(persistentSteps.secondary);
-
-    for (const readinessCheck of readinessChecks.secondary) {
-      // oxlint-disable-next-line no-await-in-loop -- ordered startup: each secondary service must be ready before the next is awaited
-      await waitForHttpReadiness(readinessCheck);
-    }
+    const secondaryChildren = startSteps(persistentSteps.secondary);
+    await waitForReadinessChecks(secondaryChildren, readinessChecks.secondary);
 
     if (browserWillOpen && !openBrowser(webUrlForPort(ports.web))) {
       console.warn(
@@ -1849,6 +1948,15 @@ const main = async () => {
     await shutdown(firstExit.exitCode);
   } catch (error) {
     await stopChildren();
+    // A shutdown that interrupted startup already has its own shutdown(0)
+    // call in flight from the signal handler (stopChildren + process.exit).
+    // Returning here instead of rethrowing lets that call own the exit;
+    // rethrowing would reach the top-level catch below and misreport a
+    // clean shutdown as a crash (wrong message, wrong exit code, and a race
+    // against the signal handler's own process.exit).
+    if (isDevRunnerShutdownSignal(error)) {
+      return;
+    }
     throw error;
   }
 };
