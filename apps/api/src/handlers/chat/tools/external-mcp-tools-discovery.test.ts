@@ -1,7 +1,7 @@
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import type { SafeDb } from "@/api/db";
+import type { SafeDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
