@@ -25,6 +25,7 @@ import {
   FetchBoundaryError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -254,8 +255,8 @@ const downloadZipHandler = async function* ({
     });
     const redactedUrl = redactedPresignedUrl(presignedUrl);
     const fetched = await Result.tryPromise(async () => {
-      const response = await fetch(presignedUrl, {
-        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      const response = await fetchWithTimeout(presignedUrl, {
+        timeoutMs: FETCH_TIMEOUT_MS,
       });
       if (!response.ok) {
         throw new FetchBoundaryError({

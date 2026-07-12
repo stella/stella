@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { JURISDICTION_ALLOWLIST_DOMAINS } from "@/api/lib/web-search/allowlists";
 import type {
   WebSearchProvider,
@@ -11,6 +12,10 @@ import { WebSearchProviderError } from "@/api/lib/web-search/types";
 
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
 const VALIDATE_TIMEOUT_MS = 10_000;
+// The caller (createWebSearchTool in web-search-tools.ts) already composes
+// its own AbortSignal.timeout into `signal` before calling fetch(); this
+// is a backstop matching that caller's WEB_SEARCH_TIMEOUT_MS budget.
+const SEARCH_TIMEOUT_MS = 10_000;
 
 /**
  * Probe a Tavily key with a minimal search before persisting it.
@@ -19,7 +24,7 @@ const VALIDATE_TIMEOUT_MS = 10_000;
  * else to an upstream failure. Consumes one Tavily search credit.
  */
 export const validateTavilyKey = async (apiKey: string): Promise<void> => {
-  const response = await fetch(TAVILY_ENDPOINT, {
+  const response = await fetchWithTimeout(TAVILY_ENDPOINT, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -31,7 +36,7 @@ export const validateTavilyKey = async (apiKey: string): Promise<void> => {
       search_depth: "basic",
       include_answer: false,
     }),
-    signal: AbortSignal.timeout(VALIDATE_TIMEOUT_MS),
+    timeoutMs: VALIDATE_TIMEOUT_MS,
   });
   if (!response.ok) {
     throw new WebSearchProviderError({
@@ -92,7 +97,7 @@ export const createTavilyProvider = ({
   }): Promise<WebSearchProviderResponse> => {
     const includeDomains = JURISDICTION_ALLOWLIST_DOMAINS[jurisdiction];
     const timeRange = TAVILY_TIME_RANGE_BY_FRESHNESS[freshness];
-    const response = await fetch(TAVILY_ENDPOINT, {
+    const response = await fetchWithTimeout(TAVILY_ENDPOINT, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -116,6 +121,7 @@ export const createTavilyProvider = ({
         ...(timeRange ? { time_range: timeRange } : {}),
       }),
       signal,
+      timeoutMs: SEARCH_TIMEOUT_MS,
     });
     if (!response.ok) {
       const body = await response.text();

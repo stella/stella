@@ -26,6 +26,8 @@
  * ```
  */
 
+import { fetchWithTimeout } from "@/api/lib/fetch";
+
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
 /** Load a fixture file as a string. */
@@ -151,8 +153,8 @@ export const recordFixture = async (
   filename: string,
   headers?: Record<string, string>,
 ): Promise<string> => {
-  const response = await fetch(url, {
-    signal: AbortSignal.timeout(30_000),
+  const response = await fetchWithTimeout(url, {
+    timeoutMs: 30_000,
     ...(headers && { headers }),
   });
 

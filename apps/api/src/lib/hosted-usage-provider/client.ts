@@ -2,6 +2,7 @@
 
 import { Result, TaggedError } from "better-result";
 
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { HostedUsageProviderApiCredentials } from "@/api/lib/hosted-usage-provider/config";
 
 const REQUEST_TIMEOUT_MS = 10_000;
@@ -78,7 +79,7 @@ export const createHostedSetupSession = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${credentials.baseUrl}/v1/setup-sessions/`,
         {
           method: "POST",
@@ -94,7 +95,7 @@ export const createHostedSetupSession = async ({
             external_account_ref: externalAccountRef,
             metadata,
           }),
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          timeoutMs: REQUEST_TIMEOUT_MS,
         },
       );
       if (!response.ok) {
@@ -139,7 +140,7 @@ export const createHostedManagementSession = async ({
 > =>
   await Result.tryPromise({
     try: async () => {
-      const response = await fetch(
+      const response = await fetchWithTimeout(
         `${credentials.baseUrl}/v1/management-sessions`,
         {
           method: "POST",
@@ -151,7 +152,7 @@ export const createHostedManagementSession = async ({
             account_ref: accountRef,
             return_url: returnUrl,
           }),
-          signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+          timeoutMs: REQUEST_TIMEOUT_MS,
         },
       );
       if (!response.ok) {

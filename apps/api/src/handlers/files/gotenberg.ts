@@ -2,6 +2,7 @@ import { Result, TaggedError } from "better-result";
 
 import { env } from "@/api/env";
 import { applyFitToPage } from "@/api/handlers/files/xlsx-preprocess";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 
 /**
  * MIME types that Gotenberg's LibreOffice route can convert
@@ -144,13 +145,13 @@ const chromiumHtmlToPdf = async (
     formData.append(key, value);
   }
 
-  const response = await fetch(
+  const response = await fetchWithTimeout(
     `${env.GOTENBERG_URL}/forms/chromium/convert/html`,
     {
       method: "POST",
       headers: { Authorization: gotenbergAuth() },
       body: formData,
-      signal: AbortSignal.timeout(30_000),
+      timeoutMs: 30_000,
     },
   );
 
@@ -314,7 +315,7 @@ export const convertToPdf = async (
         formData.append("exportNotes", "true");
         formData.append("exportNotesInMargin", "true");
 
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `${env.GOTENBERG_URL}/forms/libreoffice/convert`,
           {
             method: "POST",
@@ -322,7 +323,7 @@ export const convertToPdf = async (
               Authorization: gotenbergAuth(),
             },
             body: formData,
-            signal: AbortSignal.timeout(30_000),
+            timeoutMs: 30_000,
           },
         );
 

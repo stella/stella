@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import { envBase } from "@/api/env-base";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import type { CorpusIndexConfig } from "@/api/lib/legal-search/corpus-index-config";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -85,12 +86,12 @@ const toCorpusIndexError = (error: unknown): CorpusIndexError =>
 
 const requestJson = async (
   path: string,
-  init: RequestInit,
+  init: Omit<RequestInit, "signal">,
   timeoutMs: number,
 ): Promise<unknown> => {
-  const response = await fetch(`${baseUrl()}${path}`, {
+  const response = await fetchWithTimeout(`${baseUrl()}${path}`, {
     ...init,
-    signal: AbortSignal.timeout(timeoutMs),
+    timeoutMs,
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
@@ -149,10 +150,13 @@ const buildClient = (): CorpusIndexClient => ({
   indexExists: async (indexId) =>
     await Result.tryPromise({
       try: async () => {
-        const response = await fetch(`${baseUrl()}/api/v1/indexes/${indexId}`, {
-          method: "GET",
-          signal: AbortSignal.timeout(ADMIN_TIMEOUT_MS),
-        });
+        const response = await fetchWithTimeout(
+          `${baseUrl()}/api/v1/indexes/${indexId}`,
+          {
+            method: "GET",
+            timeoutMs: ADMIN_TIMEOUT_MS,
+          },
+        );
         if (response.status === 404) {
           return false;
         }

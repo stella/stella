@@ -18,6 +18,7 @@ import {
   parseCeDate,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -183,10 +184,9 @@ const fetchDetail = async (
   signal?: AbortSignal,
 ): Promise<SkDetailItem | null> => {
   const url = `${BASE_URL}/${encodeURIComponent(guid)}`;
-  const response = await fetch(url, {
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST)])
-      : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+  const response = await fetchWithTimeout(url, {
+    signal,
+    timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: { Accept: "application/json" },
   });
 

@@ -25,6 +25,8 @@
 import { TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { fetchWithTimeout } from "@/api/lib/fetch";
+
 const SMOKE_SESSION_TIMEOUT_MS = 15_000;
 const READ_CHECK_TIMEOUT_MS = 15_000;
 const CHAT_SEND_TIMEOUT_MS = 60_000;
@@ -332,10 +334,10 @@ const mintSmokeSession = async (
   baseUrl: string,
   secret: string,
 ): Promise<SmokeSession> => {
-  const response = await fetch(`${baseUrl}/smoke/session`, {
+  const response = await fetchWithTimeout(`${baseUrl}/smoke/session`, {
     method: "POST",
     headers: { "x-smoke-secret": secret },
-    signal: AbortSignal.timeout(SMOKE_SESSION_TIMEOUT_MS),
+    timeoutMs: SMOKE_SESSION_TIMEOUT_MS,
   });
   const evaluated = evaluateHttpCheck({
     name: "POST /smoke/session",
@@ -358,9 +360,9 @@ const readAuthenticated = async (
   path: string,
   cookie: string,
 ): Promise<EvaluatedCheck> => {
-  const response = await fetch(`${baseUrl}${path}`, {
+  const response = await fetchWithTimeout(`${baseUrl}${path}`, {
     headers: { cookie },
-    signal: AbortSignal.timeout(READ_CHECK_TIMEOUT_MS),
+    timeoutMs: READ_CHECK_TIMEOUT_MS,
   });
   return evaluateHttpCheck({
     name: `GET ${path}`,
@@ -370,8 +372,8 @@ const readAuthenticated = async (
 };
 
 const readHealth = async (baseUrl: string): Promise<EvaluatedCheck> => {
-  const response = await fetch(`${baseUrl}/health`, {
-    signal: AbortSignal.timeout(READ_CHECK_TIMEOUT_MS),
+  const response = await fetchWithTimeout(`${baseUrl}/health`, {
+    timeoutMs: READ_CHECK_TIMEOUT_MS,
   });
   return evaluateHealthRevision({
     body: response.ok ? await response.json().catch(() => null) : null,
@@ -537,14 +539,14 @@ const sendChat = async (
   baseUrl: string,
   cookie: string,
 ): Promise<EvaluatedCheck[]> => {
-  const response = await fetch(`${baseUrl}/v1/chat/`, {
+  const response = await fetchWithTimeout(`${baseUrl}/v1/chat/`, {
     method: "POST",
     headers: {
       cookie,
       "content-type": "application/json",
     },
     body: JSON.stringify(buildChatSmokeBody()),
-    signal: AbortSignal.timeout(CHAT_SEND_TIMEOUT_MS),
+    timeoutMs: CHAT_SEND_TIMEOUT_MS,
   });
 
   const httpCheck = evaluateHttpCheck({

@@ -6,22 +6,23 @@
 // slow third-party endpoint stalls the entire handler — invisible in
 // dev, paging on-call in prod.
 //
-// Under `apps/web/src` (except the `fetchWithTimeout` wrapper module
-// itself and test files) the rule is stricter still: ANY direct
-// `fetch()`/`globalThis.fetch()`/`window.fetch()` call is flagged,
-// signal or not, because the app has a wrapper — `fetchWithTimeout`
-// from `@/lib/fetch` — that makes the timeout mandatory and
-// non-optional at the type level. Elsewhere (apps/api, packages/*)
-// the looser "must have a signal" check below still applies.
+// Under `apps/web/src` and `apps/api/src` (except each app's own
+// `fetchWithTimeout` wrapper module and test files) the rule is
+// stricter still: ANY direct `fetch()`/`globalThis.fetch()`/
+// `window.fetch()` call is flagged, signal or not, because both apps
+// have a wrapper — `fetchWithTimeout` from `@/lib/fetch` (web) or
+// `@/api/lib/fetch` (api) — that makes the timeout mandatory and
+// non-optional at the type level. Elsewhere (packages/*) the looser
+// "must have a signal" check below still applies.
 //
-// Flags (apps/api, packages/*):
+// Flags (packages/*):
 //   fetch(url)                       // no options at all
 //   fetch(url, {})                   // empty options
 //   fetch(url, { method: "POST" })   // options without `signal`
 //   globalThis.fetch(url, { ... })   // same, via global access
 //   window.fetch(url, { ... })
 //
-// Allows (apps/api, packages/*):
+// Allows (packages/*):
 //   fetch(url, { signal: AbortSignal.timeout(10_000) })
 //   fetch(url, { signal: controller.signal })
 //   fetch(url, { signal: req.signal, method: "POST" })
@@ -30,22 +31,39 @@
 //   fetch(request)                   // Request-typed variable may carry signal
 //   fetch(request, { method: "POST" }) // Request's signal remains in effect
 //
-// Flags (apps/web/src, unconditionally):
+// Flags (apps/web/src, apps/api/src, unconditionally):
 //   fetch(url, { signal: AbortSignal.timeout(10_000) }) // use fetchWithTimeout instead
 //
-// Allows (apps/web/src):
+// Allows (apps/web/src, apps/api/src):
 //   fetchWithTimeout(url, { timeoutMs: 10_000 })
-//   raw fetch() inside apps/web/src/lib/fetch.ts itself (the wrapper) or in *.test.* files
+//   raw fetch() inside the app's own lib/fetch.ts wrapper module or in *.test.* files
 //
 // Escape hatch: `// eslint-disable-next-line require-fetch-timeout/require-fetch-timeout`
 // with a `// SAFETY:` comment explaining why the call cannot hang
-// (e.g. local file:/data: URL, object URL, in-process Bun.serve handler).
+// (e.g. local file:/data: URL, object URL, in-process Bun.serve handler,
+// or a call site that manages its own independent abort/timeout
+// lifecycle that fetchWithTimeout's single-timeoutMs shape can't express).
 
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
-const WEB_SRC_PATTERN = /(?:^|\/)apps\/web\/src\//u;
-const WEB_FETCH_WRAPPER_SUFFIX = "apps/web/src/lib/fetch.ts";
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
+
+// apps/web/src and apps/api/src each have a `fetchWithTimeout` wrapper
+// that makes the timeout mandatory at the type level, so raw fetch() is
+// disallowed there outright — except inside the wrapper module itself
+// (which has to call the real fetch()) and test files (already exempted
+// by the "**/*.test.{ts,tsx}" override in oxlint.config.ts; re-checked
+// here too so this branch stays correct if that scoping ever changes).
+const STRICT_FETCH_SCOPES = [
+  {
+    srcPattern: /(?:^|\/)apps\/web\/src\//u,
+    wrapperSuffix: "apps/web/src/lib/fetch.ts",
+  },
+  {
+    srcPattern: /(?:^|\/)apps\/api\/src\//u,
+    wrapperSuffix: "apps/api/src/lib/fetch.ts",
+  },
+];
 
 const normalizePath = (filename: string): string =>
   filename.replaceAll("\\", "/");
@@ -55,21 +73,18 @@ const filenameForContext = (context: {
   getFilename?: () => string;
 }): string => context.filename ?? context.getFilename?.() ?? "";
 
-// apps/web/src has a `fetchWithTimeout` wrapper (`@/lib/fetch`) that makes
-// the timeout mandatory at the type level, so raw fetch() is disallowed
-// there outright — except inside the wrapper module itself (which has to
-// call the real fetch()) and test files (already exempted by the
-// "**/*.test.{ts,tsx}" override in oxlint.config.ts; re-checked here too
-// so this branch stays correct if that scoping ever changes).
-const isStrictWebFetchFile = (context: {
+const isStrictFetchWrapperFile = (context: {
   filename?: string;
   getFilename?: () => string;
 }): boolean => {
   const normalized = normalizePath(filenameForContext(context));
-  if (!WEB_SRC_PATTERN.test(normalized)) {
+  const scope = STRICT_FETCH_SCOPES.find((candidate) =>
+    candidate.srcPattern.test(normalized),
+  );
+  if (!scope) {
     return false;
   }
-  if (normalized.endsWith(WEB_FETCH_WRAPPER_SUFFIX)) {
+  if (normalized.endsWith(scope.wrapperSuffix)) {
     return false;
   }
   return !TEST_FILE_PATTERN.test(normalized);
@@ -378,13 +393,14 @@ export default {
             "`{ signal: AbortSignal.timeout(10_000) }`) so upstream " +
             "hangs cannot stall the handler.",
           useFetchWithTimeout:
-            "apps/web/src must not call fetch() directly. Use " +
-            "`fetchWithTimeout(url, { timeoutMs, ...init })` from " +
-            "`@/lib/fetch` so the timeout is mandatory, not opt-in.",
+            "apps/web/src and apps/api/src must not call fetch() " +
+            "directly. Use `fetchWithTimeout(url, { timeoutMs, ...init })` " +
+            "from `@/lib/fetch` (web) or `@/api/lib/fetch` (api) so the " +
+            "timeout is mandatory, not opt-in.",
         },
       },
       create(context) {
-        const strictWebFetchFile = isStrictWebFetchFile(context);
+        const strictFetchWrapperFile = isStrictFetchWrapperFile(context);
 
         type RequestSignalScope = Map<string, RequestConstructorSignalState>;
 
@@ -561,7 +577,7 @@ export default {
               return;
             }
 
-            if (strictWebFetchFile) {
+            if (strictFetchWrapperFile) {
               context.report({ node, messageId: "useFetchWithTimeout" });
               return;
             }

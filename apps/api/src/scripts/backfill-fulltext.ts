@@ -15,6 +15,7 @@ import { rootDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { stripHtml } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 
 const BATCH_SIZE = 50;
 
@@ -30,8 +31,8 @@ const fetchCzSupremeFulltext = async (
   sourceUrl: string,
 ): Promise<string | undefined> => {
   try {
-    const response = await fetch(sourceUrl, {
-      signal: AbortSignal.timeout(15_000),
+    const response = await fetchWithTimeout(sourceUrl, {
+      timeoutMs: 15_000,
     });
     if (!response.ok) {
       return undefined;
@@ -79,9 +80,9 @@ const fetchCzSupremeAdminFulltext = async (
   }
 
   try {
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://vyhledavac.nssoud.cz/DokumentOriginal/Text/${idMatch.groups["id"]}`,
-      { signal: AbortSignal.timeout(15_000) },
+      { timeoutMs: 15_000 },
     );
     if (!response.ok) {
       return undefined;

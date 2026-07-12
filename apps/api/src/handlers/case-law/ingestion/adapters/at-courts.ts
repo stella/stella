@@ -18,6 +18,7 @@ import {
   stripHtml,
   toOptionalValue,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { fetchWithTimeout } from "@/api/lib/fetch";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -301,13 +302,9 @@ const fetchFulltext = async (
   signal?: AbortSignal,
 ): Promise<string | undefined> => {
   try {
-    const response = await fetch(htmlUrl, {
-      signal: signal
-        ? AbortSignal.any([
-            signal,
-            AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
-          ])
-        : AbortSignal.timeout(ADAPTER_TIMEOUT.REQUEST),
+    const response = await fetchWithTimeout(htmlUrl, {
+      signal,
+      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     });
 
     if (!response.ok) {
