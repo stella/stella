@@ -153,6 +153,11 @@ const applyMessageDefaults = (
   defaults: MessageTree,
 ): void => {
   for (const [key, defaultValue] of Object.entries(defaults)) {
+    // Guard the prototype chain: a literal `__proto__`/`constructor`/`prototype`
+    // key in a catalog would otherwise pollute Object.prototype via assignment.
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+      continue;
+    }
     const current = target[key];
     if (current === undefined) {
       target[key] = defaultValue;
