@@ -65,3 +65,15 @@ only the non-obvious caveats for this environment.
   of the base checkout; run `git submodule update --init .ai/shared` first, otherwise
   the "AI skill sync" step errors out.
 - Optional demo data: `bun --filter @stll/api db:seed-test-user` and `db:seed-dev`.
+
+## Convention & Type-Cost Guards
+
+- Whole-repo convention metrics that may only decrease live in
+  `scripts/ratchet.ts` (`RATCHET_METRICS`); this includes cross-slice imports
+  (API handler domains, route-private `-` paths, web features), which
+  structurally enforce the vertical-slice principle.
+- Typecheck cost is guarded by `scripts/typecheck-baseline.ts`: per-project
+  tsc `--extendedDiagnostics` Types/Instantiations counters with headroom,
+  checked in the CI typecheck job. Reseeding either baseline
+  (`--write` / `--write-baseline`) must be justified in the PR description;
+  it is not a mechanical way to make CI green.
