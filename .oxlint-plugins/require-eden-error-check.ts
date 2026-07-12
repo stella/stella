@@ -14,16 +14,18 @@
 //
 // Coverage is intentionally narrow: this rule flags chained consumption
 // (`.then`/`.catch`) and *direct* discards (a bare `await api...;`
-// statement, or `void api...`) of an Eden call's own result. It does NOT do
-// flow analysis — `const response = api...; /* response never checked */`
-// is out of scope, because tracing whether an assigned variable is later
-// inspected requires data-flow tracking this rule does not attempt.
+// statement, a bare fire-and-forget `api...;` statement with no
+// `await`/`void` at all, or `void api...`) of an Eden call's own result. It
+// does NOT do flow analysis — `const response = api...; /* response never
+// checked */` is out of scope, because tracing whether an assigned variable
+// is later inspected requires data-flow tracking this rule does not attempt.
 //
 // Flags:
 //   api.tasks({ id }).patch(body).then((response) => { ... })
 //   api.tasks({ id }).patch(body).then(cb).catch(cb)
 //   api.entities({ id })["some-route"].post(body).catch(cb)
 //   await api.tasks({ id }).patch(body);      // bare statement, result discarded
+//   api.tasks({ id }).patch(body);            // bare fire-and-forget, no await/void at all
 //   void api.tasks({ id }).patch(body);       // explicit discard
 //
 // Allows:
@@ -37,6 +39,11 @@
 //                                     // out of scope per above (no flow
 //                                     // analysis of whether `response.error`
 //                                     // is later checked)
+//   const api = makeScopedClient(); api.tasks({ id }).patch(body);
+//                                     // a local `api` that shadows the
+//                                     // `@/lib/api` import resolves to a
+//                                     // different binding (see scope
+//                                     // resolution below) and is not flagged
 //
 // Escape hatch: none by design — every Eden call site should be consumable
 // with `await` and an explicit `response.error` check. If a call is
@@ -46,11 +53,20 @@
 // a specific best-effort call, suppress with `// eslint-disable-next-line
 // require-eden-error-check -- SAFETY: <reason>` rather than leaving the
 // discard unexplained.
+//
+// Shadowing: the root identifier of a flagged chain is resolved through
+// oxlint's scope API (`context.sourceCode.getScope` + `Scope.set`, walking
+// `.upper` the way ESLint's `findVariable` does) to the `Variable` it
+// actually refers to at that use site, and only flagged when that
+// variable's declaration is the `api` import from `@/lib/api` itself. A
+// local `api` (parameter, destructure, `const api = ...`) that shadows the
+// import resolves to a different `Variable` and is left alone.
 
 import {
   getImportedName,
   getPropertyName,
   isIdentifier,
+  isStringLiteral,
   unwrapExpression,
 } from "./utils.ts";
 
@@ -132,6 +148,63 @@ export default {
       create(context) {
         const apiLocalNames = new Set<string>();
 
+        // Resolve the `Variable` an Identifier reference binds to by
+        // walking the scope chain outward from its use site — the same
+        // nearest-enclosing-declaration search ESLint's `findVariable`
+        // utility does, built on oxlint's `getScope`/`Scope.set` since this
+        // plugin API has no ready-made `findVariable` helper of its own.
+        const resolveVariable = (
+          identifierNode: AstNode & { name: string },
+        ) => {
+          let scope = context.sourceCode.getScope(identifierNode);
+          while (scope) {
+            const variable = scope.set.get(identifierNode.name);
+            if (variable) {
+              return variable;
+            }
+            scope = scope.upper;
+          }
+          return null;
+        };
+
+        // True when `variable` is the binding introduced by `import { api }
+        // from "@/lib/api"` (or an aliased form of it) — i.e. the actual
+        // import, not a same-named local that shadows it.
+        const isApiImportVariable = (
+          variable: ReturnType<typeof resolveVariable>,
+        ) =>
+          variable !== null &&
+          variable.defs.some((def) => {
+            if (def.type !== "ImportBinding" || !isAstNode(def.node)) {
+              return false;
+            }
+            if (getImportedName(def.node) !== "api") {
+              return false;
+            }
+            if (
+              !isAstNode(def.parent) ||
+              def.parent.type !== "ImportDeclaration"
+            ) {
+              return false;
+            }
+            return (
+              isStringLiteral(def.parent.source) &&
+              def.parent.source.value === API_MODULE
+            );
+          });
+
+        // A chain root only counts as a genuine Eden `api` call when it is
+        // both spelled like the import (fast pre-check against the
+        // `apiLocalNames` set collected from `ImportDeclaration`) and
+        // resolves, through scope, to that same import binding rather than
+        // a local shadow (parameter, destructure, `const api = ...`).
+        const isGenuineApiRoot = (root: unknown): boolean => {
+          if (!isIdentifier(root) || !apiLocalNames.has(root.name)) {
+            return false;
+          }
+          return isApiImportVariable(resolveVariable(root));
+        };
+
         return {
           ImportDeclaration(node) {
             if (node.source?.value !== API_MODULE) {
@@ -160,7 +233,7 @@ export default {
             }
 
             const root = getChainRoot(callee.object);
-            if (!isIdentifier(root) || !apiLocalNames.has(root.name)) {
+            if (!isGenuineApiRoot(root)) {
               return;
             }
 
@@ -171,35 +244,57 @@ export default {
             });
           },
 
-          // `await api...;` as a bare expression statement: the resolved
-          // `{ data, error }` is never bound to anything, so `error` can
-          // never be inspected.
+          // `await api...;` as a bare expression statement, or a bare
+          // fire-and-forget `api...;` statement with no `await`/`void` at
+          // all: the resolved `{ data, error }` is never bound to anything,
+          // so `error` can never be inspected.
           ExpressionStatement(node) {
             const expression = unwrapExpression(node.expression);
-            if (
-              !isAstNode(expression) ||
-              expression.type !== "AwaitExpression"
-            ) {
+            if (!isAstNode(expression)) {
               return;
             }
 
-            const argument = unwrapExpression(expression.argument);
-            // Already flagged by the CallExpression visitor above; do not
-            // double-report the same discard.
-            if (isThenOrCatchCall(argument)) {
+            if (expression.type === "AwaitExpression") {
+              const argument = unwrapExpression(expression.argument);
+              // Already flagged by the CallExpression visitor above; do not
+              // double-report the same discard.
+              if (isThenOrCatchCall(argument)) {
+                return;
+              }
+
+              const root = getChainRoot(argument);
+              if (!isGenuineApiRoot(root)) {
+                return;
+              }
+
+              context.report({
+                node,
+                messageId: "requireEdenErrorCheckDiscarded",
+                data: { form: "await api...;" },
+              });
               return;
             }
 
-            const root = getChainRoot(argument);
-            if (!isIdentifier(root) || !apiLocalNames.has(root.name)) {
-              return;
-            }
+            if (expression.type === "CallExpression") {
+              // Already flagged by the CallExpression visitor above (as
+              // chained consumption) or would be a false match on a call
+              // that merely ends in a differently-named method; do not
+              // double-report `.then()`/`.catch()` chains here.
+              if (isThenOrCatchCall(expression)) {
+                return;
+              }
 
-            context.report({
-              node,
-              messageId: "requireEdenErrorCheckDiscarded",
-              data: { form: "await api...;" },
-            });
+              const root = getChainRoot(expression);
+              if (!isGenuineApiRoot(root)) {
+                return;
+              }
+
+              context.report({
+                node,
+                messageId: "requireEdenErrorCheckDiscarded",
+                data: { form: "api...; (no await, no void)" },
+              });
+            }
           },
 
           // `void api...;`: an explicit discard of the resolved
@@ -217,7 +312,7 @@ export default {
             }
 
             const root = getChainRoot(argument);
-            if (!isIdentifier(root) || !apiLocalNames.has(root.name)) {
+            if (!isGenuineApiRoot(root)) {
               return;
             }
 
