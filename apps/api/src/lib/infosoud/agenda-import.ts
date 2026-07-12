@@ -11,8 +11,9 @@ import type { Transaction } from "@/api/db/root";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { AgendaItemKind } from "@/api/lib/entity-constants";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { AGENDA_ITEM_KIND, TASK_STATUS } from "@/api/lib/entity-constants";
+import type { AgendaItemKind } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 
 type InfoSoudAgendaItem = {
@@ -78,7 +79,21 @@ export const importInfoSoudAgendaItems = async ({
   tx,
   workspaceId,
 }: ImportInfoSoudAgendaItemsOptions): Promise<ImportInfoSoudAgendaItemsResult> => {
-  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`);
+  // Previously a bare `pg_advisory_xact_lock(hashtext(workspaceId))` —
+  // a domain accidentally shared with unrelated property-write
+  // (`lockWorkspacePropertyWrites`) and time-entry advisory locks,
+  // and NOT shared with the entity-count check every other
+  // entity-creating path serializes on. That meant a concurrent
+  // infosoud import and, say, an upload could each read a passing
+  // count and both insert, overshooting `LIMITS.entitiesCount`.
+  // Locking the workspace row instead puts this on the same lock
+  // manager and canonical order as every other entity-creating path
+  // (see `lockWorkspacesForEntityCap`), which closes that race. This
+  // insert never touches `document_counters` (agenda items are
+  // `task`-kind entities, which don't get a doc stamp) or a parent
+  // entity, so the workspace-row lock is the only one this path
+  // needs.
+  await lockWorkspacesForEntityCap(tx, [workspaceId]);
 
   const externalIds = agendaItems.map((item) => item.externalId);
   const existingRows =

@@ -16,6 +16,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
@@ -139,8 +140,13 @@ export const createEntityFromBuffer = async ({
     await getS3().write(s3Key, bytes);
 
     await scopedDb(async (tx) => {
+      // See `lockWorkspacesForEntityCap` for the canonical lock
+      // order every entity-creating path follows (issue #1139).
+      await lockWorkspacesForEntityCap(tx, [workspaceId]);
+
       // The authoritative limit check must stay in the same
-      // transaction as the insert to avoid TOCTOU races.
+      // transaction as the insert, behind the lock above, to avoid
+      // TOCTOU races.
       const entityCount = await tx.$count(
         entities,
         eq(entities.workspaceId, workspaceId),

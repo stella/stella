@@ -24,6 +24,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import {
@@ -62,6 +63,40 @@ type ResolveFileNameProps = {
 };
 
 const MAX_FILENAME_LENGTH = 255;
+
+type CleanupUploadedS3KeysOptions = {
+  keys: string[];
+  fileId: string;
+  workspaceId: SafeId<"workspace">;
+};
+
+/**
+ * Best-effort delete of S3 objects written before an authoritative
+ * cap check (or an unexpected error) aborts the upload. Every key's
+ * delete is attempted independently (`allSettled`, not `all`) so one
+ * rejection doesn't stop cleanup of the rest; any rejection is
+ * captured instead of silently dropped, since a swallowed failure
+ * here leaves an orphaned S3 object with no telemetry trail.
+ */
+const cleanupUploadedS3Keys = async ({
+  keys,
+  fileId,
+  workspaceId,
+}: CleanupUploadedS3KeysOptions): Promise<void> => {
+  const results = await Promise.allSettled(
+    keys.map(async (key) => await getS3().delete(key)),
+  );
+
+  for (const result of results) {
+    if (result.status === "rejected") {
+      captureError(result.reason, {
+        operation: "upload-s3-cleanup",
+        fileId,
+        workspaceId,
+      });
+    }
+  }
+};
 
 const resolveFileName = async ({
   tx,
@@ -107,6 +142,10 @@ const uploadEntityHandler = async function* ({
   body: { file, name: rawName, propertyId },
 }: UploadEntityHandlerProps) {
   const name = sanitizeFilename(rawName);
+  // Non-authoritative fast-fail: cheap, unlocked, avoids scanning
+  // and uploading a file for a request that's obviously over the
+  // limit. The authoritative check is inside the write transaction
+  // below, behind the workspace-row lock.
   const [entityCountResult, propertyResult] = await Promise.all([
     safeDb((tx) => tx.$count(entities, eq(entities.workspaceId, workspaceId))),
     safeDb((tx) =>
@@ -215,8 +254,23 @@ const uploadEntityHandler = async function* ({
     const entityVersionId = createSafeId<"entityVersion">();
     const fieldId = createSafeId<"field">();
 
-    const fileName = yield* Result.await(
+    const writeResult = yield* Result.await(
       safeDb(async (tx) => {
+        // See `lockWorkspacesForEntityCap` for the canonical lock
+        // order every entity-creating path follows (issue #1139).
+        await lockWorkspacesForEntityCap(tx, [workspaceId]);
+
+        // The earlier `entityCount` check above is a
+        // non-authoritative fast-fail to avoid wasted scan/upload
+        // work; this is the authoritative check.
+        const authoritativeEntityCount = await tx.$count(
+          entities,
+          eq(entities.workspaceId, workspaceId),
+        );
+        if (authoritativeEntityCount >= LIMITS.entitiesCount) {
+          return { ok: false as const };
+        }
+
         const resolvedName = await resolveFileName({ tx, propertyId, name });
 
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -294,9 +348,18 @@ const uploadEntityHandler = async function* ({
           },
         });
 
-        return resolvedName;
+        return { ok: true as const, resolvedName };
       }),
     );
+
+    if (!writeResult.ok) {
+      await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
+      return Result.err(
+        new HandlerError({ status: 400, message: "Entities limit reached" }),
+      );
+    }
+
+    const fileName = writeResult.resolvedName;
 
     await processExtraction(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
@@ -341,7 +404,7 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } catch (error) {
-    await Promise.all(s3Keys.map(async (key) => await getS3().delete(key)));
+    await cleanupUploadedS3Keys({ keys: s3Keys, fileId, workspaceId });
     throw error;
   }
 };
