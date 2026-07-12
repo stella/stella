@@ -1,10 +1,14 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 
 import { AUTH_USER_STELLA_SELECT_COLUMN_NAMES } from "@/api/db/auth-schema";
 import {
   SETTING_ORGANIZATION_ID,
   SETTING_USER_ID,
   SETTING_WORKSPACE_IDS,
+  WORKSPACE_ACCESS_VIEW_NAME,
+  stella,
+  stellaIngestion,
 } from "@/api/db/rls";
 import {
   getRlsFixture,
@@ -103,6 +107,74 @@ describe("policy coverage", () => {
     (table) => !CONFIG_OR_APPEND_ONLY.has(table),
   );
 
+  test("workspace access view is granted only to the application role", async () => {
+    const result = await testDb.execute<{
+      ingestion_view_select: boolean;
+      stella_view_select: boolean;
+    }>(sql`
+      SELECT
+        has_table_privilege(
+          ${stella.name},
+          ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`},
+          'SELECT'
+        ) AS stella_view_select,
+        has_table_privilege(
+          ${stellaIngestion.name},
+          ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`},
+          'SELECT'
+        ) AS ingestion_view_select
+    `);
+    const privileges = result.rows.at(0);
+
+    expect(privileges).toEqual({
+      ingestion_view_select: false,
+      stella_view_select: true,
+    });
+  });
+
+  test("workspace access view keeps its owner-evaluated security boundary", async () => {
+    const result = await testDb.execute<{
+      base_tables_force_rls: boolean;
+      owner_matches_base_tables: boolean;
+      security_barrier: boolean;
+      security_invoker: boolean;
+      view_owned_by_stella: boolean;
+    }>(sql`
+      SELECT
+        COALESCE('security_barrier=true' = ANY(view_rel.reloptions), false)
+          AS security_barrier,
+        COALESCE('security_invoker=true' = ANY(view_rel.reloptions), false)
+          AS security_invoker,
+        view_rel.relowner = workspaces_rel.relowner
+          AND view_rel.relowner = workspace_members_rel.relowner
+          AND view_rel.relowner = member_rel.relowner
+          AS owner_matches_base_tables,
+        view_rel.relowner = (
+          SELECT oid FROM pg_catalog.pg_roles WHERE rolname = ${stella.name}
+        ) AS view_owned_by_stella,
+        workspaces_rel.relforcerowsecurity
+          OR workspace_members_rel.relforcerowsecurity
+          OR member_rel.relforcerowsecurity
+          AS base_tables_force_rls
+      FROM pg_catalog.pg_class view_rel
+      JOIN pg_catalog.pg_class workspaces_rel
+        ON workspaces_rel.oid = 'public.workspaces'::regclass
+      JOIN pg_catalog.pg_class workspace_members_rel
+        ON workspace_members_rel.oid = 'public.workspace_members'::regclass
+      JOIN pg_catalog.pg_class member_rel
+        ON member_rel.oid = 'public.member'::regclass
+      WHERE view_rel.oid = ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`}::regclass
+    `);
+
+    expect(result.rows.at(0)).toEqual({
+      base_tables_force_rls: false,
+      owner_matches_base_tables: true,
+      security_barrier: true,
+      security_invoker: false,
+      view_owned_by_stella: false,
+    });
+  });
+
   test("every table with workspace_id has workspace policies", async () => {
     const scoped = await fetchScopedTables(testDb);
     const policies = await fetchStellaPolicies(testDb);
@@ -129,6 +201,8 @@ describe("policy coverage", () => {
         const expr = pol.command === "a" ? pol.check_expr : pol.using_expr;
         expect(expr).toContain("workspace_id");
         expect(expr).toContain(SETTING_WORKSPACE_IDS);
+        expect(expr).toContain(WORKSPACE_ACCESS_VIEW_NAME);
+        expect(expr).not.toContain("stella_workspace_is_authorized");
       }
     }
   });
@@ -184,6 +258,8 @@ describe("policy coverage", () => {
         expect(expr).toContain(SETTING_USER_ID);
         expect(expr).toContain("workspace_id IS NULL");
         expect(expr).toContain(SETTING_WORKSPACE_IDS);
+        expect(expr).toContain(WORKSPACE_ACCESS_VIEW_NAME);
+        expect(expr).not.toContain("stella_workspace_is_authorized");
       }
     }
   });

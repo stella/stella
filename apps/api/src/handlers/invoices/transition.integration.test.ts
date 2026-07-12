@@ -201,8 +201,9 @@ const createContext = ({
   };
 
   return asTestRaw<TransitionCtx>({
-    activeWorkspaceIds: [ids.wsA1],
-    accessibleWorkspaces: [{ id: ids.wsA1, status: "active" }],
+    getActiveWorkspaceIds: async () => [ids.wsA1],
+    getAccessibleWorkspaces: async () => [{ id: ids.wsA1, status: "active" }],
+    getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" }),
     body: { action },
     createAuditRecorder: () => async () => undefined,
     memberRole: { role: "owner" },

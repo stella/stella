@@ -4,6 +4,7 @@ import { auditLogs, documentCounters, entities, fields } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { DOCUMENT_TYPE_CLASSIFIER_ROLE } from "@/api/handlers/properties/create-schema";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -188,15 +189,19 @@ const createContext = ({
   targetWorkspaceId: targetWorkspaceIdArg = targetWorkspaceId,
   targetParentId = null,
   deleteSource = false,
-  accessibleWorkspaces,
+  targetWorkspace,
 }: {
   safeDb: CopyToWorkspaceContext["safeDb"];
   entityId: SafeId<"entity">;
   targetWorkspaceId?: SafeId<"workspace">;
   targetParentId?: SafeId<"entity"> | null;
   deleteSource?: boolean;
-  accessibleWorkspaces?: CopyToWorkspaceContext["accessibleWorkspaces"];
+  targetWorkspace?: AccessibleWorkspace | null;
 }): CopyToWorkspaceContext => {
+  const resolvedTargetWorkspace =
+    targetWorkspace === undefined
+      ? { id: targetWorkspaceIdArg, status: "active" as const }
+      : targetWorkspace;
   const sourceRecorderBindings = {
     organizationId,
     workspaceId: sourceWorkspaceId,
@@ -227,10 +232,8 @@ const createContext = ({
     },
     request: sourceRecorderBindings.request,
     route: "/v1/workspaces/:workspaceId/entities/copy-to-workspace",
-    accessibleWorkspaces: accessibleWorkspaces ?? [
-      { id: sourceWorkspaceId, status: "active" },
-      { id: targetWorkspaceIdArg, status: "active" },
-    ],
+    getWorkspaceAccess: async (workspaceId: SafeId<"workspace">) =>
+      workspaceId === targetWorkspaceIdArg ? resolvedTargetWorkspace : null,
     safeDb,
     recordAuditEvent: createAuditRecorder(sourceRecorderBindings),
     createAuditRecorder: createBoundAuditRecorder,
@@ -1449,7 +1452,6 @@ describe("copy-to-workspace", () => {
       safeDb,
       entityId: documentId,
       targetWorkspaceId: sourceWorkspaceId,
-      accessibleWorkspaces: [{ id: sourceWorkspaceId, status: "active" }],
     });
 
     const result = await copyToWorkspace.handler(context);

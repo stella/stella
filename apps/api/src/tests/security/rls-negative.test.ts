@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, getTableName, sql } from "drizzle-orm";
+import { eq, getTableName, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { stella } from "@/api/db/rls";
 import {
@@ -39,8 +39,9 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { createMembershipScopedDb } from "@/api/db/scoped";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
-import type { SafeIdType } from "@/api/lib/branded-types";
+import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
@@ -84,6 +85,40 @@ afterAll(async () => {
 });
 
 const clauseBody: ClauseBody = [{ text: "test" }];
+
+type DryMembershipQueryOptions = {
+  organizationId: SafeId<"organization">;
+  serverValidatedWorkspaceIds: SafeId<"workspace">[];
+  userId: SafeId<"user">;
+  fn: (tx: TestDatabaseTransaction) => Promise<void>;
+};
+
+// Membership-mode counterpart of dryScopedQuery: runs `fn` under the
+// request-shaped RLS scope (membership view + optional pins) and always
+// rolls the transaction back.
+const dryMembershipQuery = async ({
+  organizationId,
+  serverValidatedWorkspaceIds,
+  userId,
+  fn,
+}: DryMembershipQueryOptions): Promise<void> => {
+  const membershipDb = createMembershipScopedDb(testDb, {
+    organizationId,
+    serverValidatedWorkspaceIds,
+    userId,
+  });
+  try {
+    await membershipDb(async (tx) => {
+      await fn(tx);
+      tx.rollback();
+    });
+  } catch (error) {
+    if (error instanceof TransactionRollbackError) {
+      return;
+    }
+    throw error;
+  }
+};
 
 type WorkspaceScopedTable = (typeof wsScopedTables)[number];
 type OrganizationScopedTable = (typeof orgScopedTables)[number];
@@ -234,6 +269,82 @@ describe("chat SELECT — wrong user or workspace", () => {
       ids.userA1,
     );
     expect(c).toBe(0);
+  });
+
+  // Models production reads of global threads: membership mode with no
+  // pinned workspace, because nothing was workspace-validated for the
+  // request. The seal must not depend on an explicit scope.
+  test("deleting a contributing workspace seals a global thread and its messages", async () => {
+    await dryMembershipQuery({
+      organizationId: ids.orgA,
+      serverValidatedWorkspaceIds: [],
+      userId: ids.userA1,
+      fn: async (tx) => {
+        await tx
+          .update(chatThreads)
+          .set({ dataWorkspaceIds: [ids.wsA1] })
+          .where(eq(chatThreads.id, ids.chatThreadGlobalA1));
+
+        const visibleThreadCount = await tx.$count(
+          chatThreads,
+          eq(chatThreads.id, ids.chatThreadGlobalA1),
+        );
+        const visibleMessageCount = await tx.$count(
+          chatMessages,
+          eq(chatMessages.id, ids.chatMessageGlobalA1),
+        );
+        expect(visibleThreadCount).toBe(1);
+        expect(visibleMessageCount).toBe(1);
+
+        await tx
+          .update(workspaces)
+          .set({ status: "deleting" })
+          .where(eq(workspaces.id, ids.wsA1));
+
+        const sealedThreadCount = await tx.$count(
+          chatThreads,
+          eq(chatThreads.id, ids.chatThreadGlobalA1),
+        );
+        const sealedMessageCount = await tx.$count(
+          chatMessages,
+          eq(chatMessages.id, ids.chatMessageGlobalA1),
+        );
+        expect(sealedThreadCount).toBe(0);
+        expect(sealedMessageCount).toBe(0);
+      },
+    });
+  });
+
+  // Models the workspace-deletion request itself: the handler seals the
+  // workspace to 'deleting', then its transaction must still see and delete
+  // threads embedding that workspace, or the surviving rows break the
+  // restrict FK when the workspaces row is deleted. The pinned validated
+  // target keeps the seal from de-authorizing the cleanup mid-transaction.
+  test("pinned validated workspace can still delete its embedded-data threads while deleting", async () => {
+    await dryMembershipQuery({
+      organizationId: ids.orgA,
+      serverValidatedWorkspaceIds: [ids.wsA1],
+      userId: ids.userA1,
+      fn: async (tx) => {
+        await tx
+          .update(chatThreads)
+          .set({ dataWorkspaceIds: [ids.wsA1], workspaceId: ids.wsA1 })
+          .where(eq(chatThreads.id, ids.chatThreadGlobalA1));
+
+        await tx
+          .update(workspaces)
+          .set({ status: "deleting" })
+          .where(eq(workspaces.id, ids.wsA1));
+
+        const deletedThreads = await tx
+          .delete(chatThreads)
+          .where(eq(chatThreads.workspaceId, ids.wsA1))
+          .returning({ id: chatThreads.id });
+        expect(deletedThreads.map((thread) => thread.id)).toContain(
+          ids.chatThreadGlobalA1,
+        );
+      },
+    });
   });
 });
 
@@ -1330,9 +1441,8 @@ describe("cross-org isolation", () => {
     );
     // wsB1 is in the session wsIds, so entities in wsB1
     // are visible (ws policy only checks wsIds). This is
-    // the expected behavior — workspace IDs are server-set
-    // from resolveMemberAccess which filters by
-    // user membership. The test documents this.
+    // the expected behavior for explicit mode: these scopes are minted only by
+    // trusted server code. Request auth uses membership mode instead.
     expect(c).toBeGreaterThan(0);
   });
 });
@@ -1345,8 +1455,7 @@ describe("dual-scope integrity (ws + org columns)", () => {
   // Tables with both workspace_id and organization_id
   // where RLS only checks workspace_id. This documents
   // that org_id is not enforced at the RLS level; it is
-  // safe because workspace IDs are server-set by
-  // resolveMemberAccess which filters by org.
+  // safe because explicit workspace IDs are server-set by trusted code.
 
   test("INSERT timeEntry with correct ws but wrong org → succeeds (ws policy only)", async () => {
     await dryScopedQuery([ids.wsA1], ids.orgA, async (tx) => {
@@ -1441,20 +1550,12 @@ describe("scope reassignment via UPDATE", () => {
 // ════════════════════════════════════════════════════════
 
 describe("unset session variables", () => {
-  test("stella role without set_config → ws query errors (no leak)", async () => {
-    // When app.workspace_ids is not set, current_setting
-    // returns '' which fails to cast to text[]. This is
-    // safe: the query errors instead of leaking data.
-    const result = await testDb.transaction(async (tx) => {
+  test("stella role without set_config → ws query returns zero", async () => {
+    const count = await testDb.transaction(async (tx) => {
       await tx.execute(sql`SELECT set_config('role', ${stella.name}, true)`);
-      try {
-        await tx.$count(entities);
-        return "leaked";
-      } catch {
-        return "blocked";
-      }
+      return await tx.$count(entities);
     });
-    expect(result).toBe("blocked");
+    expect(count).toBe(0);
   });
 
   test("stella role without set_config → org query returns zero", async () => {
@@ -1516,5 +1617,35 @@ describe("chat mutations — wrong user", () => {
       ids.userA1,
     );
     expect(rows).toHaveLength(0);
+  });
+
+  test("data workspace arrays containing NULL fail closed", async () => {
+    const threadId = testId<"chatThread">();
+    const error = await tryCatch(async () =>
+      scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) => {
+          await tx.execute(sql`
+            INSERT INTO chat_threads (
+              id,
+              organization_id,
+              user_id,
+              title,
+              data_workspace_ids
+            ) VALUES (
+              ${threadId},
+              ${ids.orgA},
+              ${ids.userA1},
+              'invalid data scope',
+              ARRAY[${ids.wsA1}::uuid, NULL]::uuid[]
+            )
+          `);
+        },
+        ids.userA1,
+      ),
+    );
+
+    expect(isPgError(error, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 });

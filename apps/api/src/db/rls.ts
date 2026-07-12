@@ -10,22 +10,92 @@ export const stellaIngestion = p.pgRole("stella_ingestion").existing();
 
 /** Session setting keys set via `set_config` per transaction. */
 export const SETTING_WORKSPACE_IDS = "app.workspace_ids";
+export const SETTING_WORKSPACE_ACCESS_MODE = "app.workspace_access_mode";
 export const SETTING_ORGANIZATION_ID = "app.organization_id";
 export const SETTING_USER_ID = "app.user_id";
 
-/** Workspace IDs array from session.
- *  Wrapped in `(SELECT ...)` so the planner evaluates
- *  `current_setting` once (init plan) instead of per row. */
-const wsIdsArray = sql`(SELECT current_setting(
-  '${sql.raw(SETTING_WORKSPACE_IDS)}', true
-))::uuid[]`;
+export const WORKSPACE_ACCESS_MODE = {
+  explicit: "explicit",
+  membership: "membership",
+} as const;
+export const WORKSPACE_ACCESS_VIEW_NAME = "stella_authorized_workspaces";
 
-const workspaceCheck = sql`workspace_id = ANY(${wsIdsArray})`;
+// Created by the authorization migration because its owner-evaluated query is
+// intentionally outside Drizzle's declarative table model. Registering it as
+// existing keeps schema introspection/parity aware of the managed object.
+export const stellaAuthorizedWorkspaces = p
+  .pgView(WORKSPACE_ACCESS_VIEW_NAME, {
+    authorizedWorkspaceId: p.uuid("authorized_workspace_id").notNull(),
+    workspaceStatus: p.text("workspace_status"),
+  })
+  .existing();
 
-/** Check that the row's `id` is in the session workspace IDs.
- *  Used by the `workspaces` table (scopes on `id`, not
- *  `workspace_id`). */
-export const workspaceIdCheck = sql`id = ANY(${wsIdsArray})`;
+/**
+ * Explicit mode is used by deliberately narrowed jobs and security tests.
+ * The owner-evaluated security-barrier view unions those IDs with the live
+ * membership-derived set in membership mode. Explicit IDs stay additive there
+ * so a create transaction can authorize its new workspace before inserting
+ * workspace_members. The direct array check keeps validated point operations
+ * constant-size; when it misses, the planner-visible set lookup can run as a
+ * semi-join or hashed subplan once per statement instead of invoking a SQL
+ * function for every candidate row.
+ */
+const workspaceAccessCheck = (workspaceId: SQL) => sql`CASE
+  WHEN ${workspaceId} = ANY(
+    COALESCE(
+      NULLIF(
+        (SELECT pg_catalog.current_setting(
+          '${sql.raw(SETTING_WORKSPACE_IDS)}', true
+        )),
+        ''
+      )::uuid[],
+      ARRAY[]::uuid[]
+    )
+  )
+  THEN true
+  ELSE ${workspaceId} IN (
+    SELECT aw.authorized_workspace_id
+    FROM public.${sql.raw(WORKSPACE_ACCESS_VIEW_NAME)} aw
+  )
+END`;
+
+const workspaceCheck = workspaceAccessCheck(sql`workspace_id`);
+
+/** Check the row's `id` against the transaction workspace authorization.
+ * Used by `workspaces`, which scopes on `id` rather than `workspace_id`. */
+export const workspaceIdCheck = workspaceAccessCheck(sql`id`);
+
+// Embedded chat data must remain visible only while every contributing
+// workspace is still usable. `IS NULL` makes malformed PostgreSQL arrays fail
+// closed; array-level NOT NULL constraints do not reject NULL elements.
+// Explicit pinned IDs stay additive here exactly as in the scalar check:
+// without the pin bypass, sealing a workspace to 'deleting' would hide its
+// embedded-data threads from the deletion transaction's own cleanup DELETE,
+// leaving rows that break the workspaces FK.
+const workspaceArrayCheck = (workspaceIds: SQL) => sql`NOT EXISTS (
+  SELECT 1
+  FROM pg_catalog.unnest(${workspaceIds}) AS scoped_workspace(workspace_id)
+  WHERE scoped_workspace.workspace_id IS NULL
+    OR NOT (
+      scoped_workspace.workspace_id = ANY(
+        COALESCE(
+          NULLIF(
+            (SELECT pg_catalog.current_setting(
+              '${sql.raw(SETTING_WORKSPACE_IDS)}', true
+            )),
+            ''
+          )::uuid[],
+          ARRAY[]::uuid[]
+        )
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM public.${sql.raw(WORKSPACE_ACCESS_VIEW_NAME)} aw
+        WHERE aw.authorized_workspace_id = scoped_workspace.workspace_id
+          AND aw.workspace_status <> 'deleting'
+      )
+    )
+)`;
 
 export const organizationCheck = sql`organization_id =
   (SELECT current_setting(
@@ -62,7 +132,7 @@ const authUserVisibleCheck = sql`(
         FROM task_assignees ta
         JOIN workspaces w ON w.id = ta.workspace_id
         WHERE ta.user_id = "user".id
-          AND ta.workspace_id = ANY(${wsIdsArray})
+          AND ${workspaceAccessCheck(sql`ta.workspace_id`)}
           AND w.organization_id = (SELECT current_setting(
             '${sql.raw(SETTING_ORGANIZATION_ID)}', true
           ))
@@ -72,7 +142,7 @@ const authUserVisibleCheck = sql`(
         FROM entities e
         JOIN workspaces w ON w.id = e.workspace_id
         WHERE (e.created_by = "user".id OR e.last_edited_by = "user".id)
-          AND e.workspace_id = ANY(${wsIdsArray})
+          AND ${workspaceAccessCheck(sql`e.workspace_id`)}
           AND w.organization_id = (SELECT current_setting(
             '${sql.raw(SETTING_ORGANIZATION_ID)}', true
           ))
@@ -92,7 +162,7 @@ const denyAllRows = sql`false`;
 // thread from outliving the user's access to a contributing matter.
 const chatThreadDataScopeCheck = sql`(
   cardinality(data_workspace_ids) = 0
-  OR data_workspace_ids <@ ${wsIdsArray}
+  OR ${workspaceArrayCheck(sql`data_workspace_ids`)}
 )`;
 
 const chatThreadScopeCheck = sql`(
@@ -117,7 +187,7 @@ const chatMessageScopeCheck = sql`(
       ))
       AND (
         cardinality(ct.data_workspace_ids) = 0
-        OR ct.data_workspace_ids <@ ${wsIdsArray}
+        OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
       )
   )
 )`;
@@ -151,10 +221,10 @@ const chatDerivedThreadScopeCheck = (threadIdSql: SQL) => sql`(
       AND ct.organization_id = (SELECT current_setting(
         '${sql.raw(SETTING_ORGANIZATION_ID)}', true
       ))
-      AND (ct.workspace_id IS NULL OR ct.workspace_id = ANY(${wsIdsArray}))
+      AND (ct.workspace_id IS NULL OR ${workspaceAccessCheck(sql`ct.workspace_id`)})
       AND (
         cardinality(ct.data_workspace_ids) = 0
-        OR ct.data_workspace_ids <@ ${wsIdsArray}
+        OR ${workspaceArrayCheck(sql`ct.data_workspace_ids`)}
       )
   )
 )`;

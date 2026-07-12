@@ -24,14 +24,14 @@ const config = {
 const getOlderMessages = createSafeRootHandler(
   config,
   async function* ({
-    activeWorkspaceIds,
+    getWorkspaceAccess,
     params: { threadId },
     query: { before, workspaceId },
     safeDb,
     user,
   }) {
     const scope = yield* resolveChatScope({
-      accessibleWorkspaceIds: activeWorkspaceIds,
+      getWorkspaceAccess,
       workspaceId,
     });
 

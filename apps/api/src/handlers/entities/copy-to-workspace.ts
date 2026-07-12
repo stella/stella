@@ -593,7 +593,7 @@ const copyToWorkspace = createSafeHandler(
     user,
     body,
     workspaceId: sourceWorkspaceId,
-    accessibleWorkspaces,
+    getWorkspaceAccess,
     recordAuditEvent,
     createAuditRecorder,
   }) {
@@ -609,10 +609,12 @@ const copyToWorkspace = createSafeHandler(
     }
 
     // Validate access to target workspace
-    const targetWorkspace = accessibleWorkspaces.find(
-      (w) => w.id === targetWorkspaceId && w.status === "active",
+    const targetWorkspace = yield* Result.await(
+      Result.tryPromise(
+        async () => await getWorkspaceAccess(targetWorkspaceId),
+      ),
     );
-    if (!targetWorkspace) {
+    if (!targetWorkspace || targetWorkspace.status !== "active") {
       return Result.err(
         new HandlerError({
           status: 404,

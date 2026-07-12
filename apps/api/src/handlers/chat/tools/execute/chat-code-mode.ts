@@ -120,7 +120,10 @@ const buildChatReadTools = (
     }).server(async (args: unknown) => await runReadTool(toolName, args));
   });
 
-type BuildChatCodeModeProps = ChatRegistryContextDeps & {
+type BuildChatCodeModeProps = Omit<
+  ChatRegistryContextDeps,
+  "pinServerValidatedWorkspaceId"
+> & {
   refRegistry: ChatRefRegistry;
 };
 
