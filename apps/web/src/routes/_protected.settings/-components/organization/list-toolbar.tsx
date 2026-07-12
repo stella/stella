@@ -4,6 +4,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { SearchIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import {
   InputGroup,
@@ -11,10 +12,30 @@ import {
   InputGroupInput,
 } from "@stll/ui/components/input-group";
 
+import { optionalSearchStringSchema } from "@/lib/schema";
 import { InviteMemberDialog } from "@/routes/_protected.organization/-components/invite-member-dialog";
 
 const settingsOrgParentRoute = getRouteApi("/_protected/settings/organization");
 const membersRoute = getRouteApi("/_protected/settings/organization/members");
+
+/**
+ * One-shot marker for the value the debounced writer last pushed up, so the
+ * resync-during-render branch can tell that write's echo apart from external
+ * navigation. Wrapped in an object because `undefined` is itself a legitimate
+ * written value (a cleared field); `null` means "no unconsumed write".
+ */
+type WrittenMarker = { value: string | undefined } | null;
+
+/**
+ * Normalizes a raw debounced value the same way the route's search schema
+ * does (trim, empty -> undefined), by parsing it through that schema rather
+ * than re-implementing the transform. The marker must store this normalized
+ * form: the route re-validates `q` through the same schema on every
+ * navigation, so the URL echo of our own write comes back trimmed even when
+ * the raw input had leading/trailing whitespace.
+ */
+const normalizeQuery = (value: string): string | undefined =>
+  v.parse(optionalSearchStringSchema(), value);
 
 export const OrganizationListToolbar = () => {
   const t = useTranslations();
@@ -27,25 +48,35 @@ export const OrganizationListToolbar = () => {
   // prevents flicker between keystrokes; the URL is the source of
   // truth and gets the trimmed value via the debounced writer.
   const [localQuery, setLocalQuery] = useState(q);
-  // Adjusting state during render: when the URL `q` changes to a
-  // value our local mirror has not seen (back/forward navigation,
-  // tab switches landing on a different `?q=`) replace the input
-  // without an effect round-trip. Our own debounced writes also
-  // flow through here, but the post-navigate render arrives only
-  // after the user pauses typing, so `localQuery` already equals
-  // the value being re-set.
   const [lastSeenUrlQuery, setLastSeenUrlQuery] = useState(q);
+  const [lastWrittenQuery, setLastWrittenQuery] = useState<WrittenMarker>(null);
   const updateSearch = useDebouncedCallback((value: string) => {
+    // Marker must match what the route exposes after re-validating `q`
+    // through its search schema: trimmed, empty becomes undefined.
+    setLastWrittenQuery({ value: normalizeQuery(value) });
     void navigate({
       to: "/settings/organization/members",
       search: (prev) => ({ ...prev, q: value || undefined }),
     });
   }, 300);
 
+  // Adjusting state during render: when the URL `q` changes to a value our
+  // local mirror has not seen, decide echo vs. external change. The echo of
+  // our own debounced write must NOT cancel or reset local state: the user
+  // may have resumed typing during the navigate round-trip, and a reset
+  // would drop those keystrokes plus their newly-scheduled debounced write.
+  // Only a genuinely external change (back/forward navigation, tab switches
+  // landing on a different `?q=`) replaces the input. The marker is
+  // consumed on every transition so a stale one cannot misclassify a later
+  // external change as an echo. `q` normalizes a missing param to "", so the
+  // marker's value gets the same normalization before comparing.
   if (q !== lastSeenUrlQuery) {
-    updateSearch.cancel();
     setLastSeenUrlQuery(q);
-    setLocalQuery(q);
+    if (lastWrittenQuery === null || (lastWrittenQuery.value ?? "") !== q) {
+      updateSearch.cancel();
+      setLocalQuery(q);
+    }
+    setLastWrittenQuery(null);
   }
 
   return (
