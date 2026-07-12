@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { rlsDb } from "@/api/db/root";
-import { workspaces } from "@/api/db/schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,
   createMembershipScopedDb,
