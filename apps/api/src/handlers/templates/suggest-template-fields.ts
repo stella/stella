@@ -5,8 +5,14 @@
  * the document from the returned suggestions.
  *
  * Uses the same structured-output pattern as workflow generation
- * (`generateTanStackObjectForRole`). A failure or unavailable model yields an
- * empty list so the caller can fall back to plain `{{marker}}` discovery.
+ * (`generateTanStackObjectForRole`). An empty list means the model looked and
+ * found nothing to suggest; a call failure (BYOK misconfiguration, provider
+ * outage, timeout) instead rejects. `suggestTemplateFields` is the throwing
+ * primitive for a caller that wants the failure surfaced
+ * (`suggest-fields.ts`); `suggestTemplateFieldsOrEmpty` wraps it for the one
+ * caller that wants the documented degrade-to-empty-and-fall-back-to-plain-
+ * `{{marker}}`-discovery behaviour (`prepare.ts`), capturing the failure
+ * first so it is not silent.
  */
 
 import * as v from "valibot";
@@ -100,43 +106,61 @@ export const suggestTemplateFields = async ({
   organizationId: SafeId<"organization">;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
 }): Promise<SuggestedTemplateField[]> => {
-  try {
-    const { suggestions } = await generateTanStackObjectForRole({
+  // No try/catch here: a call failure (BYOK misconfiguration, provider
+  // outage, timeout) propagates to the caller, which decides whether to
+  // surface it (suggest-fields.ts) or degrade to [] after capturing it
+  // (prepare.ts) — see the module doc comment.
+  const { suggestions } = await generateTanStackObjectForRole({
+    role: "fast",
+    orgAIConfig,
+    organizationId,
+    analytics: aiAnalytics,
+    caching: resolveCaching({
+      promptCachingEnabled: false,
       role: "fast",
-      orgAIConfig,
-      organizationId,
-      analytics: aiAnalytics,
-      caching: resolveCaching({
-        promptCachingEnabled: false,
-        role: "fast",
-        scopeKey: organizationId,
-      }),
-      system: SYSTEM_PROMPT,
-      prompt: buildPrompt(documentText, instructions),
-      outputSchema: fieldSuggestionsSchema,
-      abortSignal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
-      serviceTier: "standard",
-    });
-    // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion
-    // uses optional members.
-    return suggestions.flatMap((s) => {
-      const fieldPath = sanitizeFieldPath(s.fieldPath);
-      if (fieldPath === null) {
-        return [];
-      }
-      return [
-        {
-          literalText: s.literalText,
-          fieldPath,
-          inputType: s.inputType ?? undefined,
-          label: s.label ?? undefined,
-          hint: s.hint ?? undefined,
-          exampleValue: s.exampleValue ?? undefined,
-          aiPrompt: s.aiPrompt ?? undefined,
-        },
-      ];
-    });
-  } catch {
+      scopeKey: organizationId,
+    }),
+    system: SYSTEM_PROMPT,
+    prompt: buildPrompt(documentText, instructions),
+    outputSchema: fieldSuggestionsSchema,
+    abortSignal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
+    serviceTier: "standard",
+  });
+  // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion
+  // uses optional members.
+  return suggestions.flatMap((s) => {
+    const fieldPath = sanitizeFieldPath(s.fieldPath);
+    if (fieldPath === null) {
+      return [];
+    }
+    return [
+      {
+        literalText: s.literalText,
+        fieldPath,
+        inputType: s.inputType ?? undefined,
+        label: s.label ?? undefined,
+        hint: s.hint ?? undefined,
+        exampleValue: s.exampleValue ?? undefined,
+        aiPrompt: s.aiPrompt ?? undefined,
+      },
+    ];
+  });
+};
+
+/**
+ * Degrade-to-empty wrapper around `suggestTemplateFields` for the one caller
+ * that wants that documented fallback (see the module doc comment): a call
+ * failure is captured via `aiAnalytics.captureError` and swallowed into an
+ * empty list instead of rejecting. A genuine "found nothing" response from
+ * the model is already an empty array, so it passes through unchanged.
+ */
+export const suggestTemplateFieldsOrEmpty = async (
+  args: Parameters<typeof suggestTemplateFields>[0],
+): Promise<SuggestedTemplateField[]> => {
+  try {
+    return await suggestTemplateFields(args);
+  } catch (error) {
+    args.aiAnalytics.captureError(error);
     return [];
   }
 };

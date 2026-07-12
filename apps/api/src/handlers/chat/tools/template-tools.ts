@@ -298,14 +298,23 @@ export const createTemplateAuthoringTools = ({
         }),
       ),
     }).server(async ({ text, instructions }) => {
-      const suggestions = await suggestTemplateFields({
-        documentText: text,
-        instructions: instructions ?? undefined,
-        orgAIConfig: orgAIConfig ?? null,
-        organizationId,
-        aiAnalytics,
-      });
-      return { suggestions };
+      // suggestTemplateFields rejects on a call failure (BYOK
+      // misconfiguration, provider outage, timeout); capture it for
+      // telemetry, then rethrow so the tool loop reports it to the model as
+      // a tool error instead of silently returning no suggestions.
+      try {
+        const suggestions = await suggestTemplateFields({
+          documentText: text,
+          instructions: instructions ?? undefined,
+          orgAIConfig: orgAIConfig ?? null,
+          organizationId,
+          aiAnalytics,
+        });
+        return { suggestions };
+      } catch (error) {
+        aiAnalytics.captureError(error);
+        throw error;
+      }
     }),
   };
 };

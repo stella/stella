@@ -74,4 +74,27 @@ describe("prepareTemplateFromDocument", () => {
     expect(fields).toEqual([]);
     expect(unapplied).toEqual([]);
   });
+
+  test("propagates a suggest() rejection instead of swallowing it", async () => {
+    // prepareTemplateFromDocument stays a thin pass-through: the decision to
+    // degrade a model-call failure to an empty list (or surface it) belongs
+    // to the injected `suggest`, not to this function — see prepare.ts's
+    // `suggestTemplateFieldsOrEmpty`-backed suggest callback.
+    const buffer = await makeDocx(["A plain paragraph."]);
+    const failure = new Error("provider unavailable");
+
+    // .rejects.toThrow trips type-aware lint (bun-types declares it void) and
+    // can report a spurious unhandled-rejection warning; capture explicitly.
+    const rejection: unknown = await prepareTemplateFromDocument({
+      buffer,
+      suggest: async () => {
+        throw failure;
+      },
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toBe(failure);
+  });
 });

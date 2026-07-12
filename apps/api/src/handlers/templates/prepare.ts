@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { prepareTemplateFromDocument } from "@/api/handlers/templates/prepare-template";
-import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
+import { suggestTemplateFieldsOrEmpty } from "@/api/handlers/templates/suggest-template-fields";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -67,8 +67,12 @@ const prepareTemplate = createSafeRootHandler(
           const buffer = Buffer.from(await file.arrayBuffer());
           return await prepareTemplateFromDocument({
             buffer,
+            // suggestTemplateFieldsOrEmpty degrades a call failure (BYOK
+            // misconfiguration, provider outage, timeout) to the documented
+            // empty-suggestions fallback — instead of failing the whole
+            // prepare request — capturing it first so it isn't silent.
             suggest: async (documentText) =>
-              await suggestTemplateFields({
+              await suggestTemplateFieldsOrEmpty({
                 documentText,
                 orgAIConfig,
                 organizationId,
