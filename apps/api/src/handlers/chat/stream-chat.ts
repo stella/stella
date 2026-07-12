@@ -700,6 +700,11 @@ const runChatAttempts = async function* ({
   workspaceId,
 }: RunChatAttemptsProps): AsyncIterable<StreamChunk> {
   const primaryState = createChatAttemptState();
+  const sandboxRun = await resolveChatSandboxPlan({
+    userId,
+    organizationId,
+    runId: threadId,
+  });
   yield* runChatAttempt({
     abortController,
     abortSignal,
@@ -714,7 +719,7 @@ const runChatAttempts = async function* ({
     promptCachingEnabled,
     role: "chat",
     safeDb,
-    sandboxRun: resolveChatSandboxPlan(),
+    sandboxRun,
     state: primaryState,
     surfaces,
     thirdPartyBoundary,
