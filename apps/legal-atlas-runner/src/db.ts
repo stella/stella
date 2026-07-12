@@ -18,6 +18,10 @@ import { rootDb, rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import { createIngestionDb } from "@/api/db/scoped";
+import {
+  type CourtWeightEntry,
+  loadCourtWeightEntriesForSql,
+} from "@/api/handlers/case-law/court-weights";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 import { LEGAL_ATLAS_RUNNER_ENV } from "./env";
@@ -118,3 +122,19 @@ export const createCaseLawSource = async (
     },
     { label: "case-law-source-create", timeoutMs: rootQueryTimeoutMs },
   );
+
+/**
+ * Load the flattened court-weight entries used to rank citations. The
+ * underlying loader (`loadCourtWeightEntriesForSql`) reads through the
+ * API's root pool with its own 60 s in-memory cache and has no bounded-db
+ * seam to inject, so this wraps the call itself in the runner's
+ * `withTimeout` budget: a reaped root-pool connection rejects instead of
+ * hanging the citation-authority recompute loop forever.
+ */
+export const loadCourtWeightEntries = async (): Promise<
+  CourtWeightEntry[] | undefined
+> =>
+  await withTimeout(loadCourtWeightEntriesForSql, {
+    label: "court-weight-entries-lookup",
+    timeoutMs: rootQueryTimeoutMs,
+  });

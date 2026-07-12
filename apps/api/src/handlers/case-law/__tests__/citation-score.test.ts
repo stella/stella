@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   citationScore,
   courtWeight,
+  courtWeightSql,
   recencyFactor,
   weightedCitationSum,
 } from "@/api/handlers/case-law/citation-score";
@@ -200,5 +201,66 @@ describe("citationScore", () => {
       now,
     );
     expect(score).toBeGreaterThan(0);
+  });
+});
+
+// Non-ASCII (Czech/Polish/German) regex source characters serialize as
+// `\uXXXX` escapes via `RegExp.prototype.source` under the `u` flag —
+// Postgres's ARE regex engine natively understands `\uwxyz`, so this is
+// an equivalent (not broken) representation. Assertions below stick to
+// ASCII-safe fragments (weights, structure) rather than matching the
+// escaped accented text verbatim.
+describe("courtWeightSql", () => {
+  test("with no entries, falls back to the legacy hardcoded tiers (3 CZ/SK patterns)", () => {
+    const generated = courtWeightSql("citing_d.court");
+    expect(generated.match(/WHEN citing_d\.court ~\*/gu)).toHaveLength(3);
+    expect(generated).toContain("THEN 4");
+    expect(generated).toContain("THEN 3");
+    expect(generated).toContain("THEN 2");
+    expect(generated).toContain("ELSE 1 END");
+  });
+
+  test("with explicit undefined entries, falls back to the legacy tiers", () => {
+    // Mirrors what callers pass when the DB-seeded table is empty
+    // (loadCourtWeightEntriesForSql() resolves to undefined, not []).
+    const withUndefined = courtWeightSql("citing_d.court", undefined);
+    const withOmitted = courtWeightSql("citing_d.court");
+    expect(withUndefined).toBe(withOmitted);
+  });
+
+  test("with DB-seeded entries, generates from those instead of the legacy tiers", () => {
+    const generated = courtWeightSql("citing_d.court", [
+      {
+        pattern: /verfassungsgerichtshof/iu,
+        tier: 4,
+        tierLabel: "constitutional",
+        weight: 10,
+      },
+      {
+        pattern: /oberster gerichtshof/iu,
+        tier: 3,
+        tierLabel: "supreme",
+        weight: 8,
+      },
+    ]);
+
+    expect(generated).toContain("verfassungsgerichtshof");
+    expect(generated).toContain("THEN 10");
+    expect(generated).toContain("oberster gerichtshof");
+    expect(generated).toContain("THEN 8");
+    expect(generated.match(/WHEN citing_d\.court ~\*/gu)).toHaveLength(2);
+    // The legacy CZ/SK-only tiers must not leak in alongside the seeded
+    // entries (legacy tier 2's ASCII-safe fragment is distinctive).
+    expect(generated).not.toContain("krajsk");
+    expect(generated).toContain("ELSE 1 END");
+  });
+
+  test("an empty entries array does NOT fall back (documents the footgun that callers must avoid)", () => {
+    // courtWeightSql only falls back on `undefined`/omitted entries; an
+    // empty array is passed through verbatim. Callers that load from the
+    // DB must convert an empty result to `undefined`
+    // (see court-weights.test.ts: flattenCourtWeightEntries).
+    const generated = courtWeightSql("citing_d.court", []);
+    expect(generated).toBe("CASE \n      ELSE 1 END");
   });
 });

@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import { validCaseLawLanguageAlternateCountSql } from "@/api/handlers/case-law/decisions/language";
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
 import {
@@ -149,7 +150,11 @@ const searchPostgresDecisions = async (
     ${languageFilter}
   `;
 
-  const courtWeightExpr = courtWeightSql("citing_d.court");
+  // DB-seeded weights (case_law_court_weights, 60s cache) cover every
+  // jurisdiction; courtWeightSql falls back to the legacy CZ/SK-only
+  // tiers only when the table has not been seeded yet.
+  const courtWeightEntries = await loadCourtWeightEntriesForSql();
+  const courtWeightExpr = courtWeightSql("citing_d.court", courtWeightEntries);
 
   const citationBoost = sql.raw(`
     LATERAL (

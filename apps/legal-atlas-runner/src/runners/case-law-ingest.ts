@@ -46,6 +46,7 @@ import {
   createCaseLawSource,
   findCaseLawSource,
   ingestionDb,
+  loadCourtWeightEntries,
 } from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
 
@@ -823,8 +824,12 @@ export const runCaseLawIngest = async (
       await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
+        const courtWeightEntries = await loadCourtWeightEntries();
+        // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
         const updated = await ingestionDb(async (tx) => {
-          const count = await recomputeCitationAuthorityForAll(tx);
+          const count = await recomputeCitationAuthorityForAll(tx, {
+            courtWeightEntries,
+          });
           return count;
         });
         logInfo(`[citation-authority] Recomputed (${updated} cited decisions)`);

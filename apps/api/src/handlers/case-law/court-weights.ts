@@ -7,6 +7,7 @@
 
 import { arrayOrEmpty } from "@/api/lib/array";
 import { readCourtWeightRows } from "@/api/lib/case-law/case-law-config-store";
+import { logger } from "@/api/lib/observability/logger";
 
 // -- Types ---------------------------------------------------------------
 
@@ -33,6 +34,17 @@ export const loadCourtWeights = async (): Promise<CourtWeightMap> => {
   }
 
   const rows = await readCourtWeightRows();
+
+  if (rows.length === 0) {
+    // Self-host before seeding, or a fresh environment that has not run
+    // seed-court-weights.ts yet: callers fall back to the hardcoded
+    // LEGACY_COURT_TIERS in citation-score.ts. Surface this so an
+    // unseeded production table is visible rather than silently ranking
+    // every non-CZ/SK court the same.
+    logger.warn("case_law.court_weights.table_empty", {
+      fallback: "legacy_hardcoded_tiers",
+    });
+  }
 
   const map: CourtWeightMap = new Map();
   for (const row of rows) {
@@ -111,3 +123,53 @@ export const loadCourtWeightsForCountry = async (
   const entries = map.get(country);
   return arrayOrEmpty(entries);
 };
+
+// -- SQL entries -----------------------------------------------------------
+
+/**
+ * Per-map-instance cache of the flattened, sorted entries. `loadCourtWeights`
+ * only ever mutates `cached.map` by swapping in a brand-new `Map` on refresh
+ * (never mutating an existing instance in place), so keying on the map
+ * instance gives free invalidation: once the 60 s TTL rotates in a new map,
+ * this WeakMap simply misses and recomputes, and the old entry is GC'd along
+ * with its map.
+ */
+const flattenedEntriesCache = new WeakMap<
+  CourtWeightMap,
+  CourtWeightEntry[] | undefined
+>();
+
+/**
+ * Flatten every country's entries into one list, sorted by tier
+ * descending so the highest-authority pattern is checked first.
+ *
+ * For building a single SQL `CASE` expression (`courtWeightSql`) that is
+ * not scoped to one jurisdiction — citation graphs cross borders, so the
+ * citing court in `citation-authority.ts` and `decisions/search.ts` can
+ * belong to any seeded country.
+ *
+ * Returns `undefined` when the map is empty so callers can pass that
+ * straight to `courtWeightSql`'s `entries` parameter: an empty array
+ * would short-circuit its `entries ?? LEGACY_COURT_TIERS` fallback,
+ * silently disabling the legacy tiers instead of falling back to them.
+ */
+export const flattenCourtWeightEntries = (
+  map: CourtWeightMap,
+): CourtWeightEntry[] | undefined => {
+  if (flattenedEntriesCache.has(map)) {
+    return flattenedEntriesCache.get(map);
+  }
+
+  const entries = [...map.values()].flat().sort((a, b) => b.tier - a.tier);
+  const result = entries.length > 0 ? entries : undefined;
+  flattenedEntriesCache.set(map, result);
+  return result;
+};
+
+/**
+ * Load and flatten court weights for a cross-jurisdiction SQL `CASE`
+ * expression. See `flattenCourtWeightEntries`.
+ */
+export const loadCourtWeightEntriesForSql = async (): Promise<
+  CourtWeightEntry[] | undefined
+> => flattenCourtWeightEntries(await loadCourtWeights());
