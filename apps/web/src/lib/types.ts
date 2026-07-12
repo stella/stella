@@ -136,8 +136,6 @@ export type WorkspaceProperty = {
   role?: "document-type-classifier" | null;
 };
 
-export type WorkspaceToolType = WorkspaceProperty["tool"]["type"];
-
 export type WorkspacePropertyOption = {
   color: OptionColor;
   value: string;
@@ -290,13 +288,6 @@ export type WorkspaceView<T extends ViewLayoutType = ViewLayoutType> = {
 // ── Inline mention types ─────────────────────────────────
 // Default renders icon/avatar; callers must explicitly
 // opt out via hideIcon / hideAvatar.
-
-export type FileMention = {
-  name: string;
-  mimeType: string;
-  /** Only set when space is extremely constrained. */
-  hideIcon?: boolean;
-};
 
 export type PersonMention = {
   name: string;
