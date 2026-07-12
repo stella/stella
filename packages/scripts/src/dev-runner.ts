@@ -1234,6 +1234,25 @@ const validateDesktopBridgeHealth =
 // startup is treated as a clean exit, not a crash.
 let isShuttingDown = false;
 
+// Thrown when a shutdown interrupts an in-progress startup step (a readiness
+// wait, or spawning the next batch of persistent children). main()'s startup
+// try/catch treats this as "stop the startup sequence" rather than a crash:
+// it does not rethrow to the top-level handler (which would log a crash
+// message and call process.exit(1)), and it does not call process.exit
+// itself. The signal handler's own in-flight shutdown() call already owns
+// tearing down children and exiting the process; this just stops main()
+// from racing it by continuing to start more steps.
+class DevRunnerShutdownSignal extends Error {
+  constructor() {
+    super("Dev runner shutdown requested during startup.");
+    this.name = "DevRunnerShutdownSignal";
+  }
+}
+
+const isDevRunnerShutdownSignal = (
+  error: unknown,
+): error is DevRunnerShutdownSignal => error instanceof DevRunnerShutdownSignal;
+
 const waitForHttpReadiness = async ({
   child,
   label,
@@ -1279,17 +1298,25 @@ const waitForHttpReadiness = async ({
   //
   // `child.exited` keeps resolving long after readiness is decided (e.g. when
   // the runner kills the child during a later, normal shutdown), so the
-  // `.then` below must check `settled` before panicking; otherwise it fires
-  // on every post-readiness exit, including clean ones.
+  // `.then` below must check `settled` first and bail out without acting;
+  // otherwise it would fire on every post-readiness exit, including clean
+  // ones, after nothing is racing against it anymore.
   //
   // It must also check `isShuttingDown`: a SIGINT/SIGTERM during startup
-  // kills every child (including this one) before readiness is settled, and
-  // that intentional kill must exit cleanly through the normal shutdown path
-  // instead of being misreported as a crash.
+  // kills every child (including this one) before readiness is settled. That
+  // intentional kill must NOT resolve the race as if readiness succeeded
+  // (which would let the caller proceed to the next startup step while
+  // shutdown is tearing children down) and must NOT be misreported as a
+  // crash panic. So it rejects with a distinct shutdown signal instead,
+  // which the caller propagates so the startup sequence stops.
   let settled = false;
   const watchForCrash = child.exited.then((exitCode) => {
-    if (settled || isShuttingDown) {
+    if (settled) {
       return "watched-exit-ignored" as const;
+    }
+
+    if (isShuttingDown) {
+      throw new DevRunnerShutdownSignal();
     }
 
     return panic(
@@ -1856,17 +1883,26 @@ const main = async () => {
     process.exit(exitCode);
   };
 
-  const startSteps = (steps: readonly Step[]): RunningStep[] =>
+  const startSteps = (steps: readonly Step[]): RunningStep[] => {
+    // A shutdown can land between two startup steps (e.g. right after the
+    // primary readiness checks resolve, before the secondary steps spawn),
+    // outside of any readiness wait. Refuse to start more children once
+    // shutdown has begun instead of racing stopChildren().
+    if (isShuttingDown) {
+      throw new DevRunnerShutdownSignal();
+    }
+
     // Push each child into `children` as soon as it spawns, not after the
     // whole batch finishes: if a later step's spawn throws mid-map, the
     // already-started children must already be tracked so stopChildren()
     // (called from the outer catch) can still clean them up instead of
     // leaving them orphaned.
-    steps.map((step) => {
+    return steps.map((step) => {
       const runningStep = spawnPersistentStep(step);
       children.push(runningStep);
       return runningStep;
     });
+  };
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
@@ -1911,6 +1947,15 @@ const main = async () => {
     await shutdown(firstExit.exitCode);
   } catch (error) {
     await stopChildren();
+    // A shutdown that interrupted startup already has its own shutdown(0)
+    // call in flight from the signal handler (stopChildren + process.exit).
+    // Returning here instead of rethrowing lets that call own the exit;
+    // rethrowing would reach the top-level catch below and misreport a
+    // clean shutdown as a crash (wrong message, wrong exit code, and a race
+    // against the signal handler's own process.exit).
+    if (isDevRunnerShutdownSignal(error)) {
+      return;
+    }
     throw error;
   }
 };
