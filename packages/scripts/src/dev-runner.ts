@@ -1228,6 +1228,12 @@ const validateDesktopBridgeHealth =
     return undefined;
   };
 
+// Set by main()'s shutdown handler as soon as a shutdown (Ctrl+C, SIGTERM,
+// or a sibling child exiting) starts. waitForHttpReadiness's crash watcher
+// checks this so a child killed as part of an intentional shutdown during
+// startup is treated as a clean exit, not a crash.
+let isShuttingDown = false;
+
 const waitForHttpReadiness = async ({
   child,
   label,
@@ -1275,9 +1281,14 @@ const waitForHttpReadiness = async ({
   // the runner kills the child during a later, normal shutdown), so the
   // `.then` below must check `settled` before panicking; otherwise it fires
   // on every post-readiness exit, including clean ones.
+  //
+  // It must also check `isShuttingDown`: a SIGINT/SIGTERM during startup
+  // kills every child (including this one) before readiness is settled, and
+  // that intentional kill must exit cleanly through the normal shutdown path
+  // instead of being misreported as a crash.
   let settled = false;
   const watchForCrash = child.exited.then((exitCode) => {
-    if (settled) {
+    if (settled || isShuttingDown) {
       return;
     }
 
@@ -1824,13 +1835,12 @@ const main = async () => {
   }
 
   const children: RunningStep[] = [];
-  let shuttingDown = false;
 
   const stopChildren = async () => {
-    if (shuttingDown) {
+    if (isShuttingDown) {
       return;
     }
-    shuttingDown = true;
+    isShuttingDown = true;
 
     for (const runningStep of children) {
       runningStep.child.kill();
