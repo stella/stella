@@ -369,7 +369,9 @@ const uploadEntityHandler = async function* ({
       renamed: fileName.renamed,
     });
   } catch (error) {
-    await Promise.all(s3Keys.map(async (key) => await getS3().delete(key)));
+    await Promise.allSettled(
+      s3Keys.map(async (key) => await getS3().delete(key)),
+    );
     throw error;
   }
 };
