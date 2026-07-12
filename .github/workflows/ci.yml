@@ -243,8 +243,8 @@ jobs:
 
       - name: Ratchet guard
         if: needs.ci-changes.outputs.package_checks_required == 'true'
-        # Whole-repo convention metrics (as-casts, `?? []` fallbacks, barrel
-        # index files, direct error-message display) that may only ever
+        # Whole-repo convention metrics (see RATCHET_METRICS in
+        # scripts/ratchet.ts) that may only ever
         # decrease. Each metric's current count is compared to a committed
         # baseline; a rise fails CI (a new violation), a fall just prompts a
         # `--write` to lock in the improvement. Line-based counters, no AST —
@@ -478,6 +478,21 @@ jobs:
           args=()
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run typecheck -- "${args[@]}"
+
+      - name: Typecheck-cost baseline guard
+        # What silently rots is the compiler's workload: an annotation-heavy
+        # or inference-exploding pattern in a hot generic path (Eden surface,
+        # route trees, query options) lands as "typecheck got slow" weeks
+        # later with no diff to point at. This re-runs tsgo per project with
+        # --extendedDiagnostics and fails when the deterministic size counters
+        # (Types, Instantiations) jump past a committed baseline; an
+        # improvement just prompts a re-baseline. Time/memory are printed but
+        # never gated (machine noise). The --self-test run first proves the
+        # parser and comparison logic, so a broken guard cannot pass silently.
+        # Regenerate: `bun scripts/typecheck-baseline.ts --write-baseline`.
+        run: |
+          bun scripts/typecheck-baseline.ts --self-test
+          bun scripts/typecheck-baseline.ts --check
 
   # Vite web build. Same rationale as landing-build below: the
   # required lint, typecheck, and test checks don't exercise the
