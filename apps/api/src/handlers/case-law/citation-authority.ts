@@ -2,6 +2,7 @@ import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
+import type { CourtWeightEntry } from "@/api/handlers/case-law/court-weights";
 import { redistributableCaseLawSourceSqlFor } from "@/api/handlers/case-law/redistribution";
 import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { isRecord } from "@/api/lib/type-guards";
@@ -31,6 +32,13 @@ import { isRecord } from "@/api/lib/type-guards";
  * (jurisdiction) scale this is cheap; at hundreds-of-millions scale it
  * should become incremental, keyed off `citation_authority_computed_at`
  * (the column exists for that future bound).
+ *
+ * Court weights are passed in via `courtWeightEntries` rather than
+ * loaded internally: this keeps the function a pure `tx`-in/count-out
+ * unit that is safe to exercise against a pglite fixture in tests.
+ * Production callers load the current DB-seeded weights themselves
+ * (`loadCourtWeightEntriesForSql()`) before calling in; omitting the
+ * option falls back to `courtWeightSql`'s legacy hardcoded tiers.
  */
 
 type CitationAuthorityTx = {
@@ -41,14 +49,19 @@ const SECONDS_PER_YEAR = 365.25 * 86_400;
 
 export const recomputeCitationAuthorityForAll = async (
   tx: CitationAuthorityTx,
-  options: { now?: Date } = {},
+  options: {
+    now?: Date;
+    courtWeightEntries?: CourtWeightEntry[] | undefined;
+  } = {},
 ): Promise<number> => {
   const nowExpr = options.now
     ? sql`${options.now.toISOString()}::timestamptz`
     : sql`now()`;
   // Court-authority weighting as a CASE expression over the citing
   // court name; mirrors the search SQL's `courtWeightSql`.
-  const courtWeightExpr = sql.raw(courtWeightSql("citing_d.court"));
+  const courtWeightExpr = sql.raw(
+    courtWeightSql("citing_d.court", options.courtWeightEntries),
+  );
 
   // The aggregate over (citation ⨝ citing decision) is LEFT JOINed onto
   // every decision so decisions with zero citations are reset to 0 too.

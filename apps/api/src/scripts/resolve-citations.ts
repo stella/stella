@@ -25,6 +25,7 @@ import {
   caseLawPolarityRules,
 } from "@/api/db/schema";
 import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
+import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import { extractContext } from "@/api/handlers/case-law/polarity/context";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -697,8 +698,10 @@ if (!REPORT_ONLY) {
   // recomputing the citation-graph aggregate per query.
   if (!DRY_RUN) {
     console.log("\n=== RECOMPUTING CITATION AUTHORITY ===");
+    const courtWeightEntries = await loadCourtWeightEntriesForSql();
     const updated = await rootDb.transaction(
-      async (tx) => await recomputeCitationAuthorityForAll(tx),
+      async (tx) =>
+        await recomputeCitationAuthorityForAll(tx, { courtWeightEntries }),
     );
     console.log(`Citation authority refreshed for ${updated} cited decisions.`);
   }

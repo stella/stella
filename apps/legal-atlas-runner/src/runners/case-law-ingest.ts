@@ -24,6 +24,7 @@ import { envBase } from "@/api/env-base";
 import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
 import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
+import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { backfillSearchIndex } from "@/api/handlers/case-law/search-index";
@@ -823,8 +824,12 @@ export const runCaseLawIngest = async (
       await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
+        const courtWeightEntries = await loadCourtWeightEntriesForSql();
+        // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
         const updated = await ingestionDb(async (tx) => {
-          const count = await recomputeCitationAuthorityForAll(tx);
+          const count = await recomputeCitationAuthorityForAll(tx, {
+            courtWeightEntries,
+          });
           return count;
         });
         logInfo(`[citation-authority] Recomputed (${updated} cited decisions)`);

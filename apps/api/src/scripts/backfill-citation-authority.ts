@@ -10,11 +10,14 @@
  */
 import { rootDb } from "@/api/db/root";
 import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
+import { loadCourtWeightEntriesForSql } from "@/api/handlers/case-law/court-weights";
 
 console.log("=== BACKFILL CITATION AUTHORITY ===");
 
+const courtWeightEntries = await loadCourtWeightEntriesForSql();
 const updated = await rootDb.transaction(
-  async (tx) => await recomputeCitationAuthorityForAll(tx),
+  async (tx) =>
+    await recomputeCitationAuthorityForAll(tx, { courtWeightEntries }),
 );
 
 console.log(`Citation authority materialized for ${updated} cited decisions.`);
