@@ -303,6 +303,10 @@ describe("MoneyTotals", () => {
     expect(new MoneyTotals().entries()).toEqual([]);
   });
 
+  test("rejects an empty currency code", () => {
+    expect(() => new MoneyTotals().add("", cents(100))).toThrow(TypeError);
+  });
+
   test("INVARIANT: entries() total per currency equals the sum of that currency's rows, regardless of insertion order", () => {
     const rand = makePrng(7_310_552);
     const currencies = ["USD", "EUR", "CZK", "GBP"];

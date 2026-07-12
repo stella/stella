@@ -167,6 +167,11 @@ export class MoneyTotals {
 
   /** Add `amountCents` to the running total for `currency`. */
   add(currency: string, amountCents: CentsAmount): void {
+    if (!currency) {
+      throw new TypeError(
+        "MoneyTotals.add(): currency must be a non-empty code",
+      );
+    }
     const running = this.#totals.get(currency) ?? cents(0);
     this.#totals.set(currency, cents(running + amountCents));
   }
@@ -174,10 +179,13 @@ export class MoneyTotals {
   /**
    * Per-currency totals, sorted deterministically by currency code so
    * output (PDF lines, API responses) does not depend on insertion order.
+   * Sorts by UTF-16 code unit (default `Array.sort`) rather than
+   * `localeCompare`, so ordering does not vary with the runtime's locale.
    */
   entries(): MoneyTotalsEntry[] {
-    return [...this.#totals.entries()]
-      .sort(([currencyA], [currencyB]) => currencyA.localeCompare(currencyB))
-      .map(([currency, amountCents]) => ({ currency, amountCents }));
+    return [...this.#totals.keys()].sort().map((currency) => ({
+      currency,
+      amountCents: this.#totals.get(currency) ?? cents(0),
+    }));
   }
 }
