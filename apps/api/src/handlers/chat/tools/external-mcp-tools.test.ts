@@ -1,10 +1,14 @@
 import { toolDefinition } from "@tanstack/ai";
 import type { ServerTool } from "@tanstack/ai";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import type { ChatTool } from "@/api/handlers/chat/tools/chat-tool-types";
 import { selectAllowedExternalMcpToolDefinitions } from "@/api/handlers/chat/tools/external-mcp-tool-definitions";
-import { createStellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
+import {
+  createLazyExternalMcpToolsLoader,
+  createStellaMcpToolSource,
+} from "@/api/handlers/chat/tools/external-mcp-tools";
+import type { LoadedExternalMcpTools } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { normalizeExternalMcpToolsForChat } from "@/api/handlers/chat/tools/external-mcp-tools-normalization";
 
 const tool = (name: string): ChatTool => ({
@@ -169,6 +173,80 @@ describe("external MCP typed definitions", () => {
         definitions: [lookup, deleteRecord],
       }),
     ).toEqual([lookup]);
+  });
+});
+
+describe("createLazyExternalMcpToolsLoader", () => {
+  const buildLoaded = (
+    overrides: Partial<LoadedExternalMcpTools> = {},
+  ): LoadedExternalMcpTools => ({
+    close: mock(async () => undefined),
+    connectors: [],
+    source: createStellaMcpToolSource({
+      closeClients: async () => undefined,
+      sourceTools: {},
+    }),
+    tools: {},
+    ...overrides,
+  });
+
+  test("never calls the loader when getExternalMcpTools is never invoked", async () => {
+    const load = mock(async () => buildLoaded());
+    const loader = createLazyExternalMcpToolsLoader(load);
+
+    // A message that needs neither validation nor streaming to load
+    // external tools must not trigger connector discovery at all.
+    await loader.closeIfLoaded();
+
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  test("loads at most once across concurrent and sequential callers", async () => {
+    const load = mock(async () => buildLoaded());
+    const loader = createLazyExternalMcpToolsLoader(load);
+
+    const [first, second] = await Promise.all([
+      loader.getExternalMcpTools(),
+      loader.getExternalMcpTools(),
+    ]);
+    const third = await loader.getExternalMcpTools();
+
+    expect(load).toHaveBeenCalledTimes(1);
+    expect(first).toBe(second);
+    expect(first).toBe(third);
+  });
+
+  test("closeIfLoaded closes the cached load exactly once", async () => {
+    const closeMock = mock(async () => undefined);
+    const load = mock(async () => buildLoaded({ close: closeMock }));
+    const loader = createLazyExternalMcpToolsLoader(load);
+
+    await loader.getExternalMcpTools();
+    await loader.closeIfLoaded();
+    await loader.closeIfLoaded();
+
+    expect(closeMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("closeIfLoaded is a no-op and does not rethrow when the load failed", async () => {
+    const load = mock(async () => {
+      throw new Error("discovery failed");
+    });
+    const loader = createLazyExternalMcpToolsLoader(load);
+
+    const rejection = await loader.getExternalMcpTools().then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(rejection).toBeInstanceOf(Error);
+    expect(rejection instanceof Error ? rejection.message : "").toContain(
+      "discovery failed",
+    );
+
+    // The finally block's cleanup call must not throw a second time on top
+    // of the original failure already surfaced to the caller above: a bare
+    // await that completes is the assertion (the test fails if it throws).
+    await loader.closeIfLoaded();
   });
 });
 

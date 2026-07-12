@@ -90,7 +90,12 @@ import {
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   buildExternalMcpSystemHint,
+  createLazyExternalMcpToolsLoader,
   loadExternalMcpToolsForUser,
+} from "@/api/handlers/chat/tools/external-mcp-tools";
+import type {
+  LazyExternalMcpToolsLoader,
+  LoadedExternalMcpTools,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
 import {
@@ -298,698 +303,761 @@ const sendMessage = createSafeRootHandler(
         userId: user.id,
       }),
     );
-    const validationExternalMcpTools = messageNeedsExternalMcpValidation(
-      body.message,
-    )
-      ? await loadExternalMcpToolsForUser({
+    // Lazy and memoized: connector discovery only runs once some caller
+    // actually needs the tools (validation only needs them when
+    // `messageNeedsExternalMcpValidation` is true; the streaming pass
+    // always needs them), and at most once per send no matter how many
+    // callers ask — `createLazyExternalMcpToolsLoader` caches the first
+    // call's promise, so a validation-triggered load is reused by the
+    // streaming pass instead of running discovery twice.
+    // `externalMcpToolsHandedOffToStreaming` below tracks whether
+    // ownership of closing these connectors (if ever loaded) passed to the
+    // streaming try/catch, so every other exit path (validation failure,
+    // any early return or throw between here and streaming) still closes
+    // them exactly once.
+    const externalMcpToolsLoader = createLazyExternalMcpToolsLoader(
+      async () =>
+        await loadExternalMcpToolsForUser({
           nullUnionStrategy: externalMcpNullUnionStrategy,
           organizationId: session.activeOrganizationId,
           safeDb,
           userId: user.id,
-        })
-      : null;
-
-    // Resolve the org's web-search providers once (BYOK key first,
-    // platform env key as fallback) and reuse for both the validation
-    // and streaming tool sets.
-    const webSearchProviders = await loadWebSearchProvidersForOrg(
-      session.activeOrganizationId,
+        }),
     );
+    let externalMcpToolsHandedOffToStreaming = false;
 
-    // Tool input schemas don't depend on `accessibleWorkspaceIds`
-    // (scope is checked at execute time, not in the schema), so we
-    // can validate the incoming message against the broad set and
-    // then rebuild the tools with the narrowed `effective` set
-    // before streaming. This lets the picker's scope actually
-    // govern tool authorization rather than just being persisted.
-    // Validation tools include the broadest workspace surface, but
-    // still honor thread/org gates for tools whose presence is an
-    // explicit user or administrator opt-in.
-    const validationTools = getChatTools({
-      organizationId: session.activeOrganizationId,
-      memberRole: memberRole.role,
-      orgAIConfig,
-      pinServerValidatedWorkspaceId,
-      requestWorkspaceId: workspaceId,
-      refRegistry,
-      safeDb,
-      scopedDb,
-      threadId: body.threadId,
-      userId: user.id,
-      // Schema validation only; this tool set's `spawn_subagents` never
-      // executes, so a raw (non-anonymizing) boundary is correct here —
-      // the real per-request boundary is created below and threaded
-      // into the streaming tool set instead.
-      thirdPartyBoundary: { type: "raw" },
-      // Schema validation runs against the user's full accessible
-      // set; per-tool scope checks happen at execute time below.
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds,
-      }),
-      activeFile: body.activeFile,
-      hasActiveDocxEditClient: true,
-      hasActiveDocxFileClient: true,
-      webSearchEnabled: validationThreadState.webSearchEnabled,
-      webSearchProviders,
-      externalTools: validationExternalMcpTools?.tools,
-      disabledNativeToolSlugs,
-      activeSkillContext: validationActiveSkillContext,
-      recordAuditEvent,
-      workspaceStatusById,
-    });
+    // The try/finally starts immediately after the loader is constructed
+    // (rather than just around the streaming pass) so that a throw from
+    // any of the awaited steps below — web-search provider load,
+    // tool-set construction, message validation — still closes
+    // `externalMcpToolsLoader` (a no-op if nothing was ever loaded)
+    // instead of leaking MCP clients. The streaming pass further below
+    // takes over ownership once it starts consuming the clients (flips
+    // `externalMcpToolsHandedOffToStreaming`); until then this `finally` is
+    // the sole owner. `Result.gen`'s `yield*` short-circuit resumes the
+    // generator via `.return()`, which unwinds this `finally` like a normal
+    // early `return` would.
+    try {
+      // Resolve the org's web-search providers once (BYOK key first,
+      // platform env key as fallback) and reuse for both the validation
+      // and streaming tool sets.
+      const webSearchProviders = await loadWebSearchProvidersForOrg(
+        session.activeOrganizationId,
+      );
 
-    const validatedMessageResult = await validateMessage({
-      message: body.message,
-      safeDb,
-      threadId: body.threadId,
-      tools: validationTools,
-      userId: user.id,
-    });
-    await validationExternalMcpTools?.close();
-    if (Result.isError(validatedMessageResult)) {
-      return Result.err(validatedMessageResult.error);
-    }
-    const validatedMessage = validatedMessageResult.value;
+      // Only load external MCP tools for validation when the incoming
+      // message actually carries a part that needs them — an ordinary
+      // message never triggers connector discovery here. The streaming
+      // pass below always needs the full set and reuses this same load via
+      // the memoized loader instead of running discovery again.
+      const externalToolsForValidation =
+        await resolveExternalToolsForValidation(
+          body.message,
+          externalMcpToolsLoader,
+        );
 
-    const thread = yield* Result.await(
-      loadThread({
-        initialContextMatterIds: requestedContextMatterIds,
-        isAnonymized: body.sendMode === CHAT_SEND_MODE.anonymized,
+      // Tool input schemas don't depend on `accessibleWorkspaceIds`
+      // (scope is checked at execute time, not in the schema), so we
+      // can validate the incoming message against the broad set and
+      // then rebuild the tools with the narrowed `effective` set
+      // before streaming. This lets the picker's scope actually
+      // govern tool authorization rather than just being persisted.
+      // Validation tools include the broadest workspace surface, but
+      // still honor thread/org gates for tools whose presence is an
+      // explicit user or administrator opt-in.
+      const validationTools = getChatTools({
         organizationId: session.activeOrganizationId,
+        memberRole: memberRole.role,
+        orgAIConfig,
+        pinServerValidatedWorkspaceId,
+        requestWorkspaceId: workspaceId,
+        refRegistry,
+        safeDb,
+        scopedDb,
+        threadId: body.threadId,
+        userId: user.id,
+        // Schema validation only; this tool set's `spawn_subagents` never
+        // executes, so a raw (non-anonymizing) boundary is correct here —
+        // the real per-request boundary is created below and threaded
+        // into the streaming tool set instead.
+        thirdPartyBoundary: { type: "raw" },
+        // Schema validation runs against the user's full accessible
+        // set; per-tool scope checks happen at execute time below.
+        toolWorkspaceIds: resolveToolWorkspaceIds({
+          pinnedIds: [],
+          accessibleWorkspaceIds,
+        }),
+        activeFile: body.activeFile,
+        hasActiveDocxEditClient: true,
+        hasActiveDocxFileClient: true,
+        webSearchEnabled: validationThreadState.webSearchEnabled,
+        webSearchProviders,
+        externalTools: externalToolsForValidation,
+        disabledNativeToolSlugs,
+        activeSkillContext: validationActiveSkillContext,
         recordAuditEvent,
+        workspaceStatusById,
+      });
+
+      const validatedMessageResult = await validateMessage({
+        message: body.message,
         safeDb,
         threadId: body.threadId,
-        title: extractTitle(validatedMessage.message.parts),
+        tools: validationTools,
+        userId: user.id,
+      });
+      if (Result.isError(validatedMessageResult)) {
+        // The wrapping try/finally closes `externalMcpToolsLoader` on this
+        // exit path too (a no-op if this message never needed the external
+        // tools) — no explicit close needed here.
+        return Result.err(validatedMessageResult.error);
+      }
+      const validatedMessage = validatedMessageResult.value;
+
+      const thread = yield* Result.await(
+        loadThread({
+          initialContextMatterIds: requestedContextMatterIds,
+          isAnonymized: body.sendMode === CHAT_SEND_MODE.anonymized,
+          organizationId: session.activeOrganizationId,
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          title: extractTitle(validatedMessage.message.parts),
+          userId: user.id,
+          workspaceId,
+        }),
+      );
+
+      // The thread's persisted chat-model override wins over the org/instance
+      // default, but the dev-only body override still wins over everything
+      // (matches `assertDevModelOverride` above). Re-validated here (not just
+      // at write time in update-thread-model.ts) so a provider key removal or
+      // a catalog bump that drops the model falls back to the org default
+      // silently instead of failing the send.
+      const chatModelOverride = resolveEffectiveChatModelId({
+        devModelId: body.devModelId,
+        threadChatModel: thread.data.chatModel,
+        orgAIConfig,
+      });
+
+      // For an existing thread, accept a non-empty body update as
+      // "user changed scope, persist it"; an omitted/empty body keeps
+      // the stored value so re-sends from cached transports don't
+      // silently widen access. Persisted pins are always intersected
+      // with the currently accessible set so a revoked workspace
+      // cannot be re-authorized through a stale stored pin.
+      const storedPinsThisRequest =
+        thread.type === "existing" && body.contextMatterIds !== undefined
+          ? requestedContextMatterIds
+          : thread.data.contextMatterIds;
+      const effectiveContextMatterIds = intersectAccessibleWorkspaceIds({
+        pinnedIds: storedPinsThisRequest,
+        accessibleWorkspaceIds,
+      });
+      if (
+        thread.type === "existing" &&
+        !workspaceIdsEqual(
+          thread.data.contextMatterIds,
+          effectiveContextMatterIds,
+        )
+      ) {
+        yield* Result.await(
+          safeDb(async (tx) => {
+            await tx
+              .update(chatThreads)
+              .set({ contextMatterIds: effectiveContextMatterIds })
+              .where(eq(chatThreads.id, body.threadId));
+
+            await recordAuditEvent(tx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+              resourceId: body.threadId,
+              workspaceId,
+              changes: {
+                contextMatterIds: {
+                  old: [...thread.data.contextMatterIds],
+                  new: [...effectiveContextMatterIds],
+                },
+              },
+            });
+          }),
+        );
+      }
+
+      const thirdPartyBoundary = createChatThirdPartyBoundary({
+        anonymizationScopeId: workspaceId ?? body.threadId,
+        organizationId: session.activeOrganizationId,
+        scopedDb,
+        sendMode: body.sendMode,
+        workspaceId: workspaceId ?? undefined,
+      });
+
+      const isClientConnectionAborted = () => request.signal.aborted;
+
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
+      const uploadResult = yield* Result.await(
+        uploadMessageFilesWithRollback({
+          message: validatedMessage.message,
+          recordAuditEvent,
+          safeDb,
+          threadId: thread.data.id,
+          threadState: thread,
+          userId: user.id,
+        }),
+      );
+
+      const parsedMessage = parseMessage({
+        accessibleWorkspaceIds,
+        message: uploadResult.message,
+      });
+
+      let messagesForPersistence: ThreadRecord["messages"] =
+        thread.data.messages;
+      let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
+      // The incoming message normally is new. Outside the truncation path the
+      // stored list is a bounded window that may exclude an old re-sent/edited
+      // id, so a targeted existence check guards against a duplicate insert.
+      let incomingMessageExists = false;
+      if (body.truncateAfterMessageId !== undefined) {
+        if (parsedMessage.message.id !== body.truncateAfterMessageId) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Truncation target must match the incoming message",
+            }),
+          );
+        }
+
+        // Resolve the target against the full thread history, not the windowed
+        // in-memory list: a replay target can be older than the window. The
+        // retained prefix is needed to recompute the thread data scope.
+        const truncationTarget = yield* Result.await(
+          resolveTruncationTarget({
+            safeDb,
+            threadId: body.threadId,
+            targetMessageId: body.truncateAfterMessageId,
+          }),
+        );
+        if (truncationTarget === null) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Truncation target was not found in the chat thread",
+            }),
+          );
+        }
+
+        messagesForPersistence = truncationTarget.messagesForPersistence;
+        deleteMessageIdsBeforeLatest =
+          truncationTarget.deleteMessageIdsBeforeLatest;
+      } else {
+        incomingMessageExists = yield* Result.await(
+          chatMessageExistsForThread({
+            messageId: brandPersistedChatMessageId(parsedMessage.message.id),
+            safeDb,
+            threadId: body.threadId,
+          }),
+        );
+      }
+
+      const latestMessagePlan = planMessagePersistence({
+        message: parsedMessage.message,
+        storedMessages: messagesForPersistence,
+        incomingMessageExists,
+      });
+      if (
+        body.truncateAfterMessageId !== undefined &&
+        latestMessagePlan.persistencePlan.type !== "update"
+      ) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Truncation requires updating an existing message",
+          }),
+        );
+      }
+
+      const recomputedDataWorkspaceIds =
+        body.truncateAfterMessageId !== undefined
+          ? recomputeThreadDataScope({
+              accessibleSet,
+              baseWorkspaceId: workspaceId,
+              messages: latestMessagePlan.messages,
+            })
+          : null;
+
+      const messagesForContextInput = await selectMessagesForContextInput({
+        messages: latestMessagePlan.messages,
+        safeDb,
+        skipCheckpoint: body.truncateAfterMessageId !== undefined,
+        threadId: body.threadId,
+      });
+
+      // Metered provider calls must not be directly cancelled by the client
+      // connection. A disconnect can arrive after preflight succeeds but before
+      // the AI SDK emits token usage; allowing that abort to reach the provider
+      // would skip the usage ledger callback while still spending provider work.
+      const createMeteredAIAbortSignal = () =>
+        AbortSignal.timeout(CHAT_METERED_AI_TIMEOUT_MS);
+
+      if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: uploadResult.uploadedFiles,
+            userId: user.id,
+          }),
+        );
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
+      const messagesForContextResult = await compactMessagesForContext({
+        abortSignal: createMeteredAIAbortSignal(),
+        boundary: thirdPartyBoundary,
+        chatModelOverride,
+        messages: messagesForContextInput,
+        organizationId: session.activeOrganizationId,
+        orgAIConfig,
+        safeDb,
+        threadId: body.threadId,
         userId: user.id,
         workspaceId,
-      }),
-    );
-
-    // The thread's persisted chat-model override wins over the org/instance
-    // default, but the dev-only body override still wins over everything
-    // (matches `assertDevModelOverride` above). Re-validated here (not just
-    // at write time in update-thread-model.ts) so a provider key removal or
-    // a catalog bump that drops the model falls back to the org default
-    // silently instead of failing the send.
-    const chatModelOverride = resolveEffectiveChatModelId({
-      devModelId: body.devModelId,
-      threadChatModel: thread.data.chatModel,
-      orgAIConfig,
-    });
-
-    // For an existing thread, accept a non-empty body update as
-    // "user changed scope, persist it"; an omitted/empty body keeps
-    // the stored value so re-sends from cached transports don't
-    // silently widen access. Persisted pins are always intersected
-    // with the currently accessible set so a revoked workspace
-    // cannot be re-authorized through a stale stored pin.
-    const storedPinsThisRequest =
-      thread.type === "existing" && body.contextMatterIds !== undefined
-        ? requestedContextMatterIds
-        : thread.data.contextMatterIds;
-    const effectiveContextMatterIds = intersectAccessibleWorkspaceIds({
-      pinnedIds: storedPinsThisRequest,
-      accessibleWorkspaceIds,
-    });
-    if (
-      thread.type === "existing" &&
-      !workspaceIdsEqual(
-        thread.data.contextMatterIds,
-        effectiveContextMatterIds,
-      )
-    ) {
-      yield* Result.await(
-        safeDb(async (tx) => {
-          await tx
-            .update(chatThreads)
-            .set({ contextMatterIds: effectiveContextMatterIds })
-            .where(eq(chatThreads.id, body.threadId));
-
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-            resourceId: body.threadId,
-            workspaceId,
-            changes: {
-              contextMatterIds: {
-                old: [...thread.data.contextMatterIds],
-                new: [...effectiveContextMatterIds],
-              },
-            },
-          });
-        }),
-      );
-    }
-
-    const thirdPartyBoundary = createChatThirdPartyBoundary({
-      anonymizationScopeId: workspaceId ?? body.threadId,
-      organizationId: session.activeOrganizationId,
-      scopedDb,
-      sendMode: body.sendMode,
-      workspaceId: workspaceId ?? undefined,
-    });
-
-    const isClientConnectionAborted = () => request.signal.aborted;
-
-    if (isClientConnectionAborted()) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Client disconnected before AI work started",
-        }),
-      );
-    }
-
-    const uploadResult = yield* Result.await(
-      uploadMessageFilesWithRollback({
-        message: validatedMessage.message,
-        recordAuditEvent,
-        safeDb,
-        threadId: thread.data.id,
-        threadState: thread,
-        userId: user.id,
-      }),
-    );
-
-    const parsedMessage = parseMessage({
-      accessibleWorkspaceIds,
-      message: uploadResult.message,
-    });
-
-    let messagesForPersistence: ThreadRecord["messages"] = thread.data.messages;
-    let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
-    // The incoming message normally is new. Outside the truncation path the
-    // stored list is a bounded window that may exclude an old re-sent/edited
-    // id, so a targeted existence check guards against a duplicate insert.
-    let incomingMessageExists = false;
-    if (body.truncateAfterMessageId !== undefined) {
-      if (parsedMessage.message.id !== body.truncateAfterMessageId) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Truncation target must match the incoming message",
-          }),
-        );
-      }
-
-      // Resolve the target against the full thread history, not the windowed
-      // in-memory list: a replay target can be older than the window. The
-      // retained prefix is needed to recompute the thread data scope.
-      const truncationTarget = yield* Result.await(
-        resolveTruncationTarget({
-          safeDb,
-          threadId: body.threadId,
-          targetMessageId: body.truncateAfterMessageId,
-        }),
-      );
-      if (truncationTarget === null) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Truncation target was not found in the chat thread",
-          }),
-        );
-      }
-
-      messagesForPersistence = truncationTarget.messagesForPersistence;
-      deleteMessageIdsBeforeLatest =
-        truncationTarget.deleteMessageIdsBeforeLatest;
-    } else {
-      incomingMessageExists = yield* Result.await(
-        chatMessageExistsForThread({
-          messageId: brandPersistedChatMessageId(parsedMessage.message.id),
-          safeDb,
-          threadId: body.threadId,
-        }),
-      );
-    }
-
-    const latestMessagePlan = planMessagePersistence({
-      message: parsedMessage.message,
-      storedMessages: messagesForPersistence,
-      incomingMessageExists,
-    });
-    if (
-      body.truncateAfterMessageId !== undefined &&
-      latestMessagePlan.persistencePlan.type !== "update"
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Truncation requires updating an existing message",
-        }),
-      );
-    }
-
-    const recomputedDataWorkspaceIds =
-      body.truncateAfterMessageId !== undefined
-        ? recomputeThreadDataScope({
-            accessibleSet,
-            baseWorkspaceId: workspaceId,
-            messages: latestMessagePlan.messages,
-          })
-        : null;
-
-    const messagesForContextInput = await selectMessagesForContextInput({
-      messages: latestMessagePlan.messages,
-      safeDb,
-      skipCheckpoint: body.truncateAfterMessageId !== undefined,
-      threadId: body.threadId,
-    });
-
-    // Metered provider calls must not be directly cancelled by the client
-    // connection. A disconnect can arrive after preflight succeeds but before
-    // the AI SDK emits token usage; allowing that abort to reach the provider
-    // would skip the usage ledger callback while still spending provider work.
-    const createMeteredAIAbortSignal = () =>
-      AbortSignal.timeout(CHAT_METERED_AI_TIMEOUT_MS);
-
-    if (isClientConnectionAborted()) {
-      yield* Result.await(
-        rollbackUnpersistedChatSideEffects({
+      });
+      if (Result.isError(messagesForContextResult)) {
+        const rollbackResult = await rollbackUnpersistedChatSideEffects({
           recordAuditEvent,
           safeDb,
           threadId: body.threadId,
           threadState: thread,
           uploadedFiles: uploadResult.uploadedFiles,
           userId: user.id,
-        }),
-      );
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Client disconnected before AI work started",
-        }),
-      );
-    }
-
-    const messagesForContextResult = await compactMessagesForContext({
-      abortSignal: createMeteredAIAbortSignal(),
-      boundary: thirdPartyBoundary,
-      chatModelOverride,
-      messages: messagesForContextInput,
-      organizationId: session.activeOrganizationId,
-      orgAIConfig,
-      safeDb,
-      threadId: body.threadId,
-      userId: user.id,
-      workspaceId,
-    });
-    if (Result.isError(messagesForContextResult)) {
-      const rollbackResult = await rollbackUnpersistedChatSideEffects({
-        recordAuditEvent,
-        safeDb,
-        threadId: body.threadId,
-        threadState: thread,
-        uploadedFiles: uploadResult.uploadedFiles,
-        userId: user.id,
-      });
-      if (Result.isError(rollbackResult)) {
-        captureError(messagesForContextResult.error, {
-          threadId: body.threadId,
         });
-        return yield* Result.err(rollbackResult.error);
+        if (Result.isError(rollbackResult)) {
+          captureError(messagesForContextResult.error, {
+            threadId: body.threadId,
+          });
+          return yield* Result.err(rollbackResult.error);
+        }
+
+        return yield* Result.err(messagesForContextResult.error);
       }
 
-      return yield* Result.err(messagesForContextResult.error);
-    }
-
-    const chatContextResult = await prepareChatContext({
-      activeDecision: body.activeDecision,
-      activeExternal: body.activeExternal,
-      activeFile: body.activeFile,
-      activeSkill: body.activeSkill,
-      activeTemplate: body.activeTemplate,
-      contextMatterIds: effectiveContextMatterIds,
-      memberRole,
-      messageWindow: messagesForContextResult.value,
-      organizationId: session.activeOrganizationId,
-      safeDb,
-      sendMode: body.sendMode,
-      // Derived from the same predicates/inputs `getChatTools` uses to
-      // register `web_search`/`fetch_url` and `suggest_template_fields`
-      // below, so the prompt only steers the model to tools that are
-      // actually handed to it.
-      toolAvailability: {
-        templateAuthoring: areTemplateAuthoringToolsRegistered(memberRole.role),
-        webResearch: areWebResearchToolsRegistered({
-          webSearchEnabled: thread.data.webSearchEnabled,
-          webSearchProviders,
-          disabledNativeToolSlugs,
-        }),
-        folioAgentDocTools: hasActiveDocxFileClient,
-        // Only at the top level of a turn, and only when the turn's scope (if
-        // any) allows spawn_subagents — a restricted scope (e.g.
-        // suggest-template-fields) drops the tool from the streaming set, so
-        // the prompt must not steer the model toward a tool it was never handed.
-        subagents: areSubagentToolsAvailableForTurn(body.toolScope),
-      },
-      userContext: body.userContext,
-      userId: user.id,
-      workspaceId,
-      refRegistry,
-    });
-    if (Result.isError(chatContextResult)) {
-      const rollbackResult = await rollbackUnpersistedChatSideEffects({
-        recordAuditEvent,
+      const chatContextResult = await prepareChatContext({
+        activeDecision: body.activeDecision,
+        activeExternal: body.activeExternal,
+        activeFile: body.activeFile,
+        activeSkill: body.activeSkill,
+        activeTemplate: body.activeTemplate,
+        contextMatterIds: effectiveContextMatterIds,
+        memberRole,
+        messageWindow: messagesForContextResult.value,
+        organizationId: session.activeOrganizationId,
         safeDb,
-        threadId: body.threadId,
-        threadState: thread,
-        uploadedFiles: uploadResult.uploadedFiles,
+        sendMode: body.sendMode,
+        // Derived from the same predicates/inputs `getChatTools` uses to
+        // register `web_search`/`fetch_url` and `suggest_template_fields`
+        // below, so the prompt only steers the model to tools that are
+        // actually handed to it.
+        toolAvailability: {
+          templateAuthoring: areTemplateAuthoringToolsRegistered(
+            memberRole.role,
+          ),
+          webResearch: areWebResearchToolsRegistered({
+            webSearchEnabled: thread.data.webSearchEnabled,
+            webSearchProviders,
+            disabledNativeToolSlugs,
+          }),
+          folioAgentDocTools: hasActiveDocxFileClient,
+          // Only at the top level of a turn, and only when the turn's scope (if
+          // any) allows spawn_subagents — a restricted scope (e.g.
+          // suggest-template-fields) drops the tool from the streaming set, so
+          // the prompt must not steer the model toward a tool it was never handed.
+          subagents: areSubagentToolsAvailableForTurn(body.toolScope),
+        },
+        userContext: body.userContext,
         userId: user.id,
+        workspaceId,
+        refRegistry,
       });
-      if (Result.isError(rollbackResult)) {
-        captureError(chatContextResult.error, { threadId: body.threadId });
-        return yield* Result.err(rollbackResult.error);
-      }
-
-      return yield* Result.err(chatContextResult.error);
-    }
-    const chatContext = chatContextResult.value;
-
-    // Keep the thread's data scope aligned with the messages being
-    // stored. Normal sends append newly observed workspace IDs
-    // before persisting. Replay truncation recomputes the exact
-    // retained scope and writes it in the same transaction as the
-    // replay update below.
-    //
-    // Intersect with `accessibleWorkspaceIds` first: an unknown ID
-    // (model hallucination, copy-pasted UUID from elsewhere) added
-    // to `data_workspace_ids` would fail the RLS subset check on
-    // every subsequent message persist, silently breaking the
-    // thread.
-    const incomingMessageWorkspaceIds = extractIncomingMessageWorkspaceIds({
-      mentions: parsedMessage.mentions,
-      message: parsedMessage.message,
-    }).filter((id) => accessibleSet.has(id));
-    let dataScopeAfterIncomingMessage: SafeId<"workspace">[];
-    if (recomputedDataWorkspaceIds !== null) {
-      dataScopeAfterIncomingMessage = recomputedDataWorkspaceIds;
-    } else {
-      dataScopeAfterIncomingMessage = yield* Result.await(
-        expandThreadDataScope({
-          currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
-          newWorkspaceIds: incomingMessageWorkspaceIds,
+      if (Result.isError(chatContextResult)) {
+        const rollbackResult = await rollbackUnpersistedChatSideEffects({
           recordAuditEvent,
           safeDb,
           threadId: body.threadId,
-          threadWorkspaceId: workspaceId,
+          threadState: thread,
+          uploadedFiles: uploadResult.uploadedFiles,
+          userId: user.id,
+        });
+        if (Result.isError(rollbackResult)) {
+          captureError(chatContextResult.error, { threadId: body.threadId });
+          return yield* Result.err(rollbackResult.error);
+        }
+
+        return yield* Result.err(chatContextResult.error);
+      }
+      const chatContext = chatContextResult.value;
+
+      // Keep the thread's data scope aligned with the messages being
+      // stored. Normal sends append newly observed workspace IDs
+      // before persisting. Replay truncation recomputes the exact
+      // retained scope and writes it in the same transaction as the
+      // replay update below.
+      //
+      // Intersect with `accessibleWorkspaceIds` first: an unknown ID
+      // (model hallucination, copy-pasted UUID from elsewhere) added
+      // to `data_workspace_ids` would fail the RLS subset check on
+      // every subsequent message persist, silently breaking the
+      // thread.
+      const incomingMessageWorkspaceIds = extractIncomingMessageWorkspaceIds({
+        mentions: parsedMessage.mentions,
+        message: parsedMessage.message,
+      }).filter((id) => accessibleSet.has(id));
+      let dataScopeAfterIncomingMessage: SafeId<"workspace">[];
+      if (recomputedDataWorkspaceIds !== null) {
+        dataScopeAfterIncomingMessage = recomputedDataWorkspaceIds;
+      } else {
+        dataScopeAfterIncomingMessage = yield* Result.await(
+          expandThreadDataScope({
+            currentDataWorkspaceIds: thread.data.dataWorkspaceIds,
+            newWorkspaceIds: incomingMessageWorkspaceIds,
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadWorkspaceId: workspaceId,
+          }),
+        );
+      }
+
+      yield* Result.await(
+        persistMessage({
+          acceptedSendMode: body.sendMode,
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          userId: user.id,
+          workspaceId,
+          persistencePlan: latestMessagePlan.persistencePlan,
+          deleteMessageIds: deleteMessageIdsBeforeLatest,
+          dataWorkspaceIdsChange:
+            recomputedDataWorkspaceIds === null
+              ? undefined
+              : {
+                  oldDataWorkspaceIds: thread.data.dataWorkspaceIds,
+                  newDataWorkspaceIds: recomputedDataWorkspaceIds,
+                },
         }),
       );
-    }
 
-    yield* Result.await(
-      persistMessage({
-        acceptedSendMode: body.sendMode,
-        recordAuditEvent,
+      // The streaming pass always needs the external MCP tool set (for the
+      // tool map, the connector system hint, and the `externalMcpToolSource`
+      // handed to `streamChat` below). This is the point where discovery
+      // actually runs for a message that didn't already trigger it during
+      // validation — deferred this far so a request that fails or aborts
+      // earlier (malformed parts, thread scope mismatch, upload/compaction
+      // failure, client disconnect) never contacts a single connector.
+      // `getExternalMcpTools` reuses the validation-triggered load instead
+      // of loading again when one already happened.
+      const externalMcpTools =
+        await externalMcpToolsLoader.getExternalMcpTools();
+
+      // Streaming tools mirror the surface the user is on: only the
+      // DOCX file-overlay client knows how to satisfy
+      // apply-active-docx-edits (it queues into the review store and
+      // sends the output back via TanStack ChatClient.addToolResult).
+      // PDF/file overlays
+      // still send active-file context, but they must not expose the
+      // DOCX edit tool or the model can chase an impossible path. The
+      // folio-agents `read_document`/`find_text` tools are narrower
+      // still — `hasActiveDocxFileClient` only, since Template Studio
+      // mounts no watcher to resolve them.
+      const chatTools = getChatTools({
+        organizationId: session.activeOrganizationId,
+        memberRole: memberRole.role,
+        orgAIConfig,
+        pinServerValidatedWorkspaceId,
+        requestWorkspaceId: workspaceId,
+        refRegistry,
         safeDb,
+        scopedDb,
         threadId: body.threadId,
+        thirdPartyBoundary,
+        excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
         userId: user.id,
-        workspaceId,
-        persistencePlan: latestMessagePlan.persistencePlan,
-        deleteMessageIds: deleteMessageIdsBeforeLatest,
-        dataWorkspaceIdsChange:
-          recomputedDataWorkspaceIds === null
-            ? undefined
-            : {
-                oldDataWorkspaceIds: thread.data.dataWorkspaceIds,
-                newDataWorkspaceIds: recomputedDataWorkspaceIds,
-              },
-      }),
-    );
+        toolWorkspaceIds: resolveToolWorkspaceIds({
+          pinnedIds: effectiveContextMatterIds,
+          accessibleWorkspaceIds,
+        }),
+        activeFile: body.activeFile,
+        hasActiveDocxEditClient:
+          hasActiveDocxFileClient || body.activeTemplate !== undefined,
+        hasActiveDocxFileClient,
+        webSearchEnabled: thread.data.webSearchEnabled,
+        webSearchProviders,
+        externalTools: externalMcpTools.tools,
+        disabledNativeToolSlugs,
+        skillMetadata: chatContext.skillMetadata,
+        activeSkillContext: chatContext.activeSkillContext,
+        recordAuditEvent,
+        workspaceStatusById,
+      });
+      // A named scope narrows the streaming turn to its server-defined
+      // allowlist (validation above stays broad so persisted tool parts
+      // keep validating). The scope name is schema-validated; unknown
+      // names never reach this point.
+      const streamingTools =
+        body.toolScope === undefined
+          ? chatTools
+          : restrictChatToolsToScope(chatTools, body.toolScope);
 
-    const externalMcpTools = await loadExternalMcpToolsForUser({
-      nullUnionStrategy: externalMcpNullUnionStrategy,
-      organizationId: session.activeOrganizationId,
-      safeDb,
-      userId: user.id,
-    });
-    // Streaming tools mirror the surface the user is on: only the
-    // DOCX file-overlay client knows how to satisfy
-    // apply-active-docx-edits (it queues into the review store and
-    // sends the output back via TanStack ChatClient.addToolResult).
-    // PDF/file overlays
-    // still send active-file context, but they must not expose the
-    // DOCX edit tool or the model can chase an impossible path. The
-    // folio-agents `read_document`/`find_text` tools are narrower
-    // still — `hasActiveDocxFileClient` only, since Template Studio
-    // mounts no watcher to resolve them.
-    const chatTools = getChatTools({
-      organizationId: session.activeOrganizationId,
-      memberRole: memberRole.role,
-      orgAIConfig,
-      pinServerValidatedWorkspaceId,
-      requestWorkspaceId: workspaceId,
-      refRegistry,
-      safeDb,
-      scopedDb,
-      threadId: body.threadId,
-      thirdPartyBoundary,
-      excludedChatHistoryMessageIds: deleteMessageIdsBeforeLatest,
-      userId: user.id,
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: effectiveContextMatterIds,
-        accessibleWorkspaceIds,
-      }),
-      activeFile: body.activeFile,
-      hasActiveDocxEditClient:
-        hasActiveDocxFileClient || body.activeTemplate !== undefined,
-      hasActiveDocxFileClient,
-      webSearchEnabled: thread.data.webSearchEnabled,
-      webSearchProviders,
-      externalTools: externalMcpTools.tools,
-      disabledNativeToolSlugs,
-      skillMetadata: chatContext.skillMetadata,
-      activeSkillContext: chatContext.activeSkillContext,
-      recordAuditEvent,
-      workspaceStatusById,
-    });
-    // A named scope narrows the streaming turn to its server-defined
-    // allowlist (validation above stays broad so persisted tool parts
-    // keep validating). The scope name is schema-validated; unknown
-    // names never reach this point.
-    const streamingTools =
-      body.toolScope === undefined
-        ? chatTools
-        : restrictChatToolsToScope(chatTools, body.toolScope);
+      const externalMcpSystemHint = buildExternalMcpSystemHint(
+        externalMcpTools.connectors,
+      );
+      // The "safe" half is whatever the prompt builder declared
+      // safe. The anonymized-mode hint is a fixed assembler-owned
+      // addition, so callers cannot brand arbitrary strings as safe.
+      // The external MCP catalog is organization/user-configured text,
+      // so it rides with the dynamic suffix and crosses the boundary in
+      // anonymized mode.
+      const systemSafe =
+        body.sendMode === CHAT_SEND_MODE.anonymized
+          ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
+          : chatContext.systemSafe;
+      const systemUntrusted = extendChatUntrustedPromptSuffix(
+        chatContext.systemUntrusted,
+        [externalMcpSystemHint],
+      );
 
-    const externalMcpSystemHint = buildExternalMcpSystemHint(
-      externalMcpTools.connectors,
-    );
-    // The "safe" half is whatever the prompt builder declared
-    // safe. The anonymized-mode hint is a fixed assembler-owned
-    // addition, so callers cannot brand arbitrary strings as safe.
-    // The external MCP catalog is organization/user-configured text,
-    // so it rides with the dynamic suffix and crosses the boundary in
-    // anonymized mode.
-    const systemSafe =
-      body.sendMode === CHAT_SEND_MODE.anonymized
-        ? appendAnonymizedModeHintToChatSafePrompt(chatContext.systemSafe)
-        : chatContext.systemSafe;
-    const systemUntrusted = extendChatUntrustedPromptSuffix(
-      chatContext.systemUntrusted,
-      [externalMcpSystemHint],
-    );
+      // From here, the try/catch below owns closing `externalMcpTools` (on a
+      // non-streaming response or a thrown error) or hands it to `streamChat`
+      // to close once the actual token stream finishes; the outer `finally`
+      // must not close it again. `externalMcpTools` is guaranteed loaded at
+      // this point (the `await` above), so `externalMcpToolsLoader.closeIfLoaded`
+      // in the outer `finally` would otherwise close the same clients again.
+      externalMcpToolsHandedOffToStreaming = true;
+      const response = yield* Result.await(
+        Result.tryPromise({
+          try: async () => {
+            try {
+              if (isClientConnectionAborted()) {
+                throw new HandlerError({
+                  status: 400,
+                  message: "Client disconnected before stream started",
+                });
+              }
 
-    const response = yield* Result.await(
-      Result.tryPromise({
-        try: async () => {
-          try {
-            if (isClientConnectionAborted()) {
-              throw new HandlerError({
-                status: 400,
-                message: "Client disconnected before stream started",
+              // Snapshot the refs the registry already holds before streaming.
+              // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
+              // resolved during prompt construction; folding the WHOLE registry
+              // into thread scope at onFinish would over-broaden it to pinned-
+              // but-never-read matters, which could make the thread unreadable
+              // after that matter's access is revoked even though its content was
+              // never persisted. Only the delta minted DURING the stream (a
+              // matter/entity a tool or subagent actually read) should widen
+              // `data_workspace_ids`.
+              const workspaceIdsBeforeStream = new Set(
+                refRegistry.getRegisteredWorkspaceIds(),
+              );
+
+              const chatResponse = await streamChat({
+                abortSignal: createMeteredAIAbortSignal(),
+                messages: chatContext.hydratedMessages,
+                latestMessageId: parsedMessage.message.id,
+                onFinish: async ({ isAborted, responseMessage }) => {
+                  const resolvedMessages = resolveAssistantMessageRefs({
+                    messages: [responseMessage],
+                    refRegistry,
+                  });
+                  const resolvedResponseMessage = resolvedMessages.at(0);
+                  if (!resolvedResponseMessage) {
+                    panic("Missing chat response message");
+                  }
+
+                  const persistencePlan = planAssistantFinishPersistence({
+                    existingIds: latestMessagePlan.existingIds,
+                    isAborted: isAborted || isClientConnectionAborted(),
+                    message: resolvedResponseMessage,
+                  });
+
+                  // Skip scope expansion when the assistant message
+                  // will not be persisted (aborted stream, planner
+                  // returned `none`). Widening `data_workspace_ids`
+                  // for transient parts that never land in
+                  // `chat_messages` could make the thread unreadable
+                  // after future access changes even though no
+                  // corresponding content was saved.
+                  if (persistencePlan.type === "none") {
+                    return;
+                  }
+
+                  // Widen the thread's data scope to cover any
+                  // workspace-scoped content the assistant just
+                  // emitted (source-document parts from search and
+                  // workspace tools). Run before persistMessage so
+                  // the recorded scope already includes the
+                  // workspaces when the message lands in
+                  // `chat_messages`.
+                  //
+                  // If expansion fails (transient DB error, etc.),
+                  // SKIP the message persist. Storing workspace-
+                  // scoped content in `chat_messages` while the
+                  // owning thread's `data_workspace_ids` stays stale
+                  // would leave the new content readable after the
+                  // user loses access to those workspaces — the same
+                  // class of leak this whole change exists to close.
+                  //
+                  // Intersect with `accessibleWorkspaceIds` so a
+                  // hallucinated or stale UUID from the model never
+                  // lands in `data_workspace_ids`. An out-of-set ID
+                  // would fail the RLS subset check on every later
+                  // persist, silently breaking the thread. Also union in the
+                  // workspaces the ref registry resolved DURING this stream —
+                  // see `computeAssistantTurnWorkspaceIds`'s docstring for why
+                  // that delta matters for subagent reads.
+                  const assistantWorkspaceIds =
+                    computeAssistantTurnWorkspaceIds({
+                      responseParts: resolvedResponseMessage.parts,
+                      workspaceIdsBeforeStream,
+                      registeredWorkspaceIdsAfterStream:
+                        refRegistry.getRegisteredWorkspaceIds(),
+                      accessibleWorkspaceIds: accessibleSet,
+                    });
+                  const expandResult = await expandThreadDataScope({
+                    currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
+                    newWorkspaceIds: assistantWorkspaceIds,
+                    recordAuditEvent,
+                    safeDb,
+                    threadId: body.threadId,
+                    threadWorkspaceId: workspaceId,
+                  });
+                  if (Result.isError(expandResult)) {
+                    captureError(expandResult.error, {
+                      threadId: body.threadId,
+                    });
+                    return;
+                  }
+                  const persistResult = await persistMessage({
+                    persistencePlan,
+                    recordAuditEvent,
+                    safeDb,
+                    threadId: body.threadId,
+                    userId: user.id,
+                    workspaceId,
+                  });
+
+                  if (Result.isError(persistResult)) {
+                    captureError(persistResult.error, {
+                      threadId: body.threadId,
+                    });
+                  } else {
+                    const messagesAfterAssistantPersist =
+                      applyAssistantPersistencePlan({
+                        messages: latestMessagePlan.messages,
+                        persistencePlan,
+                      });
+                    if (
+                      messagesAfterAssistantPersist !== null &&
+                      body.sendMode !== CHAT_SEND_MODE.anonymized
+                    ) {
+                      scheduleChatCompactionCheckpoint({
+                        abortSignal: AbortSignal.timeout(
+                          CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS,
+                        ),
+                        boundary: thirdPartyBoundary,
+                        chatModelOverride,
+                        messages: messagesAfterAssistantPersist,
+                        organizationId: session.activeOrganizationId,
+                        orgAIConfig,
+                        safeDb,
+                        threadId: body.threadId,
+                      });
+                    }
+
+                    if (
+                      thread.type === "created" &&
+                      body.sendMode !== CHAT_SEND_MODE.anonymized
+                    ) {
+                      void generateThreadTitle({
+                        messages: [
+                          parsedMessage.message,
+                          resolvedResponseMessage,
+                        ],
+                        organizationId: session.activeOrganizationId,
+                        orgAIConfig,
+                        promptCachingEnabled,
+                        recordAuditEvent,
+                        safeDb,
+                        threadId: body.threadId,
+                        threadWorkspaceId: workspaceId,
+                        userId: user.id,
+                      });
+                    }
+                  }
+                },
+                orgAIConfig,
+                organizationId: session.activeOrganizationId,
+                devModelId: chatModelOverride,
+                promptCacheKey: chatContext.promptCacheKey,
+                promptCachingEnabled,
+                resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
+                resolveAssistantValueRefs:
+                  refRegistry.resolveAssistantValueRefs,
+                safeDb,
+                thirdPartyBoundary,
+                threadId: body.threadId,
+                tools: streamingTools,
+                externalMcpToolSource: externalMcpTools.source,
+                systemSafe,
+                systemUntrusted,
+                userId: user.id,
+                workspaceId,
               });
-            }
 
-            // Snapshot the refs the registry already holds before streaming.
-            // Prompt-time pins (`contextMatterIds` → `toMatterRef`) are
-            // resolved during prompt construction; folding the WHOLE registry
-            // into thread scope at onFinish would over-broaden it to pinned-
-            // but-never-read matters, which could make the thread unreadable
-            // after that matter's access is revoked even though its content was
-            // never persisted. Only the delta minted DURING the stream (a
-            // matter/entity a tool or subagent actually read) should widen
-            // `data_workspace_ids`.
-            const workspaceIdsBeforeStream = new Set(
-              refRegistry.getRegisteredWorkspaceIds(),
-            );
+              if (!isChatStreamResponse(chatResponse)) {
+                await externalMcpTools.close();
+              }
 
-            const chatResponse = await streamChat({
-              abortSignal: createMeteredAIAbortSignal(),
-              messages: chatContext.hydratedMessages,
-              latestMessageId: parsedMessage.message.id,
-              onFinish: async ({ isAborted, responseMessage }) => {
-                const resolvedMessages = resolveAssistantMessageRefs({
-                  messages: [responseMessage],
-                  refRegistry,
-                });
-                const resolvedResponseMessage = resolvedMessages.at(0);
-                if (!resolvedResponseMessage) {
-                  panic("Missing chat response message");
-                }
-
-                const persistencePlan = planAssistantFinishPersistence({
-                  existingIds: latestMessagePlan.existingIds,
-                  isAborted: isAborted || isClientConnectionAborted(),
-                  message: resolvedResponseMessage,
-                });
-
-                // Skip scope expansion when the assistant message
-                // will not be persisted (aborted stream, planner
-                // returned `none`). Widening `data_workspace_ids`
-                // for transient parts that never land in
-                // `chat_messages` could make the thread unreadable
-                // after future access changes even though no
-                // corresponding content was saved.
-                if (persistencePlan.type === "none") {
-                  return;
-                }
-
-                // Widen the thread's data scope to cover any
-                // workspace-scoped content the assistant just
-                // emitted (source-document parts from search and
-                // workspace tools). Run before persistMessage so
-                // the recorded scope already includes the
-                // workspaces when the message lands in
-                // `chat_messages`.
-                //
-                // If expansion fails (transient DB error, etc.),
-                // SKIP the message persist. Storing workspace-
-                // scoped content in `chat_messages` while the
-                // owning thread's `data_workspace_ids` stays stale
-                // would leave the new content readable after the
-                // user loses access to those workspaces — the same
-                // class of leak this whole change exists to close.
-                //
-                // Intersect with `accessibleWorkspaceIds` so a
-                // hallucinated or stale UUID from the model never
-                // lands in `data_workspace_ids`. An out-of-set ID
-                // would fail the RLS subset check on every later
-                // persist, silently breaking the thread. Also union in the
-                // workspaces the ref registry resolved DURING this stream —
-                // see `computeAssistantTurnWorkspaceIds`'s docstring for why
-                // that delta matters for subagent reads.
-                const assistantWorkspaceIds = computeAssistantTurnWorkspaceIds({
-                  responseParts: resolvedResponseMessage.parts,
-                  workspaceIdsBeforeStream,
-                  registeredWorkspaceIdsAfterStream:
-                    refRegistry.getRegisteredWorkspaceIds(),
-                  accessibleWorkspaceIds: accessibleSet,
-                });
-                const expandResult = await expandThreadDataScope({
-                  currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
-                  newWorkspaceIds: assistantWorkspaceIds,
-                  recordAuditEvent,
-                  safeDb,
-                  threadId: body.threadId,
-                  threadWorkspaceId: workspaceId,
-                });
-                if (Result.isError(expandResult)) {
-                  captureError(expandResult.error, {
-                    threadId: body.threadId,
-                  });
-                  return;
-                }
-                const persistResult = await persistMessage({
-                  persistencePlan,
-                  recordAuditEvent,
-                  safeDb,
-                  threadId: body.threadId,
-                  userId: user.id,
-                  workspaceId,
-                });
-
-                if (Result.isError(persistResult)) {
-                  captureError(persistResult.error, {
-                    threadId: body.threadId,
-                  });
-                } else {
-                  const messagesAfterAssistantPersist =
-                    applyAssistantPersistencePlan({
-                      messages: latestMessagePlan.messages,
-                      persistencePlan,
-                    });
-                  if (
-                    messagesAfterAssistantPersist !== null &&
-                    body.sendMode !== CHAT_SEND_MODE.anonymized
-                  ) {
-                    scheduleChatCompactionCheckpoint({
-                      abortSignal: AbortSignal.timeout(
-                        CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS,
-                      ),
-                      boundary: thirdPartyBoundary,
-                      chatModelOverride,
-                      messages: messagesAfterAssistantPersist,
-                      organizationId: session.activeOrganizationId,
-                      orgAIConfig,
-                      safeDb,
-                      threadId: body.threadId,
-                    });
-                  }
-
-                  if (
-                    thread.type === "created" &&
-                    body.sendMode !== CHAT_SEND_MODE.anonymized
-                  ) {
-                    void generateThreadTitle({
-                      messages: [
-                        parsedMessage.message,
-                        resolvedResponseMessage,
-                      ],
-                      organizationId: session.activeOrganizationId,
-                      orgAIConfig,
-                      promptCachingEnabled,
-                      recordAuditEvent,
-                      safeDb,
-                      threadId: body.threadId,
-                      threadWorkspaceId: workspaceId,
-                      userId: user.id,
-                    });
-                  }
-                }
-              },
-              orgAIConfig,
-              organizationId: session.activeOrganizationId,
-              devModelId: chatModelOverride,
-              promptCacheKey: chatContext.promptCacheKey,
-              promptCachingEnabled,
-              resolveAssistantTextRefs: refRegistry.resolveAssistantTextRefs,
-              resolveAssistantValueRefs: refRegistry.resolveAssistantValueRefs,
-              safeDb,
-              thirdPartyBoundary,
-              threadId: body.threadId,
-              tools: streamingTools,
-              externalMcpToolSource: externalMcpTools.source,
-              systemSafe,
-              systemUntrusted,
-              userId: user.id,
-              workspaceId,
-            });
-
-            if (!isChatStreamResponse(chatResponse)) {
+              return chatResponse;
+            } catch (error) {
               await externalMcpTools.close();
+              throw error;
             }
+          },
+          catch: (cause) =>
+            cause instanceof HandlerError
+              ? cause
+              : new HandlerError({
+                  status: 500,
+                  message: "Failed to start chat response",
+                  cause,
+                }),
+        }),
+      );
 
-            return chatResponse;
-          } catch (error) {
-            await externalMcpTools.close();
-            throw error;
-          }
-        },
-        catch: (cause) =>
-          cause instanceof HandlerError
-            ? cause
-            : new HandlerError({
-                status: 500,
-                message: "Failed to start chat response",
-                cause,
-              }),
-      }),
-    );
-
-    return Result.ok(response);
+      return Result.ok(response);
+    } finally {
+      // No-op if `getExternalMcpTools` was never called on this exit path
+      // (the message needed neither validation nor streaming to load
+      // external tools before failing/returning early).
+      if (!externalMcpToolsHandedOffToStreaming) {
+        await externalMcpToolsLoader.closeIfLoaded();
+      }
+    }
   },
 );
 
@@ -1290,6 +1358,23 @@ const messageNeedsExternalMcpValidation = (
 
   const parts: unknown[] = Array.isArray(message.parts) ? message.parts : [];
   return parts.some(isExternalMcpToolPart);
+};
+
+/**
+ * Loads external MCP tools (via the memoized `loader`) only when the
+ * incoming message needs them for validation; returns `undefined` without
+ * ever calling the loader otherwise. Kept as a standalone helper so its
+ * branch doesn't add to the handler generator's own cognitive complexity.
+ */
+const resolveExternalToolsForValidation = async (
+  message: Static<typeof sendMessageBodySchema>["message"],
+  loader: LazyExternalMcpToolsLoader,
+): Promise<LoadedExternalMcpTools["tools"] | undefined> => {
+  if (!messageNeedsExternalMcpValidation(message)) {
+    return undefined;
+  }
+  const loaded = await loader.getExternalMcpTools();
+  return loaded.tools;
 };
 
 type ReadThreadValidationStateProps = {

@@ -13,12 +13,25 @@ import {
 import { normalizeExternalMcpToolsForChat } from "@/api/handlers/chat/tools/external-mcp-tools-normalization";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   createMcpClientForConnection,
   loadActiveMcpConnectionsForUser,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { NullUnionStrategy } from "@/api/lib/provider-safe-json-schema";
+import { withTimeout } from "@/api/lib/with-timeout";
+
+// A single connector call can legitimately chain several sequential
+// upstream HTTP round trips (OAuth authorization-server discovery, token
+// refresh, then the MCP `tools()` call itself), each already bounded by
+// its own ~10s per-call timeout inside `mcp-upstream/connections.ts`. This
+// is the aggregate ceiling for one connector's whole discovery — client
+// creation through tool listing — so a connector stuck in an unbounded
+// step (e.g. a hung DB/KMS call with no timeout of its own) cannot stall
+// discovery past a bounded budget, regardless of how many connectors the
+// user has configured.
+const EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS = 20_000;
 
 export type LoadedExternalMcpTools = {
   close: () => Promise<void> | void;
@@ -47,30 +60,52 @@ export const loadExternalMcpToolsForUser = async ({
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<LoadedExternalMcpTools> => {
-  const clients: MCPClient[] = [];
-  const connectors: LoadedExternalMcpConnector[] = [];
-  const sourceTools: Record<string, ServerTool | undefined> = {};
-  const loadedTools: ChatToolMap = {};
-
   const rows = await loadActiveMcpConnectionsForUser({
     organizationId,
     safeDb,
     userId,
   });
 
-  for (const row of rows) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential per-connector load; mutates shared clients/connectors/loadedTools and avoids fanning out concurrent external MCP connections
-    await loadConnectorTools({
-      clients,
-      connectors,
-      loadedTools,
-      nullUnionStrategy,
-      organizationId,
-      row,
-      safeDb,
-      sourceTools,
-      userId,
-    });
+  // Connectors are independent per-user integrations — separate client,
+  // separate auth, separate tool set — so loading them concurrently is
+  // safe; there is no ordering dependency between them (each row carries
+  // its own resolved credentials). Each call is individually bounded by
+  // `EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS`, so one slow or unresponsive
+  // upstream server no longer multiplies latency by connector count the
+  // way a sequential loop would. A per-connector failure — including a
+  // timeout — degrades to "no tools from that connector" rather than
+  // failing the whole load; see `loadConnectorTools`.
+  const results = await Promise.all(
+    rows.map(
+      async (row) =>
+        await loadConnectorTools({
+          nullUnionStrategy,
+          organizationId,
+          row,
+          safeDb,
+          userId,
+        }),
+    ),
+  );
+
+  const clients: MCPClient[] = [];
+  const connectors: LoadedExternalMcpConnector[] = [];
+  const sourceTools: Record<string, ServerTool | undefined> = {};
+  const loadedTools: ChatToolMap = {};
+
+  // Merge sequentially, after every connector has settled, instead of
+  // mutating these shared collections from inside the concurrent loop
+  // above — keeps connector order and any tool-name collision resolution
+  // deterministic (row order) regardless of which connector's promise
+  // resolves first.
+  for (const result of results) {
+    if (result === null) {
+      continue;
+    }
+    clients.push(result.client);
+    connectors.push(result.connector);
+    Object.assign(loadedTools, result.tools);
+    copyServerTools({ sourceTools, tools: result.tools });
   }
 
   const closeClients = async (): Promise<void> => {
@@ -84,6 +119,59 @@ export const loadExternalMcpToolsForUser = async ({
   const source = createStellaMcpToolSource({ closeClients, sourceTools });
 
   return { close: closeClients, connectors, source, tools: loadedTools };
+};
+
+export type LazyExternalMcpToolsLoader = {
+  /**
+   * Loads on first call and caches the in-flight/settled promise for every
+   * later call, so concurrent callers within one send (validation, then
+   * streaming) share a single connector-discovery round trip instead of
+   * running it twice.
+   */
+  getExternalMcpTools: () => Promise<LoadedExternalMcpTools>;
+  /**
+   * No-op when `getExternalMcpTools` was never called (nothing was loaded,
+   * so no connector clients exist to close). Otherwise awaits the cached
+   * load and closes it exactly once, no matter how many times
+   * `closeIfLoaded` itself is called — the close, like the load, is
+   * memoized. Swallows a load failure instead of rethrowing: a failed load
+   * already has no clients to leak, and the failure itself already
+   * surfaced to its own caller via `getExternalMcpTools`.
+   */
+  closeIfLoaded: () => Promise<void>;
+};
+
+/**
+ * Wraps a `LoadedExternalMcpTools` loader (normally a
+ * `loadExternalMcpToolsForUser` call bound to the current request) in a
+ * lazy, memoized accessor: connector discovery only runs if some caller
+ * actually needs the tools, and runs at most once no matter how many
+ * callers ask. Closing is memoized the same way, so a caller cannot
+ * accidentally double-close by calling `closeIfLoaded` more than once.
+ */
+export const createLazyExternalMcpToolsLoader = (
+  load: () => Promise<LoadedExternalMcpTools>,
+): LazyExternalMcpToolsLoader => {
+  let loadPromise: Promise<LoadedExternalMcpTools> | null = null;
+  let closePromise: Promise<void> | null = null;
+
+  const getExternalMcpTools = async (): Promise<LoadedExternalMcpTools> => {
+    loadPromise ??= load();
+    return await loadPromise;
+  };
+
+  const closeIfLoaded = async (): Promise<void> => {
+    if (loadPromise === null) {
+      return;
+    }
+    closePromise ??= loadPromise.then(
+      (loaded): void | Promise<void> => loaded.close(),
+      () => undefined,
+    );
+    await closePromise;
+  };
+
+  return { closeIfLoaded, getExternalMcpTools };
 };
 
 export const createStellaMcpToolSource = ({
@@ -129,59 +217,132 @@ const copyServerTools = ({
 const isServerTool = (tool: ChatTool | undefined): tool is ServerTool =>
   tool !== undefined && "__toolSide" in tool && tool.__toolSide === "server";
 
+type LoadedExternalMcpConnectorResult = {
+  client: MCPClient;
+  connector: LoadedExternalMcpConnector;
+  tools: ChatToolMap;
+};
+
 const loadConnectorTools = async ({
-  clients,
-  connectors,
-  loadedTools,
   nullUnionStrategy,
   organizationId,
   row,
   safeDb,
-  sourceTools,
   userId,
 }: {
-  clients: MCPClient[];
-  connectors: LoadedExternalMcpConnector[];
-  loadedTools: ChatToolMap;
   nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
-  sourceTools: Record<string, ServerTool | undefined>;
   userId: SafeId<"user">;
-}) => {
+}): Promise<LoadedExternalMcpConnectorResult | null> => {
+  // Tracks the client for the whole life of this discovery attempt, from
+  // the moment `createMcpClientForConnection` resolves, so every failure
+  // path below — a synchronous throw or a discovery timeout — has a
+  // handle to close it. Nothing else owns this client: on success it is
+  // handed to the caller via the returned result (which takes over
+  // closing it), and on any failure path it must be closed here or it
+  // leaks.
+  let client: MCPClient | undefined;
+
+  // Constructed once, outside `withTimeout`, so the same promise can be
+  // raced against the timeout AND, on the timeout path, awaited again
+  // afterwards to close whatever client discovery eventually produces.
+  // `withTimeout` itself only swallows the loser's late rejection to
+  // avoid an unhandled-rejection warning; it does not close resources
+  // the loser created.
+  const discovery =
+    (async (): Promise<LoadedExternalMcpConnectorResult | null> => {
+      const createdClient = await createMcpClientForConnection({
+        organizationId,
+        row,
+        safeDb,
+        userId,
+      });
+      if (!createdClient) {
+        return null;
+      }
+      client = createdClient;
+
+      const tools = await loadMcpConnectorTools({ client, row });
+      const normalized = normalizeExternalMcpToolsForChat({
+        allowedTools: row.allowedTools,
+        connectorSlug: row.slug,
+        nullUnionStrategy,
+        tools,
+      });
+
+      return {
+        client,
+        connector: {
+          description: row.description,
+          displayName: row.displayName,
+          slug: row.slug,
+          toolNames: normalized.toolNames,
+        },
+        tools: normalized.tools,
+      };
+    })();
+
   try {
-    const client = await createMcpClientForConnection({
-      organizationId,
-      row,
-      safeDb,
-      userId,
-    });
-    if (!client) {
-      return;
-    }
-    clients.push(client);
-
-    const tools = await loadMcpConnectorTools({ client, row });
-    const normalized = normalizeExternalMcpToolsForChat({
-      allowedTools: row.allowedTools,
-      connectorSlug: row.slug,
-      nullUnionStrategy,
-      tools,
-    });
-    Object.assign(loadedTools, normalized.tools);
-    copyServerTools({ sourceTools, tools: normalized.tools });
-
-    connectors.push({
-      description: row.description,
-      displayName: row.displayName,
-      slug: row.slug,
-      toolNames: normalized.toolNames,
+    return await withTimeout(async () => await discovery, {
+      label: `external-mcp-tools:${row.slug}`,
+      timeoutMs: EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS,
     });
   } catch (error) {
+    if (error instanceof TimeoutError) {
+      // Close whatever client discovery has already produced right away,
+      // instead of waiting for `discovery` to settle first: `MCPClient.close()`
+      // closes the underlying transport, which aborts the fetch backing an
+      // in-flight `client.tools()` call and locally rejects that pending
+      // call with a `ConnectionClosed` error (see `Protocol.close()` /
+      // `_onclose()` in the MCP SDK). So closing here cannot hang the way
+      // the timed-out discovery itself did — if `client.tools()` is the
+      // stuck step, this unblocks it. If discovery hasn't created a client
+      // yet (still inside `createMcpClientForConnection`, e.g. a hung
+      // DB/KMS call), `client` is still `undefined` here and there is
+      // nothing to close yet.
+      await closeAbandonedClient({ client, connectorSlug: row.slug });
+      // Still attach a best-effort close to `discovery`'s eventual
+      // settlement: it covers the case above where no client existed yet
+      // at timeout, and is a no-op otherwise since `MCPClient.close()` is
+      // idempotent (safe even if it ends up closing the same client twice).
+      void discovery
+        .catch(() => undefined)
+        .then(
+          async () =>
+            await closeAbandonedClient({ client, connectorSlug: row.slug }),
+        );
+    } else {
+      // `discovery` has already settled (that rejection is `error`), so
+      // any client it created is safe to close immediately.
+      await closeAbandonedClient({ client, connectorSlug: row.slug });
+    }
+
     captureError(error, {
       source: "external-mcp-tools",
       connectorSlug: row.slug,
+    });
+    return null;
+  }
+};
+
+const closeAbandonedClient = async ({
+  client,
+  connectorSlug,
+}: {
+  client: MCPClient | undefined;
+  connectorSlug: string;
+}): Promise<void> => {
+  if (!client) {
+    return;
+  }
+  try {
+    await client.close();
+  } catch (closeError) {
+    captureError(closeError, {
+      source: "external-mcp-tools-close",
+      connectorSlug,
     });
   }
 };
