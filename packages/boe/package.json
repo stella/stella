@@ -52,7 +52,9 @@
     "prepack": "bun run build"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "fast-check": "catalog:"
   }
 }
