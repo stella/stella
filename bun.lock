@@ -355,8 +355,10 @@
       "name": "@stll/boe",
       "version": "0.1.0",
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/business-registries": {
