@@ -22,14 +22,18 @@ export const fetchWithTimeout = async (
   input: string | URL | Request,
   { timeoutMs, signal, ...init }: FetchWithTimeoutInit,
 ): Promise<Response> => {
-  const signals = [
+  const callerSignals = [
     signal,
     input instanceof Request ? input.signal : undefined,
   ].filter((candidate): candidate is AbortSignal => candidate !== undefined);
-  signals.push(AbortSignal.timeout(timeoutMs));
+  const timeout = AbortSignal.timeout(timeoutMs);
 
   return await fetch(input, {
     ...init,
-    signal: AbortSignal.any(signals),
+    // Avoid the AbortSignal.any allocation when the timeout is the only signal.
+    signal:
+      callerSignals.length === 0
+        ? timeout
+        : AbortSignal.any([...callerSignals, timeout]),
   });
 };
