@@ -348,9 +348,158 @@ const countRawUseEffectSuppressions = (content: string): number => {
   return total;
 };
 
+// A disable directive for ANY rule (either linter, any variant, `//` or `/*`
+// comment form). Whole-repo superset of the per-rule counter above: that one
+// keeps its own burn-down, this one freezes TOTAL suppression pressure so an
+// improvement on one rule cannot silently fund new suppressions elsewhere.
+const LINT_DISABLE_DIRECTIVE =
+  /(?:\/\/|\/\*)\s*(?:eslint|oxlint)-disable(?:-next-line|-line)?\b/u;
+
+const countLintSuppressions = (content: string): number => {
+  let total = 0;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code, state } = stripStringLiterals(raw, literalState);
+    literalState = state;
+    if (LINT_DISABLE_DIRECTIVE.test(code)) {
+      total += 1;
+    }
+  }
+  return total;
+};
+
+// A compiler-suppression directive. Fidelity limit: a prose comment that
+// STARTS with the directive token (`// @ts-expect-error is bad`) counts, one
+// that merely mentions it mid-sentence does not; directives and leading
+// mentions are lexically identical, and the noise is stable so the ratchet
+// still only moves on real changes.
+const TS_SUPPRESSION_DIRECTIVE =
+  /(?:\/\/|\/\*)\s*@ts-(?:expect-error|ignore|nocheck)\b/u;
+
+const countTsSuppressions = (content: string): number => {
+  let total = 0;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code, state } = stripStringLiterals(raw, literalState);
+    literalState = state;
+    if (TS_SUPPRESSION_DIRECTIVE.test(code)) {
+      total += 1;
+    }
+  }
+  return total;
+};
+
+// --- Cross-slice import counters ---------------------------------------------
+// Vertical slices (AGENTS.md): API handler domains, web route dirs (their
+// `-`-prefixed route-private paths), and web feature dirs are independent
+// end-to-end slices; an import reaching across them couples slices. These
+// counters extract module specifiers per line and resolve them against the
+// importing file's path. Deliberately NOT literal-stripped: import specifiers
+// ARE string literals. Fidelity limits: the specifier must sit on the same
+// line as its `from`/`import(`/`import` keyword (oxfmt formats imports that
+// way), and an import-shaped string inside a template literal would count
+// (stable noise; none today).
+const MODULE_SPECIFIER =
+  /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["']([^"']+)["']/gu;
+
+const API_HANDLERS_PREFIX = "apps/api/src/handlers/";
+const WEB_ROUTES_PREFIX = "apps/web/src/routes/";
+const WEB_FEATURES_PREFIX = "apps/web/src/features/";
+const WEB_ALIAS_PREFIX = "@/";
+const WEB_ALIAS_ROOT = "apps/web/src";
+
+// Repo-relative path a specifier resolves to, or null for package imports.
+const resolveSpecifier = (file: string, spec: string): string | null => {
+  if (spec.startsWith(WEB_ALIAS_PREFIX)) {
+    return path.posix.join(WEB_ALIAS_ROOT, spec.slice(WEB_ALIAS_PREFIX.length));
+  }
+  if (spec.startsWith(".")) {
+    return path.posix.normalize(
+      path.posix.join(path.posix.dirname(file), spec),
+    );
+  }
+  return null;
+};
+
+// First path segment of `p` after `prefix` (the slice name), or null when `p`
+// is not under `prefix`.
+const sliceOf = (p: string, prefix: string): string | null => {
+  if (!p.startsWith(prefix)) {
+    return null;
+  }
+  const segment = p.slice(prefix.length).split("/").at(0);
+  return segment !== undefined && segment.length > 0 ? segment : null;
+};
+
+// Path remainder inside a slice (`""` when the specifier targets the slice
+// root itself, e.g. `../skills` — which is either a loose shared FILE under
+// the prefix or a barrel import; neither resolvable without the filesystem,
+// both excluded on purpose).
+const restWithinSlice = (p: string, prefix: string, slice: string): string =>
+  p.slice(Math.min(p.length, prefix.length + slice.length + 1));
+
+type CrossSliceRule = (file: string, resolved: string) => boolean;
+
+const crossesHandlerDomain: CrossSliceRule = (file, resolved) => {
+  const from = sliceOf(file, API_HANDLERS_PREFIX);
+  const to = sliceOf(resolved, API_HANDLERS_PREFIX);
+  if (from === null || to === null || to === from) {
+    return false;
+  }
+  return restWithinSlice(resolved, API_HANDLERS_PREFIX, to).length > 0;
+};
+
+// `-`-prefixed segments are route-private by TanStack convention; reaching
+// one from outside its TOP-LEVEL route dir (nested dirs like
+// `_protected.workspaces/$workspaceId/...` belong to `_protected.workspaces`)
+// couples route slices.
+const ROUTE_PRIVATE_SEGMENT = /(?:^|\/)-/u;
+
+const crossesRoutePrivate: CrossSliceRule = (file, resolved) => {
+  const to = sliceOf(resolved, WEB_ROUTES_PREFIX);
+  if (to === null) {
+    return false;
+  }
+  const rest = restWithinSlice(resolved, WEB_ROUTES_PREFIX, to);
+  if (!ROUTE_PRIVATE_SEGMENT.test(rest)) {
+    return false;
+  }
+  return sliceOf(file, WEB_ROUTES_PREFIX) !== to;
+};
+
+const crossesFeature: CrossSliceRule = (file, resolved) => {
+  const from = sliceOf(file, WEB_FEATURES_PREFIX);
+  const to = sliceOf(resolved, WEB_FEATURES_PREFIX);
+  return from !== null && to !== null && to !== from;
+};
+
+const countCrossSliceImports =
+  (crosses: CrossSliceRule): FileCounter =>
+  (content, file) => {
+    let total = 0;
+    for (const raw of content.split("\n")) {
+      if (COMMENT_LINE.test(raw)) {
+        continue;
+      }
+      for (const match of raw.matchAll(MODULE_SPECIFIER)) {
+        const spec = match[1];
+        if (spec === undefined) {
+          continue;
+        }
+        const resolved = resolveSpecifier(file, spec);
+        if (resolved !== null && crosses(file, resolved)) {
+          total += 1;
+        }
+      }
+    }
+    return total;
+  };
+
 // --- Metric table -----------------------------------------------------------
 
-type FileCounter = (content: string) => number;
+type FileCounter = (content: string, file: string) => number;
 
 type RatchetMetric = {
   readonly id: string;
@@ -419,6 +568,46 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     exclude: isExcludedSource,
     count: countRawUseEffectSuppressions,
   },
+  {
+    id: "lint-suppression-directives",
+    description:
+      "eslint-/oxlint-disable directives in app source, any rule (whole-repo suppression pressure; superset of the per-rule raw-use-effect metric — overlap intentional)",
+    include: APP_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countLintSuppressions,
+  },
+  {
+    id: "ts-suppression-directives",
+    description:
+      "@ts-expect-error/@ts-ignore/@ts-nocheck directives in app source (each hides a type error from the compiler)",
+    include: APP_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countTsSuppressions,
+  },
+  {
+    id: "cross-handler-imports",
+    description:
+      "imports crossing API handler domains (handlers/<a> -> handlers/<b>/...); handler domains are vertical slices — shared code belongs in apps/api/src/lib",
+    include: ["apps/api/src/handlers/**/*.ts"],
+    exclude: isExcludedSource,
+    count: countCrossSliceImports(crossesHandlerDomain),
+  },
+  {
+    id: "cross-route-private-imports",
+    description:
+      "imports reaching into another top-level route dir's `-`-private paths (TanStack route slices); move shared code to components/, lib/, or a feature dir",
+    include: ["apps/web/src/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countCrossSliceImports(crossesRoutePrivate),
+  },
+  {
+    id: "cross-feature-imports",
+    description:
+      "imports crossing web feature slices (features/<a> -> features/<b>); features are independent end-to-end slices",
+    include: ["apps/web/src/features/**/*.{ts,tsx}"],
+    exclude: isExcludedSource,
+    count: countCrossSliceImports(crossesFeature),
+  },
 ];
 
 // --- Scanning ---------------------------------------------------------------
@@ -440,7 +629,7 @@ const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
       if (metric.exclude(rel)) {
         continue;
       }
-      const n = metric.count(readFileSync(path.join(root, rel), "utf-8"));
+      const n = metric.count(readFileSync(path.join(root, rel), "utf-8"), rel);
       if (n > 0) {
         perFile[rel] = n;
         count += n;
@@ -542,12 +731,12 @@ const runReport = (): number => {
     const delta = c.count - b;
     const sign = formatDelta(delta);
     console.log(
-      `  ${metric.id.padEnd(24)} ${String(c.count).padStart(5)}  (baseline ${b}, ${sign})`,
+      `  ${metric.id.padEnd(30)} ${String(c.count).padStart(5)}  (baseline ${b}, ${sign})`,
     );
-    console.log(`  ${" ".repeat(24)} ${metric.description}`);
+    console.log(`  ${" ".repeat(30)} ${metric.description}`);
     if (showDetails) {
       for (const [file, count] of Object.entries(c.files)) {
-        console.log(`  ${" ".repeat(24)} ${count}  ${file}`);
+        console.log(`  ${" ".repeat(30)} ${count}  ${file}`);
       }
     }
   }
@@ -561,7 +750,7 @@ const runWrite = (): number => {
   for (const metric of RATCHET_METRICS) {
     const snap = snapshot[metric.id];
     console.log(
-      `  ${metric.id.padEnd(24)} ${String(snap.count).padStart(5)} across ${Object.keys(snap.files).length} file(s)`,
+      `  ${metric.id.padEnd(30)} ${String(snap.count).padStart(5)} across ${Object.keys(snap.files).length} file(s)`,
     );
   }
   return 0;
@@ -714,6 +903,96 @@ const SELF_TEST_MODULE_COLLECTIONS = `${MODULE_COLLECTION_FIXTURE_LINES.join("\n
 // declaration, and the commented-out line are all excluded.
 const EXPECTED_MODULE_COLLECTIONS = 6;
 
+const LINT_SUPPRESSION_FIXTURE_LINES = [
+  "// eslint-disable-next-line no-console -- reason one",
+  "// oxlint-disable-next-line some-plugin/some-rule -- reason two",
+  "/* eslint-disable no-console */",
+  "// oxlint-disable",
+  'const doc = "// eslint-disable-next-line fake"; // directive in a string must not count',
+  "// eslint disables discussed in prose (no hyphenated directive) must not count",
+];
+const SELF_TEST_LINT_SUPPRESSIONS = `${LINT_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
+// Expected from THIS fixture: both linters' -next-line forms, the block-
+// comment form, and the bare `oxlint-disable` = 4. The string copy and the
+// prose comment are excluded. NOTE: the raw-use-effect fixture below also
+// contains 3 directives (its two rule-specific ones plus the other-rule one),
+// and this metric scans both apps, so the whole-repo expectation is 4 + 3.
+const EXPECTED_LINT_SUPPRESSIONS_OWN_FILE = 4;
+const EXPECTED_LINT_SUPPRESSIONS_TOTAL = 7;
+
+const TS_SUPPRESSION_FIXTURE_LINES = [
+  "// @ts-expect-error legacy upstream shape",
+  "// @ts-ignore",
+  "/* @ts-nocheck */",
+  'const s = "// @ts-ignore inside a string"; // must not count',
+  "// removing the last @ts-expect-error is the goal (mid-sentence mention must not count)",
+];
+const SELF_TEST_TS_SUPPRESSIONS = `${TS_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`;
+// Expected: the three directive lines; the string copy and the mid-sentence
+// mention are excluded.
+const EXPECTED_TS_SUPPRESSIONS = 3;
+
+const CROSS_HANDLER_FIXTURE_LINES = [
+  'import { origin } from "../skills/origin";',
+  'import { local } from "./local-helper";',
+  'import { schema } from "../pagination-limit-schema";',
+  'import { db } from "../../db";',
+  'const lazy = await import("../docx/extract-text");',
+  '// import { c } from "../skills/commented";',
+];
+const SELF_TEST_CROSS_HANDLER = `${CROSS_HANDLER_FIXTURE_LINES.join("\n")}\n`;
+// Expected (file lives in handlers/catalogue/): the ../skills/ static import
+// and the ../docx/ dynamic import = 2. Same-domain, slice-root (a loose
+// shared file directly under handlers/ resolves with an empty rest and is
+// excluded on purpose), outside-handlers, and commented imports don't count.
+const EXPECTED_CROSS_HANDLER = 2;
+
+const CROSS_ROUTE_FIXTURE_LINES = [
+  'import { w } from "@/routes/_protected.alpha/-components/widget";',
+  'import { q } from "../_protected.alpha/-queries";',
+  'import { own } from "./-components/own-widget";',
+  'import { deep } from "@/routes/_protected.alpha/$id/-hooks/use-x";',
+  'import { pub } from "@/routes/_protected.alpha/shared-public";',
+  'import { Button } from "@coss/button";',
+  '// import { c } from "@/routes/_protected.alpha/-components/commented";',
+];
+const SELF_TEST_CROSS_ROUTE = `${CROSS_ROUTE_FIXTURE_LINES.join("\n")}\n`;
+// Expected (file lives in routes/_protected.beta/): alias cross-import,
+// relative cross-import, and the nested `-hooks` under the other slice = 3.
+// Own-slice private, other-slice non-private, package, and commented imports
+// don't count.
+const EXPECTED_CROSS_ROUTE_BETA = 3;
+
+const CROSS_ROUTE_NESTED_FIXTURE_LINES = [
+  'import { own } from "@/routes/_protected.alpha/-queries";',
+  'import { other } from "@/routes/_protected.beta/-queries";',
+];
+const SELF_TEST_CROSS_ROUTE_NESTED = `${CROSS_ROUTE_NESTED_FIXTURE_LINES.join("\n")}\n`;
+// Expected (file lives in routes/_protected.alpha/$id/, i.e. slice
+// `_protected.alpha`): only the `_protected.beta` reach counts; the own-slice
+// import from a NESTED dir proves attribution to the top-level route dir.
+const EXPECTED_CROSS_ROUTE_NESTED = 1;
+
+const CROSS_ROUTE_CHROME_FIXTURE_LINES = [
+  'import { q } from "@/routes/_protected.alpha/-queries";',
+  'import { util } from "@/lib/utils";',
+];
+const SELF_TEST_CROSS_ROUTE_CHROME = `${CROSS_ROUTE_CHROME_FIXTURE_LINES.join("\n")}\n`;
+// Expected (file lives OUTSIDE routes/, in components/): shared chrome
+// reaching into any route-private path counts = 1.
+const EXPECTED_CROSS_ROUTE_CHROME = 1;
+
+const CROSS_FEATURE_FIXTURE_LINES = [
+  'import { b } from "../beta/utils";',
+  'import { own } from "./own-utils";',
+  'import { shared } from "@/lib/utils";',
+  'import { viaAlias } from "@/features/beta/other";',
+];
+const SELF_TEST_CROSS_FEATURE = `${CROSS_FEATURE_FIXTURE_LINES.join("\n")}\n`;
+// Expected (file lives in features/alpha/): the relative and alias imports
+// into features/beta = 2; own-feature and non-feature imports don't count.
+const EXPECTED_CROSS_FEATURE = 2;
+
 const SUPPRESSION_FIXTURE_LINES = [
   "// eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reason one",
   "useEffect(() => {}, []);",
@@ -755,6 +1034,41 @@ const runSelfTest = (): number => {
       root,
       "apps/web/src/effect-suppressions.tsx",
       SELF_TEST_SUPPRESSIONS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/lint-suppressions.ts",
+      SELF_TEST_LINT_SUPPRESSIONS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/ts-suppressions.ts",
+      SELF_TEST_TS_SUPPRESSIONS,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/handlers/catalogue/uses-skills.ts",
+      SELF_TEST_CROSS_HANDLER,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/routes/_protected.beta/uses-alpha.tsx",
+      SELF_TEST_CROSS_ROUTE,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/routes/_protected.alpha/$id/nested.tsx",
+      SELF_TEST_CROSS_ROUTE_NESTED,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/components/chrome.tsx",
+      SELF_TEST_CROSS_ROUTE_CHROME,
+    );
+    writeFixture(
+      root,
+      "apps/web/src/features/alpha/uses-beta.ts",
+      SELF_TEST_CROSS_FEATURE,
     );
     writeFixture(root, "apps/api/src/db/index.ts", "export const x = 1;\n");
     writeFixture(root, "apps/web/src/lib/index.tsx", "export const y = 2;\n");
@@ -814,6 +1128,62 @@ const runSelfTest = (): number => {
     if (suppressionMetric.count !== EXPECTED_SUPPRESSIONS) {
       failures.push(
         `raw-use-effect-suppressions counted ${suppressionMetric.count}, expected ${EXPECTED_SUPPRESSIONS}`,
+      );
+    }
+
+    const lintSuppressionMetric = snapshot["lint-suppression-directives"];
+    if (lintSuppressionMetric.count !== EXPECTED_LINT_SUPPRESSIONS_TOTAL) {
+      failures.push(
+        `lint-suppression-directives counted ${lintSuppressionMetric.count}, expected ${EXPECTED_LINT_SUPPRESSIONS_TOTAL}`,
+      );
+    }
+    if (
+      lintSuppressionMetric.files["apps/api/src/lint-suppressions.ts"] !==
+      EXPECTED_LINT_SUPPRESSIONS_OWN_FILE
+    ) {
+      failures.push(
+        `lint-suppression-directives per-file count for the dedicated fixture was ${lintSuppressionMetric.files["apps/api/src/lint-suppressions.ts"]}, expected ${EXPECTED_LINT_SUPPRESSIONS_OWN_FILE}`,
+      );
+    }
+
+    const tsSuppressionMetric = snapshot["ts-suppression-directives"];
+    if (tsSuppressionMetric.count !== EXPECTED_TS_SUPPRESSIONS) {
+      failures.push(
+        `ts-suppression-directives counted ${tsSuppressionMetric.count}, expected ${EXPECTED_TS_SUPPRESSIONS}`,
+      );
+    }
+
+    const crossHandlerMetric = snapshot["cross-handler-imports"];
+    if (crossHandlerMetric.count !== EXPECTED_CROSS_HANDLER) {
+      failures.push(
+        `cross-handler-imports counted ${crossHandlerMetric.count}, expected ${EXPECTED_CROSS_HANDLER}`,
+      );
+    }
+
+    const crossRouteMetric = snapshot["cross-route-private-imports"];
+    const expectedCrossRouteTotal =
+      EXPECTED_CROSS_ROUTE_BETA +
+      EXPECTED_CROSS_ROUTE_NESTED +
+      EXPECTED_CROSS_ROUTE_CHROME;
+    if (crossRouteMetric.count !== expectedCrossRouteTotal) {
+      failures.push(
+        `cross-route-private-imports counted ${crossRouteMetric.count}, expected ${expectedCrossRouteTotal}`,
+      );
+    }
+    if (
+      crossRouteMetric.files[
+        "apps/web/src/routes/_protected.alpha/$id/nested.tsx"
+      ] !== EXPECTED_CROSS_ROUTE_NESTED
+    ) {
+      failures.push(
+        "cross-route-private-imports did not attribute a nested route file to its top-level slice",
+      );
+    }
+
+    const crossFeatureMetric = snapshot["cross-feature-imports"];
+    if (crossFeatureMetric.count !== EXPECTED_CROSS_FEATURE) {
+      failures.push(
+        `cross-feature-imports counted ${crossFeatureMetric.count}, expected ${EXPECTED_CROSS_FEATURE}`,
       );
     }
 
