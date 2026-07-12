@@ -3,12 +3,15 @@ import type {
   ChatToolMap,
 } from "@/api/handlers/chat/tools/chat-tool-types";
 import { SPAWN_SUBAGENTS_TOOL_NAME } from "@/api/handlers/chat/tools/spawn-subagents-tool";
-import { copyChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
+import {
+  copyChatToolPolicy,
+  getChatToolPolicy,
+} from "@/api/handlers/chat/tools/tool-policy";
 
 /**
  * Projects the full chat tool map down to the subset a subagent's
  * nested `chat()` loop (see `runSubagent` in `tanstack-ai-agent.ts`)
- * is allowed to use. Two exclusions matter:
+ * is allowed to use. Exclusions and transforms:
  *
  *  - `spawn_subagents` itself is dropped so a subagent cannot spawn
  *    further subagents. Nesting depth is already capped in
@@ -19,13 +22,64 @@ import { copyChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
  *    real chat client resolves it via `ChatClient.addToolResult`. A
  *    nested loop has no client attached, so calling one of these
  *    would hang forever waiting for a result that never arrives.
+ *  - `mcp__` external tools are dropped by name (see below).
  *
- * Every surviving tool is cloned with `needsApproval` stripped:
- * approval already happened once, up front, when the user approved
- * the `spawn_subagents` call itself. A nested loop has no client to
- * answer a pause, so a per-call approval on a projected tool would
- * deadlock the subagent.
+ * Approval handling ("buffered approval"): a subagent runs autonomously
+ * with no client to answer a per-call approval pause, so it must never
+ * execute an approval-requiring tool (any `mutation` / `external` /
+ * `publicUnofficial` policy) inline. Prompt-injected text in a document
+ * the subagent reads could otherwise drive an irreversible delete/write
+ * the user never approved. Classification is by the authoritative policy
+ * WeakMap (`getChatToolPolicy`), not the raw `needsApproval` field:
+ *
+ *  - policy `needsApproval === false` (internal / publicOfficial reads):
+ *    cloned as-is (approval was never required for these), with the
+ *    policy preserved so anonymization still treats a public tool as
+ *    public.
+ *  - policy `needsApproval === true`: replaced by a non-executing
+ *    proposal wrapper with the SAME name/description/inputSchema. Its
+ *    `execute` performs no side effect; it records the proposed
+ *    operation (tool name + validated args) into the run's proposal
+ *    buffer and returns a synthetic "queued for approval" result. The
+ *    caller of `runSubagent` drains the buffer and surfaces the proposed
+ *    writes to the top-level chat loop, where the existing top-level
+ *    `needsApproval` mechanism gates the real execution behind the user.
+ *
+ * This makes "a subagent silently executes an unapproved side-effecting
+ * tool" structurally impossible: an approval-requiring tool can only ever
+ * enter the projection as a non-executing wrapper.
  */
+export type SubagentWriteProposal = {
+  toolName: string;
+  args: unknown;
+};
+
+export type SubagentProposalSink = {
+  record: (proposal: SubagentWriteProposal) => void;
+};
+
+export type SubagentProposalBuffer = {
+  sink: SubagentProposalSink;
+  list: () => readonly SubagentWriteProposal[];
+};
+
+/**
+ * A per-subagent-run buffer of writes the subagent proposed but did not
+ * execute. Created fresh for each `runSubagent` call so a subagent's
+ * result carries only its own proposed writes (see `spawn-subagents-tool.ts`).
+ */
+export const createSubagentProposalBuffer = (): SubagentProposalBuffer => {
+  const proposals: SubagentWriteProposal[] = [];
+  return {
+    sink: {
+      record: (proposal) => {
+        proposals.push(proposal);
+      },
+    },
+    list: () => proposals,
+  };
+};
+
 const hasServerExecute = (tool: ChatTool): boolean =>
   typeof tool.execute === "function";
 
@@ -39,7 +93,41 @@ const cloneWithoutApprovalGate = (tool: ChatTool): ChatTool => {
   return clone;
 };
 
-export const projectToolMapForSubagent = (tools: ChatToolMap): ChatToolMap => {
+const buildQueuedResultMessage = (toolName: string): string =>
+  `Queued "${toolName}" for user approval. It was NOT executed and had no ` +
+  `effect. The proposed action is returned to the top-level assistant, which ` +
+  `will re-issue it so the user can approve it. Do not retry it and do not ` +
+  `assume it completed.`;
+
+/**
+ * Wraps an approval-requiring tool as a non-executing proposal: same
+ * name/description/inputSchema, but `execute` records the proposed call and
+ * returns a synthetic acknowledgement instead of running the side effect.
+ * The `outputSchema` is dropped so TanStack does not validate the synthetic
+ * acknowledgement against the real write's output contract (it validates
+ * server results against `outputSchema` when it is a Standard Schema).
+ */
+const buildProposalWrapper = (
+  tool: ChatTool,
+  proposalSink: SubagentProposalSink,
+): ChatTool => {
+  const wrapper = { ...tool };
+  delete wrapper.needsApproval;
+  delete wrapper.outputSchema;
+  wrapper.execute = async (args) => {
+    proposalSink.record({ toolName: tool.name, args });
+    return buildQueuedResultMessage(tool.name);
+  };
+  // Keep the original policy so anonymization/consent classification stays
+  // consistent, even though the wrapper itself performs no third-party call.
+  copyChatToolPolicy(tool, wrapper);
+  return wrapper;
+};
+
+export const projectToolMapForSubagent = (
+  tools: ChatToolMap,
+  proposalSink: SubagentProposalSink,
+): ChatToolMap => {
   const projected: ChatToolMap = {};
   for (const [name, tool] of Object.entries(tools)) {
     if (!tool) {
@@ -59,6 +147,13 @@ export const projectToolMapForSubagent = (tools: ChatToolMap): ChatToolMap => {
       continue;
     }
     if (!hasServerExecute(tool)) {
+      continue;
+    }
+    // Authoritative classification is the policy WeakMap, not the raw
+    // `needsApproval` field: an approval-requiring tool never gets a live
+    // server `execute` inside a subagent, only a non-executing proposal.
+    if (getChatToolPolicy(tool).needsApproval) {
+      projected[name] = buildProposalWrapper(tool, proposalSink);
       continue;
     }
     projected[name] = cloneWithoutApprovalGate(tool);

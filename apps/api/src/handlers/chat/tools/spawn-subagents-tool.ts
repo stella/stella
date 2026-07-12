@@ -7,6 +7,11 @@ import { env } from "@/api/env";
 import { createChatTextPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
+import {
+  createSubagentProposalBuffer,
+  type SubagentProposalSink,
+  type SubagentWriteProposal,
+} from "@/api/handlers/chat/tools/subagent-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -128,11 +133,38 @@ type SubagentSpec = SpawnSubagentsToolInput["subagents"][number];
 const buildSubagentSystemPrompt = (expectedOutput?: string): string => {
   const base =
     "You are a subagent completing one delegated subtask inside stella, a legal workspace. " +
-    "You have read/write tools available but no direct user interaction — never ask the user a question; make reasonable assumptions and proceed. " +
+    "You have read tools plus write tools, but no direct user interaction — never ask the user a question; make reasonable assumptions and proceed. " +
+    "Any write/mutation you call is queued for user approval and applied only after you finish, not immediately; treat it as proposed, do not retry it, and do not assume it took effect. " +
     "Return a concise final result summarizing what you did and the output the caller needs.";
   return expectedOutput
     ? `${base} Return output matching: ${expectedOutput}`
     : base;
+};
+
+/**
+ * Surfaces a subagent's proposed (but unexecuted) writes back to the top-level
+ * chat loop as structured text. The parent model re-issues each call itself,
+ * where the top-level `needsApproval` mechanism pauses for the user; the
+ * subagent never performed the side effect. Kept as text on purpose: no new
+ * streaming protocol, and the parent already reads the subagent's result.
+ */
+const appendProposedWrites = (
+  text: string,
+  proposals: readonly SubagentWriteProposal[],
+): string => {
+  if (proposals.length === 0) {
+    return text;
+  }
+  const lines = proposals.map(
+    (proposal, index) =>
+      `${index + 1}. ${proposal.toolName} ${JSON.stringify(proposal.args)}`,
+  );
+  const block = [
+    "PROPOSED WRITES — the subagent did NOT execute these; they require user approval.",
+    "Re-issue each call yourself so the user is asked to approve it (do not treat them as done):",
+    ...lines,
+  ].join("\n");
+  return text ? `${text}\n\n${block}` : block;
 };
 
 type BuildSubagentUserMessageProps = {
@@ -270,8 +302,13 @@ const preflightSubagentBatchUsage = async ({
 };
 
 type CreateSpawnSubagentsToolProps = {
-  /** Lazily builds the (already depth+1, already projected) subagent toolset. */
-  buildSubagentToolset: () => ChatToolMap;
+  /**
+   * Lazily builds the (already depth+1, already projected) subagent toolset.
+   * Approval-requiring tools in the projection are non-executing proposal
+   * wrappers that record into the supplied sink instead of running the write;
+   * the caller drains the buffer after the run to surface proposed writes.
+   */
+  buildSubagentToolset: (proposalSink: SubagentProposalSink) => ChatToolMap;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   safeDb: SafeDb;
@@ -301,8 +338,6 @@ export const createSpawnSubagentsTool = (
     inputSchema: toTanStackToolSchema(spawnSubagentsInputSchema),
     outputSchema: toTanStackToolSchema(spawnSubagentsOutputSchema),
   }).server(async ({ subagents }, ctx) => {
-    const tools = props.buildSubagentToolset();
-
     // Resolve the fast role's model info once for the whole batch; each
     // per-subagent `model` override is validated against it.
     const fastModelInfo = getTanStackTextModelInfoForRole(
@@ -330,6 +365,10 @@ export const createSpawnSubagentsTool = (
     }
 
     const runOneSubagent = async (sub: SubagentSpec, index: number) => {
+      // Fresh per-run buffer: the toolset's proposal wrappers record into it,
+      // so this subagent's result carries only its own proposed writes.
+      const proposalBuffer = createSubagentProposalBuffer();
+      const tools = props.buildSubagentToolset(proposalBuffer.sink);
       try {
         const { text } = await runSubagent({
           organizationId: props.organizationId,
@@ -360,7 +399,11 @@ export const createSpawnSubagentsTool = (
           },
           thirdPartyBoundary: props.thirdPartyBoundary,
         });
-        return { index, status: "completed" as const, result: text };
+        return {
+          index,
+          status: "completed" as const,
+          result: appendProposedWrites(text, proposalBuffer.list()),
+        };
       } catch (error) {
         if (error instanceof Error && error.name === "AbortError") {
           throw error;
