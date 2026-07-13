@@ -29,14 +29,16 @@ const numberOrNull = (input: string | undefined): number | null => {
 const buildRegistryUrl = (id: string): string =>
   `${DENUE_WEB_BASE}?idee=${encodeURIComponent(id)}`;
 
-const parseLocation = (
-  rawLocation: string | undefined,
-): {
+type ParseLocationResult = {
   locality: string | null;
   municipality: string | null;
   state: string | null;
   text: string | null;
-} => {
+};
+
+const parseLocation = (
+  rawLocation: string | undefined,
+): ParseLocationResult => {
   const text = emptyToNull(rawLocation);
   if (!text) {
     return {

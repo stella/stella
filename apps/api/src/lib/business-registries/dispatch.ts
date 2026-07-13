@@ -726,7 +726,7 @@ const requireDenueApiToken = (): string => {
   return token;
 };
 
-const DENUE_HANDLER: RegistryHandler = {
+const DENUE_HANDLER = {
   slug: "denue",
   country: "MX",
   nativeToolSlug: "denue",
@@ -750,7 +750,7 @@ const DENUE_HANDLER: RegistryHandler = {
   },
   isDeployAvailable: isDenueDeployAvailable,
   mapError: mapDenueError,
-};
+} satisfies RegistryHandler;
 
 // ---------------------------------------------------------------------------
 // SEC EDGAR (United States)

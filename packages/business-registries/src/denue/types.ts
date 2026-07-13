@@ -75,15 +75,17 @@ export type DenueEstablishment = {
   registryUrl: string;
 };
 
-export type DenueSearchResult = {
-  id: string;
-  clee: string | null;
-  name: string;
-  legalName: string | null;
-  activityClass: string | null;
-  employeeStratum: string | null;
-  unitType: string | null;
+export type DenueSearchResult = Pick<
+  DenueEstablishment,
+  | "id"
+  | "clee"
+  | "name"
+  | "legalName"
+  | "activityClass"
+  | "employeeStratum"
+  | "unitType"
+  | "coordinates"
+  | "registryUrl"
+> & {
   address: string | null;
-  coordinates: DenueCoordinates;
-  registryUrl: string;
 };

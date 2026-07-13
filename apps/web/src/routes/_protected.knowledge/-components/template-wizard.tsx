@@ -1074,7 +1074,9 @@ const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> = {
     "registered on",
     "jurisdiction",
   ],
-  denue: REGISTRY_BASE_RETURN_FIELDS,
+  denue: REGISTRY_BASE_RETURN_FIELDS.filter(
+    (fieldName) => fieldName !== "legal form",
+  ),
   brreg: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
   prh: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
   "recherche-entreprises": [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
