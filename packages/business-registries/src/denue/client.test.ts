@@ -140,7 +140,7 @@ describe("lookupByEstablishmentId (fixture)", () => {
         }),
     );
 
-    await expect(
+    expect(
       lookupByEstablishmentId("6281106", { token: "bad-token" }),
     ).rejects.toBeInstanceOf(DenueAuthError);
   });
@@ -154,7 +154,7 @@ describe("lookupByEstablishmentId (fixture)", () => {
         }),
     );
 
-    await expect(
+    expect(
       lookupByEstablishmentId("6281106", { token: "test-token" }),
     ).rejects.toBeInstanceOf(DenueAPIError);
   });
@@ -171,7 +171,7 @@ describe("lookupByEstablishmentId (fixture)", () => {
         ),
     );
 
-    await expect(
+    expect(
       lookupByEstablishmentId("6281106", { token: "test-token" }),
     ).rejects.toBeInstanceOf(DenueAPIError);
   });
@@ -236,7 +236,7 @@ describe("searchByName (fixture)", () => {
         }),
     );
 
-    await expect(
+    expect(
       searchByName("Marriott", { token: "test-token" }),
     ).rejects.toBeInstanceOf(DenueAPIError);
   });
@@ -265,22 +265,22 @@ describe("searchByName (fixture)", () => {
 
 describe("DENUE client validation", () => {
   test("rejects invalid establishment ids", async () => {
-    await expect(
+    expect(
       lookupByEstablishmentId("ABC123", { token: "test-token" }),
     ).rejects.toBeInstanceOf(DenueValidationError);
   });
 
   test("rejects empty tokens", async () => {
-    await expect(
+    expect(
       lookupByEstablishmentId("6281106", { token: " " }),
     ).rejects.toBeInstanceOf(DenueAuthError);
   });
 
   test("rejects empty search names and invalid state codes", async () => {
-    await expect(
-      searchByName("", { token: "test-token" }),
-    ).rejects.toBeInstanceOf(DenueValidationError);
-    await expect(
+    expect(searchByName("", { token: "test-token" })).rejects.toBeInstanceOf(
+      DenueValidationError,
+    );
+    expect(
       searchByName("Marriott", { token: "test-token" }, { stateCode: "99" }),
     ).rejects.toBeInstanceOf(DenueValidationError);
   });
