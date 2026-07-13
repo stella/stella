@@ -1257,6 +1257,49 @@
       "POST /v1/skills/seed": 1024
     }
   },
+  "/settings/organization/audit-logs": {
+    "depth": 4,
+    "requests": [
+      "GET /api/auth/get-session",
+      "GET /api/auth/organization/get-active-member-role",
+      "GET /api/auth/organization/list",
+      "GET /health",
+      "GET /v1/audit-logs",
+      "GET /v1/chat/threads",
+      "GET /v1/organization-settings/ai-availability",
+      "GET /v1/workspaces/navigation"
+    ],
+    "requestCounts": {
+      "GET /api/auth/get-session": 1,
+      "GET /api/auth/organization/get-active-member-role": 1,
+      "GET /api/auth/organization/list": 1,
+      "GET /health": 1,
+      "GET /v1/audit-logs": 1,
+      "GET /v1/chat/threads": 1,
+      "GET /v1/organization-settings/ai-availability": 1,
+      "GET /v1/workspaces/navigation": 1
+    },
+    "dbQueries": {
+      "GET /api/auth/get-session": 2,
+      "GET /api/auth/organization/get-active-member-role": 4,
+      "GET /api/auth/organization/list": 6,
+      "GET /health": 1,
+      "GET /v1/audit-logs": 8,
+      "GET /v1/chat/threads": 6,
+      "GET /v1/organization-settings/ai-availability": 4,
+      "GET /v1/workspaces/navigation": 6
+    },
+    "responseSizes": {
+      "GET /api/auth/get-session": 1024,
+      "GET /api/auth/organization/get-active-member-role": 1024,
+      "GET /api/auth/organization/list": 1024,
+      "GET /health": 1024,
+      "GET /v1/audit-logs": 4096,
+      "GET /v1/chat/threads": 4096,
+      "GET /v1/organization-settings/ai-availability": 1024,
+      "GET /v1/workspaces/navigation": 20480
+    }
+  },
   "/settings/organization/document-types": {
     "depth": 3,
     "requests": [
