@@ -2,16 +2,19 @@
 
 import * as slimdom from "slimdom";
 
-import type { DocxArchive } from "@/api/lib/docx-archive";
+import {
+  extractDocxText,
+  type ExtractedDocxParagraph,
+} from "@stll/folio-core/server";
+
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
-import { HEADER_FOOTER_RE, isElement, W_NS } from "./ooxml";
+import { isElement, W_NS } from "./ooxml";
 import type {
   BlockDirectiveKind,
   ExtractedDocument,
   ExtractedParagraph,
   FieldMeta,
-  ParagraphSource,
 } from "./types";
 
 // ── Directive detection ─────────────────────────────────
@@ -32,33 +35,6 @@ const DIRECTIVE_KIND_MAP: Record<string, BlockDirectiveKind> = {
   "#each": "each",
   "/if": "endif",
   "/each": "endeach",
-};
-
-/** Concatenate run text, skipping tracked deletions and preserving explicit breaks. */
-const collectText = (el: slimdom.Element): string => {
-  let text = "";
-  const walk = (node: slimdom.Node) => {
-    if (!isElement(node)) {
-      return;
-    }
-    if (node.localName === "t" && node.namespaceURI === W_NS) {
-      text += node.textContent ?? "";
-    } else if (node.localName === "br" && node.namespaceURI === W_NS) {
-      text += "\n";
-    } else if (node.localName === "tab" && node.namespaceURI === W_NS) {
-      text += "\t";
-    } else if (
-      node.localName !== "delText" &&
-      node.localName !== "del" &&
-      node.localName !== "moveFrom"
-    ) {
-      for (const c of node.childNodes) {
-        walk(c);
-      }
-    }
-  };
-  walk(el);
-  return text;
 };
 
 type ParagraphProps = {
@@ -102,220 +78,57 @@ const readParagraphProps = (p: slimdom.Element): ParagraphProps => {
 const readAttr = (el: slimdom.Element, local: string): string | undefined =>
   el.getAttributeNS(W_NS, local) ?? el.getAttribute(`w:${local}`) ?? undefined;
 
-type RunMetrics = {
-  bold: boolean;
-  fontSize?: number | undefined;
-  chars: number;
-};
-
-/** Read bold and font size from runs in a paragraph. */
-const readRunMetrics = (p: slimdom.Element): RunMetrics[] => {
-  const runs: RunMetrics[] = [];
-  for (const child of p.childNodes) {
-    if (!isElement(child)) {
-      continue;
-    }
-    if (child.localName !== "r" || child.namespaceURI !== W_NS) {
-      continue;
-    }
-    let bold = false;
-    let fontSize: number | undefined;
-    let chars = 0;
-    for (const inner of child.childNodes) {
-      if (!isElement(inner)) {
-        continue;
-      }
-      if (inner.localName === "rPr" && inner.namespaceURI === W_NS) {
-        for (const prop of inner.childNodes) {
-          if (!isElement(prop)) {
-            continue;
-          }
-          if (prop.localName === "b" && prop.namespaceURI === W_NS) {
-            const val = readAttr(prop, "val");
-            bold = val !== "0" && val !== "false";
-          }
-          if (prop.localName === "sz" && prop.namespaceURI === W_NS) {
-            const val = readAttr(prop, "val");
-            if (val) {
-              fontSize = Number.parseInt(val, 10) || undefined;
-            }
-          }
-        }
-      }
-      if (inner.localName === "t" && inner.namespaceURI === W_NS) {
-        chars += (inner.textContent ?? "").length;
-      }
-    }
-    if (chars > 0) {
-      runs.push({ bold, fontSize, chars });
-    }
-  }
-  return runs;
-};
-
-// ── Container extraction ─────────────────────────────────
-
-/**
- * Extract paragraphs from a container element (w:body,
- * w:hdr, or w:ftr), tagging each with a source label.
- */
-const extractParagraphsFromContainer = (
-  container: slimdom.Element,
-  source: ParagraphSource,
-  startIndex: number,
-): { paragraphs: ExtractedParagraph[]; chars: number } => {
-  const paragraphs: ExtractedParagraph[] = [];
-  let chars = 0;
-  let index = startIndex;
-
-  // Descendant paragraphs, not just direct children: document text
-  // commonly sits inside tables (w:tbl/w:tr/w:tc) or content controls
-  // (w:sdt), and discovery (`discover-template.ts`) already indexes
-  // paragraphs this way, so extraction must enumerate the same set or
-  // table content stays invisible to version diffs and AI context.
-  for (const child of container.getElementsByTagNameNS(W_NS, "p")) {
-    const text = collectText(child);
-    const { style, alignment } = readParagraphProps(child);
-
-    const entry: ExtractedParagraph = { index, text, source };
-    if (style) {
-      entry.style = style;
-    }
-    if (alignment) {
-      entry.alignment = alignment;
-    }
-
-    const runs = readRunMetrics(child);
-    if (runs.length > 0) {
-      const totalCharsInRuns = runs.reduce((s, r) => s + r.chars, 0);
-      const boldChars = runs.reduce((s, r) => s + (r.bold ? r.chars : 0), 0);
-      if (boldChars > totalCharsInRuns / 2) {
-        entry.bold = true;
-      }
-      const firstSize = runs.find((r) => (r.fontSize ?? 0) > 0)?.fontSize;
-      if ((firstSize ?? 0) > 0) {
-        entry.fontSize = firstSize;
-      }
-    }
-
-    const dm = DIRECTIVE_RE.exec(text);
-    if (dm) {
-      entry.isDirective = true;
-      const tag = dm.groups?.["tag"];
-      const expr = dm.groups?.["expr"];
-      if (tag !== undefined) {
-        entry.directiveKind = DIRECTIVE_KIND_MAP[tag];
-      }
-      if (expr !== undefined) {
-        entry.directiveExpression = expr.trim();
-      }
-    }
-
-    paragraphs.push(entry);
-    chars += text.length;
-    index++;
-  }
-
-  return { paragraphs, chars };
-};
-
-/**
- * Extract paragraphs from all header/footer XML entries in
- * the archive, sorted by file name for deterministic ordering.
- */
-const extractHeaderFooterParagraphs = async (
-  archive: DocxArchive,
-  source: ParagraphSource,
-  rootTag: string,
-  startIndex: number,
-): Promise<{ paragraphs: ExtractedParagraph[]; chars: number }> => {
-  const chunks: ExtractedParagraph[][] = [];
-  let chars = 0;
-  let index = startIndex;
-
-  const prefix = `word/${source === "header" ? "header" : "footer"}`;
-  const entries = Object.keys(archive.zip.files)
-    .filter((path) => HEADER_FOOTER_RE.test(path) && path.startsWith(prefix))
-    .toSorted();
-
-  for (const path of entries) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential to keep running paragraph index contiguous across parts
-    const xml = await archive.readEntryString(path);
-    if (xml === null) {
-      continue;
-    }
-
-    const doc = slimdom.parseXmlDocument(xml);
-    const container = doc.getElementsByTagNameNS(W_NS, rootTag).at(0);
-
-    if (!container) {
-      continue;
-    }
-
-    const result = extractParagraphsFromContainer(container, source, index);
-    chunks.push(result.paragraphs);
-    chars += result.chars;
-    index += result.paragraphs.length;
-  }
-
-  return { paragraphs: chunks.flat(), chars };
-};
-
 // ── Public API ───────────────────────────────────────────
+
+const annotateDirective = ({
+  index,
+  text,
+  source,
+  style,
+  bold,
+  fontSize,
+  alignment,
+}: ExtractedDocxParagraph): ExtractedParagraph => {
+  const paragraph: ExtractedParagraph = { index, text, source };
+  if (style !== undefined) {
+    paragraph.style = style;
+  }
+  if (bold !== undefined) {
+    paragraph.bold = bold;
+  }
+  if (fontSize !== undefined) {
+    paragraph.fontSize = fontSize;
+  }
+  if (alignment !== undefined) {
+    paragraph.alignment = alignment;
+  }
+
+  const directiveMatch = DIRECTIVE_RE.exec(text);
+  if (!directiveMatch) {
+    return paragraph;
+  }
+
+  paragraph.isDirective = true;
+  const tag = directiveMatch.groups?.["tag"];
+  const expression = directiveMatch.groups?.["expr"];
+  if (tag !== undefined) {
+    paragraph.directiveKind = DIRECTIVE_KIND_MAP[tag];
+  }
+  if (expression !== undefined) {
+    paragraph.directiveExpression = expression.trim();
+  }
+  return paragraph;
+};
 
 export const extractText = async (
   docxBytes: Uint8Array,
 ): Promise<ExtractedDocument> => {
-  const archive = await loadDocxArchive(docxBytes);
-  const emptyResult: ExtractedDocument = {
-    paragraphs: [],
-    charCount: 0,
-    view: "accepted",
+  const result = await extractDocxText(docxBytes);
+  return {
+    paragraphs: result.paragraphs.map(annotateDirective),
+    charCount: result.charCount,
+    view: result.view,
   };
-
-  const xml = await archive.readEntryString("word/document.xml");
-  if (xml === null) {
-    return emptyResult;
-  }
-
-  const doc = slimdom.parseXmlDocument(xml);
-
-  const body = doc.getElementsByTagNameNS(W_NS, "body").at(0);
-  if (!body) {
-    return emptyResult;
-  }
-
-  // Extract headers (before body)
-  const headers = await extractHeaderFooterParagraphs(
-    archive,
-    "header",
-    "hdr",
-    0,
-  );
-
-  // Extract body
-  const bodyResult = extractParagraphsFromContainer(
-    body,
-    "body",
-    headers.paragraphs.length,
-  );
-
-  // Extract footers (after body)
-  const footers = await extractHeaderFooterParagraphs(
-    archive,
-    "footer",
-    "ftr",
-    headers.paragraphs.length + bodyResult.paragraphs.length,
-  );
-
-  const paragraphs = [
-    ...headers.paragraphs,
-    ...bodyResult.paragraphs,
-    ...footers.paragraphs,
-  ];
-  const charCount = headers.chars + bodyResult.chars + footers.chars;
-
-  return { paragraphs, charCount, view: "accepted" };
 };
 
 /**
