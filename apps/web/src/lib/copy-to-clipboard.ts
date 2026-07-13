@@ -6,5 +6,7 @@ import { Result } from "better-result";
  * rejection path (denied permission, insecure context) without a bespoke
  * try/catch. Returns a `Result<void>`; inspect it with `Result.isError`.
  */
-export const copyToClipboard = (text: string) =>
-  Result.tryPromise(() => navigator.clipboard.writeText(text));
+export const copyToClipboard = async (text: string) =>
+  await Result.tryPromise(
+    async () => await navigator.clipboard.writeText(text),
+  );
