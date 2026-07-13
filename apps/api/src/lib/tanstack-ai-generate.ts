@@ -678,17 +678,19 @@ export const mergeGenerationOptions = ({
 const isDeferredServiceTier = (serviceTier: AIRequestServiceTier): boolean =>
   serviceTier === "flex" || serviceTier === "batch";
 
+// `prompt_cache_retention` is omitted because no single value is valid across
+// this catalogue: the API accepts "in_memory" | "24h", but gpt-5.5 supports only
+// "24h". Omission is the one portable choice, and it takes the provider default:
+// "24h" for a non-ZDR org, "in_memory" for a ZDR one. Retention is a per-model
+// capability, so setting it belongs in the model catalogue, not here.
 const openAICacheOptions = (
   caching: CachingDecision,
-): Partial<
-  Pick<OpenAITextProviderOptions, "prompt_cache_key" | "prompt_cache_retention">
-> => {
+): Partial<Pick<OpenAITextProviderOptions, "prompt_cache_key">> => {
   if (!caching.enabled || caching.scopeKey === null) {
     return {};
   }
   return {
     prompt_cache_key: hashCacheScopeKey(caching.scopeKey),
-    prompt_cache_retention: "in-memory",
   };
 };
 
