@@ -21,13 +21,13 @@ import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
+import { DocumentIcon } from "@/components/document-icon";
 import { InlinePill } from "@/components/inline-pill";
 import { MatterIcon } from "@/components/matter-icon";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 

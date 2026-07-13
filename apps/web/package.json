@@ -51,6 +51,7 @@
     "@stll/locales": "workspace:*",
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
+    "@stll/skills": "workspace:*",
     "@stll/template-conditions": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/ui": "workspace:*",

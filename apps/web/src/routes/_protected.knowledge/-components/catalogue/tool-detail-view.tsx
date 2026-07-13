@@ -7,6 +7,7 @@ import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import type { ActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import type {
   InspectorRailIconProps,
@@ -17,7 +18,6 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { catalogueOptions } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 import { CatalogueDetailPanel } from "./catalogue-detail-panel";
-import { CatalogueEntryIcon } from "./catalogue-entry-icon";
 import type { CatalogueEntry } from "./catalogue-types";
 import { useInstallEntry } from "./use-install-entry";
 import { useUninstallEntry } from "./use-uninstall-entry";

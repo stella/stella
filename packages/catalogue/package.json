@@ -13,6 +13,10 @@
     "./install-payloads": {
       "types": "./src/install-payloads.ts",
       "import": "./src/install-payloads.ts"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "import": "./src/schema.ts"
     }
   },
   "scripts": {

@@ -214,6 +214,26 @@ describe("validateCatalogue with github entries", () => {
     ).toBe(true);
   });
 
+  it("ignores hidden OS metadata in a github skill folder", () => {
+    const root = makeEntriesRoot();
+    writeSkill(root, "german-law", validGithubSkill, {
+      ".DS_Store": "finder metadata",
+    });
+    expect(validateCatalogue(root).errors).toEqual([]);
+  });
+
+  it("still rejects hidden local content in a github skill folder", () => {
+    const root = makeEntriesRoot();
+    writeSkill(root, "german-law", validGithubSkill, {
+      ".private-notes": "local content",
+    });
+    expect(
+      validateCatalogue(root).errors.some((error) =>
+        error.includes("must not include local content"),
+      ),
+    ).toBe(true);
+  });
+
   it("still surfaces schema errors (bad rev) for github skills", () => {
     const root = makeEntriesRoot();
     writeSkill(root, "german-law", { ...validGithubSkill, rev: "abc" });

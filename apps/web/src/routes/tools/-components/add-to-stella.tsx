@@ -19,7 +19,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
-import { userErrorFromThrown } from "@/lib/errors";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 const SignInDialog = lazy(async () => {
   const module = await import("@/components/auth/sign-in-dialog");

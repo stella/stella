@@ -302,10 +302,10 @@ license: MIT
 Draft in German.`;
     const scriptSource = "print('draft')\n";
 
-    const result = await fetchGithubCatalogueSkillPackage(
-      PINNED_TARGET,
-      PINNED_SOURCE_URL,
-      async (target) => {
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async (target) => {
         captured.target = target;
         return [
           skillFile(skillSource),
@@ -316,7 +316,7 @@ Draft in German.`;
           },
         ];
       },
-    );
+    });
 
     expect(Result.isOk(result)).toBe(true);
     if (Result.isError(result)) {
@@ -333,16 +333,16 @@ Draft in German.`;
   });
 
   test("surfaces an upstream fetch failure as an error", async () => {
-    const result = await fetchGithubCatalogueSkillPackage(
-      PINNED_TARGET,
-      PINNED_SOURCE_URL,
-      async () => {
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => {
         throw new HandlerError({
           status: 400,
           message: "Skill source returned HTTP 404",
         });
       },
-    );
+    });
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isOk(result)) {
@@ -352,10 +352,10 @@ Draft in German.`;
   });
 
   test("rejects a SKILL.md whose instructions exceed the size cap", async () => {
-    const result = await fetchGithubCatalogueSkillPackage(
-      PINNED_TARGET,
-      PINNED_SOURCE_URL,
-      async () => [
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => [
         skillFile(`---
 name: german-law
 description: Community skill for German legal drafting.
@@ -364,7 +364,7 @@ license: MIT
 
 ${"x".repeat(LIMITS.agentSkillBodyMaxChars + 1)}`),
       ],
-    );
+    });
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isOk(result)) {

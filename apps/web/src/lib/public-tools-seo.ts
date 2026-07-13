@@ -5,7 +5,7 @@ import {
   type PublicHeadInput,
 } from "@/lib/public-seo";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
-import { spdxLicenseUrl } from "@/routes/tools/-components/tool-detail.logic";
+import { spdxLicenseUrl } from "@/lib/spdx-license";
 
 type PublicToolsHeadInput = Omit<PublicHeadInput, "crawlAllowed"> & {
   crawlAllowed?: boolean;

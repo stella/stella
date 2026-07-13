@@ -1,27 +1,19 @@
 import { loadCatalogue } from "@stll/catalogue";
 
 import {
-  assertPublicLawSitemapXmlWithinProtocolLimits,
+  assertSitemapXmlWithinProtocolLimits,
+  escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
-} from "@/lib/public-law-sitemap";
+  TOOLS_SITEMAP_PATH,
+} from "@/lib/public-sitemap";
 import { isPublicToolsSitemapEnabled } from "@/lib/public-tools-launch";
 import { createPublicToolsCanonicalUrl } from "@/lib/public-tools-seo";
 
-export const TOOLS_SITEMAP_PATH = "/sitemaps/tools.xml";
-
-export { SITEMAP_XML_RESPONSE_HEADERS };
+export { SITEMAP_XML_RESPONSE_HEADERS, TOOLS_SITEMAP_PATH };
 
 type PublicToolsSitemapOptions = {
   publicToolsIndexingEnabled?: boolean;
 };
-
-const xmlEscape = (value: string): string =>
-  value
-    .replace(/&/gu, "&amp;")
-    .replace(/</gu, "&lt;")
-    .replace(/>/gu, "&gt;")
-    .replace(/"/gu, "&quot;")
-    .replace(/'/gu, "&apos;");
 
 // Static browse surfaces plus every catalogue entry. Content is fully
 // static (the generated `@stll/catalogue` bundle), so the whole set is
@@ -45,7 +37,7 @@ export const createPublicToolsSitemapXml = ({
   const entries = collectToolPaths()
     .map(
       (path) => `  <url>
-    <loc>${xmlEscape(createPublicToolsCanonicalUrl(path))}</loc>
+    <loc>${escapeSitemapXml(createPublicToolsCanonicalUrl(path))}</loc>
   </url>`,
     )
     .join("\n");
@@ -56,7 +48,7 @@ ${entries}
 </urlset>
 `;
 
-  assertPublicLawSitemapXmlWithinProtocolLimits(xml);
+  assertSitemapXmlWithinProtocolLimits(xml);
 
   return xml;
 };

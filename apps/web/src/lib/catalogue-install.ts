@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 
 /**
  * Minimal per-kind shape needed to install a catalogue entry. Kept

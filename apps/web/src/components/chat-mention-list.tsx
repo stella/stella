@@ -22,9 +22,9 @@ import type {
   ChatMentionOption,
   ChatReferenceCategory,
 } from "@/components/chat-mention-extension";
+import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 export const ChatMentionList = ({
   items,

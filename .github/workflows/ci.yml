@@ -323,6 +323,7 @@ jobs:
 
       - name: Catalogue pinned-content check
         if: needs.ci-changes.outputs.package_checks_required == 'true'
+        timeout-minutes: 5
         env:
           GITHUB_TOKEN: ${{ github.token }}
         # github-sourced catalogue skills pin an upstream commit SHA whose

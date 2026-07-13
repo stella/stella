@@ -72,7 +72,8 @@ const SidebarUserMenu = lazy(async () => {
 // Routes reachable without authentication. Their nav entries render as
 // real <Link>s (crawlable, no sign-in prompt); every other primary-nav
 // destination routes anonymous users through the sign-in dialog.
-const PUBLIC_PRIMARY_NAV_ROUTES = new Set(["/law/cases", "/tools"]);
+const isPublicPrimaryNavRoute = (to: string): boolean =>
+  to === "/law/cases" || to === "/tools";
 
 /**
  * Shared chrome for the public, selectively-SSR'd surfaces (`/law`,
@@ -225,7 +226,7 @@ function PublicSidebar({
                 );
               }
 
-              if (PUBLIC_PRIMARY_NAV_ROUTES.has(item.to)) {
+              if (isPublicPrimaryNavRoute(item.to)) {
                 return (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton asChild tooltip={label}>

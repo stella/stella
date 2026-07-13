@@ -6,8 +6,8 @@ import {
   MailIcon,
 } from "lucide-react";
 
+import { getDocumentIconKind } from "@/components/document-icon.logic";
 import { MarkdownIcon } from "@/components/markdown-icon";
-import { getDocumentIconKind } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon.logic";
 
 type DocxIconProps = {
   className?: string | undefined;

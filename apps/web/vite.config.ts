@@ -252,6 +252,9 @@ export default defineConfig(({ mode }) => {
             ) {
               return "vendor-react";
             }
+            if (id.includes("node_modules/@tanstack/start-client-core/")) {
+              return "vendor-tanstack-server-fn";
+            }
             if (id.includes("node_modules/@tanstack/")) {
               return "vendor-tanstack";
             }

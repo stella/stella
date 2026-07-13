@@ -20,6 +20,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DocumentIcon } from "@/components/document-icon";
 import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
@@ -31,7 +32,6 @@ import type {
   WorkspaceProperty,
   WorkspacePropertyOption,
 } from "@/lib/types";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import {
   FieldValue,

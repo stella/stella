@@ -11,8 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
-
-import type { ParsedSkillPackage } from "./skill-package";
+import type { ParsedSkillPackage } from "@/api/lib/skill-package";
 
 type InstallSkillProps = {
   // Install as a draft (hidden until the user finishes). Defaults to true so

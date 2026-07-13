@@ -14,6 +14,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
+import { DocumentIcon } from "@/components/document-icon";
 import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
@@ -40,7 +41,6 @@ import {
 } from "@/lib/consts";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { catalogueOptions } from "@/routes/_protected.knowledge/-queries/catalogue";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 
 type InspectorRailProps = {

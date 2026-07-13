@@ -5,7 +5,7 @@ import {
   parseInTreeCatalogueSkill,
   resolveCatalogueSkillPackage,
 } from "@/api/handlers/catalogue/catalogue-skill-package";
-import type { GithubSkillPath } from "@/api/handlers/skills/skill-package";
+import type { GithubSkillPath } from "@/api/lib/skill-package";
 
 const inTreePayload = {
   slug: "contract-review",
@@ -80,7 +80,7 @@ describe("resolveCatalogueSkillPackage", () => {
     };
     const result = await resolveCatalogueSkillPackage(
       "jurisrank-csjn-analysis",
-      async (target, sourceUrl) => {
+      async ({ target, sourceUrl }) => {
         captured.target = target;
         captured.sourceUrl = sourceUrl;
         return Result.ok({

@@ -46,6 +46,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { DocumentIcon } from "@/components/document-icon";
 import {
   renderDragPreview,
   renderMultiDragPreview,
@@ -69,7 +70,6 @@ import type {
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { resolveAncestorIds } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { getFolderClickIntent } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-selection.logic";

@@ -4,6 +4,8 @@
  * testable against plain objects.
  */
 
+import { getCollator } from "@/lib/collation";
+
 export const TOOLS_KIND_FILTERS = [
   "all",
   "skill",
@@ -26,10 +28,19 @@ export type ToolFilters = {
   jurisdictions: ReadonlySet<string>;
 };
 
-const TOOLS_KIND_FILTER_SET: ReadonlySet<string> = new Set(TOOLS_KIND_FILTERS);
+const SOURCE_LOCALE = "en";
 
-export const isToolsKindFilter = (value: string): value is ToolsKindFilter =>
-  TOOLS_KIND_FILTER_SET.has(value);
+export const isToolsKindFilter = (value: string): value is ToolsKindFilter => {
+  switch (value) {
+    case "all":
+    case "mcp":
+    case "native-tool":
+    case "skill":
+      return true;
+    default:
+      return false;
+  }
+};
 
 const hasIntersection = (
   values: readonly string[],
@@ -65,16 +76,19 @@ export const filterToolEntries = <T extends ToolFilterEntry>(
 
 export const sortToolEntries = <T extends ToolFilterEntry>(
   entries: readonly T[],
-  recommendedSlugs: ReadonlySet<string>,
-): readonly T[] =>
-  [...entries].sort((left, right) => {
-    const leftRecommended = recommendedSlugs.has(left.slug);
-    const rightRecommended = recommendedSlugs.has(right.slug);
+  recommendedSlugs: readonly string[],
+): readonly T[] => {
+  const recommended = new Set(recommendedSlugs);
+  const collator = getCollator(SOURCE_LOCALE);
+  return entries.toSorted((left, right) => {
+    const leftRecommended = recommended.has(left.slug);
+    const rightRecommended = recommended.has(right.slug);
     if (leftRecommended !== rightRecommended) {
       return leftRecommended ? -1 : 1;
     }
-    return left.displayName.localeCompare(right.displayName);
+    return collator.compare(left.displayName, right.displayName);
   });
+};
 
 /**
  * Invert `recommended.json` (jurisdiction -> slugs) into slug ->
@@ -110,7 +124,7 @@ export const collectPracticeAreas = (
       set.add(tag);
     }
   }
-  return [...set].sort();
+  return [...set].toSorted();
 };
 
 export const collectJurisdictions = (
@@ -122,7 +136,7 @@ export const collectJurisdictions = (
       set.add(code);
     }
   }
-  return [...set].sort();
+  return [...set].toSorted();
 };
 
 export type CatalogueStats = {

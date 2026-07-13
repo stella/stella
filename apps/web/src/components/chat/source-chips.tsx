@@ -20,10 +20,10 @@ import {
   collectExternalSources,
   collectSourceDocuments,
 } from "@/components/chat/source-chips.logic";
+import { DocumentIcon } from "@/components/document-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type SourceChipsProps = {

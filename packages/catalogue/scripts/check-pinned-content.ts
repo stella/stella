@@ -24,6 +24,12 @@ import {
   normalizeResourcePath,
   parseSkillFile,
 } from "@stll/skills";
+import type { SkillMetadata } from "@stll/skills";
+import {
+  SKILL_NAME_PATTERN,
+  SKILL_PACKAGE_LIMITS,
+} from "@stll/skills/package-limits";
+import { readCappedBytes } from "@stll/skills/streaming";
 
 import { isGithubSkillEntry, loadCatalogue } from "../src/loader";
 
@@ -35,20 +41,7 @@ class PinnedContentError extends TaggedError("PinnedContentError")<{
 const FETCH_TIMEOUT_MS = 10_000;
 const SKILL_FILE_NAME = "SKILL.md";
 
-/**
- * Limits mirror the install path (apps/api/src/lib/limits.ts and
- * handlers/skills/skill-package.ts). The install handler is the
- * enforcer; this pre-flight must match it so a broken pin fails at PR
- * time, not at install time. Keep these in sync if the install limits
- * change.
- */
-const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
-const BODY_MAX_CHARS = 80_000; // agentSkillBodyMaxChars
-const RESOURCE_MAX_CHARS = 100_000; // agentSkillResourceMaxChars
-const RESOURCE_MAX_BYTES = RESOURCE_MAX_CHARS * 4; // GITHUB_SKILL_FILE_MAX_BYTES
-const TOTAL_MAX_BYTES = 6 * 1024 * 1024; // agentSkillArchiveUncompressedMaxBytes
-const RESOURCES_PER_SKILL_MAX = 50; // agentSkillResourcesPerSkill
-const DIRECTORIES_MAX = 100; // agentSkillGithubDirectoriesMax
+const RESOURCE_MAX_BYTES = SKILL_PACKAGE_LIMITS.resourceMaxChars * 4;
 const SKILL_RESOURCE_ROOTS: ReadonlySet<string> = new Set([
   "assets",
   "knowledge",
@@ -75,6 +68,13 @@ type GithubContentItem = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const toContentItems = (payload: unknown): unknown[] => {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  return isRecord(payload) ? [payload] : [];
+};
 
 const githubHeaders = (accept: string): Record<string, string> => {
   const headers: Record<string, string> = {
@@ -119,39 +119,72 @@ const contentsApiUrl = (
   return url.toString();
 };
 
+type FetchPinnedTextFileOptions = {
+  allowNotFound?: boolean;
+  label: string;
+  maxBytes: number;
+  repoRelativePath: string;
+  target: GithubTarget;
+};
+
+type PinnedTextFile = {
+  byteLength: number;
+  content: string;
+};
+
+const fetchPinnedTextFile = async ({
+  allowNotFound = false,
+  label,
+  maxBytes,
+  repoRelativePath,
+  target,
+}: FetchPinnedTextFileOptions): Promise<PinnedTextFile | null> => {
+  const response = await fetch(rawContentUrl(target, repoRelativePath), {
+    headers: githubHeaders("text/plain"),
+    redirect: "error",
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (response.status === 404 && allowNotFound) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new PinnedContentError({
+      message: `${label} fetch returned HTTP ${response.status}`,
+    });
+  }
+  if (!response.body) {
+    throw new PinnedContentError({ message: `${label} response has no body` });
+  }
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new PinnedContentError({
+      message: `${label} is larger than ${maxBytes} bytes`,
+    });
+  }
+  const bytes = await readCappedBytes(response.body, maxBytes);
+  if (bytes === null) {
+    throw new PinnedContentError({
+      message: `${label} is larger than ${maxBytes} bytes`,
+    });
+  }
+  return { byteLength: bytes.byteLength, content: UTF8_DECODER.decode(bytes) };
+};
+
 /**
  * Fetch the pinned `SKILL.md` as text. Returns null on a 404 so the
  * caller can report the specific "not found at pinned rev" failure;
  * every other non-2xx response and any redirect throws.
  */
-const fetchSkillMarkdown = async (
+const fetchSkillFile = async (
   target: GithubTarget,
-): Promise<string | null> => {
-  const response = await fetch(
-    rawContentUrl(target, joinRepoPath(target.directory, SKILL_FILE_NAME)),
-    {
-      headers: githubHeaders("text/plain"),
-      redirect: "error",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    },
-  );
-  if (response.status === 404) {
-    return null;
-  }
-  if (!response.ok) {
-    throw new PinnedContentError({
-      message: `SKILL.md fetch returned HTTP ${response.status}`,
-    });
-  }
-
-  const buffer = await response.arrayBuffer();
-  if (buffer.byteLength > RESOURCE_MAX_BYTES) {
-    throw new PinnedContentError({
-      message: `SKILL.md is larger than ${RESOURCE_MAX_BYTES} bytes`,
-    });
-  }
-  return UTF8_DECODER.decode(buffer);
-};
+): Promise<PinnedTextFile | null> =>
+  await fetchPinnedTextFile({
+    allowNotFound: true,
+    label: SKILL_FILE_NAME,
+    maxBytes: RESOURCE_MAX_BYTES,
+    repoRelativePath: joinRepoPath(target.directory, SKILL_FILE_NAME),
+    target,
+  });
 
 const fetchDirectoryContents = async (
   target: GithubTarget,
@@ -174,11 +207,7 @@ const fetchDirectoryContents = async (
   }
 
   const payload: unknown = await response.json();
-  const items = Array.isArray(payload)
-    ? payload
-    : isRecord(payload)
-      ? [payload]
-      : [];
+  const items = toContentItems(payload);
   const parsed: GithubContentItem[] = [];
   for (const item of items) {
     if (!isRecord(item)) {
@@ -223,24 +252,145 @@ const safeNormalize = (path: string): string | null => {
   }
 };
 
+type FrontmatterFieldLimit = {
+  field: string;
+  limit: number;
+  value: string | null | undefined;
+};
+
+const frontmatterFieldLimitError = (
+  slug: string,
+  { field, limit, value }: FrontmatterFieldLimit,
+): string | null => {
+  if (!value || value.length <= limit) {
+    return null;
+  }
+  return `${slug}: frontmatter ${field} is ${value.length} chars, exceeds the ${limit} install limit`;
+};
+
+export const checkFrontmatterLimits = (
+  slug: string,
+  metadata: SkillMetadata,
+): string[] => {
+  const errors: string[] = [];
+  const fields: FrontmatterFieldLimit[] = [
+    {
+      field: "description",
+      limit: SKILL_PACKAGE_LIMITS.descriptionMaxChars,
+      value: metadata.description,
+    },
+    {
+      field: "version",
+      limit: SKILL_PACKAGE_LIMITS.versionMaxChars,
+      value: metadata.version,
+    },
+    {
+      field: "license",
+      limit: SKILL_PACKAGE_LIMITS.licenseMaxChars,
+      value: metadata.license,
+    },
+    {
+      field: "compatibility",
+      limit: SKILL_PACKAGE_LIMITS.compatibilityMaxChars,
+      value: metadata.compatibility,
+    },
+  ];
+  for (const field of fields) {
+    const error = frontmatterFieldLimitError(slug, field);
+    if (error) {
+      errors.push(error);
+    }
+  }
+
+  const entries = Object.entries(metadata.metadata ?? {});
+  if (entries.length > SKILL_PACKAGE_LIMITS.metadataEntriesMax) {
+    errors.push(
+      `${slug}: frontmatter metadata has ${entries.length} entries, exceeds the ${SKILL_PACKAGE_LIMITS.metadataEntriesMax} install limit`,
+    );
+  }
+  for (const [key, value] of entries) {
+    if (key.length > SKILL_PACKAGE_LIMITS.metadataKeyMaxChars) {
+      errors.push(
+        `${slug}: frontmatter metadata key "${key}" is ${key.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.metadataKeyMaxChars} install limit`,
+      );
+    }
+    if (value.length > SKILL_PACKAGE_LIMITS.metadataValueMaxChars) {
+      errors.push(
+        `${slug}: frontmatter metadata value for "${key}" is ${value.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.metadataValueMaxChars} install limit`,
+      );
+    }
+  }
+  return errors;
+};
+
+type ResourceContentLimitInput = {
+  content: string;
+  path: string;
+  slug: string;
+};
+
+export const resourceContentLimitError = ({
+  content,
+  path,
+  slug,
+}: ResourceContentLimitInput): string | null => {
+  if (content.length <= SKILL_PACKAGE_LIMITS.resourceMaxChars) {
+    return null;
+  }
+  return `${slug}: resource ${path} is ${content.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.resourceMaxChars} install limit`;
+};
+
+type ArchiveSizeLimitInput = {
+  resourceBytes: number;
+  skillFileBytes: number;
+  slug: string;
+};
+
+export const archiveSizeLimitError = ({
+  resourceBytes,
+  skillFileBytes,
+  slug,
+}: ArchiveSizeLimitInput): string | null => {
+  if (
+    resourceBytes + skillFileBytes <=
+    SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes
+  ) {
+    return null;
+  }
+  return `${slug}: skill package exceeds ${SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes} bytes in total`;
+};
+
 /**
  * Check the pinned `SKILL.md`: fetch it, parse it with the real skill
  * parser (which requires name + description), and enforce the install
  * name pattern and body length. Returns collected error strings.
  */
-const checkSkillFile = async (target: GithubTarget): Promise<string[]> => {
-  const markdown = await fetchSkillMarkdown(target);
-  if (markdown === null) {
-    return [`${target.slug}: SKILL.md not found at pinned rev`];
+type SkillFileCheckResult = {
+  byteLength: number;
+  errors: string[];
+};
+
+const checkSkillFile = async (
+  target: GithubTarget,
+): Promise<SkillFileCheckResult> => {
+  const file = await fetchSkillFile(target);
+  if (file === null) {
+    return {
+      byteLength: 0,
+      errors: [`${target.slug}: SKILL.md not found at pinned rev`],
+    };
   }
 
   let parsed: ReturnType<typeof parseSkillFile>;
   try {
-    parsed = parseSkillFile(markdown);
+    parsed = parseSkillFile(file.content);
   } catch (error) {
-    return [
-      `${target.slug}: SKILL.md frontmatter is invalid (${errorMessage(error)})`,
-    ];
+    return {
+      byteLength: file.byteLength,
+      errors: [
+        `${target.slug}: SKILL.md frontmatter is invalid (${errorMessage(error)})`,
+      ],
+    };
   }
 
   const errors: string[] = [];
@@ -249,12 +399,13 @@ const checkSkillFile = async (target: GithubTarget): Promise<string[]> => {
       `${target.slug}: frontmatter name "${parsed.metadata.name}" fails the skill name pattern`,
     );
   }
-  if (parsed.body.length > BODY_MAX_CHARS) {
+  if (parsed.body.length > SKILL_PACKAGE_LIMITS.bodyMaxChars) {
     errors.push(
-      `${target.slug}: SKILL.md body is ${parsed.body.length} chars, exceeds the ${BODY_MAX_CHARS} install limit`,
+      `${target.slug}: SKILL.md body is ${parsed.body.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.bodyMaxChars} install limit`,
     );
   }
-  return errors;
+  errors.push(...checkFrontmatterLimits(target.slug, parsed.metadata));
+  return { byteLength: file.byteLength, errors };
 };
 
 /**
@@ -262,79 +413,118 @@ const checkSkillFile = async (target: GithubTarget): Promise<string[]> => {
  * the allowed resource roots) and enforce the install path's resource
  * count, per-file size, cumulative size, and directory-count limits.
  */
-const checkResources = async (target: GithubTarget): Promise<string[]> => {
+const checkResources = async (
+  target: GithubTarget,
+  skillFileBytes: number,
+): Promise<string[]> => {
   const errors: string[] = [];
   const rootPath = target.directory;
   const pending: string[] = [rootPath];
   const queued = new Set(pending);
   let resourceCount = 0;
-  let totalBytes = 0;
+  let resourceBytes = 0;
 
-  while (pending.length > 0) {
+  const processItems = async (
+    items: readonly GithubContentItem[],
+    index: number,
+  ): Promise<boolean> => {
+    const item = items.at(index);
+    if (!item) {
+      return true;
+    }
+
+    const relative = relativeToSkillRoot(rootPath, item.path);
+    if (relative === null) {
+      return processItems(items, index + 1);
+    }
+
+    if (item.type === "dir") {
+      const root = relative.split("/").at(0);
+      if (root && SKILL_RESOURCE_ROOTS.has(root) && !queued.has(item.path)) {
+        if (queued.size + 1 > SKILL_PACKAGE_LIMITS.githubDirectoriesMax) {
+          errors.push(
+            `${target.slug}: more than ${SKILL_PACKAGE_LIMITS.githubDirectoriesMax} resource directories`,
+          );
+          return false;
+        }
+        queued.add(item.path);
+        pending.push(item.path);
+      }
+      return processItems(items, index + 1);
+    }
+    if (item.type !== "file") {
+      return processItems(items, index + 1);
+    }
+
+    const normalized = safeNormalize(relative);
+    if (
+      !normalized ||
+      normalized === SKILL_FILE_NAME ||
+      !isAllowedResourcePath(normalized)
+    ) {
+      return processItems(items, index + 1);
+    }
+
+    resourceCount += 1;
+    if (resourceCount > SKILL_PACKAGE_LIMITS.resourcesPerSkillMax) {
+      errors.push(
+        `${target.slug}: more than ${SKILL_PACKAGE_LIMITS.resourcesPerSkillMax} resource files`,
+      );
+      return false;
+    }
+    if (item.size !== null && item.size > RESOURCE_MAX_BYTES) {
+      errors.push(
+        `${target.slug}: resource ${normalized} is ${item.size} bytes, exceeds the ${RESOURCE_MAX_BYTES} install limit`,
+      );
+      return processItems(items, index + 1);
+    }
+
+    const resource = await fetchPinnedTextFile({
+      label: `resource ${normalized}`,
+      maxBytes: RESOURCE_MAX_BYTES,
+      repoRelativePath: item.path,
+      target,
+    });
+    if (resource === null) {
+      throw new PinnedContentError({
+        message: `resource ${normalized} disappeared during validation`,
+      });
+    }
+    const contentLimitError = resourceContentLimitError({
+      content: resource.content,
+      path: normalized,
+      slug: target.slug,
+    });
+    if (contentLimitError) {
+      errors.push(contentLimitError);
+    }
+    resourceBytes += resource.byteLength;
+    const archiveLimitError = archiveSizeLimitError({
+      resourceBytes,
+      skillFileBytes,
+      slug: target.slug,
+    });
+    if (archiveLimitError) {
+      errors.push(archiveLimitError);
+      return false;
+    }
+    return processItems(items, index + 1);
+  };
+
+  const visitNextDirectory = async (): Promise<void> => {
     const directory = pending.shift();
     if (directory === undefined) {
-      break;
+      return;
     }
-
-    // oxlint-disable-next-line no-await-in-loop -- breadth-first traversal: each directory's contents enqueue the next
     const items = await fetchDirectoryContents(target, directory);
-    for (const item of items) {
-      const relative = relativeToSkillRoot(rootPath, item.path);
-      if (relative === null) {
-        continue;
-      }
-
-      if (item.type === "dir") {
-        const root = relative.split("/").at(0);
-        if (root && SKILL_RESOURCE_ROOTS.has(root) && !queued.has(item.path)) {
-          if (queued.size + 1 > DIRECTORIES_MAX) {
-            errors.push(
-              `${target.slug}: more than ${DIRECTORIES_MAX} resource directories`,
-            );
-            return errors;
-          }
-          queued.add(item.path);
-          pending.push(item.path);
-        }
-        continue;
-      }
-      if (item.type !== "file") {
-        continue;
-      }
-
-      const normalized = safeNormalize(relative);
-      if (
-        !normalized ||
-        normalized === SKILL_FILE_NAME ||
-        !isAllowedResourcePath(normalized)
-      ) {
-        continue;
-      }
-
-      resourceCount += 1;
-      if (resourceCount > RESOURCES_PER_SKILL_MAX) {
-        errors.push(
-          `${target.slug}: more than ${RESOURCES_PER_SKILL_MAX} resource files`,
-        );
-        return errors;
-      }
-      if (item.size !== null && item.size > RESOURCE_MAX_BYTES) {
-        errors.push(
-          `${target.slug}: resource ${normalized} is ${item.size} bytes, exceeds the ${RESOURCE_MAX_BYTES} install limit`,
-        );
-      }
-      if (item.size !== null) {
-        totalBytes += item.size;
-        if (totalBytes > TOTAL_MAX_BYTES) {
-          errors.push(
-            `${target.slug}: resource files exceed ${TOTAL_MAX_BYTES} bytes in total`,
-          );
-          return errors;
-        }
-      }
+    const shouldContinue = await processItems(items, 0);
+    if (!shouldContinue) {
+      return;
     }
-  }
+    return visitNextDirectory();
+  };
 
+  await visitNextDirectory();
   return errors;
 };
 
@@ -355,25 +545,33 @@ const run = async (): Promise<string[]> => {
   const targets = collectGithubTargets();
   const errors: string[] = [];
 
-  for (const target of targets) {
+  const checkTarget = async (target: GithubTarget): Promise<void> => {
     try {
-      // oxlint-disable-next-line no-await-in-loop -- sequential sweep keeps the GitHub API request rate low
-      const fileErrors = await checkSkillFile(target);
+      const skillFile = await checkSkillFile(target);
       // Skip the resource enumeration when SKILL.md itself is broken:
       // the entry already fails, and the extra API calls add nothing.
-      const resourceErrors =
-        fileErrors.length > 0
-          ? []
-          : // oxlint-disable-next-line no-await-in-loop -- sequential sweep keeps the GitHub API request rate low
-            await checkResources(target);
-      errors.push(...fileErrors, ...resourceErrors);
+      let resourceErrors: string[] = [];
+      if (skillFile.errors.length === 0) {
+        resourceErrors = await checkResources(target, skillFile.byteLength);
+      }
+      errors.push(...skillFile.errors, ...resourceErrors);
     } catch (error) {
       errors.push(
         `${target.slug}: pinned-content check failed (${errorMessage(error)})`,
       );
     }
-  }
+  };
 
+  const checkNextTarget = async (index: number): Promise<void> => {
+    const target = targets.at(index);
+    if (!target) {
+      return;
+    }
+    await checkTarget(target);
+    return checkNextTarget(index + 1);
+  };
+
+  await checkNextTarget(0);
   return errors;
 };
 

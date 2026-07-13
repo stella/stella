@@ -55,13 +55,16 @@ const RATCHET_DOWN = 0.97;
 const HASH = "[A-Za-z0-9_-]{8}";
 
 // Named vendor chunks, exactly as apps/web/vite.config.ts's manualChunks emits
-// them. Two of them (vendor-anonymize-data, wasm-vendor) currently have no
+// them. `vendor-tanstack-server-fn` is route-lazy so a public server function
+// does not inflate the core TanStack chunk preloaded on every visit. Two
+// groups (vendor-anonymize-data, wasm-vendor) currently have no
 // client-graph chunk because those deps load inside web workers, not the main
 // bundle; they are tracked at 0 so that if one ever leaks into the client graph
 // the guard forces a deliberate baseline update.
 const VENDOR_GROUPS = [
   "vendor-react",
   "vendor-tanstack",
+  "vendor-tanstack-server-fn",
   "vendor-anonymize-data",
   "wasm-vendor",
   "vendor-graphs",
@@ -116,6 +119,7 @@ const emptySizes = (): Sizes => ({
   entry: 0,
   "vendor-react": 0,
   "vendor-tanstack": 0,
+  "vendor-tanstack-server-fn": 0,
   "vendor-anonymize-data": 0,
   "wasm-vendor": 0,
   "vendor-graphs": 0,
@@ -182,6 +186,7 @@ const sortedSizes = (sizes: Sizes): Sizes => ({
   "vendor-graphs": sizes["vendor-graphs"],
   "vendor-react": sizes["vendor-react"],
   "vendor-tanstack": sizes["vendor-tanstack"],
+  "vendor-tanstack-server-fn": sizes["vendor-tanstack-server-fn"],
   "wasm-vendor": sizes["wasm-vendor"],
 });
 
@@ -267,6 +272,9 @@ const perfMeaning = (key: GroupKey): string => {
   }
   if (key === "total") {
     return "total client JS shipped across the app";
+  }
+  if (key === "vendor-tanstack-server-fn") {
+    return "the TanStack Start client runtime, loaded only by routes that call server functions";
   }
   if (key === "routes" || key === "largest-route") {
     return "lazy route/locale/worker chunk weight, loaded on navigation";
@@ -387,6 +395,10 @@ const runSelfTest = (): number => {
   expectClass("rolldown-runtime-CJJwijRH.js", "entry");
   expectClass("vendor-react-DTPWpeFk.js", "vendor-react");
   expectClass("vendor-tanstack-C8imk9BY.js", "vendor-tanstack");
+  expectClass(
+    "vendor-tanstack-server-fn-C8imk9BY.js",
+    "vendor-tanstack-server-fn",
+  );
   expectClass("vendor-editor-BNV6-MX2.js", "vendor-editor");
   expectClass("vendor-graphs-Bb5OXA3_.js", "vendor-graphs");
   // A route index chunk must NOT be mistaken for the entry, and a locale/route

@@ -20,11 +20,11 @@ import {
   authorizeSkillInstallScope,
   installSkill,
 } from "@/api/handlers/skills/install";
-import { parseUploadedSkillPackage } from "@/api/handlers/skills/skill-package";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { parseUploadedSkillPackage } from "@/api/lib/skill-package";
 
 import { finalizeErr, finalizeOk } from "./lib";
 

@@ -42,6 +42,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DocumentIcon } from "@/components/document-icon";
 import { MatterIcon } from "@/components/matter-icon";
 import { getChatHitRoute } from "@/components/search-dialog.logic";
 import {
@@ -94,7 +95,6 @@ import type {
   RecentSearch,
   SearchRecentsScope,
 } from "@/lib/search-recents";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 type SearchSummaryCitation = {
   id: string;

@@ -19,15 +19,10 @@ export const CATALOGUE_ENTRIES_URL = `${STELLA_REPO_URL}/tree/main/packages/cata
  * corpus; anything larger is almost certainly the wrong file or an
  * abusive upstream, so we degrade to metadata rather than stream it.
  */
-export const MAX_GITHUB_SKILL_BYTES = 512 * 1024;
 
 /** Server download route for an in-tree skill's zip bundle. */
 export const toolDownloadPath = (slug: string): `/${string}` =>
   `/tools/${slug}/download`;
-
-/** Canonical SPDX license landing page for a license identifier. */
-export const spdxLicenseUrl = (license: string): string =>
-  `https://spdx.org/licenses/${license}.html`;
 
 type GithubSkillLocator = {
   repo: string;

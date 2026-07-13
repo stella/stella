@@ -9,12 +9,12 @@ import type { LoadedGithubSkillEntry } from "@stll/catalogue";
 import type { LoadedCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 
-import { fetchGithubCatalogueSkillPackage } from "@/api/handlers/skills/skill-package";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { fetchGithubCatalogueSkillPackage } from "@/api/lib/skill-package";
 import type {
   GithubSkillPath,
   ParsedSkillPackage,
-} from "@/api/handlers/skills/skill-package";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+} from "@/api/lib/skill-package";
 
 import {
   toParsedBundledSkillPackage,
@@ -34,10 +34,10 @@ export type ResolvedCatalogueSkill = {
   package: ParsedSkillPackage;
 };
 
-type FetchGithubCatalogueSkill = (
-  target: GithubSkillPath,
-  sourceUrl: string,
-) => Promise<Result<ParsedSkillPackage, HandlerError>>;
+type FetchGithubCatalogueSkill = (options: {
+  sourceUrl: string;
+  target: GithubSkillPath;
+}) => Promise<Result<ParsedSkillPackage, HandlerError>>;
 
 /**
  * Resolve a catalogue skill slug to an installable package plus the
@@ -65,10 +65,10 @@ export const resolveCatalogueSkillPackage = async (
 
   const entry = findCatalogueEntry("skill", slug);
   if (entry && isGithubSkillEntry(entry)) {
-    const fetched = await fetchGithubSkill(
-      githubSkillTargetFromEntry(entry),
-      githubRawContentBaseUrl(entry),
-    );
+    const fetched = await fetchGithubSkill({
+      sourceUrl: githubRawContentBaseUrl(entry),
+      target: githubSkillTargetFromEntry(entry),
+    });
     if (Result.isError(fetched)) {
       return Result.err(fetched.error);
     }

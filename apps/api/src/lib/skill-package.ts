@@ -8,13 +8,13 @@ import {
   parseSkillFile,
 } from "@stll/skills";
 import type { SkillMetadata, SkillResourceKind } from "@stll/skills";
+import { SKILL_NAME_PATTERN } from "@stll/skills/package-limits";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
 const SKILL_FILE_NAME = "SKILL.md";
-const SKILL_NAME_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/u;
 const GITHUB_API_TIMEOUT_MS = 10_000;
 const GITHUB_REF_CANDIDATE_LIMIT = 16;
 const GITHUB_SKILL_FILE_MAX_BYTES = LIMITS.agentSkillResourceMaxChars * 4;
@@ -72,6 +72,12 @@ export type GithubSkillPath = {
 export type FetchGithubSkillFiles = (
   target: GithubSkillPath,
 ) => Promise<SkillFile[]>;
+
+type FetchGithubCatalogueSkillPackageOptions = {
+  fetchFiles?: FetchGithubSkillFiles;
+  sourceUrl: string;
+  target: GithubSkillPath;
+};
 
 type GithubRefKind = "heads" | "tags";
 
@@ -159,11 +165,13 @@ export const fetchSkillPackageFromUrl = async (
  * `fetchGithubSkillFiles` + `parseSkillFiles`). `fetchFiles` is
  * injectable so tests exercise parsing without the network.
  */
-export const fetchGithubCatalogueSkillPackage = async (
-  target: GithubSkillPath,
-  sourceUrl: string,
-  fetchFiles: FetchGithubSkillFiles = fetchGithubSkillFiles,
-): Promise<Result<ParsedSkillPackage, HandlerError>> =>
+export const fetchGithubCatalogueSkillPackage = async ({
+  target,
+  sourceUrl,
+  fetchFiles = fetchGithubSkillFiles,
+}: FetchGithubCatalogueSkillPackageOptions): Promise<
+  Result<ParsedSkillPackage, HandlerError>
+> =>
   await Result.tryPromise({
     try: async () => {
       const files = await fetchFiles(target);

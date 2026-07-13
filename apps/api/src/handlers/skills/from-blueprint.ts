@@ -7,10 +7,10 @@ import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ParsedSkillPackage } from "@/api/lib/skill-package";
 
 import { hashAuthoredSkillContent } from "./authored-content-hash";
 import { authorizeSkillInstallScope, installSkill } from "./install";
-import type { ParsedSkillPackage } from "./skill-package";
 import { uniqueSlug } from "./slug";
 
 const encoder = new TextEncoder();
