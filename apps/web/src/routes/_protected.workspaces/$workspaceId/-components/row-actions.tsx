@@ -67,6 +67,7 @@ import type {
   WorkspaceEntity,
 } from "@/lib/types";
 import { isFileDisplayable } from "@/lib/types";
+import { downloadFile } from "@/lib/utils";
 import {
   CellLockMenuItem,
   CellMetadataMenuSection,
@@ -84,7 +85,6 @@ import {
   getPdfDownloadFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
-import { downloadFile } from "@/lib/utils";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 import { useUploadVersion } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-upload-version";

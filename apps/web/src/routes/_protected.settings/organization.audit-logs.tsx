@@ -29,13 +29,13 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
+import { downloadFile } from "@/lib/utils";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import {
   auditLogOptions,
   type fetchAuditLogs,
   type AuditLogsPageKey,
 } from "@/routes/_protected.settings/-queries/audit-logs";
-import { downloadFile } from "@/lib/utils";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/audit-logs",
