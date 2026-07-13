@@ -21,6 +21,7 @@
 import { validateIco as validateAresIco } from "@stll/business-registries/ares";
 import { validateOrgnr } from "@stll/business-registries/brreg";
 import { validateCompanyNumber } from "@stll/business-registries/companies-house";
+import { validateEstablishmentId } from "@stll/business-registries/denue";
 import { validateCik } from "@stll/business-registries/edgar";
 import { validateTaxId } from "@stll/business-registries/gcis";
 import { validateKrsNumber } from "@stll/business-registries/krs";
@@ -65,6 +66,7 @@ const LOOKUP_VALUE_VALIDATORS: Record<
   ares: validateAresIco,
   brreg: validateOrgnr,
   "companies-house": validateCompanyNumber,
+  denue: validateEstablishmentId,
   edgar: validateCik,
   gcis: validateTaxId,
   krs: validateKrsNumber,
@@ -79,6 +81,7 @@ export const LOOKUP_REGISTRY_NAMES: Record<LookupRegistry, string> = {
   ares: "ARES",
   brreg: "BRREG",
   "companies-house": "Companies House",
+  denue: "INEGI DENUE",
   edgar: "SEC EDGAR",
   gcis: "GCIS",
   krs: "KRS",
@@ -252,6 +255,11 @@ const lookupTemplateTokens = (
       tokens["registry number"] = company.companyNumber;
       tokens["registered on"] = company.dateOfCreation;
       tokens["jurisdiction"] = company.jurisdiction;
+      break;
+    }
+    case "denue": {
+      const { establishment } = details;
+      tokens["registry number"] = establishment.id;
       break;
     }
     case "brreg": {

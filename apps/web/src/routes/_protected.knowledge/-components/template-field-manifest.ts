@@ -6,6 +6,7 @@ const LOOKUP_REGISTRIES = [
   "ares",
   "brreg",
   "companies-house",
+  "denue",
   "edgar",
   "gcis",
   "krs",

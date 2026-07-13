@@ -241,3 +241,86 @@ describe("EDGAR deployment gating", () => {
     }
   });
 });
+
+describe("DENUE deployment gating", () => {
+  test("normalizes lookup hits and preserves the DENUE enrichment payload", async () => {
+    const previousToken = process.env["INEGI_DENUE_API_TOKEN"];
+    const originalFetch = globalThis.fetch;
+    process.env["INEGI_DENUE_API_TOKEN"] = "test-token";
+    const stub = async (): Promise<Response> =>
+      new Response(
+        JSON.stringify([
+          {
+            Id: "6281106",
+            Nombre: "HOTEL MARRIOTT REFORMA",
+            Razon_social: "HOTELERA REFORMA SA DE CV",
+            Tipo_vialidad: "AVENIDA",
+            Calle: "PASEO DE LA REFORMA",
+            Num_Exterior: "276",
+            CP: "06600",
+            Ubicacion: "LOCALIDAD, MUNICIPIO, ESTADO",
+            Latitud: "19.428611",
+            Longitud: "-99.162222",
+          },
+        ]),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    globalThis.fetch = Object.assign(stub, {
+      preconnect: originalFetch.preconnect,
+    });
+    try {
+      const hit = await BUSINESS_REGISTRY_DISPATCH.denue.lookup("6281106");
+      expect(hit?.registry).toBe("denue");
+      expect(hit?.legalForm).toBeNull();
+      expect(hit?.address?.city).toBe("MUNICIPIO");
+      expect(hit?.address?.region).toBe("ESTADO");
+      expect(hit?.details).toEqual({
+        registry: "denue",
+        establishment: expect.objectContaining({
+          id: "6281106",
+          legalName: "HOTELERA REFORMA SA DE CV",
+        }),
+      });
+    } finally {
+      globalThis.fetch = originalFetch;
+      if (previousToken === undefined) {
+        delete process.env["INEGI_DENUE_API_TOKEN"];
+      } else {
+        process.env["INEGI_DENUE_API_TOKEN"] = previousToken;
+      }
+    }
+  });
+
+  test("does not expose the MX handler when INEGI_DENUE_API_TOKEN is missing", () => {
+    const previous = process.env["INEGI_DENUE_API_TOKEN"];
+    delete process.env["INEGI_DENUE_API_TOKEN"];
+    try {
+      expect(getRegistryHandlerByCountry("MX")).toBeUndefined();
+      expect(isBusinessRegistryNativeToolDeployAvailable("denue")).toBe(false);
+    } finally {
+      if (previous === undefined) {
+        delete process.env["INEGI_DENUE_API_TOKEN"];
+      } else {
+        process.env["INEGI_DENUE_API_TOKEN"] = previous;
+      }
+    }
+  });
+
+  test("exposes the MX handler when INEGI_DENUE_API_TOKEN is configured", () => {
+    const previous = process.env["INEGI_DENUE_API_TOKEN"];
+    process.env["INEGI_DENUE_API_TOKEN"] = "test-token";
+    try {
+      expect(getRegistryHandlerByCountry("MX")?.slug).toBe("denue");
+      expect(isBusinessRegistryNativeToolDeployAvailable("denue")).toBe(true);
+    } finally {
+      if (previous === undefined) {
+        delete process.env["INEGI_DENUE_API_TOKEN"];
+      } else {
+        process.env["INEGI_DENUE_API_TOKEN"] = previous;
+      }
+    }
+  });
+});

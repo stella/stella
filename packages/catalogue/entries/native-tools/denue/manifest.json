@@ -1,0 +1,18 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "native-tool",
+  "slug": "denue",
+  "displayName": "INEGI DENUE",
+  "description": "Mexican establishment and economic-unit lookup by DENUE establishment Id, name, or legal name from INEGI's official DENUE API. DENUE is an establishment directory, not the Registro Público de Comercio corporate-law register. Requires a free INEGI API token.",
+  "author": "stella",
+  "authorUrl": "https://github.com/stella",
+  "license": "Apache-2.0",
+  "cost": "free",
+  "setup": "api-key",
+  "homepage": "https://www.inegi.org.mx/servicios/api_denue.html",
+  "tags": ["corporate", "regulatory"],
+  "jurisdictions": ["MX"],
+  "backendSlug": "denue",
+  "url": "https://www.inegi.org.mx/app/mapa/denue/",
+  "documentationUrl": "https://www.inegi.org.mx/servicios/api_denue.html"
+}
