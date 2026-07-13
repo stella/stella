@@ -33,6 +33,7 @@ const stub = (
   status,
   applyMode: null,
   revisionIds: null,
+  undoHandle: null,
   pendingOperation: null,
   snapshot: null,
   ...overrides,
