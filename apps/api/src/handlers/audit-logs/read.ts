@@ -4,7 +4,6 @@ import {
   and,
   desc,
   eq,
-  getColumns,
   inArray,
   gte,
   lt,
@@ -205,7 +204,13 @@ export const queryAuditLogPage = async function* ({
     safeDb((tx) =>
       tx
         .select({
-          ...getColumns(auditLogs),
+          id: auditLogs.id,
+          createdAt: auditLogs.createdAt,
+          userId: auditLogs.userId,
+          action: auditLogs.action,
+          resourceType: auditLogs.resourceType,
+          resourceId: auditLogs.resourceId,
+          changes: auditLogs.changes,
           createdAtCursor: auditLogCreatedAtCursor.as("created_at_cursor"),
         })
         .from(auditLogs)
