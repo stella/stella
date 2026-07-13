@@ -1,7 +1,7 @@
 name: Publish npm packages
 
-# Publishes the shared @stll dependency packages (docx-core, docx-utils,
-# conditions, template-conditions) and the @stll/cli command-line client to
+# Publishes the shared @stll dependency packages (docx-utils, conditions,
+# template-conditions) and the @stll/cli command-line client to
 # npm with SLSA provenance via OIDC trusted publishing — no long-lived
 # NPM_TOKEN. These packages live in this monorepo (stella's apps consume the
 # shared packages; the CLI is consumed standalone) and are published from
@@ -36,7 +36,6 @@ on:
     paths:
       - packages/conditions/package.json
       - packages/template-conditions/package.json
-      - packages/docx-core/package.json
       - packages/docx-utils/package.json
       - packages/cli/package.json
   workflow_dispatch:
@@ -48,7 +47,6 @@ on:
           - all
           - conditions
           - template-conditions
-          - docx-core
           - docx-utils
           - cli
         default: all
@@ -83,12 +81,12 @@ jobs:
           set -euo pipefail
           # On push (auto-release) there is no input, so pack all and let the
           # idempotent publish skip unchanged versions. conditions before
-          # template-conditions (which depends on it); the docx packages and
-          # cli are independent (cli has no workspace dependency on any other
-          # published package).
+          # template-conditions (which depends on it); docx-utils and cli are
+          # independent (cli has no workspace dependency on any other published
+          # package).
           selected="${{ github.event_name == 'workflow_dispatch' && inputs.package || 'all' }}"
           case "${selected}" in
-            all) pkgs=(conditions template-conditions docx-core docx-utils cli) ;;
+            all) pkgs=(conditions template-conditions docx-utils cli) ;;
             *) pkgs=("${selected}") ;;
           esac
 

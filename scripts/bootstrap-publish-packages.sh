@@ -23,9 +23,9 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 
-# conditions before template-conditions (which depends on it); the docx
-# packages are independent.
-packages=(conditions template-conditions docx-core docx-utils)
+# conditions before template-conditions (which depends on it); docx-utils is
+# independent.
+packages=(conditions template-conditions docx-utils)
 
 for p in "${packages[@]}"; do
   echo "==> publishing @stll/${p}"
