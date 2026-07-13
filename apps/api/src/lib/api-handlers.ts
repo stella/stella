@@ -207,10 +207,10 @@ export type McpExposure =
   | { type: "internal"; reason: McpInternalReason };
 
 export type AuditConfig<
-  TBody = any,
-  TParams = any,
-  TQuery = any,
-  TResult = any,
+  TBody = unknown,
+  TParams = unknown,
+  TQuery = unknown,
+  TResult = unknown,
 > = {
   action: AuditAction;
   resourceType: AuditResourceType;

@@ -28,7 +28,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import {
   auditLogOptions,

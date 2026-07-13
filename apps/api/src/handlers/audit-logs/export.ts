@@ -42,7 +42,9 @@ const exportAuditLogs = createSafeRootHandler(
     );
 
     // Batch-fetch user names/emails
-    const userIds = [...new Set(rows.map((row) => row.userId).filter(Boolean))];
+    const userIds = [
+      ...new Set(rows.flatMap((row) => (row.userId ? [row.userId] : []))),
+    ];
     const userDetails =
       userIds.length > 0
         ? yield* Result.await(

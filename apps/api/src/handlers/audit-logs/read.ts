@@ -14,8 +14,8 @@ import {
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { SafeDb } from "@/api/db/safe-db";
 import { member, user } from "@/api/db/auth-schema";
+import type { SafeDb } from "@/api/db/safe-db";
 import { auditLogs } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -216,7 +216,9 @@ export const queryAuditLogPage = async function* ({
   );
 
   // Batch-fetch user names/emails
-  const userIds = [...new Set(rows.map((row) => row.userId).filter(Boolean))];
+  const userIds = [
+    ...new Set(rows.flatMap((row) => (row.userId ? [row.userId] : []))),
+  ];
   const userDetails =
     userIds.length > 0
       ? yield* Result.await(
