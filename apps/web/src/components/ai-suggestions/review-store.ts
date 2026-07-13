@@ -139,7 +139,7 @@ export type ReviewSuggestion = {
   /**
    * The editor-shaped operation, kept on the suggestion for the
    * lifetime of the session. The panel feeds this to
-   * `editor.applyAIEditOperations` when the user accepts. Retained
+   * `editor.applyDocumentOperations` when the user accepts. Retained
    * after Accept / Reject so a later "Revert" can put the
    * suggestion back into the pending queue without losing the
    * original op spec.
