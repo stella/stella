@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -6,9 +7,12 @@ import {
   isGithubSkillEntry,
   loadCatalogue,
 } from "@stll/catalogue";
+import { readCappedBytes } from "@stll/skills/streaming";
 
+import { fetchWithTimeout } from "@/lib/fetch";
 import { isPublicToolsRouteEnabled } from "@/lib/public-tools-launch";
-import { MAX_GITHUB_SKILL_BYTES } from "@/routes/tools/-components/tool-detail.logic";
+
+const MAX_GITHUB_SKILL_BYTES = 512 * 1024;
 
 /**
  * Result of fetching a github-sourced skill's `SKILL.md`. Deliberately
@@ -49,7 +53,12 @@ type SkillCacheEntry =
       expiresAt: number;
     };
 
-const skillCache = new Map<string, SkillCacheEntry>();
+let skillCache: Map<string, SkillCacheEntry> | undefined;
+
+const getSkillCache = (): Map<string, SkillCacheEntry> => {
+  skillCache ??= new Map<string, SkillCacheEntry>();
+  return skillCache;
+};
 
 /**
  * Read a response body, aborting the moment accumulated bytes exceed
@@ -62,34 +71,8 @@ export const readCappedBody = async (
   body: ReadableStream<Uint8Array>,
   maxBytes: number,
 ): Promise<string | null> => {
-  const reader = body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  let overflowed = false;
-  while (true) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential stream read: cap must be checked before pulling the next chunk
-    const { done, value } = await reader.read();
-    if (done) {
-      break;
-    }
-    total += value.byteLength;
-    if (total > maxBytes) {
-      overflowed = true;
-      break;
-    }
-    chunks.push(value);
-  }
-  if (overflowed) {
-    await reader.cancel();
-    return null;
-  }
-  const merged = new Uint8Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(merged);
+  const bytes = await readCappedBytes(body, maxBytes);
+  return bytes === null ? null : new TextDecoder().decode(bytes);
 };
 
 const loadRawSkill = async (url: string): Promise<GithubSkillContentResult> => {
@@ -100,9 +83,9 @@ const loadRawSkill = async (url: string): Promise<GithubSkillContentResult> => {
     // SHA: it must never redirect, so a redirect signals tampering or a
     // moved host and is rejected rather than followed to an arbitrary
     // origin.
-    const response = await fetch(url, {
+    const response = await fetchWithTimeout(url, {
       redirect: "error",
-      signal: AbortSignal.timeout(10_000),
+      timeoutMs: 10_000,
     });
     if (!response.ok || !response.body) {
       return { status: "error" };
@@ -142,7 +125,7 @@ type ResolveWithCacheOptions = {
  * Exported for tests; production callers go through
  * {@link resolveGithubSkillContent}.
  */
-export const resolveWithCache = (
+export const resolveWithCache = async (
   key: string,
   fetcher: () => Promise<GithubSkillContentResult>,
   { cache, now }: ResolveWithCacheOptions,
@@ -150,10 +133,10 @@ export const resolveWithCache = (
   const existing = cache.get(key);
   if (existing) {
     if (existing.state === "pending") {
-      return existing.promise;
+      return await existing.promise;
     }
     if (existing.expiresAt > now()) {
-      return Promise.resolve(existing.result);
+      return existing.result;
     }
     // A negative entry that outlived its TTL falls through to a refetch.
   }
@@ -181,7 +164,7 @@ export const resolveWithCache = (
   });
   // Publish the in-flight promise so concurrent callers share this fetch.
   cache.set(key, { state: "pending", promise });
-  return promise;
+  return await promise;
 };
 
 type ResolveGithubSkillContentOptions = {
@@ -197,31 +180,32 @@ type ResolveGithubSkillContentOptions = {
  * injectable for tests; production callers omit them to use the real
  * launch gate, fetcher, clock, and module cache.
  */
-export const resolveGithubSkillContent = (
+export const resolveGithubSkillContent = async (
   slug: string,
   {
     isEnabled = isPublicToolsRouteEnabled,
     fetchRawSkill = loadRawSkill,
     now = Date.now,
-    cache = skillCache,
+    cache = getSkillCache(),
   }: ResolveGithubSkillContentOptions = {},
 ): Promise<GithubSkillContentResult> => {
   // The route's `beforeLoad` gates rendering, not this RPC: a flag-off
   // deployment must not expose an unauthenticated outbound GitHub fetch,
   // so the gate is enforced here before any network work.
   if (!isEnabled()) {
-    return Promise.resolve({ status: "error" });
+    return { status: "error" };
   }
   const entry = loadCatalogue().find(
     (candidate) => candidate.kind === "skill" && candidate.slug === slug,
   );
   if (!entry || !isGithubSkillEntry(entry)) {
-    return Promise.resolve({ status: "error" });
+    return { status: "error" };
   }
   const key = `${entry.repo}@${entry.rev}/${entry.directory ?? ""}`;
-  return resolveWithCache(
+  return await resolveWithCache(
     key,
-    () => fetchRawSkill(`${githubRawContentBaseUrl(entry)}SKILL.md`),
+    async () =>
+      await fetchRawSkill(`${githubRawContentBaseUrl(entry)}SKILL.md`),
     { cache, now },
   );
 };
@@ -237,6 +221,23 @@ export const fetchGithubSkillContent = createServerFn({ method: "GET" })
     v.parse(inputSchema, input),
   )
   .handler(
-    ({ data }): Promise<GithubSkillContentResult> =>
-      resolveGithubSkillContent(data.slug),
+    async ({ data }): Promise<GithubSkillContentResult> =>
+      await resolveGithubSkillContent(data.slug),
   );
+
+type FetchGithubSkillContent = (input: {
+  data: { slug: string };
+}) => Promise<GithubSkillContentResult>;
+
+export const loadGithubSkillMarkdown = async (
+  slug: string,
+  fetchContent: FetchGithubSkillContent = fetchGithubSkillContent,
+): Promise<string | null> => {
+  const result = await Result.tryPromise(
+    async () => await fetchContent({ data: { slug } }),
+  );
+  if (Result.isError(result)) {
+    return null;
+  }
+  return result.value.status === "ok" ? result.value.markdown : null;
+};

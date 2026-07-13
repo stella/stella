@@ -13,8 +13,8 @@ import {
   PRACTICE_AREAS,
   type CatalogueCost,
   type CatalogueSetup,
-} from "@stll/catalogue";
-import { Button, buttonVariants } from "@stll/ui/components/button";
+} from "@stll/catalogue/schema";
+import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import {
@@ -25,11 +25,12 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
-import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
+import { prettifyPracticeArea } from "@/lib/tools-catalogue";
 import {
   deriveSlug,
   evaluateManifest,
@@ -45,7 +46,6 @@ import {
   CATALOGUE_CONTRIBUTING_URL,
   CATALOGUE_ENTRIES_URL,
 } from "@/routes/tools/-components/tool-detail.logic";
-import { prettifyPracticeArea } from "@/routes/tools/-components/tools-catalogue.logic";
 
 const COMMIT_FETCH_TIMEOUT_MS = 10_000;
 const JURISDICTION_INPUT = /^[A-Za-z]{2}$/u;
@@ -138,22 +138,32 @@ function ContributePage() {
         </Section>
 
         <div className="flex flex-wrap gap-3 pt-2">
-          <a
-            className={cn(buttonVariants({ variant: "outline" }))}
-            href={CATALOGUE_CONTRIBUTING_URL}
-            rel="noreferrer"
-            target="_blank"
+          <Button
+            render={
+              <a
+                aria-label={t("publicTools.contribute.contributingLink")}
+                href={CATALOGUE_CONTRIBUTING_URL}
+                rel="noreferrer"
+                target="_blank"
+              />
+            }
+            variant="outline"
           >
             {t("publicTools.contribute.contributingLink")}
-          </a>
-          <a
-            className={cn(buttonVariants({ variant: "outline" }))}
-            href={CATALOGUE_ENTRIES_URL}
-            rel="noreferrer"
-            target="_blank"
+          </Button>
+          <Button
+            render={
+              <a
+                aria-label={t("publicTools.contribute.repoLink")}
+                href={CATALOGUE_ENTRIES_URL}
+                rel="noreferrer"
+                target="_blank"
+              />
+            }
+            variant="outline"
           >
             {t("publicTools.contribute.repoLink")}
-          </a>
+          </Button>
         </div>
       </div>
     </main>
@@ -213,9 +223,9 @@ function AddSkillForm() {
     }
     setCommitStatus("loading");
     const result = await Result.tryPromise(async () => {
-      const response = await fetch(githubCommitsApiUrl(repo), {
+      const response = await fetchWithTimeout(githubCommitsApiUrl(repo), {
         headers: { Accept: "application/vnd.github+json" },
-        signal: AbortSignal.timeout(COMMIT_FETCH_TIMEOUT_MS),
+        timeoutMs: COMMIT_FETCH_TIMEOUT_MS,
       });
       const payload: unknown = response.ok ? await response.json() : null;
       return { ok: response.ok, payload };
@@ -508,14 +518,21 @@ function AddSkillForm() {
 
       <div className="flex flex-wrap items-center gap-3">
         {valid ? (
-          <a
-            className={cn(buttonVariants())}
-            href={githubNewFileUrl({ slug: form.slug, manifestJson: json })}
-            rel="noreferrer"
-            target="_blank"
+          <Button
+            render={
+              <a
+                aria-label={t("publicTools.contribute.form.openPr")}
+                href={githubNewFileUrl({
+                  slug: form.slug,
+                  manifestJson: json,
+                })}
+                rel="noreferrer"
+                target="_blank"
+              />
+            }
           >
             {t("publicTools.contribute.form.openPr")}
-          </a>
+          </Button>
         ) : (
           <Button disabled type="button">
             {t("publicTools.contribute.form.openPr")}

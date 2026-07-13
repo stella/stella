@@ -42,6 +42,9 @@ const GITHUB_SKILL_ALLOWED_FILES: ReadonlySet<string> = new Set([
   ...ICON_FILE_NAMES,
 ]);
 
+const isIgnoredOsMetadataFile = (name: string): boolean =>
+  name === ".DS_Store" || name.startsWith("._");
+
 type ValidationResult = {
   errors: string[];
   entryCount: number;
@@ -207,6 +210,9 @@ const validateGithubSkillFolder = (
   errors: string[],
 ): void => {
   for (const child of readdirSync(location.folder, { withFileTypes: true })) {
+    if (isIgnoredOsMetadataFile(child.name)) {
+      continue;
+    }
     if (!GITHUB_SKILL_ALLOWED_FILES.has(child.name)) {
       errors.push(
         `${location.kind}/${location.slug}: github-sourced skill must not include local content (found "${child.name}"); content lives upstream`,

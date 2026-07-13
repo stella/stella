@@ -10,7 +10,7 @@ import {
   prettifyPracticeArea,
   sortToolEntries,
   type ToolFilterEntry,
-} from "@/routes/tools/-components/tools-catalogue.logic";
+} from "@/lib/tools-catalogue";
 
 const entry = (
   overrides: Partial<ToolFilterEntry> & Pick<ToolFilterEntry, "slug" | "kind">,
@@ -87,7 +87,7 @@ describe("filterToolEntries", () => {
 
 describe("sortToolEntries", () => {
   test("recommended slugs sort first, then alphabetical by name", () => {
-    const sorted = sortToolEntries(entries, new Set(["ares-mcp"]));
+    const sorted = sortToolEntries(entries, ["ares-mcp"]);
     expect(sorted.map((item) => item.slug)).toEqual([
       "ares-mcp",
       "gdpr-skill",

@@ -2,11 +2,12 @@ import { describe, expect, test } from "bun:test";
 
 import {
   type GithubSkillContentResult,
+  loadGithubSkillMarkdown,
   NEGATIVE_CACHE_TTL_MS,
   readCappedBody,
   resolveGithubSkillContent,
   resolveWithCache,
-} from "@/routes/tools/-components/github-skill-content";
+} from "@/lib/public-tools-github-content";
 
 const streamOf = (chunks: readonly Uint8Array[]): ReadableStream<Uint8Array> =>
   new ReadableStream<Uint8Array>({
@@ -44,6 +45,17 @@ describe("readCappedBody", () => {
   });
 });
 
+describe("loadGithubSkillMarkdown", () => {
+  test("degrades a rejected RPC to unavailable content", async () => {
+    const markdown = await loadGithubSkillMarkdown(
+      "broken",
+      async () => await Promise.reject(new Error("RPC unavailable")),
+    );
+
+    expect(markdown).toBeNull();
+  });
+});
+
 const ok = (markdown: string): GithubSkillContentResult => ({
   status: "ok",
   markdown,
@@ -55,9 +67,9 @@ describe("resolveWithCache", () => {
     const cache = new Map();
     let calls = 0;
     let release!: (result: GithubSkillContentResult) => void;
-    const fetcher = () => {
+    const fetcher = async () => {
       calls += 1;
-      return new Promise<GithubSkillContentResult>((resolve) => {
+      return await new Promise<GithubSkillContentResult>((resolve) => {
         release = resolve;
       });
     };

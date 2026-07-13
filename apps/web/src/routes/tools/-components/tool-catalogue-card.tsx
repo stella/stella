@@ -3,13 +3,13 @@ import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 
-import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import {
   CostBadge,
   FirstPartyMark,
   SetupBadge,
-} from "@/routes/_protected.knowledge/-components/catalogue/catalogue-badges";
-import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
+} from "@/components/catalogue/catalogue-badges";
+import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 
 type ToolCatalogueCardProps = {
   entry: LoadedCatalogueEntry;
@@ -46,13 +46,15 @@ export const ToolCatalogueCard = ({
           </span>
           {isFirstParty && <FirstPartyMark />}
           {recommendedIn && recommendedIn.length > 0 && (
-            <span
-              className="bg-success/12 text-success inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium"
-              title={t("publicTools.recommendedIn", {
-                codes: recommendedIn.join(", "),
-              })}
-            >
-              {t("catalogue.sectionRecommended")}
+            <span className="bg-success/12 text-success inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium">
+              <span aria-hidden="true">
+                {t("catalogue.sectionRecommended")}
+              </span>
+              <span className="sr-only">
+                {t("publicTools.recommendedIn", {
+                  codes: recommendedIn.join(", "),
+                })}
+              </span>
             </span>
           )}
         </div>

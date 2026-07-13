@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { spdxLicenseUrl } from "@/lib/spdx-license";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
-  spdxLicenseUrl,
   toolDownloadPath,
 } from "@/routes/tools/-components/tool-detail.logic";
 

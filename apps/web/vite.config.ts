@@ -286,6 +286,9 @@ export default defineConfig(({ mode }) => {
               // chunk so users without MCP App output never download it.
               return "mcp-app";
             }
+            if (id.includes("node_modules/@tanstack/start-client-core/")) {
+              return "vendor-tanstack-server-fn";
+            }
             if (id.includes("node_modules/@tanstack/")) {
               return "vendor-tanstack";
             }

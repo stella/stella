@@ -227,15 +227,19 @@ export const fetchSkillPackageFromUrl = async (
  * catalogue installs include the pinned SKILL.md and all allowed resources.
  */
 export const fetchGithubCatalogueSkillPackage = async (
-  target: GithubSkillPath,
-  sourceUrl: string,
-  fetchFiles: (target: GithubSkillPath) => Promise<SkillFile[]> = async (
-    skillTarget,
-  ) =>
-    await fetchGithubSkillFiles(
-      skillTarget,
-      createSkillPackageFetchContext(),
-    ),
+  {
+    fetchFiles = async (skillTarget) =>
+      await fetchGithubSkillFiles(
+        skillTarget,
+        createSkillPackageFetchContext(),
+      ),
+    sourceUrl,
+    target,
+  }: {
+    fetchFiles?: (target: GithubSkillPath) => Promise<SkillFile[]>;
+    sourceUrl: string;
+    target: GithubSkillPath;
+  },
 ): Promise<Result<ParsedSkillPackage, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {

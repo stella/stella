@@ -346,7 +346,7 @@ describe("public law sitemap", () => {
   test("case-law shard sitemaps fail before exceeding the protocol byte limit", () => {
     expect(() =>
       assertPublicLawSitemapXmlWithinProtocolLimits("<urlset />", 5),
-    ).toThrow("Public case-law sitemap exceeded 5 bytes.");
+    ).toThrow("Public sitemap exceeded 5 bytes.");
   });
 
   test("root sitemap indexes fail before exceeding the protocol byte limit", () => {
@@ -370,7 +370,7 @@ describe("public law sitemap", () => {
         maxBytes: 5,
         publicLawIndexingEnabled: true,
       }),
-    ).toThrow("Public case-law sitemap exceeded 5 bytes.");
+    ).toThrow("Public sitemap exceeded 5 bytes.");
   });
 
   test("sitemap XML responses are publicly cacheable", () => {

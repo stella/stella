@@ -6,14 +6,18 @@ import * as v from "valibot";
 
 import {
   githubArchiveUrl,
-  loadCatalogue,
   type LoadedCatalogueEntry,
   type LoadedEntryByKind,
 } from "@stll/catalogue";
-import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
-import { Button, buttonVariants } from "@stll/ui/components/button";
-import { cn } from "@stll/ui/lib/utils";
+import { Button } from "@stll/ui/components/button";
 
+import {
+  CostBadge,
+  FirstPartyMark,
+  LicenseBadge,
+  SetupBadge,
+} from "@/components/catalogue/catalogue-badges";
+import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
@@ -22,20 +26,12 @@ import {
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import {
-  CostBadge,
-  FirstPartyMark,
-  LicenseBadge,
-  SetupBadge,
-} from "@/routes/_protected.knowledge/-components/catalogue/catalogue-badges";
-import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
-import { fetchGithubSkillContent } from "@/routes/tools/-components/github-skill-content";
+import { prettifyPracticeArea } from "@/lib/tools-catalogue";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
   toolDownloadPath,
 } from "@/routes/tools/-components/tool-detail.logic";
-import { prettifyPracticeArea } from "@/routes/tools/-components/tools-catalogue.logic";
 
 const ToolMarkdown = lazy(async () => ({
   default: (await import("@/routes/tools/-components/tool-markdown"))
@@ -51,29 +47,6 @@ const AddToStella = lazy(async () => ({
     .AddToStella,
 }));
 
-// Slugs are unique across kinds, so a flat lookup is unambiguous.
-const findEntryBySlug = (slug: string): LoadedCatalogueEntry | undefined =>
-  loadCatalogue().find((entry) => entry.slug === slug);
-
-// SKILL.md for the detail page: in-tree bodies ship in the static
-// install-payload bundle; github bodies are fetched server-side at the
-// pinned SHA. `null` means "not a skill" or "content unavailable"; the
-// page degrades to metadata + an external link rather than crashing.
-const loadSkillMarkdown = async (
-  entry: LoadedCatalogueEntry,
-): Promise<string | null> => {
-  if (entry.kind !== "skill") {
-    return null;
-  }
-  if (entry.source === "in-tree") {
-    return findCatalogueSkillInstallPayload(entry.slug)?.body ?? null;
-  }
-  const result = await fetchGithubSkillContent({
-    data: { slug: entry.slug },
-  });
-  return result.status === "ok" ? result.markdown : null;
-};
-
 // Public SEO page: a bad `?install=` value (e.g. `?install=true`) must
 // degrade to "no install intent", not throw into the router's default
 // error boundary. `v.fallback` swallows the parse failure and yields
@@ -85,15 +58,12 @@ const searchSchema = v.object({
 export const Route = createFileRoute("/tools/$slug")({
   validateSearch: searchSchema,
   loader: async ({ params }) => {
-    const entry = findEntryBySlug(params.slug);
-    if (!entry) {
+    const { loadPublicToolDetail } = await import("@/lib/public-tools-data");
+    const detail = await loadPublicToolDetail(params.slug);
+    if (!detail) {
       throw redirect({ to: "/tools", replace: true });
     }
-    return {
-      displayName: entry.displayName,
-      entry,
-      markdown: await loadSkillMarkdown(entry),
-    };
+    return detail;
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
@@ -234,23 +204,33 @@ function DownloadAffordance({ entry }: { entry: LoadedCatalogueEntry }) {
   }
   if (entry.source === "in-tree") {
     return (
-      <a
-        className={cn(buttonVariants({ variant: "outline" }))}
-        href={toolDownloadPath(entry.slug)}
+      <Button
+        render={
+          <a
+            aria-label={t("common.download")}
+            href={toolDownloadPath(entry.slug)}
+          />
+        }
+        variant="outline"
       >
         {t("common.download")}
-      </a>
+      </Button>
     );
   }
   return (
-    <a
-      className={cn(buttonVariants({ variant: "outline" }))}
-      href={githubArchiveUrl(entry)}
-      rel="noreferrer"
-      target="_blank"
+    <Button
+      render={
+        <a
+          aria-label={t("publicTools.downloadUpstream")}
+          href={githubArchiveUrl(entry)}
+          rel="noreferrer"
+          target="_blank"
+        />
+      }
+      variant="outline"
     >
       {t("publicTools.downloadUpstream")}
-    </a>
+    </Button>
   );
 }
 

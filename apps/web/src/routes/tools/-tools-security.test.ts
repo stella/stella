@@ -14,6 +14,8 @@ const SSR_ENTRY_MODULES = [
   "apps/web/src/routes/tools/index.tsx",
   "apps/web/src/routes/tools/$slug.tsx",
   "apps/web/src/routes/tools/contribute.tsx",
+  "apps/web/src/lib/public-tools-data.ts",
+  "apps/web/src/lib/public-tools-github-content.ts",
   "apps/web/src/lib/public-tools-sitemap.ts",
   "apps/web/src/routes/sitemaps/tools[.]xml.ts",
 ];
@@ -81,8 +83,9 @@ const resolveLocalImport = (
 
 // Static imports only: `import ... from "x"`, `export ... from "x"`, and
 // bare `import "x"`. Dynamic `import("x")` has no `from` clause and is
-// intentionally NOT matched — lazy client-only islands are the
-// sanctioned escape hatch for the auth/install path.
+// intentionally not matched. Server/loader modules reached dynamically are
+// explicit roots above; client-only islands remain the sanctioned escape
+// hatch for the auth/install path.
 const collectStaticImportSpecifiers = (source: string): readonly string[] => {
   const specifiers: string[] = [];
   for (const match of source.matchAll(
