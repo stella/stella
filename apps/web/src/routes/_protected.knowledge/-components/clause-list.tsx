@@ -36,7 +36,7 @@ import type {
   CategoryOps,
 } from "@/routes/_protected.knowledge/-components/category-sidebar";
 import { ClauseImportDialog } from "@/routes/_protected.knowledge/-components/clause-import-dialog";
-import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
+import { downloadFile } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────
 

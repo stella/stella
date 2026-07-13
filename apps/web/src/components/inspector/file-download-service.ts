@@ -4,7 +4,7 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
-import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
+import { downloadFile } from "@/lib/utils";
 
 export type DownloadTabFileProps = {
   fieldId: string;

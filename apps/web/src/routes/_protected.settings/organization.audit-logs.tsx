@@ -35,7 +35,7 @@ import {
   type fetchAuditLogs,
   type AuditLogsPageKey,
 } from "@/routes/_protected.settings/-queries/audit-logs";
-import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
+import { downloadFile } from "@/lib/utils";
 
 export const Route = createFileRoute(
   "/_protected/settings/organization/audit-logs",
