@@ -53,7 +53,7 @@
     "@stll/catalogue": "workspace:*",
     "@stll/conditions": "workspace:*",
     "@stll/country-codes": "workspace:*",
-    "@stll/docx-core": "workspace:*",
+    "@stll/docx-core": "0.1.1",
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/folio-agents": "^0.4.0",

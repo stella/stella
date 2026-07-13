@@ -56,7 +56,7 @@
         "@stll/catalogue": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
-        "@stll/docx-core": "workspace:*",
+        "@stll/docx-core": "0.1.1",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/folio-agents": "^0.4.0",
@@ -230,7 +230,7 @@
         "@stll/catalogue": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
-        "@stll/docx-core": "workspace:*",
+        "@stll/docx-core": "0.1.1",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/folio-agents": "^0.4.0",
@@ -423,19 +423,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-      },
-    },
-    "packages/docx-core": {
-      "name": "@stll/docx-core",
-      "version": "0.1.0",
-      "dependencies": {
-        "better-result": "catalog:",
-        "jszip": "catalog:",
-      },
-      "devDependencies": {
-        "@stll/typescript-config": "workspace:*",
-        "@types/bun": "catalog:",
-        "tsdown": "catalog:",
       },
     },
     "packages/docx-utils": {
@@ -1717,7 +1704,7 @@
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
-    "@stll/docx-core": ["@stll/docx-core@workspace:packages/docx-core"],
+    "@stll/docx-core": ["@stll/docx-core@0.1.1", "", { "dependencies": { "better-result": "2.9.2", "jszip": "3.10.1" } }, "sha512-MpmcXtFYAzjtmmDH2dVF8dfJW0kil46GgfFje69hzO8oGWg5cwPiTwH5yfECRRDPZWbnEWG2AbWkD/IZG+iL3Q=="],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
