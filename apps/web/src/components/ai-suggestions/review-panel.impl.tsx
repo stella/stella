@@ -65,6 +65,7 @@ import {
 } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
+const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
 
 type GroupAxis = "severity" | "area";
 
@@ -270,6 +271,7 @@ export const ReviewPanelImpl = ({
   ): {
     status: "accepted" | "skipped";
     revisionIds: readonly number[] | null;
+    undoHandle: ReviewSuggestion["undoHandle"];
     skipReason?: string;
   } => {
     const editor = docxEditorRef.current;
@@ -278,6 +280,7 @@ export const ReviewPanelImpl = ({
       return {
         status: "skipped",
         revisionIds: null,
+        undoHandle: null,
         skipReason: "documentNotEditable",
       };
     }
@@ -294,14 +297,18 @@ export const ReviewPanelImpl = ({
       return {
         status: "skipped",
         revisionIds: null,
+        undoHandle: null,
         skipReason: "documentNotEditable",
       };
     }
 
-    const result = editor.applyAIEditOperations({
-      mode: applyMode,
-      operations: [op],
+    const result = editor.applyDocumentOperations({
       snapshot,
+      batch: {
+        version: DOCUMENT_OPERATION_CONTRACT_VERSION,
+        mode: applyMode,
+        operations: [op],
+      },
       // Author the tracked-change marks as the user (their preferred
       // name from account settings) — they're reviewing and
       // accepting the AI's suggestion AS THEMSELVES, not as "AI".
@@ -314,12 +321,14 @@ export const ReviewPanelImpl = ({
       return {
         status: "accepted",
         revisionIds: applied.revisionIds ?? null,
+        undoHandle: result.undoHandle,
       };
     }
     const skipped = result.skipped.at(0);
     return {
       status: "skipped",
       revisionIds: null,
+      undoHandle: null,
       skipReason: skipped?.reason ?? "unsupportedBlock",
     };
   };
@@ -349,6 +358,7 @@ export const ReviewPanelImpl = ({
     updateSuggestion(entityId, item.id, {
       status: outcome.status,
       revisionIds: outcome.revisionIds,
+      undoHandle: outcome.undoHandle,
       applyMode: outcome.status === "accepted" ? applyMode : null,
       ...(outcome.skipReason !== undefined && {
         skipReason: outcome.skipReason,
@@ -372,25 +382,19 @@ export const ReviewPanelImpl = ({
     if (item.status === "pending") {
       return;
     }
-    // Tracked-change accepts produced revision ids we can ask
-    // Folio to roll back; rolling back restores the document to
-    // the pre-accept state. Direct accepts skipped the tracked-
-    // changes pipeline so we have no reversible handle — the doc
-    // change has been merged into history and we'd need a fresh
-    // edit op to undo it. Surface that asymmetry honestly: revert
-    // only flips the suggestion back to pending, the doc isn't
-    // touched (the user has already-committed text they can edit
-    // by hand if needed).
-    if (
-      item.status === "accepted" &&
-      item.revisionIds !== null &&
-      item.applyMode === "tracked-changes"
-    ) {
-      docxEditorRef.current?.rejectAIEditOperation(item.revisionIds);
+    if (item.status === "accepted" && item.undoHandle !== null) {
+      const undoResult = docxEditorRef.current?.undoDocumentOperations(
+        item.undoHandle,
+      );
+      if (undoResult?.status !== "undone") {
+        stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+        return;
+      }
     }
     updateSuggestion(entityId, item.id, {
       status: "pending",
       revisionIds: null,
+      undoHandle: null,
       applyMode: null,
       skipReason: undefined,
     });
@@ -434,6 +438,7 @@ export const ReviewPanelImpl = ({
       updateSuggestion(entityId, item.id, {
         status: outcome.status,
         revisionIds: outcome.revisionIds,
+        undoHandle: outcome.undoHandle,
         applyMode: outcome.status === "accepted" ? applyMode : null,
         ...(outcome.skipReason !== undefined && {
           skipReason: outcome.skipReason,

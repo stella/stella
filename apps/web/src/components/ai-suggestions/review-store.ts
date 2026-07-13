@@ -16,7 +16,12 @@ import type {
   FolioAIEditOperation,
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
+  DocxEditorRef,
 } from "@stll/folio-react";
+
+type DocumentOperationUndoHandle = NonNullable<
+  ReturnType<DocxEditorRef["applyDocumentOperations"]>["undoHandle"]
+>;
 
 export const REVIEW_UNSPECIFIED_AREA = "Unspecified";
 export type ReviewSeverityKey = FolioAIEditSeverity | "unspecified";
@@ -129,6 +134,8 @@ export type ReviewSuggestion = {
    * together.
    */
   revisionIds: readonly number[] | null;
+  /** Transactional handle for reversing the committed operation batch. */
+  undoHandle: DocumentOperationUndoHandle | null;
   /**
    * The editor-shaped operation, kept on the suggestion for the
    * lifetime of the session. The panel feeds this to

@@ -720,6 +720,7 @@ const queueReviewSuggestions = ({
         status: "pending",
         applyMode: null,
         revisionIds: null,
+        undoHandle: null,
         pendingOperation: folio,
         snapshot,
       };
