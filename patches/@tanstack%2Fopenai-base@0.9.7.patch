@@ -36,3 +36,51 @@ index 6977689012fb8caccc28e1bcde4154b69b60cc46..18bd07c23e75adb3a367b376ae9846d3
  }
  function containsStrictUnsupportedKeyword(node) {
    if (Array.isArray(node)) {
+diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
+index 64b80b74b3d56b7486f7978b1c1585c12a4d5b39..2c994e76c6d0107319677f63eed9675a83e36184 100644
+--- a/dist/esm/adapters/responses-text.js
++++ b/dist/esm/adapters/responses-text.js
+@@ -761,8 +761,8 @@ class OpenAIResponsesTextAdapter extends BaseTextAdapter {
+             };
+           }
+-          if (contentPart.type === "output_text") {
++          if (contentPart.type === "output_text" && contentPart.text) {
+             hasStreamedContentDeltas = true;
+-          } else if (contentPart.type === "reasoning_text") {
++          } else if (contentPart.type === "reasoning_text" && contentPart.text) {
+             hasStreamedReasoningDeltas = true;
+           }
+           const partChunk = handleContentPart(contentPart);
+@@ -976,6 +976,32 @@ class OpenAIResponsesTextAdapter extends BaseTextAdapter {
+           }
+         }
+         if (chunk.type === "response.completed") {
++          // PATCH (stella): reasoning responses may only carry their final text
++          // on the completed response. Backfill it when no text was streamed so
++          // a successful provider response cannot become an empty AI result.
++          const completedText = chunk.response.output.flatMap((item) => item.type === "message" ? item.content : []).filter((part) => part.type === "output_text").map((part) => part.text).join("");
++          if (!accumulatedContent && completedText) {
++            if (!hasEmittedTextMessageStart) {
++              hasEmittedTextMessageStart = true;
++              yield {
++                type: EventType.TEXT_MESSAGE_START,
++                messageId: aguiState.messageId,
++                model: model || options.model,
++                timestamp: Date.now(),
++                role: "assistant"
++              };
++            }
++            accumulatedContent = completedText;
++            hasStreamedContentDeltas = true;
++            yield {
++              type: EventType.TEXT_MESSAGE_CONTENT,
++              messageId: aguiState.messageId,
++              model: model || options.model,
++              timestamp: Date.now(),
++              delta: completedText,
++              content: accumulatedContent
++            };
++          }
+           for (const item of chunk.response.output) {
+             if (item.type !== "function_call" || !item.id) continue;
+             const metadata = toolCallMetadata.get(item.id) ?? {
