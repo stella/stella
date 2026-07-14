@@ -127,8 +127,22 @@ const MessageResponseFallback = ({
   </div>
 );
 
-export const MessageResponse = (props: MessageResponseProps) => (
-  <Suspense fallback={<MessageResponseFallback {...props} />}>
-    <LazyMessageResponse {...props} />
+type MessageResponsePropsWithFallback = MessageResponseProps & {
+  fallbackChildren?: ReactNode | undefined;
+};
+
+export const MessageResponse = ({
+  children,
+  fallbackChildren,
+  ...props
+}: MessageResponsePropsWithFallback) => (
+  <Suspense
+    fallback={
+      <MessageResponseFallback {...props}>
+        {fallbackChildren ?? children}
+      </MessageResponseFallback>
+    }
+  >
+    <LazyMessageResponse {...props}>{children}</LazyMessageResponse>
   </Suspense>
 );

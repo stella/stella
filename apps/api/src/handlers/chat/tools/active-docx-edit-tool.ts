@@ -269,7 +269,10 @@ const inputJsonSchema: JsonObject = {
   properties: {
     version: {
       type: "integer",
-      enum: [FOLIO_DOCUMENT_OPERATION_CONTRACT_VERSION],
+      // Do not express the pinned numeric value as `enum: [1]` here.
+      // OpenRouter's Gemini translation drops numeric-enum properties but
+      // leaves them in the strict-mode `required` array, invalidating the
+      // entire tool catalog. The runtime validator below still pins version 1.
       description: "Document-operation contract version. Always 1.",
     },
     operations: {

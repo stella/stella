@@ -64,6 +64,50 @@ const renderWithProviders = (children: ReactNode) =>
   );
 
 describe("chat thread messages", () => {
+  test("does not flash TipTap paragraph tags for an optimistic user message", () => {
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-user",
+        parts: [{ type: "text", content: "<p>ahoj</p>" }],
+        role: "user",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+      />,
+    );
+
+    expect(html).toContain("ahoj");
+    expect(html).not.toContain("&lt;p&gt;");
+    expect(html).not.toContain("&lt;/p&gt;");
+  });
+
+  test("treats an error as terminal even if generation state is stale", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        error={new Error("provider failed")}
+        isGenerating
+        messages={[]}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        onResend={() => {}}
+        showThinkingIndicator
+      />,
+    );
+
+    expect(html).toContain("There was an issue sending your message.");
+    expect(html).not.toContain("Working with context");
+    expect(html).not.toContain('disabled=""');
+  });
+
   test("shows a copy action at the end of assistant responses", () => {
     const chatMessages: PersistedChatMessage[] = [
       {

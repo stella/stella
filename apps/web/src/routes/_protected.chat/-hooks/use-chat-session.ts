@@ -754,10 +754,11 @@ export const useChatSession = ({
     [messages],
   );
   const isGenerating =
-    status === "submitted" ||
-    status === "streaming" ||
-    sessionGenerating ||
-    hasRunningToolCall;
+    error === undefined &&
+    (status === "submitted" ||
+      status === "streaming" ||
+      sessionGenerating ||
+      hasRunningToolCall);
   useExternalSyncEffect(() => {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);

@@ -62,6 +62,7 @@ import { usePulse } from "@/hooks/use-pulse";
 import type { TranslationKey } from "@/i18n/types";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
+import { shouldShowPromptBarBusyPlaceholder } from "./host.logic";
 import type { FileAIChatStatus } from "./types";
 
 const SEVERITY_DOT_CLASS: Record<AISuggestionSeverity, string> = {
@@ -558,6 +559,11 @@ export function PromptBar(props: PromptBarProps) {
 
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
+  const showBusyPlaceholder = shouldShowPromptBarBusyPlaceholder({
+    isEmpty,
+    queueWhileGenerating,
+    status,
+  });
   const isSendBlocked = sendDisabledReason !== undefined;
   const inputDisabled = isSendBlocked;
   const submitDisabled = busy || isSendBlocked;
@@ -833,7 +839,7 @@ export function PromptBar(props: PromptBarProps) {
         </span>
       )}
       <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
-        {isEmpty && busy && (
+        {showBusyPlaceholder && (
           <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
             <LoaderCircleIcon
               aria-hidden="true"
@@ -874,7 +880,9 @@ export function PromptBar(props: PromptBarProps) {
             // busy "working" label, or the editor-loading label) — otherwise
             // the two texts paint on top of each other.
             isEmpty &&
-              (emptyPlaceholder !== undefined || busy || isSendBlocked) &&
+              (emptyPlaceholder !== undefined ||
+                showBusyPlaceholder ||
+                isSendBlocked) &&
               "folio-ai-bar-editor--custom-placeholder",
             inputDisabled && "pointer-events-none",
           )}

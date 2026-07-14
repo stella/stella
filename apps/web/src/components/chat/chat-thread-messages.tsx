@@ -89,6 +89,7 @@ export const ChatThreadMessages = ({
   // any downstream read. Memoized because this component bails out of React
   // Compiler (see below), so the manual memos here need a stable `messages`.
   const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
+  const generationActive = error === undefined && isGenerating;
   // This component bails out of React Compiler (a suppression below), so its
   // manual memoization is kept (RC will not auto-memoize a bailed component).
   const retryableAssistantMessageId = useMemo(
@@ -193,7 +194,7 @@ export const ChatThreadMessages = ({
           <>
             <AssistantMessageParts
               activeOrganizationId={activeOrganizationId}
-              isGenerating={isGenerating}
+              isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
               }
@@ -215,7 +216,7 @@ export const ChatThreadMessages = ({
               workspaceId={workspaceId}
             />
             <AssistantMessageActions
-              isGenerating={isGenerating}
+              isGenerating={generationActive}
               isLatestAssistantMessage={
                 message.id === retryableAssistantMessageId
               }
@@ -294,13 +295,13 @@ export const ChatThreadMessages = ({
       {error && (
         <ChatErrorMessage
           error={error}
-          isGenerating={isGenerating}
+          isGenerating={generationActive}
           onResend={onResend}
           onSendWithoutAnonymization={onSendWithoutAnonymization}
         />
       )}
       {showThinkingIndicator &&
-        isGenerating &&
+        generationActive &&
         !hasVisibleContent(messages) && <ThinkingIndicator />}
       {onRemoveQueuedMessage &&
         queuedMessages !== undefined &&
@@ -650,6 +651,75 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
   }
 
   return result;
+};
+
+const USER_MESSAGE_FALLBACK_BLOCK_TAGS = new Set([
+  "blockquote",
+  "div",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "ul",
+]);
+
+/**
+ * The optimistic user message still contains TipTap HTML until the API returns
+ * its normalized Markdown copy. Streamdown is lazy-loaded, so its Suspense
+ * fallback needs a plain-text preview instead of briefly printing raw tags.
+ * This only produces text nodes; the original string still goes to Streamdown
+ * and the API, preserving formatting and mention validation.
+ */
+const userMessageFallbackText = (html: string): string => {
+  let output = "";
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const tagStart = html.indexOf("<", cursor);
+    if (tagStart === -1) {
+      output += html.slice(cursor);
+      break;
+    }
+
+    output += html.slice(cursor, tagStart);
+    const tagEnd = html.indexOf(">", tagStart + 1);
+    if (tagEnd === -1) {
+      output += html.slice(tagStart);
+      break;
+    }
+
+    const rawTag = html.slice(tagStart + 1, tagEnd).trimStart();
+    const closing = rawTag.startsWith("/");
+    const nameStart = closing ? 1 : 0;
+    let nameEnd = nameStart;
+    while (/[\dA-Za-z-]/u.test(rawTag.charAt(nameEnd))) {
+      nameEnd += 1;
+    }
+    const tagName = rawTag.slice(nameStart, nameEnd).toLowerCase();
+    if (
+      tagName === "br" ||
+      (closing && USER_MESSAGE_FALLBACK_BLOCK_TAGS.has(tagName))
+    ) {
+      output += "\n";
+    }
+    cursor = tagEnd + 1;
+  }
+
+  return output
+    .replaceAll("&nbsp;", " ")
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#39;", "'")
+    .replaceAll("&amp;", "&")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
 };
 
 const IMAGE_MEDIA_TYPES = Object.freeze([
@@ -1516,7 +1586,10 @@ const UserMessageText = ({
   );
   if (rehypePlugins === undefined) {
     return (
-      <MessageResponse components={USER_TEXT_STREAMDOWN_COMPONENTS}>
+      <MessageResponse
+        components={USER_TEXT_STREAMDOWN_COMPONENTS}
+        fallbackChildren={userMessageFallbackText(text)}
+      >
         {text}
       </MessageResponse>
     );
@@ -1524,6 +1597,7 @@ const UserMessageText = ({
   return (
     <MessageResponse
       components={USER_TEXT_STREAMDOWN_COMPONENTS}
+      fallbackChildren={userMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}
     >
       {text}
