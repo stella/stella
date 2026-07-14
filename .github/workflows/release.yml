@@ -158,7 +158,7 @@ jobs:
           docker run --rm --network host \
             --env DATABASE_URL \
             stella-api:smoke \
-            bun run src/db/migrate.ts
+            bun /app/apps/api/src/db/migrate.js
 
       - name: Run smoke container
         env:

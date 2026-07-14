@@ -185,8 +185,8 @@ validateServiceConfig({
 const apiDeploy = getRecord(readJson(API_CONFIG_PATH), "deploy");
 expect(
   JSON.stringify(apiDeploy["preDeployCommand"]) ===
-    JSON.stringify(["bun src/db/migrate.ts"]),
-  "API config must run migrations as a pre-deploy command",
+    JSON.stringify(["bun /app/apps/api/src/db/migrate.js"]),
+  "API config must run the bundled migrations as a pre-deploy command",
 );
 
 const railwayDoc = readText(RAILWAY_DOC_PATH);
