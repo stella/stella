@@ -1,3 +1,4 @@
+import { useLocation } from "@tanstack/react-router";
 import { MailIcon, MegaphoneIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -12,38 +13,18 @@ import {
   MenuTrigger,
 } from "@stll/ui/components/menu";
 
+import { buildFeedbackMailto } from "@/components/feedback-dialog.logic";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/sidebar";
 import { env } from "@/env";
 
-type Props = {
-  userEmail?: string | undefined;
-};
-
-const DISCORD_URL = "https://discord.gg/8dZjmVFjTK";
-const DEFAULT_FEEDBACK_EMAIL = "hello@stll.app";
-const GITHUB_FEEDBACK_URL =
-  "https://github.com/stella/stella/issues/new/choose";
-
-const buildMailto = (
-  recipient: string,
-  userEmail: string | undefined,
-  route: string,
-) => {
-  const subject = `Feedback (${route})`;
-  const body = [
-    "",
-    "",
-    "---",
-    ...(userEmail ? [`From: ${userEmail}`] : []),
-    `Route: ${route}`,
-  ].join("\n");
-  return `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-};
-
 export const FeedbackDialog = ({ userEmail }: Props) => {
   const t = useTranslations();
-  const recipient = env.VITE_FEEDBACK_EMAIL_TO ?? DEFAULT_FEEDBACK_EMAIL;
-  const route = typeof window === "undefined" ? "/" : window.location.pathname;
+  const route = useLocation({ select: (location) => location.pathname });
+  const mailto = buildFeedbackMailto({
+    recipient: env.VITE_FEEDBACK_EMAIL_TO,
+    route,
+    userEmail,
+  });
 
   return (
     <SidebarMenuItem>
@@ -83,19 +64,24 @@ export const FeedbackDialog = ({ userEmail }: Props) => {
             <GitHubLogoIcon />
             {t("feedback.github")}
           </MenuItem>
-          <MenuItem
-            render={
-              <a
-                aria-label={t("common.email")}
-                href={buildMailto(recipient, userEmail, route)}
-              />
-            }
-          >
-            <MailIcon />
-            {t("common.email")}
-          </MenuItem>
+          {mailto && (
+            <MenuItem
+              render={<a aria-label={t("common.email")} href={mailto} />}
+            >
+              <MailIcon />
+              {t("common.email")}
+            </MenuItem>
+          )}
         </MenuPopup>
       </Menu>
     </SidebarMenuItem>
   );
 };
+
+type Props = {
+  userEmail?: string | undefined;
+};
+
+const DISCORD_URL = "https://discord.gg/8dZjmVFjTK";
+const GITHUB_FEEDBACK_URL =
+  "https://github.com/stella/stella/issues/new/choose";

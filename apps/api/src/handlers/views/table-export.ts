@@ -22,6 +22,7 @@ import { extractFormattingLocale } from "@/api/lib/locale";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseViewLayout } from "@/api/lib/views-schema";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 // Postgres caps bound parameters per statement; chunk the justification
 // lookup so an export at the row ceiling cannot overflow a single `IN (...)`.
@@ -33,8 +34,6 @@ const EXPORT_COMMENT_AUTHOR = "stella";
 
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-const DOCX_MIME_TYPE =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 const chunkArray = <T>(items: T[], size: number): T[][] => {
   const chunks: T[][] = [];
@@ -975,8 +974,11 @@ const docxRootRelationshipsXml = `<?xml version="1.0" encoding="UTF-8" standalon
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`;
 
+const sanitizeDocxText = (value: string): string =>
+  sanitizeSpreadsheetCell(value).replace(/\r\n?/gu, "\n");
+
 const buildDocxTextRuns = (value: string): string =>
-  value
+  sanitizeDocxText(value)
     .split("\n")
     .map(
       (line, index) =>

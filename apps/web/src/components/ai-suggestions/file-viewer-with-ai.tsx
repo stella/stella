@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useRef } from "react";
+import { lazy, Suspense, useCallback } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
 
@@ -63,10 +63,7 @@ export const FileViewerWithAI = ({
 };
 
 const DocxHorizontalScrollbar = () => {
-  const cleanupRef = useRef<() => void>(() => undefined);
   const trackRef = useCallback((track: HTMLDivElement | null) => {
-    cleanupRef.current();
-    cleanupRef.current = () => undefined;
     if (!track?.parentElement) {
       return;
     }
@@ -81,11 +78,38 @@ const DocxHorizontalScrollbar = () => {
     let scrollCleanup = () => undefined;
     let pointerCleanup = () => undefined;
 
+    const updateThumb = () => {
+      if (!scrollElement) {
+        track.hidden = true;
+        return;
+      }
+
+      const maxScroll = scrollElement.scrollWidth - scrollElement.clientWidth;
+      track.hidden = maxScroll <= 1;
+      if (maxScroll <= 1) {
+        return;
+      }
+
+      const thumbWidth = Math.max(
+        (scrollElement.clientWidth / scrollElement.scrollWidth) *
+          track.clientWidth,
+        24,
+      );
+      const travel = Math.max(track.clientWidth - thumbWidth, 0);
+      const progress = Math.min(
+        Math.max(scrollElement.scrollLeft / maxScroll, 0),
+        1,
+      );
+      thumb.style.width = `${String(thumbWidth)}px`;
+      thumb.style.transform = `translateX(${String(progress * travel)}px)`;
+    };
+
     const bindScrollElement = () => {
       const nextScrollElement = host.querySelector<HTMLElement>(
         "[data-folio-scroll]",
       );
       if (nextScrollElement === scrollElement) {
+        updateThumb();
         return;
       }
 
@@ -100,28 +124,6 @@ const DocxHorizontalScrollbar = () => {
       const boundScrollElement = scrollElement;
       const previousOverflowX = boundScrollElement.style.overflowX;
       boundScrollElement.style.overflowX = "hidden";
-
-      const updateThumb = () => {
-        const maxScroll =
-          boundScrollElement.scrollWidth - boundScrollElement.clientWidth;
-        track.hidden = maxScroll <= 1;
-        if (maxScroll <= 1) {
-          return;
-        }
-
-        const thumbWidth = Math.max(
-          (boundScrollElement.clientWidth / boundScrollElement.scrollWidth) *
-            track.clientWidth,
-          24,
-        );
-        const travel = Math.max(track.clientWidth - thumbWidth, 0);
-        const progress = Math.min(
-          Math.abs(boundScrollElement.scrollLeft) / maxScroll,
-          1,
-        );
-        thumb.style.width = `${String(thumbWidth)}px`;
-        thumb.style.transform = `translateX(${String(progress * travel)}px)`;
-      };
 
       const resizeObserver = new ResizeObserver(updateThumb);
       resizeObserver.observe(boundScrollElement);
@@ -219,7 +221,7 @@ const DocxHorizontalScrollbar = () => {
     };
 
     track.addEventListener("pointerdown", handlePointerDown);
-    cleanupRef.current = () => {
+    return () => {
       mutationObserver.disconnect();
       scrollCleanup();
       pointerCleanup();
@@ -232,6 +234,7 @@ const DocxHorizontalScrollbar = () => {
       ref={trackRef}
       aria-hidden="true"
       className="absolute inset-x-1 bottom-1 z-[100] h-1.5 cursor-pointer"
+      dir="ltr"
       hidden
     >
       <div className="bg-foreground/20 absolute inset-y-0 start-0 rounded-full" />

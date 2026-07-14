@@ -42,7 +42,6 @@ const TABLE_COLUMN_FLAG_EXCLUDED_ENTITY_KINDS = [
   "task",
 ] satisfies EntityKind[];
 const COLUMN_FLAG_TARGET_BATCH_SIZE = 500;
-const VERIFIED_COLUMN_FLAG = "verified";
 const COLUMN_METADATA_FLAG = {
   locked: "locked",
   verified: "verified",
@@ -221,7 +220,7 @@ const processColumnFlagBatch = async ({
         ? buildColumnLockMutation(mutationArgs)
         : buildColumnFlagMutation({
             ...mutationArgs,
-            flag: VERIFIED_COLUMN_FLAG,
+            flag,
           });
 
     if (mutation.insertValues.length > 0) {

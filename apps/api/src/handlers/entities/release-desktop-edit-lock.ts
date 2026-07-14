@@ -11,7 +11,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
+import { liveOwnDesktopEditSessionTargetPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { broadcast } from "@/api/lib/sse";
 
 const config = {
@@ -25,23 +25,27 @@ const config = {
 
 export default createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({ safeDb, workspaceId, body, user, recordAuditEvent }) {
     // Find the session ID before closing (for SSE notification)
-    const openSessions = yield* Result.await(
+    const releasedSessionId = yield* Result.await(
       safeDb(async (tx) => {
         const sessions = await tx
           .select({ id: desktopEditSessions.id })
           .from(desktopEditSessions)
           .where(
             and(
-              eq(desktopEditSessions.entityId, body.entityId),
-              eq(desktopEditSessions.propertyId, body.propertyId),
-              eq(desktopEditSessions.workspaceId, workspaceId),
-              ...liveDesktopEditSessionPredicates(new Date()),
+              ...liveOwnDesktopEditSessionTargetPredicates({
+                entityId: body.entityId,
+                now: new Date(),
+                propertyId: body.propertyId,
+                userId: user.id,
+                workspaceId,
+              }),
             ),
           )
           .orderBy(desktopEditSessions.createdAt)
-          .limit(1);
+          .limit(1)
+          .for("update");
 
         const session = sessions.at(0);
         if (session) {
@@ -66,19 +70,18 @@ export default createSafeHandler(
     );
 
     // Notify the desktop app via SSE before closing the connection
-    if (openSessions) {
-      pushSessionEvent(openSessions, {
+    if (releasedSessionId) {
+      pushSessionEvent(releasedSessionId, {
         type: "session-closed",
         data: { reason: "released" },
       });
-      closeSessionConnections(openSessions);
+      closeSessionConnections(releasedSessionId);
+      broadcast(workspaceId, {
+        type: "invalidate-query",
+        data: ["entities", workspaceId],
+      });
     }
 
-    broadcast(workspaceId, {
-      type: "invalidate-query",
-      data: ["entities", workspaceId],
-    });
-
-    return Result.ok({ released: true });
+    return Result.ok({ released: releasedSessionId !== null });
   },
 );

@@ -290,6 +290,22 @@ describe("table export", () => {
     expect(documentXml?.match(/<w:tr>/gu)).toHaveLength(3);
   });
 
+  test("DOCX cells strip invalid XML controls and normalize line endings", async () => {
+    const bytes = await buildDocxExport({
+      columns: [
+        { type: "property", id: "notes", propertyId: "notes", header: "Notes" },
+      ],
+      rows: [[textCell("First\u0000\r\nSecond\rThird")]],
+    });
+    const zip = await JSZip.loadAsync(bytes);
+    const documentXml = await zip.file("word/document.xml")?.async("text");
+
+    expect(documentXml).toContain("First");
+    expect(documentXml).not.toContain("\u0000");
+    expect(documentXml).not.toContain("\r");
+    expect(documentXml?.match(/<w:br\/>/gu)).toHaveLength(2);
+  });
+
   test("xlsx stores cells as escaped inline strings", async () => {
     const bytes = await buildXlsxExport({
       columns: [
