@@ -571,7 +571,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/web/*|packages/*|scripts/bundle-baseline.ts|scripts/bundle-baseline.json|VERSION|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
+              apps/web/*|packages/*|patches/*|scripts/bundle-baseline.ts|scripts/bundle-baseline.json|VERSION|bun.lock|bunfig.toml|package.json|.npmrc|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -688,7 +688,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/landing/*|docs/changelog/*|VERSION|packages/*|bun.lock|package.json|.github/workflows/ci.yml)
+              apps/landing/*|docs/changelog/*|VERSION|packages/*|patches/*|bun.lock|package.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -754,7 +754,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/web/*|apps/api/*|packages/*|docker-compose.yml|bun.lock|package.json|.github/workflows/ci.yml)
+              apps/web/*|apps/api/*|packages/*|patches/*|docker-compose.yml|bun.lock|package.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -979,7 +979,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/api/*|apps/legal-atlas-runner/*|packages/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
+              apps/api/*|apps/legal-atlas-runner/*|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -1008,7 +1008,9 @@ jobs:
           rm -rf install-json
           mkdir -p install-json
           cp bun.lock package.json install-json/
-          for f in bunfig.toml .npmrc; do [ ! -e "$f" ] || cp "$f" install-json/; done
+          for input in bunfig.toml .npmrc patches; do
+            [ ! -e "$input" ] || cp -a "$input" install-json/
+          done
           find apps packages -mindepth 2 -maxdepth 2 -name package.json \
             -not -path '*/node_modules/*' \
             -exec cp --parents -t install-json/ {} +

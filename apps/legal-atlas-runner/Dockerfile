@@ -9,7 +9,9 @@ FROM base AS install-inputs
 COPY . .
 RUN mkdir -p /json && \
     cp bun.lock package.json /json/ && \
-    for f in bunfig.toml .npmrc; do [ ! -e "$f" ] || cp "$f" /json/; done && \
+    for input in bunfig.toml .npmrc patches; do \
+      [ ! -e "$input" ] || cp -a "$input" /json/; \
+    done && \
     find apps packages -mindepth 2 -maxdepth 2 -name package.json \
       -not -path '*/node_modules/*' \
       -exec cp --parents -t /json/ {} +
