@@ -93,6 +93,7 @@ const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
     path: "/knowledge/skills",
     expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
   },
+  { template: "/knowledge/styles", path: "/knowledge/styles" },
   { template: "/knowledge/templates", path: "/knowledge/templates" },
   { template: "/knowledge/tools", path: "/knowledge/tools" },
   {
