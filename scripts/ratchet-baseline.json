@@ -333,7 +333,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 496,
+    "count": 498,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -451,7 +451,7 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 5,
       "apps/web/src/routes/_protected.knowledge/-components/template-versions-tab.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/templates.tsx": 3,
+      "apps/web/src/routes/_protected.knowledge/templates.tsx": 4,
       "apps/web/src/routes/_protected.knowledge/tools.tsx": 1,
       "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
@@ -498,7 +498,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 4,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 5,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts": 4,
