@@ -18,6 +18,7 @@ ALTER TABLE "style_sets" ADD CONSTRAINT "style_sets_organization_id_organization
 ALTER TABLE "style_sets" ADD CONSTRAINT "style_sets_created_by_user_id_fk" FOREIGN KEY ("created_by") REFERENCES "user"("id") ON DELETE restrict;--> statement-breakpoint
 CREATE INDEX "style_sets_organization_id_idx" ON "style_sets" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "style_sets_organization_id_updated_at_idx" ON "style_sets" USING btree ("organization_id", "updated_at", "id");--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "style_sets" TO stella;--> statement-breakpoint
 
 CREATE POLICY "organization_select" ON "style_sets" AS PERMISSIVE FOR SELECT TO "stella" USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
 CREATE POLICY "organization_insert" ON "style_sets" AS PERMISSIVE FOR INSERT TO "stella" WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint
