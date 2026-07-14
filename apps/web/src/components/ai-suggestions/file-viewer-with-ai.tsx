@@ -43,7 +43,6 @@ export const FileViewerWithAI = ({
       data-file-viewer-ai="true"
     >
       {children}
-      {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
       <Suspense fallback={null}>
         <LazyFileChatOverlayHost
           activeExternal={activeExternal}
@@ -58,6 +57,7 @@ export const FileViewerWithAI = ({
           workspaceId={workspaceId}
         />
       </Suspense>
+      {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
     </div>
   );
 };
@@ -197,7 +197,7 @@ const DocxHorizontalScrollbar = () => {
     <div
       ref={trackRef}
       aria-hidden="true"
-      className="absolute inset-x-1 bottom-1 z-[60] h-1.5 cursor-pointer"
+      className="absolute inset-x-1 bottom-1 z-[100] h-1.5 cursor-pointer"
       hidden
     >
       <div className="bg-foreground/20 absolute inset-y-0 start-0 rounded-full" />
