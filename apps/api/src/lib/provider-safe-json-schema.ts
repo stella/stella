@@ -169,8 +169,14 @@ const normalizeConstKeyword = ({
 
   const constValue = next["const"];
   delete next["const"];
-  if (typeof constValue === "boolean" && !("type" in next)) {
-    next["type"] = "boolean";
+  const constType = typeof constValue;
+  if (
+    !("type" in next) &&
+    (constType === "boolean" ||
+      constType === "number" ||
+      constType === "string")
+  ) {
+    next["type"] = constType;
   }
 
   if (constValue === null && !("enum" in next) && !("type" in next)) {
