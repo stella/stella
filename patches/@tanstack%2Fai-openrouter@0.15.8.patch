@@ -1,0 +1,154 @@
+diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
+index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0da69bf80 100644
+--- a/dist/esm/adapters/responses-text.js
++++ b/dist/esm/adapters/responses-text.js
+@@ -831,24 +831,28 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+             let metadata = toolCallMetadata.get(item.id);
+             if (!metadata) {
+               metadata = {
++                callId: item.callId || item.id,
+                 index: chunk.outputIndex ?? 0,
++                itemId: item.id,
+                 name: item.name,
+                 started: false
+               };
+               toolCallMetadata.set(item.id, metadata);
+-            } else if (!metadata.name) {
+-              metadata.name = item.name;
++            } else {
++              if (item.callId) metadata.callId = item.callId;
++              if (!metadata.name) metadata.name = item.name;
+             }
+             if (!metadata.started && metadata.name) {
+               yield {
+                 type: EventType.TOOL_CALL_START,
+-                toolCallId: item.id,
++                toolCallId: metadata.callId,
+                 toolCallName: metadata.name,
+                 toolName: metadata.name,
+                 parentMessageId: aguiState.messageId,
+                 model: model || options.model,
+                 timestamp: Date.now(),
+-                index: chunk.outputIndex ?? 0
++                index: chunk.outputIndex ?? 0,
++                metadata: { itemId: metadata.itemId }
+               };
+               metadata.started = true;
+             }
+@@ -870,7 +874,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+           }
+           yield {
+             type: EventType.TOOL_CALL_ARGS,
+-            toolCallId: itemId,
++            toolCallId: metadata.callId,
+             model: model || options.model,
+             timestamp: Date.now(),
+             delta: typeof chunk.delta === "string" ? chunk.delta : ""
+@@ -920,7 +924,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+           }
+           yield {
+             type: EventType.TOOL_CALL_END,
+-            toolCallId: itemId,
++            toolCallId: metadata.callId,
+             toolCallName: name,
+             toolName: name,
+             model: model || options.model,
+@@ -932,25 +936,29 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+           const item = chunk.item;
+           if (item?.type === "function_call" && item.id) {
+             const metadata = toolCallMetadata.get(item.id) ?? {
++              callId: item.callId || item.id,
+               index: chunk.outputIndex ?? 0,
++              itemId: item.id,
+               name: item.name,
+               started: false
+             };
+             if (!toolCallMetadata.has(item.id)) {
+               toolCallMetadata.set(item.id, metadata);
+-            } else if (!metadata.name) {
+-              metadata.name = item.name;
++            } else {
++              if (item.callId) metadata.callId = item.callId;
++              if (!metadata.name) metadata.name = item.name;
+             }
+             if (!metadata.started && metadata.name) {
+               yield {
+                 type: EventType.TOOL_CALL_START,
+-                toolCallId: item.id,
++                toolCallId: metadata.callId,
+                 toolCallName: metadata.name,
+                 toolName: metadata.name,
+                 parentMessageId: aguiState.messageId,
+                 model: model || options.model,
+                 timestamp: Date.now(),
+-                index: metadata.index
++                index: metadata.index,
++                metadata: { itemId: metadata.itemId }
+               };
+               metadata.started = true;
+             }
+@@ -981,7 +989,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+               }
+               yield {
+                 type: EventType.TOOL_CALL_END,
+-                toolCallId: item.id,
++                toolCallId: metadata.callId,
+                 toolCallName: name,
+                 toolName: name,
+                 model: model || options.model,
+@@ -999,25 +1007,29 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+           for (const item of outputItems) {
+             if (item.type !== "function_call" || !item.id) continue;
+             const metadata = toolCallMetadata.get(item.id) ?? {
++              callId: item.callId || item.id,
+               index: 0,
++              itemId: item.id,
+               name: item.name || "",
+               started: false
+             };
+             if (!toolCallMetadata.has(item.id)) {
+               toolCallMetadata.set(item.id, metadata);
+-            } else if (!metadata.name && item.name) {
+-              metadata.name = item.name;
++            } else {
++              if (item.callId) metadata.callId = item.callId;
++              if (!metadata.name && item.name) metadata.name = item.name;
+             }
+             if (!metadata.started && metadata.name) {
+               yield {
+                 type: EventType.TOOL_CALL_START,
+-                toolCallId: item.id,
++                toolCallId: metadata.callId,
+                 toolCallName: metadata.name,
+                 toolName: metadata.name,
+                 parentMessageId: aguiState.messageId,
+                 model: model || options.model,
+                 timestamp: Date.now(),
+-                index: metadata.index
++                index: metadata.index,
++                metadata: { itemId: metadata.itemId }
+               };
+               metadata.started = true;
+             }
+@@ -1048,7 +1060,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+               }
+               yield {
+                 type: EventType.TOOL_CALL_END,
+-                toolCallId: item.id,
++                toolCallId: metadata.callId,
+                 toolCallName: name,
+                 toolName: name,
+                 model: model || options.model,
+@@ -1215,10 +1227,11 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+         if (message.toolCalls && message.toolCalls.length > 0) {
+           for (const toolCall of message.toolCalls) {
+             const argumentsString = typeof toolCall.function.arguments === "string" ? toolCall.function.arguments : JSON.stringify(toolCall.function.arguments);
++            const itemId = toolCall.metadata?.itemId;
+             result.push({
+               type: "function_call",
+               callId: toolCall.id,
+-              id: toolCall.id,
++              id: itemId || toolCall.id,
+               name: toolCall.function.name,
+               arguments: argumentsString
+             });
