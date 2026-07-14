@@ -31,6 +31,10 @@ export const brandPersistedTemplateId = (
   templateId: string,
 ): SafeId<"template"> => toSafeId<"template">(templateId);
 
+export const brandPersistedStyleSetId = (
+  styleSetId: string,
+): SafeId<"styleSet"> => toSafeId<"styleSet">(styleSetId);
+
 export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
   toSafeId<"entity">(entityId);
 

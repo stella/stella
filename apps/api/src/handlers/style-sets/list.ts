@@ -6,7 +6,6 @@ import { styleSets } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -15,6 +14,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { brandPersistedStyleSetId } from "@/api/lib/safe-id-boundaries";
 import { styleSetColumns } from "@/api/lib/style-sets";
 
 const querySchema = t.Object({
@@ -48,7 +48,7 @@ const decodeStyleSetCursor = (cursor: string): StyleSetCursor | null => {
     return null;
   }
 
-  return { updatedAt, id: toSafeId<"styleSet">(id) };
+  return { updatedAt, id: brandPersistedStyleSetId(id) };
 };
 
 export default createSafeRootHandler(
