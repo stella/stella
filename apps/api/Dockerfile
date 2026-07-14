@@ -55,17 +55,10 @@ RUN bun build \
     --target bun \
     --outfile /app/backfill.js \
     apps/api/src/scripts/backfill-case-law-slugs.ts
-# Durable fix for the migrate task's "Cannot find module" class of failure
-# (#1141 band-aided one instance by hand-adding a missing loose file).
-# Bundling resolves migrate.ts's full transitive @/api import graph at
-# build time, so a new import can never again silently break the migrate
-# task the way the loose-file COPY list below can — that failure mode is
-# invisible to typecheck/lint/unit CI and only a real deploy catches it.
-# Output next to the loose migrate.ts source (same directory depth) so
-# migrate.ts's cwd-independent migrationsFolder lookup
-# (`import.meta.dir` + `../../drizzle`, see migrate.ts) resolves to the
-# same drizzle/ copy the loose file already uses below, without a second
-# copy of the migrations folder.
+# Bundle the migration entrypoint so its full transitive @/api import graph is
+# resolved at build time. Keep the output at the same directory depth as the
+# source so its `import.meta.dir`-relative migrationsFolder lookup resolves to
+# /app/apps/api/drizzle in the runtime image.
 RUN bun build \
     --target bun \
     --outfile /app/apps/api/src/db/migrate.js \
@@ -105,32 +98,10 @@ RUN groupadd --system --gid 1001 stella && \
 COPY --chown=stella:stella --from=builder /app/server /app/server
 COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
-# Migrate task entrypoint, bundled. This is the target for deployment
-# migration commands once they switch over:
+# Bundled migration task entrypoint:
 #   ["bun", "/app/apps/api/src/db/migrate.js"]
-# Placed at the same directory depth as the loose migrate.ts below so its
-# import.meta.dir-relative migrationsFolder lookup resolves to the same
-# drizzle/ copy the loose file uses, with no second copy needed.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.js /app/apps/api/src/db/migrate.js
-# Loose files for the one-off migrate task (the API itself is the compiled
-# /app/server binary), kept so the current deployment migration command
-# (`bun run src/db/migrate.ts`, cwd /app/apps/api) keeps working during the
-# transition to the bundle above. migrate.ts runs the drizzle migrator over
-# Bun's SQL client; it imports db-url.ts (which imports lib/type-guards.ts)
-# and reads the drizzle/ migration folder. This COPY set is the loose
-# entrypoint's full transitive @/api dependency — keep it in sync when
-# db-url.ts/migrate.ts gain an import, or the loose-file task fails at
-# runtime with "Cannot find module" (the compiled API binary and the
-# migrate.js bundle above both resolve imports at build time, so neither
-# would catch a missing entry here). Delete these loose-source COPYs once
-# every deployment target uses the bundle and the loose path is confirmed
-# dead in production.
-COPY --chown=stella:stella --from=builder /app/apps/api/drizzle.config.ts /app/apps/api/drizzle.config.ts
-COPY --chown=stella:stella --from=builder /app/apps/api/src/db-url.ts /app/apps/api/src/db-url.ts
-COPY --chown=stella:stella --from=builder /app/apps/api/src/lib/type-guards.ts /app/apps/api/src/lib/type-guards.ts
-COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.ts /app/apps/api/src/db/migrate.ts
-# The bundled entrypoint still reads migration SQL from this external folder;
-# retain it after removing the loose TypeScript source files above.
+# The bundled entrypoint reads migration SQL from this external folder.
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 RUN mkdir -p '/$bunfs/root'
 COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
