@@ -9,6 +9,7 @@ type CreateTemplateBufferOptions =
   | { type: "stella" }
   | { type: "style-source"; buffer: Buffer; name: string };
 
+/** Builds a content-free DOCX from Stella Style or an extracted style source. */
 export const createTemplateBuffer = async (
   options: CreateTemplateBufferOptions,
 ): Promise<Buffer> => {

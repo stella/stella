@@ -7,13 +7,13 @@ import { useFormatter, useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
+import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
-import { StyleSetPickerDialog } from "@/routes/_protected.knowledge/-components/style-set-picker-dialog";
-import type { StyleSelection } from "@/routes/_protected.knowledge/-components/style-set-picker-dialog";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";

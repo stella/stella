@@ -28,16 +28,16 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  styleSetsKeys,
+  styleSetsOptions,
+} from "@/features/style-sets/style-set-queries";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { isDocxFile } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
-import {
-  knowledgeKeys,
-  styleSetsOptions,
-} from "@/routes/_protected.knowledge/-queries";
 
 export const Route = createFileRoute("/_protected/knowledge/styles")({
   component: StyleSetsPage,
@@ -76,7 +76,7 @@ const StyleSetsPage = () => {
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({
-      queryKey: knowledgeKeys.styleSets.all(organizationId),
+      queryKey: styleSetsKeys.all(organizationId),
     });
   };
 
@@ -128,14 +128,12 @@ const StyleSetsPage = () => {
     await invalidate();
   };
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return <PageMessage>{t("common.loading")}</PageMessage>;
   }
   if (isError) {
     return <PageMessage>{t("styleSets.loadFailed")}</PageMessage>;
   }
-
-  const styleSets = data?.items ?? [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -163,7 +161,7 @@ const StyleSetsPage = () => {
             </span>
           }
         />
-        {styleSets.map((styleSet) => (
+        {data.items.map((styleSet) => (
           <StyleSetRow
             description={format.dateTime(new Date(styleSet.updatedAt), {
               dateStyle: "medium",

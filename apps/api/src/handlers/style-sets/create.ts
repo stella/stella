@@ -3,12 +3,6 @@ import { eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
-import {
-  buildStyleSetKey,
-  extractStyleSetBuffer,
-  styleSetColumns,
-  styleSetExportFileName,
-} from "@/api/handlers/style-sets/shared";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -18,6 +12,12 @@ import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
+import {
+  buildStyleSetKey,
+  extractStyleSetBuffer,
+  styleSetColumns,
+  styleSetExportFileName,
+} from "@/api/lib/style-sets";
 
 const bodySchema = t.Object({
   name: tDefaultVarchar,

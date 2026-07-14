@@ -3,7 +3,6 @@ import { and, desc, eq, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
-import { styleSetColumns } from "@/api/handlers/style-sets/shared";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -16,6 +15,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { styleSetColumns } from "@/api/lib/style-sets";
 
 const querySchema = t.Object({
   limit: t.Optional(

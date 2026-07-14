@@ -21,12 +21,12 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
+import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
-import { StyleSetPickerDialog } from "@/routes/_protected.knowledge/-components/style-set-picker-dialog";
-import type { StyleSelection } from "@/routes/_protected.knowledge/-components/style-set-picker-dialog";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { NewDocumentFromTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";

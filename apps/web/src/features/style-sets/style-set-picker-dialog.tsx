@@ -19,7 +19,7 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
 
-import { styleSetsOptions } from "@/routes/_protected.knowledge/-queries";
+import { styleSetsOptions } from "@/features/style-sets/style-set-queries";
 
 export type StyleSelection =
   | { type: "stella" }
@@ -70,7 +70,6 @@ const StyleSetPickerDialogBody = ({
     type: "stella",
   });
   const [creating, setCreating] = useState(false);
-  const customSets = data?.items ?? [];
 
   const submit = async () => {
     const normalizedName = name.trim();
@@ -111,7 +110,7 @@ const StyleSetPickerDialogBody = ({
               onSelect={() => setSelection({ type: "stella" })}
               selected={selection.type === "stella"}
             />
-            {customSets.map((styleSet) => (
+            {data?.items.map((styleSet) => (
               <StyleChoice
                 description={t("styleSets.savedDescription")}
                 key={styleSet.id}

@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { readStyleSetBuffer } from "@/api/handlers/style-sets/shared";
 import {
   type CreatedTemplate,
   createStoredTemplate,
@@ -16,6 +15,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { readStyleSetBuffer } from "@/api/lib/style-sets";
 
 const bodySchema = t.Object({
   name: tDefaultVarchar,

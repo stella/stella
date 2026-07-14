@@ -2,8 +2,8 @@ import { Result } from "better-result";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
-import { createTemplateBuffer } from "@/api/handlers/templates/create-template-buffer";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";

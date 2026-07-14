@@ -3,11 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
-import {
-  buildStyleSetKey,
-  extractStyleSetBuffer,
-  styleSetColumns,
-} from "@/api/handlers/style-sets/shared";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -16,6 +11,11 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
+import {
+  buildStyleSetKey,
+  extractStyleSetBuffer,
+  styleSetColumns,
+} from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const bodySchema = t.Object({

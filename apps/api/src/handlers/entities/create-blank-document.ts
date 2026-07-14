@@ -3,12 +3,12 @@ import { t } from "elysia";
 
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { validateParentId } from "@/api/handlers/entities/validate-parent-id";
-import { readStyleSetBuffer } from "@/api/handlers/style-sets/shared";
-import { createTemplateBuffer } from "@/api/handlers/templates/create-template-buffer";
 import { createSafeHandler } from "@/api/lib/api-handlers";
+import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { readStyleSetBuffer } from "@/api/lib/style-sets";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const styleSelectionSchema = t.Union([

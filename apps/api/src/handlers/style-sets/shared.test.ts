@@ -11,7 +11,7 @@ import {
 import {
   extractStyleSetBuffer,
   validateStyleSource,
-} from "@/api/handlers/style-sets/shared";
+} from "@/api/lib/style-sets";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 describe("style set source extraction", () => {
