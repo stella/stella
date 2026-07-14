@@ -658,37 +658,34 @@ const TemplateStudioChatInner = ({
   // effect invocation, which runs before the parent can commit the
   // cleared pending-send state.
   const presetSendDispatchedRef = useRef(false);
-  const dispatchPendingPresetSend = useLatestCallback(() => {
+  const dispatchPendingPresetSend = useLatestCallback(async () => {
     const request = pendingPresetSend;
     if (request === null || presetSendDispatchedRef.current) {
       return;
     }
     presetSendDispatchedRef.current = true;
     onPendingPresetSendHandled();
-    ensureAIAvailable()
-      .then(async (available) => {
-        if (!available) {
-          return;
-        }
-        // This send bypasses the prompt bar's `canSubmitNow` (which
-        // normally records the sent snapshot), and after the rotate
-        // remount the transport's `getActiveTemplate` can be bound to a
-        // previous instance whose ref this one cannot see. Record the
-        // snapshot here so the apply path resolves the ops against the
-        // same blocks the model receives.
-        lastSentSnapshotRef.current =
-          editorRef.current?.createAIEditSnapshot() ?? null;
-        setPanelOpen(true);
-        const message = createTextChatMessage(request.text);
-        activeScopedPresetTurnMessageIdRef.current = message.id;
-        await sendMessage(message, {
-          body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
-        });
-      })
-      .catch(capturePromptSubmitError);
+    const available = await ensureAIAvailable();
+    if (!available) {
+      return;
+    }
+    // This send bypasses the prompt bar's `canSubmitNow` (which
+    // normally records the sent snapshot), and after the rotate
+    // remount the transport's `getActiveTemplate` can be bound to a
+    // previous instance whose ref this one cannot see. Record the
+    // snapshot here so the apply path resolves the ops against the
+    // same blocks the model receives.
+    lastSentSnapshotRef.current =
+      editorRef.current?.createAIEditSnapshot() ?? null;
+    setPanelOpen(true);
+    const message = createTextChatMessage(request.text);
+    activeScopedPresetTurnMessageIdRef.current = message.id;
+    await sendMessage(message, {
+      body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
+    });
   });
   useMountEffect(() => {
-    dispatchPendingPresetSend();
+    dispatchPendingPresetSend().catch(capturePromptSubmitError);
   });
 
   /**
