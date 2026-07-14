@@ -389,9 +389,10 @@ export function DockedComposer({ chips, bar, dock }: DockedComposerProps) {
             row). Legibility over live document content comes from this one
             heavy blur band, not from per-control chrome: the status-row
             controls stay quiet muted text/icons sitting directly on it.
-            Negative insets let it overhang the stack and reach the pane's
-            bottom edge (the column floats 3.5 above it). */}
-        <ComposerVeil className="-inset-x-3 -top-4 -bottom-3.5" />
+            Negative side/top insets soften the edge around the controls;
+            the bottom stops with the stack so nearby pane chrome, including
+            document scrollbars, stays crisp. */}
+        <ComposerVeil className="-inset-x-3 -top-4" />
         {bar}
         {/* No extra top margin: `ComposerStatusRow` owns the single
             bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}
