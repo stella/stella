@@ -1015,7 +1015,6 @@ const tanStackOpenAIModelOptionsForRole = ({
     return { temperature: 0 };
   }
   return {
-    temperature: 0,
     reasoning: { effort: "medium" },
   };
 };

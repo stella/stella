@@ -1,6 +1,8 @@
 import { EventType, chat, parsePartialJSON } from "@tanstack/ai";
 import type {
   ModelMessage,
+  RunErrorEvent,
+  StreamChunk,
   StructuredOutputPart,
   SystemPrompt,
 } from "@tanstack/ai";
@@ -97,33 +99,23 @@ export const generateTanStackTextForRole = async (
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
+  let output = "";
 
-  return await withStandardServiceTierFallback({
+  for await (const delta of streamTanStackTextDeltas({
+    abortController,
+    analytics: options.analytics,
+    caching: options.caching,
+    maxOutputTokens: options.maxOutputTokens,
+    messages: requestMessages,
     model,
     serviceTier: options.serviceTier,
-    run: async (serviceTier) =>
-      await chat({
-        adapter: model.adapter,
-        messages: requestMessages,
-        stream: false,
-        ...systemPromptsPatch({
-          caching: options.caching,
-          model,
-          system: options.system,
-        }),
-        modelOptions: mergeGenerationOptions({
-          caching: options.caching,
-          model,
-          maxOutputTokens: options.maxOutputTokens,
-          serviceTier,
-          temperature: options.temperature,
-        }),
-        ...(options.analytics
-          ? { middleware: [options.analytics.middleware] }
-          : {}),
-        ...(abortController ? { abortController } : {}),
-      }),
-  });
+    system: options.system,
+    temperature: options.temperature,
+  })) {
+    output += delta;
+  }
+
+  return output;
 };
 
 export const streamTanStackTextForRole = (
@@ -221,7 +213,10 @@ const withStandardServiceTierFallback = async <TResult>({
   }
 };
 
-type StandardServiceTierStreamFallbackOptions<TChunk, TResult> = {
+type StandardServiceTierStreamFallbackOptions<
+  TChunk extends StreamChunk,
+  TResult,
+> = {
   model: ResolvedTanStackTextModel;
   serviceTier: AIRequestServiceTier;
   stream: (serviceTier: AIRequestServiceTier) => AsyncIterable<TChunk>;
@@ -229,7 +224,7 @@ type StandardServiceTierStreamFallbackOptions<TChunk, TResult> = {
 };
 
 const iterateWithStandardServiceTierFallback = async function* <
-  TChunk,
+  TChunk extends StreamChunk,
   TResult,
 >({
   model,
@@ -244,6 +239,7 @@ const iterateWithStandardServiceTierFallback = async function* <
 
   try {
     for await (const chunk of stream(serviceTier)) {
+      throwIfTanStackRunError(chunk);
       const result = onChunk(chunk);
       if (result === undefined) {
         continue;
@@ -262,12 +258,29 @@ const iterateWithStandardServiceTierFallback = async function* <
   }
 
   for await (const chunk of stream("standard")) {
+    throwIfTanStackRunError(chunk);
     const result = onChunk(chunk);
     if (result !== undefined) {
       yield result;
     }
   }
 };
+
+const throwIfTanStackRunError = (chunk: StreamChunk): void => {
+  if (chunk.type !== EventType.RUN_ERROR) {
+    return;
+  }
+
+  throw tanStackRunError(chunk);
+};
+
+const tanStackRunError = (chunk: RunErrorEvent): HandlerError =>
+  new HandlerError({
+    status: 502,
+    message: chunk.message,
+    ...(chunk.code ? { code: chunk.code } : {}),
+    ...(chunk.rawEvent === undefined ? {} : { cause: chunk.rawEvent }),
+  });
 
 const shouldRetryWithStandardServiceTier = ({
   error,

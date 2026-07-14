@@ -305,8 +305,7 @@ describe("TanStack text model resolution", () => {
     });
     expect(model.adapter.name).toBe("openai");
     expect(model.adapter.model).toBe("gpt-5.4");
-    expect(model.modelOptions).toMatchObject({
-      temperature: 0,
+    expect(model.modelOptions).toEqual({
       reasoning: { effort: "medium" },
     });
   });
