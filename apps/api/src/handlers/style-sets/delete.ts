@@ -93,7 +93,7 @@ export default createSafeRootHandler(
     );
     yield* Result.await(
       safeDb(async (tx) => {
-        // audit: skip; storage cleanup for the already-audited style set deletion
+        // audit: skip — storage cleanup for the already-audited style set deletion
         await tx
           .delete(styleSets)
           .where(
