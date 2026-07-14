@@ -32,6 +32,7 @@ jobs:
       packages: write
       id-token: write
       attestations: write
+      artifact-metadata: write
 
     steps:
       - name: Resolve synthetic ref
