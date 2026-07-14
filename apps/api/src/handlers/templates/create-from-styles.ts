@@ -25,6 +25,8 @@ const createTemplateFromStylesBodySchema = t.Object({
   styleSource: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
 });
 
+const DOCX_EXTENSION = ".docx";
+
 type CreateTemplateFromStylesProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -43,7 +45,10 @@ const createTemplateFromStylesHandler = async function* ({
   body: { name, styleSource },
   recordAuditEvent,
 }: CreateTemplateFromStylesProps): SafeHandlerGenerator<CreatedTemplate> {
-  if (styleSource.type !== DOCX_MIME_TYPE) {
+  if (
+    styleSource.type !== DOCX_MIME_TYPE &&
+    !styleSource.name.toLowerCase().endsWith(DOCX_EXTENSION)
+  ) {
     return Result.err(
       new HandlerError({
         status: 400,

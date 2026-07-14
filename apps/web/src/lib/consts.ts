@@ -1,6 +1,9 @@
 export const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document" as const;
 
+export const isDocxFile = (file: Pick<File, "name" | "type">): boolean =>
+  file.type === DOCX_MIME || file.name.toLowerCase().endsWith(".docx");
+
 export const PDF_MIME = "application/pdf" as const;
 export const EML_MIME = "message/rfc822" as const;
 export const MSG_MIME = "application/vnd.ms-outlook" as const;
