@@ -80,7 +80,7 @@ import {
   ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import { nullUnionStrategyForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   abortControllerFromSignal,
   mergeGenerationOptions,
@@ -368,9 +368,8 @@ export const projectChatToolSchemasForProvider = ({
   modelTools: ReturnType<typeof chatToolMapToArray>;
   provider: string;
 }): ReturnType<typeof chatToolMapToArray> => {
-  const projectionOptions = {
-    nullUnionStrategy: nullUnionStrategyForTanStackProvider(provider),
-  };
+  const projectionOptions =
+    providerSafeJsonSchemaOptionsForTanStackProvider(provider);
   const projectedTools: ReturnType<typeof chatToolMapToArray> = [];
   for (const tool of modelTools) {
     const projectedTool = { ...tool };
@@ -404,9 +403,8 @@ const projectServerToolsForProvider = ({
   provider: string;
   serverTools: readonly ServerTool[];
 }): ServerTool[] => {
-  const projectionOptions = {
-    nullUnionStrategy: nullUnionStrategyForTanStackProvider(provider),
-  };
+  const projectionOptions =
+    providerSafeJsonSchemaOptionsForTanStackProvider(provider);
   const projectedTools: ServerTool[] = [];
   for (const tool of serverTools) {
     const projectedTool = { ...tool };
