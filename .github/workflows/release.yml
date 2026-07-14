@@ -99,6 +99,25 @@ jobs:
             exit 1
           fi
 
+      - name: Write trusted release receipt
+        env:
+          RELEASE_REF: ${{ steps.release.outputs.ref }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          jq -n \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            '{release_ref: $release_ref, release_sha: $release_sha}' \
+            > release-source-receipt.json
+
+      - name: Upload trusted release receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-source-receipt
+          path: release-source-receipt.json
+          retention-days: 1
+          if-no-files-found: error
+
   smoke:
     name: Build and smoke test API image
     runs-on: ubuntu-24.04-arm

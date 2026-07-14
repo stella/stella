@@ -64,17 +64,69 @@ on:
         type: string
 
 concurrency:
-  group: publish-npm-${{ github.event.workflow_run.head_sha || github.ref }}
+  group: publish-npm-${{ github.event.workflow_run.id || github.ref }}
   cancel-in-progress: false
 
 jobs:
+  release-trigger:
+    name: Resolve release trigger
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      eligible: ${{ steps.source.outputs.eligible }}
+      release_ref: ${{ steps.source.outputs.release_ref }}
+      release_sha: ${{ steps.source.outputs.release_sha }}
+    steps:
+      - name: Resolve upstream release receipt
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "workflow_run" ]]; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$UPSTREAM_CONCLUSION" != "success" ]]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          receipt_dir="${RUNNER_TEMP}/release-source-receipt"
+          gh run download "$UPSTREAM_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name release-source-receipt \
+            --dir "$receipt_dir"
+          receipt="${receipt_dir}/release-source-receipt.json"
+          release_ref="$(jq -er '.release_ref | strings' "$receipt")"
+          release_sha="$(jq -er '.release_sha | strings' "$receipt")"
+          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
+            echo "::error::Upstream release receipt has an invalid release_ref: ${release_ref}" >&2
+            exit 1
+          fi
+          if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Upstream release receipt has an invalid release_sha." >&2
+            exit 1
+          fi
+
+          eligible=false
+          if [[ "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            eligible=true
+          fi
+          {
+            echo "eligible=${eligible}"
+            echo "release_ref=${release_ref}"
+            echo "release_sha=${release_sha}"
+          } >> "$GITHUB_OUTPUT"
+
   pack:
     name: Build and pack
-    if: >-
-      github.event_name != 'workflow_run'
-      || (github.event.workflow_run.conclusion == 'success'
-      && startsWith(github.event.workflow_run.head_branch, 'v')
-      && !contains(github.event.workflow_run.head_branch, '-'))
+    needs: release-trigger
+    if: ${{ needs.release-trigger.outputs.eligible == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read # deliberately NO id-token: untrusted build scripts run here
@@ -89,7 +141,7 @@ jobs:
           MANUAL_PUBLISH: ${{ inputs.publish || false }}
           MANUAL_RELEASE_REF: ${{ inputs.release_ref || '' }}
           RUN_SHA: ${{ github.sha }}
-          UPSTREAM_SHA: ${{ github.event.workflow_run.head_sha || '' }}
+          UPSTREAM_SHA: ${{ needs.release-trigger.outputs.release_sha }}
         run: |
           set -euo pipefail
           source_ref="$RUN_SHA"
@@ -179,7 +231,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
           MANUAL_RELEASE_REF: ${{ inputs.release_ref || '' }}
-          UPSTREAM_RELEASE_REF: ${{ github.event.workflow_run.head_branch || '' }}
+          UPSTREAM_RELEASE_REF: ${{ needs.release-trigger.outputs.release_ref }}
         run: |
           set -euo pipefail
           release_ref="$MANUAL_RELEASE_REF"

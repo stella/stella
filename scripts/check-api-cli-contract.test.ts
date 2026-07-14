@@ -54,4 +54,24 @@ describe("API and CLI release contract", () => {
     expectSubset(CLI_DEFAULT_SCOPES, CLI_KNOWN_SCOPES);
     expectSubset(CLI_REQUIRED_SCOPES, CLI_DEFAULT_SCOPES);
   });
+
+  test("manual releases preserve their resolved tag for CLI publication", async () => {
+    const [releaseWorkflow, publishWorkflow] = await Promise.all([
+      Bun.file(
+        new URL("../.github/workflows/release.yml", import.meta.url),
+      ).text(),
+      Bun.file(
+        new URL("../.github/workflows/publish-npm.yml", import.meta.url),
+      ).text(),
+    ]);
+
+    expect(releaseWorkflow).toContain("name: release-source-receipt");
+    expect(publishWorkflow).toContain('gh run download "$UPSTREAM_RUN_ID"');
+    expect(publishWorkflow).toContain(
+      "UPSTREAM_RELEASE_REF: ${{ needs.release-trigger.outputs.release_ref }}",
+    );
+    expect(publishWorkflow).not.toContain(
+      "github.event.workflow_run.head_branch",
+    );
+  });
 });
