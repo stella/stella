@@ -56,7 +56,7 @@
         "@stll/docx-core": "0.3.0",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
-        "@stll/folio-agents": "^0.4.0",
+        "@stll/folio-agents": "^0.5.0",
         "@stll/folio-core": "^0.9.0",
         "@stll/infosoud": "workspace:*",
         "@stll/legal-ast": "workspace:*",
@@ -230,7 +230,7 @@
         "@stll/docx-core": "0.3.0",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
-        "@stll/folio-agents": "^0.4.0",
+        "@stll/folio-agents": "^0.5.0",
         "@stll/folio-react": "^0.10.0",
         "@stll/legal-ast": "workspace:*",
         "@stll/locales": "workspace:*",
@@ -1700,7 +1700,7 @@
 
     "@stll/errors": ["@stll/errors@workspace:packages/errors"],
 
-    "@stll/folio-agents": ["@stll/folio-agents@0.4.0", "", { "dependencies": { "@stll/folio-core": "^0.5.0" } }, "sha512-okfORalRfyTNMiX1wzdcJfZh3333Etyq6A3EnWuJKxxmNvfLdlHPL/9PSmNJ5ic8aeoPECgYYuY4hrwCM+HbZQ=="],
+    "@stll/folio-agents": ["@stll/folio-agents@0.5.1", "", { "dependencies": { "@stll/folio-core": "^0.6.0" } }, "sha512-jpS1Pg+2OkvtIIiRx8w1SXRH1WF9tnotF1qDj7jfUeXRR51maWf8ikhtQ/GbMGkvWFeCH+BtW+X3a9KA4eStKQ=="],
 
     "@stll/folio-core": ["@stll/folio-core@0.9.0", "", { "dependencies": { "@stll/docx-core": "^0.1.0", "@stll/docx-utils": "^0.1.0", "@stll/template-conditions": "^0.1.0", "better-result": "2.9.2", "csstype": "^3.1.3", "fast-xml-parser": "^5.9.3", "hyphen": "1.14.1", "jszip": "3.10.1", "marked": "^18.0.5", "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.41.8", "utif2": "^4.1.0", "valibot": "1.4.2", "y-prosemirror": "^1.3.7", "yjs": "^13.6.31" } }, "sha512-/dpbHw5cyqjPZoRJGQb5zWTMJ41zfoxyprybd4bvQ2l1yAhI3Hd8EKFQpuOfUekalc+vyDXc/HCKsQsSdD25Tg=="],
 
