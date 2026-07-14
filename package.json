@@ -30,6 +30,7 @@
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",
     "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts",
+    "canary:ai-provider": "bun --cwd apps/api canary:ai-provider",
     "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",
     "check:railway-template": "bun scripts/check-railway-template-shape.ts",
     "check:railway-template-source-runtime": "bun scripts/sync-railway-template-source.ts --check-rendered-credentials",
@@ -140,5 +141,9 @@
       "react": "^19.2.7",
       "react-dom": "^19.2.7"
     }
+  },
+  "patchedDependencies": {
+    "@tanstack/openai-base@0.9.7": "patches/@tanstack%2Fopenai-base@0.9.7.patch",
+    "@tanstack/ai-anthropic@0.16.1": "patches/@tanstack%2Fai-anthropic@0.16.1.patch"
   }
 }

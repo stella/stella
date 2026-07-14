@@ -33,10 +33,15 @@ describe("TanStack AI is the only live app provider SDK boundary", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("TanStack provider adapter factories stay in tanstack-ai-models.ts", async () => {
+  test("TanStack provider adapter factories stay at explicit boundaries", async () => {
     const apiSrc = path.resolve(import.meta.dir, "..");
     const glob = new Glob("**/*.ts");
-    const allowed = new Set(["lib/tanstack-ai-models.ts"]);
+    const allowed = new Set([
+      "lib/tanstack-ai-models.ts",
+      // This is the final-request contract matrix. It deliberately constructs the
+      // real adapters with intercepted clients; it is not imported by app code.
+      "handlers/chat/tools/tool-schema.test.ts",
+    ]);
     const forbiddenPackages = [
       "@tanstack/ai-anthropic",
       "@tanstack/ai-gemini",

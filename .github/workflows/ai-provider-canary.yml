@@ -1,0 +1,125 @@
+name: AI provider canary
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Provider to probe
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - google
+          - openrouter
+          - openai
+          - anthropic
+          - bedrock
+          - mistral
+
+permissions: {}
+
+jobs:
+  provider-canary:
+    name: ${{ matrix.provider }} capability contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        provider: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.provider != 'all' && format('["{0}"]', inputs.provider) || '["google","openrouter","openai","anthropic","bedrock","mistral"]') }}
+    concurrency:
+      group: ai-provider-canary-${{ matrix.provider }}
+      cancel-in-progress: true
+    steps:
+      - name: Check canary credential
+        id: credential
+        env:
+          AI_CANARY_API_KEY: ${{ matrix.provider == 'google' && secrets.GOOGLE_GENERATIVE_AI_API_KEY || matrix.provider == 'openrouter' && secrets.OPENROUTER_API_KEY || matrix.provider == 'openai' && secrets.OPENAI_API_KEY || matrix.provider == 'anthropic' && secrets.ANTHROPIC_API_KEY || matrix.provider == 'bedrock' && secrets.BEDROCK_API_KEY || matrix.provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          PROVIDER: ${{ matrix.provider }}
+        run: |
+          if [[ -n "$AI_CANARY_API_KEY" ]]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "::error title=Missing canary credential::No repository secret is configured for $PROVIDER."
+            exit 1
+          fi
+
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          echo "::notice title=Canary not configured::$PROVIDER was skipped because its repository secret is absent."
+
+      - name: Checkout default branch
+        if: steps.credential.outputs.configured == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        if: steps.credential.outputs.configured == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        if: steps.credential.outputs.configured == 'true'
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Record configured provider
+        if: steps.credential.outputs.configured == 'true'
+        env:
+          PROVIDER: ${{ matrix.provider }}
+        run: |
+          mkdir -p .canary-ran
+          touch ".canary-ran/$PROVIDER"
+
+      - name: Upload configured-provider marker
+        if: steps.credential.outputs.configured == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ai-provider-canary-${{ matrix.provider }}
+          path: .canary-ran/
+          retention-days: 1
+
+      - name: Probe provider capability contract
+        if: steps.credential.outputs.configured == 'true'
+        env:
+          AI_CANARY_API_KEY: ${{ matrix.provider == 'google' && secrets.GOOGLE_GENERATIVE_AI_API_KEY || matrix.provider == 'openrouter' && secrets.OPENROUTER_API_KEY || matrix.provider == 'openai' && secrets.OPENAI_API_KEY || matrix.provider == 'anthropic' && secrets.ANTHROPIC_API_KEY || matrix.provider == 'bedrock' && secrets.BEDROCK_API_KEY || matrix.provider == 'mistral' && secrets.MISTRAL_API_KEY || '' }}
+          USE_MOCK_AI: "false"
+        run: bun run canary:ai-provider -- --provider "${{ matrix.provider }}"
+
+  require-provider-coverage:
+    name: Require configured provider coverage
+    if: always()
+    needs: provider-canary
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions: {}
+    steps:
+      - name: Download configured-provider markers
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ai-provider-canary-*
+          path: .canary-ran
+          merge-multiple: true
+
+      - name: Require at least one configured provider
+        env:
+          DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
+        run: |
+          if [[ "$DOWNLOAD_OUTCOME" != "success" ]] || [[ -z "$(find .canary-ran -type f -print -quit 2>/dev/null)" ]]; then
+            echo "::error title=No AI provider canary coverage::Configure at least one supported provider repository secret."
+            exit 1
+          fi

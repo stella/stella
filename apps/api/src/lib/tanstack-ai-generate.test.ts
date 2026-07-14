@@ -214,6 +214,40 @@ describe("TanStack AI structured output generation", () => {
     expect(options).toEqual({ max_tokens: 1000 });
   });
 
+  test("enables OpenAI prompt caching without sending a model-specific retention value", () => {
+    // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+    // The adapter is irrelevant for this pure option-merge regression test.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "gpt-5.4-mini",
+      modelOptions: {},
+      provider: "openai",
+    } as ResolvedTanStackTextModel;
+
+    const options = mergeGenerationOptions({
+      caching: {
+        enabled: true,
+        scopeKey: "organization:contract-probe",
+        ttl: "5m",
+      },
+      maxOutputTokens: 1000,
+      model,
+      serviceTier: "standard",
+      temperature: 0,
+    });
+
+    expect(options).toEqual({
+      max_output_tokens: 1000,
+      prompt_cache_key:
+        "106a444562569784437b331c30f0edcfa70367d5e744cdba050d7234d6ee197c",
+      service_tier: "default",
+      temperature: 0,
+    });
+    expect(options).not.toHaveProperty("prompt_cache_retention");
+  });
+
   test("forwards deferred service tiers to Gemini requests", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.

@@ -18,6 +18,7 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/api",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "oxfmt .",
+    "canary:ai-provider": "bun --env-file=.env.example scripts/ai-provider-canary.ts",
     "bench:chat-read-surface": "NODE_ENV=development bun scripts/benchmark-chat-read-surface.ts",
     "db:migrate": "bun run --env-file=.env src/db/migrate.ts",
     "db:push": "bun run --env-file=.env drizzle-kit push",
