@@ -140,5 +140,8 @@
       "react": "^19.2.7",
       "react-dom": "^19.2.7"
     }
+  },
+  "patchedDependencies": {
+    "@tanstack/openai-base@0.9.7": "patches/@tanstack%2Fopenai-base@0.9.7.patch"
   }
 }

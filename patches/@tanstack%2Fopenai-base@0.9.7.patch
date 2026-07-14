@@ -1,0 +1,38 @@
+diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converter.js
+index 6977689012fb8caccc28e1bcde4154b69b60cc46..18bd07c23e75adb3a367b376ae9846d330554e6a 100644
+--- a/dist/esm/utils/schema-converter.js
++++ b/dist/esm/utils/schema-converter.js
+@@ -42,7 +42,32 @@ const TYPE_INDICATOR_KEYWORDS = [
+   "$ref"
+ ];
+ function isStrictModeCompatible(schema) {
+-  return !containsStrictUnsupportedKeyword(schema) && !containsTypelessSchema(schema);
++  return !containsStrictUnsupportedKeyword(schema) && !containsTypelessSchema(schema) && !containsOpenObject(schema);
++}
++// PATCH (stella): strict mode compiles the schema into a constrained-decoding
++// grammar, so every object must be closed: `additionalProperties: false`, with
++// every key enumerated. A free-form map has no grammar and 400s the request.
++// `containsTypelessSchema` never walks `additionalProperties`, and
++// `coerceStrictSchema` only closes objects that have a `properties` key, so a
++// map input reaches the API with `strict: true` and poisons the whole call.
++// Two distinct 400s result: `additionalProperties: {}` (from a record schema)
++// fails with "schema must have a 'type' key", `additionalProperties: true` with
++// "'additionalProperties' is required to be supplied and to be false". Flag both,
++// so such tools take the existing `strict: false` fallback instead.
++function containsOpenObject(node) {
++  if (Array.isArray(node)) {
++    return node.some(containsOpenObject);
++  }
++  if (node === null || typeof node !== "object") return false;
++  const isObjectSchema = node.type === "object" || Array.isArray(node.type) && node.type.includes("object");
++  if (isObjectSchema) {
++    // An omitted `additionalProperties` is fine only when `properties` is
++    // present: `coerceStrictSchema` closes that node. Without it there is
++    // nothing to close and no keys to enumerate.
++    if ("additionalProperties" in node && node.additionalProperties !== false) return true;
++    if (!node.properties) return true;
++  }
++  return Object.values(node).some(containsOpenObject);
+ }
+ function containsStrictUnsupportedKeyword(node) {
+   if (Array.isArray(node)) {

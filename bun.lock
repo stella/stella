@@ -616,6 +616,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@tanstack/openai-base@0.9.7": "patches/@tanstack%2Fopenai-base@0.9.7.patch",
+  },
   "overrides": {
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
