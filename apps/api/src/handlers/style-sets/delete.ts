@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
@@ -30,30 +30,41 @@ export default createSafeRootHandler(
             id: { eq: params.styleSetId },
             organizationId: { eq: session.activeOrganizationId },
           },
-          columns: { id: true, name: true, s3Key: true, cleanupS3Key: true },
+          columns: {
+            id: true,
+            name: true,
+            s3Key: true,
+            cleanupS3Key: true,
+            deletedAt: true,
+          },
         });
         if (!existing) {
           return false;
         }
 
-        await tx
-          .delete(styleSets)
-          .where(
-            and(
-              eq(styleSets.id, params.styleSetId),
-              eq(styleSets.organizationId, session.activeOrganizationId),
-            ),
-          );
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.DELETE,
-          resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
-          resourceId: existing.id,
-          workspaceId: null,
-          changes: {
-            deleted: { old: { name: existing.name }, new: null },
-          },
-        });
+        const deletedAt = existing.deletedAt ?? new Date();
+        if (!existing.deletedAt) {
+          await tx
+            .update(styleSets)
+            .set({ deletedAt })
+            .where(
+              and(
+                eq(styleSets.id, params.styleSetId),
+                eq(styleSets.organizationId, session.activeOrganizationId),
+              ),
+            );
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.DELETE,
+            resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
+            resourceId: existing.id,
+            workspaceId: null,
+            changes: {
+              deleted: { old: { name: existing.name }, new: null },
+            },
+          });
+        }
         return {
+          deletedAt,
           s3Keys: existing.cleanupS3Key
             ? [existing.s3Key, existing.cleanupS3Key]
             : [existing.s3Key],
@@ -78,6 +89,21 @@ export default createSafeRootHandler(
             message: "Could not delete the style set package.",
             cause,
           }),
+      }),
+    );
+    yield* Result.await(
+      safeDb(async (tx) => {
+        // audit: skip; storage cleanup for the already-audited style set deletion
+        await tx
+          .delete(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+              eq(styleSets.deletedAt, deleted.deletedAt),
+              isNotNull(styleSets.deletedAt),
+            ),
+          );
       }),
     );
     return Result.ok({});

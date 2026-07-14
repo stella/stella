@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
@@ -30,13 +30,17 @@ export default createSafeRootHandler(
     const name = yield* normalizeStyleSetName(body.name);
     const row = yield* Result.await(
       safeDb(async (tx) => {
-        const existing = await tx.query.styleSets.findFirst({
-          where: {
-            id: { eq: params.styleSetId },
-            organizationId: { eq: session.activeOrganizationId },
-          },
-          columns: { name: true },
-        });
+        const [existing] = await tx
+          .select({ name: styleSets.name })
+          .from(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+              isNull(styleSets.deletedAt),
+            ),
+          )
+          .limit(1);
         if (!existing) {
           return null;
         }
@@ -52,6 +56,7 @@ export default createSafeRootHandler(
             and(
               eq(styleSets.id, params.styleSetId),
               eq(styleSets.organizationId, session.activeOrganizationId),
+              isNull(styleSets.deletedAt),
             ),
           )
           .returning(styleSetColumns);

@@ -25,6 +25,7 @@ export const styleSets = p.pgTable(
       .references(() => user.id, { onDelete: "restrict" }),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+    deletedAt: p.timestamp("deleted_at"),
   },
   (table) => [
     p.index("style_sets_organization_id_idx").on(table.organizationId),

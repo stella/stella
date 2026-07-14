@@ -1,6 +1,8 @@
 import { Result } from "better-result";
+import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
+import { styleSets } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -21,18 +23,22 @@ export default createSafeRootHandler(
   async function* ({ safeDb, session, params, recordAuditEvent }) {
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const styleSet = await tx.query.styleSets.findFirst({
-          where: {
-            id: { eq: params.styleSetId },
-            organizationId: { eq: session.activeOrganizationId },
-          },
-          columns: {
-            id: true,
-            fileName: true,
-            s3Key: true,
-            sizeBytes: true,
-          },
-        });
+        const [styleSet] = await tx
+          .select({
+            id: styleSets.id,
+            fileName: styleSets.fileName,
+            s3Key: styleSets.s3Key,
+            sizeBytes: styleSets.sizeBytes,
+          })
+          .from(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+              isNull(styleSets.deletedAt),
+            ),
+          )
+          .limit(1);
         if (!styleSet) {
           return null;
         }

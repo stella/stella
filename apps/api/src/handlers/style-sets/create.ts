@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
@@ -64,7 +64,10 @@ export default createSafeRootHandler(
           );
           const count = await tx.$count(
             styleSets,
-            eq(styleSets.organizationId, session.activeOrganizationId),
+            and(
+              eq(styleSets.organizationId, session.activeOrganizationId),
+              isNull(styleSets.deletedAt),
+            ),
           );
           if (count >= LIMITS.styleSetsCount) {
             return null;

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
@@ -57,6 +57,7 @@ export default createSafeRootHandler(
     const limit = query.limit ?? LIMITS.styleSetsPageSizeDefault;
     const conditions = [
       eq(styleSets.organizationId, session.activeOrganizationId),
+      isNull(styleSets.deletedAt),
     ];
 
     if (query.cursor) {

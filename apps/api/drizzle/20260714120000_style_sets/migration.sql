@@ -11,7 +11,8 @@ CREATE TABLE "style_sets" (
 	"size_bytes" integer NOT NULL,
 	"created_by" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
-	"updated_at" timestamp DEFAULT now() NOT NULL
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	"deleted_at" timestamp
 );--> statement-breakpoint
 
 ALTER TABLE "style_sets" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

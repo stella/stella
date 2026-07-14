@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { styleSets } from "@/api/db/schema";
@@ -89,15 +90,20 @@ export const readStyleSetBuffer = async ({
   organizationId,
   styleSetId,
 }: ReadStyleSetBufferOptions): Promise<Result<Buffer, HandlerError>> => {
-  const styleSetResult = await safeDb((tx) =>
-    tx.query.styleSets.findFirst({
-      where: {
-        id: { eq: styleSetId },
-        organizationId: { eq: organizationId },
-      },
-      columns: { s3Key: true },
-    }),
-  );
+  const styleSetResult = await safeDb(async (tx) => {
+    const [styleSet] = await tx
+      .select({ s3Key: styleSets.s3Key })
+      .from(styleSets)
+      .where(
+        and(
+          eq(styleSets.id, styleSetId),
+          eq(styleSets.organizationId, organizationId),
+          isNull(styleSets.deletedAt),
+        ),
+      )
+      .limit(1);
+    return styleSet;
+  });
   if (Result.isError(styleSetResult)) {
     return Result.err(
       new HandlerError({

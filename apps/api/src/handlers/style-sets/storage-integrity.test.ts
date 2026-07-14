@@ -5,13 +5,15 @@ const readHandler = (name: string) =>
   readFileSync(new URL(`${name}.ts`, import.meta.url), "utf-8");
 
 describe("style set storage integrity", () => {
-  test("commits row deletion before removing stored packages", () => {
+  test("persists a deletion tombstone until stored packages are removed", () => {
     const source = readHandler("delete");
+    const tombstone = source.indexOf(".set({ deletedAt })");
     const rowDelete = source.indexOf(".delete(styleSets)");
     const storageDelete = source.indexOf("getS3().delete(s3Key)");
 
-    expect(rowDelete).toBeGreaterThan(-1);
-    expect(storageDelete).toBeGreaterThan(rowDelete);
+    expect(tombstone).toBeGreaterThan(-1);
+    expect(storageDelete).toBeGreaterThan(tombstone);
+    expect(rowDelete).toBeGreaterThan(storageDelete);
   });
 
   test("persists replacement cleanup state before deleting the old package", () => {

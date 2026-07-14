@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
@@ -33,15 +33,23 @@ export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     const existing = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.styleSets.findFirst({
-          where: {
-            id: { eq: params.styleSetId },
-            organizationId: { eq: session.activeOrganizationId },
-          },
-          columns: { name: true, cleanupS3Key: true },
-        }),
-      ),
+      safeDb(async (tx) => {
+        const [styleSet] = await tx
+          .select({
+            name: styleSets.name,
+            cleanupS3Key: styleSets.cleanupS3Key,
+          })
+          .from(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+              isNull(styleSets.deletedAt),
+            ),
+          )
+          .limit(1);
+        return styleSet;
+      }),
     );
     if (!existing) {
       return Result.err(
@@ -73,6 +81,7 @@ export default createSafeRootHandler(
                 eq(styleSets.id, params.styleSetId),
                 eq(styleSets.organizationId, session.activeOrganizationId),
                 eq(styleSets.cleanupS3Key, cleanupS3Key),
+                isNull(styleSets.deletedAt),
               ),
             );
         }),
@@ -105,13 +114,21 @@ export default createSafeRootHandler(
           await tx.execute(
             sql`SELECT pg_advisory_xact_lock(hashtext(${params.styleSetId}))`,
           );
-          const locked = await tx.query.styleSets.findFirst({
-            where: {
-              id: { eq: params.styleSetId },
-              organizationId: { eq: session.activeOrganizationId },
-            },
-            columns: { s3Key: true, cleanupS3Key: true, sizeBytes: true },
-          });
+          const [locked] = await tx
+            .select({
+              s3Key: styleSets.s3Key,
+              cleanupS3Key: styleSets.cleanupS3Key,
+              sizeBytes: styleSets.sizeBytes,
+            })
+            .from(styleSets)
+            .where(
+              and(
+                eq(styleSets.id, params.styleSetId),
+                eq(styleSets.organizationId, session.activeOrganizationId),
+                isNull(styleSets.deletedAt),
+              ),
+            )
+            .limit(1);
           if (!locked) {
             return null;
           }
@@ -131,6 +148,7 @@ export default createSafeRootHandler(
               and(
                 eq(styleSets.id, params.styleSetId),
                 eq(styleSets.organizationId, session.activeOrganizationId),
+                isNull(styleSets.deletedAt),
               ),
             )
             .returning(styleSetColumns);
@@ -190,6 +208,7 @@ export default createSafeRootHandler(
                 eq(styleSets.id, params.styleSetId),
                 eq(styleSets.organizationId, session.activeOrganizationId),
                 eq(styleSets.cleanupS3Key, replaced.oldS3Key),
+                isNull(styleSets.deletedAt),
               ),
             );
         });
