@@ -303,7 +303,7 @@ export const czNsAdapter: SourceAdapter = {
 
           // Fetch detail + print pages in parallel
           try {
-            // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- polite sequential crawl of one court detail page per entry, rate-limited via Bun.sleep below
+            // oxlint-disable-next-line no-await-in-loop -- polite sequential crawl of one court detail page per entry, rate-limited via Bun.sleep below
             const [detailResponse, printResponse] = await Promise.all([
               fetchWithTimeout(webUrl, {
                 signal,

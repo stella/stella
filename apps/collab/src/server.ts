@@ -236,7 +236,7 @@ export const createCollabServer = async ({
 
     const refresh = (async () => {
       const token = state.token;
-      // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: the token-changed check below can only run after this round trip completes, since it detects mutations that raced during this same await
+
       const refreshed = await postJson({
         apiUrl,
         body: {
@@ -422,7 +422,6 @@ export const createCollabServer = async ({
     }
     sessionTokens.clear();
 
-    // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: shutdown must stop new connections before draining pending document stores, then fire onDestroy only once draining completes
     await server.stop(true);
 
     await new Promise<void>((resolve) => {

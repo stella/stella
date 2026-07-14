@@ -518,7 +518,7 @@ export const computeVerdictBatch = async ({
       index,
       index + POSITION_MATCH_CONCURRENCY,
     );
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential chunk drain bounds the per-entity Promise.all fan-out of LLM compares
+    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the per-entity Promise.all fan-out of LLM compares
     await Promise.all(
       chunk.map(async ({ property, askValue }) => {
         const graded = await gradeTierMatch({

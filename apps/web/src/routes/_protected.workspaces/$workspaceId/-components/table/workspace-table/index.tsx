@@ -386,9 +386,9 @@ export const WorkspaceTable = ({
     index: virtualRow.index,
   }));
   const orderedColumns = getOrderedColumns({
-    leftColumns: table.getLeftLeafColumns(),
+    startColumns: table.getStartLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
-    rightColumns: table.getRightLeafColumns(),
+    endColumns: table.getEndLeafColumns(),
   }).filter((column) => column.getIsVisible());
   // Grouped sections drop the per-group add-column rail: it would repeat under
   // every group and the toolbar already offers "+ new column". (Its trigger is

@@ -92,7 +92,7 @@ const createViewTemplate = createSafeHandler(
           },
           limit: LIMITS.propertiesCount,
         });
-        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same tx client (single Postgres connection can't run concurrent statements)
+
         const workspaceDependencies =
           // SAFETY: one workspace's property-dependency edges, bounded by its properties (<= LIMITS.propertiesCount per endpoint)
           // eslint-disable-next-line require-query-limit/require-query-limit

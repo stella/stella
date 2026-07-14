@@ -20,9 +20,9 @@ const cell = (id: string) => ({
 describe("workspace grid column ordering", () => {
   test("places pinned columns before center columns", () => {
     const ordered = getOrderedColumns({
-      leftColumns: [column("select", 48), column("documents", 240)],
+      startColumns: [column("select", 48), column("documents", 240)],
       centerColumns: [column("status", 200), column("due-date", 160)],
-      rightColumns: [],
+      endColumns: [],
     });
 
     expect(ordered.map((c) => c.id)).toEqual([
@@ -59,9 +59,9 @@ describe("workspace grid column ordering", () => {
 
   test("grid template has no hidden slot for a pinned column's original position", () => {
     const orderedColumns = getOrderedColumns({
-      leftColumns: [column("select", 48), column("documents", 240)],
+      startColumns: [column("select", 48), column("documents", 240)],
       centerColumns: [column("status", 200), column("due-date", 160)],
-      rightColumns: [],
+      endColumns: [],
     });
 
     expect(getGridTemplateColumns(orderedColumns)).toBe(

@@ -213,7 +213,6 @@ function RouteComponent() {
         query.q = searchQuery;
       }
 
-      // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: the abort check only makes sense once the request settles (detects a superseding load), so it cannot move before the await
       const response = await api.clauses.get({
         query,
         fetch: { signal: controller.signal },

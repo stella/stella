@@ -2213,7 +2213,6 @@ const insertMessages = async ({
   }
 
   const insertResult = await safeDb(async (tx) => {
-    // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
         id: persistedMessage.id,
@@ -2316,7 +2315,7 @@ const runPersistMessage = async ({
           );
 
         for (const deletedMessageId of deleteMessageIds) {
-          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential audit writes on the same transaction connection (one in-flight query per tx)
+          // oxlint-disable-next-line no-await-in-loop -- sequential audit writes on the same transaction connection (one in-flight query per tx)
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,

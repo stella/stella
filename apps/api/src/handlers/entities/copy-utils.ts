@@ -603,7 +603,7 @@ export const copyEntities = async ({
 
     const copyName =
       source.id === sourceEntityId
-        ? // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: copy steps depend on prior-created parent IDs in idMap; iterations must run sequentially in order
+        ? // oxlint-disable-next-line no-await-in-loop -- sequential by design: copy steps depend on prior-created parent IDs in idMap; iterations must run sequentially in order
           await resolveEntityName({
             tx,
             workspaceId: targetWorkspaceId,
@@ -618,7 +618,7 @@ export const copyEntities = async ({
           await allocateEntityStamp(tx, targetWorkspaceId)
         : null;
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-parallel -- sequential by design: same DB transaction client; children reference parent IDs created in earlier iterations, and the version insert/currentVersionId update just below depend on this row
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: same DB transaction client; children reference parent IDs created in earlier iterations, and the version insert/currentVersionId update just below depend on this row
     await tx.insert(entities).values({
       id: newEntityId,
       workspaceId: targetWorkspaceId,

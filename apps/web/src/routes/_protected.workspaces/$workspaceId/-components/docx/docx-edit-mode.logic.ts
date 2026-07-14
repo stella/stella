@@ -45,7 +45,6 @@ export const buildAnonymizationDetectionKey = ({
   text,
   excludedCanonicals,
 }: BuildAnonymizationDetectionKeyOptions): string =>
-  // eslint-disable-next-line react-doctor/js-tosorted-immutable -- input is a generic Iterable; the spread is the single required copy
   `${[...excludedCanonicals].sort().join("|")}~${text}`;
 
 type DecideAnonymizationDetectionRunOptions = {

@@ -41,7 +41,7 @@ const assignSlug = async (db: ScopedDb, row: BackfillRow): Promise<boolean> => {
   });
 
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: retry loop, each attempt re-scans after a concurrent writer took the prior candidate
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: retry loop, each attempt re-scans after a concurrent writer took the prior candidate
     const existingSlugRows = await db((tx) =>
       tx
         .select({ slug: caseLawDecisions.slug })
@@ -131,7 +131,7 @@ export const backfillCaseLawSlugs = async (
     // by the rows before it to avoid handing out the same suffix twice.
     for (const row of rows) {
       try {
-        // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: each slug scan must see the slugs committed by prior rows to avoid handing out the same suffix twice
+        // oxlint-disable-next-line no-await-in-loop -- sequential by design: each slug scan must see the slugs committed by prior rows to avoid handing out the same suffix twice
         const wrote = await assignSlug(db, row);
         if (wrote) {
           written += 1;

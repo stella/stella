@@ -121,7 +121,7 @@ export const adaptAiFields = async ({
     if (occurrences.length === 0) {
       continue;
     }
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential: metered per-field AI adaptation call; must not fan out across fields
+    // oxlint-disable-next-line no-await-in-loop -- sequential: metered per-field AI adaptation call; must not fan out across fields
     const renderings = await adapt({
       stub,
       fieldPath: field.path,

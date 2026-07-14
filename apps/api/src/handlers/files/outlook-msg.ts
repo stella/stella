@@ -556,7 +556,7 @@ const isDirectChildPath = (
   if (childPath.length !== parentPath.length + 1) {
     return false;
   }
-  // eslint-disable-next-line react-doctor/js-length-check-first -- length comparison is +1 by design (direct-child path check); the preceding early return already guarantees `childPath.length === parentPath.length + 1` before this .every() runs
+
   return parentPath.every((part, index) => childPath[index] === part);
 };
 

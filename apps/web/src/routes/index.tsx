@@ -30,7 +30,7 @@ function RootRedirect() {
     void (async () => {
       // loadAuthContext swallows its own errors (returns a null session), so
       // this never rejects; a failed session simply routes to /auth below.
-      // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: run.cancelled only becomes true during this await (unmount race guard); it is always false before, so the check cannot move earlier
+
       const authContext = await loadAuthContext(queryClient);
       if (run.cancelled) {
         return;

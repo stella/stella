@@ -86,7 +86,7 @@ export const resolveAiFields = async ({
 
     const boundary = findArrayBoundary(field.path, resolved);
     if (boundary !== undefined) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- awaited at its position to preserve declaration order; rows fan out internally
+      // oxlint-disable-next-line no-await-in-loop -- awaited at its position to preserve declaration order; rows fan out internally
       await resolveArrayField({
         rows: boundary.rows,
         remainder: boundary.remainder,
@@ -247,7 +247,7 @@ const resolveArrayField = async ({
       if (task === undefined) {
         return;
       }
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- bounded-concurrency worker draining a shared queue; the pool runs in parallel
+      // oxlint-disable-next-line no-await-in-loop -- bounded-concurrency worker draining a shared queue; the pool runs in parallel
       const value = await draftRow({
         row: task.row,
         index: task.index,

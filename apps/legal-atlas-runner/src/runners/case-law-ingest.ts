@@ -125,7 +125,6 @@ type SourceDef = {
   name: string;
 };
 
-// eslint-disable-next-line sonarjs/publicly-writable-directories -- heartbeat file in the runner's own single-process container; /tmp is not shared
 const HEARTBEAT_PATH = "/tmp/ingestion.lock";
 const CYCLE_DELAY_MS = 5000;
 const HEALTH_INTERVAL_MS = 30_000;
@@ -557,7 +556,7 @@ const runOneCycle = async (
  * Independent loop for a single adapter. Runs forever,
  * catching all errors so it never crashes.
  */
-// eslint-disable-next-line sonarjs/cognitive-complexity -- preserves the daemon's existing retry, alert, and idle-backoff state machine.
+
 const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   /**
    * Consecutive cycles with no forward progress — a hard failure OR a timeout
@@ -769,7 +768,7 @@ export const runCaseLawIngest = async (
   // Health loop: heartbeat + S3 credential refresh.
   const healthLoop = (async () => {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- fixed-interval health poll; the loop must wait HEALTH_INTERVAL_MS between heartbeats, so this await is intentionally sequential
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval health poll; the loop must wait HEALTH_INTERVAL_MS between heartbeats, so this await is intentionally sequential
       await Bun.sleep(HEALTH_INTERVAL_MS);
       writeHeartbeat();
       try {
@@ -794,7 +793,7 @@ export const runCaseLawIngest = async (
   // timeout so long texts don't block other work.
   const searchIndexLoop = (async () => {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
@@ -823,7 +822,7 @@ export const runCaseLawIngest = async (
   // continuous daemon). Runs via the ingestion role outside the DB slot.
   const citationAuthorityLoop = (async () => {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- fixed-interval recompute poll; the loop must wait CITATION_AUTHORITY_INTERVAL_MS between recomputes, so this await is intentionally sequential
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval recompute poll; the loop must wait CITATION_AUTHORITY_INTERVAL_MS between recomputes, so this await is intentionally sequential
       await Bun.sleep(CITATION_AUTHORITY_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one full recompute per interval; the next poll only runs after this recompute completes
@@ -859,7 +858,7 @@ export const runCaseLawIngest = async (
     const generation = envBase.LEGAL_SEARCH_INDEX_GENERATION;
     logInfo(`[corpus-index] Enabled for generation ${generation}`);
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
@@ -891,7 +890,7 @@ export const runCaseLawIngest = async (
   // corpus daemon maintains both families' search projections.
   const legislationSearchIndexLoop = (async () => {
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait SEARCH_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
@@ -928,7 +927,7 @@ export const runCaseLawIngest = async (
     const generation = corpusGeneration("legislation");
     logInfo(`[legislation-corpus-index] Enabled for generation ${generation}`);
     while (true) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
+      // oxlint-disable-next-line no-await-in-loop -- fixed-interval backfill poll; the loop must wait CORPUS_INDEX_INTERVAL_MS between batches, so this await is intentionally sequential
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes

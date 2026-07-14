@@ -391,6 +391,41 @@ const countTsSuppressions = (content: string): number => {
   return total;
 };
 
+// Explicitly detached calls bypass no-floating-promises when `void` is
+// accepted, while async JSX handlers bypass no-misused-promises because JSX
+// attributes are intentionally disabled there. Both shapes require review:
+// some callees handle failures internally or are synchronous despite the
+// syntax, while others can turn a rejection into an unhandled-rejection event.
+// This lexical rollout freezes review debt without pretending to infer types.
+// A terminal `.catch(...)` on the same line is treated as handled;
+// `.finally(...)` is not, because its returned promise can still reject.
+const VOID_DETACHED_CALL = /\bvoid\s+(?=[(A-Za-z_$])/gu;
+const ASYNC_JSX_HANDLER = /\bon[A-Z][\w$]*\s*=\s*\{\s*async\b/gu;
+const TERMINAL_CATCH = /\.catch\s*\(/u;
+
+const countUnhandledDetachedPromises = (content: string): number => {
+  let total = 0;
+  let inBlockComment = false;
+  let literalState = NO_OPEN_TEMPLATE;
+
+  for (const raw of content.split("\n")) {
+    const { code: lineCode, state } = stripLine(raw, literalState);
+    literalState = state;
+    const blockResult = stripBlockComments(lineCode, inBlockComment);
+    const code = blockResult.code;
+    inBlockComment = blockResult.inBlockComment;
+    if (COMMENT_LINE.test(code)) {
+      continue;
+    }
+
+    total += (code.match(ASYNC_JSX_HANDLER) ?? []).length;
+    if (!TERMINAL_CATCH.test(code)) {
+      total += (code.match(VOID_DETACHED_CALL) ?? []).length;
+    }
+  }
+  return total;
+};
+
 // --- Cross-slice import counters ---------------------------------------------
 // Vertical slices (AGENTS.md): API handler domains, web route dirs (their
 // `-`-prefixed route-private paths), and web feature dirs are independent
@@ -629,6 +664,14 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: APP_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countTsSuppressions,
+  },
+  {
+    id: "detached-promise-review-sites",
+    description:
+      "detached-work syntax requiring rejection review: `void` calls without a same-line `.catch(...)`, plus direct async JSX callbacks (lexical; not every site is a Promise or bug)",
+    include: APP_SOURCE_GLOBS,
+    exclude: isExcludedSource,
+    count: countUnhandledDetachedPromises,
   },
   {
     id: "cross-handler-imports",
@@ -978,6 +1021,23 @@ const SELF_TEST_TS_SUPPRESSIONS = `${TS_SUPPRESSION_FIXTURE_LINES.join("\n")}\n`
 // mention are excluded.
 const EXPECTED_TS_SUPPRESSIONS = 3;
 
+const DETACHED_PROMISE_FIXTURE_LINES = [
+  "void saveDraft();",
+  "const handler = () => void refreshData();",
+  "void saveDraft().catch(reportError);",
+  "void saveDraft().finally(markFinished);",
+  "const button = <Button onClick={async () => saveDraft()} />;",
+  "const form = <form onSubmit={async (event) => submit(event)} />;",
+  "const sync = <Button onClick={() => saveDraft()} />;",
+  'const doc = "void ignoredCall()";',
+  "// void commentedOut();",
+];
+const SELF_TEST_DETACHED_PROMISES = `${DETACHED_PROMISE_FIXTURE_LINES.join("\n")}\n`;
+// Expected: two void-detached calls, the `.finally(...)` chain (which can
+// still reject), and two direct async JSX handlers. The terminal catch,
+// synchronous JSX callback, string, and comment are excluded.
+const EXPECTED_DETACHED_PROMISES = 5;
+
 const CROSS_HANDLER_FIXTURE_LINES = [
   'import { origin } from "../skills/origin";',
   'import { local } from "./local-helper";',
@@ -1109,6 +1169,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/web/src/detached-promises.tsx",
+      SELF_TEST_DETACHED_PROMISES,
+    );
+    writeFixture(
+      root,
       "apps/api/src/handlers/catalogue/uses-skills.ts",
       SELF_TEST_CROSS_HANDLER,
     );
@@ -1217,6 +1282,13 @@ const runSelfTest = (): number => {
     if (tsSuppressionMetric.count !== EXPECTED_TS_SUPPRESSIONS) {
       failures.push(
         `ts-suppression-directives counted ${tsSuppressionMetric.count}, expected ${EXPECTED_TS_SUPPRESSIONS}`,
+      );
+    }
+
+    const detachedPromiseMetric = snapshot["detached-promise-review-sites"];
+    if (detachedPromiseMetric.count !== EXPECTED_DETACHED_PROMISES) {
+      failures.push(
+        `detached-promise-review-sites counted ${detachedPromiseMetric.count}, expected ${EXPECTED_DETACHED_PROMISES}`,
       );
     }
 

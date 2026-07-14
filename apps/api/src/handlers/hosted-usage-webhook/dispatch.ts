@@ -148,7 +148,6 @@ export const handleHostedEntitlementUpsert = async ({
   tx,
   payload,
   eventId,
-  // eslint-disable-next-line sonarjs/cognitive-complexity -- entitlement reconciliation deliberately keeps account, external-id, metadata-ownership, period, and allocation decisions in one transaction
 }: HostedEntitlementUpsertParams): Promise<DispatchOutcome> => {
   // metadata.organization_id (which we set at hosted setup creation) is
   // authoritative only before a local mapping exists. Once an entitlement is

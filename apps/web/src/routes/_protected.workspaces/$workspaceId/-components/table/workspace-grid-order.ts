@@ -12,19 +12,19 @@ type CellLike = {
 export type ColumnDropEdge = "left" | "right";
 
 type OrderedColumnsInput<TColumn extends ColumnLike> = {
-  leftColumns: readonly TColumn[];
+  startColumns: readonly TColumn[];
   centerColumns: readonly TColumn[];
-  rightColumns: readonly TColumn[];
+  endColumns: readonly TColumn[];
 };
 
 export const getOrderedColumns = <TColumn extends ColumnLike>({
-  leftColumns,
+  startColumns,
   centerColumns,
-  rightColumns,
+  endColumns,
 }: OrderedColumnsInput<TColumn>): TColumn[] => [
-  ...leftColumns,
+  ...startColumns,
   ...centerColumns,
-  ...rightColumns,
+  ...endColumns,
 ];
 
 export const getOrderedCells = <TCell extends CellLike>(

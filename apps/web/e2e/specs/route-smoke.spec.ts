@@ -27,6 +27,10 @@ import {
 // network baseline records them as part of the route's manifest instead of
 // racing them. Costs ~30s across the walk.
 const DEFAULT_SETTLE_MS = 1000;
+// The route walk is intentionally serial and cold-compiles every authenticated
+// route. Keep runner headroom separate from the network and bundle budgets that
+// enforce product performance after the walk completes.
+const ROUTE_SMOKE_TIMEOUT_MS = 300_000;
 
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
@@ -154,7 +158,7 @@ test("authenticated routes render without browser errors", async ({
   context,
   request,
 }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(ROUTE_SMOKE_TIMEOUT_MS);
 
   const cleanupTasks: (() => Promise<void>)[] = [];
 

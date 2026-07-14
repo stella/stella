@@ -115,7 +115,7 @@ export const generateBatchMock = async ({
       switch (content.type) {
         case "text": {
           const value = `${inputFieldValue} + ${faker.lorem.word()}`;
-          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- mock emits partial answers sequentially to mirror streaming order
+          // oxlint-disable-next-line no-await-in-loop -- mock emits partial answers sequentially to mirror streaming order
           await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,

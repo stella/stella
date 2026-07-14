@@ -233,7 +233,6 @@ export const createEntityFromBuffer = async ({
       });
     });
   } catch (error) {
-    // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: S3 cleanup is required before every exit path below (the file is already uploaded regardless of which error triggered the catch), so there is no skip path to defer past
     await Promise.all(s3Keys.map(async (k) => await getS3().delete(k)));
 
     if (EntityLimitError.is(error)) {

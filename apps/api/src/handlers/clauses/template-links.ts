@@ -684,7 +684,7 @@ export const syncAllClausesHandler = async ({
         continue;
       }
 
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop -- sequential: ordered read/update/audit steps run inside the one bulk-sync transaction
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential: ordered read/update/audit steps run inside the one bulk-sync transaction
       const latestVersion = await tx.query.clauseVersions.findFirst({
         where: {
           clauseId: { eq: link.clauseId },

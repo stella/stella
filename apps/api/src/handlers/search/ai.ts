@@ -639,7 +639,6 @@ export const createSearchSummaryChatThread = async ({
   );
 
   const insertResult = await safeDb(async (tx) => {
-    // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
     await tx.insert(chatThreads).values({
       id: threadId,
       organizationId,
@@ -894,7 +893,7 @@ const buildSearchResultContexts = async ({
       continue;
     }
 
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- ordered char budget: each hit consumes remainingChars and assigns the next context number; stops when budget is exhausted
+    // oxlint-disable-next-line no-await-in-loop -- ordered char budget: each hit consumes remainingChars and assigns the next context number; stops when budget is exhausted
     const content = await loadSearchHitContent({
       hit,
       organizationId,

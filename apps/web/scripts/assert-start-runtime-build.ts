@@ -18,13 +18,10 @@ const missingPaths: string[] = requiredFiles.filter(
 );
 
 const clientAssetGlob = new Bun.Glob("dist/client/assets/*");
-let hasClientAsset = false;
-for await (const clientAssetPath of clientAssetGlob.scan({
-  cwd: WEB_ROOT_PATH,
-})) {
-  hasClientAsset = clientAssetPath.length > 0;
-  break;
-}
+const firstClientAsset = await clientAssetGlob
+  .scan({ cwd: WEB_ROOT_PATH })
+  .next();
+const hasClientAsset = !firstClientAsset.done;
 
 if (!hasClientAsset) {
   missingPaths.push("dist/client/assets/*");

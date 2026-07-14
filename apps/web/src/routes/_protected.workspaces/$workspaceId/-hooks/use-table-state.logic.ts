@@ -33,13 +33,13 @@ export const omitUtilityColumnSizing = (
 export const createColumnPinningState = (
   pinnedColumnIds: readonly string[],
 ): ColumnPinningState => ({
-  left: [selectColId, ...pinnedColumnIds.filter(isPersistableColumnId)],
-  right: [],
+  start: [selectColId, ...pinnedColumnIds.filter(isPersistableColumnId)],
+  end: [],
 });
 
 export const getPersistedColumnPinning = (
   pinning: ColumnPinningState,
-): string[] => pinning.left.filter(isPersistableColumnId);
+): string[] => pinning.start.filter(isPersistableColumnId);
 
 export const createColumnOrderState = (
   orderedColumnIds: readonly string[],

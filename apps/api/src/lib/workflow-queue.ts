@@ -362,7 +362,7 @@ const removeQueuedWorkflowJobs = async (
   jobIds: readonly string[],
 ): Promise<void> => {
   for (const chunk of chunkItems(jobIds, LIMITS.workflowEntityBatchSize)) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential chunk drain bounds the per-batch Promise.all concurrency
+    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the per-batch Promise.all concurrency
     await Promise.all(
       chunk.map(async (jobId) => {
         try {
@@ -578,7 +578,7 @@ export const startWorkflow = async ({
           workflowEntityJobId({ entityId, requestId }),
         );
         queuedJobIds.push(...chunkJobIds);
-        // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential chunk enqueue bounds queue write batch size and preserves job ordering
+        // oxlint-disable-next-line no-await-in-loop -- sequential chunk enqueue bounds queue write batch size and preserves job ordering
         await enqueueEntityJobs({
           entityIds: chunk,
           executionPlan,
@@ -719,7 +719,7 @@ const selectWorkspacesWithPendingCells = async (
             fields.workspaceId,
             workspaceIdBatch.map((id) => brandPersistedWorkspaceId(id)),
           );
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential batched DB scan bounds the IN-list size per query; workspace count is unbounded across tenants, so unbounded parallel fan-out risks DB pool exhaustion
+    // oxlint-disable-next-line no-await-in-loop -- sequential batched DB scan bounds the IN-list size per query; workspace count is unbounded across tenants, so unbounded parallel fan-out risks DB pool exhaustion
     const rows = await rootDb
       .selectDistinct({ workspaceId: fields.workspaceId })
       .from(fields)
@@ -760,7 +760,7 @@ const readWorkflowRequestIds = async (
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
+    // oxlint-disable-next-line no-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
     await Promise.all(
       workspaceIdBatch.map(async (id) => {
         const requestId = await redis.get(
@@ -782,7 +782,7 @@ const readWorkflowRunningValues = async (
     workspaceIds,
     LIMITS.workflowEntityBatchSize,
   )) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
+    // oxlint-disable-next-line no-await-in-loop -- sequential batch drain bounds the per-batch Promise.all concurrency against Redis
     await Promise.all(
       workspaceIdBatch.map(async (id) => {
         const runningValue = await redis.get(
@@ -1018,7 +1018,7 @@ export const reconcileOrphanedWorkflows = async ({
   });
 
   for (const workspaceId of recoverableOrphans) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential recovery serialises lock contention across orphaned workflows
+    // oxlint-disable-next-line no-await-in-loop -- sequential recovery serialises lock contention across orphaned workflows
     await recoverOrphanedWorkflow({
       expectedRequestId: currentRequestIds.get(workspaceId) ?? null,
       workspaceId: brandPersistedWorkspaceId(workspaceId),

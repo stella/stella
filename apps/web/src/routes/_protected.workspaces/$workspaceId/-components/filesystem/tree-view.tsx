@@ -975,7 +975,6 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         parentId={currentFolderId}
         showTaskOption={false}
         render={
-          // eslint-disable-next-line github/a11y-no-visually-hidden-interactive-element -- sr-only anchor for a programmatic right-click Menu; not meant to be reachable
           <button
             aria-label={t("common.add")}
             className="sr-only"
@@ -1095,7 +1094,6 @@ const ColumnHeaderCell = ({
         >
           <MenuTrigger
             render={
-              // eslint-disable-next-line github/a11y-no-visually-hidden-interactive-element -- sr-only anchor for a programmatic right-click Menu; not meant to be reachable
               <button
                 aria-label={t("common.options")}
                 className="sr-only"

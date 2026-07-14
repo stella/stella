@@ -32,7 +32,6 @@ export const publishDesktopEditSessionExpiryNotifications = async ({
 }): Promise<void> => {
   const workspaceIds = new Set(sessions.map((session) => session.workspaceId));
   const sessionNotifications = sessions.map(async (session) => {
-    // oxlint-disable-next-line react-doctor/async-await-in-loop -- sequential by design: the client must see the "closed" reason event before the close signal forces it to disconnect; the two are ordered, not independent
     await publisher.publishSessionEvent(
       session.id,
       desktopEditSessionClosedEvent("expired"),
@@ -66,9 +65,10 @@ export const publishDesktopEditSessionExpiryNotificationsWithRetry = async ({
   retryDelaysMs?: readonly number[];
   sleep?: (delayMs: number) => Promise<void>;
 }): Promise<void> => {
+  // oxlint-disable-next-line no-unreachable-loop -- failed attempts reach the loop tail after the catch and continue with the next backoff delay
   for (const retryDelayMs of retryDelaysMs) {
     try {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential retry: each attempt must complete (and fail) before the next backoff delay is scheduled
+      // oxlint-disable-next-line no-await-in-loop -- sequential retry: each attempt must complete (and fail) before the next backoff delay is scheduled
       await publishDesktopEditSessionExpiryNotifications({
         publisher,
         sessions,

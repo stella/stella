@@ -1238,7 +1238,7 @@ const AssistantMessageParts = ({
                       status: "expanded",
                     }
               }
-              // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
+              // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
               key={`${message.id}-thinking-${index}`}
               reasoningTokenCount={
                 index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1253,7 +1253,7 @@ const AssistantMessageParts = ({
           return (
             <AssistantTextPart
               components={streamdownComponents}
-              // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
+              // eslint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates multiple parts within this single, already message.id-scoped message.
               key={`${message.id}-text-${index}`}
               restorationPairs={restorationPairs}
               text={part.content}

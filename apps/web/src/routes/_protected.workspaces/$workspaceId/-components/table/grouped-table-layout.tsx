@@ -384,9 +384,9 @@ const useGroupGridGeometry = (
   });
 
   const orderedColumns = getOrderedColumns({
-    leftColumns: table.getLeftLeafColumns(),
+    startColumns: table.getStartLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
-    rightColumns: table.getRightLeafColumns(),
+    endColumns: table.getEndLeafColumns(),
   }).filter((column) => column.getIsVisible());
   const renderColumns = orderedColumns.filter(
     (column) => column.id !== addPropertyColId,

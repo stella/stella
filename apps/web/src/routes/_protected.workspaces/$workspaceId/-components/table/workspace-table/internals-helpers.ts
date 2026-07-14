@@ -35,7 +35,7 @@ export type EndFillerInput = {
   addPropertyColumn: TableColumn | null;
 };
 
-export type ColumnDragPinning = "left" | "right" | "center";
+export type ColumnDragPinning = "start" | "end" | "center";
 
 export type ColumnDragData = {
   type: typeof TABLE_COLUMN_DRAG_TYPE;
@@ -92,30 +92,29 @@ export const getGridPinningStyles = (column: TableColumn): CSSProperties => {
       zIndex: 2,
     };
   }
-  const isLeftPinned = column.getIsPinned() === "left";
-  if (!isLeftPinned) {
+  const isStartPinned = column.getIsPinned() === "start";
+  if (!isStartPinned) {
     return {};
   }
 
-  // TanStack only ever pins to "left" (the logical inline-start of the
-  // table); `getStart("left")` is the cumulative inline offset of the
-  // pinned columns. Resolve it to `inset-inline-start` so the frozen
-  // column docks to the start edge under both LTR and RTL.
+  // Stella only pins to "start"; `getStart("start")` is the cumulative
+  // inline offset of the pinned columns. Resolve it to `inset-inline-start`
+  // so the frozen column docks to the start edge under both LTR and RTL.
   return {
-    insetInlineStart: `${column.getStart("left")}px`,
+    insetInlineStart: `${column.getStart("start")}px`,
     position: "sticky",
     zIndex: column.id === selectColId ? 21 : 20,
   };
 };
 
 export const isPinnedBoundaryColumn = (column: TableColumn) =>
-  column.getIsPinned() === "left" && column.getIsLastColumn("left");
+  column.getIsPinned() === "start" && column.getIsLastColumn("start");
 
 export const getColumnPinningGroup = (
   column: TableColumn,
 ): ColumnDragPinning => {
   const pinning = column.getIsPinned();
-  if (pinning === "left" || pinning === "right") {
+  if (pinning === "start" || pinning === "end") {
     return pinning;
   }
 
@@ -132,7 +131,7 @@ export const getColumnDragData = (
   if (
     type === TABLE_COLUMN_DRAG_TYPE &&
     typeof columnId === "string" &&
-    (pinning === "left" || pinning === "right" || pinning === "center")
+    (pinning === "start" || pinning === "end" || pinning === "center")
   ) {
     return { type, columnId, pinning };
   }

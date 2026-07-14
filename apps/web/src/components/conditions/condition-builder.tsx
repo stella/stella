@@ -178,7 +178,7 @@ export const ConditionBuilder = ({
                 capabilities={capabilities}
                 combinator={group.combinator}
                 index={index}
-                // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit via replaceChild/buildLeaf); rows are fully controlled by the `value`/`node` prop with no internal state, so index-keyed reuse never mismatches rendered content.
+                // eslint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit via replaceChild/buildLeaf); rows are fully controlled by the `value`/`node` prop with no internal state, so index-keyed reuse never mismatches rendered content.
                 key={index}
                 onChange={(next) => onChange(replaceChild(group, index, next))}
                 onRemove={() => onChange(removeChild(group, index))}
@@ -194,7 +194,7 @@ export const ConditionBuilder = ({
               capabilities={capabilities}
               combinator={group.combinator}
               index={index}
-              // eslint-disable-next-line react/no-array-index-key, react-doctor/no-array-index-as-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit via replaceChild/buildLeaf); rows are fully controlled by the `node` prop with no internal state, so index-keyed reuse never mismatches rendered content.
+              // eslint-disable-next-line react/no-array-index-key -- ConditionNode has no stable id (nodes are plain value objects recreated on every edit via replaceChild/buildLeaf); rows are fully controlled by the `node` prop with no internal state, so index-keyed reuse never mismatches rendered content.
               key={index}
               node={child}
               onChange={(next) => onChange(replaceChild(group, index, next))}

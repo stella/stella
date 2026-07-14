@@ -136,7 +136,7 @@ export const EntityLink = ({
       ? rawId.slice(0, separator)
       : workspaceId;
   const id = separator !== -1 ? rawId.slice(separator + 1) : rawId;
-  // eslint-disable-next-line react-doctor/no-polymorphic-children -- children is the markdown link's parsed text (a single text node in practice); `label` is only a best-effort display hint passed to the inspector-open call, not the rendered content, so a generic fallback for non-string children is safe.
+
   const label = typeof children === "string" ? children : "Reference";
 
   // Entity links without workspace context can't be resolved;

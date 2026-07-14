@@ -1058,7 +1058,7 @@ const readTaskDetail = async ({
           agendaKind: true,
         },
       });
-      // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same scoped-db transaction client as `task`; a single connection can't run concurrent statements
+
       const assignees = await tx.query.taskAssignees.findMany({
         where: {
           entityId: { eq: taskId },
@@ -1077,7 +1077,7 @@ const readTaskDetail = async ({
         with: linkWith,
         limit: LIMITS.taskEntityLinksPerDirectionMax,
       });
-      // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same scoped-db transaction client as `outgoing`; a single connection can't run concurrent statements
+
       const incoming = await tx.query.entityLinks.findMany({
         where: {
           workspaceId: { eq: workspaceId },

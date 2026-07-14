@@ -8,7 +8,6 @@
  */
 
 import { createElement } from "react";
-// eslint-disable-next-line react-doctor/no-flush-sync -- drag preview must paint before dragstart returns; browser snapshots the drag image synchronously
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 

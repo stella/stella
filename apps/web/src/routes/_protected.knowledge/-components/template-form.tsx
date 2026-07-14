@@ -97,7 +97,6 @@ const addFormulaFieldReferences = (
   referencedPaths: Set<string>,
 ): void => {
   for (const field of fields) {
-    // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
     if (expr.includes(field.path)) {
       referencedPaths.add(field.path);
     }
@@ -1542,7 +1541,6 @@ export const TemplateForm = ({
       addConditionAstReferences(condition.node, allFields, referencedPaths);
     }
     for (const f of allFields) {
-      // eslint-disable-next-line react-doctor/js-set-map-lookups -- String.prototype.includes substring check, not array membership
       if (condition.expression.includes(f.path)) {
         referencedPaths.add(f.path);
       }

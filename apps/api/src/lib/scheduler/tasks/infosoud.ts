@@ -42,7 +42,7 @@ export const syncInfoSoudTrackedCases: SchedulerTask = async ({
       }
 
       try {
-        // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- rate-limited external court lookups must run one at a time
+        // oxlint-disable-next-line no-await-in-loop -- rate-limited external court lookups must run one at a time
         const lookupResult = await client.searchCaseWithHearings({
           courtCode: trackedCase.courtCode,
           signal,

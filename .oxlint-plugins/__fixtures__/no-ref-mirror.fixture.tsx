@@ -22,7 +22,7 @@ export function RefMirrorFixture({ value }: { value: string }) {
 
   const updateLater = () => {
     valueRef.current = value;
-    timerRef.current = window.setTimeout(() => undefined);
+    timerRef.current = window.setTimeout(() => undefined, 0);
   };
 
   return <div ref={domRef}>{updateLater.name}</div>;

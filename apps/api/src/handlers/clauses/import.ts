@@ -207,7 +207,7 @@ const importHandler = async function* ({
           );
         }
         for (const [variantIndex, variant] of variants.entries()) {
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop -- sequential variant inserts in one transaction preserve sortOrder/insertion order
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential variant inserts in one transaction preserve sortOrder/insertion order
           await tx.insert(clauseVariants).values({
             id: createSafeId<"clauseVariant">(),
             organizationId,

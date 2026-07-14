@@ -423,7 +423,7 @@ export const ExistingFileOrganizerDialog = ({
         );
 
         if (row.parentId !== targetParentId) {
-          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: sequential entity moves share the same query-key cache invalidation and report progress on one toast; concurrent mutations would race and risk rate limits
+          // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential entity moves share the same query-key cache invalidation and report progress on one toast; concurrent mutations would race and risk rate limits
           const moveResponse = await api
             .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
             .move.patch({

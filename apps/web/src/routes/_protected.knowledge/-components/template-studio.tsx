@@ -61,6 +61,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { BoundedMap } from "@/lib/bounded-set";
@@ -1293,12 +1294,11 @@ export const TemplateStudioPage = ({
     requestAnimationFrame(read);
   }, GESTURE_SHOW_DELAY_MS);
 
-  const fetchGestureSuggestion = async (sel: GestureSelection) => {
+  const fetchGestureSuggestion = async (sel: GestureSelection, seq: number) => {
     const view = editorViewRef.current;
     if (!view) {
       return;
     }
-    const seq = ++enrichSeqRef.current;
     const contextText = paragraphsAroundSelection(view.state, sel.from);
     const knownPaths = enrichmentKnownPaths(
       useTemplateStudioStore.getState().fields,
@@ -1357,7 +1357,15 @@ export const TemplateStudioPage = ({
     if (shown === null || shown.from !== sel.from || shown.to !== sel.to) {
       return;
     }
-    void fetchGestureSuggestion(sel);
+    const seq = ++enrichSeqRef.current;
+    fetchGestureSuggestion(sel, seq).catch((error: unknown) => {
+      if (seq !== enrichSeqRef.current) {
+        return;
+      }
+      getAnalytics().captureError(error);
+      setEnrichment({ status: "idle" });
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    });
   }, GESTURE_ENRICH_DELAY_MS);
 
   const onGestureSelectionChange = (sel: GestureSelection) => {
@@ -2089,7 +2097,7 @@ export const TemplateStudioPage = ({
           // after markSaved() would leave the pending steps stranded with the
           // Save affordance (gated on isDirty) gone.
           try {
-            // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: steps must replay in recorded order so each rename lands against the state the prior steps produced, respecting the unique-slot constraint.
+            // oxlint-disable-next-line no-await-in-loop -- sequential by design: steps must replay in recorded order so each rename lands against the state the prior steps produced, respecting the unique-slot constraint.
             const patched = await api
               .templates({ templateId: toSafeId<"template">(templateId) })
               .clauses({ linkId: toSafeId<"templateClause">(step.linkId) })

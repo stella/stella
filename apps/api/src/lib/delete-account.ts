@@ -469,7 +469,7 @@ export const verifyAndDeleteUser = async (
         ).map((row) => row.workspaceId);
 
         // audit: skip — ephemeral verification code deletion
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client
+
         await tx
           .delete(verification)
           .where(eq(verification.id, verificationRow.id));
@@ -746,7 +746,6 @@ export const verifyAndDeleteUser = async (
           taskReassignmentCount = updates.length;
         }
 
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client
         await tx.delete(member).where(eq(member.userId, currentUserId));
         await tx
           .delete(workspaceMembers)
@@ -781,7 +780,6 @@ export const verifyAndDeleteUser = async (
           ),
         );
 
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client
         await tx
           .delete(desktopEditHandoffs)
           .where(eq(desktopEditHandoffs.createdBy, currentUserId));
@@ -894,7 +892,7 @@ export const verifyAndDeleteUser = async (
             ),
           );
         }
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client
+
         await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
 
         // 10. AI chat threads — messages and fileChatThreads cascade on thread deletion

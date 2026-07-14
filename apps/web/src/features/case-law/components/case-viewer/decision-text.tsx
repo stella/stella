@@ -320,7 +320,6 @@ const InlineContent = ({
   pieceId: string;
   ranges: SearchMatchRange[];
 }) => {
-  // eslint-disable-next-line react-doctor/prefer-module-scope-static-value -- per-render mutable accumulator; module scope would share state across instances
   const offset: OffsetRef = { value: 0 };
   const context: HighlightContext = {
     pieceId,

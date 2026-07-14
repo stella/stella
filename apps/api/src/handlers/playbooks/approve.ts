@@ -72,7 +72,6 @@ const approvePlaybookDefinition = createSafeRootHandler(
         const nextVersion = (latestVersion?.version ?? 0) + 1;
         const approvedAt = new Date();
 
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client (single Postgres connection can't run concurrent statements)
         await tx.insert(playbookDefinitionVersions).values({
           id: createSafeId<"playbookDefinitionVersion">(),
           organizationId,

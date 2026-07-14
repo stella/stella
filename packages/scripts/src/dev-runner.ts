@@ -1346,7 +1346,7 @@ const waitForReadinessChecks = async (
       panic(
         `No running process found for readiness check "${readinessCheck.label}".`,
       );
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- ordered startup: each service in this group must be ready before the next is awaited
+    // oxlint-disable-next-line no-await-in-loop -- ordered startup: each service in this group must be ready before the next is awaited
     await waitForHttpReadiness({ ...readinessCheck, child: runningStep.child });
   }
 };

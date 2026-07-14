@@ -127,7 +127,6 @@ export const createEntitiesHandler = async function* ({
 
       const entityVersionId = createSafeId<"entityVersion">();
 
-      // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (tx) as the entities/workspaces updates and recordAuditEvent below; a single connection can't run concurrent statements
       await tx.insert(entityVersions).values({
         id: entityVersionId,
         workspaceId,

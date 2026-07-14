@@ -29,7 +29,7 @@ describe("workspace table v9 feature set", () => {
     });
 
     expect(table.getRowModel().rows.map((row) => row.id)).toEqual(["row-a"]);
-    expect(table.initialState.columnPinning).toEqual({ left: [], right: [] });
+    expect(table.initialState.columnPinning).toEqual({ start: [], end: [] });
     expect(typeof table.options.features.coreRowModel).toBe("function");
 
     expect(typeof table.setColumnOrder).toBe("function");

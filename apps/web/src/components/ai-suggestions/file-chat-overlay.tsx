@@ -1482,7 +1482,7 @@ const FileChatOverlayInner = ({
     }
 
     const part = findFolioAgentApprovalPart(approvalId, toolName);
-    // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: approve() must complete on both paths (the !part early return still approves the tool call), and the mutation tool may only run after approval settles; the part is captured before approve() mutates message state
+
     await approve();
     if (!part) {
       return;

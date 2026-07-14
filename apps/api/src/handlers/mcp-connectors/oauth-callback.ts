@@ -183,7 +183,6 @@ const mcpOAuthCallback = createSafeRootHandler(
         safeDb(
           async (tx) =>
             await tx.transaction(async (innerTx) => {
-              // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (innerTx) as the second delete, insert, and recordAuditEvent below; a single connection can't run concurrent statements
               await innerTx
                 .delete(mcpOAuthState)
                 .where(eq(mcpOAuthState.state, state));

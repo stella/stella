@@ -175,7 +175,7 @@ const parseZipSkillPackage = async (
       assertZipUncompressedLimit(totalUncompressedBytes + declaredSize);
     }
 
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: cumulative-byte limit must abort before decompressing further entries
+    // oxlint-disable-next-line no-await-in-loop -- sequential by design: cumulative-byte limit must abort before decompressing further entries
     const bytes = await file.async("uint8array");
     totalUncompressedBytes += bytes.byteLength;
     assertZipUncompressedLimit(totalUncompressedBytes);
@@ -480,7 +480,7 @@ const fetchGithubSkillFiles = async (
         assertGithubTotalFileBytes(totalFileBytes + item.size);
       }
 
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: cumulative-byte limit must abort before fetching further files; also throttles requests to the GitHub raw content API
+      // oxlint-disable-next-line no-await-in-loop -- sequential by design: cumulative-byte limit must abort before fetching further files; also throttles requests to the GitHub raw content API
       const raw = await fetchSafeBytes(
         githubRawUrl({
           owner: target.owner,
