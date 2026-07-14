@@ -73,11 +73,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { compareByLocale } from "@/lib/collation";
-import {
-  DOCX_MIME,
-  isDocxFile,
-  TOOLBAR_ROW_MIN_HEIGHT,
-} from "@/lib/consts";
+import { DOCX_MIME, isDocxFile, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";

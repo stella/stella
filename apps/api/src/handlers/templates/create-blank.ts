@@ -2,11 +2,11 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
+import { createTemplateBuffer } from "@/api/handlers/templates/create-template-buffer";
 import {
   type CreatedTemplate,
   createStoredTemplate,
 } from "@/api/handlers/templates/create-template-service";
-import { createTemplateBuffer } from "@/api/handlers/templates/create-template-buffer";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,
