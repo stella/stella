@@ -3,7 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -21,7 +20,7 @@ const config = {
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, params, recordAuditEvent }) {
-    const deletedS3Key = yield* Result.await(
+    const deleted = yield* Result.await(
       safeDb(async (tx) => {
         await tx.execute(
           sql`SELECT pg_advisory_xact_lock(hashtext(${params.styleSetId}))`,
@@ -34,9 +33,20 @@ export default createSafeRootHandler(
           columns: { id: true, name: true, s3Key: true },
         });
         if (!existing) {
-          return null;
+          return false;
         }
 
+        Result.unwrap(
+          await Result.tryPromise({
+            try: async () => await getS3().delete(existing.s3Key),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Could not delete the style set package.",
+                cause,
+              }),
+          }),
+        );
         await tx
           .delete(styleSets)
           .where(
@@ -54,16 +64,15 @@ export default createSafeRootHandler(
             deleted: { old: { name: existing.name }, new: null },
           },
         });
-        return existing.s3Key;
+        return true;
       }),
     );
 
-    if (!deletedS3Key) {
+    if (!deleted) {
       return Result.err(
         new HandlerError({ status: 404, message: "Style set not found" }),
       );
     }
-    getS3().delete(deletedS3Key).catch(captureError);
     return Result.ok({});
   },
 );
