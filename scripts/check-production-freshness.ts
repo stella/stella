@@ -1,3 +1,5 @@
+import { appendFile } from "node:fs/promises";
+
 const DEFAULT_PRODUCTION_API_URL = "https://api.stll.app";
 const DEFAULT_MAX_LAG_COMMITS = 100;
 const DEFAULT_MAX_LAG_HOURS = 7 * 24;
@@ -149,7 +151,7 @@ const appendSummary = async (lines: string[]) => {
   if (!summaryPath) {
     return;
   }
-  await Bun.write(summaryPath, `${lines.join("\n")}\n`);
+  await appendFile(summaryPath, `${lines.join("\n")}\n`);
 };
 
 const main = async () => {
