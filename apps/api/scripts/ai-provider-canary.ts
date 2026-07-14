@@ -22,6 +22,8 @@ import {
 import type { TanStackTextProvider } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 
+import { modelRoleMaxOutputTokens } from "./ai-provider-canary-config";
+
 const CANARY_PROVIDERS = [
   "google",
   "openrouter",
@@ -36,7 +38,6 @@ type CanaryProvider = (typeof CANARY_PROVIDERS)[number];
 const CAPABILITY_ROLE = "fast" satisfies ModelRole;
 const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
 const MAX_OUTPUT_TOKENS = 64;
-const MODEL_ROLE_MAX_OUTPUT_TOKENS = 512;
 const CAPABILITY_PROBE_TIMEOUT_MS = 20_000;
 const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
 const SYNTHETIC_PROMPT = "Reply with exactly OK.";
@@ -278,7 +279,7 @@ const runModelRoleProbe = async ({
   const output = await generateTanStackTextForRole({
     abortSignal: signal,
     caching: NO_CACHING,
-    maxOutputTokens: MODEL_ROLE_MAX_OUTPUT_TOKENS,
+    maxOutputTokens: modelRoleMaxOutputTokens(role),
     organizationId: null,
     orgAIConfig: config,
     prompt: SYNTHETIC_PROMPT,
