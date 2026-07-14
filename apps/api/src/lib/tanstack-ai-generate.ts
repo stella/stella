@@ -213,19 +213,28 @@ const withStandardServiceTierFallback = async <TResult>({
   }
 };
 
-type StandardServiceTierStreamFallbackOptions<TResult> = {
+type StandardServiceTierStreamFallbackOptions<
+  TChunk extends StreamChunk,
+  TResult,
+> = {
   model: ResolvedTanStackTextModel;
   serviceTier: AIRequestServiceTier;
-  stream: (serviceTier: AIRequestServiceTier) => AsyncIterable<StreamChunk>;
-  onChunk: (chunk: StreamChunk) => TResult | undefined;
+  stream: (serviceTier: AIRequestServiceTier) => AsyncIterable<TChunk>;
+  onChunk: (chunk: TChunk) => TResult | undefined;
 };
 
-const iterateWithStandardServiceTierFallback = async function* <TResult>({
+const iterateWithStandardServiceTierFallback = async function* <
+  TChunk extends StreamChunk,
+  TResult,
+>({
   model,
   serviceTier,
   stream,
   onChunk,
-}: StandardServiceTierStreamFallbackOptions<TResult>): AsyncIterable<TResult> {
+}: StandardServiceTierStreamFallbackOptions<
+  TChunk,
+  TResult
+>): AsyncIterable<TResult> {
   let yielded = false;
 
   try {
