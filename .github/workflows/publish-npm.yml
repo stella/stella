@@ -270,7 +270,7 @@ jobs:
           cd "${canary}"
           npm init -y >/dev/null
           npm install --ignore-scripts "${tgz}"
-          node_modules/@stll/cli/dist/cli.js compatibility check \
+          node node_modules/@stll/cli/dist/cli.js compatibility check \
             --server https://api.stll.app
 
       - name: Upload tarballs

@@ -1,10 +1,11 @@
 import { appendFile } from "node:fs/promises";
 
+import { getApiHealthUrl, parseHealthCommit } from "./api-health";
+
 const DEFAULT_PRODUCTION_API_URL = "https://api.stll.app";
 const DEFAULT_MAX_LAG_COMMITS = 100;
 const DEFAULT_MAX_LAG_HOURS = 7 * 24;
 const FETCH_TIMEOUT_MS = 10_000;
-const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
 
 class ProductionFreshnessError extends Error {
   constructor(message: string) {
@@ -64,10 +65,8 @@ const readPositiveInteger = (name: string, fallback: number) => {
   return value;
 };
 
-const stripTrailingSlash = (value: string) => value.replace(/\/+$/u, "");
-
 const readProductionCommit = async (apiUrl: string) => {
-  const healthUrl = new URL("/health", `${stripTrailingSlash(apiUrl)}/`);
+  const healthUrl = getApiHealthUrl(apiUrl);
   const response = await fetch(healthUrl, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
@@ -77,15 +76,8 @@ const readProductionCommit = async (apiUrl: string) => {
     );
   }
 
-  const value: unknown = await response.json();
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    throw new ProductionFreshnessError(
-      "production /health did not return an object",
-    );
-  }
-
-  const commit = Reflect.get(value, "commit");
-  if (typeof commit !== "string" || !COMMIT_SHA_PATTERN.test(commit)) {
+  const commit = parseHealthCommit(await response.json());
+  if (!commit) {
     throw new ProductionFreshnessError(
       "production /health did not return a full lowercase commit SHA",
     );

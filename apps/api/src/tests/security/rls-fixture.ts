@@ -62,10 +62,19 @@ export const releaseRlsFixture = async (): Promise<void> => {
   const releasedFixturePromise = fixturePromise;
   fixturePromise = null;
   fixtureRefCount = 0;
-  fixtureReleasePromise = fixtureReleasePromise.then(async () => {
-    await releasedFixturePromise;
-    await releaseTestDb();
-    return undefined;
-  });
-  await fixtureReleasePromise;
+  const previousReleasePromise = fixtureReleasePromise;
+  const releasePromise = (async () => {
+    await previousReleasePromise;
+    try {
+      await releasedFixturePromise;
+    } finally {
+      // initFixture acquires the shared DB before it seeds RLS data. Release
+      // that reference even when seeding fails.
+      await releaseTestDb();
+    }
+  })();
+  // Keep the current failure visible while allowing future test files to
+  // create a fresh fixture rather than inheriting a rejected teardown chain.
+  fixtureReleasePromise = releasePromise.catch(() => undefined);
+  await releasePromise;
 };

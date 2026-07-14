@@ -1,3 +1,5 @@
+import { getApiHealthUrl, parseHealthCommit } from "./api-health";
+
 const DEFAULT_ATTEMPTS = 30;
 const DEFAULT_DELAY_MS = 10_000;
 const FETCH_TIMEOUT_MS = 10_000;
@@ -9,17 +11,6 @@ class ApiDeploymentError extends Error {
     this.name = "ApiDeploymentError";
   }
 }
-
-export const parseHealthCommit = (value: unknown) => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return undefined;
-  }
-  const commit = Reflect.get(value, "commit");
-  if (typeof commit !== "string" || !COMMIT_SHA_PATTERN.test(commit)) {
-    return undefined;
-  }
-  return commit;
-};
 
 const readRequiredEnv = (name: string) => {
   const value = process.env[name]?.trim();
@@ -41,13 +32,14 @@ const readPositiveInteger = (name: string, fallback: number) => {
   return value;
 };
 
-const sleep = (ms: number) =>
-  new Promise((resolve) => {
+const sleep = async (ms: number) => {
+  await new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
+};
 
 const readDeployedCommit = async (apiUrl: string) => {
-  const healthUrl = new URL("/health", `${apiUrl.replace(/\/+$/u, "")}/`);
+  const healthUrl = getApiHealthUrl(apiUrl);
   const response = await fetch(healthUrl, {
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });

@@ -1,8 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseHealthCommit } from "./check-api-deployment";
+import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 
 describe("API deployment health receipt", () => {
+  test("preserves a configured API path prefix", () => {
+    expect(getApiHealthUrl("https://example.com/api").toString()).toBe(
+      "https://example.com/api/health",
+    );
+    expect(getApiHealthUrl("https://example.com").toString()).toBe(
+      "https://example.com/health",
+    );
+  });
+
   test("accepts only a full lowercase commit SHA", () => {
     expect(
       parseHealthCommit({

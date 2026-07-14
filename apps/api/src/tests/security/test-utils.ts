@@ -257,12 +257,15 @@ export const releaseTestDb = async (): Promise<void> => {
   const closingDbPromise = dbPromise;
   dbPromise = null;
   dbRefCount = 0;
-  dbClosePromise = dbClosePromise.then(async () => {
+  const closePromise = dbClosePromise.then(async () => {
     const testDb = await closingDbPromise;
     await testDb.$client.close();
     return undefined;
   });
-  await dbClosePromise;
+  // Preserve the failure for this release call, but recover the shared chain
+  // so one failed initialization or close cannot poison every later test.
+  dbClosePromise = closePromise.catch(() => undefined);
+  await closePromise;
 };
 
 export const createScopedQuery = (testDb: TestDatabase) => {

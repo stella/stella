@@ -1,3 +1,4 @@
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 /**
  * Redis-backed storage for better-auth's rate limiter.
  *
@@ -84,7 +85,14 @@ const withCommandTimeout = async <T>(
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timeoutId = commandTimer.set(
-      () => reject(new Error("redis command timeout")),
+      () =>
+        reject(
+          new TimeoutError({
+            label: "auth-rate-limit-redis-command",
+            message: "Redis command timed out",
+            timeoutMs: COMMAND_TIMEOUT_MS,
+          }),
+        ),
       COMMAND_TIMEOUT_MS,
     );
   });

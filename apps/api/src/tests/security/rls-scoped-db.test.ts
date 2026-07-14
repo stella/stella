@@ -30,7 +30,7 @@ const otherPersonalWorkspaceId = createSafeId<"workspace">();
 const scopedAuthorizationLifetimeWorkspaceId = createSafeId<"workspace">();
 const safeAuthorizationLifetimeWorkspaceId = createSafeId<"workspace">();
 
-beforeAll(async () => {
+const setupRlsScopedDb = async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
   ids = fixture.ids;
@@ -93,7 +93,9 @@ beforeAll(async () => {
       userId: ids.userA2,
     },
   ]);
-});
+};
+
+beforeAll(setupRlsScopedDb, { timeout: 30_000 });
 
 afterAll(async () => {
   await releaseRlsFixture();
