@@ -2397,6 +2397,8 @@
     "confirmDelete": "Tímto trvale smažete vzor.",
     "createDocument": "Vytvořit dokument",
     "createDocumentAnyway": "Přesto vytvořit",
+    "createFromStyles": "Začít se styly dokumentu",
+    "createFromStylesHint": "Vytvoří prázdný vzor se styly ze souboru DOCX. Obsah zdrojového dokumentu se nekopíruje.",
     "createInStudio": "Vytvořit ve stella",
     "createInStudioHint": "Vzor napište přímo v editoru a na místa, kam patří hodnoty, vložte '{{pole}}'.",
     "dateChipFirstOfNextMonth": "První den příštího měsíce",

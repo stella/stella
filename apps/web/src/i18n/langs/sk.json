@@ -2397,6 +2397,8 @@
     "confirmDelete": "Vzor bude trvalo vymazaný.",
     "createDocument": "Vytvoriť dokument",
     "createDocumentAnyway": "Aj tak vytvoriť",
+    "createFromStyles": "Začať so štýlmi dokumentu",
+    "createFromStylesHint": "Vytvorí prázdny vzor so štýlmi zo súboru DOCX. Obsah zdrojového dokumentu sa nekopíruje.",
     "createInStudio": "Vytvoriť v stella",
     "createInStudioHint": "Vzor napíšte v editore a na miesta, kam patria hodnoty, vložte '{{polia}}'.",
     "dateChipFirstOfNextMonth": "Prvý deň budúceho mesiaca",

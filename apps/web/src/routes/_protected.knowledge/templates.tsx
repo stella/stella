@@ -178,41 +178,47 @@ function RouteComponent() {
     [t, invalidateTemplates],
   );
 
-  // Creating a blank template is the primary path: the server stamps out a
-  // Folio-native empty DOCX, then we drop straight into the Studio where the
-  // user authors the body and adds {{fields}} (no upload, no AI).
-  const openBlankTemplate = useCallback(async () => {
-    setCreating(true);
-    const response = await api.templates.blank.put({
-      name: t("templates.untitledTemplate"),
-    });
-    setCreating(false);
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.saveFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
+  // Blank templates always use a complete Folio style system. Without a style
+  // source the server applies Stella Style; with one it extracts only the
+  // source DOCX's sanitized styles and rebuilds a content-free document.
+  const openBlankTemplate = useCallback(
+    async (styleSource?: File) => {
+      setCreating(true);
+      const name = styleSource
+        ? styleSource.name.replace(DOCX_EXTENSION_RE, "")
+        : t("templates.untitledTemplate");
+      const response = await api.templates.blank.put(
+        styleSource ? { name, styleSource } : { name },
+      );
+      setCreating(false);
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+      const created = response.data;
+      invalidateTemplates();
+      setView({
+        kind: "detail",
+        template: {
+          id: created.id,
+          name: created.name,
+          fileName: created.fileName,
+          fieldCount: created.fieldCount,
+          sizeBytes: created.sizeBytes,
+          categoryId: null,
+          createdAt: new Date(created.createdAt),
+        },
       });
-      return;
-    }
-    const created = response.data;
-    invalidateTemplates();
-    setView({
-      kind: "detail",
-      template: {
-        id: created.id,
-        name: created.name,
-        fileName: created.fileName,
-        fieldCount: created.fieldCount,
-        sizeBytes: created.sizeBytes,
-        categoryId: null,
-        createdAt: new Date(created.createdAt),
-      },
-    });
-  }, [t, invalidateTemplates]);
+    },
+    [t, invalidateTemplates],
+  );
 
   if (view.kind === "detail") {
     const exitDetail = () => {
@@ -294,6 +300,9 @@ function RouteComponent() {
       onCategorySelect={handleCategorySelect}
       onCreateBlank={() => {
         void openBlankTemplate();
+      }}
+      onCreateFromStyles={(file) => {
+        void openBlankTemplate(file);
       }}
       onDeleted={invalidateTemplates}
       onDiscovered={(file) => {

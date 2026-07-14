@@ -2397,6 +2397,8 @@
     "confirmDelete": "Esto eliminará la plantilla permanentemente.",
     "createDocument": "Crear documento",
     "createDocumentAnyway": "Crear de todos modos",
+    "createFromStyles": "Empezar con estilos de documento",
+    "createFromStylesHint": "Crea una plantilla vacía con los estilos de un archivo DOCX. El contenido original no se copia.",
     "createInStudio": "Crear en stella",
     "createInStudioHint": "Redacte la plantilla en el editor y añada '{{campos}}' donde deban ir los valores.",
     "dateChipFirstOfNextMonth": "Primer día del próximo mes",

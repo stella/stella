@@ -22,16 +22,19 @@ type DiscoverData = Exclude<
 
 type TemplateUploadProps = {
   onCreateBlank: () => void;
+  onCreateFromStyles: (file: File) => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
 };
 
 export const TemplateUpload = ({
   onCreateBlank,
+  onCreateFromStyles,
   onDiscovered,
 }: TemplateUploadProps) => {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement>(null);
   const prepareInputRef = useRef<HTMLInputElement>(null);
+  const styleInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const discoverMutation = useMutation({
@@ -135,6 +138,21 @@ export const TemplateUpload = ({
     e.target.value = "";
   };
 
+  const handleStyleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.item(0);
+    if (file) {
+      if (file.type !== DOCX_MIME) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.invalidFileType"),
+        });
+      } else {
+        onCreateFromStyles(file);
+      }
+    }
+    e.target.value = "";
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -187,6 +205,18 @@ export const TemplateUpload = ({
           <p className="text-muted-foreground text-center text-xs">
             {t("templates.createInStudioHint")}
           </p>
+          <Button
+            className="w-full"
+            disabled={loading}
+            onClick={() => styleInputRef.current?.click()}
+            variant="outline"
+          >
+            <UploadIcon />
+            {t("templates.createFromStyles")}
+          </Button>
+          <p className="text-muted-foreground text-center text-xs">
+            {t("templates.createFromStylesHint")}
+          </p>
         </div>
 
         {/* Secondary: import an existing document (upload or AI markup). */}
@@ -232,6 +262,13 @@ export const TemplateUpload = ({
           className="hidden"
           onChange={handlePrepareFileChange}
           ref={prepareInputRef}
+          type="file"
+        />
+        <input
+          accept=".docx"
+          className="hidden"
+          onChange={handleStyleFileChange}
+          ref={styleInputRef}
           type="file"
         />
       </div>

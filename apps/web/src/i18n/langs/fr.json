@@ -2397,6 +2397,8 @@
     "confirmDelete": "Cela supprimera définitivement le modèle.",
     "createDocument": "Créer le document",
     "createDocumentAnyway": "Créer quand même",
+    "createFromStyles": "Commencer avec les styles d’un document",
+    "createFromStylesHint": "Crée un modèle vide avec les styles d’un fichier DOCX. Le contenu source n’est pas copié.",
     "createInStudio": "Créer dans stella",
     "createInStudioHint": "Rédigez le modèle dans l'éditeur et ajoutez des '{{champs}}' là où les valeurs doivent apparaître.",
     "dateChipFirstOfNextMonth": "Premier jour du mois prochain",

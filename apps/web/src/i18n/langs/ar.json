@@ -2397,6 +2397,8 @@
     "confirmDelete": "سيؤدي هذا إلى حذف القالب نهائياً.",
     "createDocument": "إنشاء مستند",
     "createDocumentAnyway": "الإنشاء على أي حال",
+    "createFromStyles": "البدء بأنماط مستند",
+    "createFromStylesHint": "ينشئ قالبًا فارغًا باستخدام أنماط ملف DOCX. لا يتم نسخ محتوى المستند المصدر.",
     "createInStudio": "الإنشاء في stella",
     "createInStudioHint": "اكتب القالب في المحرّر وأضِف '{{fields}}' حيث ينبغي أن تظهر القيم.",
     "dateChipFirstOfNextMonth": "أول الشهر القادم",

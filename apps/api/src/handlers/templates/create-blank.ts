@@ -1,6 +1,12 @@
+import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createDocx, createEmptyDocument } from "@stll/folio-core/server";
+import {
+  createDocx,
+  createEmptyDocument,
+  createStellaStyleDocumentPreset,
+  extractDocumentStyleSetFromDocx,
+} from "@stll/folio-core/server";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -15,11 +21,15 @@ import type {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createBlankTemplateBodySchema = t.Object({
   name: tDefaultVarchar,
   categoryId: t.Optional(tSafeId("templateCategory")),
+  styleSource: t.Optional(t.File({ maxSize: FILE_SIZE_LIMITS.document })),
 });
 
 type CreateBlankTemplateProps = {
@@ -29,22 +39,70 @@ type CreateBlankTemplateProps = {
   body: {
     name: string;
     categoryId?: SafeId<"templateCategory">;
+    styleSource?: File;
   };
   recordAuditEvent: AuditRecorder;
+};
+
+type CreateBlankTemplateBufferOptions =
+  | { type: "stella" }
+  | { type: "style-source"; buffer: Buffer; name: string };
+
+export const createBlankTemplateBuffer = async (
+  options: CreateBlankTemplateBufferOptions,
+): Promise<Buffer> => {
+  const preset = createStellaStyleDocumentPreset();
+  if (options.type === "style-source") {
+    preset.styleSet = await extractDocumentStyleSetFromDocx(options.buffer, {
+      name: options.name,
+    });
+  }
+
+  return Buffer.from(
+    new Uint8Array(await createDocx(createEmptyDocument({ preset }))),
+  );
 };
 
 const createBlankTemplateHandler = async function* ({
   safeDb,
   organizationId,
   userId,
-  body: { name, categoryId },
+  body: { name, categoryId, styleSource },
   recordAuditEvent,
 }: CreateBlankTemplateProps): SafeHandlerGenerator<CreatedTemplate> {
-  // A blank template starts from a Folio-native empty document: the user
-  // authors the body and adds {{fields}} in the Studio. There's no source
-  // filename, so derive one from the name to keep the stored DOCX scannable.
-  const buffer = Buffer.from(
-    new Uint8Array(await createDocx(createEmptyDocument())),
+  if (styleSource && styleSource.type !== DOCX_MIME_TYPE) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid style source. Expected a DOCX file.",
+      }),
+    );
+  }
+
+  // A style source is parsed only for its sanitized style resources. Folio
+  // rebuilds a fresh content-free package, so source text, relationships,
+  // media, comments, and revisions cannot enter the stored template.
+  const buffer = yield* Result.await(
+    Result.tryPromise({
+      try: async () =>
+        await createBlankTemplateBuffer(
+          styleSource
+            ? {
+                type: "style-source",
+                buffer: Buffer.from(await styleSource.arrayBuffer()),
+                name,
+              }
+            : { type: "stella" },
+        ),
+      catch: (cause) =>
+        new HandlerError({
+          status: styleSource ? 400 : 500,
+          message: styleSource
+            ? "Could not extract styles from the DOCX file."
+            : "Could not create the blank template.",
+          cause,
+        }),
+    }),
   );
 
   return yield* createStoredTemplate({

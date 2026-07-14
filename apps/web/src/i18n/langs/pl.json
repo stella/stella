@@ -2397,6 +2397,8 @@
     "confirmDelete": "Szablon zostanie trwale usunięty.",
     "createDocument": "Utwórz dokument",
     "createDocumentAnyway": "Utwórz mimo to",
+    "createFromStyles": "Zacznij od stylów dokumentu",
+    "createFromStylesHint": "Tworzy pusty szablon ze stylami z pliku DOCX. Treść dokumentu źródłowego nie jest kopiowana.",
     "createInStudio": "Utwórz w stella",
     "createInStudioHint": "Napisz szablon w edytorze i wstaw '{{pola}}' tam, gdzie mają znaleźć się wartości.",
     "dateChipFirstOfNextMonth": "Pierwszy dzień następnego miesiąca",
