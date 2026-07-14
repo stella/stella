@@ -1,8 +1,8 @@
-import { chat, toolDefinition } from "@tanstack/ai";
+import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { Tool } from "@tanstack/ai";
 import * as v from "valibot";
 
-import { DEFAULT_MODELS } from "@stll/ai-catalog";
+import { DEFAULT_MODELS, MODEL_ROLES } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -29,11 +29,22 @@ const CANARY_PROVIDERS = [
 
 type CanaryProvider = (typeof CANARY_PROVIDERS)[number];
 
-const CANARY_ROLE = "fast" satisfies ModelRole;
+const CAPABILITY_ROLE = "fast" satisfies ModelRole;
+const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
 const MAX_OUTPUT_TOKENS = 64;
-const PROBE_TIMEOUT_MS = 20_000;
+const MODEL_ROLE_MAX_OUTPUT_TOKENS = 512;
+const CAPABILITY_PROBE_TIMEOUT_MS = 20_000;
+const MODEL_ROLE_PROBE_TIMEOUT_MS = 30_000;
 const SYNTHETIC_PROMPT = "Reply with exactly OK.";
-const TOOL_PROMPT = "Do not call any tool. Reply with exactly OK.";
+const TOOL_SCHEMA_PROMPT = "Do not call any tool. Reply with exactly OK.";
+const TOOL_ROUND_TRIP_NAME = "canary_round_trip";
+const TOOL_ROUND_TRIP_VALUE = "stella-canary";
+const TOOL_ROUND_TRIP_COUNT = 7;
+const TOOL_ROUND_TRIP_RESULT = "stella-tool-round-trip-ok";
+const TOOL_ROUND_TRIP_PROMPT =
+  `Call ${TOOL_ROUND_TRIP_NAME} exactly once with value "${TOOL_ROUND_TRIP_VALUE}" ` +
+  `and count ${TOOL_ROUND_TRIP_COUNT}. Then reply with only the confirmation ` +
+  "value returned by the tool.";
 
 const NO_CACHING = {
   enabled: false,
@@ -64,35 +75,54 @@ const openMapTool = toolDefinition({
   ),
 }).client();
 
-type Probe = {
-  name: string;
+const toolRoundTripInputSchema = v.strictObject({
+  count: v.literal(TOOL_ROUND_TRIP_COUNT),
+  value: v.literal(TOOL_ROUND_TRIP_VALUE),
+});
+
+const toolRoundTripOutputSchema = v.strictObject({
+  confirmation: v.literal(TOOL_ROUND_TRIP_RESULT),
+});
+
+type ProbeBase = {
+  timeoutMs: number;
   run: (context: CanaryContext, signal: AbortSignal) => Promise<void>;
 };
+
+type CapabilityProbe = ProbeBase & {
+  type: "capability";
+  name: string;
+};
+
+type ModelRoleProbe = ProbeBase & {
+  type: "model-role";
+  role: ModelRole;
+};
+
+type Probe = CapabilityProbe | ModelRoleProbe;
 
 type CanaryContext = {
   config: OrgAIConfig;
   provider: CanaryProvider;
 };
 
-const probes = [
+const modelRoleProbes = MODEL_ROLES.map(
+  (role) =>
+    ({
+      type: "model-role",
+      role,
+      timeoutMs: MODEL_ROLE_PROBE_TIMEOUT_MS,
+      run: async (context, signal) => {
+        await runModelRoleProbe({ context, role, signal });
+      },
+    }) satisfies ModelRoleProbe,
+);
+
+const capabilityProbes = [
   {
-    name: "text",
-    run: async ({ config }, signal) => {
-      const output = await generateTanStackTextForRole({
-        abortSignal: signal,
-        caching: NO_CACHING,
-        maxOutputTokens: MAX_OUTPUT_TOKENS,
-        organizationId: null,
-        orgAIConfig: config,
-        prompt: SYNTHETIC_PROMPT,
-        role: CANARY_ROLE,
-        serviceTier: "standard",
-      });
-      requireNonEmptyText(output);
-    },
-  },
-  {
+    type: "capability",
     name: "structured-output",
+    timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config }, signal) => {
       await generateTanStackObjectForRole({
         abortSignal: signal,
@@ -102,25 +132,51 @@ const probes = [
         orgAIConfig: config,
         outputSchema: structuredOutputSchema,
         prompt: "Return an object whose ok field is true.",
-        role: CANARY_ROLE,
+        role: CAPABILITY_ROLE,
         serviceTier: "standard",
       });
     },
   },
   {
+    type: "capability",
     name: "strict-tool-schema",
+    timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async (context, signal) => {
-      await runToolSchemaProbe(context, strictTool, signal);
+      await runToolProbe({
+        context,
+        prompt: TOOL_SCHEMA_PROMPT,
+        role: CAPABILITY_ROLE,
+        signal,
+        tool: strictTool,
+      });
     },
   },
   {
+    type: "capability",
     name: "open-map-tool-schema",
+    timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async (context, signal) => {
-      await runToolSchemaProbe(context, openMapTool, signal);
+      await runToolProbe({
+        context,
+        prompt: TOOL_SCHEMA_PROMPT,
+        role: CAPABILITY_ROLE,
+        signal,
+        tool: openMapTool,
+      });
     },
   },
   {
+    type: "capability",
+    name: "tool-call-round-trip",
+    timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
+    run: async (context, signal) => {
+      await runToolCallRoundTripProbe({ context, signal });
+    },
+  },
+  {
+    type: "capability",
     name: "prompt-caching",
+    timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config }, signal) => {
       const output = await generateTanStackTextForRole({
         abortSignal: signal,
@@ -129,24 +185,122 @@ const probes = [
         organizationId: null,
         orgAIConfig: config,
         prompt: SYNTHETIC_PROMPT,
-        role: CANARY_ROLE,
+        role: CAPABILITY_ROLE,
         serviceTier: "standard",
         system: "This is a synthetic provider-contract canary.",
       });
       requireNonEmptyText(output);
     },
   },
-] as const satisfies readonly Probe[];
+] as const satisfies readonly CapabilityProbe[];
 
-const runToolSchemaProbe = async (
-  { config, provider }: CanaryContext,
-  tool: Tool,
-  signal: AbortSignal,
-): Promise<void> => {
+const probes = [
+  ...modelRoleProbes,
+  ...capabilityProbes,
+] satisfies readonly Probe[];
+
+type RunModelRoleProbeOptions = {
+  context: CanaryContext;
+  role: ModelRole;
+  signal: AbortSignal;
+};
+
+const runModelRoleProbe = async ({
+  context: { config, provider },
+  role,
+  signal,
+}: RunModelRoleProbeOptions): Promise<void> => {
   const model = resolveTanStackTextModel({
     organizationId: null,
     orgAIConfig: config,
-    role: CANARY_ROLE,
+    role,
+  });
+  if (
+    model.provider !== provider ||
+    model.modelId !== DEFAULT_MODELS[provider][role]
+  ) {
+    throw new TypeError("Canary resolved an unexpected provider model.");
+  }
+
+  const output = await generateTanStackTextForRole({
+    abortSignal: signal,
+    caching: NO_CACHING,
+    maxOutputTokens: MODEL_ROLE_MAX_OUTPUT_TOKENS,
+    organizationId: null,
+    orgAIConfig: config,
+    prompt: SYNTHETIC_PROMPT,
+    role,
+    serviceTier: "standard",
+  });
+  requireNonEmptyText(output);
+};
+
+type RunToolCallRoundTripProbeOptions = {
+  context: CanaryContext;
+  signal: AbortSignal;
+};
+
+const runToolCallRoundTripProbe = async ({
+  context,
+  signal,
+}: RunToolCallRoundTripProbeOptions): Promise<void> => {
+  const observedInputs: unknown[] = [];
+  const tool = toolDefinition({
+    name: TOOL_ROUND_TRIP_NAME,
+    description:
+      "Call exactly once with the value and count requested by the user.",
+    inputSchema: toTanStackToolSchema(toolRoundTripInputSchema),
+    outputSchema: toTanStackToolSchema(toolRoundTripOutputSchema),
+  }).server((input) => {
+    observedInputs.push(input);
+    return { confirmation: TOOL_ROUND_TRIP_RESULT };
+  });
+
+  const output = await runToolProbe({
+    context,
+    prompt: TOOL_ROUND_TRIP_PROMPT,
+    role: TOOL_CALL_ROLE,
+    signal,
+    tool,
+  });
+
+  if (observedInputs.length !== 1) {
+    throw new TypeError(
+      "Provider did not execute the canary tool exactly once.",
+    );
+  }
+  const observedInput = observedInputs.at(0);
+  if (
+    !isRecord(observedInput) ||
+    observedInput["count"] !== TOOL_ROUND_TRIP_COUNT ||
+    observedInput["value"] !== TOOL_ROUND_TRIP_VALUE
+  ) {
+    throw new TypeError("Provider returned unexpected canary tool arguments.");
+  }
+  if (!output.includes(TOOL_ROUND_TRIP_RESULT)) {
+    throw new TypeError("Provider did not return the canary tool result.");
+  }
+};
+
+type RunToolProbeOptions = {
+  context: CanaryContext;
+  prompt: string;
+  role: ModelRole;
+  signal: AbortSignal;
+  tool: Tool;
+};
+
+const runToolProbe = async ({
+  context: { config, provider },
+  prompt,
+  role,
+  signal,
+  tool,
+}: RunToolProbeOptions): Promise<string> => {
+  const model = resolveTanStackTextModel({
+    organizationId: null,
+    orgAIConfig: config,
+    role,
   });
   const inputSchema = projectSchemaInputJsonSchema(tool.inputSchema, {
     nullUnionStrategy: nullUnionStrategyForTanStackProvider(provider),
@@ -159,7 +313,8 @@ const runToolSchemaProbe = async (
   const output = await chat({
     adapter: model.adapter,
     abortController: abortControllerFromSignal(signal),
-    messages: [{ role: "user", content: TOOL_PROMPT }],
+    agentLoopStrategy: maxIterations(2),
+    messages: [{ role: "user", content: prompt }],
     modelOptions: mergeGenerationOptions({
       caching: NO_CACHING,
       model,
@@ -171,6 +326,7 @@ const runToolSchemaProbe = async (
     tools: [projectedTool],
   });
   requireNonEmptyText(output);
+  return output;
 };
 
 const requireNonEmptyText = (output: string): void => {
@@ -255,6 +411,14 @@ const providerStatus = (error: unknown): number | null => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const probeLabel = (context: CanaryContext, probe: Probe): string => {
+  if (probe.type === "capability") {
+    return probe.name;
+  }
+
+  return `role-${probe.role}:${DEFAULT_MODELS[context.provider][probe.role]}`;
+};
+
 const run = async (): Promise<void> => {
   const provider = parseProvider(Bun.argv.slice(2));
   const apiKey = process.env["AI_CANARY_API_KEY"];
@@ -285,14 +449,15 @@ const runProbes = async (
     return failures;
   }
 
-  const signal = AbortSignal.timeout(PROBE_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(probe.timeoutMs);
+  const label = probeLabel(context, probe);
   try {
     await probe.run(context, signal);
-    console.log(`[ai-canary] ${context.provider}/${probe.name}: passed`);
+    console.log(`[ai-canary] ${context.provider}/${label}: passed`);
     return await runProbes(context, index + 1, failures);
   } catch (error) {
     console.error(
-      `[ai-canary] ${context.provider}/${probe.name}: failed (${errorSummary(error, signal)})`,
+      `[ai-canary] ${context.provider}/${label}: failed (${errorSummary(error, signal)})`,
     );
     return await runProbes(context, index + 1, failures + 1);
   }
