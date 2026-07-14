@@ -15,18 +15,25 @@ import { cn } from "@stll/ui/lib/utils";
  * Contract: render it as the first child of a `relative` parent that
  * creates a stacking context (`isolate` or an explicit z-index) — the
  * veil absolutely fills that parent at `-z-10`, behind its siblings.
- * Pass `className` only for geometry (inset overrides when the veil
- * should overhang the stack); the glass values live here alone.
+ * `rounded` is the compact tray treatment used by the main chat. `pane`
+ * feathers across the full host width for document overlays, avoiding a
+ * visible rounded blur band while keeping text beneath the controls quiet.
  */
 export const ComposerVeil = ({
   className,
+  variant = "rounded",
 }: {
   className?: string | undefined;
+  variant?: "pane" | "rounded";
 }) => (
   <div
     aria-hidden="true"
     className={cn(
-      "bg-background/75 supports-[backdrop-filter]:bg-background/40 pointer-events-none absolute inset-0 -z-10 rounded-3xl [mask-image:linear-gradient(to_bottom,transparent,black_2rem)] backdrop-blur-xl",
+      "pointer-events-none absolute -z-10",
+      variant === "rounded" &&
+        "bg-background/75 supports-[backdrop-filter]:bg-background/40 inset-0 rounded-3xl [mask-image:linear-gradient(to_bottom,transparent,black_2rem)] backdrop-blur-xl",
+      variant === "pane" &&
+        "via-background/65 to-background/95 supports-[backdrop-filter]:via-background/50 supports-[backdrop-filter]:to-background/85 inset-x-0 -top-5 -bottom-3.5 bg-linear-to-b from-transparent [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)] backdrop-blur-sm",
       className,
     )}
   />

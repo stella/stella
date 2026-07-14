@@ -55,6 +55,7 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
+import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
@@ -124,7 +125,7 @@ type PromptBarProps = {
    * Gates surface-specific FEATURES only — the preset chips and the
    * pending-suggestion badge are shown in `floating` surfaces (chats
    * over a document) and hidden in `standalone` ones. It no longer
-   * drives any geometry: position, width, chip offset, and
+   * drives any geometry: position, width, veil, chip offset, and
    * status-row placement all live in `DockedComposer`, so every surface
    * is docked identically regardless of this value.
    */
@@ -276,8 +277,8 @@ const DOC_FLOAT_SURFACE_CLASS =
  * `PromptBar` and the loading `PromptBarPlaceholder` render through it so
  * they can never drift apart.
  *
- * The surface is solid on purpose: it keeps document content legible beneath
- * the composer without a translucent blur band or halo around the controls.
+ * The surface is solid on purpose: the separate pane veil softens document
+ * content around the stack while the controls themselves remain crisp.
  */
 export function PromptBarShell({
   children,
@@ -358,7 +359,8 @@ type DockedComposerProps = {
  */
 export function DockedComposer({ chips, bar, dock }: DockedComposerProps) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-3.5 flex flex-col items-center">
+    <div className="pointer-events-none absolute inset-x-0 bottom-3.5 z-[80] flex flex-col items-center">
+      <ComposerVeil variant="pane" />
       {chips !== undefined && (
         <div
           className={cn(
