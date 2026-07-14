@@ -666,7 +666,7 @@ const TemplateStudioChatInner = ({
     presetSendDispatchedRef.current = true;
     onPendingPresetSendHandled();
     ensureAIAvailable()
-      .then((available) => {
+      .then(async (available) => {
         if (!available) {
           return;
         }
@@ -681,7 +681,7 @@ const TemplateStudioChatInner = ({
         setPanelOpen(true);
         const message = createTextChatMessage(request.text);
         activeScopedPresetTurnMessageIdRef.current = message.id;
-        return sendMessage(message, {
+        await sendMessage(message, {
           body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
         });
       })
