@@ -8,7 +8,11 @@ import { Result } from "better-result";
 import { createInterface } from "node:readline/promises";
 
 import { openInBrowser } from "./browser-open.js";
-import { getRegisteredClientId, setRegisteredClientId } from "./cli-config.js";
+import {
+  getRegisteredClient,
+  registeredClientSupportsScopes,
+  setRegisteredClient,
+} from "./cli-config.js";
 import {
   getMcpResourceUrl,
   LOGIN_TIMEOUT_MS,
@@ -34,6 +38,7 @@ import { registerLoopbackClient } from "./oauth-client-registration.js";
 import { discoverAuthorizationServerMetadata } from "./oauth-metadata.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 import { createOAuthState, createPkcePair } from "./pkce.js";
+import { negotiateOAuthScopes } from "./scope-negotiation.js";
 import { resolveServerUrl } from "./server-resolution.js";
 import { exchangeAuthorizationCode } from "./token-exchange.js";
 
@@ -42,6 +47,7 @@ export type LoginOptions = {
   readonly orgHint: string | undefined;
   readonly registrationScopes: readonly string[];
   readonly requestedScopes: readonly string[];
+  readonly requiredScopes: readonly string[];
   readonly serverFlag: string | undefined;
 };
 
@@ -104,9 +110,9 @@ const getOrRegisterClient = async (
   metadata: AuthorizationServerMetadata,
   registrationScopes: readonly string[],
 ): Promise<Result<string, CliAuthError>> => {
-  const cached = await getRegisteredClientId(configDir, serverUrl);
-  if (cached) {
-    return Result.ok(cached);
+  const cached = await getRegisteredClient(configDir, serverUrl);
+  if (cached && registeredClientSupportsScopes(cached, registrationScopes)) {
+    return Result.ok(cached.clientId);
   }
 
   const registered = await registerLoopbackClient(metadata, registrationScopes);
@@ -114,7 +120,12 @@ const getOrRegisterClient = async (
     return registered;
   }
 
-  await setRegisteredClientId(configDir, serverUrl, registered.value);
+  await setRegisteredClient(
+    configDir,
+    serverUrl,
+    registered.value,
+    registrationScopes,
+  );
   return Result.ok(registered.value);
 };
 
@@ -213,12 +224,18 @@ export const login = async (
     const metadata = yield* Result.await(
       discoverAuthorizationServerMetadata(serverUrl),
     );
+    const scopes = yield* negotiateOAuthScopes({
+      advertisedScopes: metadata.scopes_supported,
+      registrationScopes: options.registrationScopes,
+      requestedScopes: options.requestedScopes,
+      requiredScopes: options.requiredScopes,
+    });
     const clientId = yield* Result.await(
       getOrRegisterClient(
         options.configDir,
         serverUrl,
         metadata,
-        options.registrationScopes,
+        scopes.registrationScopes,
       ),
     );
 
@@ -244,7 +261,7 @@ export const login = async (
       clientId,
       codeChallenge,
       redirectUri,
-      scopes: options.requestedScopes,
+      scopes: scopes.requestedScopes,
       state,
     });
 
@@ -283,7 +300,7 @@ export const login = async (
       orgId: claims.org_id,
       ...(options.orgHint ? { orgLabel: options.orgHint } : {}),
       refreshToken: token.refresh_token,
-      scope: token.scope ?? options.requestedScopes.join(" "),
+      scope: token.scope ?? scopes.requestedScopes.join(" "),
       serverUrl,
       tokenType: token.token_type,
       updatedAt: now,

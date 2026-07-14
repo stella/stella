@@ -25,7 +25,8 @@ type RlsFixture = {
 };
 
 let fixturePromise: Promise<RlsFixture> | null = null;
-let refCount = 0;
+let fixtureReleasePromise = Promise.resolve();
+let fixtureRefCount = 0;
 
 const initFixture = async (): Promise<RlsFixture> => {
   const testDb = await getTestDb();
@@ -42,22 +43,38 @@ const initFixture = async (): Promise<RlsFixture> => {
  * promise.
  */
 export const getRlsFixture = async (): Promise<RlsFixture> => {
-  refCount++;
-
-  fixturePromise ??= initFixture();
+  fixtureRefCount += 1;
+  fixturePromise ??= fixtureReleasePromise.then(initFixture);
 
   return await fixturePromise;
 };
 
 /**
- * Release the shared RLS fixture. When the last consumer
- * releases, the underlying PGlite instance ref is released.
+ * Release the shared RLS fixture. Serialize teardown with later acquisition
+ * so the next fixture cannot reuse a database client that is still closing.
  */
 export const releaseRlsFixture = async (): Promise<void> => {
-  refCount--;
-  if (refCount <= 0 && fixturePromise) {
-    fixturePromise = null;
-    refCount = 0;
-    await releaseTestDb();
+  fixtureRefCount -= 1;
+  if (fixtureRefCount > 0 || !fixturePromise) {
+    return;
   }
+
+  const releasedFixturePromise = fixturePromise;
+  fixturePromise = null;
+  fixtureRefCount = 0;
+  const previousReleasePromise = fixtureReleasePromise;
+  const releasePromise = (async () => {
+    await previousReleasePromise;
+    try {
+      await releasedFixturePromise;
+    } finally {
+      // initFixture acquires the shared DB before it seeds RLS data. Release
+      // that reference even when seeding fails.
+      await releaseTestDb();
+    }
+  })();
+  // Keep the current failure visible while allowing future test files to
+  // create a fresh fixture rather than inheriting a rejected teardown chain.
+  fixtureReleasePromise = releasePromise.catch(() => undefined);
+  await releasePromise;
 };

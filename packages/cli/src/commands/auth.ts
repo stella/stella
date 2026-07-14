@@ -4,7 +4,11 @@ import { buildCommand, buildRouteMap } from "@stricli/core";
 import type { RouteMap } from "@stricli/core";
 import { Result } from "better-result";
 
-import { CLI_DEFAULT_SCOPES, CLI_KNOWN_SCOPES } from "../auth/constants.js";
+import {
+  CLI_DEFAULT_SCOPES,
+  CLI_KNOWN_SCOPES,
+  CLI_REQUIRED_SCOPES,
+} from "../auth/constants.js";
 import { login } from "../auth/login.js";
 import { logout, switchOrg, whoami } from "../auth/manage.js";
 import { parseScopesFlag } from "../auth/scopes.js";
@@ -46,12 +50,14 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
   },
   func: async function func(this: Context, flags) {
     let requestedScopes: readonly string[] = CLI_DEFAULT_SCOPES;
+    let requiredScopes: readonly string[] = CLI_REQUIRED_SCOPES;
     if (flags.scopes) {
       const parsedScopes = parseScopesFlag(flags.scopes);
       if (Result.isError(parsedScopes)) {
         return new Error(parsedScopes.error.message);
       }
       requestedScopes = parsedScopes.value;
+      requiredScopes = parsedScopes.value;
     }
 
     if (!flags.keychain) {
@@ -65,6 +71,7 @@ const loginCommand = buildCommand<LoginFlags, [], Context>({
       orgHint: flags.org,
       registrationScopes: CLI_KNOWN_SCOPES,
       requestedScopes,
+      requiredScopes,
       serverFlag: flags.server,
     });
 

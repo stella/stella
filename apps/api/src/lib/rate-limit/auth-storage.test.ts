@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, mock, test, vi } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
+
+import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 
 // A controllable fake of Bun's RedisClient: `redisDown` toggles whether
 // get/set reject, simulating an unreachable Redis without real I/O.
@@ -30,7 +32,12 @@ class FakeRedisClient {
     return this.maybeDelay(redisStore.get(key) ?? null);
   }
 
-  async set(key: string, value: string): Promise<"OK"> {
+  async set(
+    key: string,
+    value: string,
+    _expiryMode: "PX",
+    _ttlMs: number,
+  ): Promise<"OK"> {
     if (redisDown) {
       throw new Error("redis unreachable");
     }
@@ -39,12 +46,8 @@ class FakeRedisClient {
   }
 }
 
-void mock.module("@/api/lib/redis-client", () => ({
-  createRedisClient: () => new FakeRedisClient(),
-}));
-
-const { createAuthRateLimitStorage } =
-  await import("@/api/lib/rate-limit/auth-storage");
+const createStorage = () =>
+  createAuthRateLimitStorage(60_000, { redis: new FakeRedisClient() });
 
 const value = (count: number, lastRequest = 1000) => ({
   key: "ip:1.2.3.4",
@@ -60,7 +63,7 @@ describe("auth rate-limit storage", () => {
   });
 
   test("round-trips through Redis when it is reachable", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
+    const storage = createStorage();
 
     await storage.set("ip:1.2.3.4", value(3));
 
@@ -68,13 +71,13 @@ describe("auth rate-limit storage", () => {
   });
 
   test("returns null for an unknown key", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
+    const storage = createStorage();
 
     expect(await storage.get("ip:9.9.9.9")).toBeNull();
   });
 
   test("fails open: a get after Redis goes down reads the fallback", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
+    const storage = createStorage();
 
     // A successful set warms both Redis and the in-memory fallback.
     await storage.set("ip:1.2.3.4", value(5));
@@ -86,7 +89,7 @@ describe("auth rate-limit storage", () => {
   });
 
   test("fails open: set never throws when Redis is down", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
+    const storage = createStorage();
     redisDown = true;
 
     // set must resolve (not reject) even though the Redis write fails.
@@ -97,7 +100,7 @@ describe("auth rate-limit storage", () => {
   });
 
   test("falls back when Redis is reachable but missing a warmed key", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
+    const storage = createStorage();
     redisDown = true;
 
     await storage.set("ip:1.2.3.4", value(4));
@@ -107,7 +110,7 @@ describe("auth rate-limit storage", () => {
   });
 
   test("stores fallback values as snapshots", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
+    const storage = createStorage();
     const counter = value(7);
 
     await storage.set("ip:1.2.3.4", counter);
@@ -118,7 +121,7 @@ describe("auth rate-limit storage", () => {
   });
 
   test("keeps the stricter fallback counter when Redis has stale data", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
+    const storage = createStorage();
 
     await storage.set("ip:1.2.3.4", value(5, 1000));
     redisDown = true;
@@ -132,7 +135,7 @@ describe("auth rate-limit storage", () => {
   });
 
   test("fails open when a Redis command hangs past the timeout", async () => {
-    const storage = createAuthRateLimitStorage(60_000);
+    const storage = createStorage();
 
     // Warm the fallback.
     await storage.set("ip:1.2.3.4", value(8));
@@ -152,17 +155,23 @@ describe("auth rate-limit storage", () => {
   });
 
   test("clears command timeout timers after Redis resolves", async () => {
-    vi.useFakeTimers();
-    try {
-      const storage = createAuthRateLimitStorage(60_000);
-      const baselineTimers = vi.getTimerCount();
+    let activeTimerCount = 0;
+    const storage = createAuthRateLimitStorage(60_000, {
+      redis: new FakeRedisClient(),
+      commandTimer: {
+        set: (callback, delayMs) => {
+          activeTimerCount += 1;
+          return setTimeout(callback, delayMs);
+        },
+        clear: (timeoutId) => {
+          clearTimeout(timeoutId);
+          activeTimerCount -= 1;
+        },
+      },
+    });
 
-      await storage.set("ip:1.2.3.4", value(9));
+    await storage.set("ip:1.2.3.4", value(9));
 
-      expect(vi.getTimerCount()).toBe(baselineTimers);
-    } finally {
-      vi.clearAllTimers();
-      vi.useRealTimers();
-    }
+    expect(activeTimerCount).toBe(0);
   });
 });

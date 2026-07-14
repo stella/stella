@@ -55,6 +55,10 @@ beforeAll(
       // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order (deterministic test schema setup)
       await db.execute(sql.raw(statement));
     }
+    // Calendar-only decision dates are UTC midnights in the TypeScript
+    // reference implementation. A non-UTC database session must produce the
+    // same score instead of applying its local offset during the implicit cast.
+    await db.execute(sql.raw("SET TIME ZONE 'Europe/Prague'"));
 
     await db.insert(caseLawSources).values({
       id: sourceId,

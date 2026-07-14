@@ -10,9 +10,9 @@ name: Publish npm packages
 # Least privilege: packing and publishing are separate jobs. The `pack` job runs
 # the untrusted build (bun install, prepack, bun pm pack) with NO id-token, so a
 # compromised build/postinstall script cannot mint an OIDC credential. Only the
-# `publish` job — which just downloads the prebuilt tarballs and runs the
-# hardened action — is granted id-token: write, and it runs only from main when
-# auto-release or an explicit manual publish requests it.
+# `publish` job — which only verifies and publishes the prebuilt tarballs — is
+# granted id-token: write. CLI publication additionally requires the successful
+# stable-release proof; shared packages retain their main/manual flow.
 #
 # Prerequisite (one-time, per package, by a maintainer on npmjs.com): configure
 # an npm "trusted publisher" for each @stll/* package pointing at this repository
@@ -27,17 +27,21 @@ env:
   NODE_VERSION: "22"
   NPM_VERSION: "11.11.1"
 
+permissions: {}
+
 on:
-  # Auto-release: a version bump merged to main publishes that package. The
-  # hardened action is idempotent, so the packages you did not bump are
-  # packed but skipped (their version already exists on the registry).
+  # Shared libraries publish from their package-version bump. The CLI is
+  # deliberately excluded: it publishes only after a successful stable
+  # Release Artifacts run has promoted the corresponding API to production.
   push:
     branches: [main]
     paths:
       - packages/conditions/package.json
       - packages/template-conditions/package.json
       - packages/docx-utils/package.json
-      - packages/cli/package.json
+  workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the publish job receives id-token
+    workflows: ["Release Artifacts"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       package:
@@ -54,21 +58,109 @@ on:
         description: Publish to npm (leave unchecked for a build + pack dry run)
         type: boolean
         default: false
+      release_ref:
+        description: Stable release tag already in production; required when manually publishing cli
+        required: false
+        type: string
 
 concurrency:
-  group: publish-npm-${{ github.ref }}
+  group: publish-npm-${{ github.event.workflow_run.id || github.ref }}
   cancel-in-progress: false
 
 jobs:
+  release-trigger:
+    name: Resolve release trigger
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      eligible: ${{ steps.source.outputs.eligible }}
+      release_ref: ${{ steps.source.outputs.release_ref }}
+      release_sha: ${{ steps.source.outputs.release_sha }}
+    steps:
+      - name: Resolve upstream release receipt
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          UPSTREAM_CONCLUSION: ${{ github.event.workflow_run.conclusion || '' }}
+          UPSTREAM_RUN_ID: ${{ github.event.workflow_run.id || '' }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" != "workflow_run" ]]; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$UPSTREAM_CONCLUSION" != "success" ]]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          receipt_dir="${RUNNER_TEMP}/release-source-receipt"
+          gh run download "$UPSTREAM_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" \
+            --name release-source-receipt \
+            --dir "$receipt_dir"
+          receipt="${receipt_dir}/release-source-receipt.json"
+          release_ref="$(jq -er '.release_ref | strings' "$receipt")"
+          release_sha="$(jq -er '.release_sha | strings' "$receipt")"
+          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; then
+            echo "::error::Upstream release receipt has an invalid release_ref: ${release_ref}" >&2
+            exit 1
+          fi
+          if [[ ! "$release_sha" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Upstream release receipt has an invalid release_sha." >&2
+            exit 1
+          fi
+
+          eligible=false
+          if [[ "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            eligible=true
+          fi
+          {
+            echo "eligible=${eligible}"
+            echo "release_ref=${release_ref}"
+            echo "release_sha=${release_sha}"
+          } >> "$GITHUB_OUTPUT"
+
   pack:
     name: Build and pack
+    needs: release-trigger
+    if: ${{ needs.release-trigger.outputs.eligible == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read # deliberately NO id-token: untrusted build scripts run here
     outputs:
       packages: ${{ steps.pack.outputs.packages }}
     steps:
+      - name: Resolve trusted source
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_PACKAGE: ${{ inputs.package || '' }}
+          MANUAL_PUBLISH: ${{ inputs.publish || false }}
+          MANUAL_RELEASE_REF: ${{ inputs.release_ref || '' }}
+          RUN_SHA: ${{ github.sha }}
+          UPSTREAM_SHA: ${{ needs.release-trigger.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          source_ref="$RUN_SHA"
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            source_ref="$UPSTREAM_SHA"
+          elif [[ "$EVENT_NAME" == "workflow_dispatch" && "$MANUAL_PUBLISH" == "true" && ( "$MANUAL_PACKAGE" == "cli" || "$MANUAL_PACKAGE" == "all" ) ]]; then
+            if [[ -z "$MANUAL_RELEASE_REF" ]]; then
+              echo "::error::release_ref is required to manually publish the CLI." >&2
+              exit 1
+            fi
+            source_ref="$MANUAL_RELEASE_REF"
+          fi
+          echo "ref=${source_ref}" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ steps.source.outputs.ref }}
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
@@ -77,18 +169,25 @@ jobs:
       - name: Build and pack selected packages (dependency order)
         id: pack
         shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_PACKAGE: ${{ inputs.package || 'all' }}
         run: |
           set -euo pipefail
-          # On push (auto-release) there is no input, so pack all and let the
-          # idempotent publish skip unchanged versions. conditions before
-          # template-conditions (which depends on it); docx-utils and cli are
-          # independent (cli has no workspace dependency on any other published
-          # package).
-          selected="${{ github.event_name == 'workflow_dispatch' && inputs.package || 'all' }}"
-          case "${selected}" in
-            all) pkgs=(conditions template-conditions docx-utils cli) ;;
-            *) pkgs=("${selected}") ;;
-          esac
+          # A completed stable release publishes only the CLI built from that
+          # release SHA. Ordinary main pushes publish shared libraries only, so
+          # an unpublished CLI bump cannot leak out through an unrelated package
+          # release. Manual dry-runs retain the explicit package selector.
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            pkgs=(cli)
+          elif [[ "$EVENT_NAME" == "push" ]]; then
+            pkgs=(conditions template-conditions docx-utils)
+          else
+            case "$MANUAL_PACKAGE" in
+              all) pkgs=(conditions template-conditions docx-utils cli) ;;
+              *) pkgs=("$MANUAL_PACKAGE") ;;
+            esac
+          fi
 
           # Build, then transform each package.json from its in-repo source
           # shape (exports -> ./src/*.ts) to the published dist shape
@@ -124,6 +223,53 @@ jobs:
           for p in "${pkgs[@]}"; do [ "${p}" = "cli" ] && cli_selected=true; done
           echo "cli=${cli_selected}" >> "${GITHUB_OUTPUT}"
 
+      - name: Validate CLI release source
+        id: release-source
+        if: >-
+          steps.pack.outputs.cli == 'true'
+          && (github.event_name == 'workflow_run' || inputs.publish)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_RELEASE_REF: ${{ inputs.release_ref || '' }}
+          UPSTREAM_RELEASE_REF: ${{ needs.release-trigger.outputs.release_ref }}
+        run: |
+          set -euo pipefail
+          release_ref="$MANUAL_RELEASE_REF"
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            release_ref="$UPSTREAM_RELEASE_REF"
+          fi
+          if [[ ! "$release_ref" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::CLI publication requires a stable vX.Y.Z release; got '${release_ref}'." >&2
+            exit 1
+          fi
+
+          # Resolve the tag namespace explicitly. A same-named branch must
+          # never influence source selection in a workflow that can mint npm
+          # provenance for a release artifact.
+          if git ls-remote --exit-code --heads origin "refs/heads/${release_ref}" >/dev/null 2>&1; then
+            echo "::error::A branch named ${release_ref} exists alongside the release tag; refusing ambiguous publication." >&2
+            exit 1
+          fi
+          git fetch --no-tags origin \
+            "refs/tags/${release_ref}:refs/tags/${release_ref}" \
+            main:refs/remotes/origin/main
+
+          source_sha="$(git rev-parse HEAD)"
+          release_sha="$(git rev-parse "refs/tags/${release_ref}^{commit}")"
+          if [[ "$source_sha" != "$release_sha" ]]; then
+            echo "::error::Checked-out source ${source_sha} does not match ${release_ref} (${release_sha})." >&2
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$release_sha" origin/main; then
+            echo "::error::${release_ref} is not reachable from protected main." >&2
+            exit 1
+          fi
+          if [[ "$(tr -d '[:space:]' < VERSION)" != "${release_ref#v}" ]]; then
+            echo "::error::VERSION does not match ${release_ref}." >&2
+            exit 1
+          fi
+          echo "expected_production_commit=${release_sha}" >> "$GITHUB_OUTPUT"
+
       # The CLI is the one published package with an executable entrypoint, and
       # it must run under plain Node (not Bun). Set up Node, install the packed
       # tarball into a throwaway project exactly as an external consumer would
@@ -137,7 +283,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Smoke-test the packed CLI under plain Node
+      - name: Smoke-test the packed CLI under plain Node # zizmor: ignore[adhoc-packages] intentionally installs the locally packed artifact as a consumer
         if: ${{ steps.pack.outputs.cli == 'true' }}
         shell: bash
         run: |
@@ -155,6 +301,30 @@ jobs:
           echo "Running: node ${cli} --help"
           node "${cli}" --help
 
+      - name: Wait for the corresponding API release in production
+        if: >-
+          steps.pack.outputs.cli == 'true'
+          && (github.event_name == 'workflow_run' || inputs.publish)
+        env:
+          API_DEPLOYMENT_EXPECTED_COMMIT: ${{ steps.release-source.outputs.expected_production_commit }}
+          API_DEPLOYMENT_URL: https://api.stll.app
+        run: bun scripts/check-api-deployment.ts
+
+      - name: Canary the exact packed CLI against production # zizmor: ignore[adhoc-packages] the exact local tarball is the canary subject
+        if: >-
+          steps.pack.outputs.cli == 'true'
+          && (github.event_name == 'workflow_run' || inputs.publish)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tgz="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
+          canary="$(mktemp -d)"
+          cd "${canary}"
+          npm init -y >/dev/null
+          npm install --ignore-scripts "${tgz}"
+          node node_modules/@stll/cli/dist/cli.js compatibility check \
+            --server https://api.stll.app
+
       - name: Upload tarballs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -166,9 +336,14 @@ jobs:
   publish:
     name: Publish @stll/${{ matrix.package }}
     needs: pack
-    # Auto-publish only from main: a version-bump push to main, or a manual
-    # dispatch from main with the publish checkbox ticked.
-    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.publish) }}
+    # Shared packages publish only from main. CLI packages publish only after a
+    # successful stable release, or a recovery dispatch from main that passes
+    # the identical stable-tag, deployed-commit, and canary checks.
+    if: >-
+      needs.pack.result == 'success'
+      && (github.event_name == 'workflow_run'
+      || (github.ref == 'refs/heads/main'
+      && (github.event_name == 'push' || inputs.publish)))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -190,11 +365,13 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           registry-url: https://registry.npmjs.org
 
-      - name: Install npm for trusted publishing
+      - name: Install npm for trusted publishing # zizmor: ignore[adhoc-packages] exact npm version is pinned below
         # --ignore-scripts: this job holds id-token: write, so do not run any
         # lifecycle hooks from the fetched npm package before the hardened
         # publish step (npm itself needs none to run).
-        run: npm install --global --ignore-scripts "npm@${{ env.NPM_VERSION }}"
+        env:
+          NPM_VERSION_TO_INSTALL: ${{ env.NPM_VERSION }}
+        run: npm install --global --ignore-scripts "npm@${NPM_VERSION_TO_INSTALL}"
 
       - name: Download tarballs
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -202,12 +379,17 @@ jobs:
           name: npm-tarballs
           path: release-artifacts/
 
+      - name: Verify canaried tarball integrity
+        run: sha256sum --check release-artifacts/SHA256SUMS
+
       - name: Resolve tarball path
         id: tarball
         shell: bash
+        env:
+          PACKAGE_NAME: ${{ matrix.package }}
         run: |
           set -euo pipefail
-          tgz="$(ls "release-artifacts/${{ matrix.package }}"/*.tgz)"
+          tgz="$(ls "release-artifacts/${PACKAGE_NAME}"/*.tgz)"
           echo "path=${tgz}" >> "${GITHUB_OUTPUT}"
 
       - name: Publish to npm

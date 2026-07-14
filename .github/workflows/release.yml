@@ -99,6 +99,25 @@ jobs:
             exit 1
           fi
 
+      - name: Write trusted release receipt
+        env:
+          RELEASE_REF: ${{ steps.release.outputs.ref }}
+          RELEASE_SHA: ${{ steps.release.outputs.sha }}
+        run: |
+          jq -n \
+            --arg release_ref "$RELEASE_REF" \
+            --arg release_sha "$RELEASE_SHA" \
+            '{release_ref: $release_ref, release_sha: $release_sha}' \
+            > release-source-receipt.json
+
+      - name: Upload trusted release receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-source-receipt
+          path: release-source-receipt.json
+          retention-days: 1
+          if-no-files-found: error
+
   smoke:
     name: Build and smoke test API image
     runs-on: ubuntu-24.04-arm
@@ -505,7 +524,9 @@ jobs:
     # carrying a prerelease label (vX.Y.Z-anything) publishes the
     # artifact and is handled by `promote-staging` below.
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Infra promotion can consume most of the old 30-minute budget; retain
+    # headroom for the exact-commit verification that gates CLI publication.
+    timeout-minutes: 40
     needs: [resolve, manifest, smoke]
     if: ${{ !contains(needs.resolve.outputs.release_ref, '-') }}
     permissions:
@@ -582,6 +603,24 @@ jobs:
             --repo "$INFRA_REPO" \
             --compact \
             --exit-status
+
+      - name: Checkout release verification script
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ needs.resolve.outputs.release_sha }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+          no-cache: true
+
+      - name: Verify production serves the release commit
+        env:
+          API_DEPLOYMENT_EXPECTED_COMMIT: ${{ needs.resolve.outputs.release_sha }}
+          API_DEPLOYMENT_URL: https://api.stll.app
+        run: bun scripts/check-api-deployment.ts
 
   promote-staging:
     # Auto-promote release-candidate tags (vX.Y.Z-rc.N) to staging.

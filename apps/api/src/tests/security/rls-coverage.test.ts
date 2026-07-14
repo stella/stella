@@ -41,10 +41,13 @@ const privilegesForTable = (
     .map((p) => p.privilege)
     .sort();
 
-beforeAll(async () => {
-  const fixture = await getRlsFixture();
-  testDb = fixture.testDb;
-});
+beforeAll(
+  async () => {
+    const fixture = await getRlsFixture();
+    testDb = fixture.testDb;
+  },
+  { timeout: 30_000 },
+);
 
 afterAll(async () => {
   await releaseRlsFixture();

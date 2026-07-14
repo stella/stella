@@ -66,6 +66,9 @@ export const CLI_DEFAULT_SCOPES = [
   "stella:search",
 ] as const;
 
+/** Minimum scopes needed for the default CLI login to be useful. */
+export const CLI_REQUIRED_SCOPES = ["openid", "stella:read"] as const;
+
 /** Every OAuth scope `stella auth login --scopes` is documented to accept. */
 export const CLI_KNOWN_SCOPES = [
   "openid",
@@ -87,6 +90,10 @@ export const CLI_KNOWN_SCOPES = [
   "stella:external_mcps",
   "stella:feedback",
 ] as const;
+
+/** Full resource scope surface the packaged CLI release expects its API to expose. */
+export const CLI_REQUIRED_RESOURCE_SCOPES: readonly string[] =
+  CLI_KNOWN_SCOPES.filter((scope) => scope.startsWith("stella:"));
 
 export const CLIENT_NAME = "stella-cli";
 

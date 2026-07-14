@@ -143,6 +143,16 @@ export class MissingOrgClaimError extends CliBaseError<"MissingOrgClaimError"> {
   }
 }
 
+export class UnsupportedOAuthScopesError extends CliBaseError<"UnsupportedOAuthScopesError"> {
+  override readonly name = "UnsupportedOAuthScopesError";
+  readonly missingScopes: readonly string[];
+
+  constructor(props: { message: string; missingScopes: readonly string[] }) {
+    super("UnsupportedOAuthScopesError", props.message);
+    this.missingScopes = props.missingScopes;
+  }
+}
+
 export class NoRefreshTokenError extends CliBaseError<"NoRefreshTokenError"> {
   override readonly name = "NoRefreshTokenError";
 
@@ -162,4 +172,5 @@ export type CliAuthError =
   | ServerUrlNotConfiguredError
   | CredentialNotFoundError
   | MissingOrgClaimError
+  | UnsupportedOAuthScopesError
   | NoRefreshTokenError;

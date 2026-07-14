@@ -68,16 +68,28 @@ export const MCP_ALLOWED_HEADERS = [
   "MCP-Protocol-Version",
 ] as const;
 
+// Public compatibility contract advertised by protected-resource discovery.
+// Deploy support for a CLI version before publishing it: the production
+// canary checks these inclusive bounds against the exact packed CLI version.
+export const STELLA_MCP_API_CONTRACT_VERSION = 1;
+export const STELLA_CLI_MINIMUM_VERSION = "0.2.0";
+export const STELLA_CLI_MAXIMUM_VERSION = "0.2.0";
+export const STELLA_MCP_API_CONTRACT_HEADER = "x-stella-api-contract-version";
+export const STELLA_CLI_MINIMUM_HEADER = "x-stella-cli-minimum";
+
 // Feeds the @stll/cli update nudge: the CLI reads `x-stella-cli-latest` off its
 // runtime `tools/list` fetch and, if this is newer than the running CLI, prints
-// one stderr hint. Bump this line when publishing a new @stll/cli. The header
-// name is mirrored (by design, no shared module) in
-// `packages/cli/src/cli-version-nudge.ts`.
+// one stderr hint. Keep this at the latest version already published to npm;
+// the maximum may move ahead in the API release that deliberately precedes a
+// CLI publication. The header name is mirrored (by design, no shared module)
+// in `packages/cli/src/cli-version-nudge.ts`.
 export const STELLA_CLI_LATEST_VERSION = "0.2.0";
 export const STELLA_CLI_LATEST_HEADER = "x-stella-cli-latest";
 
 export const MCP_EXPOSE_HEADERS = [
   "WWW-Authenticate",
+  STELLA_MCP_API_CONTRACT_HEADER,
+  STELLA_CLI_MINIMUM_HEADER,
   STELLA_CLI_LATEST_HEADER,
   // The per-request receipt (also on the global CORS exposeHeaders list):
   // browser-based MCP clients correlate a failed/successful call with server

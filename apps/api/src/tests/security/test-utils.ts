@@ -228,6 +228,7 @@ const DEFAULT_TEST_USER_ID = toSafeId<"user">("user_test");
 // across all test files that need one.
 
 let dbPromise: Promise<TestDatabase> | null = null;
+let dbClosePromise = Promise.resolve();
 let dbRefCount = 0;
 
 /**
@@ -236,25 +237,35 @@ let dbRefCount = 0;
  * same promise.
  */
 export const getTestDb = async (): Promise<TestDatabase> => {
-  dbRefCount++;
-
-  dbPromise ??= createTestDb();
+  dbRefCount += 1;
+  dbPromise ??= dbClosePromise.then(createTestDb);
 
   return await dbPromise;
 };
 
 /**
- * Release the shared test database. When the last consumer
- * releases, the PGlite instance is closed.
+ * Release the shared test database. Detach the closing instance before the
+ * asynchronous close starts; a later acquisition then waits for that close
+ * before creating a replacement instead of receiving a closing client.
  */
 export const releaseTestDb = async (): Promise<void> => {
-  dbRefCount--;
-  if (dbRefCount <= 0 && dbPromise) {
-    const testDb = await dbPromise;
-    await testDb.$client.close();
-    dbPromise = null;
-    dbRefCount = 0;
+  dbRefCount -= 1;
+  if (dbRefCount > 0 || !dbPromise) {
+    return;
   }
+
+  const closingDbPromise = dbPromise;
+  dbPromise = null;
+  dbRefCount = 0;
+  const closePromise = dbClosePromise.then(async () => {
+    const testDb = await closingDbPromise;
+    await testDb.$client.close();
+    return undefined;
+  });
+  // Preserve the failure for this release call, but recover the shared chain
+  // so one failed initialization or close cannot poison every later test.
+  dbClosePromise = closePromise.catch(() => undefined);
+  await closePromise;
 };
 
 export const createScopedQuery = (testDb: TestDatabase) => {

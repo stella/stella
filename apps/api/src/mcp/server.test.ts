@@ -6,7 +6,11 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { STELLA_CLI_LATEST_VERSION } from "@/api/mcp/constants";
+import {
+  STELLA_CLI_LATEST_VERSION,
+  STELLA_CLI_MINIMUM_VERSION,
+  STELLA_MCP_API_CONTRACT_VERSION,
+} from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
   McpOrganizationAccessError,
@@ -220,7 +224,14 @@ describe("handleMcpHttpRequest", () => {
     expect(body.result.tools.map((tool) => tool.name)).toEqual([
       "list_matters",
     ]);
-    // The response carries the CLI update-nudge header (spec 051 addendum).
+    // Every transport response carries the same release contract as public
+    // discovery, so an authenticated CLI can warn about incompatibility too.
+    expect(response.headers.get("x-stella-api-contract-version")).toBe(
+      String(STELLA_MCP_API_CONTRACT_VERSION),
+    );
+    expect(response.headers.get("x-stella-cli-minimum")).toBe(
+      STELLA_CLI_MINIMUM_VERSION,
+    );
     expect(response.headers.get("x-stella-cli-latest")).toBe(
       STELLA_CLI_LATEST_VERSION,
     );

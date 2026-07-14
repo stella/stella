@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
-import { eq, TransactionRollbackError } from "drizzle-orm";
+import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -42,9 +42,12 @@ const SHA_256_HEX = "a".repeat(64);
 
 let testDb: TestDatabase;
 
-beforeAll(async () => {
-  testDb = await getTestDb();
-});
+beforeAll(
+  async () => {
+    testDb = await getTestDb();
+  },
+  { timeout: 30_000 },
+);
 
 afterAll(async () => {
   await releaseTestDb();
@@ -161,6 +164,7 @@ const runRolledBack = async <T>(
   let value: T | undefined;
   try {
     await testDb.transaction(async (tx) => {
+      await tx.execute(sql.raw("RESET ROLE"));
       // oxlint-disable-next-line node/callback-return -- must call tx.rollback() after capturing the value
       value = await callback(tx);
       tx.rollback();
@@ -455,13 +459,13 @@ describe("entity-create presigned upload validation", () => {
     const result = await runRolledBack(async (tx) => {
       const seeded = await seedWorkspace(tx);
       const currentUploadId = toSafeId<"pendingUpload">(Bun.randomUUIDv7());
-      const now = new Date();
-      const future = new Date(now.getTime() + 60_000);
-      const past = new Date(now.getTime() - 60_000);
-      const recentClaim = new Date(now.getTime() - 1000);
-      const staleClaim = new Date(
-        now.getTime() - FINALIZE_CLAIM_TIMEOUT_MS - 1000,
-      );
+      const future = sql<Date>`NOW() + interval '1 minute'`;
+      const past = sql<Date>`NOW() - interval '1 minute'`;
+      const recentClaim = sql<Date>`NOW() - interval '1 second'`;
+      const staleClaimSeconds =
+        Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000) + 1;
+      const staleClaim = sql<Date>`NOW() - ${staleClaimSeconds} * interval '1 second'`;
+      const createdAt = sql<Date>`NOW()`;
 
       await tx.insert(pendingUploads).values([
         {
@@ -480,7 +484,7 @@ describe("entity-create presigned upload validation", () => {
           declaredSha256: SHA_256_HEX,
           status: "pending",
           expiresAt: future,
-          createdAt: now,
+          createdAt,
         },
         {
           id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
@@ -499,7 +503,7 @@ describe("entity-create presigned upload validation", () => {
           status: "failed",
           expiresAt: future,
           claimedAt: recentClaim,
-          createdAt: now,
+          createdAt,
         },
         {
           id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
@@ -518,7 +522,7 @@ describe("entity-create presigned upload validation", () => {
           status: "scanning",
           expiresAt: past,
           claimedAt: recentClaim,
-          createdAt: now,
+          createdAt,
         },
         {
           id: currentUploadId,
@@ -536,7 +540,7 @@ describe("entity-create presigned upload validation", () => {
           declaredSha256: SHA_256_HEX,
           status: "pending",
           expiresAt: future,
-          createdAt: now,
+          createdAt,
         },
         {
           id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
@@ -554,7 +558,7 @@ describe("entity-create presigned upload validation", () => {
           declaredSha256: SHA_256_HEX,
           status: "pending",
           expiresAt: past,
-          createdAt: now,
+          createdAt,
         },
         {
           id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
@@ -573,7 +577,7 @@ describe("entity-create presigned upload validation", () => {
           status: "scanning",
           expiresAt: past,
           claimedAt: staleClaim,
-          createdAt: now,
+          createdAt,
         },
         {
           id: toSafeId<"pendingUpload">(Bun.randomUUIDv7()),
@@ -591,7 +595,7 @@ describe("entity-create presigned upload validation", () => {
           declaredSha256: SHA_256_HEX,
           status: "pending",
           expiresAt: future,
-          createdAt: now,
+          createdAt,
         },
       ]);
 

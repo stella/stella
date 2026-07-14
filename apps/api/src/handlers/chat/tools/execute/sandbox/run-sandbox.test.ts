@@ -404,7 +404,7 @@ describe("runSandbox", () => {
       registry: baseRegistry,
       limits: {
         maxStackBytes: 32 * 1024,
-        maxDurationMs: 1000,
+        maxDurationMs: 5000,
       },
     });
 

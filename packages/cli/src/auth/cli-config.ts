@@ -24,14 +24,20 @@ export type { ConfigPathOverrides };
 export type CliConfig = {
   readonly version: 1;
   readonly defaultServerUrl?: string | undefined;
-  readonly oauthClients: Readonly<
-    Record<string, { readonly clientId: string; readonly registeredAt: number }>
-  >;
+  readonly oauthClients: Readonly<Record<string, RegisteredOAuthClient>>;
+};
+
+export type RegisteredOAuthClient = {
+  readonly clientId: string;
+  readonly registeredAt: number;
+  /** Missing only on config entries written before scope-aware registration. */
+  readonly registeredScopes?: readonly string[] | undefined;
 };
 
 const oauthClientEntrySchema = v.strictObject({
   clientId: v.string(),
   registeredAt: v.number(),
+  registeredScopes: v.optional(v.array(v.string())),
 });
 
 const cliConfigSchema = v.strictObject({
@@ -84,25 +90,37 @@ export const setDefaultServerUrl = async (
   await writeCliConfig(configDir, { ...config, defaultServerUrl: serverUrl });
 };
 
-export const getRegisteredClientId = async (
+export const getRegisteredClient = async (
   configDir: string,
   serverUrl: string,
-): Promise<string | undefined> => {
+): Promise<RegisteredOAuthClient | undefined> => {
   const config = await readCliConfig(configDir);
-  return config.oauthClients[serverUrl]?.clientId;
+  return config.oauthClients[serverUrl];
 };
 
-export const setRegisteredClientId = async (
+export const registeredClientSupportsScopes = (
+  client: RegisteredOAuthClient,
+  scopes: readonly string[],
+): boolean => {
+  const registeredScopes = client.registeredScopes;
+  if (registeredScopes === undefined) {
+    return false;
+  }
+  return scopes.every((scope) => registeredScopes.includes(scope));
+};
+
+export const setRegisteredClient = async (
   configDir: string,
   serverUrl: string,
   clientId: string,
+  registeredScopes: readonly string[],
 ): Promise<void> => {
   const config = await readCliConfig(configDir);
   await writeCliConfig(configDir, {
     ...config,
     oauthClients: {
       ...config.oauthClients,
-      [serverUrl]: { clientId, registeredAt: Date.now() },
+      [serverUrl]: { clientId, registeredAt: Date.now(), registeredScopes },
     },
   });
 };

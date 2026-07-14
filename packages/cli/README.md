@@ -20,6 +20,19 @@ Authenticate against a Stella server with:
 stella auth login
 ```
 
+The login flow negotiates the server's advertised OAuth scopes. Optional
+scopes unsupported by an older server are omitted; scopes passed explicitly
+with `--scopes` must all be available.
+
+To verify the public API contract without signing in:
+
+```sh
+stella compatibility check --server https://api.stll.app
+```
+
+Release automation runs this command from the exact packed tarball against
+production before publishing a new CLI version.
+
 ## Links
 
 - Repository: https://github.com/stella/stella/tree/main/packages/cli
