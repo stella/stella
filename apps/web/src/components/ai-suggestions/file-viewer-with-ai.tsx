@@ -97,24 +97,25 @@ const DocxHorizontalScrollbar = () => {
         return;
       }
 
+      const boundScrollElement = scrollElement;
+      boundScrollElement.dataset.docxCustomHorizontalScrollbar = "true";
+
       const updateThumb = () => {
-        if (!scrollElement) {
-          return;
-        }
-        const maxScroll = scrollElement.scrollWidth - scrollElement.clientWidth;
+        const maxScroll =
+          boundScrollElement.scrollWidth - boundScrollElement.clientWidth;
         track.hidden = maxScroll <= 1;
         if (maxScroll <= 1) {
           return;
         }
 
         const thumbWidth = Math.max(
-          (scrollElement.clientWidth / scrollElement.scrollWidth) *
+          (boundScrollElement.clientWidth / boundScrollElement.scrollWidth) *
             track.clientWidth,
           24,
         );
         const travel = Math.max(track.clientWidth - thumbWidth, 0);
         const progress = Math.min(
-          Math.abs(scrollElement.scrollLeft) / maxScroll,
+          Math.abs(boundScrollElement.scrollLeft) / maxScroll,
           1,
         );
         thumb.style.width = `${String(thumbWidth)}px`;
@@ -122,13 +123,16 @@ const DocxHorizontalScrollbar = () => {
       };
 
       const resizeObserver = new ResizeObserver(updateThumb);
-      resizeObserver.observe(scrollElement);
+      resizeObserver.observe(boundScrollElement);
       resizeObserver.observe(track);
-      scrollElement.addEventListener("scroll", updateThumb, { passive: true });
+      boundScrollElement.addEventListener("scroll", updateThumb, {
+        passive: true,
+      });
       updateThumb();
       scrollCleanup = () => {
         resizeObserver.disconnect();
-        scrollElement?.removeEventListener("scroll", updateThumb);
+        boundScrollElement.removeEventListener("scroll", updateThumb);
+        delete boundScrollElement.dataset.docxCustomHorizontalScrollbar;
       };
     };
 
