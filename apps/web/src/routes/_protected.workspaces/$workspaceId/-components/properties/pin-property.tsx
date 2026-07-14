@@ -18,7 +18,7 @@ export const PinProperty = ({ column }: PinPropertyProps) => {
 
   const isPinned = column.getIsPinned() !== false;
   const togglePinned = () => {
-    column.pin(isPinned ? false : "left");
+    column.pin(isPinned ? false : "start");
   };
 
   if (isPinned) {

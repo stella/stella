@@ -1294,12 +1294,14 @@ export const TemplateStudioPage = ({
     requestAnimationFrame(read);
   }, GESTURE_SHOW_DELAY_MS);
 
-  const fetchGestureSuggestion = async (sel: GestureSelection) => {
+  const fetchGestureSuggestion = async (
+    sel: GestureSelection,
+    seq: number,
+  ) => {
     const view = editorViewRef.current;
     if (!view) {
       return;
     }
-    const seq = ++enrichSeqRef.current;
     const contextText = paragraphsAroundSelection(view.state, sel.from);
     const knownPaths = enrichmentKnownPaths(
       useTemplateStudioStore.getState().fields,
@@ -1358,7 +1360,11 @@ export const TemplateStudioPage = ({
     if (shown === null || shown.from !== sel.from || shown.to !== sel.to) {
       return;
     }
-    fetchGestureSuggestion(sel).catch((error: unknown) => {
+    const seq = ++enrichSeqRef.current;
+    fetchGestureSuggestion(sel, seq).catch((error: unknown) => {
+      if (seq !== enrichSeqRef.current) {
+        return;
+      }
       getAnalytics().captureError(error);
       setEnrichment({ status: "idle" });
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
