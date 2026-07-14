@@ -6,6 +6,12 @@ import { styleSets } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
+import {
+  parsePgTimestampCursorValue,
+  pgTimestampCursorBoundary,
+  pgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -31,20 +37,15 @@ const config = {
 } satisfies HandlerConfig;
 
 type StyleSetCursor = {
-  updatedAt: Date;
+  updatedAt: ParsedPgTimestampCursor;
   id: SafeId<"styleSet">;
 };
 
 const decodeStyleSetCursor = (cursor: string): StyleSetCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  const timestamp = parts?.at(0);
+  const updatedAt = parsePgTimestampCursorValue(parts?.at(0));
   const id = parts?.at(1);
-  if (typeof timestamp !== "string" || !isUuidPaginationCursorPart(id)) {
-    return null;
-  }
-
-  const updatedAt = new Date(timestamp);
-  if (Number.isNaN(updatedAt.valueOf())) {
+  if (!updatedAt || !isUuidPaginationCursorPart(id)) {
     return null;
   }
 
@@ -68,9 +69,9 @@ export default createSafeRootHandler(
         );
       }
       const cursorCondition = or(
-        lt(styleSets.updatedAt, cursor.updatedAt),
+        lt(styleSets.updatedAt, pgTimestampCursorBoundary(cursor.updatedAt)),
         and(
-          eq(styleSets.updatedAt, cursor.updatedAt),
+          eq(styleSets.updatedAt, pgTimestampCursorBoundary(cursor.updatedAt)),
           lt(styleSets.id, cursor.id),
         ),
       );
@@ -82,7 +83,12 @@ export default createSafeRootHandler(
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select(styleSetColumns)
+          .select({
+            ...styleSetColumns,
+            updatedAtCursor: pgTimestampCursorValue(styleSets.updatedAt).as(
+              "updated_at_cursor",
+            ),
+          })
           .from(styleSets)
           .where(and(...conditions))
           .orderBy(desc(styleSets.updatedAt), desc(styleSets.id))
@@ -93,11 +99,19 @@ export default createSafeRootHandler(
       rows,
       limit,
       cursorForItem: (item) =>
-        encodePaginationCursor([item.updatedAt.toISOString(), item.id]),
+        encodePaginationCursor([item.updatedAtCursor, item.id]),
     });
 
     return Result.ok({
       ...page,
+      items: page.items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        fileName: item.fileName,
+        sizeBytes: item.sizeBytes,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      })),
       styleSetsCountLimit: LIMITS.styleSetsCount,
     });
   },
