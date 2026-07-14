@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
+import { advanceDeploymentStability } from "./check-api-deployment";
 
 describe("API deployment health receipt", () => {
   test("preserves a configured API path prefix", () => {
@@ -31,5 +32,37 @@ describe("API deployment health receipt", () => {
     expect(parseHealthCommit(undefined)).toBeUndefined();
     expect(parseHealthCommit([])).toBeUndefined();
     expect(parseHealthCommit({ status: "ok" })).toBeUndefined();
+  });
+
+  test("requires a stable target streak across mixed rollout traffic", () => {
+    const expectedCommit = "7a1b25220298e7b93d38c1d949ef77b93f86bf84";
+    const staleCommit = "6b0a14110298e7b93d38c1d949ef77b93f86bf73";
+    let consecutiveMatches = 0;
+
+    for (const observedCommit of [
+      expectedCommit,
+      expectedCommit,
+      staleCommit,
+      expectedCommit,
+      expectedCommit,
+    ]) {
+      const result = advanceDeploymentStability({
+        consecutiveMatches,
+        expectedCommit,
+        observedCommit,
+        requiredMatches: 3,
+      });
+      consecutiveMatches = result.consecutiveMatches;
+      expect(result.status).toBe("waiting");
+    }
+
+    const result = advanceDeploymentStability({
+      consecutiveMatches,
+      expectedCommit,
+      observedCommit: expectedCommit,
+      requiredMatches: 3,
+    });
+
+    expect(result).toEqual({ status: "stable", consecutiveMatches: 3 });
   });
 });

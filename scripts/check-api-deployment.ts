@@ -2,6 +2,7 @@ import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 
 const DEFAULT_ATTEMPTS = 30;
 const DEFAULT_DELAY_MS = 10_000;
+const DEFAULT_STABLE_PROBES = 5;
 const FETCH_TIMEOUT_MS = 10_000;
 const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
 
@@ -30,6 +31,33 @@ const readPositiveInteger = (name: string, fallback: number) => {
     throw new ApiDeploymentError(`${name} must be a positive integer`);
   }
   return value;
+};
+
+type AdvanceDeploymentStabilityOptions = {
+  consecutiveMatches: number;
+  expectedCommit: string;
+  observedCommit: string;
+  requiredMatches: number;
+};
+
+export const advanceDeploymentStability = ({
+  consecutiveMatches,
+  expectedCommit,
+  observedCommit,
+  requiredMatches,
+}: AdvanceDeploymentStabilityOptions) => {
+  const nextConsecutiveMatches =
+    observedCommit === expectedCommit ? consecutiveMatches + 1 : 0;
+  if (nextConsecutiveMatches >= requiredMatches) {
+    return {
+      status: "stable",
+      consecutiveMatches: nextConsecutiveMatches,
+    } as const;
+  }
+  return {
+    status: "waiting",
+    consecutiveMatches: nextConsecutiveMatches,
+  } as const;
 };
 
 const sleep = async (ms: number) => {
@@ -73,20 +101,46 @@ const main = async () => {
     "API_DEPLOYMENT_DELAY_MS",
     DEFAULT_DELAY_MS,
   );
+  const requiredStableProbes = readPositiveInteger(
+    "API_DEPLOYMENT_STABLE_PROBES",
+    DEFAULT_STABLE_PROBES,
+  );
+  if (requiredStableProbes > attempts) {
+    throw new ApiDeploymentError(
+      "API_DEPLOYMENT_STABLE_PROBES cannot exceed API_DEPLOYMENT_ATTEMPTS",
+    );
+  }
 
   let lastObservedCommit: string | undefined;
+  let consecutiveMatches = 0;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       // eslint-disable-next-line no-await-in-loop -- each probe must observe the deployed commit before deciding whether to retry.
       lastObservedCommit = await readDeployedCommit(apiUrl);
-      if (lastObservedCommit === expectedCommit) {
-        console.log(`api-deployment: ok (${expectedCommit})`);
+      const stability = advanceDeploymentStability({
+        consecutiveMatches,
+        expectedCommit,
+        observedCommit: lastObservedCommit,
+        requiredMatches: requiredStableProbes,
+      });
+      consecutiveMatches = stability.consecutiveMatches;
+      if (stability.status === "stable") {
+        console.log(
+          `api-deployment: ok (${expectedCommit}; ${requiredStableProbes} consecutive probes)`,
+        );
         return;
       }
-      console.log(
-        `api-deployment: waiting for ${expectedCommit}; observed ${lastObservedCommit} (${attempt}/${attempts})`,
-      );
+      if (lastObservedCommit === expectedCommit) {
+        console.log(
+          `api-deployment: confirming ${expectedCommit} (${consecutiveMatches}/${requiredStableProbes} stable probes; ${attempt}/${attempts} attempts)`,
+        );
+      } else {
+        console.log(
+          `api-deployment: waiting for ${expectedCommit}; observed ${lastObservedCommit} (${attempt}/${attempts})`,
+        );
+      }
     } catch (error) {
+      consecutiveMatches = 0;
       const message = error instanceof Error ? error.message : String(error);
       console.log(
         `api-deployment: probe failed (${attempt}/${attempts}): ${message}`,
@@ -99,7 +153,7 @@ const main = async () => {
   }
 
   throw new ApiDeploymentError(
-    `production did not reach ${expectedCommit}; last observed ${lastObservedCommit ?? "unavailable"}`,
+    `production did not remain at ${expectedCommit} for ${requiredStableProbes} consecutive probes; last observed ${lastObservedCommit ?? "unavailable"}; final streak ${consecutiveMatches}`,
   );
 };
 
