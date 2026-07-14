@@ -98,7 +98,8 @@ const DocxHorizontalScrollbar = () => {
       }
 
       const boundScrollElement = scrollElement;
-      boundScrollElement.dataset.docxCustomHorizontalScrollbar = "true";
+      const previousOverflowX = boundScrollElement.style.overflowX;
+      boundScrollElement.style.overflowX = "hidden";
 
       const updateThumb = () => {
         const maxScroll =
@@ -128,11 +129,39 @@ const DocxHorizontalScrollbar = () => {
       boundScrollElement.addEventListener("scroll", updateThumb, {
         passive: true,
       });
+      const handleWheel = (event: WheelEvent) => {
+        let horizontalDelta = 0;
+        if (event.shiftKey) {
+          horizontalDelta = event.deltaY;
+        } else if (Math.abs(event.deltaX) >= Math.abs(event.deltaY)) {
+          horizontalDelta = event.deltaX;
+        }
+        if (horizontalDelta === 0) {
+          return;
+        }
+
+        const maxScroll =
+          boundScrollElement.scrollWidth - boundScrollElement.clientWidth;
+        const nextScrollLeft = Math.min(
+          Math.max(boundScrollElement.scrollLeft + horizontalDelta, 0),
+          maxScroll,
+        );
+        if (nextScrollLeft === boundScrollElement.scrollLeft) {
+          return;
+        }
+
+        event.preventDefault();
+        boundScrollElement.scrollLeft = nextScrollLeft;
+      };
+      boundScrollElement.addEventListener("wheel", handleWheel, {
+        passive: false,
+      });
       updateThumb();
       scrollCleanup = () => {
         resizeObserver.disconnect();
         boundScrollElement.removeEventListener("scroll", updateThumb);
-        delete boundScrollElement.dataset.docxCustomHorizontalScrollbar;
+        boundScrollElement.removeEventListener("wheel", handleWheel);
+        boundScrollElement.style.overflowX = previousOverflowX;
       };
     };
 

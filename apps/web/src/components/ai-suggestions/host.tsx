@@ -55,7 +55,6 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { resolveChatComposerAction } from "@/components/chat/chat-composer-action-button.logic";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
-import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
@@ -125,7 +124,7 @@ type PromptBarProps = {
    * Gates surface-specific FEATURES only — the preset chips and the
    * pending-suggestion badge are shown in `floating` surfaces (chats
    * over a document) and hidden in `standalone` ones. It no longer
-   * drives any geometry: position, width, veil, chip offset, and
+   * drives any geometry: position, width, chip offset, and
    * status-row placement all live in `DockedComposer`, so every surface
    * is docked identically regardless of this value.
    */
@@ -270,20 +269,15 @@ const DOC_FLOAT_SURFACE_CLASS =
   "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
 
 /**
- * The bar box itself — border, shadow, halo, and the doc-anchored
+ * The bar box itself — border, shadow, and the doc-anchored
  * surface — with no positioning or sizing of its own. `DockedComposer`
  * owns where the bar sits and how wide it is; this shell just paints the
  * box and fills the width it is given (`w-full`). Both the live
  * `PromptBar` and the loading `PromptBarPlaceholder` render through it so
  * they can never drift apart.
  *
- * The surface is solid on purpose: a translucent background lets content
- * behind the bar bleed through, and backdrop-blur cannot compensate for
- * children of this shell — the shell's own backdrop-filter would make it
- * the backdrop root for its descendants (the preset chips), whose blur
- * then samples nothing. The solid `DOC_FLOAT_SURFACE_CLASS` is the anchor
- * (white in light, the theme popover in dark); the halo fades the content
- * around the bar toward the page so it reads as floating over it.
+ * The surface is solid on purpose: it keeps document content legible beneath
+ * the composer without a translucent blur band or halo around the controls.
  */
 export function PromptBarShell({
   children,
@@ -296,15 +290,11 @@ export function PromptBarShell({
       className={cn(
         "group/bar border-foreground/15 relative flex w-full items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-        "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--doc-float-halo)_0%,transparent_75%)] after:opacity-90",
         // py-0.5 keeps the single-line pill slim (the inner editor cell's
         // min-h-8 sets the line height; the shell adds only a hairline of
         // breathing room) so the bar reads lighter than the transcript.
         "py-0.5 ps-1.5 pe-1",
         DOC_FLOAT_SURFACE_CLASS,
-        // The halo fades content around the bar, so it blends toward the
-        // page: white in light, the theme background in dark.
-        "[--doc-float-halo:var(--color-white)] dark:[--doc-float-halo:var(--background)]",
         className,
       )}
     >
@@ -385,14 +375,6 @@ export function DockedComposer({ chips, bar, dock }: DockedComposerProps) {
           DOCKED_COMPOSER_WIDTH_CLASS,
         )}
       >
-        {/* Shared glass veil behind the whole composer stack (bar + status
-            row). Legibility over live document content comes from this one
-            heavy blur band, not from per-control chrome: the status-row
-            controls stay quiet muted text/icons sitting directly on it.
-            Negative side/top insets soften the edge around the controls;
-            the bottom stops with the stack so nearby pane chrome, including
-            document scrollbars, stays crisp. */}
-        <ComposerVeil className="-inset-x-3 -top-4" />
         {bar}
         {/* No extra top margin: `ComposerStatusRow` owns the single
             bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}

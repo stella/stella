@@ -1128,12 +1128,6 @@
   height: 0 !important;
 }
 
-/* The DOCX viewer renders its own horizontal scrollbar above floating chat.
- * Suppress only the native horizontal bar; keep native vertical scrolling. */
-[data-docx-custom-horizontal-scrollbar="true"]::-webkit-scrollbar:horizontal {
-  height: 0;
-}
-
 /*
  * Thin, low-contrast scrollbar for dense scroll regions (tables, panels)
  * where the default bar competes for attention. Track is transparent; the

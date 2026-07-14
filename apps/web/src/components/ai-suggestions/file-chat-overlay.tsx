@@ -1831,9 +1831,8 @@ const FileChatOverlayInner = ({
                 // The matter control is a real picker on every surface, so
                 // the user can widen or narrow the file chat's context just
                 // like the main chat and inspector. Seeded (below) with the
-                // file's own matter by default. Legibility over the document
-                // comes from the veil behind the docked composer stack (see
-                // `DockedComposer`), not from per-control chrome.
+                // file's own matter by default. The opaque composer pill keeps
+                // the input legible without adding chrome behind this row.
                 contextMatterIds !== null ? (
                   <ChatMatterPicker
                     matterIds={contextMatterIds}
