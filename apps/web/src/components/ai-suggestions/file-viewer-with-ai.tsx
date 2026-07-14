@@ -153,6 +153,7 @@ const DocxHorizontalScrollbar = () => {
         event.preventDefault();
         boundScrollElement.scrollLeft = nextScrollLeft;
       };
+      // eslint-disable-next-line github/require-passive-events -- horizontal wheel interception calls preventDefault; passive: false is required and set
       boundScrollElement.addEventListener("wheel", handleWheel, {
         passive: false,
       });

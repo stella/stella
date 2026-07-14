@@ -259,7 +259,7 @@ export const PropertyPopover = ({
     }
     if (result.status === "already-running") {
       stellaToast.add({
-        title: t("common.running"),
+        title: t("common.running", {}),
         type: "info",
       });
       return;

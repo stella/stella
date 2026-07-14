@@ -127,8 +127,12 @@ const MessageResponseFallback = ({
   </div>
 );
 
-type MessageResponsePropsWithFallback = MessageResponseProps & {
-  fallbackChildren?: ReactNode | undefined;
+type MessageResponsePropsWithFallback = Omit<
+  MessageResponseProps,
+  "children"
+> & {
+  children: string;
+  fallbackChildren?: string | undefined;
 };
 
 export const MessageResponse = ({

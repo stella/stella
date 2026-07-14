@@ -74,12 +74,13 @@ type ExportReportControlProps = {
 };
 
 export const ExportReportControl = ({
-  initialMode = "workspace",
+  initialMode: initialModeProp,
   onOpenChange,
   open,
   view,
   workspaceId,
 }: ExportReportControlProps) => {
+  const initialMode = initialModeProp ?? "workspace";
   const t = useTranslations();
   const queryClient = useQueryClient();
   const navigate = useNavigate();

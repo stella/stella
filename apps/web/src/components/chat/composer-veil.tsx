@@ -21,20 +21,24 @@ import { cn } from "@stll/ui/lib/utils";
  */
 export const ComposerVeil = ({
   className,
-  variant = "rounded",
+  variant: variantProp,
 }: {
   className?: string | undefined;
   variant?: "pane" | "rounded";
-}) => (
-  <div
-    aria-hidden="true"
-    className={cn(
-      "pointer-events-none absolute -z-10",
-      variant === "rounded" &&
-        "bg-background/75 supports-[backdrop-filter]:bg-background/40 inset-0 rounded-3xl [mask-image:linear-gradient(to_bottom,transparent,black_2rem)] backdrop-blur-xl",
-      variant === "pane" &&
-        "via-background/65 to-background/95 supports-[backdrop-filter]:via-background/50 supports-[backdrop-filter]:to-background/85 inset-x-0 -top-5 -bottom-3.5 bg-linear-to-b from-transparent [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)] backdrop-blur-sm",
-      className,
-    )}
-  />
-);
+}) => {
+  const variant = variantProp ?? "rounded";
+
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        "pointer-events-none absolute -z-10",
+        variant === "rounded" &&
+          "bg-background/75 supports-[backdrop-filter]:bg-background/40 inset-0 rounded-3xl [mask-image:linear-gradient(to_bottom,transparent,black_2rem)] backdrop-blur-xl",
+        variant === "pane" &&
+          "via-background/65 to-background/95 supports-[backdrop-filter]:via-background/50 supports-[backdrop-filter]:to-background/85 inset-x-0 -top-5 -bottom-3.5 bg-linear-to-b from-transparent [mask-image:linear-gradient(to_bottom,transparent,black_1.5rem)] backdrop-blur-sm",
+        className,
+      )}
+    />
+  );
+};

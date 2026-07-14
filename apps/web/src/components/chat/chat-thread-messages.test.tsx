@@ -80,6 +80,9 @@ describe("chat thread messages", () => {
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
         onOpenCreatedDocument={() => {}}
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
       />,
     );
 
@@ -100,6 +103,9 @@ describe("chat thread messages", () => {
         onOpenCreatedDocument={() => {}}
         onResend={() => {}}
         showThinkingIndicator
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
       />,
     );
 
