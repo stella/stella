@@ -37,9 +37,7 @@ export const BottomRow = ({
           <WorkspaceGridCell
             className="z-10 flex items-center justify-center border-t"
             style={{
-              insetInlineStart: table
-                .getColumn(selectColId)
-                ?.getStart("start"),
+              insetInlineStart: table.getColumn(selectColId)?.getStart("start"),
               position: "sticky",
             }}
           >

@@ -1294,10 +1294,7 @@ export const TemplateStudioPage = ({
     requestAnimationFrame(read);
   }, GESTURE_SHOW_DELAY_MS);
 
-  const fetchGestureSuggestion = async (
-    sel: GestureSelection,
-    seq: number,
-  ) => {
+  const fetchGestureSuggestion = async (sel: GestureSelection, seq: number) => {
     const view = editorViewRef.current;
     if (!view) {
       return;
