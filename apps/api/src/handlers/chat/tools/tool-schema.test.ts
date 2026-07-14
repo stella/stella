@@ -2,8 +2,20 @@ import {
   convertSchemaToJsonSchema,
   parseWithStandardSchema,
   toolDefinition,
+  type Tool,
 } from "@tanstack/ai";
+import {
+  convertToolsToProviderFormat as convertAnthropicTools,
+  createAnthropicChat,
+} from "@tanstack/ai-anthropic";
+import { webSearchTool as anthropicWebSearchTool } from "@tanstack/ai-anthropic/tools";
+import { bedrockText } from "@tanstack/ai-bedrock";
+import { createGeminiChat } from "@tanstack/ai-gemini";
+import { createMistralText } from "@tanstack/ai-mistral";
+import { createOpenaiChat } from "@tanstack/ai-openai";
 import { convertFunctionToolToAdapterFormat } from "@tanstack/ai-openai/tools";
+import { createOpenRouterResponsesText } from "@tanstack/ai-openrouter";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -94,6 +106,35 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
 const isSchemaObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const emptyProviderStream = async function* () {
+  // The contract probes only need the adapter to issue its SDK request.
+};
+
+const consumeProviderStream = async (
+  stream: AsyncIterable<unknown>,
+): Promise<void> => {
+  for await (const _chunk of stream) {
+    // Consume the fake provider stream so request mapping runs to completion.
+  }
+};
+
+const requireRecord = (
+  value: unknown,
+  description: string,
+): Record<string, unknown> => {
+  if (!isSchemaObject(value)) {
+    throw new TypeError(`Expected ${description} to be an object.`);
+  }
+  return value;
+};
+
+const requireArray = (value: unknown, description: string): unknown[] => {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`Expected ${description} to be an array.`);
+  }
+  return value;
+};
+
 // Construct args so every conditional tool group registers: owner role
 // (template use + create), active docx edit client, web search enabled with
 // a resolved provider, and an editable active skill context. BOE, infosoud,
@@ -143,6 +184,208 @@ const buildFullCoverageChatTools = () => {
     ],
   });
 };
+
+const serializeFullCoverageChatTools = (): Tool[] =>
+  Object.entries(buildFullCoverageChatTools()).map(([name, tool]) => {
+    if (!tool?.inputSchema) {
+      throw new TypeError(`Registered tool "${name}" has no input schema.`);
+    }
+    const inputSchema = convertSchemaToJsonSchema(tool.inputSchema);
+    if (!inputSchema) {
+      throw new TypeError(`Registered tool "${name}" did not serialize.`);
+    }
+    return { name, description: tool.description, inputSchema };
+  });
+
+const commonProviderOptions = (tools: Tool[]) => ({
+  logger: resolveDebugOption(false),
+  messages: [{ role: "user" as const, content: "Contract probe." }],
+  tools,
+});
+
+type ProviderRequestProbe = {
+  provider:
+    | "anthropic"
+    | "bedrock"
+    | "google"
+    | "mistral"
+    | "openai"
+    | "openrouter";
+  capture: (tools: Tool[]) => Promise<Record<string, unknown>>;
+  toolsFromRequest: (request: Record<string, unknown>) => unknown[];
+};
+
+const providerRequestProbes: ProviderRequestProbe[] = [
+  {
+    provider: "openai",
+    capture: async (tools) => {
+      const adapter = createOpenaiChat("gpt-5.2", "test-key");
+      let request: unknown;
+      Reflect.set(adapter, "client", {
+        responses: {
+          create: (payload: unknown) => {
+            request = payload;
+            return emptyProviderStream();
+          },
+        },
+      });
+      await consumeProviderStream(
+        adapter.chatStream({
+          ...commonProviderOptions(tools),
+          model: adapter.model,
+        }),
+      );
+      return requireRecord(request, "OpenAI request");
+    },
+    toolsFromRequest: (request) =>
+      requireArray(request["tools"], "OpenAI request tools"),
+  },
+  {
+    provider: "google",
+    capture: async (tools) => {
+      const adapter = createGeminiChat("gemini-3.5-flash", "test-key");
+      let request: unknown;
+      Reflect.set(adapter, "client", {
+        models: {
+          generateContentStream: (payload: unknown) => {
+            request = payload;
+            return emptyProviderStream();
+          },
+        },
+      });
+      await consumeProviderStream(
+        adapter.chatStream({
+          ...commonProviderOptions(tools),
+          model: adapter.model,
+        }),
+      );
+      return requireRecord(request, "Gemini request");
+    },
+    toolsFromRequest: (request) => {
+      const config = requireRecord(request["config"], "Gemini request config");
+      const groups = requireArray(config["tools"], "Gemini request tools");
+      return groups.flatMap((group) => {
+        const record = requireRecord(group, "Gemini tool group");
+        return Array.isArray(record["functionDeclarations"])
+          ? record["functionDeclarations"]
+          : [record];
+      });
+    },
+  },
+  {
+    provider: "anthropic",
+    capture: async (tools) => {
+      const adapter = createAnthropicChat("claude-opus-4-6", "test-key");
+      let request: unknown;
+      Reflect.set(adapter, "client", {
+        beta: {
+          messages: {
+            create: (payload: unknown) => {
+              request = payload;
+              return emptyProviderStream();
+            },
+          },
+        },
+      });
+      await consumeProviderStream(
+        adapter.chatStream({
+          ...commonProviderOptions(tools),
+          model: adapter.model,
+        }),
+      );
+      if (request === undefined) {
+        throw new TypeError("Anthropic adapter did not issue its SDK request.");
+      }
+      return requireRecord(request, "Anthropic request");
+    },
+    toolsFromRequest: (request) =>
+      requireArray(request["tools"], "Anthropic request tools"),
+  },
+  {
+    provider: "bedrock",
+    capture: async (tools) => {
+      const adapter = bedrockText("us.amazon.nova-micro-v1:0", {
+        apiKey: "test-key",
+      });
+      let request: unknown;
+      Reflect.set(adapter, "sendStream", async (payload: unknown) => {
+        request = payload;
+        return emptyProviderStream();
+      });
+      await consumeProviderStream(
+        adapter.chatStream({
+          ...commonProviderOptions(tools),
+          model: adapter.model,
+        }),
+      );
+      return requireRecord(request, "Bedrock Converse request");
+    },
+    toolsFromRequest: (request) => {
+      const toolConfig = requireRecord(
+        request["toolConfig"],
+        "Bedrock tool config",
+      );
+      return requireArray(toolConfig["tools"], "Bedrock request tools");
+    },
+  },
+  {
+    provider: "openrouter",
+    capture: async (tools) => {
+      const adapter = createOpenRouterResponsesText(
+        "openai/gpt-5.2",
+        "test-key",
+      );
+      let request: unknown;
+      Reflect.set(adapter, "orClient", {
+        beta: {
+          responses: {
+            send: (payload: unknown) => {
+              request = payload;
+              return emptyProviderStream();
+            },
+          },
+        },
+      });
+      await consumeProviderStream(
+        adapter.chatStream({
+          ...commonProviderOptions(tools),
+          model: adapter.model,
+        }),
+      );
+      return requireRecord(request, "OpenRouter SDK request");
+    },
+    toolsFromRequest: (request) => {
+      const responsesRequest = requireRecord(
+        request["responsesRequest"],
+        "OpenRouter responses request",
+      );
+      return requireArray(
+        responsesRequest["tools"],
+        "OpenRouter request tools",
+      );
+    },
+  },
+  {
+    provider: "mistral",
+    capture: async (tools) => {
+      const adapter = createMistralText("mistral-large-latest", "test-key");
+      let request: unknown;
+      Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
+        request = payload;
+        return emptyProviderStream();
+      });
+      await consumeProviderStream(
+        adapter.chatStream({
+          ...commonProviderOptions(tools),
+          model: adapter.model,
+        }),
+      );
+      return requireRecord(request, "Mistral request");
+    },
+    toolsFromRequest: (request) =>
+      requireArray(request["tools"], "Mistral request tools"),
+  },
+];
 
 describe("chat tool schemas", () => {
   test("construct org-level tools as JSON-schema-compatible AI tools", () => {
@@ -736,6 +979,61 @@ describe("chat tool schemas", () => {
     }
 
     expect(violations).toEqual([]);
+  });
+
+  for (const probe of providerRequestProbes) {
+    test(`every registered chat tool reaches the final ${probe.provider} request`, async () => {
+      const tools = serializeFullCoverageChatTools();
+      const request = await probe.capture(tools);
+      const providerTools = probe.toolsFromRequest(request);
+
+      // This is deliberately an adapter/SDK-boundary invariant, matching the
+      // provider suites in TanStack AI itself. Schema-only tests stop before
+      // provider-specific conversion, which is where request-breaking fields
+      // such as OpenAI strict mode and provider wire-name changes are added.
+      expect(providerTools).toHaveLength(tools.length);
+      for (const providerTool of providerTools) {
+        expect(isSchemaObject(providerTool)).toBe(true);
+      }
+    });
+  }
+
+  test("Anthropic keeps an ordinary web_search function distinct from its native web-search tool", () => {
+    const ordinaryWebSearch: Tool = {
+      name: "web_search",
+      description: "Search through stella's configured provider.",
+      inputSchema: {
+        type: "object",
+        properties: { query: { type: "string" } },
+        required: ["query"],
+        additionalProperties: false,
+      },
+    };
+    const nativeWebSearch = anthropicWebSearchTool({
+      name: "web_search",
+      type: "web_search_20250305",
+    });
+
+    expect(convertAnthropicTools([ordinaryWebSearch, nativeWebSearch])).toEqual(
+      [
+        {
+          name: "web_search",
+          type: "custom",
+          description: ordinaryWebSearch.description,
+          input_schema: {
+            type: "object",
+            properties: { query: { type: "string" } },
+            required: ["query"],
+          },
+          cache_control: null,
+        },
+        {
+          name: "web_search",
+          type: "web_search_20250305",
+          cache_control: null,
+        },
+      ],
+    );
   });
 
   // OpenAI rejects the entire request (400) when any tool is sent with

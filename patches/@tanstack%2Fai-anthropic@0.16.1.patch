@@ -1,0 +1,24 @@
+diff --git a/dist/esm/tools/tool-converter.js b/dist/esm/tools/tool-converter.js
+index c595d3f078f0ac3fe43299718b260e7de3208c08..6ea7f7e1e7ab8b9167cae5b1db2fbab711852ce6 100644
+--- a/dist/esm/tools/tool-converter.js
++++ b/dist/esm/tools/tool-converter.js
+@@ -6,6 +6,10 @@ import { convertMemoryToolToAdapterFormat } from "./memory-tool.js";
+ import { convertTextEditorToolToAdapterFormat } from "./text-editor-tool.js";
+ import { convertWebFetchToolToAdapterFormat } from "./web-fetch-tool.js";
+ import { convertWebSearchToolToAdapterFormat } from "./web-search-tool.js";
++function isAnthropicWebSearchTool(tool) {
++  const metadata = tool.metadata;
++  return typeof metadata === "object" && metadata !== null && "type" in metadata && metadata.type === "web_search_20250305" && "name" in metadata && metadata.name === "web_search";
++}
+ function convertToolsToProviderFormat(tools) {
+   return tools.map((tool) => {
+     const name = tool.name;
+@@ -23,7 +27,7 @@ function convertToolsToProviderFormat(tools) {
+       case "web_fetch":
+         return convertWebFetchToolToAdapterFormat(tool);
+       case "web_search":
+-        return convertWebSearchToolToAdapterFormat(tool);
++        return isAnthropicWebSearchTool(tool) ? convertWebSearchToolToAdapterFormat(tool) : convertCustomToolToAdapterFormat(tool);
+       default:
+         return convertCustomToolToAdapterFormat(tool);
+     }

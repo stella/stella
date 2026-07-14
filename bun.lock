@@ -618,6 +618,7 @@
   },
   "patchedDependencies": {
     "@tanstack/openai-base@0.9.7": "patches/@tanstack%2Fopenai-base@0.9.7.patch",
+    "@tanstack/ai-anthropic@0.16.1": "patches/@tanstack%2Fai-anthropic@0.16.1.patch",
   },
   "overrides": {
     "@emnapi/core": "1.9.1",
