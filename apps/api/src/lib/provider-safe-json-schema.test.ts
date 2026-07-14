@@ -10,6 +10,7 @@ import {
   projectToProviderSafeJsonSchema,
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
 } from "@/api/lib/provider-safe-json-schema";
+import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 
 const PROVIDER_SAFE_KEYWORDS = new Set<string>(
   PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
@@ -177,6 +178,22 @@ describe("projectToProviderSafeJsonSchema", () => {
     expect(droppedKeywords).toEqual(["const"]);
   });
 
+  test("preserves a numeric literal type through the provider tool funnel", () => {
+    const inputSchema = projectSchemaInputJsonSchema(
+      toTanStackToolSchema(v.strictObject({ count: v.literal(7) })),
+      { nullUnionStrategy: "openapi" },
+    );
+
+    expect(convertSchemaToJsonSchema(inputSchema)).toEqual({
+      type: "object",
+      properties: {
+        count: { type: "number", enum: [7] },
+      },
+      required: ["count"],
+      additionalProperties: false,
+    });
+  });
+
   test("records const when enum already carries the allowed values", () => {
     const { schema, droppedKeywords } = projectToProviderSafeJsonSchema({
       type: "string",
@@ -336,7 +353,7 @@ describe("projectToProviderSafeJsonSchema", () => {
     expect(schema).toEqual({
       type: "object",
       properties: {
-        kind: { enum: ["lookup"] },
+        kind: { type: "string", enum: ["lookup"] },
         mode: { enum: ["auto"], nullable: true },
       },
       required: ["kind"],
