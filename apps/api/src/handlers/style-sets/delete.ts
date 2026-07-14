@@ -30,23 +30,12 @@ export default createSafeRootHandler(
             id: { eq: params.styleSetId },
             organizationId: { eq: session.activeOrganizationId },
           },
-          columns: { id: true, name: true, s3Key: true },
+          columns: { id: true, name: true, s3Key: true, cleanupS3Key: true },
         });
         if (!existing) {
           return false;
         }
 
-        Result.unwrap(
-          await Result.tryPromise({
-            try: async () => await getS3().delete(existing.s3Key),
-            catch: (cause) =>
-              new HandlerError({
-                status: 500,
-                message: "Could not delete the style set package.",
-                cause,
-              }),
-          }),
-        );
         await tx
           .delete(styleSets)
           .where(
@@ -64,7 +53,11 @@ export default createSafeRootHandler(
             deleted: { old: { name: existing.name }, new: null },
           },
         });
-        return true;
+        return {
+          s3Keys: existing.cleanupS3Key
+            ? [existing.s3Key, existing.cleanupS3Key]
+            : [existing.s3Key],
+        };
       }),
     );
 
@@ -73,6 +66,20 @@ export default createSafeRootHandler(
         new HandlerError({ status: 404, message: "Style set not found" }),
       );
     }
+    yield* Result.await(
+      Result.tryPromise({
+        try: async () =>
+          await Promise.all(
+            deleted.s3Keys.map((s3Key) => getS3().delete(s3Key)),
+          ),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Could not delete the style set package.",
+            cause,
+          }),
+      }),
+    );
     return Result.ok({});
   },
 );

@@ -17,6 +17,7 @@ export const styleSets = p.pgTable(
     name: p.varchar({ length: 256 }).notNull(),
     fileName: p.varchar("file_name", { length: 256 }).notNull(),
     s3Key: p.varchar("s3_key", { length: 512 }).notNull(),
+    cleanupS3Key: p.varchar("cleanup_s3_key", { length: 512 }),
     sizeBytes: p.integer("size_bytes").notNull(),
     createdBy: p
       .text("created_by")

@@ -7,6 +7,7 @@ CREATE TABLE "style_sets" (
 	"name" varchar(256) NOT NULL,
 	"file_name" varchar(256) NOT NULL,
 	"s3_key" varchar(512) NOT NULL,
+	"cleanup_s3_key" varchar(512),
 	"size_bytes" integer NOT NULL,
 	"created_by" text NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,

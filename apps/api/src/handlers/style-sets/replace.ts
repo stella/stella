@@ -39,13 +39,42 @@ export default createSafeRootHandler(
             id: { eq: params.styleSetId },
             organizationId: { eq: session.activeOrganizationId },
           },
-          columns: { name: true },
+          columns: { name: true, cleanupS3Key: true },
         }),
       ),
     );
     if (!existing) {
       return Result.err(
         new HandlerError({ status: 404, message: "Style set not found" }),
+      );
+    }
+
+    if (existing.cleanupS3Key) {
+      const cleanupS3Key = existing.cleanupS3Key;
+      yield* Result.await(
+        Result.tryPromise({
+          try: async () => await getS3().delete(cleanupS3Key),
+          catch: (cause) =>
+            new HandlerError({
+              status: 500,
+              message: "Could not finish the previous style set cleanup.",
+              cause,
+            }),
+        }),
+      );
+      yield* Result.await(
+        safeDb(async (tx) => {
+          await tx
+            .update(styleSets)
+            .set({ cleanupS3Key: null })
+            .where(
+              and(
+                eq(styleSets.id, params.styleSetId),
+                eq(styleSets.organizationId, session.activeOrganizationId),
+                eq(styleSets.cleanupS3Key, cleanupS3Key),
+              ),
+            );
+        }),
       );
     }
 
@@ -80,16 +109,20 @@ export default createSafeRootHandler(
               id: { eq: params.styleSetId },
               organizationId: { eq: session.activeOrganizationId },
             },
-            columns: { s3Key: true, sizeBytes: true },
+            columns: { s3Key: true, cleanupS3Key: true, sizeBytes: true },
           });
           if (!locked) {
             return null;
+          }
+          if (locked.cleanupS3Key) {
+            return { type: "cleanup-pending" as const };
           }
 
           const [row] = await tx
             .update(styleSets)
             .set({
               s3Key,
+              cleanupS3Key: locked.s3Key,
               sizeBytes: buffer.byteLength,
               updatedAt: new Date(),
             })
@@ -113,7 +146,9 @@ export default createSafeRootHandler(
             });
           }
 
-          return row ? { row, oldS3Key: locked.s3Key } : null;
+          return row
+            ? { type: "replaced" as const, row, oldS3Key: locked.s3Key }
+            : null;
         }),
       );
 
@@ -122,13 +157,58 @@ export default createSafeRootHandler(
           new HandlerError({ status: 404, message: "Style set not found" }),
         );
       }
+      if (replaced.type === "cleanup-pending") {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Previous style set cleanup is still pending",
+          }),
+        );
+      }
 
       persisted = true;
-      getS3().delete(replaced.oldS3Key).catch(captureError);
+      const cleanupResult = await Result.tryPromise({
+        try: async () => await getS3().delete(replaced.oldS3Key),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Could not clean up the previous style set package.",
+            cause,
+          }),
+      });
+      if (Result.isError(cleanupResult)) {
+        captureError(cleanupResult.error);
+      } else {
+        const cleared = await safeDb(async (tx) => {
+          await tx
+            .update(styleSets)
+            .set({ cleanupS3Key: null })
+            .where(
+              and(
+                eq(styleSets.id, params.styleSetId),
+                eq(styleSets.organizationId, session.activeOrganizationId),
+                eq(styleSets.cleanupS3Key, replaced.oldS3Key),
+              ),
+            );
+        });
+        if (Result.isError(cleared)) {
+          captureError(cleared.error);
+        }
+      }
       return Result.ok(replaced.row);
     } finally {
       if (!persisted) {
-        getS3().delete(s3Key).catch(captureError);
+        Result.unwrap(
+          await Result.tryPromise({
+            try: async () => await getS3().delete(s3Key),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Could not clean up the replacement style package.",
+                cause,
+              }),
+          }),
+        );
       }
     }
   },

@@ -3,7 +3,6 @@ import { eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { styleSets } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -116,7 +115,17 @@ export default createSafeRootHandler(
       return Result.ok(inserted);
     } finally {
       if (!persisted) {
-        getS3().delete(s3Key).catch(captureError);
+        Result.unwrap(
+          await Result.tryPromise({
+            try: async () => await getS3().delete(s3Key),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Could not clean up the rejected style set package.",
+                cause,
+              }),
+          }),
+        );
       }
     }
   },

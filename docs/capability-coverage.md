@@ -110,7 +110,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.compare-versions` | read | stella:matters_write | — | generic invoke → `stella entities compare-versions` |
 | `entities.copy-to-workspace` | write, destructive | stella:matters_write | — | generic invoke → `stella entities copy-to-workspace` |
 | `entities.create` | write | stella:documents_write | — | curated tool `save_document` |
-| `entities.create-blank-document` | write | stella:matters_write | — | generic invoke → `stella entities create-blank-document` |
+| `entities.create-blank-document` | write | stella:documents_write | — | generic invoke → `stella entities create-blank-document` |
 | `entities.create-from-legal-source` | write | stella:matters_write | — | generic invoke → `stella entities create-from-legal-source` |
 | `entities.delete` | write, destructive | stella:documents_write | — | curated tool `delete_document` |
 | `entities.delete-version` | write, destructive | stella:documents_write | — | covered by `delete_document` |

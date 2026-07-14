@@ -14,6 +14,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -84,10 +85,14 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
 function KnowledgeLanding() {
   const t = useTranslations();
   const playbooksEnabled = usePlaybooksPreviewEnabled();
+  const canUseStyleSets = usePermissions({ styleSet: ["use"] });
 
   const sectionCards: ReactNode[] = [];
   for (const section of knowledgeSections) {
     if (section.key === "playbooks" && !playbooksEnabled) {
+      continue;
+    }
+    if (section.key === "styles" && !canUseStyleSets) {
       continue;
     }
     const Icon = section.icon;

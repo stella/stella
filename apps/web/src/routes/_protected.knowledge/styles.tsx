@@ -157,11 +157,11 @@ const StyleSetsPage = () => {
     await invalidate();
   };
 
-  if (isLoading || !data) {
-    return <PageMessage>{t("common.loading")}</PageMessage>;
-  }
   if (isError) {
     return <PageMessage>{t("styleSets.loadFailed")}</PageMessage>;
+  }
+  if (isLoading || !data) {
+    return <PageMessage>{t("common.loading")}</PageMessage>;
   }
 
   return (
