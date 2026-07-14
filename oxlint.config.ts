@@ -146,30 +146,6 @@ export default defineConfig({
     "require-contained-handler/require-contained-handler": "error",
     "no-void": ["error", { allowAsStatement: true }],
 
-    "sonarjs/array-callback-without-return": "error",
-    "sonarjs/anchor-precedence": "error",
-    "sonarjs/code-eval": "error",
-    "sonarjs/no-array-delete": "error",
-    "sonarjs/no-alphabetical-sort": "error",
-    "sonarjs/confidential-information-logging": "error",
-    "sonarjs/cognitive-complexity": ["error", 30],
-    "sonarjs/existing-groups": "error",
-    "sonarjs/no-hardcoded-secrets": "error",
-    "sonarjs/no-collection-size-mischeck": "error",
-    "sonarjs/no-element-overwrite": "error",
-    "sonarjs/no-empty-collection": "error",
-    "sonarjs/no-exclusive-tests": "error",
-    "sonarjs/no-identical-conditions": "error",
-    "sonarjs/no-identical-functions": "error",
-    "sonarjs/no-inverted-boolean-check": "error",
-    "sonarjs/no-unthrown-error": "error",
-    "sonarjs/no-useless-increment": "error",
-    "sonarjs/non-existent-operator": "error",
-    "sonarjs/regex-complexity": ["error", { threshold: 30 }],
-    "sonarjs/slow-regex": "error",
-    "sonarjs/stateful-regex": "error",
-    "sonarjs/updated-loop-counter": "error",
-
     // --- Disabled ultracite defaults ---
     "sort-keys": "off",
     "no-plusplus": "off",
@@ -297,126 +273,21 @@ export default defineConfig({
     "typescript/return-await": ["error", "error-handling-correctness-only"],
     "typescript/non-nullable-type-assertion-style": "off",
 
-    // ── ultracite 7.9.2 / oxlint 1.73 preset additions ─────────────────
-    // The 7.9.2 presets turned on ~350 new rules (react-doctor and
-    // eslint-plugin-github are new plugins). Rules with zero hits stay on
-    // silently and guard future code. Every disable below had hits on
-    // 2026-07-12 and falls into one of three buckets; bucket 3 is an
-    // adoption backlog — to adopt a rule, delete its line and fix what
-    // surfaces.
-
-    // Bucket 1: conflicts with codified Stella conventions (permanent).
-    // `import * as v from "valibot"` is the mandated validation style.
-    "sonarjs/no-wildcard-import": "off",
-    // TanStack Router file names: $params, -components, dotted routes.
-    "github/filenames-match-regex": "off",
-    // Flags PascalCase React components and __fixture bindings.
-    "sonarjs/function-name": "off",
-    "sonarjs/variable-name": "off",
-    // Explicit `undefined` assignment is idiomatic TS in this codebase.
-    "sonarjs/no-undefined-assignment": "off",
-    // Result.gen safe handlers are `async function*` without a bare yield
-    // by contract (`yield* Result.await(...)`).
-    "sonarjs/generator-without-yield": "off",
-    // Semantic aliases (SomethingResult, branded-adjacent names) document
-    // intent; the two rules below apply opposite pressure on the same
-    // judgment call.
-    "sonarjs/redundant-type-aliases": "off",
-    "sonarjs/use-type-alias": "off",
-    // Duplicates the local no-unsafe-inner-html rule, which understands
-    // sanitized sinks.
-    "github/no-inner-html": "off",
-
-    // Bucket 2: style-only, no bug-catching value (permanent).
-    "github/no-then": "off",
-    "sonarjs/no-duplicate-string": "off",
-    "sonarjs/expression-complexity": "off",
-    "sonarjs/max-union-size": "off",
-    "sonarjs/too-many-break-or-continue-in-loop": "off",
-    "sonarjs/no-nested-functions": "off",
-    "sonarjs/no-nested-template-literals": "off",
-    "sonarjs/no-nested-incdec": "off",
-    "sonarjs/no-nested-conditional": "off",
-    "sonarjs/no-nested-assignment": "off",
-    "sonarjs/no-redundant-jump": "off",
-    "sonarjs/no-redundant-assignments": "off",
-    "sonarjs/misplaced-loop-counter": "off",
-    "sonarjs/destructuring-assignment-syntax": "off",
-    "sonarjs/prefer-single-boolean-return": "off",
-    "sonarjs/bool-param-default": "off",
-    "sonarjs/no-invariant-returns": "off",
-    "sonarjs/todo-tag": "off",
-    // Non-crypto jitter/sampling; crypto paths use platform crypto APIs.
-    "sonarjs/pseudo-random": "off",
-    // Duplicates of core no-unused-vars / TS arity checking, which stay on.
-    "sonarjs/no-unused-vars": "off",
-    "sonarjs/no-unused-function-argument": "off",
-    "sonarjs/no-extra-arguments": "off",
-    // Explicit import paths policy; re-export chains hide provenance.
+    // Ultracite 7.9.3 removed its slow JS-plugin rules from the default
+    // presets. These native-rule exceptions remain Stella-specific.
     "unicorn/prefer-export-from": "off",
     "unicorn/prefer-number-coercion": "off",
     "unicorn/prefer-single-call": "off",
     "prefer-named-capture-group": "off",
-    "github/get-attribute": "off",
-    "github/array-foreach": "off",
-    // Programmatic blur is how dialogs and menus release focus here.
-    "github/no-blur": "off",
-    "github/no-useless-passive": "off",
     "react/jsx-curly-brace-presence": "off",
     "react/no-unescaped-entities": "off",
     // Fires on any method named setState; no class components exist here.
     "react/no-set-state": "off",
     "react/display-name": "off",
 
-    // Bucket 3: kept off deliberately, each with an owner or a standing
-    // policy; do not adopt without revisiting that decision.
-    // The 2026-07-12 adoption pass fixed every fixable hit of these five
-    // and confirmed the remainder are collisions with sanctioned repo
-    // patterns, not defects:
-    // no-event-handler / no-pass-data-to-parent fire on the
-    // useLatestCallback + useExternalSyncEffect parent-sync and
-    // store-relay patterns that /conventions-use-effect codifies.
-    "react-doctor/no-event-handler": "off",
-    "react-doctor/no-pass-data-to-parent": "off",
-    // preventDefault on form onSubmit IS the SPA/TanStack Form submission
-    // pattern; every hit was load-bearing.
-    "react-doctor/no-prevent-default": "off",
-    // Remaining hits are scroll-position math and dismiss-on-any-scroll
-    // semantics with no Resize/IntersectionObserver equivalent.
-    "github/prefer-observers": "off",
     // React Compiler memoizes context values in apps/web; the remaining
     // hits are genuinely reactive values with no static part to hoist.
     "react/jsx-no-constructed-context-values": "off",
-    // All remaining hits are established component APIs (coss Dialog is
-    // the modal pattern, not raw <dialog>; render-prop/boolean-prop API
-    // changes ripple across consumers). Adopt during feature work.
-    "react-doctor/prefer-html-dialog": "off",
-    "react-doctor/prefer-useReducer": "off",
-    "react-doctor/no-many-boolean-props": "off",
-    "react-doctor/no-render-prop-children": "off",
-    // Two hits: an SSE autocomplete stream (not a query) and the
-    // Query-less playground app. Adopt when playground gains TanStack
-    // Query infrastructure.
-    "react-doctor/no-fetch-in-effect": "off",
-    // Policy (CLAUDE.md): legacy memoization is removed gradually when
-    // touching a file, never as a mechanical sweep — and packages/ui is
-    // consumed by surfaces without the React Compiler.
-    "react-doctor/react-compiler-no-manual-memoization": "off",
-    // Splitting the 59 flagged components (several are 600+ lines) is
-    // component decomposition — design work with regression risk, not a
-    // lint fix. Adopt per-component during feature work, not as a sweep.
-    "react-doctor/no-giant-component": "off",
-    // Render-loop guard wave owns these (its own lint rules + suppression
-    // ratchet); adopting here would collide with that branch.
-    "react-doctor/no-render-in-render": "off",
-    "react-doctor/no-derived-state": "off",
-    "react-doctor/no-derived-useState": "off",
-    "react-doctor/no-chain-state-updates": "off",
-    "react-doctor/no-adjust-state-on-prop-change": "off",
-    "react-doctor/no-prop-callback-in-effect": "off",
-    "react-doctor/rerender-state-only-in-handlers": "off",
-    "react-doctor/no-cascading-set-state": "off",
-    "react-doctor/no-effect-chain": "off",
   },
   ignorePatterns: [
     ...libraryIgnorePatterns,
@@ -428,8 +299,7 @@ export default defineConfig({
     // Static browser assets (e.g. the CSP-strict dark-mode bootstrap) are
     // untyped JS; type-aware rules flag their DOM globals as `error`.
     "apps/web/public/**",
-    // Declaration files carry no runtime code, and react-doctor's JS
-    // plugin crashes traversing them (`node.parent` undefined on .d.ts).
+    // Declaration files carry no runtime code; skip product-code rules.
     "**/*.d.ts",
   ],
 
@@ -438,7 +308,6 @@ export default defineConfig({
     "@tanstack/eslint-plugin-query",
     "@tanstack/eslint-plugin-router",
     "eslint-plugin-drizzle",
-    "eslint-plugin-sonarjs",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
@@ -517,24 +386,6 @@ export default defineConfig({
   overrides: [
     ...(core.overrides ?? []),
     ...libraryOverrides,
-    {
-      // Tests exercise IP/URL parsers and sandboxed tmp paths with literal
-      // values; these sonarjs hardening rules stay on for product code.
-      files: ["**/*.test.ts", "**/*.test.tsx"],
-      rules: {
-        "sonarjs/no-hardcoded-ip": "off",
-        "sonarjs/no-clear-text-protocols": "off",
-        "sonarjs/publicly-writable-directories": "off",
-      },
-    },
-    {
-      // Fixtures deliberately embed anti-patterns to exercise the custom
-      // plugin rules; exemplary-code rules do not apply to them.
-      files: [".oxlint-plugins/__fixtures__/**"],
-      rules: {
-        "sonarjs/public-static-readonly": "off",
-      },
-    },
     {
       // Custom oxlint plugin rules traverse AST nodes that the runtime
       // delivers as untyped (effectively `any`). Strict any-flow rules
@@ -671,10 +522,6 @@ export default defineConfig({
         "typescript/no-unsafe-argument": "off",
         "typescript/strict-boolean-expressions": "off",
         "typescript/no-redundant-type-constituents": "off",
-        // Existing scripts are operational glue with argument parsing,
-        // process orchestration, and one-off reporting branches. Keep a
-        // looser legacy budget while new app/library code starts at 30.
-        "sonarjs/cognitive-complexity": ["error", 80],
       },
     },
     {
@@ -770,28 +617,6 @@ export default defineConfig({
       // identical to main and disable the rule for this single-regex file.
       files: ["packages/template-conditions/src/index.ts"],
       rules: { "prefer-named-capture-group": "off" },
-    },
-    {
-      // Case-law ingestion parsers/adapters intentionally encode many source
-      // quirks. Tighten this after parser-specific refactors.
-      files: ["apps/api/src/handlers/case-law/ingestion/**/*.ts"],
-      rules: { "sonarjs/cognitive-complexity": ["error", 80] },
-    },
-    {
-      // DOCX handlers include document traversal and XML transformation
-      // routines. Tighten after splitting the largest transforms.
-      files: ["apps/api/src/handlers/docx/**/*.ts"],
-      rules: { "sonarjs/cognitive-complexity": ["error", 100] },
-    },
-    {
-      // PDF anonymization/redaction parsing is complex today; keep the global
-      // rule for the rest of web while this area gets a focused cleanup.
-      files: ["apps/web/src/lib/anonymize/**/*.ts"],
-      rules: { "sonarjs/cognitive-complexity": ["error", 80] },
-    },
-    {
-      files: ["packages/template-conditions/src/**/*.ts"],
-      rules: { "sonarjs/cognitive-complexity": ["error", 40] },
     },
     {
       files: ["apps/web/src/**/*.{ts,tsx}", "packages/ui/src/**/*.{ts,tsx}"],
@@ -1092,8 +917,6 @@ export default defineConfig({
         "require-router-select/require-router-select": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
-        "sonarjs/jsx-no-leaked-render": "error",
-        "sonarjs/no-hook-setter-in-body": "error",
         "stella-toast/stella-toast": "error",
       },
     },
@@ -1409,12 +1232,6 @@ export default defineConfig({
     {
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
-        "sonarjs/no-all-duplicated-branches": "error",
-        "sonarjs/no-duplicated-branches": "error",
-        "sonarjs/no-gratuitous-expressions": "error",
-        "sonarjs/no-identical-expressions": "error",
-        "sonarjs/no-ignored-return": "error",
-        "sonarjs/no-use-of-empty-return-value": "error",
         "require-fetch-timeout/require-fetch-timeout": "error",
         "require-escape-like/require-escape-like": "error",
       },

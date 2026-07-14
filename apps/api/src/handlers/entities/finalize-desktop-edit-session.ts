@@ -461,7 +461,6 @@ export const finalizeDesktopEditSessionHandler = async ({
         (field) => field.propertyId === editSession.propertyId,
       );
 
-      // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (tx)
       await tx
         .update(entities)
         .set({

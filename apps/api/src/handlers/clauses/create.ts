@@ -90,7 +90,6 @@ export const createClauseHandler = async function* ({
 
   const inserted = yield* Result.await(
     safeDb(async (tx) => {
-      // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client (single Postgres connection can't run concurrent statements)
       const [row] = await tx
         .insert(clauses)
         .values({

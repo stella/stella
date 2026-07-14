@@ -279,7 +279,6 @@ const uploadEntityHandler = async function* ({
 
         const resolvedName = await resolveFileName({ tx, propertyId, name });
 
-        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client (tx) as resolveFileName above; a single connection can't run concurrent statements
         const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
         await tx.insert(entities).values({

@@ -135,7 +135,7 @@ export const redactCaseLawDecision = async ({
     // transient error) must not leave copies in the others undeleted.
     let firstError: CorpusIndexError | null = null;
     for (const indexId of targets) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential GDPR erasure across index targets for deterministic audit ordering
+      // oxlint-disable-next-line no-await-in-loop -- sequential GDPR erasure across index targets for deterministic audit ordering
       const removed = await removeDecisionFromCorpusIndex(
         decisionId,
         scopedDb,

@@ -649,7 +649,7 @@ if (import.meta.main) {
 
     if (shouldSync) {
       const synced = syncMessages(enMessages, messages);
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: write must stay paired with this file's ordered console output
+      // oxlint-disable-next-line no-await-in-loop -- sequential by design: write must stay paired with this file's ordered console output
       await Bun.write(filePath, `${JSON.stringify(synced, null, 2)}\n`);
       console.log("  ✓ synced");
     }

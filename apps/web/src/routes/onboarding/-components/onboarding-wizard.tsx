@@ -364,7 +364,6 @@ export const OnboardingWizard = () => {
               return;
             }
             if (entry.kind === "skill") {
-              // oxlint-disable-next-line react-doctor/async-await-in-loop -- already parallel: installTasks entries are collected and awaited together via Promise.allSettled(catalogueTasks) below, not sequentially
               const { error } = await api.catalogue["install-skill"].post({
                 slug: entry.slug,
                 queryKey: ["skills"],
@@ -396,7 +395,6 @@ export const OnboardingWizard = () => {
         );
         const optOutTasks = catalogueSetupPlan.nativeToolOptOuts.map(
           async (entry) => {
-            // oxlint-disable-next-line react-doctor/async-await-in-loop -- already parallel: optOutTasks entries are collected and awaited together via Promise.allSettled(catalogueTasks) below, not sequentially
             const { error } = await api.mcp["native-tools"]({
               slug: entry.backendSlug,
             }).patch({ enabled: false, queryKey: ["mcp"] });

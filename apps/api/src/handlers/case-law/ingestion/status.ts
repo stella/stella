@@ -62,7 +62,7 @@ export const getIngestionStatus = async (
     const sourceStatuses: SourceStatus[] = [];
 
     for (const source of sources) {
-      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop, react-doctor/async-parallel -- sequential by design: single scoped-db transaction client, must not be parallelized
+      // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: single scoped-db transaction client, must not be parallelized
       const [totalRow] = await db
         .select({ total: count() })
         .from(caseLawDecisions)
@@ -155,12 +155,10 @@ export const getIngestionStatus = async (
       });
     }
 
-    // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: single scoped-db transaction client, must not be parallelized
     const [totalDecisions] = await db
       .select({ total: count() })
       .from(caseLawDecisions);
 
-    // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: single scoped-db transaction client, must not be parallelized
     const [totalEvents] = await db
       .select({ total: count() })
       .from(caseLawIngestionEvents);

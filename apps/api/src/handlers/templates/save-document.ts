@@ -278,7 +278,7 @@ const saveTemplateDocument = createSafeRootHandler(
         // Under the lock: only concurrent saves of this same template wait, and
         // they must serialize anyway so vN's bytes aren't overwritten before the
         // version row commits.
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client (advisory-locked), and the S3 write must land before the version row commits
+
         await getS3().write(versionS3Key, new Uint8Array(updatedDocx));
 
         const [row] = await tx

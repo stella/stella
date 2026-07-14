@@ -659,7 +659,7 @@ export class InfoSoudClient {
 
       if (allowedEventTypes.has(event.udalost)) {
         try {
-          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential per-event external-registry detail fetches, preserve polite request pacing
+          // oxlint-disable-next-line no-await-in-loop -- sequential per-event external-registry detail fetches, preserve polite request pacing
           detail = await this.getCaseEventDetail({
             courtCode: event.znackaId.organizace,
             event,
@@ -792,7 +792,7 @@ export class InfoSoudClient {
       };
 
       try {
-        // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential probe across Prague districts, return on first match
+        // oxlint-disable-next-line no-await-in-loop -- sequential probe across Prague districts, return on first match
         return await this.#request({
           body: requestBody,
           cacheKey: this.#buildRequestCacheKey({

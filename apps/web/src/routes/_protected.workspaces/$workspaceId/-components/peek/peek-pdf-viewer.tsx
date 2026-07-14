@@ -279,7 +279,6 @@ export const PeekPrintButton = () => {
 
     setIsPrinting(true);
     try {
-      // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: abort can only fire during this await since the controller was just created; the check can't trigger earlier
       const data = await pdfDocument.document.getData();
       if (controller.signal.aborted) {
         return;
@@ -341,7 +340,6 @@ export const PreparedPdfPrintButton = ({
 
     setIsPrinting(true);
     try {
-      // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: abort can only fire during this await since the controller was just created; the check can't trigger earlier
       const data = await fetchPrintPdf({
         workspaceId,
         fieldId,

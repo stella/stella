@@ -489,7 +489,7 @@ export const skUsAdapter: SourceAdapter = {
 
         for (const doc of data.documents) {
           try {
-            // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential per-document PDF download/parse, rate-limited via Bun.sleep below
+            // oxlint-disable-next-line no-await-in-loop -- sequential per-document PDF download/parse, rate-limited via Bun.sleep below
             const result = await parseDocument(doc, signal);
             if (result) {
               decisions.push(result);

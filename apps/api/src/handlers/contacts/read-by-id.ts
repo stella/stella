@@ -44,7 +44,7 @@ const readContactById = createSafeRootHandler(
 
         // Not merged with clientMatters below: this counts matters across
         // all statuses, while clientMatters is scoped to active only.
-        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- same DB transaction client: all reads in this block share one tx
+
         const clientMatterCount = await tx.$count(
           workspaces,
           and(
@@ -72,7 +72,7 @@ const readContactById = createSafeRootHandler(
         // GROUP BY and before LIMIT/ORDER BY apply, so the page's
         // LIMIT.workspaceContactsCount cap does not affect it. This replaces
         // a separate countDistinct query that reran the same join/predicate.
-        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- same DB transaction client: all reads in this block share one tx
+
         const partyMatterRows = await tx
           .select({
             color: workspaces.color,

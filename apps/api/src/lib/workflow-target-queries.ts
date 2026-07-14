@@ -40,7 +40,7 @@ export const fetchExplicitWorkflowTargetRows = async ({
 }): Promise<WorkflowTargetEntityRow[]> => {
   const entityRows: WorkflowTargetEntityRow[] = [];
   for (const chunk of chunkEntityIds(inputEntityIds)) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: bounds connection-pool/DB load when the caller passes a large explicit entity selection
+    // oxlint-disable-next-line no-await-in-loop -- sequential by design: bounds connection-pool/DB load when the caller passes a large explicit entity selection
     const rows = await scopedDb((tx) =>
       tx
         .select({ id: entities.id, kind: entities.kind })

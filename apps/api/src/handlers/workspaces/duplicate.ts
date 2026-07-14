@@ -321,7 +321,7 @@ const copyWorkspaceFiles = async ({
         return;
       }
 
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: worker drains the shared queue sequentially; bounded concurrency comes from running multiple copyNext workers
+      // oxlint-disable-next-line no-await-in-loop -- sequential by design: worker drains the shared queue sequentially; bounded concurrency comes from running multiple copyNext workers
       const key = await copyWorkspaceFile({
         copy,
         organizationId,
@@ -732,14 +732,14 @@ const duplicateWorkspace = createSafeHandler(
           const newVersionId = createSafeId<"entityVersion">();
           const entityStamp =
             source.kind === "document"
-              ? // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: stamp allocation is a sequential per-workspace counter; must run in order within the transaction
+              ? // oxlint-disable-next-line no-await-in-loop -- sequential by design: stamp allocation is a sequential per-workspace counter; must run in order within the transaction
                 await allocateEntityStamp(tx, targetWorkspaceId)
               : null;
           const newParentId = source.parentId
             ? (entityIdMap.get(source.parentId) ?? null)
             : null;
 
-          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-parallel -- sequential by design: children reference parent IDs created in earlier iterations via entityIdMap; also the version insert and currentVersionId update just below depend on this row
+          // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: children reference parent IDs created in earlier iterations via entityIdMap; also the version insert and currentVersionId update just below depend on this row
           await tx.insert(entities).values({
             id: newEntityId,
             workspaceId: targetWorkspaceId,

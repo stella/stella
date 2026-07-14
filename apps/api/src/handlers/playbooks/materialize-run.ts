@@ -302,7 +302,7 @@ export const materializePlaybookRun = async ({
   // dependency inputs (generate-batch resolves documents from `batch.inputs`),
   // so every AI ASK column must depend on the workspace's file column to
   // actually read the document.
-  // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same tx client shared with the caller (single Postgres connection can't run concurrent statements)
+
   const systemFileProperty = await tx.query.properties.findFirst({
     where: {
       workspaceId: { eq: workspaceId },

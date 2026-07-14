@@ -301,7 +301,6 @@ const buildExistingOpenDesktopEditSessionResponse = async ({
     return null;
   }
 
-  // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: same DB transaction client (tx) as the update above and readVersionDocxTarget below; deferring this await would let the audit write overlap another query on the single connection
   await recordAuditEvent(tx, {
     action: AUDIT_ACTION.UPDATE,
     resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,

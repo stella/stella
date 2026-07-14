@@ -120,7 +120,7 @@ export const expireDesktopEditSessions: SchedulerTask = async ({
     });
 
     expired += expiredSessions.length;
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-defer-await -- sequential by design: this publish marks expiryNotificationPublishedAt, which the unnotified-sessions query at the top of the loop filters on; deferring it past the batch-size check would let the next sweep re-fetch and re-notify the same batch
+    // oxlint-disable-next-line no-await-in-loop -- sequential by design: this publish marks expiryNotificationPublishedAt, which the unnotified-sessions query at the top of the loop filters on; deferring it past the batch-size check would let the next sweep re-fetch and re-notify the same batch
     await publishAndMarkExpiryNotifications(expiredSessions);
 
     if (batch.length < EXPIRE_SWEEP_BATCH_SIZE) {

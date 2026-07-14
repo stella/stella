@@ -83,7 +83,7 @@ const getLanguageDisplayNamesFormatter = (
   if (cached) {
     return cached;
   }
-  // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale cache getter; the constructor necessarily runs below top level
+
   const formatter = new Intl.DisplayNames([locale], { type: "language" });
   languageDisplayNamesFormatters.set(locale, formatter);
   return formatter;

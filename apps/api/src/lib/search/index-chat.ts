@@ -289,7 +289,7 @@ export const backfillChatThreadSearchIndex = async (): Promise<number> => {
 
     for (const row of batch) {
       try {
-        // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: sequential per-thread backfill writes bound DB load
+        // oxlint-disable-next-line no-await-in-loop -- sequential by design: sequential per-thread backfill writes bound DB load
         await upsertChatThreadSearchDocument(row.id);
       } catch (error) {
         captureError(error, {

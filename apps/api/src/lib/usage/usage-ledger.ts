@@ -109,7 +109,6 @@ export const getRemainingUsageUnits = async ({
       ),
     );
 
-  // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client (tx) as allocatedRow above; a single connection can't run concurrent statements
   const consumedRow = await tx
     .select({
       total: sql<number>`COALESCE(SUM(${usageEvents.unitsConsumed}), 0)::int`,

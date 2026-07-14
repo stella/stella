@@ -62,7 +62,7 @@ export default createSafeHandler(
         }
 
         const now = new Date();
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same DB transaction client (tx) as recordAuditEvent and the requestingUser select below; a single connection can't run concurrent statements
+
         await tx
           .update(desktopEditSessions)
           .set({

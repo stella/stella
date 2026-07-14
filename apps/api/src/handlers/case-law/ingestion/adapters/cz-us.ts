@@ -346,7 +346,7 @@ export const czUsAdapter: SourceAdapter = {
           // by ~5x without meaningful server load increase.
           const yearSuffix = toYearSuffix(state.year);
 
-          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential probe batches; each batch advances the cursor based on the previous batch's results and consecutive-miss count
+          // oxlint-disable-next-line no-await-in-loop -- sequential probe batches; each batch advances the cursor based on the previous batch's results and consecutive-miss count
           const probeResults = await Promise.allSettled(
             Array.from({ length: PROBE_CONCURRENCY }, async (_, i) => {
               const num = state.number + i;
@@ -425,7 +425,7 @@ export const czUsAdapter: SourceAdapter = {
             // Fetch abstract + legal sentence (separate endpoint)
             try {
               const szParam = `I-${probe.num}-${yearSuffix}_1`;
-              // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential per-decision abstract fetch within the ordered result-processing loop
+              // oxlint-disable-next-line no-await-in-loop -- sequential per-decision abstract fetch within the ordered result-processing loop
               const absResp = await fetchWithTimeout(
                 `${ABSTRACT_URL}?sz=${szParam}`,
                 {

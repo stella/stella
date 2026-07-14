@@ -170,7 +170,7 @@ export const mapOrderedConcurrent = async function* <T, R>(
     if (head === undefined) {
       break;
     }
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- bounded-concurrency drain: await the in-flight head before refilling the window and yielding
+    // oxlint-disable-next-line no-await-in-loop -- bounded-concurrency drain: await the in-flight head before refilling the window and yielding
     const result = await head;
     startNext();
     yield result;

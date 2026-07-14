@@ -607,6 +607,7 @@ export const runIngestionPipeline = async ({
 
   const maxPages = maxPagesOverride ?? adapter.maxSyncPages ?? MAX_SYNC_PAGES;
 
+  // oxlint-disable-next-line no-unreachable-loop -- successful pages advance the cursor and pagesProcessed at the loop tail; break paths halt ingestion
   while (pagesProcessed < maxPages) {
     if (signal?.aborted) {
       haltReason = "Cycle timeout exceeded";
@@ -680,7 +681,7 @@ export const runIngestionPipeline = async ({
           break;
         }
         try {
-          // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential decision inserts: consecutive-failure halting and per-page counters depend on ordering
+          // oxlint-disable-next-line no-await-in-loop -- sequential decision inserts: consecutive-failure halting and per-page counters depend on ordering
           const outcome = await processDecision(result, source.id, scopedDb);
 
           if (outcome.inserted) {

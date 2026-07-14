@@ -54,7 +54,7 @@ export const acquireCellLocks = async ({
   // can deadlock.
   const sorted = propertyIds.toSorted();
   for (const propertyId of sorted) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: locks acquired in sorted order within one tx to avoid deadlock; parallelizing would defeat the ordering
+    // oxlint-disable-next-line no-await-in-loop -- sequential by design: locks acquired in sorted order within one tx to avoid deadlock; parallelizing would defeat the ordering
     await acquireCellLock({ tx, entityVersionId, propertyId });
   }
 };

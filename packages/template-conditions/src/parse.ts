@@ -29,7 +29,6 @@ type Token =
   | { type: "string"; raw: string };
 
 const TOKEN_RE =
-  // oxlint-disable-next-line sonarjs/regex-complexity -- tokenizer regex; the alternation count is inherent to the token grammar (strings, operators, numbers, identifiers) and cannot be reduced without changing tokenization.
   /(?<token>"[^"\\]*(?:\\.[^"\\]*)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|contains\b|[()]|-?\d[\p{N}_.]*|[\p{L}\p{N}_.]+(?:-[\p{L}\p{N}_.]+)*)/gu;
 
 const STARTS_WITH_DIGIT_RE = /^-?\d/u;

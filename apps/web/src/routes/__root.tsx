@@ -78,7 +78,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
     <html lang="en" dir="ltr" suppressHydrationWarning>
       <head>
         <HeadContent />
-        {/* eslint-disable-next-line react-doctor/no-undeferred-third-party, react-doctor/rendering-script-defer-async -- dark-mode bootstrap must run before first paint to avoid FOUC */}
+
         <script src="/dark-mode-init.js" />
       </head>
       <body>

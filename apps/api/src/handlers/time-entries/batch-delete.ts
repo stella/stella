@@ -71,7 +71,6 @@ const batchDelete = createSafeHandler(
           )
           .returning({ id: timeEntries.id });
 
-        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same DB transaction client (tx) as the delete above; a single connection can't run concurrent statements
         const writtenOff = await tx
           .update(timeEntries)
           .set({

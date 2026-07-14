@@ -8,7 +8,6 @@
         "@tanstack/eslint-plugin-router",
         "eslint",
         "eslint-plugin-drizzle",
-        "eslint-plugin-sonarjs",
         "oxlint-tsgolint",
         "ultracite",
         "i18n-unused",

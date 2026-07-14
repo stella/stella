@@ -104,7 +104,7 @@ const updateAnonymizationBlacklist = createSafeRootHandler(
           );
 
           if (existing) {
-            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop -- sequential by design: sequential blacklist upserts inside one transaction
+            // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: sequential blacklist upserts inside one transaction
             await tx
               .update(anonymizationBlacklistEntries)
               .set({

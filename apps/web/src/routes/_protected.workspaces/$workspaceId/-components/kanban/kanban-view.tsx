@@ -363,7 +363,6 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       return;
     }
 
-    // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: files must upload regardless of columnValue; the guard below only skips the optional column-value assignment, not the upload
     const results = await uploadFileEntitiesBatched({
       files,
       workspaceId,

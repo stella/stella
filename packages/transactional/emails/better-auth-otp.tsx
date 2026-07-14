@@ -18,7 +18,7 @@ import { BRAND_FOOTER_TEXT, ICON_URL, brand, sharedStyles } from "./_shared";
 const otpTypeKey = {
   "sign-in": "otp.signIn",
   "email-verification": "otp.emailVerification",
-  // eslint-disable-next-line sonarjs/no-hardcoded-passwords -- translation-key map; the value is an i18n key, not a credential
+
   "forget-password": "otp.forgetPassword",
   "change-email": "otp.changeEmail",
   "delete-account": "otp.deleteAccount",

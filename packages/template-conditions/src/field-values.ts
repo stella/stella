@@ -56,7 +56,7 @@ const getDateFormatter = (
   if (cached) {
     return cached;
   }
-  // eslint-disable-next-line react-doctor/js-hoist-intl -- per-locale+style cache getter; the constructor necessarily runs below top level
+
   const formatter = new Intl.DateTimeFormat(locale, {
     ...STYLE_OPTIONS[style],
     timeZone: "UTC",

@@ -185,7 +185,7 @@ export const loadDocsForBatch = async (
   const readFailures: LoadedBatch["readFailures"] = [];
   for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
     const chunk = rows.slice(i, i + INDEX_CONCURRENCY);
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
+    // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
     const built = await Promise.all(
       chunk.map(async (row) => {
         try {
@@ -254,7 +254,7 @@ const recordReadFailures = async (
     }
   }
   for (const [indexId, jobs] of failuresByIndex) {
-    // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential per-index audit writes preserve job ordering
+    // oxlint-disable-next-line no-await-in-loop -- sequential per-index audit writes preserve job ordering
     await recordJobs(scopedDb, jobs, indexId);
   }
 };
@@ -379,7 +379,7 @@ export const backfillCorpusIndex = async (
     );
     let staleError: CorpusIndexError | null = null;
     for (const entry of moved) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential deletes that early-break on the first error
+      // oxlint-disable-next-line no-await-in-loop -- sequential deletes that early-break on the first error
       const removed = await removeDecisionFromCorpusIndex(
         entry.id,
         scopedDb,
@@ -432,7 +432,7 @@ export const backfillCorpusIndex = async (
         // when the row was already pending) and bumps updatedAt, and an
         // unconditional write would mask that refresh so the stale index
         // document would never be retried.
-        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
+        // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential CAS updates within the transaction; ordering preserved
         const marked = await tx
           .update(caseLawDecisions)
           .set({
@@ -470,7 +470,7 @@ export const backfillCorpusIndex = async (
     // so delete the unrecorded copy now; the refreshed row is re-indexed
     // by a later cycle.
     for (const missedId of casMissed) {
-      // oxlint-disable-next-line no-await-in-loop, react-doctor/async-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
+      // oxlint-disable-next-line no-await-in-loop -- sequential cleanup deletes of the unrecorded copies; matches this file's established sequential-vs-search-backend design (see ensureIndex/ingestBatch above)
       const removed = await removeDecisionFromCorpusIndex(
         missedId,
         scopedDb,

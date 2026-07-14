@@ -391,7 +391,7 @@ const createDirectoryRows = async ({
     const entityId = createSafeId<"entity">();
     const entityVersionId = createSafeId<"entityVersion">();
 
-    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop, react-doctor/async-parallel -- sequential by design: same tx client, entityVersions/update/audit all depend on entityId/entityVersionId from this insert
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential by design: same tx client, entityVersions/update/audit all depend on entityId/entityVersionId from this insert
     await tx.insert(entities).values({
       id: entityId,
       workspaceId,

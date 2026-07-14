@@ -499,7 +499,6 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        // oxlint-disable-next-line react-doctor/async-defer-await -- sequential by design: check must precede the rest of the middleware for every path, self-host email-OTP gate cannot be skipped
         await assertSelfhostEmailOtpAllowed(ctx.path);
         if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
           return;

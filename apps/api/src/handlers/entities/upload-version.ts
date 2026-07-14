@@ -245,7 +245,6 @@ export default createSafeHandler(
           workspaceReference: workspace?.reference ?? null,
         });
 
-        // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
         await tx.insert(entityVersions).values({
           createdBy: userId,
           entityId,
@@ -324,7 +323,6 @@ export default createSafeHandler(
           );
         }
 
-        // oxlint-disable-next-line react-doctor/async-parallel -- same DB transaction client: all writes in this block share one tx
         await tx
           .update(entities)
           .set({

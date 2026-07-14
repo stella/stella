@@ -135,7 +135,6 @@ const restoreClauseVersion = createSafeRootHandler(
 
         const newVersion = plan.newVersion;
 
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client (single Postgres connection can't run concurrent statements)
         const [row] = await tx
           .update(clauses)
           .set({

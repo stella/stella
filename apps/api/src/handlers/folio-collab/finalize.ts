@@ -456,7 +456,6 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
           (field) => field.propertyId === sessionPreview.propertyId,
         );
 
-        // oxlint-disable-next-line react-doctor/async-parallel -- sequential by design: same tx client committing the finalize step by step (entity version, workspace activity, session status, audit)
         await tx
           .update(entities)
           .set({

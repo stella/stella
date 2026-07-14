@@ -124,7 +124,7 @@ const getThreadRecap = createSafeRootHandler(
           orderBy: { createdAt: "asc" },
           limit: 1,
         });
-        // oxlint-disable-next-line react-doctor/server-sequential-independent-await -- sequential by design: same tx client (single Postgres connection can't run concurrent statements)
+
         const recentMessagesDesc = await tx.query.chatMessages.findMany({
           where: {
             threadId: { eq: threadId },
