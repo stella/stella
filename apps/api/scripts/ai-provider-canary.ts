@@ -2,7 +2,11 @@ import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { Tool } from "@tanstack/ai";
 import * as v from "valibot";
 
-import { DEFAULT_MODELS, MODEL_ROLES } from "@stll/ai-catalog";
+import {
+  DEFAULT_MODELS,
+  isBYOKProviderRoleSupported,
+  MODEL_ROLES,
+} from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
@@ -277,7 +281,7 @@ const runToolCallRoundTripProbe = async ({
   ) {
     throw new TypeError("Provider returned unexpected canary tool arguments.");
   }
-  if (!output.includes(TOOL_ROUND_TRIP_RESULT)) {
+  if (output.trim() !== TOOL_ROUND_TRIP_RESULT) {
     throw new TypeError("Provider did not return the canary tool result.");
   }
 };
@@ -449,8 +453,21 @@ const runProbes = async (
     return failures;
   }
 
-  const signal = AbortSignal.timeout(probe.timeoutMs);
   const label = probeLabel(context, probe);
+  if (
+    probe.type === "model-role" &&
+    !isBYOKProviderRoleSupported({
+      provider: context.provider,
+      role: probe.role,
+    })
+  ) {
+    console.log(
+      `[ai-canary] ${context.provider}/${label}: skipped (unsupported role)`,
+    );
+    return await runProbes(context, index + 1, failures);
+  }
+
+  const signal = AbortSignal.timeout(probe.timeoutMs);
   try {
     await probe.run(context, signal);
     console.log(`[ai-canary] ${context.provider}/${label}: passed`);
