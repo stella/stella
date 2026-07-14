@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "np. Standard 2025"
     },
     "revertToDraft": "Przywróć do wersji roboczej",
-    "running": "W toku",
     "selectMatter": "Wybierz sprawę...",
     "selectMatterToStart": "Wybierz sprawę, aby rozpocząć mierzenie czasu",
     "selectedCount": "{count, plural, one {# zaznaczony} few {# zaznaczone} many {# zaznaczonych} other {# zaznaczonego}}",
@@ -895,6 +894,7 @@
     "retry": "Spróbuj ponownie",
     "role": "Rola",
     "run": "Uruchom",
+    "running": "W toku",
     "save": "Zapisz",
     "saveAsPdf": "Zapisz jako PDF",
     "saveChanges": "Zapisz zmiany",

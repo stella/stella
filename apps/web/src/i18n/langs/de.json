@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "z.B. Standard 2025"
     },
     "revertToDraft": "In Entwurf zurückversetzen",
-    "running": "Läuft",
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
     "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
@@ -895,6 +894,7 @@
     "retry": "Erneut versuchen",
     "role": "Rolle",
     "run": "Ausführen",
+    "running": "Läuft",
     "save": "Speichern",
     "saveAsPdf": "Als PDF speichern",
     "saveChanges": "Änderungen speichern",

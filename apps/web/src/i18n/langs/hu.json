@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "pl. Standard 2025"
     },
     "revertToDraft": "Visszaállítás tervezetre",
-    "running": "Fut",
     "selectMatter": "Válasszon ügyet...",
     "selectMatterToStart": "Válasszon ügyet az időmérés indításához",
     "selectedCount": "{count, plural, one {# kijelölve} other {# kijelölve}}",
@@ -895,6 +894,7 @@
     "retry": "Újrapróbál",
     "role": "Szerepkör",
     "run": "Futtatás",
+    "running": "Fut",
     "save": "Mentés",
     "saveAsPdf": "Mentés PDF-ként",
     "saveChanges": "Változtatások mentése",

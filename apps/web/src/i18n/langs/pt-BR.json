@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "por exemplo Padrão 2025"
     },
     "revertToDraft": "Reverter para rascunho",
-    "running": "Em execução",
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
     "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
@@ -895,6 +894,7 @@
     "retry": "Tentar novamente",
     "role": "Função",
     "run": "Executar",
+    "running": "Em execução",
     "save": "Salvar",
     "saveAsPdf": "Salvar como PDF",
     "saveChanges": "Salvar alterações",

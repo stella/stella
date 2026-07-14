@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "p. ej. Estándar 2025"
     },
     "revertToDraft": "Volver a borrador",
-    "running": "En curso",
     "selectMatter": "Seleccione un asunto...",
     "selectMatterToStart": "Seleccione un asunto para iniciar el temporizador",
     "selectedCount": "{count, plural, one {# seleccionado} other {# seleccionados}}",
@@ -895,6 +894,7 @@
     "retry": "Reintentar",
     "role": "Rol",
     "run": "Ejecutar",
+    "running": "En curso",
     "save": "Guardar",
     "saveAsPdf": "Guardar como PDF",
     "saveChanges": "Guardar cambios",

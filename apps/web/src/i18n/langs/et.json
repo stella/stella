@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "nt Standard 2025"
     },
     "revertToDraft": "Tagasta mustandiks",
-    "running": "Käib",
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
@@ -895,6 +894,7 @@
     "retry": "Proovi uuesti",
     "role": "Roll",
     "run": "Käivita",
+    "running": "Käib",
     "save": "Salvesta",
     "saveAsPdf": "Salvesta PDF-na",
     "saveChanges": "Salvesta muudatused",

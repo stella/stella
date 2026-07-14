@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "napr. Štandard 2025"
     },
     "revertToDraft": "Vrátiť do konceptu",
-    "running": "Beží",
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Vyberte spis na spustenie merania",
     "selectedCount": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
@@ -895,6 +894,7 @@
     "retry": "Skúsiť znova",
     "role": "Rola",
     "run": "Spustiť",
+    "running": "Beží",
     "save": "Uložiť",
     "saveAsPdf": "Uložiť ako PDF",
     "saveChanges": "Uložiť zmeny",

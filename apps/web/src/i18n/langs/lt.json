@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "pvz. Standartinis 2025"
     },
     "revertToDraft": "Grąžinti į juodraštį",
-    "running": "Vykdoma",
     "selectMatter": "Pasirinkite bylą...",
     "selectMatterToStart": "Pasirinkite bylą, kad pradėtumėte fiksuoti laiką",
     "selectedCount": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinkto} other {# pasirinktų}}",
@@ -895,6 +894,7 @@
     "retry": "Bandyti dar kartą",
     "role": "Rolė",
     "run": "Paleisti",
+    "running": "Vykdoma",
     "save": "Išsaugoti",
     "saveAsPdf": "Išsaugoti kaip PDF",
     "saveChanges": "Išsaugoti pakeitimus",

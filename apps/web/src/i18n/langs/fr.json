@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "p. ex. Standard 2025"
     },
     "revertToDraft": "Repasser en brouillon",
-    "running": "En cours",
     "selectMatter": "Sélectionner un dossier...",
     "selectMatterToStart": "Sélectionnez un dossier pour démarrer",
     "selectedCount": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}",
@@ -895,6 +894,7 @@
     "retry": "Réessayer",
     "role": "Rôle",
     "run": "Exécuter",
+    "running": "En cours",
     "save": "Enregistrer",
     "saveAsPdf": "Enregistrer en PDF",
     "saveChanges": "Enregistrer les modifications",

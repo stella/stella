@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "piem. Standarta 2025"
     },
     "revertToDraft": "Atgriezt kā melnrakstu",
-    "running": "Darbojas",
     "selectMatter": "Izvēlieties lietu...",
     "selectMatterToStart": "Atlasiet lietu, lai sāktu laika uzskaiti",
     "selectedCount": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
@@ -895,6 +894,7 @@
     "retry": "Mēģināt vēlreiz",
     "role": "Loma",
     "run": "Palaist",
+    "running": "Darbojas",
     "save": "Saglabāt",
     "saveAsPdf": "Saglabāt kā PDF",
     "saveChanges": "Saglabāt izmaiņas",

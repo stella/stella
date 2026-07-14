@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "مثال: قياسي 2025"
     },
     "revertToDraft": "الإعادة إلى مسودة",
-    "running": "قيد التشغيل",
     "selectMatter": "اختر ملفًا...",
     "selectMatterToStart": "اختر ملفًا لبدء توقيت الوقت",
     "selectedCount": "{count, plural, zero {لا شيء محدد} one {محدد واحد} two {محددان} few {# محددة} many {# محددًا} other {# محدد}}",
@@ -895,6 +894,7 @@
     "retry": "إعادة المحاولة",
     "role": "الدور",
     "run": "تشغيل",
+    "running": "قيد التشغيل",
     "save": "حفظ",
     "saveAsPdf": "حفظ كملف PDF",
     "saveChanges": "حفظ التغييرات",

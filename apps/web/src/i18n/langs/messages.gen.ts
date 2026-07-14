@@ -216,7 +216,6 @@ type Messages = {
       "tableNamePlaceholder": "e.g. Standard 2025";
     };
     "revertToDraft": "Revert to draft";
-    "running": "Running";
     "selectMatter": "Select a matter...";
     "selectMatterToStart": "Select a matter to start timing";
     "selectedCount": "{count, plural, one {# selected} other {# selected}}";
@@ -898,6 +897,7 @@ type Messages = {
     "retry": "Retry";
     "role": "Role";
     "run": "Run";
+    "running": "Running";
     "save": "Save";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
