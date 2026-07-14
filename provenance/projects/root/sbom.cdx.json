@@ -14822,9 +14822,6 @@
             "location": "packages/cli/src/run-resource-command.ts#7"
           },
           {
-            "location": "packages/docx-core/src/validate/docx.ts#1"
-          },
-          {
             "location": "packages/errors/src/index.ts#1"
           },
           {
@@ -18883,12 +18880,6 @@
           },
           {
             "location": "apps/api/src/scripts/prepare-spa-template.ts#9"
-          },
-          {
-            "location": "packages/docx-core/src/serialize/docx.ts#1"
-          },
-          {
-            "location": "packages/docx-core/src/validate/docx.ts#2"
           },
           {
             "location": "packages/docx-utils/src/zip.ts#1"
