@@ -52,6 +52,7 @@ import { searchRoute } from "@/api/handlers/search/routes";
 import { skillsRoute } from "@/api/handlers/skills/routes";
 import { smokeRoute } from "@/api/handlers/smoke/routes";
 import { styleSetsRoute } from "@/api/handlers/style-sets/routes";
+import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
 import { myTasksRoute } from "@/api/handlers/tasks/my-tasks-route";
 import { tasksRoute } from "@/api/handlers/tasks/routes";
 import { templateRecipesRoute } from "@/api/handlers/template-recipes/routes";
@@ -412,7 +413,8 @@ const api = new Elysia()
             const { pathname } = new URL(req.url);
             return (
               isUploadRateLimitedPath(pathname) ||
-              isFolioCollabRateLimitedPath(pathname)
+              isFolioCollabRateLimitedPath(pathname) ||
+              isStyleSetUploadRateLimitedRequest(req)
             );
           },
         }),

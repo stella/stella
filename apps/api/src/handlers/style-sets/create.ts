@@ -15,6 +15,7 @@ import { getS3 } from "@/api/lib/s3";
 import {
   buildStyleSetKey,
   extractStyleSetBuffer,
+  normalizeStyleSetName,
   styleSetColumns,
   styleSetExportFileName,
 } from "@/api/lib/style-sets";
@@ -33,8 +34,9 @@ const config = {
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {
+    const name = yield* normalizeStyleSetName(body.name);
     const buffer = yield* Result.await(
-      extractStyleSetBuffer(body.styleSource, body.name),
+      extractStyleSetBuffer(body.styleSource, name),
     );
     const styleSetId = createSafeId<"styleSet">();
     const s3Key = buildStyleSetKey({
@@ -74,8 +76,8 @@ export default createSafeRootHandler(
             .values({
               id: styleSetId,
               organizationId: session.activeOrganizationId,
-              name: body.name,
-              fileName: styleSetExportFileName(body.name),
+              name,
+              fileName: styleSetExportFileName(name),
               s3Key,
               sizeBytes: buffer.byteLength,
               createdBy: user.id,

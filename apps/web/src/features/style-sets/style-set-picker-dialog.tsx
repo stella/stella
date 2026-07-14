@@ -64,7 +64,9 @@ const StyleSetPickerDialogBody = ({
   const organizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data, isLoading } = useQuery(styleSetsOptions(organizationId));
+  const { data, isLoading, isError } = useQuery(
+    styleSetsOptions(organizationId),
+  );
   const [name, setName] = useState(initialName);
   const [selection, setSelection] = useState<StyleSelection>({
     type: "stella",
@@ -129,6 +131,11 @@ const StyleSetPickerDialogBody = ({
                 {t("common.loading")}
               </p>
             )}
+            {isError && (
+              <p className="text-destructive p-2 text-sm">
+                {t("styleSets.loadFailed")}
+              </p>
+            )}
           </div>
         </div>
       </DialogPanel>
@@ -136,7 +143,10 @@ const StyleSetPickerDialogBody = ({
         <DialogClose render={<Button variant="outline" />}>
           {t("common.cancel")}
         </DialogClose>
-        <Button disabled={creating || name.trim() === ""} onClick={submit}>
+        <Button
+          disabled={creating || isError || name.trim() === ""}
+          onClick={submit}
+        >
           {creating ? t("common.loading") : t("styleSets.create")}
         </Button>
       </DialogFooter>
@@ -158,6 +168,7 @@ const StyleChoice = ({
   onSelect,
 }: StyleChoiceProps) => (
   <button
+    aria-pressed={selected}
     className={cn(
       "flex w-full items-center gap-3 rounded-lg border p-3 text-start",
       selected && "border-foreground/30 bg-muted",

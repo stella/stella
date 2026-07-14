@@ -8,7 +8,11 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { styleSetColumns, styleSetExportFileName } from "@/api/lib/style-sets";
+import {
+  normalizeStyleSetName,
+  styleSetColumns,
+  styleSetExportFileName,
+} from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const bodySchema = t.Object({ name: tDefaultVarchar });
@@ -23,6 +27,7 @@ const config = {
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+    const name = yield* normalizeStyleSetName(body.name);
     const row = yield* Result.await(
       safeDb(async (tx) => {
         const existing = await tx.query.styleSets.findFirst({
@@ -39,8 +44,8 @@ export default createSafeRootHandler(
         const [updated] = await tx
           .update(styleSets)
           .set({
-            name: body.name,
-            fileName: styleSetExportFileName(body.name),
+            name,
+            fileName: styleSetExportFileName(name),
             updatedAt: new Date(),
           })
           .where(

@@ -11,6 +11,18 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const DOCX_EXTENSION = ".docx";
 
+export const normalizeStyleSetName = (
+  name: string,
+): Result<string, HandlerError> => {
+  const normalized = name.trim();
+  if (normalized === "") {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Name must not be blank" }),
+    );
+  }
+  return Result.ok(normalized);
+};
+
 export const validateStyleSource = (file: File): Result<void, HandlerError> => {
   if (
     file.type === DOCX_MIME_TYPE ||

@@ -7,6 +7,7 @@ import downloadStyleSet from "@/api/handlers/style-sets/download";
 import listStyleSets from "@/api/handlers/style-sets/list";
 import replaceStyleSet from "@/api/handlers/style-sets/replace";
 import updateStyleSet from "@/api/handlers/style-sets/update";
+import { isStyleSetUploadRateLimitedRequest } from "@/api/handlers/style-sets/upload-rate-limit";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import {
@@ -24,13 +25,7 @@ export const styleSetsRoute = new Elysia({ prefix: "/style-sets" })
       max: API_RATE_LIMITS.upload.max,
       generator: scopedGenerator("style-set-upload"),
       context: new InMemoryRateLimitContext(),
-      skip: (request) => {
-        const { pathname } = new URL(request.url);
-        return !(
-          request.method === "PUT" ||
-          (request.method === "POST" && pathname.endsWith("/source"))
-        );
-      },
+      skip: (request) => !isStyleSetUploadRateLimitedRequest(request),
     }),
   )
   .guard({ validateAuth: true })

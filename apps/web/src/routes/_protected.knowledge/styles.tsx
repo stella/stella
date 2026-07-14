@@ -230,11 +230,13 @@ const StyleSetsPage = () => {
         ref={replaceInputRef}
         type="file"
       />
-      <ImportStyleSetDialog
-        onImported={invalidate}
-        onOpenChange={setImportOpen}
-        open={importOpen}
-      />
+      {importOpen && (
+        <ImportStyleSetDialog
+          onImported={invalidate}
+          onOpenChange={setImportOpen}
+          open
+        />
+      )}
       <RenameStyleSetDialog
         onOpenChange={(open) => {
           if (!open) {

@@ -10,11 +10,21 @@ import {
 
 import {
   extractStyleSetBuffer,
+  normalizeStyleSetName,
   validateStyleSource,
 } from "@/api/lib/style-sets";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 describe("style set source extraction", () => {
+  test("normalizes names and rejects whitespace-only input", () => {
+    const normalized = normalizeStyleSetName("  Firm Style  ");
+    expect(Result.isOk(normalized)).toBe(true);
+    if (Result.isOk(normalized)) {
+      expect(normalized.value).toBe("Firm Style");
+    }
+    expect(Result.isError(normalizeStyleSetName("   "))).toBe(true);
+  });
+
   test("rejects a source that is not a DOCX", () => {
     const source = new File(["not a document"], "styles.pdf", {
       type: "application/pdf",
