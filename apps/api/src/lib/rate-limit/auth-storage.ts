@@ -25,6 +25,26 @@ type AuthRateLimitStorage = {
   set: (key: string, value: RateLimitValue) => Promise<void>;
 };
 
+type AuthRateLimitRedisClient = {
+  get: (key: string) => Promise<string | null>;
+  set: (
+    key: string,
+    value: string,
+    expiryMode: "PX",
+    ttlMs: number,
+  ) => Promise<unknown>;
+};
+
+type CommandTimer = {
+  set: (callback: () => void, delayMs: number) => ReturnType<typeof setTimeout>;
+  clear: (timeoutId: ReturnType<typeof setTimeout>) => void;
+};
+
+type AuthRateLimitStorageOptions = {
+  redis?: AuthRateLimitRedisClient;
+  commandTimer?: CommandTimer;
+};
+
 const REDIS_KEY_PREFIX = "auth:ratelimit:";
 const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
 /**
@@ -34,6 +54,10 @@ const FALLBACK_CLEANUP_INTERVAL_MS = 60_000;
  * if it does not resolve in time.
  */
 const COMMAND_TIMEOUT_MS = 500;
+const DEFAULT_COMMAND_TIMER: CommandTimer = {
+  set: (callback, delayMs) => setTimeout(callback, delayMs),
+  clear: (timeoutId) => clearTimeout(timeoutId),
+};
 
 const isRateLimitValue = (value: unknown): value is RateLimitValue =>
   typeof value === "object" &&
@@ -53,17 +77,20 @@ const isStricterRateLimitValue = (
   (candidate.count === current.count &&
     candidate.lastRequest > current.lastRequest);
 
-const withCommandTimeout = async <T>(promise: Promise<T>): Promise<T> => {
+const withCommandTimeout = async <T>(
+  promise: Promise<T>,
+  commandTimer: CommandTimer,
+): Promise<T> => {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
-    timeoutId = setTimeout(
+    timeoutId = commandTimer.set(
       () => reject(new Error("redis command timeout")),
       COMMAND_TIMEOUT_MS,
     );
   });
   return await Promise.race([promise, timeout]).finally(() => {
     if (timeoutId) {
-      clearTimeout(timeoutId);
+      commandTimer.clear(timeoutId);
     }
   });
 };
@@ -74,11 +101,15 @@ const withCommandTimeout = async <T>(promise: Promise<T>): Promise<T> => {
  */
 export const createAuthRateLimitStorage = (
   ttlMs: number,
+  options: AuthRateLimitStorageOptions = {},
 ): AuthRateLimitStorage => {
-  const redis = createRedisClient({
-    connectionTimeout: COMMAND_TIMEOUT_MS,
-    enableOfflineQueue: false,
-  });
+  const redis =
+    options.redis ??
+    createRedisClient({
+      connectionTimeout: COMMAND_TIMEOUT_MS,
+      enableOfflineQueue: false,
+    });
+  const commandTimer = options.commandTimer ?? DEFAULT_COMMAND_TIMER;
   // Bun's RedisClient surfaces connection loss via the onclose callback
   // and exposes errors through rejected commands. Leaving onclose unset
   // is safe; per-command rejections drive the fail-open path below.
@@ -111,6 +142,7 @@ export const createAuthRateLimitStorage = (
         "PX",
         ttlMs,
       ),
+      commandTimer,
     );
   };
 
@@ -120,6 +152,7 @@ export const createAuthRateLimitStorage = (
         const fallbackValue = readFallback(key);
         const raw = await withCommandTimeout(
           redis.get(`${REDIS_KEY_PREFIX}${key}`),
+          commandTimer,
         );
         if (raw === null) {
           return fallbackValue;

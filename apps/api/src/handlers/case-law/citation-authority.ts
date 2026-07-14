@@ -74,7 +74,12 @@ export const recomputeCitationAuthorityForAll = async (
       citation_authority = ln(1 + (
         agg.raw_sum / GREATEST(
           COALESCE(
-            extract(epoch FROM (${nowExpr} - d.decision_date)) / ${SECONDS_PER_YEAR},
+            extract(
+              epoch FROM (
+                ${nowExpr}
+                - (d.decision_date::timestamp AT TIME ZONE 'UTC')
+              )
+            ) / ${SECONDS_PER_YEAR},
             1.0
           ),
           1.0
@@ -89,7 +94,12 @@ export const recomputeCitationAuthorityForAll = async (
           CASE WHEN c.id IS NULL THEN 0 ELSE
             (${courtWeightExpr})
             * (1.0 / (1 + COALESCE(
-                extract(epoch FROM (${nowExpr} - citing_d.decision_date))
+                extract(
+                  epoch FROM (
+                    ${nowExpr}
+                    - (citing_d.decision_date::timestamp AT TIME ZONE 'UTC')
+                  )
+                )
                   / ${SECONDS_PER_YEAR},
                 1.0
               )))
