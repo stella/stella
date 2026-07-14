@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
 const readHandler = (name: string) =>
-  readFileSync(new URL(`./${name}.ts`, import.meta.url), "utf8");
+  readFileSync(new URL(`${name}.ts`, import.meta.url), "utf-8");
 
 describe("style set storage integrity", () => {
   test("commits row deletion before removing stored packages", () => {

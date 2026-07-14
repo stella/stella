@@ -61,7 +61,7 @@ export default createSafeRootHandler(
       }),
     );
 
-    if (!deleted) {
+    if (deleted === false) {
       return Result.err(
         new HandlerError({ status: 404, message: "Style set not found" }),
       );
@@ -70,7 +70,7 @@ export default createSafeRootHandler(
       Result.tryPromise({
         try: async () =>
           await Promise.all(
-            deleted.s3Keys.map((s3Key) => getS3().delete(s3Key)),
+            deleted.s3Keys.map(async (s3Key) => await getS3().delete(s3Key)),
           ),
         catch: (cause) =>
           new HandlerError({

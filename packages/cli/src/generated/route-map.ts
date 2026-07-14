@@ -9687,7 +9687,7 @@ export const generatedRouteMap: RouteNode = {
             inputOnly: ["body.parentId", "body.style"],
             paginated: false,
             destructive: false,
-            scope: "matters_write",
+            scope: "documents_write",
             inputSchema: {
               type: "object",
               additionalProperties: false,

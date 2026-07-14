@@ -64,6 +64,7 @@ export default createSafeRootHandler(
       );
       yield* Result.await(
         safeDb(async (tx) => {
+          // audit: skip — cleanup metadata for the audited replacement below
           await tx
             .update(styleSets)
             .set({ cleanupS3Key: null })
@@ -180,6 +181,7 @@ export default createSafeRootHandler(
         captureError(cleanupResult.error);
       } else {
         const cleared = await safeDb(async (tx) => {
+          // audit: skip — cleanup metadata for the already-audited replacement
           await tx
             .update(styleSets)
             .set({ cleanupS3Key: null })
