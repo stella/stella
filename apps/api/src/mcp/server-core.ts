@@ -14,11 +14,7 @@ import type {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import type { McpSession } from "@/api/mcp/auth";
-import {
-  STELLA_CLI_LATEST_HEADER,
-  STELLA_CLI_LATEST_VERSION,
-  type McpMode,
-} from "@/api/mcp/constants";
+import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   McpAuthenticationError,
@@ -104,10 +100,6 @@ const withMcpCors = (response: Response) => {
       headers.set(key, value);
     }
   }
-  // Rides on every MCP response (incl. the CLI's tools/list fetch) to feed the
-  // @stll/cli update nudge; never touches the JSON-RPC payload.
-  headers.set(STELLA_CLI_LATEST_HEADER, STELLA_CLI_LATEST_VERSION);
-
   return new Response(response.body, {
     headers,
     status: response.status,

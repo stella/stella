@@ -53,10 +53,55 @@ should lag the release that stopped using the old data.
 
    For RCs, use matching values such as `VERSION=1.2.3-rc.1` and
    `docs/changelog/v1.2.3-rc.1.md`.
+
 4. Merge the commit to `main`. The `tag-on-version-bump.yml` workflow pushes
    the matching `vX.Y.Z` tag automatically. The tag then triggers
    `release.yml`.
 5. Wait for the release workflow to publish the image, manifest, and GitHub
-   release notes.
-6. Promote the release from a private deploy repository or your own deployment
-   system by consuming the manifest's immutable image digest.
+   release notes. Stable releases are promoted automatically; the workflow does
+   not succeed until `https://api.stll.app/health` reports the exact release
+   commit. RCs continue to target staging.
+6. After a stable release succeeds, `publish-npm.yml` checks out the same
+   release commit, packs the CLI, installs that exact tarball under plain Node,
+   and runs its unauthenticated compatibility canary against production. Only
+   then can the hardened npm publishing job publish `@stll/cli`.
+
+Changing `packages/cli/package.json` on `main` does not publish the CLI by
+itself. This ordering is deliberate: the API must advertise support for the
+packed CLI version and all of its resource scopes before the client becomes
+public. A manual CLI publish is recovery-only and requires `release_ref` to
+name the stable release currently served by production.
+
+## API and CLI Compatibility
+
+MCP protected-resource discovery publishes the versioned
+`stella_compatibility` contract. It contains the API contract version and the
+inclusive CLI version range supported by that server; `scopes_supported`
+remains the authoritative OAuth resource-scope list.
+
+Before expanding the CLI contract:
+
+1. Add the API behavior and scopes, then raise the server's maximum supported
+   CLI version.
+2. Ship that API in a stable release.
+3. Let the post-release exact-tarball canary publish the CLI.
+
+The CLI intersects ordinary login requests with the authorization server's
+advertised scopes, so an older server remains usable for capabilities it
+actually supports. Explicitly requested scopes remain requirements and fail
+before browser authorization when unavailable.
+
+CI enforces the cross-boundary invariants as one contract: the API contract
+number must match the CLI implementation, the API's maximum CLI version must
+equal the package version, the published-version hint must remain within the
+advertised range, and every packaged CLI scope must exist in the API's OAuth
+and MCP scope sets. The canaried tarball's SHA-256 checksum is verified again
+in the isolated OIDC publishing job, so npm receives those exact bytes.
+
+## Production Freshness
+
+`production-freshness.yml` checks production daily. It fails when production
+trails `main` by more than 100 commits or when the oldest unreleased commit has
+waited more than 168 hours. The check also rejects a production commit that is
+not an ancestor of `main`. Threshold overrides are available only on a manual
+workflow run, keeping the scheduled policy reviewable in source.

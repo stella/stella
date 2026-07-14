@@ -345,6 +345,21 @@ jobs:
       - name: Test release-channel script
         run: bash scripts/release-channel.test.sh
 
+      # Release ordering and freshness are safety properties. These tests have
+      # no workspace dependencies, so they remain runnable when a PR changes
+      # only workflows and the dependency install above is intentionally skipped.
+      - name: Test release policy scripts
+        run: >-
+          bun test
+          scripts/check-api-deployment.test.ts
+          scripts/check-production-freshness.test.ts
+
+      - name: Test API and CLI contract invariants
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        run: >-
+          bun test --preload ./apps/api/src/tests/setup-env.ts
+          scripts/check-api-cli-contract.test.ts
+
       # Self-test the desktop-release skip decision. This script
       # decides whether prod desktop users get an update at all; a
       # regression either ships stale desktop builds or reintroduces

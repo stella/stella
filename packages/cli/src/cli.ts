@@ -24,6 +24,7 @@ import {
 import { resolveServerUrl } from "./auth/server-resolution.js";
 import { buildGeneratedRoutes, buildResourceRoutes } from "./build-cli-tree.js";
 import { authRoute } from "./commands/auth.js";
+import { compatibilityRoute } from "./commands/compatibility.js";
 import type { Context } from "./context.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
 import { generatedResourceTree } from "./generated/resource-tree.js";
@@ -78,6 +79,7 @@ const buildApp = (tree: RouteNode) => {
     docs: { brief: "Stella command-line client" },
     routes: {
       auth: authRoute,
+      compatibility: compatibilityRoute,
       tools: toolsRoute,
       reference: buildResourceRoutes(generatedResourceTree),
       ...buildGeneratedRoutes(tree),

@@ -7,6 +7,9 @@ import {
   MCP_DISCOVERY_PATH,
   MCP_HTTP_PATH,
   ROOT_MCP_DISCOVERY_PATH,
+  STELLA_CLI_MAXIMUM_VERSION,
+  STELLA_CLI_MINIMUM_VERSION,
+  STELLA_MCP_API_CONTRACT_VERSION,
 } from "@/api/mcp/constants";
 import { getMcpProtectedResourceMetadata } from "@/api/mcp/metadata";
 
@@ -29,7 +32,22 @@ describe("MCP protected resource discovery routes", () => {
   };
 
   test("serves protected resource metadata from the canonical path", async () => {
-    await assertMetadataResponse(MCP_DISCOVERY_PATH);
+    const response = await mcpRoute.handle(
+      new Request(`http://localhost${MCP_DISCOVERY_PATH}`),
+    );
+    const metadata = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(metadata).toMatchObject({
+      scopes_supported: expect.arrayContaining(["stella:read"]),
+      stella_compatibility: {
+        api_contract_version: STELLA_MCP_API_CONTRACT_VERSION,
+        cli_version: {
+          maximum: STELLA_CLI_MAXIMUM_VERSION,
+          minimum: STELLA_CLI_MINIMUM_VERSION,
+        },
+      },
+    });
   });
 
   test("serves protected resource metadata from the root compatibility path", async () => {
