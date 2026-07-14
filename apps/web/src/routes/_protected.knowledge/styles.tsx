@@ -36,7 +36,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { isDocxFile } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
 const protectedRouteApi = getRouteApi("/_protected");
@@ -117,7 +117,7 @@ const StyleSetsPage = () => {
 
   const handleDownload = (styleSet: StyleSetItem) => {
     download(styleSet).catch((error: unknown) => {
-      showError(
+      showThrownError(
         t("styleSets.exportFailed"),
         error,
         t("common.unexpectedError"),
@@ -128,7 +128,7 @@ const StyleSetsPage = () => {
   const handleReplace = (file: File) => {
     replace(file).catch((error: unknown) => {
       setBusy(false);
-      showError(
+      showThrownError(
         t("styleSets.replaceFailed"),
         error,
         t("common.unexpectedError"),
@@ -381,7 +381,11 @@ const StyleSetFormDialog = ({
   const handleSave = () => {
     save().catch((error: unknown) => {
       setSaving(false);
-      showError(t("styleSets.saveFailed"), error, t("common.unexpectedError"));
+      showThrownError(
+        t("styleSets.saveFailed"),
+        error,
+        t("common.unexpectedError"),
+      );
     });
   };
 
@@ -480,5 +484,17 @@ const showError = (
     type: "error",
     title,
     description: userErrorMessage(error, fallbackMessage),
+  });
+};
+
+const showThrownError = (
+  title: string,
+  error: unknown,
+  fallbackMessage: string,
+) => {
+  stellaToast.add({
+    type: "error",
+    title,
+    description: userErrorFromThrown(error, fallbackMessage),
   });
 };

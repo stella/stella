@@ -21,7 +21,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { styleSetsOptions } from "@/features/style-sets/style-set-queries";
-import { userErrorMessage } from "@/lib/errors/user-safe";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 export type StyleSelection =
   | { type: "stella" }
@@ -94,7 +94,7 @@ const StyleSetPickerDialogBody = ({
       stellaToast.add({
         type: "error",
         title: t("errors.actionFailed"),
-        description: userErrorMessage(error, t("common.unexpectedError")),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
     });
   };
