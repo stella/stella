@@ -168,9 +168,8 @@ describe("projectToProviderSafeJsonSchema", () => {
     expect(droppedKeywords).toEqual([]);
   });
 
-  test("drops const constraints that cannot be lowered to provider-safe enums", () => {
+  test("preserves the inferred boolean type when dropping a const constraint", () => {
     const { schema, droppedKeywords } = projectToProviderSafeJsonSchema({
-      type: "boolean",
       const: true,
     });
 

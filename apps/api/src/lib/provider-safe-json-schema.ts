@@ -169,6 +169,10 @@ const normalizeConstKeyword = ({
 
   const constValue = next["const"];
   delete next["const"];
+  if (typeof constValue === "boolean" && !("type" in next)) {
+    next["type"] = "boolean";
+  }
+
   if (constValue === null && !("enum" in next) && !("type" in next)) {
     if (context.nullUnionStrategy === "json-schema") {
       next["type"] = "null";
