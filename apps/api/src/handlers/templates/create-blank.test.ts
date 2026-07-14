@@ -9,7 +9,7 @@ import {
 
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
-import { createBlankTemplateBuffer } from "@/api/handlers/templates/create-blank";
+import { createTemplateBuffer } from "@/api/handlers/templates/create-template-buffer";
 
 // The blank-create handler's only logic on top of the shared
 // `createStoredTemplate` recipe is generating the source buffer from a
@@ -19,7 +19,7 @@ import { createBlankTemplateBuffer } from "@/api/handlers/templates/create-blank
 // create path; here we only guard the blank buffer it consumes.
 describe("blank template buffer", () => {
   test("the default is a non-empty, openable stella style DOCX", async () => {
-    const buffer = await createBlankTemplateBuffer({ type: "stella" });
+    const buffer = await createTemplateBuffer({ type: "stella" });
 
     expect(buffer.byteLength).toBeGreaterThan(0);
 
@@ -33,7 +33,7 @@ describe("blank template buffer", () => {
   });
 
   test("discovers zero fields and carries no embedded manifest", async () => {
-    const buffer = await createBlankTemplateBuffer({ type: "stella" });
+    const buffer = await createTemplateBuffer({ type: "stella" });
 
     const [discovered, manifest] = await Promise.all([
       discoverTemplate(buffer),
@@ -58,7 +58,7 @@ describe("blank template buffer", () => {
       ),
     );
 
-    const buffer = await createBlankTemplateBuffer({
+    const buffer = await createTemplateBuffer({
       type: "style-source",
       buffer: source,
       name: "Imported styles",

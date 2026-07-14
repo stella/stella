@@ -178,18 +178,18 @@ function RouteComponent() {
     [t, invalidateTemplates],
   );
 
-  // Blank templates always use a complete Folio style system. Without a style
-  // source the server applies Stella Style; with one it extracts only the
-  // source DOCX's sanitized styles and rebuilds a content-free document.
+  // Blank templates always use a complete Folio style system. The dedicated
+  // styles endpoint extracts only sanitized styles from the source DOCX and
+  // rebuilds a content-free document.
   const openBlankTemplate = useCallback(
     async (styleSource?: File) => {
       setCreating(true);
       const name = styleSource
         ? styleSource.name.replace(DOCX_EXTENSION_RE, "")
         : t("templates.untitledTemplate");
-      const response = await api.templates.blank.put(
-        styleSource ? { name, styleSource } : { name },
-      );
+      const response = styleSource
+        ? await api.templates.styles.put({ name, styleSource })
+        : await api.templates.blank.put({ name });
       setCreating(false);
       if (response.error) {
         stellaToast.add({

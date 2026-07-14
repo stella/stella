@@ -605,6 +605,10 @@ export const CAPABILITY_DISPATCH = {
   "templates.create-blank": {
     load: async () => await import("@/api/handlers/templates/create-blank"),
   },
+  "templates.create-from-styles": {
+    load: async () =>
+      await import("@/api/handlers/templates/create-from-styles"),
+  },
   "templates.delete": {
     load: async () => await import("@/api/handlers/templates/delete"),
   },

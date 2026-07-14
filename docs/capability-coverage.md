@@ -308,6 +308,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `templates.clauses-unlink` | write | stella:templates | — | generic invoke → `stella templates clauses-unlink` |
 | `templates.create` | write | stella:templates | — | curated tool `save_template` |
 | `templates.create-blank` | write | stella:templates | — | generic invoke → `stella templates create-blank` |
+| `templates.create-from-styles` | write | stella:templates | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `templates.delete` | write, destructive | stella:templates | — | generic invoke → `stella templates delete` |
 | `templates.discover` | read | stella:templates | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `templates.fill` | write | stella:templates | — | curated tool `fill_template` |

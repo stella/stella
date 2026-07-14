@@ -14,40 +14,58 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const createBlankTemplateBodySchema = t.Object({
+const createTemplateFromStylesBodySchema = t.Object({
   name: tDefaultVarchar,
-  categoryId: t.Optional(tSafeId("templateCategory")),
+  styleSource: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
 });
 
-type CreateBlankTemplateProps = {
+type CreateTemplateFromStylesProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   body: {
     name: string;
-    categoryId?: SafeId<"templateCategory">;
+    styleSource: File;
   };
   recordAuditEvent: AuditRecorder;
 };
 
-const createBlankTemplateHandler = async function* ({
+const createTemplateFromStylesHandler = async function* ({
   safeDb,
   organizationId,
   userId,
-  body: { name, categoryId },
+  body: { name, styleSource },
   recordAuditEvent,
-}: CreateBlankTemplateProps): SafeHandlerGenerator<CreatedTemplate> {
+}: CreateTemplateFromStylesProps): SafeHandlerGenerator<CreatedTemplate> {
+  if (styleSource.type !== DOCX_MIME_TYPE) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Invalid style source. Expected a DOCX file.",
+      }),
+    );
+  }
+
+  // Folio reads only sanitized style resources, then creates a fresh package.
+  // Source text, relationships, media, comments, and revisions are excluded.
   const buffer = yield* Result.await(
     Result.tryPromise({
-      try: async () => await createTemplateBuffer({ type: "stella" }),
+      try: async () =>
+        await createTemplateBuffer({
+          type: "style-source",
+          buffer: Buffer.from(await styleSource.arrayBuffer()),
+          name,
+        }),
       catch: (cause) =>
         new HandlerError({
-          status: 500,
-          message: "Could not create the blank template.",
+          status: 400,
+          message: "Could not extract styles from the DOCX file.",
           cause,
         }),
     }),
@@ -60,22 +78,20 @@ const createBlankTemplateHandler = async function* ({
     buffer,
     name,
     fileName: sanitizeFilename(`${name}.docx`),
-    categoryId,
     recordAuditEvent,
   });
 };
 
 const config = {
   permissions: { template: ["create"] },
-  // Not reachable through save_template (which requires a DOCX on create).
   mcp: { type: "capability", reason: "template_authoring_ui" },
-  body: createBlankTemplateBodySchema,
+  body: createTemplateFromStylesBodySchema,
 } satisfies HandlerConfig;
 
-const createBlankTemplate = createSafeRootHandler(
+const createTemplateFromStyles = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {
-    return yield* createBlankTemplateHandler({
+    return yield* createTemplateFromStylesHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
       userId: user.id,
@@ -85,4 +101,4 @@ const createBlankTemplate = createSafeRootHandler(
   },
 );
 
-export default createBlankTemplate;
+export default createTemplateFromStyles;
