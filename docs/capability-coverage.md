@@ -110,6 +110,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `entities.compare-versions` | read | stella:matters_write | — | generic invoke → `stella entities compare-versions` |
 | `entities.copy-to-workspace` | write, destructive | stella:matters_write | — | generic invoke → `stella entities copy-to-workspace` |
 | `entities.create` | write | stella:documents_write | — | curated tool `save_document` |
+| `entities.create-blank-document` | write | stella:matters_write | — | generic invoke → `stella entities create-blank-document` |
 | `entities.create-from-legal-source` | write | stella:matters_write | — | generic invoke → `stella entities create-from-legal-source` |
 | `entities.delete` | write, destructive | stella:documents_write | — | curated tool `delete_document` |
 | `entities.delete-version` | write, destructive | stella:documents_write | — | covered by `delete_document` |
@@ -268,6 +269,17 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `skills.update` | write | stella:skills | — | generic invoke → `stella skills update` |
 | `skills.upload` | write | stella:skills | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 
+## style-sets
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `style-sets.create` | write | stella:templates | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `style-sets.delete` | write, destructive | stella:templates | — | generic invoke → `stella style-sets delete` |
+| `style-sets.download` | read | stella:templates | — | generic invoke → `stella style-sets download` |
+| `style-sets.list` | read | stella:templates | — | generic invoke → `stella style-sets list` |
+| `style-sets.replace` | write | stella:templates | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `style-sets.update` | write | stella:templates | — | generic invoke → `stella style-sets update` |
+
 ## tasks
 
 | Capability | Access | Scope | Feature | Reachable via |
@@ -308,6 +320,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `templates.clauses-unlink` | write | stella:templates | — | generic invoke → `stella templates clauses-unlink` |
 | `templates.create` | write | stella:templates | — | curated tool `save_template` |
 | `templates.create-blank` | write | stella:templates | — | generic invoke → `stella templates create-blank` |
+| `templates.create-from-style-set` | write | stella:templates | — | generic invoke → `stella templates create-from-style-set` |
 | `templates.create-from-styles` | write | stella:templates | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `templates.delete` | write, destructive | stella:templates | — | generic invoke → `stella templates delete` |
 | `templates.discover` | read | stella:templates | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |

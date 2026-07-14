@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Šī perioda lietojuma vienības"
     }
   },
+  "styleSets": {
+    "create": "Izveidot",
+    "defaultBadge": "Noklusējums",
+    "deleteConfirmation": "Lai apstiprinātu, ievadiet stilu kopas nosaukumu.",
+    "deleteDescription": "Esošie dokumenti un veidnes nemainīsies.",
+    "deleteFailed": "Neizdevās dzēst stilu kopu",
+    "deleteTitle": "Dzēst stilu kopu?",
+    "description": "Atkārtoti izmantojams dokumentu formatējums veidnēm un jauniem dokumentiem",
+    "exportFailed": "Neizdevās eksportēt stilu kopu",
+    "import": "Importēt stilu kopu",
+    "importDescription": "Stili tiek iegūti jaunā DOCX failā bez satura.",
+    "importTitle": "Importēt stilu kopu",
+    "loadFailed": "Neizdevās ielādēt stilu kopas",
+    "newDocument": "Jauns dokuments",
+    "pickerDescription": "Izvēlieties jaunā faila formatēšanas sistēmu.",
+    "renameTitle": "Pārdēvēt stilu kopu",
+    "replace": "Aizstāt avotu",
+    "replaceFailed": "Neizdevās aizstāt stilu kopu",
+    "replaced": "Stilu kopa aizstāta",
+    "saveFailed": "Neizdevās saglabāt stilu kopu",
+    "savedDescription": "Saglabāta stilu kopa",
+    "sourceDocument": "Avota DOCX",
+    "stellaDescription": "Pilnīgs neitrāls Stella juridisko dokumentu formatējums",
+    "stellaStyle": "Stella Style",
+    "title": "Stilu kopas",
+    "untitledDocument": "Dokuments bez nosaukuma"
+  },
   "success": {
     "aiConfigDeleted": "AI konfigurācija noņemta",
     "aiConfigUpdated": "AI konfigurācija atjaunināta",

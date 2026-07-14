@@ -1,0 +1,114 @@
+import { Result } from "better-result";
+import { eq, sql } from "drizzle-orm";
+import { t } from "elysia";
+
+import { styleSets } from "@/api/db/schema";
+import {
+  buildStyleSetKey,
+  extractStyleSetBuffer,
+  styleSetColumns,
+  styleSetExportFileName,
+} from "@/api/handlers/style-sets/shared";
+import { captureError } from "@/api/lib/analytics/capture";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
+import { tDefaultVarchar } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
+import { getS3 } from "@/api/lib/s3";
+
+const bodySchema = t.Object({
+  name: tDefaultVarchar,
+  styleSource: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+});
+
+const config = {
+  permissions: { styleSet: ["create"] },
+  mcp: { type: "capability", reason: "template_authoring_ui" },
+  body: bodySchema,
+} satisfies HandlerConfig;
+
+export default createSafeRootHandler(
+  config,
+  async function* ({ safeDb, session, user, body, recordAuditEvent }) {
+    const buffer = yield* Result.await(
+      extractStyleSetBuffer(body.styleSource, body.name),
+    );
+    const styleSetId = createSafeId<"styleSet">();
+    const s3Key = buildStyleSetKey({
+      organizationId: session.activeOrganizationId,
+      styleSetId,
+    });
+
+    yield* Result.await(
+      Result.tryPromise({
+        try: async () => await getS3().write(s3Key, buffer),
+        catch: (cause) =>
+          new HandlerError({
+            status: 500,
+            message: "Could not store the style set.",
+            cause,
+          }),
+      }),
+    );
+
+    const inserted = yield* Result.await(
+      safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${session.activeOrganizationId}))`,
+        );
+        const count = await tx.$count(
+          styleSets,
+          eq(styleSets.organizationId, session.activeOrganizationId),
+        );
+        if (count >= LIMITS.styleSetsCount) {
+          return null;
+        }
+
+        const [row] = await tx
+          .insert(styleSets)
+          .values({
+            id: styleSetId,
+            organizationId: session.activeOrganizationId,
+            name: body.name,
+            fileName: styleSetExportFileName(body.name),
+            s3Key,
+            sizeBytes: buffer.byteLength,
+            createdBy: user.id,
+          })
+          .returning(styleSetColumns);
+
+        if (row) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CREATE,
+            resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
+            resourceId: row.id,
+            workspaceId: null,
+            changes: {
+              created: {
+                old: null,
+                new: {
+                  name: row.name,
+                  sizeBytes: row.sizeBytes,
+                },
+              },
+            },
+          });
+        }
+
+        return row ?? null;
+      }),
+    );
+
+    if (!inserted) {
+      getS3().delete(s3Key).catch(captureError);
+      return Result.err(
+        new HandlerError({ status: 400, message: "Style set limit reached" }),
+      );
+    }
+
+    return Result.ok(inserted);
+  },
+);

@@ -44,6 +44,9 @@ export const LIMITS = {
    *  endpoint returns a plain ordered array rather than a paginated page. */
   documentTypesCount: 100,
   templatesCount: 50,
+  styleSetsCount: 100,
+  styleSetsPageSizeDefault: 50,
+  styleSetsPageSizeMax: 100,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,
   templateRecipesCount: 100,

@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Selle perioodi kasutusühikud"
     }
   },
+  "styleSets": {
+    "create": "Loo",
+    "defaultBadge": "Vaikimisi",
+    "deleteConfirmation": "Kinnitamiseks sisestage stiilikomplekti nimi.",
+    "deleteDescription": "Olemasolevad dokumendid ja mallid ei muutu.",
+    "deleteFailed": "Stiilikomplekti ei saanud kustutada",
+    "deleteTitle": "Kas kustutada stiilikomplekt?",
+    "description": "Korduskasutatav dokumendivorming mallidele ja uutele dokumentidele",
+    "exportFailed": "Stiilikomplekti ei saanud eksportida",
+    "import": "Impordi stiilikomplekt",
+    "importDescription": "Stiilid eraldatakse uude sisuta DOCX-faili.",
+    "importTitle": "Impordi stiilikomplekt",
+    "loadFailed": "Stiilikomplekte ei saanud laadida",
+    "newDocument": "Uus dokument",
+    "pickerDescription": "Valige uue faili vormindussüsteem.",
+    "renameTitle": "Nimeta stiilikomplekt ümber",
+    "replace": "Asenda lähtefail",
+    "replaceFailed": "Stiilikomplekti ei saanud asendada",
+    "replaced": "Stiilikomplekt asendatud",
+    "saveFailed": "Stiilikomplekti ei saanud salvestada",
+    "savedDescription": "Salvestatud stiilikomplekt",
+    "sourceDocument": "Lähte-DOCX",
+    "stellaDescription": "Stella täielik neutraalne juriidiliste dokumentide vorming",
+    "stellaStyle": "Stella Style",
+    "title": "Stiilikomplektid",
+    "untitledDocument": "Pealkirjata dokument"
+  },
   "success": {
     "aiConfigDeleted": "AI seadistus eemaldatud",
     "aiConfigUpdated": "AI seadistus uuendatud",

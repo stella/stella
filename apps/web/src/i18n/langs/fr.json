@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Unités d’utilisation sur cette période"
     }
   },
+  "styleSets": {
+    "create": "Créer",
+    "defaultBadge": "Par défaut",
+    "deleteConfirmation": "Saisissez le nom du jeu de styles pour confirmer.",
+    "deleteDescription": "Les documents et modèles existants ne seront pas modifiés.",
+    "deleteFailed": "Impossible de supprimer le jeu de styles",
+    "deleteTitle": "Supprimer le jeu de styles ?",
+    "description": "Mise en forme réutilisable pour les modèles et les nouveaux documents",
+    "exportFailed": "Impossible d’exporter le jeu de styles",
+    "import": "Importer un jeu de styles",
+    "importDescription": "Les styles sont extraits dans un nouveau DOCX sans contenu.",
+    "importTitle": "Importer un jeu de styles",
+    "loadFailed": "Impossible de charger les jeux de styles",
+    "newDocument": "Nouveau document",
+    "pickerDescription": "Choisissez le système de mise en forme du nouveau fichier.",
+    "renameTitle": "Renommer le jeu de styles",
+    "replace": "Remplacer la source",
+    "replaceFailed": "Impossible de remplacer le jeu de styles",
+    "replaced": "Jeu de styles remplacé",
+    "saveFailed": "Impossible d’enregistrer le jeu de styles",
+    "savedDescription": "Jeu de styles enregistré",
+    "sourceDocument": "DOCX source",
+    "stellaDescription": "Mise en forme juridique complète et neutre de Stella",
+    "stellaStyle": "Stella Style",
+    "title": "Jeux de styles",
+    "untitledDocument": "Document sans titre"
+  },
   "success": {
     "aiConfigDeleted": "Configuration de l’IA supprimée",
     "aiConfigUpdated": "Configuration de l’IA mise à jour",

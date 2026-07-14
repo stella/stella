@@ -6,6 +6,7 @@ import clipEndpoint from "@/api/handlers/entities/clip";
 import compareVersions from "@/api/handlers/entities/compare-versions";
 import copyToWorkspace from "@/api/handlers/entities/copy-to-workspace";
 import createEntities from "@/api/handlers/entities/create";
+import createBlankDocument from "@/api/handlers/entities/create-blank-document";
 import createFromLegalSource from "@/api/handlers/entities/create-from-legal-source";
 import deleteEntities from "@/api/handlers/entities/delete";
 import deleteVersion from "@/api/handlers/entities/delete-version";
@@ -89,6 +90,11 @@ export const entitiesRoute = new Elysia({
     body: createEntities.config.body,
     invalidateQuery: true,
     permissions: createEntities.config.permissions,
+  })
+  .put("/blank-document", createBlankDocument.handler, {
+    body: createBlankDocument.config.body,
+    invalidateQuery: true,
+    permissions: createBlankDocument.config.permissions,
   })
   .post("/upload", uploadEntity.handler, {
     body: uploadEntity.config.body,

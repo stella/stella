@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Unidades de uso neste período"
     }
   },
+  "styleSets": {
+    "create": "Criar",
+    "defaultBadge": "Padrão",
+    "deleteConfirmation": "Digite o nome do conjunto de estilos para confirmar.",
+    "deleteDescription": "Documentos e modelos existentes não serão alterados.",
+    "deleteFailed": "Não foi possível excluir o conjunto de estilos",
+    "deleteTitle": "Excluir conjunto de estilos?",
+    "description": "Formatação reutilizável para modelos e novos documentos",
+    "exportFailed": "Não foi possível exportar o conjunto de estilos",
+    "import": "Importar conjunto de estilos",
+    "importDescription": "Os estilos são extraídos para um novo DOCX sem conteúdo.",
+    "importTitle": "Importar conjunto de estilos",
+    "loadFailed": "Não foi possível carregar os conjuntos de estilos",
+    "newDocument": "Novo documento",
+    "pickerDescription": "Escolha o sistema de formatação do novo arquivo.",
+    "renameTitle": "Renomear conjunto de estilos",
+    "replace": "Substituir origem",
+    "replaceFailed": "Não foi possível substituir o conjunto de estilos",
+    "replaced": "Conjunto de estilos substituído",
+    "saveFailed": "Não foi possível salvar o conjunto de estilos",
+    "savedDescription": "Conjunto de estilos salvo",
+    "sourceDocument": "DOCX de origem",
+    "stellaDescription": "Formatação jurídica completa e neutra da Stella",
+    "stellaStyle": "Stella Style",
+    "title": "Conjuntos de estilos",
+    "untitledDocument": "Documento sem título"
+  },
   "success": {
     "aiConfigDeleted": "Configuração de IA removida",
     "aiConfigUpdated": "Configuração de IA atualizada",

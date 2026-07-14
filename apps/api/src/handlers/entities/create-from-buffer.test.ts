@@ -47,10 +47,12 @@ const workspaceId = toSafeId<"workspace">(
 );
 const userId = toSafeId<"user">("00000000-0000-0000-0000-000000000003");
 const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
+const parentId = toSafeId<"entity">("00000000-0000-0000-0000-000000000005");
 
 describe("createEntityFromBuffer", () => {
   test("writes an entity create audit log with the DB insert", async () => {
     let nextDocumentSequence = 0;
+    let insertedEntity: unknown;
     const tx = {
       query: {
         properties: {
@@ -67,7 +69,7 @@ describe("createEntityFromBuffer", () => {
       },
       $count: async () => 0,
       insert: (table: unknown) => ({
-        values: () => {
+        values: (values: unknown) => {
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -84,6 +86,9 @@ describe("createEntityFromBuffer", () => {
             table === entityVersions ||
             table === fields
           ) {
+            if (table === entities) {
+              insertedEntity = values;
+            }
             return undefined;
           }
 
@@ -111,6 +116,7 @@ describe("createEntityFromBuffer", () => {
       fileName: "Generated Agreement.docx",
       mimeType:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      parentId,
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -127,11 +133,15 @@ describe("createEntityFromBuffer", () => {
               "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             sizeBytes: 10,
             propertyId,
+            parentId,
           },
         },
       },
       resourceId: expect.any(String),
       resourceType: "entity",
     });
+    expect(insertedEntity).toEqual(
+      expect.objectContaining({ parentId, workspaceId }),
+    );
   });
 });

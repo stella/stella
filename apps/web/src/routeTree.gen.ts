@@ -38,6 +38,7 @@ import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as ProtectedKnowledgeToolsRouteImport } from './routes/_protected.knowledge/tools'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
+import { Route as ProtectedKnowledgeStylesRouteImport } from './routes/_protected.knowledge/styles'
 import { Route as ProtectedKnowledgeSkillsRouteImport } from './routes/_protected.knowledge/skills'
 import { Route as ProtectedKnowledgePromptsRouteImport } from './routes/_protected.knowledge/prompts'
 import { Route as ProtectedKnowledgePlaybooksRouteImport } from './routes/_protected.knowledge/playbooks'
@@ -223,6 +224,12 @@ const ProtectedKnowledgeTemplatesRoute =
   ProtectedKnowledgeTemplatesRouteImport.update({
     id: '/templates',
     path: '/templates',
+    getParentRoute: () => ProtectedKnowledgeRouteRoute,
+  } as any)
+const ProtectedKnowledgeStylesRoute =
+  ProtectedKnowledgeStylesRouteImport.update({
+    id: '/styles',
+    path: '/styles',
     getParentRoute: () => ProtectedKnowledgeRouteRoute,
   } as any)
 const ProtectedKnowledgeSkillsRoute =
@@ -487,6 +494,7 @@ export interface FileRoutesByFullPath {
   '/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
   '/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
   '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
+  '/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -549,6 +557,7 @@ export interface FileRoutesByTo {
   '/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
   '/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
   '/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
+  '/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -619,6 +628,7 @@ export interface FileRoutesById {
   '/_protected/knowledge/playbooks': typeof ProtectedKnowledgePlaybooksRoute
   '/_protected/knowledge/prompts': typeof ProtectedKnowledgePromptsRoute
   '/_protected/knowledge/skills': typeof ProtectedKnowledgeSkillsRoute
+  '/_protected/knowledge/styles': typeof ProtectedKnowledgeStylesRoute
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/_protected/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
@@ -690,6 +700,7 @@ export interface FileRouteTypes {
     | '/knowledge/playbooks'
     | '/knowledge/prompts'
     | '/knowledge/skills'
+    | '/knowledge/styles'
     | '/knowledge/templates'
     | '/knowledge/tools'
     | '/auth/accept-invitation/$invitationId'
@@ -752,6 +763,7 @@ export interface FileRouteTypes {
     | '/knowledge/playbooks'
     | '/knowledge/prompts'
     | '/knowledge/skills'
+    | '/knowledge/styles'
     | '/knowledge/templates'
     | '/knowledge/tools'
     | '/auth/accept-invitation/$invitationId'
@@ -821,6 +833,7 @@ export interface FileRouteTypes {
     | '/_protected/knowledge/playbooks'
     | '/_protected/knowledge/prompts'
     | '/_protected/knowledge/skills'
+    | '/_protected/knowledge/styles'
     | '/_protected/knowledge/templates'
     | '/_protected/knowledge/tools'
     | '/auth/accept-invitation/$invitationId'
@@ -1080,6 +1093,13 @@ declare module '@tanstack/react-router' {
       path: '/templates'
       fullPath: '/knowledge/templates'
       preLoaderRoute: typeof ProtectedKnowledgeTemplatesRouteImport
+      parentRoute: typeof ProtectedKnowledgeRouteRoute
+    }
+    '/_protected/knowledge/styles': {
+      id: '/_protected/knowledge/styles'
+      path: '/styles'
+      fullPath: '/knowledge/styles'
+      preLoaderRoute: typeof ProtectedKnowledgeStylesRouteImport
       parentRoute: typeof ProtectedKnowledgeRouteRoute
     }
     '/_protected/knowledge/skills': {
@@ -1421,6 +1441,7 @@ interface ProtectedKnowledgeRouteRouteChildren {
   ProtectedKnowledgePlaybooksRoute: typeof ProtectedKnowledgePlaybooksRoute
   ProtectedKnowledgePromptsRoute: typeof ProtectedKnowledgePromptsRoute
   ProtectedKnowledgeSkillsRoute: typeof ProtectedKnowledgeSkillsRoute
+  ProtectedKnowledgeStylesRoute: typeof ProtectedKnowledgeStylesRoute
   ProtectedKnowledgeTemplatesRoute: typeof ProtectedKnowledgeTemplatesRoute
   ProtectedKnowledgeToolsRoute: typeof ProtectedKnowledgeToolsRoute
   ProtectedKnowledgeIndexRoute: typeof ProtectedKnowledgeIndexRoute
@@ -1434,6 +1455,7 @@ const ProtectedKnowledgeRouteRouteChildren: ProtectedKnowledgeRouteRouteChildren
     ProtectedKnowledgePlaybooksRoute: ProtectedKnowledgePlaybooksRoute,
     ProtectedKnowledgePromptsRoute: ProtectedKnowledgePromptsRoute,
     ProtectedKnowledgeSkillsRoute: ProtectedKnowledgeSkillsRoute,
+    ProtectedKnowledgeStylesRoute: ProtectedKnowledgeStylesRoute,
     ProtectedKnowledgeTemplatesRoute: ProtectedKnowledgeTemplatesRoute,
     ProtectedKnowledgeToolsRoute: ProtectedKnowledgeToolsRoute,
     ProtectedKnowledgeIndexRoute: ProtectedKnowledgeIndexRoute,

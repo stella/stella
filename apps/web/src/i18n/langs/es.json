@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Unidades de uso de este periodo"
     }
   },
+  "styleSets": {
+    "create": "Crear",
+    "defaultBadge": "Predeterminado",
+    "deleteConfirmation": "Escribe el nombre del conjunto de estilos para confirmar.",
+    "deleteDescription": "Los documentos y las plantillas existentes no cambiarán.",
+    "deleteFailed": "No se pudo eliminar el conjunto de estilos",
+    "deleteTitle": "¿Eliminar el conjunto de estilos?",
+    "description": "Formato de documentos reutilizable para plantillas y documentos nuevos",
+    "exportFailed": "No se pudo exportar el conjunto de estilos",
+    "import": "Importar conjunto de estilos",
+    "importDescription": "Los estilos se extraen a un DOCX nuevo y sin contenido.",
+    "importTitle": "Importar conjunto de estilos",
+    "loadFailed": "No se pudieron cargar los conjuntos de estilos",
+    "newDocument": "Nuevo documento",
+    "pickerDescription": "Elige el sistema de formato para el archivo nuevo.",
+    "renameTitle": "Cambiar nombre del conjunto de estilos",
+    "replace": "Reemplazar origen",
+    "replaceFailed": "No se pudo reemplazar el conjunto de estilos",
+    "replaced": "Conjunto de estilos reemplazado",
+    "saveFailed": "No se pudo guardar el conjunto de estilos",
+    "savedDescription": "Conjunto de estilos guardado",
+    "sourceDocument": "DOCX de origen",
+    "stellaDescription": "Formato jurídico completo y neutro de Stella",
+    "stellaStyle": "Stella Style",
+    "title": "Conjuntos de estilos",
+    "untitledDocument": "Documento sin título"
+  },
   "success": {
     "aiConfigDeleted": "Configuración de IA eliminada",
     "aiConfigUpdated": "Configuración de IA actualizada",

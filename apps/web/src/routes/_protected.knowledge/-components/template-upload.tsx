@@ -9,7 +9,7 @@ import { TextSeparator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { DOCX_MIME, isDocxFile } from "@/lib/consts";
+import { DOCX_MIME } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
@@ -22,19 +22,16 @@ type DiscoverData = Exclude<
 
 type TemplateUploadProps = {
   onCreateBlank: () => void;
-  onCreateFromStyles: (file: File) => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
 };
 
 export const TemplateUpload = ({
   onCreateBlank,
-  onCreateFromStyles,
   onDiscovered,
 }: TemplateUploadProps) => {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement>(null);
   const prepareInputRef = useRef<HTMLInputElement>(null);
-  const styleInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const discoverMutation = useMutation({
@@ -138,25 +135,6 @@ export const TemplateUpload = ({
     e.target.value = "";
   };
 
-  const handleStyleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.item(0);
-    e.target.value = "";
-
-    if (!file) {
-      return;
-    }
-
-    if (!isDocxFile(file)) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.invalidFileType"),
-      });
-      return;
-    }
-
-    onCreateFromStyles(file);
-  };
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -209,17 +187,8 @@ export const TemplateUpload = ({
           <p className="text-muted-foreground text-center text-xs">
             {t("templates.createInStudioHint")}
           </p>
-          <Button
-            className="w-full"
-            disabled={loading}
-            onClick={() => styleInputRef.current?.click()}
-            variant="outline"
-          >
-            <UploadIcon />
-            {t("templates.createFromStyles")}
-          </Button>
           <p className="text-muted-foreground text-center text-xs">
-            {t("templates.createFromStylesHint")}
+            {t("styleSets.pickerDescription")}
           </p>
         </div>
 
@@ -266,13 +235,6 @@ export const TemplateUpload = ({
           className="hidden"
           onChange={handlePrepareFileChange}
           ref={prepareInputRef}
-          type="file"
-        />
-        <input
-          accept=".docx"
-          className="hidden"
-          onChange={handleStyleFileChange}
-          ref={styleInputRef}
           type="file"
         />
       </div>

@@ -36,7 +36,7 @@ export type CreateEntitiesHandlerProps = {
   body: CreateEntityBodySchema;
 };
 
-const validateParentId = async (
+export const validateParentId = async (
   tx: Transaction,
   parentId: SafeId<"entity">,
   workspaceId: SafeId<"workspace">,

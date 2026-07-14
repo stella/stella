@@ -10,7 +10,10 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
+import { StyleSetPickerDialog } from "@/routes/_protected.knowledge/-components/style-set-picker-dialog";
+import type { StyleSelection } from "@/routes/_protected.knowledge/-components/style-set-picker-dialog";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
 import { TemplateStudioPage } from "@/routes/_protected.knowledge/-components/template-studio";
@@ -91,6 +94,7 @@ function RouteComponent() {
   });
   const [view, setView] = useState<View>({ kind: "list" });
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [stylePickerOpen, setStylePickerOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
@@ -178,18 +182,16 @@ function RouteComponent() {
     [t, invalidateTemplates],
   );
 
-  // Blank templates always use a complete Folio style system. The dedicated
-  // styles endpoint extracts only sanitized styles from the source DOCX and
-  // rebuilds a content-free document.
   const openBlankTemplate = useCallback(
-    async (styleSource?: File) => {
+    async (name: string, style: StyleSelection) => {
       setCreating(true);
-      const name = styleSource
-        ? styleSource.name.replace(DOCX_EXTENSION_RE, "")
-        : t("templates.untitledTemplate");
-      const response = styleSource
-        ? await api.templates.styles.put({ name, styleSource })
-        : await api.templates.blank.put({ name });
+      const response =
+        style.type === "stella"
+          ? await api.templates.blank.put({ name })
+          : await api.templates["style-set"].put({
+              name,
+              styleSetId: toSafeId<"styleSet">(style.styleSetId),
+            });
       setCreating(false);
       if (response.error) {
         stellaToast.add({
@@ -200,7 +202,7 @@ function RouteComponent() {
             t("common.unexpectedError"),
           ),
         });
-        return;
+        return false;
       }
       const created = response.data;
       invalidateTemplates();
@@ -216,6 +218,7 @@ function RouteComponent() {
           createdAt: new Date(created.createdAt),
         },
       });
+      return true;
     },
     [t, invalidateTemplates],
   );
@@ -294,24 +297,28 @@ function RouteComponent() {
   }
 
   return (
-    <TemplateList
-      categories={categories}
-      onCategoriesChanged={invalidateCategories}
-      onCategorySelect={handleCategorySelect}
-      onCreateBlank={() => {
-        void openBlankTemplate();
-      }}
-      onCreateFromStyles={(file) => {
-        void openBlankTemplate(file);
-      }}
-      onDeleted={invalidateTemplates}
-      onDiscovered={(file) => {
-        void openUploadedTemplate(file);
-      }}
-      onSelect={(template) => setView({ kind: "detail", template })}
-      selectedCategoryId={selectedCategoryId}
-      templates={templates}
-    />
+    <>
+      <TemplateList
+        categories={categories}
+        onCategoriesChanged={invalidateCategories}
+        onCategorySelect={handleCategorySelect}
+        onCreateBlank={() => setStylePickerOpen(true)}
+        onDeleted={invalidateTemplates}
+        onDiscovered={(file) => {
+          void openUploadedTemplate(file);
+        }}
+        onSelect={(template) => setView({ kind: "detail", template })}
+        selectedCategoryId={selectedCategoryId}
+        templates={templates}
+      />
+      <StyleSetPickerDialog
+        initialName={t("templates.untitledTemplate")}
+        onCreate={openBlankTemplate}
+        onOpenChange={setStylePickerOpen}
+        open={stylePickerOpen}
+        title={t("templates.newTemplate")}
+      />
+    </>
   );
 }
 

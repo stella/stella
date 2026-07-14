@@ -182,6 +182,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
   skills: "stella:skills",
+  "style-sets": "stella:templates",
   tasks: "stella:matters_write",
   "template-recipes": "stella:templates",
   templates: "stella:templates",
@@ -306,6 +307,10 @@ const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
  *   pure count read used before running a workflow.
  */
 const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
+  "entities.create-blank-document": {
+    access: "write",
+    destructive: false,
+  },
   "playbooks.run": { access: "write", destructive: false },
   "playbooks.auto-run": { access: "write", destructive: false },
   "playbooks.approve": { access: "write", destructive: false },
@@ -327,6 +332,12 @@ const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
   "skills.get": { access: "read", destructive: false },
   "skills.list": { access: "read", destructive: false },
   "skills.list-commands": { access: "read", destructive: false },
+  "style-sets.download": { access: "read", destructive: false },
+  "style-sets.list": { access: "read", destructive: false },
+  "templates.create-from-style-set": {
+    access: "write",
+    destructive: false,
+  },
   "usage.get-entitlement": { access: "read", destructive: false },
   "workspaces.read-workflow-target-count": {
     access: "read",

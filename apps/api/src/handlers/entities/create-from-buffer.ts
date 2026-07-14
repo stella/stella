@@ -60,6 +60,7 @@ type CreateEntityFromBufferInput = {
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
+  parentId?: SafeId<"entity"> | null | undefined;
   scanWarnings?: string[] | undefined;
 };
 
@@ -96,6 +97,7 @@ export const createEntityFromBuffer = async ({
   buffer,
   fileName: rawFileName,
   mimeType,
+  parentId,
   scanWarnings,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
@@ -163,6 +165,7 @@ export const createEntityFromBuffer = async ({
         id: entityId,
         workspaceId,
         name: fileName,
+        parentId: parentId ?? null,
         createdBy: userId,
         docSequence: entityStamp.docSequence,
       });
@@ -227,6 +230,7 @@ export const createEntityFromBuffer = async ({
               mimeType,
               sizeBytes: bytes.byteLength,
               propertyId: fileProperty.id,
+              parentId: parentId ?? null,
             },
           },
         },

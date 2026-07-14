@@ -1,0 +1,68 @@
+import { Result } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
+import { t } from "elysia";
+
+import { styleSets } from "@/api/db/schema";
+import { deleteS3Keys } from "@/api/handlers/files/utils";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
+const config = {
+  permissions: { styleSet: ["delete"] },
+  mcp: { type: "capability", reason: "template_authoring_ui" },
+  params: paramsSchema,
+} satisfies HandlerConfig;
+
+export default createSafeRootHandler(
+  config,
+  async function* ({ safeDb, session, params, recordAuditEvent }) {
+    const deleted = yield* Result.await(
+      safeDb(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${params.styleSetId}))`,
+        );
+        const existing = await tx.query.styleSets.findFirst({
+          where: {
+            id: { eq: params.styleSetId },
+            organizationId: { eq: session.activeOrganizationId },
+          },
+          columns: { id: true, name: true, s3Key: true },
+        });
+        if (!existing) {
+          return false;
+        }
+
+        Result.unwrap(await deleteS3Keys([existing.s3Key]));
+        await tx
+          .delete(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+            ),
+          );
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
+          resourceId: existing.id,
+          workspaceId: null,
+          changes: {
+            deleted: { old: { name: existing.name }, new: null },
+          },
+        });
+        return true;
+      }),
+    );
+
+    if (!deleted) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Style set not found" }),
+      );
+    }
+    return Result.ok({});
+  },
+);

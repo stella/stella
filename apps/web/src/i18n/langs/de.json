@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Nutzungseinheiten in diesem Zeitraum"
     }
   },
+  "styleSets": {
+    "create": "Erstellen",
+    "defaultBadge": "Standard",
+    "deleteConfirmation": "Geben Sie zur Bestätigung den Namen des Stilsets ein.",
+    "deleteDescription": "Bestehende Dokumente und Vorlagen bleiben unverändert.",
+    "deleteFailed": "Stilset konnte nicht gelöscht werden",
+    "deleteTitle": "Stilset löschen?",
+    "description": "Wiederverwendbare Dokumentformatierung für Vorlagen und neue Dokumente",
+    "exportFailed": "Stilset konnte nicht exportiert werden",
+    "import": "Stilset importieren",
+    "importDescription": "Stile werden in eine neue, inhaltsfreie DOCX-Datei extrahiert.",
+    "importTitle": "Stilset importieren",
+    "loadFailed": "Stilsets konnten nicht geladen werden",
+    "newDocument": "Neues Dokument",
+    "pickerDescription": "Wählen Sie das Formatierungssystem für die neue Datei.",
+    "renameTitle": "Stilset umbenennen",
+    "replace": "Quelle ersetzen",
+    "replaceFailed": "Stilset konnte nicht ersetzt werden",
+    "replaced": "Stilset ersetzt",
+    "saveFailed": "Stilset konnte nicht gespeichert werden",
+    "savedDescription": "Gespeichertes Stilset",
+    "sourceDocument": "Quell-DOCX",
+    "stellaDescription": "Vollständige, neutrale Formatierung für Rechtsdokumente von Stella",
+    "stellaStyle": "Stella Style",
+    "title": "Stilsets",
+    "untitledDocument": "Unbenanntes Dokument"
+  },
   "success": {
     "aiConfigDeleted": "KI-Konfiguration entfernt",
     "aiConfigUpdated": "KI-Konfiguration aktualisiert",
