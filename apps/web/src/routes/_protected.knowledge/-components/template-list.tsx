@@ -72,7 +72,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { compareByLocale } from "@/lib/collation";
-import { DOCX_MIME, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
+import { isDocxFile, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -164,7 +164,7 @@ export const TemplateList = ({
   };
 
   const discover = async (file: File) => {
-    if (file.type !== DOCX_MIME) {
+    if (!isDocxFile(file)) {
       stellaToast.add({
         type: "error",
         title: t("templates.invalidFileType"),
@@ -235,7 +235,7 @@ export const TemplateList = ({
     if (!file) {
       return;
     }
-    if (file.type !== DOCX_MIME) {
+    if (!isDocxFile(file)) {
       stellaToast.add({
         type: "error",
         title: t("templates.invalidFileType"),

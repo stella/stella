@@ -9,7 +9,7 @@ import { TextSeparator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { DOCX_MIME } from "@/lib/consts";
+import { DOCX_MIME, isDocxFile } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
@@ -100,7 +100,7 @@ export const TemplateUpload = ({
 
   const mutateDiscover = discoverMutation.mutate;
   const discover = (file: File) => {
-    if (file.type !== DOCX_MIME) {
+    if (!isDocxFile(file)) {
       stellaToast.add({
         type: "error",
         title: t("templates.invalidFileType"),
@@ -122,17 +122,18 @@ export const TemplateUpload = ({
   const mutatePrepare = prepareMutation.mutate;
   const handlePrepareFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.item(0);
-    if (file) {
-      if (file.type !== DOCX_MIME) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.invalidFileType"),
-        });
-      } else {
-        mutatePrepare(file);
-      }
-    }
     e.target.value = "";
+    if (!file) {
+      return;
+    }
+    if (!isDocxFile(file)) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.invalidFileType"),
+      });
+      return;
+    }
+    mutatePrepare(file);
   };
 
   const handleDrop = (e: React.DragEvent) => {
