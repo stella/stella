@@ -1,4 +1,4 @@
-import { chat, maxIterations, toolDefinition } from "@tanstack/ai";
+import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { Tool } from "@tanstack/ai";
 import * as v from "valibot";
 
@@ -381,10 +381,10 @@ const runToolProbe = async ({
   });
   let output = "";
   for await (const chunk of stream) {
-    if (chunk.type === "TEXT_MESSAGE_CONTENT" && chunk.delta) {
+    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT && chunk.delta) {
       output += chunk.delta;
     }
-    if (chunk.type === "RUN_ERROR") {
+    if (chunk.type === EventType.RUN_ERROR) {
       throw new CanaryProviderRunError(chunk);
     }
   }
