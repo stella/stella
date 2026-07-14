@@ -11,7 +11,7 @@ import type { ModelRole } from "@stll/ai-catalog";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
-import { nullUnionStrategyForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   abortControllerFromSignal,
   generateTanStackObjectForRole,
@@ -49,6 +49,55 @@ const TOOL_ROUND_TRIP_PROMPT =
   `Call ${TOOL_ROUND_TRIP_NAME} exactly once with value "${TOOL_ROUND_TRIP_VALUE}" ` +
   `and count ${TOOL_ROUND_TRIP_COUNT}. Then reply with only the confirmation ` +
   "value returned by the tool.";
+
+const SAFE_CANARY_ERROR_MESSAGES = new Set([
+  "Canary resolved an unexpected provider model.",
+  "Provider did not execute the canary tool exactly once.",
+  "Provider returned unexpected canary tool arguments.",
+  "Provider did not return the canary tool result.",
+  "Provider returned no text.",
+]);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const providerStatus = (error: unknown, depth = 0): number | null => {
+  if (!isRecord(error)) {
+    return null;
+  }
+  for (const key of ["status", "statusCode", "code"] as const) {
+    const value = error[key];
+    if (
+      typeof value === "number" &&
+      Number.isInteger(value) &&
+      value >= 100 &&
+      value <= 599
+    ) {
+      return value;
+    }
+  }
+
+  if (depth >= 3) {
+    return null;
+  }
+  for (const key of ["rawEvent", "error", "cause"] as const) {
+    const nestedStatus = providerStatus(error[key], depth + 1);
+    if (nestedStatus !== null) {
+      return nestedStatus;
+    }
+  }
+  return null;
+};
+
+class CanaryProviderRunError extends TypeError {
+  readonly status: number | null;
+
+  constructor(event: unknown) {
+    super("Provider stream failed.");
+    this.name = "CanaryProviderRunError";
+    this.status = providerStatus(event);
+  }
+}
 
 const NO_CACHING = {
   enabled: false,
@@ -306,15 +355,16 @@ const runToolProbe = async ({
     orgAIConfig: config,
     role,
   });
-  const inputSchema = projectSchemaInputJsonSchema(tool.inputSchema, {
-    nullUnionStrategy: nullUnionStrategyForTanStackProvider(provider),
-  });
+  const inputSchema = projectSchemaInputJsonSchema(
+    tool.inputSchema,
+    providerSafeJsonSchemaOptionsForTanStackProvider(provider),
+  );
   const projectedTool = {
     ...tool,
     ...(inputSchema === undefined ? {} : { inputSchema }),
   };
 
-  const output = await chat({
+  const stream = chat({
     adapter: model.adapter,
     abortController: abortControllerFromSignal(signal),
     agentLoopStrategy: maxIterations(2),
@@ -326,9 +376,18 @@ const runToolProbe = async ({
       serviceTier: "standard",
       temperature: 0,
     }),
-    stream: false,
+    stream: true,
     tools: [projectedTool],
   });
+  let output = "";
+  for await (const chunk of stream) {
+    if (chunk.type === "TEXT_MESSAGE_CONTENT" && chunk.delta) {
+      output += chunk.delta;
+    }
+    if (chunk.type === "RUN_ERROR") {
+      throw new CanaryProviderRunError(chunk);
+    }
+  }
   requireNonEmptyText(output);
   return output;
 };
@@ -395,25 +454,22 @@ const errorSummary = (error: unknown, signal: AbortSignal): string => {
     return "timeout";
   }
 
+  if (error instanceof CanaryProviderRunError) {
+    return error.status === null
+      ? "provider stream error"
+      : `provider HTTP ${error.status}`;
+  }
+
+  if (
+    error instanceof TypeError &&
+    SAFE_CANARY_ERROR_MESSAGES.has(error.message)
+  ) {
+    return error.message;
+  }
+
   const status = providerStatus(error);
   return status === null ? "provider error" : `provider HTTP ${status}`;
 };
-
-const providerStatus = (error: unknown): number | null => {
-  if (!isRecord(error)) {
-    return null;
-  }
-  for (const key of ["status", "statusCode"] as const) {
-    const value = error[key];
-    if (typeof value === "number" && Number.isInteger(value)) {
-      return value;
-    }
-  }
-  return null;
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
 
 const probeLabel = (context: CanaryContext, probe: Probe): string => {
   if (probe.type === "capability") {
