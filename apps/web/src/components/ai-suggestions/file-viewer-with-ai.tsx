@@ -65,7 +65,7 @@ export const FileViewerWithAI = ({
 const DocxHorizontalScrollbar = () => {
   const trackRef = useCallback((track: HTMLDivElement | null) => {
     if (!track?.parentElement) {
-      return;
+      return undefined;
     }
 
     const host = track.parentElement;
