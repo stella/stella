@@ -115,6 +115,27 @@ const StyleSetsPage = () => {
     window.open(response.data.presignedUrl, "_blank");
   };
 
+  const handleDownload = (styleSet: StyleSetItem) => {
+    download(styleSet).catch((error: unknown) => {
+      showError(
+        t("styleSets.exportFailed"),
+        error,
+        t("common.unexpectedError"),
+      );
+    });
+  };
+
+  const handleReplace = (file: File) => {
+    replace(file).catch((error: unknown) => {
+      setBusy(false);
+      showError(
+        t("styleSets.replaceFailed"),
+        error,
+        t("common.unexpectedError"),
+      );
+    });
+  };
+
   const remove = async () => {
     if (!deleteTarget) {
       return;
@@ -180,7 +201,7 @@ const StyleSetsPage = () => {
               <div className="flex items-center gap-1">
                 <Button
                   aria-label={t("common.download")}
-                  onClick={() => void download(styleSet)}
+                  onClick={() => handleDownload(styleSet)}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -232,7 +253,7 @@ const StyleSetsPage = () => {
           const file = event.currentTarget.files?.item(0);
           event.currentTarget.value = "";
           if (file) {
-            void replace(file);
+            handleReplace(file);
           }
         }}
         ref={replaceInputRef}
@@ -357,6 +378,13 @@ const StyleSetFormDialog = ({
     onOpenChange(false);
   };
 
+  const handleSave = () => {
+    save().catch((error: unknown) => {
+      setSaving(false);
+      showError(t("styleSets.saveFailed"), error, t("common.unexpectedError"));
+    });
+  };
+
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
       <DialogPopup>
@@ -400,7 +428,7 @@ const StyleSetFormDialog = ({
           </DialogClose>
           <Button
             disabled={saving || name.trim() === "" || (!styleSet && !file)}
-            onClick={() => void save()}
+            onClick={handleSave}
           >
             {saving ? t("common.loading") : t("common.save")}
           </Button>

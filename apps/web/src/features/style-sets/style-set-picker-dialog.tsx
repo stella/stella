@@ -17,9 +17,11 @@ import {
   DialogTitle,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { styleSetsOptions } from "@/features/style-sets/style-set-queries";
+import { userErrorMessage } from "@/lib/errors/user-safe";
 
 export type StyleSelection =
   | { type: "stella" }
@@ -86,6 +88,17 @@ const StyleSetPickerDialogBody = ({
     }
   };
 
+  const handleSubmit = () => {
+    submit().catch((error: unknown) => {
+      setCreating(false);
+      stellaToast.add({
+        type: "error",
+        title: t("errors.actionFailed"),
+        description: userErrorMessage(error, t("common.unexpectedError")),
+      });
+    });
+  };
+
   return (
     <DialogPopup className="sm:max-w-lg">
       <DialogHeader>
@@ -145,7 +158,7 @@ const StyleSetPickerDialogBody = ({
         </DialogClose>
         <Button
           disabled={creating || isError || name.trim() === ""}
-          onClick={() => void submit()}
+          onClick={handleSubmit}
         >
           {creating ? t("common.loading") : t("styleSets.create")}
         </Button>

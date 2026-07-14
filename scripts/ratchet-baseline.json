@@ -333,7 +333,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 498,
+    "count": 496,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -451,7 +451,7 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 5,
       "apps/web/src/routes/_protected.knowledge/-components/template-versions-tab.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/templates.tsx": 4,
+      "apps/web/src/routes/_protected.knowledge/templates.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/tools.tsx": 1,
       "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
