@@ -1,8 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { validateParentId } from "@/api/handlers/entities/create";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
+import { validateParentId } from "@/api/handlers/entities/validate-parent-id";
 import { readStyleSetBuffer } from "@/api/handlers/style-sets/shared";
 import { createTemplateBuffer } from "@/api/handlers/templates/create-template-buffer";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -44,7 +44,7 @@ export default createSafeHandler(
     if (parentId) {
       const parentError = yield* Result.await(
         scopedDb(
-          async (tx) => await validateParentId(tx, parentId, workspaceId),
+          async (tx) => await validateParentId({ tx, parentId, workspaceId }),
         ),
       );
       if (parentError) {

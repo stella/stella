@@ -68,61 +68,68 @@ export default createSafeRootHandler(
       }),
     );
 
-    const replaced = yield* Result.await(
-      safeDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${params.styleSetId}))`,
-        );
-        const locked = await tx.query.styleSets.findFirst({
-          where: {
-            id: { eq: params.styleSetId },
-            organizationId: { eq: session.activeOrganizationId },
-          },
-          columns: { s3Key: true, sizeBytes: true },
-        });
-        if (!locked) {
-          return null;
-        }
-
-        const [row] = await tx
-          .update(styleSets)
-          .set({
-            s3Key,
-            sizeBytes: buffer.byteLength,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(styleSets.id, params.styleSetId),
-              eq(styleSets.organizationId, session.activeOrganizationId),
-            ),
-          )
-          .returning(styleSetColumns);
-
-        if (row) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.UPDATE,
-            resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
-            resourceId: row.id,
-            workspaceId: null,
-            changes: {
-              sizeBytes: { old: locked.sizeBytes, new: row.sizeBytes },
+    let persisted = false;
+    try {
+      const replaced = yield* Result.await(
+        safeDb(async (tx) => {
+          await tx.execute(
+            sql`SELECT pg_advisory_xact_lock(hashtext(${params.styleSetId}))`,
+          );
+          const locked = await tx.query.styleSets.findFirst({
+            where: {
+              id: { eq: params.styleSetId },
+              organizationId: { eq: session.activeOrganizationId },
             },
+            columns: { s3Key: true, sizeBytes: true },
           });
-        }
+          if (!locked) {
+            return null;
+          }
 
-        return row ? { row, oldS3Key: locked.s3Key } : null;
-      }),
-    );
+          const [row] = await tx
+            .update(styleSets)
+            .set({
+              s3Key,
+              sizeBytes: buffer.byteLength,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(styleSets.id, params.styleSetId),
+                eq(styleSets.organizationId, session.activeOrganizationId),
+              ),
+            )
+            .returning(styleSetColumns);
 
-    if (!replaced) {
-      getS3().delete(s3Key).catch(captureError);
-      return Result.err(
-        new HandlerError({ status: 404, message: "Style set not found" }),
+          if (row) {
+            await recordAuditEvent(tx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
+              resourceId: row.id,
+              workspaceId: null,
+              changes: {
+                sizeBytes: { old: locked.sizeBytes, new: row.sizeBytes },
+              },
+            });
+          }
+
+          return row ? { row, oldS3Key: locked.s3Key } : null;
+        }),
       );
-    }
 
-    getS3().delete(replaced.oldS3Key).catch(captureError);
-    return Result.ok(replaced.row);
+      if (!replaced) {
+        return Result.err(
+          new HandlerError({ status: 404, message: "Style set not found" }),
+        );
+      }
+
+      persisted = true;
+      getS3().delete(replaced.oldS3Key).catch(captureError);
+      return Result.ok(replaced.row);
+    } finally {
+      if (!persisted) {
+        getS3().delete(s3Key).catch(captureError);
+      }
+    }
   },
 );

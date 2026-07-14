@@ -45,12 +45,14 @@ export const Route = createFileRoute("/_protected/knowledge/styles")({
 
 const protectedRouteApi = getRouteApi("/_protected");
 
-type StyleSetItem = {
-  id: string;
-  name: string;
-  sizeBytes: number;
-  updatedAt: Date;
-};
+type StyleSetListResponse = Awaited<
+  ReturnType<(typeof api)["style-sets"]["get"]>
+>;
+type StyleSetListData = Exclude<
+  NonNullable<Extract<StyleSetListResponse, { data: unknown }>["data"]>,
+  Response
+>;
+type StyleSetItem = StyleSetListData["items"][number];
 
 const StyleSetsPage = () => {
   const t = useTranslations();
