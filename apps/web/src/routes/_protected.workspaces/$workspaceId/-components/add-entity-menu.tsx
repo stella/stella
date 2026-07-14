@@ -167,6 +167,7 @@ export const AddEntityMenu = ({
     style: StyleSelection,
   ): Promise<boolean> => {
     const response = await api.entities({ workspaceId })["blank-document"].put({
+      queryKey: entitiesKeys.all(workspaceId),
       name,
       parentId: parentId ? toSafeId<"entity">(parentId) : null,
       style:
@@ -194,6 +195,7 @@ export const AddEntityMenu = ({
       label: response.data.fileName,
       fileName: response.data.fileName,
       mimeType: DOCX_MIME,
+      pdfFileId: null,
       workspaceId,
     });
     return true;

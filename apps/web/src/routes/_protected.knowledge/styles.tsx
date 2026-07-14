@@ -39,10 +39,6 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
-export const Route = createFileRoute("/_protected/knowledge/styles")({
-  component: StyleSetsPage,
-});
-
 const protectedRouteApi = getRouteApi("/_protected");
 
 type StyleSetListResponse = Awaited<
@@ -93,7 +89,11 @@ const StyleSetsPage = () => {
     }).source.post({ styleSource: file });
     setBusy(false);
     if (response.error) {
-      showError(t("styleSets.replaceFailed"), response.error, t);
+      showError(
+        t("styleSets.replaceFailed"),
+        response.error,
+        t("common.unexpectedError"),
+      );
       return;
     }
     await invalidate();
@@ -105,7 +105,11 @@ const StyleSetsPage = () => {
       styleSetId: toSafeId<"styleSet">(styleSet.id),
     }).download.get();
     if (response.error) {
-      showError(t("styleSets.exportFailed"), response.error, t);
+      showError(
+        t("styleSets.exportFailed"),
+        response.error,
+        t("common.unexpectedError"),
+      );
       return;
     }
     window.open(response.data.presignedUrl, "_blank");
@@ -121,7 +125,11 @@ const StyleSetsPage = () => {
     }).delete();
     setBusy(false);
     if (response.error) {
-      showError(t("styleSets.deleteFailed"), response.error, t);
+      showError(
+        t("styleSets.deleteFailed"),
+        response.error,
+        t("common.unexpectedError"),
+      );
       throw toAPIError(response.error);
     }
     setDeleteTarget(null);
@@ -266,6 +274,10 @@ const StyleSetsPage = () => {
   );
 };
 
+export const Route = createFileRoute("/_protected/knowledge/styles")({
+  component: StyleSetsPage,
+});
+
 const StyleSetRow = ({
   name,
   description,
@@ -332,7 +344,11 @@ const StyleSetFormDialog = ({
       return;
     }
     if (response.error) {
-      showError(t("styleSets.saveFailed"), response.error, t);
+      showError(
+        t("styleSets.saveFailed"),
+        response.error,
+        t("common.unexpectedError"),
+      );
       return;
     }
     await onSaved();
@@ -428,11 +444,11 @@ const RenameStyleSetDialog = ({
 const showError = (
   title: string,
   error: Parameters<typeof userErrorMessage>[0],
-  t: ReturnType<typeof useTranslations>,
+  fallbackMessage: string,
 ) => {
   stellaToast.add({
     type: "error",
     title,
-    description: userErrorMessage(error, t("common.unexpectedError")),
+    description: userErrorMessage(error, fallbackMessage),
   });
 };
