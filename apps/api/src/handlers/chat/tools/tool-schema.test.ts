@@ -3,6 +3,7 @@ import {
   parseWithStandardSchema,
   toolDefinition,
 } from "@tanstack/ai";
+import { convertFunctionToolToAdapterFormat } from "@tanstack/ai-openai/tools";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -88,6 +89,59 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   source: "installed",
   toolName: "closing-review",
   version: null,
+};
+
+const isSchemaObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Construct args so every conditional tool group registers: owner role
+// (template use + create), active docx edit client, web search enabled with
+// a resolved provider, and an editable active skill context. BOE, infosoud,
+// and business-registry tools register by default (no disabled slugs).
+const buildFullCoverageChatTools = () => {
+  const webSearchProvider: WebSearchProvider = {
+    name: "tavily",
+    search: async () => ({ results: [] }),
+  };
+  const urlFetcher: UrlFetcher = {
+    name: "jina",
+    fetch: async () => ({
+      url: "",
+      content: "",
+      truncated: false,
+      provider: "jina",
+    }),
+  };
+
+  return getChatTools({
+    orgAIConfig: null,
+    memberRole: "owner",
+    organizationId,
+    requestWorkspaceId: workspaceId,
+    thirdPartyBoundary: { type: "raw" },
+    refRegistry: createChatRefRegistry(),
+    safeDb: unusedSafeDb,
+    scopedDb: unusedScopedDb,
+    threadId,
+    userId,
+    toolWorkspaceIds: resolveToolWorkspaceIds({
+      pinnedIds: [],
+      accessibleWorkspaceIds: [workspaceId],
+    }),
+    hasActiveDocxEditClient: true,
+    hasActiveDocxFileClient: true,
+    webSearchEnabled: true,
+    webSearchProviders: { webSearchProvider, urlFetcher },
+    activeSkillContext: editableActiveSkillContext,
+    recordAuditEvent: noopAuditRecorder,
+    skillMetadata: [
+      {
+        description: editableActiveSkillContext.description,
+        name: editableActiveSkillContext.toolName,
+        version: editableActiveSkillContext.version,
+      },
+    ],
+  });
 };
 
 describe("chat tool schemas", () => {
@@ -606,53 +660,7 @@ describe("chat tool schemas", () => {
   });
 
   test("every registered chat tool serializes to a provider-safe JSON schema", () => {
-    // Construct args so every conditional tool group registers: owner role
-    // (template use + create), active docx edit client, web search enabled with
-    // a resolved provider, and an editable active skill context. BOE, infosoud,
-    // and business-registry tools register by default (no disabled slugs).
-    const webSearchProvider: WebSearchProvider = {
-      name: "tavily",
-      search: async () => ({ results: [] }),
-    };
-    const urlFetcher: UrlFetcher = {
-      name: "jina",
-      fetch: async () => ({
-        url: "",
-        content: "",
-        truncated: false,
-        provider: "jina",
-      }),
-    };
-
-    const tools = getChatTools({
-      orgAIConfig: null,
-      memberRole: "owner",
-      organizationId,
-      requestWorkspaceId: workspaceId,
-      thirdPartyBoundary: { type: "raw" },
-      refRegistry: createChatRefRegistry(),
-      safeDb: unusedSafeDb,
-      scopedDb: unusedScopedDb,
-      threadId,
-      userId,
-      toolWorkspaceIds: resolveToolWorkspaceIds({
-        pinnedIds: [],
-        accessibleWorkspaceIds: [workspaceId],
-      }),
-      hasActiveDocxEditClient: true,
-      hasActiveDocxFileClient: true,
-      webSearchEnabled: true,
-      webSearchProviders: { webSearchProvider, urlFetcher },
-      activeSkillContext: editableActiveSkillContext,
-      recordAuditEvent: noopAuditRecorder,
-      skillMetadata: [
-        {
-          description: editableActiveSkillContext.description,
-          name: editableActiveSkillContext.toolName,
-          version: editableActiveSkillContext.version,
-        },
-      ],
-    });
+    const tools = buildFullCoverageChatTools();
 
     // Sanity: the groups we depend on for coverage are actually present.
     for (const requiredTool of [
@@ -668,9 +676,6 @@ describe("chat tool schemas", () => {
     }
 
     const allowedKeywords = new Set<string>(PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS);
-    const isSchemaObject = (value: unknown): value is Record<string, unknown> =>
-      typeof value === "object" && value !== null && !Array.isArray(value);
-
     const violations: string[] = [];
     const assertProviderSafe = (
       node: unknown,
@@ -731,6 +736,115 @@ describe("chat tool schemas", () => {
     }
 
     expect(violations).toEqual([]);
+  });
+
+  // OpenAI rejects the entire request (400) when any tool is sent with
+  // `strict: true` but a schema outside the strict Structured Outputs subset.
+  // This test runs the real adapter conversion over every registered chat tool
+  // offline, so a schema that would 400 in production fails here first, even
+  // under USE_MOCK_AI. It also fails if the @tanstack/openai-base patch
+  // (patches/) stops applying, e.g. after a version bump.
+  test("every registered chat tool converts to strict-legal OpenAI parameters or the deliberate non-strict fallback", () => {
+    const tools = buildFullCoverageChatTools();
+
+    // Free-form map inputs (`v.record(...)`, `additionalProperties: true`)
+    // cannot be expressed under strict mode, which requires every object node
+    // closed with its keys enumerated; the adapter must send those tools with
+    // `strict: false`. fill_template, save_clause and save_template degrade
+    // for open maps; set_field_value for its deliberately typeless
+    // `content.value` node. Growing this list is a deliberate trade: prefer
+    // closed schemas so a tool keeps strict-mode adherence.
+    const expectedNonStrictTools = [
+      "fill_template",
+      "save_clause",
+      "save_template",
+      "set_field_value",
+    ];
+
+    // A strict:true tool must satisfy OpenAI's strict subset: every object
+    // node closed via `additionalProperties: false` with enumerated
+    // `properties`, and no typeless schema nodes anywhere.
+    const strictTypeIndicators = ["type", "enum", "const", "anyOf"];
+    const violations: string[] = [];
+    const collectStrictViolations = (
+      node: unknown,
+      path: string,
+      toolName: string,
+    ): void => {
+      if (!isSchemaObject(node)) {
+        return;
+      }
+
+      const { type, additionalProperties, properties, items, anyOf } = node;
+      const isObjectNode =
+        type === "object" || (Array.isArray(type) && type.includes("object"));
+      if (isObjectNode) {
+        if (additionalProperties !== false) {
+          violations.push(
+            `tool "${toolName}" at "${path}" sends strict: true with an object node not closed by additionalProperties: false`,
+          );
+        }
+        if (!isSchemaObject(properties)) {
+          violations.push(
+            `tool "${toolName}" at "${path}" sends strict: true with an object node without enumerated properties`,
+          );
+        }
+      }
+      if (!strictTypeIndicators.some((key) => key in node)) {
+        violations.push(
+          `tool "${toolName}" at "${path}" sends strict: true with a typeless schema node`,
+        );
+      }
+      if (isSchemaObject(properties)) {
+        for (const [name, child] of Object.entries(properties)) {
+          collectStrictViolations(
+            child,
+            `${path}.properties.${name}`,
+            toolName,
+          );
+        }
+      }
+      if (Array.isArray(items)) {
+        for (const [index, child] of items.entries()) {
+          collectStrictViolations(child, `${path}.items[${index}]`, toolName);
+        }
+      } else if (isSchemaObject(items)) {
+        collectStrictViolations(items, `${path}.items`, toolName);
+      }
+      if (Array.isArray(anyOf)) {
+        for (const [index, child] of anyOf.entries()) {
+          collectStrictViolations(child, `${path}.anyOf[${index}]`, toolName);
+        }
+      }
+    };
+
+    const nonStrictTools: string[] = [];
+    for (const [name, tool] of Object.entries(tools)) {
+      const inputSchema = tool?.inputSchema;
+      if (!inputSchema) {
+        continue;
+      }
+      // The exact pipeline the runtime runs: the ai layer serializes the
+      // Standard Schema to JSON Schema, then the OpenAI adapter converts it
+      // to a function tool and decides strict mode.
+      const serialized = convertSchemaToJsonSchema(inputSchema);
+      if (!serialized) {
+        continue;
+      }
+      const converted = convertFunctionToolToAdapterFormat({
+        name,
+        description: tool.description,
+        inputSchema: serialized,
+      });
+      if (converted.strict !== true) {
+        nonStrictTools.push(name);
+        continue;
+      }
+      collectStrictViolations(converted.parameters, "root", name);
+    }
+
+    expect(violations).toEqual([]);
+    expect(nonStrictTools.toSorted()).toEqual(expectedNonStrictTools);
   });
 
   test("created document output includes the canonical entity mention", () => {
