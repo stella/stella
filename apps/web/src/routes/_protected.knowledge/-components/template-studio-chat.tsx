@@ -110,6 +110,10 @@ const SUGGEST_FIELDS_PRESET_ID = "suggest-template-fields";
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+const capturePromptSubmitError = (error: unknown): void => {
+  getAnalytics().captureError(error);
+};
+
 type TemplateStudioChatProps = {
   templateId: string;
   /** Template DOCX file name — context label for the model + placeholder. */
@@ -661,26 +665,27 @@ const TemplateStudioChatInner = ({
     }
     presetSendDispatchedRef.current = true;
     onPendingPresetSendHandled();
-    void ensureAIAvailable().then((available) => {
-      if (!available) {
-        return;
-      }
-      // This send bypasses the prompt bar's `canSubmitNow` (which
-      // normally records the sent snapshot), and after the rotate
-      // remount the transport's `getActiveTemplate` can be bound to a
-      // previous instance whose ref this one cannot see. Record the
-      // snapshot here so the apply path resolves the ops against the
-      // same blocks the model receives.
-      lastSentSnapshotRef.current =
-        editorRef.current?.createAIEditSnapshot() ?? null;
-      setPanelOpen(true);
-      const message = createTextChatMessage(request.text);
-      activeScopedPresetTurnMessageIdRef.current = message.id;
-      void sendMessage(message, {
-        body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
-      });
-      return;
-    });
+    ensureAIAvailable()
+      .then((available) => {
+        if (!available) {
+          return;
+        }
+        // This send bypasses the prompt bar's `canSubmitNow` (which
+        // normally records the sent snapshot), and after the rotate
+        // remount the transport's `getActiveTemplate` can be bound to a
+        // previous instance whose ref this one cannot see. Record the
+        // snapshot here so the apply path resolves the ops against the
+        // same blocks the model receives.
+        lastSentSnapshotRef.current =
+          editorRef.current?.createAIEditSnapshot() ?? null;
+        setPanelOpen(true);
+        const message = createTextChatMessage(request.text);
+        activeScopedPresetTurnMessageIdRef.current = message.id;
+        return sendMessage(message, {
+          body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
+        });
+      })
+      .catch(capturePromptSubmitError);
   });
   useMountEffect(() => {
     dispatchPendingPresetSend();
@@ -1257,24 +1262,26 @@ const TemplateStudioChatInner = ({
             stop();
           }}
           onSubmit={({ prompt, files }) => {
-            void ensureAIAvailable().then(async (available) => {
-              if (!available) {
+            ensureAIAvailable()
+              .then(async (available) => {
+                if (!available) {
+                  return;
+                }
+                // Always pop the thread open on send, even if the user
+                // minimised it earlier.
+                setPanelOpen(true);
+                // The typed composer submit carries any (+) attachments
+                // (reference docs to lift clauses from); the scoped-preset
+                // path below stays text-only.
+                await sendMessage(
+                  await buildChatRequestMessage({
+                    files,
+                    html: prompt,
+                  }),
+                );
                 return;
-              }
-              // Always pop the thread open on send, even if the user
-              // minimised it earlier.
-              setPanelOpen(true);
-              // The typed composer submit carries any (+) attachments
-              // (reference docs to lift clauses from); the scoped-preset
-              // path below stays text-only.
-              await sendMessage(
-                await buildChatRequestMessage({
-                  files,
-                  html: prompt,
-                }),
-              );
-              return;
-            });
+              })
+              .catch(capturePromptSubmitError);
           }}
           pendingCount={pendingCount}
           presetScopeChooser={{

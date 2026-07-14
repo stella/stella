@@ -226,14 +226,19 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       // eslint-disable-next-line react/react-compiler -- docxActionsRef.current read at call time in a load-bearing callback (compiler-bailout component). react-compiler and react-hooks/exhaustive-deps disagree on this ref: exhaustive-deps requires it in the dep array (kept), the compiler flags it as unlistable — suppress the compiler side.
       const action = docxActionsRef.current.get(tabId);
       if (editingDocxTabId === tabId && action) {
-        void action.cancel().finally(() => {
-          docxActionsRef.current.delete(tabId);
-          setEditingDocxTabId((current) =>
-            current === tabId ? null : current,
-          );
-          clearAnonymization(tabId);
-          closeTab(tabId, { suggestRevive: true });
-        });
+        action
+          .cancel()
+          .finally(() => {
+            docxActionsRef.current.delete(tabId);
+            setEditingDocxTabId((current) =>
+              current === tabId ? null : current,
+            );
+            clearAnonymization(tabId);
+            closeTab(tabId, { suggestRevive: true });
+          })
+          .catch((error: unknown) => {
+            getAnalytics().captureError(error);
+          });
         return;
       }
 

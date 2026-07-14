@@ -727,6 +727,13 @@ export const SearchDialog = ({
     });
   };
 
+  const openSearchResult = (hit: GlobalSearchHit): void => {
+    handleResultClick(hit).catch((error: unknown) => {
+      analytics.captureError(error);
+      stellaToast.add({ title: t("common.somethingWentWrong"), type: "error" });
+    });
+  };
+
   const handleCommandInputKeyDownCapture = (
     e: React.KeyboardEvent<HTMLInputElement>,
   ) => {
@@ -1011,7 +1018,7 @@ export const SearchDialog = ({
                           (item) => item.id === citationId,
                         );
                         if (hit) {
-                          void handleResultClick(hit);
+                          openSearchResult(hit);
                         }
                       }}
                       onClick={() => {
@@ -1046,7 +1053,7 @@ export const SearchDialog = ({
                             hit={hit}
                             index={virtualHit.index}
                             onClick={(selectedHit) => {
-                              void handleResultClick(selectedHit);
+                              openSearchResult(selectedHit);
                             }}
                             resultNumber={virtualHit.index + 1}
                           />

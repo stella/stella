@@ -61,6 +61,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { BoundedMap } from "@/lib/bounded-set";
@@ -1357,7 +1358,11 @@ export const TemplateStudioPage = ({
     if (shown === null || shown.from !== sel.from || shown.to !== sel.to) {
       return;
     }
-    void fetchGestureSuggestion(sel);
+    fetchGestureSuggestion(sel).catch((error: unknown) => {
+      getAnalytics().captureError(error);
+      setEnrichment({ status: "idle" });
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+    });
   }, GESTURE_ENRICH_DELAY_MS);
 
   const onGestureSelectionChange = (sel: GestureSelection) => {

@@ -393,12 +393,12 @@ const countTsSuppressions = (content: string): number => {
 
 // Explicitly detached calls bypass no-floating-promises when `void` is
 // accepted, while async JSX handlers bypass no-misused-promises because JSX
-// attributes are intentionally disabled there. Both shapes can turn a
-// rejection into an unhandled-rejection event. This is a lexical rollout:
-// it freezes the existing debt without requiring type-aware lint in this
-// already-cheap ratchet. A terminal `.catch(...)` on the same line is treated
-// as handled; `.finally(...)` is not, because its returned promise can still
-// reject.
+// attributes are intentionally disabled there. Both shapes require review:
+// some callees handle failures internally or are synchronous despite the
+// syntax, while others can turn a rejection into an unhandled-rejection event.
+// This lexical rollout freezes review debt without pretending to infer types.
+// A terminal `.catch(...)` on the same line is treated as handled;
+// `.finally(...)` is not, because its returned promise can still reject.
 const VOID_DETACHED_CALL = /\bvoid\s+(?=[(A-Za-z_$])/gu;
 const ASYNC_JSX_HANDLER = /\bon[A-Z][\w$]*\s*=\s*\{\s*async\b/gu;
 const TERMINAL_CATCH = /\.catch\s*\(/u;
@@ -666,9 +666,9 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
     count: countTsSuppressions,
   },
   {
-    id: "unhandled-detached-promises",
+    id: "detached-promise-review-sites",
     description:
-      "syntactically detached async work in app source: `void` calls without a same-line `.catch(...)`, plus direct async JSX event handlers",
+      "detached-work syntax requiring rejection review: `void` calls without a same-line `.catch(...)`, plus direct async JSX callbacks (lexical; not every site is a Promise or bug)",
     include: APP_SOURCE_GLOBS,
     exclude: isExcludedSource,
     count: countUnhandledDetachedPromises,
@@ -1285,10 +1285,10 @@ const runSelfTest = (): number => {
       );
     }
 
-    const detachedPromiseMetric = snapshot["unhandled-detached-promises"];
+    const detachedPromiseMetric = snapshot["detached-promise-review-sites"];
     if (detachedPromiseMetric.count !== EXPECTED_DETACHED_PROMISES) {
       failures.push(
-        `unhandled-detached-promises counted ${detachedPromiseMetric.count}, expected ${EXPECTED_DETACHED_PROMISES}`,
+        `detached-promise-review-sites counted ${detachedPromiseMetric.count}, expected ${EXPECTED_DETACHED_PROMISES}`,
       );
     }
 
