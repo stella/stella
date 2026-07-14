@@ -130,7 +130,7 @@ export const TimeEntryRow = ({
           {isActive ? (
             <span className="flex items-center gap-1.5">
               <span className="bg-success size-1.5 animate-pulse rounded-full" />
-              {t("billing.running")}
+              {t("common.running")}
             </span>
           ) : (
             formatMinutes(entry.durationMinutes)

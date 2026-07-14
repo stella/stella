@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "piem. Standarta 2025"
     },
     "revertToDraft": "Atgriezt kā melnrakstu",
-    "running": "Darbojas",
     "selectMatter": "Izvēlieties lietu...",
     "selectMatterToStart": "Atlasiet lietu, lai sāktu laika uzskaiti",
     "selectedCount": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
@@ -895,6 +894,7 @@
     "retry": "Mēģināt vēlreiz",
     "role": "Loma",
     "run": "Palaist",
+    "running": "Darbojas",
     "save": "Saglabāt",
     "saveAsPdf": "Saglabāt kā PDF",
     "saveChanges": "Saglabāt izmaiņas",
@@ -1198,6 +1198,8 @@
     "uploadFailed": "Augšupielāde neizdevās"
   },
   "feedback": {
+    "discord": "Discord kopiena",
+    "github": "GitHub problēmas",
     "trigger": "Atsauksmes"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Vesels skaitlis",
       "keepEmpty": "Atstāt tukšu",
       "manualColumn": "Manuāla kolonna",
+      "markAllAsLocked": "Bloķēt visas šūnas",
       "markAllAsReviewed": "Atzīmēt visus kā pārbaudītus",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Bloķēt šo grupu",
+      "markThisGroupAsReviewed": "Atzīmēt šo grupu kā pārbaudītu",
+      "markedAsLocked": "{count, plural, zero {Nav bloķēta neviena šūna} one {Bloķēta # šūna} other {Bloķētas # šūnas}}",
+      "markedAsReviewed": "{count, plural, zero {Neviena šūna nav atzīmēta kā pārbaudīta} one {# šūna atzīmēta kā pārbaudīta} other {# šūnas atzīmētas kā pārbaudītas}}",
       "multiSelect": "Vairāku izvēļu",
       "nameProperty": "Nosaukuma īpašība",
       "newColumn": "Jauna kolonna",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (kopija)",
       "deleteView": "Dzēst skatu",
       "exportCsv": "Eksportēt CSV",
+      "exportDocxPlain": "Eksportēt DOCX (vienkārša tabula)",
+      "exportDocxTemplate": "Eksportēt DOCX no veidnes…",
       "exportFailed": "Eksportēšana neizdevās",
       "exportTable": "Eksportēt tabulu",
       "exportXlsx": "Eksportēt XLSX",

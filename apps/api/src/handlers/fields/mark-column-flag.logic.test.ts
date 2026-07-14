@@ -4,6 +4,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   buildColumnFlagMutation,
+  buildColumnLockMutation,
   sortColumnFlagTargetsForLocking,
   type ColumnFlagTarget,
 } from "./mark-column-flag.logic";
@@ -427,6 +428,95 @@ describe("mark column flag metadata planning", () => {
         lockedAt: LOCKED_AT,
         reason: "explicit",
       },
+    });
+  });
+
+  test("locks a cell while preserving flags and their provenance", () => {
+    const target = createTarget("ent_lock", "ver_lock");
+    const mutation = buildColumnLockMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      set: true,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["needs-review"],
+            flagProvenance: {
+              "needs-review": {
+                addedBy: "user_existing",
+                addedAt: LOCKED_AT,
+              },
+            },
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation.updatedCount).toBe(1);
+    expect(mutation.insertValues.at(0)?.metadata).toEqual({
+      version: 1,
+      manualFlags: ["needs-review"],
+      flagProvenance: {
+        "needs-review": {
+          addedBy: "user_existing",
+          addedAt: LOCKED_AT,
+        },
+      },
+      locked: true,
+      lockProvenance: {
+        lockedBy: USER_ID,
+        lockedAt: ADDED_AT,
+        reason: "explicit",
+      },
+    });
+    expect(mutation.auditEvents.at(0)?.changes).toEqual({
+      locked: { old: false, new: true },
+    });
+  });
+
+  test("precise undo unlocks only the lock created by that operation", () => {
+    const matching = createTarget("ent_matching", "ver_matching");
+    const earlier = createTarget("ent_earlier", "ver_earlier");
+    const mutation = buildColumnLockMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      set: false,
+      onlyAddedAt: ADDED_AT,
+      targets: [matching, earlier],
+      existingRows: [matching, earlier].map((target) => ({
+        entityVersionId: target.entityVersionId,
+        metadata: {
+          version: 1,
+          manualFlags: [],
+          flagProvenance: {},
+          locked: true,
+          lockProvenance: {
+            lockedBy: USER_ID,
+            lockedAt:
+              target.entityVersionId === matching.entityVersionId
+                ? ADDED_AT
+                : LOCKED_AT,
+            reason: "explicit",
+          },
+        },
+      })),
+      userId: USER_ID,
+      addedAt: "2026-05-28T10:00:00.000Z",
+    });
+
+    expect(mutation.updatedCount).toBe(1);
+    expect(mutation.insertValues.at(0)?.entityVersionId).toBe(
+      matching.entityVersionId,
+    );
+    expect(mutation.insertValues.at(0)?.metadata).toEqual({
+      version: 1,
+      manualFlags: [],
+      flagProvenance: {},
     });
   });
 });

@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "pl. Standard 2025"
     },
     "revertToDraft": "Visszaállítás tervezetre",
-    "running": "Fut",
     "selectMatter": "Válasszon ügyet...",
     "selectMatterToStart": "Válasszon ügyet az időmérés indításához",
     "selectedCount": "{count, plural, one {# kijelölve} other {# kijelölve}}",
@@ -895,6 +894,7 @@
     "retry": "Újrapróbál",
     "role": "Szerepkör",
     "run": "Futtatás",
+    "running": "Fut",
     "save": "Mentés",
     "saveAsPdf": "Mentés PDF-ként",
     "saveChanges": "Változtatások mentése",
@@ -1198,6 +1198,8 @@
     "uploadFailed": "Feltöltés sikertelen"
   },
   "feedback": {
+    "discord": "Discord-közösség",
+    "github": "GitHub-problémák",
     "trigger": "Visszajelzés"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Egész szám",
       "keepEmpty": "Hagyja üresen",
       "manualColumn": "Kézi oszlop",
+      "markAllAsLocked": "Összes cella zárolása",
       "markAllAsReviewed": "Mind megjelölése ellenőrzöttként",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Csoport zárolása",
+      "markThisGroupAsReviewed": "Csoport megjelölése ellenőrzöttként",
+      "markedAsLocked": "{count, plural, one {# cella zárolva} other {# cella zárolva}}",
+      "markedAsReviewed": "{count, plural, one {# cella ellenőrzöttként megjelölve} other {# cella ellenőrzöttként megjelölve}}",
       "multiSelect": "Többszörös választás",
       "nameProperty": "Névelőzmény",
       "newColumn": "Új oszlop",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (másolat)",
       "deleteView": "Nézet törlése",
       "exportCsv": "CSV exportálása",
+      "exportDocxPlain": "DOCX exportálása (egyszerű táblázat)",
+      "exportDocxTemplate": "DOCX exportálása sablonból…",
       "exportFailed": "Az exportálás sikertelen",
       "exportTable": "Táblázat exportálása",
       "exportXlsx": "XLSX exportálása",

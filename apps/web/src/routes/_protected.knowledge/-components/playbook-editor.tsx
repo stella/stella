@@ -48,6 +48,7 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
+import { resolvePlaybookScrollTop } from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
 import { usePlaybookNavStore } from "@/routes/_protected.knowledge/-components/playbook-nav-store";
 import {
   duplicatePosition,
@@ -72,6 +73,8 @@ import {
   knowledgeKeys,
   playbookDetailOptions,
 } from "@/routes/_protected.knowledge/-queries";
+
+const PLAYBOOK_JUMP_TOP_OFFSET_PX = 24;
 
 // ── Root component ────────────────────────────────────
 
@@ -382,9 +385,22 @@ const PlaybookEditorForm = ({
 
   const jumpToPosition = (sourceId: string) => {
     setOpen(sourceId, true);
-    scrollRef.current
-      ?.querySelector(`#position-${sourceId}`)
-      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const container = scrollRef.current;
+    const target = container?.querySelector<HTMLElement>(
+      `#position-${sourceId}`,
+    );
+    if (!container || !target) {
+      return;
+    }
+    container.scrollTo({
+      behavior: "smooth",
+      top: resolvePlaybookScrollTop({
+        containerScrollTop: container.scrollTop,
+        containerTop: container.getBoundingClientRect().top,
+        targetTop: target.getBoundingClientRect().top,
+        topOffset: PLAYBOOK_JUMP_TOP_OFFSET_PX,
+      }),
+    });
   };
 
   const handleSave = async () => {

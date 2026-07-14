@@ -1,3 +1,4 @@
+import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import type { FolioAIEditAppliedOperation } from "@stll/folio-core/ai-edits";
@@ -108,6 +109,15 @@ const validateOutput = async (output: unknown) => {
 };
 
 describe("apply-active-docx-edits stella narrowings", () => {
+  test("does not send the pinned numeric version as a provider enum", () => {
+    const schema = convertSchemaToJsonSchema(
+      createActiveDocxEditTool().inputSchema,
+    );
+
+    expect(schema?.properties?.["version"]).toMatchObject({ type: "integer" });
+    expect(schema?.properties?.["version"]).not.toHaveProperty("enum");
+  });
+
   test("accepts every operation variant available on this surface", async () => {
     const result = await validateInput({
       version: 1,

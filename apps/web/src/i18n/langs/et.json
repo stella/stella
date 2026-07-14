@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "nt Standard 2025"
     },
     "revertToDraft": "Tagasta mustandiks",
-    "running": "Käib",
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
@@ -895,6 +894,7 @@
     "retry": "Proovi uuesti",
     "role": "Roll",
     "run": "Käivita",
+    "running": "Käib",
     "save": "Salvesta",
     "saveAsPdf": "Salvesta PDF-na",
     "saveChanges": "Salvesta muudatused",
@@ -1198,6 +1198,8 @@
     "uploadFailed": "Üleslaadimine ebaõnnestus"
   },
   "feedback": {
+    "discord": "Discordi kogukond",
+    "github": "GitHubi probleemid",
     "trigger": "Tagasiside"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Täisarv",
       "keepEmpty": "Jäta tühjaks",
       "manualColumn": "Käsitsi veerg",
+      "markAllAsLocked": "Lukusta kõik lahtrid",
       "markAllAsReviewed": "Märgi kõik ülevaadatuks",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Lukusta see rühm",
+      "markThisGroupAsReviewed": "Märgi see rühm ülevaadatuks",
+      "markedAsLocked": "{count, plural, one {# lahter lukustatud} other {# lahtrit lukustatud}}",
+      "markedAsReviewed": "{count, plural, one {# lahter märgitud ülevaadatuks} other {# lahtrit märgitud ülevaadatuks}}",
       "multiSelect": "Mitmikvalik",
       "nameProperty": "Nimeomadus",
       "newColumn": "Uus veerg",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (koopia)",
       "deleteView": "Kustuta vaade",
       "exportCsv": "Ekspordi CSV",
+      "exportDocxPlain": "Ekspordi DOCX (lihtne tabel)",
+      "exportDocxTemplate": "Ekspordi DOCX malli alusel…",
       "exportFailed": "Eksport nurjus",
       "exportTable": "Ekspordi tabel",
       "exportXlsx": "Ekspordi XLSX",

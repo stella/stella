@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "z.B. Standard 2025"
     },
     "revertToDraft": "In Entwurf zurückversetzen",
-    "running": "Läuft",
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
     "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
@@ -895,6 +894,7 @@
     "retry": "Erneut versuchen",
     "role": "Rolle",
     "run": "Ausführen",
+    "running": "Läuft",
     "save": "Speichern",
     "saveAsPdf": "Als PDF speichern",
     "saveChanges": "Änderungen speichern",
@@ -1198,6 +1198,8 @@
     "uploadFailed": "Upload fehlgeschlagen"
   },
   "feedback": {
+    "discord": "Discord-Community",
+    "github": "GitHub-Issues",
     "trigger": "Feedback"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Ganzzahl",
       "keepEmpty": "Leer lassen",
       "manualColumn": "Manuelle Spalte",
+      "markAllAsLocked": "Alle Zellen sperren",
       "markAllAsReviewed": "Alle als geprüft markieren",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Diese Gruppe sperren",
+      "markThisGroupAsReviewed": "Diese Gruppe als geprüft markieren",
+      "markedAsLocked": "{count, plural, one {# Zelle gesperrt} other {# Zellen gesperrt}}",
+      "markedAsReviewed": "{count, plural, one {# Zelle als geprüft markiert} other {# Zellen als geprüft markiert}}",
       "multiSelect": "Mehrfachauswahl",
       "nameProperty": "Namenseigenschaft",
       "newColumn": "Neue Spalte",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (Kopie)",
       "deleteView": "Ansicht löschen",
       "exportCsv": "CSV exportieren",
+      "exportDocxPlain": "DOCX exportieren (einfache Tabelle)",
+      "exportDocxTemplate": "DOCX aus Vorlage exportieren…",
       "exportFailed": "Export fehlgeschlagen",
       "exportTable": "Tabelle exportieren",
       "exportXlsx": "XLSX exportieren",

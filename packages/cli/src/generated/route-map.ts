@@ -21379,7 +21379,8 @@ export const generatedRouteMap: RouteNode = {
                 partPath: "propertyId",
               },
               {
-                kind: "string",
+                kind: "enum",
+                enum: ["verified", "locked"],
                 repeatable: false,
                 flag: "--flag",
                 prop: "flag",
@@ -21439,8 +21440,9 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                     },
                     flag: {
-                      const: "verified",
+                      default: "verified",
                       type: "string",
+                      enum: ["verified", "locked"],
                     },
                     filters: {
                       type: "array",

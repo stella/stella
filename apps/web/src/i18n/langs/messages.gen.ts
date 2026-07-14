@@ -216,7 +216,6 @@ type Messages = {
       "tableNamePlaceholder": "e.g. Standard 2025";
     };
     "revertToDraft": "Revert to draft";
-    "running": "Running";
     "selectMatter": "Select a matter...";
     "selectMatterToStart": "Select a matter to start timing";
     "selectedCount": "{count, plural, one {# selected} other {# selected}}";
@@ -898,6 +897,7 @@ type Messages = {
     "retry": "Retry";
     "role": "Role";
     "run": "Run";
+    "running": "Running";
     "save": "Save";
     "saveAsPdf": "Save as PDF";
     "saveChanges": "Save changes";
@@ -1201,6 +1201,8 @@ type Messages = {
     "uploadFailed": "Upload failed";
   };
   "feedback": {
+    "discord": "Discord community";
+    "github": "GitHub issues";
     "trigger": "Feedback";
   };
   "fileDetail": {
@@ -3106,8 +3108,11 @@ type Messages = {
       "int": "Integer";
       "keepEmpty": "Keep Empty";
       "manualColumn": "Manual column";
+      "markAllAsLocked": "Lock all cells";
       "markAllAsReviewed": "Mark all as reviewed";
+      "markThisGroupAsLocked": "Lock this group";
       "markThisGroupAsReviewed": "Mark this group as reviewed";
+      "markedAsLocked": "{count, plural, one {# cell locked} other {# cells locked}}";
       "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
@@ -3221,6 +3226,8 @@ type Messages = {
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
       "exportCsv": "Export CSV";
+      "exportDocxPlain": "Export DOCX (plain table)";
+      "exportDocxTemplate": "Export DOCX from template…";
       "exportFailed": "Export failed";
       "exportTable": "Export table";
       "exportXlsx": "Export XLSX";

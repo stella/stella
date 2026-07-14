@@ -62,6 +62,7 @@ import { usePulse } from "@/hooks/use-pulse";
 import type { TranslationKey } from "@/i18n/types";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
+import { shouldShowPromptBarBusyPlaceholder } from "./host.logic";
 import type { FileAIChatStatus } from "./types";
 
 const SEVERITY_DOT_CLASS: Record<AISuggestionSeverity, string> = {
@@ -270,20 +271,15 @@ const DOC_FLOAT_SURFACE_CLASS =
   "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
 
 /**
- * The bar box itself — border, shadow, halo, and the doc-anchored
+ * The bar box itself — border, shadow, and the doc-anchored
  * surface — with no positioning or sizing of its own. `DockedComposer`
  * owns where the bar sits and how wide it is; this shell just paints the
  * box and fills the width it is given (`w-full`). Both the live
  * `PromptBar` and the loading `PromptBarPlaceholder` render through it so
  * they can never drift apart.
  *
- * The surface is solid on purpose: a translucent background lets content
- * behind the bar bleed through, and backdrop-blur cannot compensate for
- * children of this shell — the shell's own backdrop-filter would make it
- * the backdrop root for its descendants (the preset chips), whose blur
- * then samples nothing. The solid `DOC_FLOAT_SURFACE_CLASS` is the anchor
- * (white in light, the theme popover in dark); the halo fades the content
- * around the bar toward the page so it reads as floating over it.
+ * The surface is solid on purpose: the separate pane veil softens document
+ * content around the stack while the controls themselves remain crisp.
  */
 export function PromptBarShell({
   children,
@@ -296,15 +292,11 @@ export function PromptBarShell({
       className={cn(
         "group/bar border-foreground/15 relative flex w-full items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-        "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--doc-float-halo)_0%,transparent_75%)] after:opacity-90",
         // py-0.5 keeps the single-line pill slim (the inner editor cell's
         // min-h-8 sets the line height; the shell adds only a hairline of
         // breathing room) so the bar reads lighter than the transcript.
         "py-0.5 ps-1.5 pe-1",
         DOC_FLOAT_SURFACE_CLASS,
-        // The halo fades content around the bar, so it blends toward the
-        // page: white in light, the theme background in dark.
-        "[--doc-float-halo:var(--color-white)] dark:[--doc-float-halo:var(--background)]",
         className,
       )}
     >
@@ -368,7 +360,8 @@ type DockedComposerProps = {
  */
 export function DockedComposer({ chips, bar, dock }: DockedComposerProps) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-3.5 flex flex-col items-center">
+    <div className="pointer-events-none absolute inset-x-0 bottom-3.5 z-[80] flex flex-col items-center">
+      <ComposerVeil variant="pane" />
       {chips !== undefined && (
         <div
           className={cn(
@@ -385,13 +378,6 @@ export function DockedComposer({ chips, bar, dock }: DockedComposerProps) {
           DOCKED_COMPOSER_WIDTH_CLASS,
         )}
       >
-        {/* Shared glass veil behind the whole composer stack (bar + status
-            row). Legibility over live document content comes from this one
-            heavy blur band, not from per-control chrome: the status-row
-            controls stay quiet muted text/icons sitting directly on it.
-            Negative insets let it overhang the stack and reach the pane's
-            bottom edge (the column floats 3.5 above it). */}
-        <ComposerVeil className="-inset-x-3 -top-4 -bottom-3.5" />
         {bar}
         {/* No extra top margin: `ComposerStatusRow` owns the single
             bar-to-row gap (mt-1.5), matching the main chat tray's rhythm. */}
@@ -573,6 +559,11 @@ export function PromptBar(props: PromptBarProps) {
 
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
+  const showBusyPlaceholder = shouldShowPromptBarBusyPlaceholder({
+    isEmpty,
+    queueWhileGenerating,
+    status,
+  });
   const isSendBlocked = sendDisabledReason !== undefined;
   const inputDisabled = isSendBlocked;
   const submitDisabled = busy || isSendBlocked;
@@ -848,7 +839,7 @@ export function PromptBar(props: PromptBarProps) {
         </span>
       )}
       <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
-        {isEmpty && busy && (
+        {showBusyPlaceholder && (
           <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
             <LoaderCircleIcon
               aria-hidden="true"
@@ -889,7 +880,9 @@ export function PromptBar(props: PromptBarProps) {
             // busy "working" label, or the editor-loading label) — otherwise
             // the two texts paint on top of each other.
             isEmpty &&
-              (emptyPlaceholder !== undefined || busy || isSendBlocked) &&
+              (emptyPlaceholder !== undefined ||
+                showBusyPlaceholder ||
+                isSendBlocked) &&
               "folio-ai-bar-editor--custom-placeholder",
             inputDisabled && "pointer-events-none",
           )}

@@ -6,7 +6,11 @@ import { MessageResponse } from "@/components/ai-elements/message";
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
 import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 
-type MarkdownPreviewProps = Omit<MessageResponseProps, "components"> & {
+type MarkdownPreviewProps = Omit<
+  MessageResponseProps,
+  "children" | "components"
+> & {
+  children: string;
   components?: MessageResponseProps["components"];
 };
 

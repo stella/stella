@@ -66,10 +66,10 @@ export const MentionList = ({
       <PopoverPopup
         align="start"
         anchor={decorationNode}
-        className="*:data-[slot=popover-positioner]:transition-none! *:data-[slot=popover-viewport]:p-1!"
+        className="max-h-72 w-72 max-w-[min(18rem,var(--available-width))] *:data-[slot=popover-positioner]:transition-none! *:data-[slot=popover-viewport]:p-1!"
         initialFocus={false}
       >
-        <div className="flex min-w-32 flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           {items.length === 0 && (
             <div className="text-muted-foreground flex items-center justify-center p-1 text-center text-sm">
               {t("workspaces.properties.noPropertiesFound")}
@@ -78,7 +78,7 @@ export const MentionList = ({
           {items.map((item, index) => (
             <Button
               className={cn(
-                "justify-start font-normal",
+                "w-full min-w-0 justify-start overflow-hidden font-normal",
                 selectedIndex === index && "bg-accent text-accent-foreground",
               )}
               key={item.id}
@@ -86,7 +86,7 @@ export const MentionList = ({
               size="sm"
               variant="ghost"
             >
-              {item.label}
+              <span className="truncate">{item.label}</span>
             </Button>
           ))}
         </div>

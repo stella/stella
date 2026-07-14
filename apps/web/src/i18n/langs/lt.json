@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "pvz. Standartinis 2025"
     },
     "revertToDraft": "Grąžinti į juodraštį",
-    "running": "Vykdoma",
     "selectMatter": "Pasirinkite bylą...",
     "selectMatterToStart": "Pasirinkite bylą, kad pradėtumėte fiksuoti laiką",
     "selectedCount": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinkto} other {# pasirinktų}}",
@@ -895,6 +894,7 @@
     "retry": "Bandyti dar kartą",
     "role": "Rolė",
     "run": "Paleisti",
+    "running": "Vykdoma",
     "save": "Išsaugoti",
     "saveAsPdf": "Išsaugoti kaip PDF",
     "saveChanges": "Išsaugoti pakeitimus",
@@ -1198,6 +1198,8 @@
     "uploadFailed": "Įkėlimas nepavyko"
   },
   "feedback": {
+    "discord": "„Discord“ bendruomenė",
+    "github": "„GitHub“ problemos",
     "trigger": "Atsiliepimai"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Sveikasis skaičius",
       "keepEmpty": "Palikti tuščią",
       "manualColumn": "Rankinis stulpelis",
+      "markAllAsLocked": "Užrakinti visus langelius",
       "markAllAsReviewed": "Pažymėti visus kaip peržiūrėtus",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Užrakinti šią grupę",
+      "markThisGroupAsReviewed": "Pažymėti šią grupę kaip peržiūrėtą",
+      "markedAsLocked": "{count, plural, one {Užrakintas # langelis} few {Užrakinti # langeliai} other {Užrakinta # langelių}}",
+      "markedAsReviewed": "{count, plural, one {# langelis pažymėtas kaip peržiūrėtas} few {# langeliai pažymėti kaip peržiūrėti} other {# langelių pažymėta kaip peržiūrėta}}",
       "multiSelect": "Keli pasirinkimai",
       "nameProperty": "Pavadinimo savybė",
       "newColumn": "Naujas stulpelis",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (kopija)",
       "deleteView": "Ištrinti rodinį",
       "exportCsv": "Eksportuoti CSV",
+      "exportDocxPlain": "Eksportuoti DOCX (paprasta lentelė)",
+      "exportDocxTemplate": "Eksportuoti DOCX pagal šabloną…",
       "exportFailed": "Eksportuoti nepavyko",
       "exportTable": "Eksportuoti lentelę",
       "exportXlsx": "Eksportuoti XLSX",

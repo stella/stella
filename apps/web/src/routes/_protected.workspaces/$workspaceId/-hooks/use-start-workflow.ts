@@ -25,18 +25,21 @@ export const useStartWorkflow = (workspaceId: string) => {
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: aiAvailability } = useQuery(
-    aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-  );
+  const aiAvailabilityQuery = aiAvailabilityOptions({
+    organizationId: activeOrganizationId,
+  });
+  const { data: aiAvailability } = useQuery(aiAvailabilityQuery);
   const confirmLargeRun = useWorkflowStartConfirmationPrompt();
   const promptForServiceTier = useWorkflowServiceTierPrompt();
 
   return async (args?: StartWorkflowArgs) => {
-    if (!aiAvailability?.available) {
-      return undefined;
-    }
-
     try {
+      const availability =
+        aiAvailability ?? (await queryClient.fetchQuery(aiAvailabilityQuery));
+      if (!availability.available) {
+        return { status: "failed" } as const;
+      }
+
       const entityCount = await estimateWorkflowTargetCount({
         args,
         queryClient,
@@ -52,8 +55,7 @@ export const useStartWorkflow = (workspaceId: string) => {
 
       const serviceTier = await resolveWorkflowServiceTier({
         args,
-        deferredServiceTierAvailable:
-          aiAvailability.deferredServiceTierAvailable,
+        deferredServiceTierAvailable: availability.deferredServiceTierAvailable,
         entityCount,
         promptForServiceTier,
       });
@@ -82,7 +84,7 @@ export const useStartWorkflow = (workspaceId: string) => {
 
       if (response.error) {
         analytics.captureError(new Error("Failed to start workflow"));
-        return undefined;
+        return { status: "failed" } as const;
       }
 
       // Invalidate workflow status so UI shows "running"
@@ -93,7 +95,7 @@ export const useStartWorkflow = (workspaceId: string) => {
       return response.data;
     } catch (error) {
       analytics.captureError(error);
-      return undefined;
+      return { status: "failed" } as const;
     }
   };
 };

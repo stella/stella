@@ -213,7 +213,6 @@
       "tableNamePlaceholder": "p. ex. Standard 2025"
     },
     "revertToDraft": "Repasser en brouillon",
-    "running": "En cours",
     "selectMatter": "Sélectionner un dossier...",
     "selectMatterToStart": "Sélectionnez un dossier pour démarrer",
     "selectedCount": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}",
@@ -895,6 +894,7 @@
     "retry": "Réessayer",
     "role": "Rôle",
     "run": "Exécuter",
+    "running": "En cours",
     "save": "Enregistrer",
     "saveAsPdf": "Enregistrer en PDF",
     "saveChanges": "Enregistrer les modifications",
@@ -1198,6 +1198,8 @@
     "uploadFailed": "Échec de l'import"
   },
   "feedback": {
+    "discord": "Communauté Discord",
+    "github": "Tickets GitHub",
     "trigger": "Commentaires"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Entier",
       "keepEmpty": "Laisser vide",
       "manualColumn": "Colonne manuelle",
+      "markAllAsLocked": "Verrouiller toutes les cellules",
       "markAllAsReviewed": "Tout marquer comme vérifié",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Verrouiller ce groupe",
+      "markThisGroupAsReviewed": "Marquer ce groupe comme vérifié",
+      "markedAsLocked": "{count, plural, one {# cellule verrouillée} other {# cellules verrouillées}}",
+      "markedAsReviewed": "{count, plural, one {# cellule marquée comme vérifiée} other {# cellules marquées comme vérifiées}}",
       "multiSelect": "Sélection multiple",
       "nameProperty": "Propriété du nom",
       "newColumn": "Nouvelle colonne",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (copie)",
       "deleteView": "Supprimer la vue",
       "exportCsv": "Exporter en CSV",
+      "exportDocxPlain": "Exporter en DOCX (tableau simple)",
+      "exportDocxTemplate": "Exporter un DOCX depuis un modèle…",
       "exportFailed": "Échec de l’export",
       "exportTable": "Exporter le tableau",
       "exportXlsx": "Exporter en XLSX",
