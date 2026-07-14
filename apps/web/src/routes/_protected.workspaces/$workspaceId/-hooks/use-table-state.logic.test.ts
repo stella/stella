@@ -19,8 +19,8 @@ describe("workspace table state normalization", () => {
     ]);
 
     expect(liveState).toEqual({
-      left: ["select", "status", "owner"],
-      right: [],
+      start: ["select", "status", "owner"],
+      end: [],
     });
     expect(getPersistedColumnPinning(liveState)).toEqual(["status", "owner"]);
   });
