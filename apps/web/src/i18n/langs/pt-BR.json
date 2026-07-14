@@ -1198,6 +1198,8 @@
     "uploadFailed": "Falha no upload"
   },
   "feedback": {
+    "discord": "Comunidade no Discord",
+    "github": "Problemas no GitHub",
     "trigger": "Feedback"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Inteiro",
       "keepEmpty": "Manter vazio",
       "manualColumn": "Coluna manual",
+      "markAllAsLocked": "Bloquear todas as células",
       "markAllAsReviewed": "Marcar tudo como revisado",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Bloquear este grupo",
+      "markThisGroupAsReviewed": "Marcar este grupo como revisado",
+      "markedAsLocked": "{count, plural, one {# célula bloqueada} other {# células bloqueadas}}",
+      "markedAsReviewed": "{count, plural, one {# célula marcada como revisada} other {# células marcadas como revisadas}}",
       "multiSelect": "Seleção múltipla",
       "nameProperty": "Propriedade de nome",
       "newColumn": "Nova coluna",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (cópia)",
       "deleteView": "Excluir visualização",
       "exportCsv": "Exportar CSV",
+      "exportDocxPlain": "Exportar DOCX (tabela simples)",
+      "exportDocxTemplate": "Exportar DOCX a partir de um modelo…",
       "exportFailed": "Falha na exportação",
       "exportTable": "Exportar tabela",
       "exportXlsx": "Exportar XLSX",

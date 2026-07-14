@@ -34,6 +34,7 @@ export const DeleteProperty = ({
   return (
     <AlertDialog>
       <AlertDialogTrigger
+        nativeButton
         render={
           <Button
             className="text-destructive-foreground justify-start font-normal"

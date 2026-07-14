@@ -1198,6 +1198,8 @@
     "uploadFailed": "فشل الرفع"
   },
   "feedback": {
+    "discord": "مجتمع Discord",
+    "github": "مشكلات GitHub",
     "trigger": "ملاحظات"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "عدد صحيح",
       "keepEmpty": "إبقاؤه فارغًا",
       "manualColumn": "عمود يدوي",
+      "markAllAsLocked": "قفل جميع الخلايا",
       "markAllAsReviewed": "وضع علامة على الكل بأنه تمت مراجعته",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "قفل هذه المجموعة",
+      "markThisGroupAsReviewed": "وضع علامة على هذه المجموعة بأنها تمت مراجعتها",
+      "markedAsLocked": "{count, plural, zero {لم يتم قفل أي خلايا} one {تم قفل خلية واحدة} two {تم قفل خليتين} few {تم قفل # خلايا} many {تم قفل # خلية} other {تم قفل # خلية}}",
+      "markedAsReviewed": "{count, plural, zero {لم تتم مراجعة أي خلايا} one {تمت مراجعة خلية واحدة} two {تمت مراجعة خليتين} few {تمت مراجعة # خلايا} many {تمت مراجعة # خلية} other {تمت مراجعة # خلية}}",
       "multiSelect": "اختيار متعدد",
       "nameProperty": "اسم الخاصية",
       "newColumn": "عمود جديد",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (نسخة)",
       "deleteView": "حذف طريقة العرض",
       "exportCsv": "تصدير CSV",
+      "exportDocxPlain": "تصدير DOCX (جدول بسيط)",
+      "exportDocxTemplate": "تصدير DOCX من قالب…",
       "exportFailed": "فشل التصدير",
       "exportTable": "تصدير الجدول",
       "exportXlsx": "تصدير XLSX",

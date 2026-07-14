@@ -45,7 +45,11 @@ import {
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import {
+  getChatThreadKey,
+  resolveChatContextMatterIds,
+  type ChatThreadRef,
+} from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { toAPIError } from "@/lib/errors/api";
@@ -121,12 +125,16 @@ export const ChatThreadPage = ({
   // Track which thread our local state was seeded for so we can
   // detect navigation between two `/chat/$threadId` routes inside
   // the same mounted component and reset before the next send.
-  const [seededForThreadId, setSeededForThreadId] = useState<string | null>(
+  const [seededForThreadKey, setSeededForThreadKey] = useState<string | null>(
     null,
   );
+  const threadKey = getChatThreadKey(threadRef);
   const anonymized = useChatAnonymized(threadRef);
   const getContextMatterIds = useLatestCallback(() =>
-    optionalArray(contextMatterIds),
+    resolveChatContextMatterIds(
+      threadRef,
+      seededForThreadKey === threadKey ? optionalArray(contextMatterIds) : [],
+    ),
   );
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
 
@@ -152,13 +160,21 @@ export const ChatThreadPage = ({
     data,
     key: threadRef,
   });
+  const selectedContextMatterIds = resolveChatContextMatterIds(
+    threadRef,
+    seededForThreadKey === threadKey
+      ? optionalArray(contextMatterIds)
+      : data.contextMatterIds,
+  );
   useExternalSyncEffect(() => {
-    if (seededForThreadId === threadRef.threadId) {
+    if (seededForThreadKey === threadKey) {
       return;
     }
-    setSeededForThreadId(threadRef.threadId);
-    setContextMatterIds(data.contextMatterIds);
-  }, [data.contextMatterIds, seededForThreadId, threadRef.threadId]);
+    setSeededForThreadKey(threadKey);
+    setContextMatterIds(
+      resolveChatContextMatterIds(threadRef, data.contextMatterIds),
+    );
+  }, [data.contextMatterIds, seededForThreadKey, threadKey, threadRef]);
 
   // Surface a 402 usage-limit response from the metered
   // chat handler as a usage-state modal instead of an inline
@@ -358,7 +374,6 @@ export const ChatThreadPage = ({
   // caches are invalidated so the inspector doesn't read whichever
   // entry happens to predate the move.
   const moveToSide = () => {
-    const persistedContext = contextMatterIds ?? data.contextMatterIds;
     void invalidateChatThreadAcrossScopes({
       queryClient,
       threadId: threadRef.threadId,
@@ -367,7 +382,7 @@ export const ChatThreadPage = ({
       openInspectorChat({
         id: threadRef.threadId,
         workspaceId: threadRef.workspaceId,
-        contextMatterIds: persistedContext,
+        contextMatterIds: selectedContextMatterIds,
       });
       void navigate({
         to: "/workspaces/$workspaceId",
@@ -377,7 +392,7 @@ export const ChatThreadPage = ({
     }
     openInspectorChat({
       id: threadRef.threadId,
-      contextMatterIds: persistedContext,
+      contextMatterIds: selectedContextMatterIds,
     });
     void navigate({ to: "/chat" });
   };
@@ -616,12 +631,14 @@ export const ChatThreadPage = ({
                     <ChatComposerDock
                       data={data}
                       leadingContext={
-                        contextMatterIds !== null ? (
-                          <ChatMatterPicker
-                            matterIds={contextMatterIds}
-                            onChange={setContextMatterIds}
-                          />
-                        ) : undefined
+                        <ChatMatterPicker
+                          matterIds={selectedContextMatterIds}
+                          onChange={(matterIds) =>
+                            setContextMatterIds(
+                              resolveChatContextMatterIds(threadRef, matterIds),
+                            )
+                          }
+                        />
                       }
                       onNewThread={messages.length > 0 ? startNewThread : null}
                       threadRef={threadRef}

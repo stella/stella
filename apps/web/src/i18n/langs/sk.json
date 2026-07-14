@@ -1198,6 +1198,8 @@
     "uploadFailed": "Nahrávanie zlyhalo"
   },
   "feedback": {
+    "discord": "Komunita na Discorde",
+    "github": "Hlásenia na GitHube",
     "trigger": "Spätná väzba"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Celé číslo",
       "keepEmpty": "Ponechať prázdne",
       "manualColumn": "Manuálny stĺpec",
+      "markAllAsLocked": "Uzamknúť všetky bunky",
       "markAllAsReviewed": "Označiť všetko ako skontrolované",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Uzamknúť túto skupinu",
+      "markThisGroupAsReviewed": "Označiť túto skupinu ako skontrolovanú",
+      "markedAsLocked": "{count, plural, one {Uzamknutá # bunka} few {Uzamknuté # bunky} other {Uzamknutých # buniek}}",
+      "markedAsReviewed": "{count, plural, one {# bunka označená ako skontrolovaná} few {# bunky označené ako skontrolované} other {# buniek označených ako skontrolované}}",
       "multiSelect": "Viacnásobný výber",
       "nameProperty": "Vlastnosť názvu",
       "newColumn": "Nový stĺpec",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (kópia)",
       "deleteView": "Vymazať zobrazenie",
       "exportCsv": "Exportovať CSV",
+      "exportDocxPlain": "Exportovať DOCX (jednoduchá tabuľka)",
+      "exportDocxTemplate": "Exportovať DOCX zo vzoru…",
       "exportFailed": "Export zlyhal",
       "exportTable": "Exportovať tabuľku",
       "exportXlsx": "Exportovať XLSX",

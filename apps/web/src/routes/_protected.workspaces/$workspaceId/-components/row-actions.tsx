@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
@@ -55,8 +55,10 @@ import { apiUrl } from "@/lib/api-url";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { DOCX_MIME } from "@/lib/consts";
 import { openDocxInDesktop } from "@/lib/desktop-bridge";
+import { toAPIError } from "@/lib/errors/api";
 import { isUnauthorizedError } from "@/lib/errors/auth";
 import { ClientOperationError } from "@/lib/errors/client";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -77,7 +79,10 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
-import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
+import {
+  getDesktopEditLockState,
+  getPdfDownloadFileName,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
 import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useEntitiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
@@ -142,6 +147,7 @@ export const RowActions = ({
 }: RowActionsProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const deleteEntities = useDeleteEntities();
   const uploadVersion = useUploadVersion();
   const requestChatAbout = useRequestChatAbout(workspaceId);
@@ -161,10 +167,9 @@ export const RowActions = ({
   const isCellContext =
     !isBulk && cellMetadataTarget !== null && cellMetadataTarget !== undefined;
   const isDocx = !isBulk && file?.mimeType === DOCX_MIME;
-  const isLockedByMe =
-    isDocx && entity.activeEditBy !== null && entity.activeEditBy.isMe;
-  const isLockedByOther =
-    isDocx && entity.activeEditBy !== null && !entity.activeEditBy.isMe;
+  const desktopEditLockState = getDesktopEditLockState(entity.activeEditBy);
+  const isLockedByMe = isDocx && desktopEditLockState === "locked-by-me";
+  const isLockedByOther = isDocx && desktopEditLockState === "locked-by-other";
   // Show "Edit in Desktop" when: DOCX + (not locked OR locked by me)
   const canOpenInDesktop = isDocx && !isLockedByOther;
   const openCopyToMatterDialog = () => {
@@ -334,6 +339,34 @@ export const RowActions = ({
   const handleReleaseLock = async () => {
     if (!file || file.mimeType !== DOCX_MIME) {
       return;
+    }
+
+    if (desktopEditLockState === "locked-by-me") {
+      try {
+        const response = await api
+          .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          ["desktop-edit-sessions"].release.post({
+            entityId: toSafeId<"entity">(file.entityId),
+            propertyId: toSafeId<"property">(file.propertyId),
+            queryKey: entitiesKeys.all(workspaceId),
+          });
+
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+
+        await queryClient.invalidateQueries({
+          queryKey: entitiesKeys.all(workspaceId),
+        });
+        return;
+      } catch (error) {
+        stellaToast.add({
+          description: userErrorFromThrown(error, t("common.unexpectedError")),
+          title: t("errors.actionFailed"),
+          type: "error",
+        });
+        return;
+      }
     }
 
     const lockedByName = entity.activeEditBy?.name ?? "";
@@ -644,7 +677,7 @@ export const RowActions = ({
             {t("workspaces.files.desktopEdit.action")}
           </MenuItem>
         )}
-        {!isCellContext && isLockedByOther && (
+        {!isCellContext && isDocx && desktopEditLockState !== "unlocked" && (
           <MenuItem
             onClick={() => {
               void handleReleaseLock();

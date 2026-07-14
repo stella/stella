@@ -3,7 +3,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { t } from "elysia";
 
-import { chatMessages, chatThreads, entities } from "@/api/db/schema";
+import { chatMessages, chatThreads, entities, fields } from "@/api/db/schema";
 import {
   decodeWorkspaceActivityCursor,
   encodeWorkspaceActivityCursor,
@@ -33,12 +33,19 @@ const config = {
   }),
 } satisfies HandlerConfig;
 
+type ActivityFile = {
+  fileName: string | null;
+  mimeType: string | null;
+};
+
 type InternalActivity =
   | {
       activityAt: Date;
       cursorActivityAt: string;
       entityKind: (typeof entities.$inferSelect)["kind"];
+      fileName: string | null;
       id: string;
+      mimeType: string | null;
       status: string | null;
       title: string;
       type: "entity";
@@ -55,7 +62,9 @@ type WorkspaceActivity =
   | {
       activityAt: string;
       entityKind: (typeof entities.$inferSelect)["kind"];
+      fileName: string | null;
       id: string;
+      mimeType: string | null;
       status: string | null;
       title: string;
       type: "entity";
@@ -88,6 +97,18 @@ const readWorkspaceActivity = createSafeHandler(
       ${chatThreads.updatedAt},
       'YYYY-MM-DD"T"HH24:MI:SS.US'
     )`;
+    const entityFile = sql<ActivityFile | null>`(
+      select jsonb_build_object(
+        'fileName', ${fields.content}->>'fileName',
+        'mimeType', ${fields.content}->>'mimeType'
+      )
+      from ${fields}
+      where ${fields.workspaceId} = ${entities.workspaceId}
+        and ${fields.entityVersionId} = ${entities.currentVersionId}
+        and ${fields.content}->>'type' = 'file'
+      order by ${fields.propertyId}
+      limit 1
+    )`;
 
     const entityCursorCondition = activityCursorCondition({
       activityAt: entityActivityAt,
@@ -110,6 +131,7 @@ const readWorkspaceActivity = createSafeHandler(
             activityAt: entityActivityAt,
             cursorActivityAt: entityCursorActivityAt,
             entityKind: entities.kind,
+            file: entityFile,
             id: entities.id,
             status: entities.status,
             title: entities.name,
@@ -167,7 +189,9 @@ const readWorkspaceActivity = createSafeHandler(
         activityAt: row.activityAt,
         cursorActivityAt: row.cursorActivityAt,
         entityKind: row.entityKind,
+        fileName: row.file?.fileName ?? null,
         id: row.id,
+        mimeType: row.file?.mimeType ?? null,
         status: row.status,
         title: row.title,
         type: "entity",
@@ -191,7 +215,9 @@ const readWorkspaceActivity = createSafeHandler(
         items.push({
           activityAt: item.activityAt.toISOString(),
           entityKind: item.entityKind,
+          fileName: item.fileName,
           id: item.id,
+          mimeType: item.mimeType,
           status: item.status,
           title: item.title,
           type: item.type,

@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useCallback, useRef } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
 
@@ -43,6 +43,7 @@ export const FileViewerWithAI = ({
       data-file-viewer-ai="true"
     >
       {children}
+      {docxEditorRef !== undefined && <DocxHorizontalScrollbar />}
       <Suspense fallback={null}>
         <LazyFileChatOverlayHost
           activeExternal={activeExternal}
@@ -57,6 +58,149 @@ export const FileViewerWithAI = ({
           workspaceId={workspaceId}
         />
       </Suspense>
+    </div>
+  );
+};
+
+const DocxHorizontalScrollbar = () => {
+  const cleanupRef = useRef<() => void>(() => undefined);
+  const trackRef = useCallback((track: HTMLDivElement | null) => {
+    cleanupRef.current();
+    cleanupRef.current = () => undefined;
+    if (!track?.parentElement) {
+      return;
+    }
+
+    const host = track.parentElement;
+    const thumb = track.firstElementChild;
+    if (!(thumb instanceof HTMLDivElement)) {
+      return;
+    }
+
+    let scrollElement: HTMLElement | null = null;
+    let scrollCleanup = () => undefined;
+    let pointerCleanup = () => undefined;
+
+    const bindScrollElement = () => {
+      const nextScrollElement = host.querySelector<HTMLElement>(
+        "[data-folio-scroll]",
+      );
+      if (nextScrollElement === scrollElement) {
+        return;
+      }
+
+      scrollCleanup();
+      scrollElement = nextScrollElement;
+      if (!scrollElement) {
+        track.hidden = true;
+        scrollCleanup = () => undefined;
+        return;
+      }
+
+      const updateThumb = () => {
+        if (!scrollElement) {
+          return;
+        }
+        const maxScroll = scrollElement.scrollWidth - scrollElement.clientWidth;
+        track.hidden = maxScroll <= 1;
+        if (maxScroll <= 1) {
+          return;
+        }
+
+        const thumbWidth = Math.max(
+          (scrollElement.clientWidth / scrollElement.scrollWidth) *
+            track.clientWidth,
+          24,
+        );
+        const travel = Math.max(track.clientWidth - thumbWidth, 0);
+        const progress = Math.min(
+          Math.abs(scrollElement.scrollLeft) / maxScroll,
+          1,
+        );
+        thumb.style.width = `${String(thumbWidth)}px`;
+        thumb.style.transform = `translateX(${String(progress * travel)}px)`;
+      };
+
+      const resizeObserver = new ResizeObserver(updateThumb);
+      resizeObserver.observe(scrollElement);
+      resizeObserver.observe(track);
+      scrollElement.addEventListener("scroll", updateThumb, { passive: true });
+      updateThumb();
+      scrollCleanup = () => {
+        resizeObserver.disconnect();
+        scrollElement?.removeEventListener("scroll", updateThumb);
+      };
+    };
+
+    const mutationObserver = new MutationObserver(bindScrollElement);
+    mutationObserver.observe(host, { childList: true, subtree: true });
+    bindScrollElement();
+
+    const setScrollFromPointer = (clientX: number, grabOffset: number) => {
+      if (!scrollElement) {
+        return;
+      }
+      const maxScroll = scrollElement.scrollWidth - scrollElement.clientWidth;
+      const trackRect = track.getBoundingClientRect();
+      const thumbWidth = thumb.getBoundingClientRect().width;
+      const travel = Math.max(trackRect.width - thumbWidth, 1);
+      const thumbStart = Math.min(
+        Math.max(clientX - trackRect.left - grabOffset, 0),
+        travel,
+      );
+      scrollElement.scrollLeft = (thumbStart / travel) * maxScroll;
+    };
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!scrollElement) {
+        return;
+      }
+      pointerCleanup();
+      event.preventDefault();
+      const thumbRect = thumb.getBoundingClientRect();
+      const grabbedThumb = event.target === thumb;
+      const grabOffset = grabbedThumb
+        ? event.clientX - thumbRect.left
+        : thumbRect.width / 2;
+      track.setPointerCapture(event.pointerId);
+      setScrollFromPointer(event.clientX, grabOffset);
+
+      const handlePointerMove = (moveEvent: PointerEvent) => {
+        setScrollFromPointer(moveEvent.clientX, grabOffset);
+      };
+      const handlePointerUp = (upEvent: PointerEvent) => {
+        if (track.hasPointerCapture(upEvent.pointerId)) {
+          track.releasePointerCapture(upEvent.pointerId);
+        }
+        pointerCleanup();
+      };
+      pointerCleanup = () => {
+        track.removeEventListener("pointermove", handlePointerMove);
+        track.removeEventListener("pointerup", handlePointerUp);
+        track.removeEventListener("pointercancel", handlePointerUp);
+      };
+      track.addEventListener("pointermove", handlePointerMove);
+      track.addEventListener("pointerup", handlePointerUp);
+      track.addEventListener("pointercancel", handlePointerUp);
+    };
+
+    track.addEventListener("pointerdown", handlePointerDown);
+    cleanupRef.current = () => {
+      mutationObserver.disconnect();
+      scrollCleanup();
+      pointerCleanup();
+      track.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, []);
+
+  return (
+    <div
+      ref={trackRef}
+      aria-hidden="true"
+      className="absolute inset-x-1 bottom-1 z-[60] h-1.5 cursor-pointer"
+      hidden
+    >
+      <div className="bg-foreground/20 absolute inset-y-0 start-0 rounded-full" />
     </div>
   );
 };

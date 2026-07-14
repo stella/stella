@@ -23,6 +23,17 @@ export const getChatThreadKey = (threadRef: ChatThreadRef) =>
     ? `workspace:${threadRef.workspaceId}:${threadRef.threadId}`
     : `global:${threadRef.threadId}`;
 
+export const resolveChatContextMatterIds = (
+  threadRef: ChatThreadRef,
+  contextMatterIds: readonly string[],
+): string[] => {
+  if (threadRef.scope === "global") {
+    return [...new Set(contextMatterIds)];
+  }
+
+  return [...new Set([threadRef.workspaceId, ...contextMatterIds])];
+};
+
 export const toChatThreadId = (value: string): ChatThreadId =>
   toSafeId<"chatThread">(value);
 

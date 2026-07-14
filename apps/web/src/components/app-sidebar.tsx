@@ -672,11 +672,6 @@ export function AppSidebar(props: AppSidebarProps) {
               </SidebarGroupContent>
             </SidebarGroup>
           )}
-
-          <RecentGlobalChatsGroup
-            showSeparator={pinned.length > 0 || recents.length > 0}
-            threads={groupedChatThreads.global}
-          />
         </SidebarContextArea>
       </SidebarContent>
 
@@ -708,7 +703,6 @@ export function AppSidebar(props: AppSidebarProps) {
 }
 
 const RECENTS_LIMIT = 5;
-const RECENT_GLOBAL_CHATS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
 
 type MatterExpansion =
@@ -1140,9 +1134,9 @@ const MatterItem = ({
               aria-label={
                 isExpanded ? t("common.showLess") : t("common.showMore")
               }
-              className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 flex size-6 items-center justify-center rounded-md outline-hidden group-data-[collapsible=icon]:hidden focus-visible:ring-2"
+              className="text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute start-1 top-1 z-10 border-0 group-data-[collapsible=icon]:hidden before:hidden focus-visible:ring-1 focus-visible:ring-offset-0"
               onClick={onExpandedChange}
-              size="icon"
+              size="icon-xs"
               type="button"
               variant="ghost"
             />
@@ -1392,7 +1386,9 @@ const MatterActivityList = ({
             ) : (
               <EntityKindIcon
                 className="text-muted-foreground size-3.5 shrink-0"
+                fileName={item.fileName}
                 kind={item.entityKind}
+                mimeType={item.mimeType}
                 status={item.status}
               />
             )}
@@ -1457,55 +1453,6 @@ const MatterActivityList = ({
         </SidebarMenuSubItem>
       ) : null}
     </SidebarMenuSub>
-  );
-};
-
-const RecentGlobalChatsGroup = ({
-  showSeparator,
-  threads,
-}: {
-  showSeparator: boolean;
-  threads: ReturnType<typeof mergeGroupedChatThreadPages>["global"];
-}) => {
-  const t = useTranslations();
-  const recentThreads = threads.slice(0, RECENT_GLOBAL_CHATS_LIMIT);
-
-  if (recentThreads.length === 0) {
-    return null;
-  }
-
-  return (
-    <>
-      {showSeparator ? <SidebarSeparator /> : null}
-      <SidebarGroup className="min-h-0">
-        <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
-        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
-          <SidebarMenu>
-            {recentThreads.map((thread) => {
-              const title = isPlaceholderThreadTitle(thread.title)
-                ? t("chat.newChat")
-                : thread.title;
-              return (
-                <SidebarMenuItem key={thread.id}>
-                  <SidebarMenuButton asChild tooltip={title}>
-                    <Link
-                      activeProps={{ "data-active": true }}
-                      params={{ threadId: thread.id }}
-                      to="/chat/$threadId"
-                    >
-                      <MessageSquareIcon />
-                      <BidiText as="span" className="truncate">
-                        {title}
-                      </BidiText>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
-    </>
   );
 };
 

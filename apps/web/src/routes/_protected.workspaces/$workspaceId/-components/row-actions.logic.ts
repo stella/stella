@@ -7,3 +7,13 @@ export const getPdfDownloadFileName = (fileName: string): string => {
 
   return `${fileName.slice(0, dotIndex)}.pdf`;
 };
+
+export const getDesktopEditLockState = (
+  activeEditBy: { isMe: boolean } | null,
+) => {
+  if (!activeEditBy) {
+    return "unlocked";
+  }
+
+  return activeEditBy.isMe ? "locked-by-me" : "locked-by-other";
+};

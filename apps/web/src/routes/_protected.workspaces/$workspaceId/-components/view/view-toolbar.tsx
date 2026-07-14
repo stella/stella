@@ -245,7 +245,6 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           />
           <TableContentModeControl viewId={view.id} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
-          <ExportReportControl view={view} workspaceId={workspaceId} />
           <RunPlaybookControl workspaceId={workspaceId} />
           <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
         </>
@@ -341,7 +340,7 @@ const TableContentModeControl = ({ viewId }: TableContentModeControlProps) => {
   );
 };
 
-type TableExportFormat = "csv" | "xlsx";
+type TableExportFormat = "csv" | "xlsx" | "docx";
 
 type TableExportMenuProps = {
   view: Pick<WorkspaceView, "id" | "name">;
@@ -354,6 +353,7 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
   const analytics = useAnalytics();
   const [exportingFormat, setExportingFormat] =
     useState<TableExportFormat | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const handleExport = async (format: TableExportFormat) => {
     setExportingFormat(format);
@@ -400,39 +400,60 @@ const TableExportMenu = ({ view, workspaceId }: TableExportMenuProps) => {
   };
 
   return (
-    <Menu>
-      <MenuTrigger
-        render={
-          <Button
-            aria-label={t("workspaces.views.exportTable")}
+    <>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              aria-label={t("workspaces.views.exportTable")}
+              disabled={exportingFormat !== null}
+              size="icon-xs"
+              title={t("workspaces.views.exportTable")}
+              variant="ghost"
+            />
+          }
+        >
+          <DownloadIcon className="size-3.5" />
+        </MenuTrigger>
+        <MenuPopup>
+          <MenuItem
             disabled={exportingFormat !== null}
-            size="icon-xs"
-            title={t("workspaces.views.exportTable")}
-            variant="ghost"
-          />
-        }
-      >
-        <DownloadIcon className="size-3.5" />
-      </MenuTrigger>
-      <MenuPopup>
-        <MenuItem
-          disabled={exportingFormat !== null}
-          onClick={() => {
-            void handleExport("csv");
-          }}
-        >
-          {t("workspaces.views.exportCsv")}
-        </MenuItem>
-        <MenuItem
-          disabled={exportingFormat !== null}
-          onClick={() => {
-            void handleExport("xlsx");
-          }}
-        >
-          {t("workspaces.views.exportXlsx")}
-        </MenuItem>
-      </MenuPopup>
-    </Menu>
+            onClick={() => {
+              void handleExport("csv");
+            }}
+          >
+            {t("workspaces.views.exportCsv")}
+          </MenuItem>
+          <MenuItem
+            disabled={exportingFormat !== null}
+            onClick={() => {
+              void handleExport("xlsx");
+            }}
+          >
+            {t("workspaces.views.exportXlsx")}
+          </MenuItem>
+          <MenuSeparator />
+          <MenuItem
+            disabled={exportingFormat !== null}
+            onClick={() => {
+              void handleExport("docx");
+            }}
+          >
+            {t("workspaces.views.exportDocxPlain")}
+          </MenuItem>
+          <MenuItem onClick={() => setReportOpen(true)}>
+            {t("workspaces.views.exportDocxTemplate")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+      <ExportReportControl
+        initialMode="download"
+        onOpenChange={setReportOpen}
+        open={reportOpen}
+        view={view}
+        workspaceId={workspaceId}
+      />
+    </>
   );
 };
 

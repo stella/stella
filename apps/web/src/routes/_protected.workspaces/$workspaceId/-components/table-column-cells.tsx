@@ -360,7 +360,7 @@ export const VerdictBadge = ({
   // flow and pins to the bottom-left, on the same baseline as the Preview/Retry
   // actions (which are absolute bottom-1.5), so the whole action row lines up.
   const triggerAlignmentClass =
-    "flex shrink-0 items-center self-center group-data-[expanded-cell]/cell-content:absolute group-data-[expanded-cell]/cell-content:bottom-1.5 group-data-[expanded-cell]/cell-content:start-2";
+    "flex shrink-0 items-center self-center group-data-[expanded-cell]/cell-content:absolute group-data-[expanded-cell]/cell-content:bottom-1.5 group-data-[expanded-cell]/cell-content:start-2 group-data-[expanded-cell]/cell-content:max-w-[calc(100%-4.5rem)]";
 
   const badge = (
     <span aria-label={label} className="flex items-center" role="img">
@@ -371,9 +371,9 @@ export const VerdictBadge = ({
       >
         {Icon !== null && <Icon aria-hidden="true" className="size-2.5" />}
       </span>
-      {/* Expanded cell: an icon + label pill matching the Preview/Retry actions
-          on the same row, keeping the tier color on the glyph. */}
-      <span className="text-foreground-ghost hover:text-foreground hidden h-6 items-center gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100">
+      {/* Expanded cell: an icon + label pill beside the compact Preview/Retry
+          actions, keeping the tier color on the glyph. */}
+      <span className="text-foreground-ghost hover:text-foreground hidden h-6 min-w-0 items-center gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100">
         {Icon !== null && (
           <Icon
             aria-hidden="true"
@@ -381,7 +381,7 @@ export const VerdictBadge = ({
             style={{ color: color.foreground }}
           />
         )}
-        {label}
+        <span className="truncate">{label}</span>
       </span>
     </span>
   );
@@ -515,7 +515,7 @@ const WithOpenEntityButton = ({
   };
 
   const inlineActionClass =
-    "text-foreground-ghost hover:text-foreground hidden h-6 gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100";
+    "text-foreground-ghost hover:text-foreground hidden opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100";
 
   return (
     // The wrapper onClick is a click-only enhancement: when the
@@ -531,29 +531,29 @@ const WithOpenEntityButton = ({
         data-row-expansion-ignore
       >
         <Button
+          aria-label={t("common.preview")}
           className={inlineActionClass}
           onClick={(event) => {
             event.stopPropagation();
             handleOpenPreview();
           }}
-          size="xs"
+          size="icon-xs"
           variant="ghost"
         >
           <EyeIcon className="size-3.5" />
-          {t("common.preview")}
         </Button>
         <Button
+          aria-label={t("common.retry")}
           className={inlineActionClass}
           disabled={retryDisabled || isRetrying}
           onClick={(event) => {
             event.stopPropagation();
             handleRetry();
           }}
-          size="xs"
+          size="icon-xs"
           variant="ghost"
         >
           <RefreshCwIcon className="size-3.5" />
-          {t("common.retry")}
         </Button>
       </div>
     </div>

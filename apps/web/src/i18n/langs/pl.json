@@ -1198,6 +1198,8 @@
     "uploadFailed": "Przesyłanie nie powiodło się"
   },
   "feedback": {
+    "discord": "Społeczność Discord",
+    "github": "Zgłoszenia GitHub",
     "trigger": "Opinia"
   },
   "fileDetail": {
@@ -3103,9 +3105,12 @@
       "int": "Liczba całkowita",
       "keepEmpty": "Pozostaw puste",
       "manualColumn": "Kolumna ręczna",
+      "markAllAsLocked": "Zablokuj wszystkie komórki",
       "markAllAsReviewed": "Oznacz wszystkie jako sprawdzone",
-      "markThisGroupAsReviewed": "Mark this group as reviewed",
-      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}",
+      "markThisGroupAsLocked": "Zablokuj tę grupę",
+      "markThisGroupAsReviewed": "Oznacz tę grupę jako sprawdzoną",
+      "markedAsLocked": "{count, plural, one {Zablokowano # komórkę} few {Zablokowano # komórki} many {Zablokowano # komórek} other {Zablokowano # komórki}}",
+      "markedAsReviewed": "{count, plural, one {Oznaczono # komórkę jako sprawdzoną} few {Oznaczono # komórki jako sprawdzone} many {Oznaczono # komórek jako sprawdzone} other {Oznaczono # komórki jako sprawdzone}}",
       "multiSelect": "Wielokrotny wybór",
       "nameProperty": "Właściwość nazwy",
       "newColumn": "Nowa kolumna",
@@ -3218,6 +3223,8 @@
       "copySuffix": "{name} (kopia)",
       "deleteView": "Usuń widok",
       "exportCsv": "Eksportuj CSV",
+      "exportDocxPlain": "Eksportuj DOCX (prosta tabela)",
+      "exportDocxTemplate": "Eksportuj DOCX z szablonu…",
       "exportFailed": "Eksport nie powiódł się",
       "exportTable": "Eksportuj tabelę",
       "exportXlsx": "Eksportuj XLSX",

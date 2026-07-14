@@ -9,6 +9,7 @@ import type { PropertyTool } from "@/api/db/schema-validators";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import {
   buildCsvExport,
+  buildDocxExport,
   buildExportColumns,
   buildExportTable,
   buildXlsxExport,
@@ -258,6 +259,35 @@ describe("table export", () => {
         rows: [[textCell("\n=cmd|' /C calc'!A0")]],
       }),
     ).toBe("Value\n\"\t\n=cmd|' /C calc'!A0\"");
+  });
+
+  test("builds a plain DOCX containing a real Word table", async () => {
+    const bytes = await buildDocxExport({
+      columns: [
+        { type: "property", id: "name", propertyId: "name", header: "Name" },
+        {
+          type: "property",
+          id: "terms",
+          propertyId: "terms",
+          header: "Terms & notes",
+        },
+      ],
+      rows: [
+        [textCell("Acme"), textCell("Line 1\nLine <2>")],
+        [textCell("Beta"), textCell("Net 30")],
+      ],
+    });
+    const zip = await JSZip.loadAsync(bytes);
+    const documentXml = await zip.file("word/document.xml")?.async("text");
+
+    expect(zip.file("[Content_Types].xml")).not.toBeNull();
+    expect(zip.file("_rels/.rels")).not.toBeNull();
+    expect(documentXml).toContain("<w:tbl>");
+    expect(documentXml).toContain("<w:tblHeader/>");
+    expect(documentXml).toContain("Terms &amp; notes");
+    expect(documentXml).toContain("Line &lt;2&gt;");
+    expect(documentXml).toContain("<w:br/>");
+    expect(documentXml?.match(/<w:tr>/gu)).toHaveLength(3);
   });
 
   test("xlsx stores cells as escaped inline strings", async () => {
