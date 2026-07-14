@@ -1145,6 +1145,384 @@ describe("chat tool schemas", () => {
     expect(nonStrictTools.toSorted()).toEqual(expectedNonStrictTools);
   });
 
+  // The companion to the strict-mode test above, guarding the inbound leg.
+  //
+  // OpenAI strict Structured Outputs requires every property to appear in
+  // `required`, so the adapter's `coerceStrictSchema` null-widens each optional
+  // property (`type: ["array", "null"]`) and then marks it required. The model
+  // is therefore *instructed* to send `null` for a field it wants to omit, and
+  // it does. Those args are validated straight back against the tool's own
+  // Valibot schema (`parseWithStandardSchema(tool.inputSchema, args)` in
+  // TanStack's tool-calls.ts), so a field declared `v.optional(...)` — which
+  // accepts `undefined` but not `null` — rejects the model's own legally
+  // required output and kills the whole chat turn.
+  //
+  // The invariant: no validation issue may land on a null-widened path. We know
+  // those paths from the converted schema, and we only ever place `null` there,
+  // so an issue at one of them is the schema refusing a null OpenAI compelled.
+  // Checking paths rather than whole-payload validity keeps coverage honest:
+  // a tool whose `pattern` we cannot synthesize (a BOE law id, an ELI uri)
+  // still gets its null dimension checked, because the resulting complaint
+  // lands on the string's path, not on a null-widened one.
+  //
+  // Model-facing optional fields must use `v.nullish(...)`, not `v.optional(...)`.
+  // (Output schemas are exempt: our own `execute()` produces those values, so
+  // the adapter never null-widens them and `v.optional(...)` stays correct.)
+  test("no registered chat tool rejects the nulls OpenAI strict mode forces for omitted fields", async () => {
+    const tools = buildFullCoverageChatTools();
+
+    const isNullWidened = (node: unknown): boolean => {
+      if (!isSchemaObject(node)) {
+        return false;
+      }
+      const { type, anyOf } = node;
+      if (type === "null") {
+        return true;
+      }
+      if (Array.isArray(type) && type.includes("null")) {
+        return true;
+      }
+      return (
+        Array.isArray(anyOf) &&
+        anyOf.some((entry) => isSchemaObject(entry) && entry["type"] === "null")
+      );
+    };
+
+    // Array indices are collapsed to `[]` so a schema path (`questions.items`)
+    // and a runtime issue path (`questions.0`) compare equal.
+    const joinPath = (parent: string, key: string): string =>
+      parent ? `${parent}.${key}` : key;
+
+    const nullWidenedPaths = (node: unknown, path = ""): string[] => {
+      if (!isSchemaObject(node)) {
+        return [];
+      }
+      const found: string[] = [];
+      const { properties, items, anyOf } = node;
+      if (isSchemaObject(properties)) {
+        for (const [name, child] of Object.entries(properties)) {
+          const childPath = joinPath(path, name);
+          if (isNullWidened(child)) {
+            found.push(childPath);
+          }
+          found.push(...nullWidenedPaths(child, childPath));
+        }
+      }
+      if (isSchemaObject(items)) {
+        found.push(...nullWidenedPaths(items, joinPath(path, "[]")));
+      }
+      if (Array.isArray(anyOf)) {
+        for (const arm of anyOf) {
+          found.push(...nullWidenedPaths(arm, path));
+        }
+      }
+      return found;
+    };
+
+    const synthesizeString = (node: Record<string, unknown>): string => {
+      const { format, minLength } = node;
+      if (format === "uuid") {
+        return "77777777-7777-4777-8777-777777777777";
+      }
+      if (format === "email") {
+        return "probe@example.com";
+      }
+      if (format === "date-time") {
+        return "2026-01-01T00:00:00.000Z";
+      }
+      if (format === "date") {
+        return "2026-01-01";
+      }
+      if (format === "uri") {
+        return "https://example.com";
+      }
+      return "x".repeat(
+        typeof minLength === "number" ? Math.max(minLength, 1) : 1,
+      );
+    };
+
+    // Strict mode forces every property at every level to be present, so a
+    // faithful payload populates all of them. Two knobs sweep the space of
+    // nulls the model may legally emit:
+    //
+    // - `branch` selects which arm of every `anyOf` (and which `enum` value) to
+    //   take, so every arm of every union is visited across the sweep.
+    // - `nullDepth` is the object depth at which optional fields flip from
+    //   populated to null: depth 0 nulls the top-level optionals, depth 1
+    //   populates those and nulls the optionals one level in, and so on. Without
+    //   it, an optional nested inside another optional would never be reached.
+    // `nulled` collects the paths this payload actually set to null. Only an
+    // issue landing on one of those is evidence of a null rejection: at
+    // `nullDepth` > 0 an optional field is populated instead, and a synthesized
+    // value that trips the field's own `pattern` would otherwise raise an issue
+    // at the very same path and read as a false positive.
+    type SynthesizeOptions = {
+      branch: number;
+      nullDepth: number;
+      nulled: Set<string>;
+    };
+
+    const synthesize = (
+      node: unknown,
+      options: SynthesizeOptions,
+      depth = 0,
+      path = "",
+    ): unknown => {
+      if (!isSchemaObject(node)) {
+        return null;
+      }
+
+      const { type, anyOf, enum: enumValues, properties, items } = node;
+
+      if (Array.isArray(anyOf) && anyOf.length > 0) {
+        // Skip the `{ type: "null" }` arm the adapter appended: the caller
+        // decides null-vs-value here, not the schema.
+        const valueArms = anyOf.filter(
+          (arm) => !(isSchemaObject(arm) && arm["type"] === "null"),
+        );
+        if (valueArms.length === 0) {
+          return null;
+        }
+        const arm = valueArms.at(
+          Math.min(options.branch, valueArms.length - 1),
+        );
+        return synthesize(arm, options, depth, path);
+      }
+
+      if (Array.isArray(enumValues) && enumValues.length > 0) {
+        return enumValues.at(Math.min(options.branch, enumValues.length - 1));
+      }
+
+      const resolvedType = Array.isArray(type)
+        ? type.find((entry) => entry !== "null")
+        : type;
+
+      if (resolvedType === "object") {
+        const result: Record<string, unknown> = {};
+        if (!isSchemaObject(properties)) {
+          return result;
+        }
+        for (const [name, child] of Object.entries(properties)) {
+          const childPath = joinPath(path, name);
+          // A null-widened property is one the source schema declared optional.
+          if (isNullWidened(child) && depth >= options.nullDepth) {
+            options.nulled.add(childPath);
+            result[name] = null;
+            continue;
+          }
+          result[name] = synthesize(child, options, depth + 1, childPath);
+        }
+        return result;
+      }
+
+      if (resolvedType === "array") {
+        const { minItems, maxItems } = node;
+        const atLeast =
+          typeof minItems === "number" ? Math.max(minItems, 1) : 1;
+        const count =
+          typeof maxItems === "number" ? Math.min(atLeast, maxItems) : atLeast;
+        return Array.from({ length: count }, () =>
+          synthesize(items, options, depth, joinPath(path, "[]")),
+        );
+      }
+
+      if (resolvedType === "string") {
+        return synthesizeString(node);
+      }
+      if (resolvedType === "integer" || resolvedType === "number") {
+        const { minimum } = node;
+        return typeof minimum === "number" ? minimum : 1;
+      }
+      if (resolvedType === "boolean") {
+        return false;
+      }
+      return null;
+    };
+
+    // Sweep bounds are read off the schema, so a tool that grows a union arm or
+    // another layer of optionals stays covered without edits here. Strict-mode
+    // schemas carry no `$ref`, so the walk always terminates.
+    const schemaBounds = (
+      node: unknown,
+      depth = 0,
+    ): { branches: number; depth: number } => {
+      if (!isSchemaObject(node)) {
+        return { branches: 1, depth };
+      }
+      let branches = 1;
+      let maxDepth = depth;
+      const visit = (child: unknown, childDepth: number): void => {
+        const bounds = schemaBounds(child, childDepth);
+        branches = Math.max(branches, bounds.branches);
+        maxDepth = Math.max(maxDepth, bounds.depth);
+      };
+
+      const { anyOf, enum: enumValues, properties, items } = node;
+      if (Array.isArray(anyOf)) {
+        branches = Math.max(branches, anyOf.length);
+        for (const arm of anyOf) {
+          visit(arm, depth);
+        }
+      }
+      if (Array.isArray(enumValues)) {
+        branches = Math.max(branches, enumValues.length);
+      }
+      if (isSchemaObject(properties)) {
+        for (const child of Object.values(properties)) {
+          visit(child, depth + 1);
+        }
+      }
+      if (isSchemaObject(items)) {
+        visit(items, depth);
+      }
+      return { branches, depth: maxDepth };
+    };
+
+    // The tool's own validator, which is what `parseWithStandardSchema` calls at
+    // runtime. Awaited rather than routed through that helper because
+    // `apply-active-docx-edits` wraps its schema in an async repairing
+    // validator, and the helper is sync-only. Awaiting covers both kinds.
+    type ValidationIssue = { readonly path?: readonly unknown[] };
+    type StandardResult = { readonly issues?: readonly ValidationIssue[] };
+
+    const validatorOf = (
+      schema: unknown,
+    ):
+      | ((value: unknown) => StandardResult | Promise<StandardResult>)
+      | null => {
+      if (!isSchemaObject(schema)) {
+        return null;
+      }
+      const standard = schema["~standard"];
+      if (!isSchemaObject(standard)) {
+        return null;
+      }
+      const validate: unknown = standard["validate"];
+      if (typeof validate !== "function") {
+        return null;
+      }
+      return (value: unknown) => validate(value);
+    };
+
+    const issuePathsFor = async (
+      validate: (value: unknown) => StandardResult | Promise<StandardResult>,
+      args: unknown,
+    ): Promise<string[]> => {
+      const result = await validate(args);
+      return (result.issues ?? []).map((issue) =>
+        (issue.path ?? [])
+          .map((segment) => {
+            const key =
+              isSchemaObject(segment) && "key" in segment
+                ? segment["key"]
+                : segment;
+            return typeof key === "number" ? "[]" : String(key);
+          })
+          .join("."),
+      );
+    };
+
+    // Every (tool, payload) pair to check, built up front so the validations can
+    // run together rather than serially inside the sweep.
+    type NullProbe = {
+      name: string;
+      validate: (value: unknown) => StandardResult | Promise<StandardResult>;
+      args: unknown;
+      nulled: Set<string>;
+    };
+
+    const probes: NullProbe[] = [];
+    // Tools actually swept. Asserted against below so that a tool dropping out
+    // of coverage — a schema that stops being strict, stops exposing a Standard
+    // Schema validator, or loses its optional fields — surfaces as a failure
+    // rather than as silent green.
+    const checked: string[] = [];
+
+    for (const [name, tool] of Object.entries(tools)) {
+      const inputSchema = tool?.inputSchema;
+      if (!inputSchema) {
+        continue;
+      }
+      const serialized = convertSchemaToJsonSchema(inputSchema);
+      if (!serialized) {
+        continue;
+      }
+      const converted = convertFunctionToolToAdapterFormat({
+        name,
+        description: tool.description,
+        inputSchema: serialized,
+      });
+      // Non-strict tools are sent unmodified, so the adapter never null-widens
+      // them and the model is never forced to emit a null.
+      if (converted.strict !== true) {
+        continue;
+      }
+
+      // No optional field: nothing for strict mode to null-widen.
+      if (nullWidenedPaths(converted.parameters).length === 0) {
+        continue;
+      }
+
+      // Tools declaring a raw JSON Schema rather than a Standard Schema (the
+      // folio-agent tools) are never validated at runtime —
+      // `parseWithStandardSchema` passes their args straight through — so they
+      // cannot reject a null.
+      const validate = validatorOf(inputSchema);
+      if (!validate) {
+        continue;
+      }
+      checked.push(name);
+
+      const bounds = schemaBounds(converted.parameters);
+      for (let branch = 0; branch < bounds.branches; branch++) {
+        for (let nullDepth = 0; nullDepth <= bounds.depth; nullDepth++) {
+          const nulled = new Set<string>();
+          const args = synthesize(converted.parameters, {
+            branch,
+            nullDepth,
+            nulled,
+          });
+          probes.push({ name, validate, args, nulled });
+        }
+      }
+    }
+
+    const rejections = await Promise.all(
+      probes.map(async ({ name, validate, args, nulled }) => {
+        const paths = await issuePathsFor(validate, args);
+        return paths
+          .filter((path) => nulled.has(path))
+          .map((path) => `${name} ${path}`);
+      }),
+    );
+
+    const violations = [...new Set(rejections.flat())]
+      .toSorted()
+      .map((entry) => {
+        const [name, path] = entry.split(" ");
+        return `tool "${name}" rejects the null OpenAI strict mode forces at "${path}": declare it v.nullish(...), not v.optional(...)`;
+      });
+
+    expect(violations).toEqual([]);
+    // The tools known to carry optional model-facing inputs. If one drops off
+    // this list it has silently left coverage, which is the failure mode this
+    // test exists to prevent.
+    for (const covered of [
+      "ask-user",
+      "web_search",
+      "fetch_url",
+      "boe_get_law",
+      "boe_search_legislation",
+      "business_registry_lookup",
+      "search-chat-history",
+      "expand-chat-history",
+      "spawn_subagents",
+      APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
+    ]) {
+      expect(checked).toContain(covered);
+    }
+  });
+
   test("created document output includes the canonical entity mention", () => {
     const refRegistry = createChatRefRegistry();
 

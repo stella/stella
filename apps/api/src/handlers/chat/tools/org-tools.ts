@@ -54,7 +54,7 @@ export const createOrgTools = (_context: OrgToolsContext) => ({
                 v.string(),
                 v.description("Why this matters for the task"),
               ),
-              options: v.optional(
+              options: v.nullish(
                 v.pipe(
                   v.array(v.string()),
                   v.description(
@@ -64,7 +64,7 @@ export const createOrgTools = (_context: OrgToolsContext) => ({
                   ),
                 ),
               ),
-              default: v.optional(
+              default: v.nullish(
                 v.pipe(
                   v.string(),
                   v.description("Preselected option or default value"),

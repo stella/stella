@@ -100,7 +100,7 @@ export const createBusinessRegistryTools = ({
       v.string(),
       v.description(QUERY_DESCRIPTION_BASE + canonicalOnlySuffix),
     ),
-    limit: v.optional(
+    limit: v.nullish(
       v.pipe(
         v.number(),
         v.integer(),
@@ -129,7 +129,8 @@ export const createBusinessRegistryTools = ({
       const result = await executeRegistryLookup({
         handler,
         query,
-        ...(limit === undefined ? {} : { limit }),
+        // `null` is how strict mode makes the model omit `limit`.
+        ...(limit === null || limit === undefined ? {} : { limit }),
       });
       // executeRegistryLookup returns a HandlerError instance for
       // validation / upstream failures; surface those to the model

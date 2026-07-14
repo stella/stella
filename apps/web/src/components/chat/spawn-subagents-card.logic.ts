@@ -1,8 +1,11 @@
+// `null` is not an oversight: OpenAI's strict Structured Outputs obliges the
+// model to send `null` for the optional fields it omits, and this card renders
+// the model's tool-call arguments.
 type SpawnSubagent = {
   task: string;
-  context?: string | undefined;
-  expectedOutput?: string | undefined;
-  model?: string | undefined;
+  context?: string | null | undefined;
+  expectedOutput?: string | null | undefined;
+  model?: string | null | undefined;
 };
 
 export type KeyedSpawnSubagent<T extends SpawnSubagent> = {

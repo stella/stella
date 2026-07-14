@@ -38,7 +38,7 @@ const webSearchInputSchema = v.strictObject({
     v.maxLength(400),
     v.description("Search query; be specific."),
   ),
-  jurisdiction: v.optional(
+  jurisdiction: v.nullish(
     v.pipe(
       v.picklist(WEB_SEARCH_JURISDICTIONS),
       v.description(
@@ -47,14 +47,14 @@ const webSearchInputSchema = v.strictObject({
     ),
     "global",
   ),
-  freshness: v.optional(
+  freshness: v.nullish(
     v.pipe(
       v.picklist(WEB_SEARCH_FRESHNESS),
       v.description("Recency filter; 'any' unless time-sensitive."),
     ),
     "any",
   ),
-  maxResults: v.optional(
+  maxResults: v.nullish(
     v.pipe(
       v.number(),
       v.integer(),
@@ -74,7 +74,7 @@ const fetchUrlInputSchema = v.strictObject({
       "URL from a previous `web_search` result; do not hand-author.",
     ),
   ),
-  maxChars: v.optional(
+  maxChars: v.nullish(
     v.pipe(
       v.number(),
       v.integer(),

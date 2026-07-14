@@ -117,6 +117,52 @@ describe("ask-user clarification card", () => {
     expect(html).toContain("Which jurisdiction should I use?");
   });
 
+  test("renders a question whose options and default arrive as null", () => {
+    // The exact shape OpenAI sends. Its strict Structured Outputs mode requires
+    // every property to sit in `required`, so the adapter null-widens the
+    // optional ones and the model must send `null` for the fields it omits —
+    // it cannot leave them out. Verbatim from a persisted tool call:
+    //   {"question":"…","reason":"…","options":null,"default":null}
+    // The card renders the model's raw arguments, so it has to survive the null
+    // rather than dereference it.
+    const argumentsOnlyPart = {
+      arguments: JSON.stringify({
+        analysis: "The user wants a Florida non-compete.",
+        questions: [
+          {
+            question: "Please provide the employer's legal name.",
+            reason: "Required party identifier for the agreement.",
+            options: null,
+            default: null,
+          },
+        ],
+      }),
+      id: "tool-call-ask-user",
+      state: "input-complete",
+      name: "ask-user",
+      type: "tool-call",
+    } satisfies AskUserPart;
+
+    const [message] = withParsedToolCallInputs([
+      { id: "message-1", parts: [argumentsOnlyPart], role: "assistant" },
+    ]);
+    const normalized = message?.parts[0];
+    if (normalized?.type !== "tool-call" || normalized.name !== "ask-user") {
+      throw new Error("Expected a normalized ask-user tool-call part");
+    }
+
+    const html = renderWithIntl(
+      <AskUserCard onSubmit={() => {}} part={normalized} />,
+    );
+
+    // A null `options` means free text, exactly as an absent one does: the
+    // question renders, with a text input and no option chips.
+    expect(html).toContain("legal name.");
+    expect(html).toContain('type="text"');
+    expect(html).toContain('type="submit"');
+    expect(html).not.toContain('type="button"');
+  });
+
   test("keeps option chips out of form submission semantics", () => {
     const html = renderWithIntl(
       <AskUserCard
