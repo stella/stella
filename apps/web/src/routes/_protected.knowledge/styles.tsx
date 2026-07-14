@@ -329,20 +329,22 @@ const StyleSetFormDialog = ({
       return;
     }
     setSaving(true);
-    const response = styleSet
-      ? await api["style-sets"]({
-          styleSetId: toSafeId<"styleSet">(styleSet.id),
-        }).post({ name: normalizedName })
-      : file
-        ? await api["style-sets"].put({
-            name: normalizedName,
-            styleSource: file,
-          })
-        : null;
-    setSaving(false);
-    if (!response) {
-      return;
+    let response;
+    if (styleSet) {
+      response = await api["style-sets"]({
+        styleSetId: toSafeId<"styleSet">(styleSet.id),
+      }).post({ name: normalizedName });
+    } else {
+      if (!file) {
+        setSaving(false);
+        return;
+      }
+      response = await api["style-sets"].put({
+        name: normalizedName,
+        styleSource: file,
+      });
     }
+    setSaving(false);
     if (response.error) {
       showError(
         t("styleSets.saveFailed"),
@@ -398,7 +400,7 @@ const StyleSetFormDialog = ({
           </DialogClose>
           <Button
             disabled={saving || name.trim() === "" || (!styleSet && !file)}
-            onClick={save}
+            onClick={() => void save()}
           >
             {saving ? t("common.loading") : t("common.save")}
           </Button>

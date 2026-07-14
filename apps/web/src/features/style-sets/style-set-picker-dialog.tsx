@@ -145,7 +145,7 @@ const StyleSetPickerDialogBody = ({
         </DialogClose>
         <Button
           disabled={creating || isError || name.trim() === ""}
-          onClick={submit}
+          onClick={() => void submit()}
         >
           {creating ? t("common.loading") : t("styleSets.create")}
         </Button>
