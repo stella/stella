@@ -369,7 +369,7 @@ jobs:
       && (needs.trust-check.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     permissions:
       contents: read
 
@@ -415,7 +415,9 @@ jobs:
         run: |
           args=()
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
-          bun run lint -- "${args[@]}"
+          # Type-aware API and web linting together can exhaust the hosted
+          # runner. Serialize packages so lint failures remain deterministic.
+          bun run lint -- "${args[@]}" --concurrency=1
 
   typecheck:
     needs: [trust-check, ci-changes]
