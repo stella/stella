@@ -196,12 +196,22 @@ describe("projectToProviderSafeJsonSchema", () => {
     expect(droppedKeywords).toEqual(["const"]);
   });
 
-  test("preserves a numeric literal type through the provider tool funnel", () => {
-    const inputSchema = projectSchemaInputJsonSchema(
-      toTanStackToolSchema(v.strictObject({ count: v.literal(7) })),
-      { nullUnionStrategy: "openapi" },
+  test("projects numeric literals without weakening local tool validation", async () => {
+    const sourceInputSchema = toTanStackToolSchema(
+      v.strictObject({ count: v.literal(7) }),
     );
+    const inputSchema = projectSchemaInputJsonSchema(sourceInputSchema, {
+      nullUnionStrategy: "openapi",
+    });
 
+    expect(inputSchema).toHaveProperty(
+      "~standard.validate",
+      sourceInputSchema["~standard"].validate,
+    );
+    const invalidResult = await sourceInputSchema["~standard"].validate({
+      count: 8,
+    });
+    expect(invalidResult.issues).toBeDefined();
     expect(convertSchemaToJsonSchema(inputSchema)).toEqual({
       type: "object",
       properties: {
