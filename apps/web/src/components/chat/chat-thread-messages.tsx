@@ -653,7 +653,7 @@ const normalizeUserMessageTextForDisplay = (text: string) => {
   return result;
 };
 
-const USER_MESSAGE_FALLBACK_BLOCK_TAGS = new Set([
+const USER_MESSAGE_FALLBACK_BLOCK_TAGS = Object.freeze([
   "blockquote",
   "div",
   "h1",
@@ -704,7 +704,10 @@ const userMessageFallbackText = (html: string): string => {
     const tagName = rawTag.slice(nameStart, nameEnd).toLowerCase();
     if (
       tagName === "br" ||
-      (closing && USER_MESSAGE_FALLBACK_BLOCK_TAGS.has(tagName))
+      (closing &&
+        USER_MESSAGE_FALLBACK_BLOCK_TAGS.some(
+          (blockTagName) => blockTagName === tagName,
+        ))
     ) {
       output += "\n";
     }
