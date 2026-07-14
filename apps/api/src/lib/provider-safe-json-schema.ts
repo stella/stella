@@ -68,14 +68,22 @@ export type ProviderSafeJsonSchemaProjection = {
 };
 
 export type NullUnionStrategy = "json-schema" | "openapi";
+export type EnumValueStrategy = "json-schema" | "string-only";
 
 export type ProviderSafeJsonSchemaProjectionOptions = {
+  enumValueStrategy?: EnumValueStrategy;
   nullUnionStrategy?: NullUnionStrategy;
 };
 
-export const nullUnionStrategyForTanStackProvider = (
+export const providerSafeJsonSchemaOptionsForTanStackProvider = (
   provider: string,
-): NullUnionStrategy => (provider === "google" ? "openapi" : "json-schema");
+): ProviderSafeJsonSchemaProjectionOptions => ({
+  enumValueStrategy:
+    provider === "google" || provider === "openrouter"
+      ? "string-only"
+      : "json-schema",
+  nullUnionStrategy: provider === "google" ? "openapi" : "json-schema",
+});
 
 const isJsonObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
@@ -110,6 +118,7 @@ const resolveLocalJsonPointer = (root: JsonObject, ref: string): unknown => {
 type ProjectionContext = {
   root: JsonObject;
   dropped: string[];
+  enumValueStrategy: EnumValueStrategy;
   nullUnionStrategy: NullUnionStrategy;
 };
 
@@ -200,7 +209,7 @@ const normalizeConstKeyword = ({
   context.dropped.push(joinPath(path, "const"));
 };
 
-const filterOpenApiEnumValues = ({
+const filterEnumValues = ({
   context,
   next,
   path,
@@ -213,17 +222,17 @@ const filterOpenApiEnumValues = ({
     return;
   }
 
-  if (context.nullUnionStrategy === "json-schema") {
+  if (context.enumValueStrategy === "json-schema") {
     return;
   }
 
   const providerSafeValues: unknown[] = [];
   for (const [index, value] of next["enum"].entries()) {
-    if (typeof value === "string" || typeof value === "number") {
+    if (typeof value === "string") {
       providerSafeValues.push(value);
       continue;
     }
-    if (value === null) {
+    if (value === null && context.nullUnionStrategy === "openapi") {
       next["nullable"] = true;
       continue;
     }
@@ -248,7 +257,7 @@ const normalizeLiteralKeywords = ({
   path: string;
 }): void => {
   normalizeConstKeyword({ context, next, path });
-  filterOpenApiEnumValues({ context, next, path });
+  filterEnumValues({ context, next, path });
 };
 
 const stringArrayFrom = (value: unknown): string[] | null => {
@@ -902,10 +911,14 @@ export const projectToProviderSafeJsonSchema = (
   schema: Record<string, unknown>,
   options: ProviderSafeJsonSchemaProjectionOptions = {},
 ): ProviderSafeJsonSchemaProjection => {
+  const nullUnionStrategy = options.nullUnionStrategy ?? "json-schema";
   const context: ProjectionContext = {
     root: schema,
     dropped: [],
-    nullUnionStrategy: options.nullUnionStrategy ?? "json-schema",
+    enumValueStrategy:
+      options.enumValueStrategy ??
+      (nullUnionStrategy === "openapi" ? "string-only" : "json-schema"),
+    nullUnionStrategy,
   };
   const projected = projectNode({
     node: schema,
