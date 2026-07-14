@@ -14,6 +14,7 @@ import {
   SquarePenIcon,
   TagIcon,
   Trash2Icon,
+  UploadIcon,
   WandSparklesIcon,
   XIcon,
 } from "lucide-react";
@@ -72,7 +73,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { compareByLocale } from "@/lib/collation";
-import { DOCX_MIME, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
+import { DOCX_MIME, isDocxFile, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -122,6 +123,7 @@ type TemplateListProps = {
   onCategorySelect: (id: string | null) => void;
   onCategoriesChanged: () => void;
   onCreateBlank: () => void;
+  onCreateFromStyles: (file: File) => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
   onSelect: (template: TemplateItem) => void;
   onDeleted: () => void;
@@ -141,6 +143,7 @@ export const TemplateList = ({
   onCategorySelect,
   onCategoriesChanged,
   onCreateBlank,
+  onCreateFromStyles,
   onDiscovered,
   onSelect,
   onDeleted,
@@ -151,6 +154,7 @@ export const TemplateList = ({
   const canCreateTemplate = usePermissions({ template: ["create"] });
   const assignCategory = useAssignTemplateCategory();
   const inputRef = useRef<HTMLInputElement>(null);
+  const styleInputRef = useRef<HTMLInputElement>(null);
   const [discovering, setDiscovering] = useState(false);
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -209,6 +213,25 @@ export const TemplateList = ({
     e.target.value = "";
   };
 
+  const handleStyleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.item(0);
+    e.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    if (!isDocxFile(file)) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.invalidFileType"),
+      });
+      return;
+    }
+
+    onCreateFromStyles(file);
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     if (!canCreateTemplate || !isFileDrag(e)) {
       return;
@@ -251,6 +274,7 @@ export const TemplateList = ({
     return (
       <TemplateUpload
         onCreateBlank={onCreateBlank}
+        onCreateFromStyles={onCreateFromStyles}
         onDiscovered={onDiscovered}
       />
     );
@@ -329,8 +353,15 @@ export const TemplateList = ({
             <DensityToggle density={density} onChange={changeDensity} />
             {canCreateTemplate && (
               <>
-                {/* Primary action: create a blank template in the Studio. The
-                    hidden input stays for the drag-and-drop .docx import path. */}
+                <Button
+                  disabled={discovering}
+                  onClick={() => styleInputRef.current?.click()}
+                  size="sm"
+                  variant="outline"
+                >
+                  <UploadIcon />
+                  {t("templates.createFromStyles")}
+                </Button>
                 <Button
                   disabled={discovering}
                   onClick={onCreateBlank}
@@ -346,6 +377,13 @@ export const TemplateList = ({
                   className="hidden"
                   onChange={handleFileChange}
                   ref={inputRef}
+                  type="file"
+                />
+                <input
+                  accept=".docx"
+                  className="hidden"
+                  onChange={handleStyleFileChange}
+                  ref={styleInputRef}
                   type="file"
                 />
               </>

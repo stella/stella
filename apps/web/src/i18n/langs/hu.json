@@ -2397,6 +2397,8 @@
     "confirmDelete": "A sablon véglegesen törlődik.",
     "createDocument": "Dokumentum létrehozása",
     "createDocumentAnyway": "Létrehozás így is",
+    "createFromStyles": "Kezdés dokumentumstílusokkal",
+    "createFromStylesHint": "Üres sablont hoz létre egy DOCX-fájl stílusaival. A forrás tartalma nem kerül átmásolásra.",
     "createInStudio": "Létrehozás a stellában",
     "createInStudioHint": "Írja meg a sablont a szerkesztőben, és illesszen be '{{mezőket}}' oda, ahová az értékek kerülnek.",
     "dateChipFirstOfNextMonth": "A következő hónap elseje",

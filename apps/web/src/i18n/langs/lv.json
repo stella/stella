@@ -2397,6 +2397,8 @@
     "confirmDelete": "Veidne tiks neatgriezeniski dzēsta.",
     "createDocument": "Izveidot dokumentu",
     "createDocumentAnyway": "Tomēr izveidot",
+    "createFromStyles": "Sākt ar dokumenta stiliem",
+    "createFromStylesHint": "Izveido tukšu veidni ar DOCX faila stiliem. Avota saturs netiek kopēts.",
     "createInStudio": "Izveidot ar stella",
     "createInStudioHint": "Uzrakstiet veidni redaktorā un ievietojiet '{{laukus}}' tur, kur jābūt vērtībām.",
     "dateChipFirstOfNextMonth": "Nākamā mēneša pirmā diena",

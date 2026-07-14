@@ -2397,6 +2397,8 @@
     "confirmDelete": "Šablonas bus ištrintas negrįžtamai.",
     "createDocument": "Sukurti dokumentą",
     "createDocumentAnyway": "Vis tiek sukurti",
+    "createFromStyles": "Pradėti nuo dokumento stilių",
+    "createFromStylesHint": "Sukuria tuščią šabloną su DOCX failo stiliais. Šaltinio turinys nekopijuojamas.",
     "createInStudio": "Kurti su stella",
     "createInStudioHint": "Parašykite šabloną redaktoriuje ir įterpkite '{{laukus}}' ten, kur turi būti reikšmės.",
     "dateChipFirstOfNextMonth": "Kito mėnesio pirma diena",

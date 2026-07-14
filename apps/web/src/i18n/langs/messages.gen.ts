@@ -2400,6 +2400,8 @@ type Messages = {
     "confirmDelete": "This will permanently delete the template.";
     "createDocument": "Create document";
     "createDocumentAnyway": "Create anyway";
+    "createFromStyles": "Start with document styles";
+    "createFromStylesHint": "Creates an empty template using styles from a DOCX. The source content is not copied.";
     "createInStudio": "Create in stella";
     "createInStudioHint": "Write the template in the editor and add '{{fields}}' where values should go.";
     "dateChipFirstOfNextMonth": "First of next month";

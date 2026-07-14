@@ -2397,6 +2397,8 @@
     "confirmDelete": "Die Vorlage wird dauerhaft gelöscht.",
     "createDocument": "Dokument erstellen",
     "createDocumentAnyway": "Trotzdem erstellen",
+    "createFromStyles": "Mit Dokumentformatvorlagen beginnen",
+    "createFromStylesHint": "Erstellt eine leere Vorlage mit den Formatvorlagen einer DOCX-Datei. Der Quellinhalt wird nicht kopiert.",
     "createInStudio": "In stella erstellen",
     "createInStudioHint": "Schreiben Sie die Vorlage im Editor und fügen Sie '{{Felder}}' dort ein, wo Werte stehen sollen.",
     "dateChipFirstOfNextMonth": "Erster des nächsten Monats",

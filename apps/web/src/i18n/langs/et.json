@@ -2397,6 +2397,8 @@
     "confirmDelete": "See kustutab malli jäädavalt.",
     "createDocument": "Loo dokument",
     "createDocumentAnyway": "Loo ikkagi",
+    "createFromStyles": "Alusta dokumendi laadidega",
+    "createFromStylesHint": "Loob tühja malli DOCX-faili laadidega. Lähtefaili sisu ei kopeerita.",
     "createInStudio": "Loo stellas",
     "createInStudioHint": "Kirjuta mall redaktoris ja lisa '{{väljad}}' sinna, kuhu kuuluvad väärtused.",
     "dateChipFirstOfNextMonth": "Järgmise kuu esimene päev",
