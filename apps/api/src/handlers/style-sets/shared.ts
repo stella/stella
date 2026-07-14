@@ -33,7 +33,7 @@ export const extractStyleSetBuffer = async (
 ): Promise<Result<Buffer, HandlerError>> => {
   const validated = validateStyleSource(file);
   if (Result.isError(validated)) {
-    return validated;
+    return Result.err(validated.error);
   }
 
   return await Result.tryPromise({
@@ -100,10 +100,10 @@ export const readStyleSetBuffer = async ({
       new HandlerError({ status: 404, message: "Style set not found" }),
     );
   }
+  const { s3Key } = styleSetResult.value;
 
   return await Result.tryPromise({
-    try: async () =>
-      Buffer.from(await getS3().file(styleSetResult.value.s3Key).arrayBuffer()),
+    try: async () => Buffer.from(await getS3().file(s3Key).arrayBuffer()),
     catch: (cause) =>
       new HandlerError({
         status: 500,

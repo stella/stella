@@ -42,10 +42,8 @@ export default createSafeHandler(
   }) {
     const parentId = body.parentId ?? null;
     if (parentId) {
-      const parentError = yield* Result.await(
-        scopedDb(
-          async (tx) => await validateParentId({ tx, parentId, workspaceId }),
-        ),
+      const parentError = await scopedDb(
+        async (tx) => await validateParentId({ tx, parentId, workspaceId }),
       );
       if (parentError) {
         return Result.err(
