@@ -6,8 +6,6 @@ on:
     # trusts a fork with "run-ci" or requests a rerun with "run-pr-lint".
     # This metadata-only workflow must never check out or execute PR code.
     types: [opened, labeled]
-    branches-ignore:
-      - "dependabot/**"
 
 concurrency:
   # Keep manual reruns cancellable, but do not let unrelated label
@@ -26,8 +24,9 @@ permissions:
 jobs:
   pr-lint:
     if: >-
-      (github.event.pull_request.head.repo.full_name == github.repository
-       || contains(github.event.pull_request.labels.*.name, 'run-ci'))
+      github.event.pull_request.user.login != 'dependabot[bot]'
+      && (github.event.pull_request.head.repo.full_name == github.repository
+          || contains(github.event.pull_request.labels.*.name, 'run-ci'))
       && (github.event.action != 'labeled'
           || github.event.label.name == 'run-ci'
           || github.event.label.name == 'run-pr-lint')
