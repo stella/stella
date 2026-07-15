@@ -11,11 +11,12 @@ describe("style set package cleanup queue", () => {
       cleanupQueue: { add, getJob },
       delayMs: 900_000,
       s3Key: "org/style-sets/set/old.docx",
+      styleSetId: "set",
     });
 
     expect(add).toHaveBeenCalledWith(
       "delete-style-set-package",
-      { s3Key: "org/style-sets/set/old.docx" },
+      { s3Key: "org/style-sets/set/old.docx", styleSetId: "set" },
       {
         delay: 900_000,
         jobId:
@@ -36,12 +37,13 @@ describe("style set package cleanup queue", () => {
       cleanupQueue: { add, getJob },
       delayMs: -1,
       s3Key: "old.docx",
+      styleSetId: "set",
     });
 
     expect(remove).toHaveBeenCalledTimes(1);
     expect(add).toHaveBeenCalledWith(
       "delete-style-set-package",
-      { s3Key: "old.docx" },
+      { s3Key: "old.docx", styleSetId: "set" },
       {
         delay: 0,
         jobId: "delete%2Dstyle%2Dset%2Dpackage-old.docx",

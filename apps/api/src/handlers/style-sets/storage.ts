@@ -183,6 +183,7 @@ export const replaceStoredStyleSet = async ({
           try: async () =>
             await enqueueStyleSetPackageCleanup({
               s3Key: cleanupS3Key,
+              styleSetId,
               delayMs: Math.max(
                 0,
                 existing.updatedAt.getTime() +
@@ -338,7 +339,10 @@ export const replaceStoredStyleSet = async ({
       persisted = true;
       const cleanupResult = await Result.tryPromise({
         try: async () =>
-          await enqueueStyleSetPackageCleanup({ s3Key: replaced.oldS3Key }),
+          await enqueueStyleSetPackageCleanup({
+            s3Key: replaced.oldS3Key,
+            styleSetId,
+          }),
         catch: (cause) =>
           new HandlerError({
             status: 500,

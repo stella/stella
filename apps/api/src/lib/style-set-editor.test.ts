@@ -78,6 +78,36 @@ describe("style set visual editing", () => {
     ).toEqual(hyperlink);
   });
 
+  test("preserves complex-script typography when editing Latin styles", () => {
+    const source = createStellaStyleEditorPreset();
+    const level1 = source.preset.styleSet.styles.styles.find(
+      (style) => style.styleId === "ClauseHeading1",
+    );
+    if (!level1) {
+      throw new Error("Expected clause level 1 style");
+    }
+    level1.rPr = {
+      ...level1.rPr,
+      fontFamily: {
+        ...level1.rPr?.fontFamily,
+        cs: "Noto Naskh Arabic",
+      },
+      fontSizeCs: 28,
+    };
+
+    const edited = applyStyleSetEditorSettings(
+      source.preset,
+      "Custom",
+      source.settings,
+    );
+    const editedLevel1 = edited.styleSet.styles.styles.find(
+      (style) => style.styleId === "ClauseHeading1",
+    );
+
+    expect(editedLevel1?.rPr?.fontFamily?.cs).toBe("Noto Naskh Arabic");
+    expect(editedLevel1?.rPr?.fontSizeCs).toBe(28);
+  });
+
   test("keeps custom numbering syntax when the editor reports preserve", async () => {
     const source = createStellaStyleEditorPreset();
     const clauseNumbering = source.preset.styleSet.numbering?.abstractNums.find(

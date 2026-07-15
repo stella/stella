@@ -8,12 +8,18 @@ describe("style set storage integrity", () => {
   test("persists a deletion tombstone until stored packages are removed", () => {
     const source = readHandler("delete");
     const tombstone = source.indexOf(".set({ deletedAt })");
+    const queuedStorageDelete = source.indexOf(
+      "deleteQueuedStyleSetPackages",
+      tombstone,
+    );
     const rowDelete = source.indexOf(".delete(styleSets)");
     const storageDelete = source.indexOf("getS3().delete(s3Key)");
 
     expect(tombstone).toBeGreaterThan(-1);
     expect(storageDelete).toBeGreaterThan(tombstone);
+    expect(queuedStorageDelete).toBeGreaterThan(tombstone);
     expect(rowDelete).toBeGreaterThan(storageDelete);
+    expect(rowDelete).toBeGreaterThan(queuedStorageDelete);
   });
 
   test("retains replaced packages until their download URLs expire", () => {

@@ -13,6 +13,7 @@ const DEFAULT_JOB_ATTEMPTS = 3;
 
 type StyleSetPackageCleanupJobData = {
   s3Key: string;
+  styleSetId: string;
 };
 
 type EnqueueStyleSetPackageCleanupOptions = StyleSetPackageCleanupJobData & {
@@ -56,22 +57,26 @@ const getQueue = (): Queue<StyleSetPackageCleanupJobData> => {
 
 export const enqueueStyleSetPackageCleanup = async ({
   s3Key,
+  styleSetId,
   delayMs = STYLE_SET_DOWNLOAD_TTL_SECONDS * 1000,
 }: EnqueueStyleSetPackageCleanupOptions): Promise<void> =>
   await enqueueStyleSetPackageCleanupJob({
     cleanupQueue: getQueue(),
     delayMs,
     s3Key,
+    styleSetId,
   });
 
 export const enqueueStyleSetPackageCleanupJob = async ({
   cleanupQueue,
   delayMs,
   s3Key,
+  styleSetId,
 }: {
   cleanupQueue: StyleSetPackageCleanupQueue;
   delayMs: number;
   s3Key: string;
+  styleSetId: string;
 }): Promise<void> => {
   const jobId = createBullMqJobId(CLEANUP_JOB_NAME, s3Key);
   const existingJob = await cleanupQueue.getJob(jobId);
@@ -81,9 +86,27 @@ export const enqueueStyleSetPackageCleanupJob = async ({
 
   await cleanupQueue.add(
     CLEANUP_JOB_NAME,
-    { s3Key },
+    { s3Key, styleSetId },
     { delay: Math.max(0, delayMs), jobId },
   );
+};
+
+export const deleteQueuedStyleSetPackages = async (
+  styleSetId: string,
+): Promise<void> => {
+  const jobs = await getQueue().getJobs([
+    "active",
+    "delayed",
+    "failed",
+    "paused",
+    "prioritized",
+    "waiting",
+    "waiting-children",
+  ]);
+  const s3Keys = jobs
+    .filter((job) => job.data.styleSetId === styleSetId)
+    .map((job) => job.data.s3Key);
+  await Promise.all(s3Keys.map(async (s3Key) => await getS3().delete(s3Key)));
 };
 
 export const initStyleSetPackageCleanupWorker = () => {

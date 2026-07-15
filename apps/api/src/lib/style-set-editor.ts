@@ -498,18 +498,21 @@ const applyBodySettings = (
   body: StyleDefinition,
   settings: StyleSetEditorSettings,
 ) => {
+  const bodyDefaults = styleSet.styles.docDefaults?.rPr;
   const font = textFormatting(
+    bodyDefaults,
     settings.body.fontFamily,
     settings.body.fontSizePt,
   );
   styleSet.styles.docDefaults = {
     ...styleSet.styles.docDefaults,
-    rPr: {
-      ...styleSet.styles.docDefaults?.rPr,
-      ...font,
-    },
+    rPr: font,
   };
-  body.rPr = { ...body.rPr, ...font };
+  body.rPr = textFormatting(
+    body.rPr,
+    settings.body.fontFamily,
+    settings.body.fontSizePt,
+  );
   body.pPr = {
     ...body.pPr,
     spaceAfter: toTwips(settings.body.spaceAfterPt),
@@ -523,8 +526,7 @@ const applyParagraphStyleSettings = (
   settings: StyleSetEditorSettings["title"],
 ) => {
   style.rPr = {
-    ...style.rPr,
-    ...textFormatting(settings.fontFamily, settings.fontSizePt),
+    ...textFormatting(style.rPr, settings.fontFamily, settings.fontSizePt),
     bold: settings.bold,
   };
   style.pPr = {
@@ -535,10 +537,14 @@ const applyParagraphStyleSettings = (
   applyAlignment(style.pPr, settings.alignment);
 };
 
-const textFormatting = (family: string, sizePt: number): TextFormatting => ({
-  fontFamily: { ascii: family, hAnsi: family, cs: family },
+const textFormatting = (
+  existing: TextFormatting | undefined,
+  family: string,
+  sizePt: number,
+): TextFormatting => ({
+  ...existing,
+  fontFamily: { ...existing?.fontFamily, ascii: family, hAnsi: family },
   fontSize: sizePt * HALF_POINTS_PER_POINT,
-  fontSizeCs: sizePt * HALF_POINTS_PER_POINT,
 });
 
 const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
