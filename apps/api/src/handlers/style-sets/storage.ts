@@ -125,11 +125,15 @@ export const createStoredStyleSet = async ({
     }
   });
 
+type ReplacementName =
+  | { type: "preserve" }
+  | { type: "replace"; value: string };
+
 type ReplaceStoredStyleSetOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   styleSetId: SafeId<"styleSet">;
-  name: string;
+  replacementName: ReplacementName;
   buffer: Buffer;
   expectedUpdatedAt?: string | undefined;
   recordAuditEvent: AuditRecorder;
@@ -139,7 +143,7 @@ export const replaceStoredStyleSet = async ({
   safeDb,
   organizationId,
   styleSetId,
-  name,
+  replacementName,
   buffer,
   expectedUpdatedAt,
   recordAuditEvent,
@@ -248,11 +252,16 @@ export const replaceStoredStyleSet = async ({
             return { type: "version-conflict" as const };
           }
 
+          const nextName =
+            replacementName.type === "replace"
+              ? replacementName.value
+              : locked.name;
+
           const [row] = await tx
             .update(styleSets)
             .set({
-              name,
-              fileName: styleSetExportFileName(name),
+              name: nextName,
+              fileName: styleSetExportFileName(nextName),
               s3Key,
               cleanupS3Key: locked.s3Key,
               sizeBytes: buffer.byteLength,

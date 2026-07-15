@@ -433,12 +433,7 @@ const NumberField = ({
           min={min}
           onChange={(event) => {
             const next = event.currentTarget.valueAsNumber;
-            if (
-              Number.isFinite(next) &&
-              next >= min &&
-              next <= max &&
-              Number.isInteger((next - min) / resolvedStep)
-            ) {
+            if (Number.isFinite(next) && next >= min && next <= max) {
               onChange(next);
             } else if (event.currentTarget.value === "") {
               onChange(min);

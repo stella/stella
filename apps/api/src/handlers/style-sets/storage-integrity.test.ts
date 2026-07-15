@@ -44,4 +44,12 @@ describe("style set storage integrity", () => {
     expect(awaitedCleanup).toBeGreaterThan(-1);
     expect(awaitedCleanup).toBeLessThan(rejectedCleanup);
   });
+
+  test("preserves a concurrently renamed style set during source replacement", () => {
+    const storage = readHandler("storage");
+    const replace = readHandler("replace");
+
+    expect(storage).toContain(": locked.name;");
+    expect(replace).toContain('replacementName: { type: "preserve" }');
+  });
 });

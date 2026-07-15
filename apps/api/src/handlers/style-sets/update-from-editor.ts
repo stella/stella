@@ -49,11 +49,13 @@ export default createSafeRootHandler(
           );
         },
         catch: (cause) =>
-          new HandlerError({
-            status: 400,
-            message: "Could not update the style set package.",
-            cause,
-          }),
+          HandlerError.is(cause)
+            ? cause
+            : new HandlerError({
+                status: 400,
+                message: "Could not update the style set package.",
+                cause,
+              }),
       }),
     );
     const row = yield* Result.await(
@@ -61,7 +63,7 @@ export default createSafeRootHandler(
         safeDb,
         organizationId: session.activeOrganizationId,
         styleSetId: params.styleSetId,
-        name,
+        replacementName: { type: "replace", value: name },
         buffer,
         expectedUpdatedAt: body.expectedUpdatedAt,
         recordAuditEvent,

@@ -7,6 +7,7 @@ import {
 } from "@stll/folio-core/server";
 import type { DocumentPreset, DocumentStyleSet } from "@stll/folio-core/server";
 
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { StyleSetEditorSettings } from "@/api/lib/style-set-editor-contract";
 
 const TWIPS_PER_POINT = 20;
@@ -16,6 +17,8 @@ const DEFAULT_FONT_FAMILY = "Arial";
 const DEFAULT_FONT_SIZE_PT = 10;
 const DEFAULT_MARGIN_PT = 72;
 const EDITOR_NUMBERING_NAME = "Stella editor legal numbering";
+const EDITOR_NUMBERING_STYLE_ID = "StellaStyleEditorNumbering";
+const EDITOR_NUMBERING_STYLE_NAME = "Stella Style editor numbering metadata";
 const ROLE_STYLE_IDS = {
   title: ["Title"],
   level1: ["ClauseHeading1", "Heading1"],
@@ -458,8 +461,19 @@ const findNumberingLevels = (
 ): NumberingLevels => {
   const definitions = styleSet.numbering;
   const level1NumId = roles.level1.pPr?.numPr?.numId;
-  if (!definitions || level1NumId === undefined) {
+  if (!definitions) {
     return { enabled: false };
+  }
+  if (level1NumId === undefined) {
+    const preserved = definitions.abstractNums.findLast(
+      (candidate) => candidate.name === EDITOR_NUMBERING_NAME,
+    );
+    return {
+      enabled: false,
+      level1: preserved?.levels.find((level) => level.ilvl === 0),
+      level2: preserved?.levels.find((level) => level.ilvl === 1),
+      level3: preserved?.levels.find((level) => level.ilvl === 2),
+    };
   }
   const instance = definitions.nums.find((num) => num.numId === level1NumId);
   const abstract = definitions.abstractNums.find(
@@ -576,6 +590,7 @@ const applyNumberingSettings = (
   settings: StyleSetEditorSettings,
 ) => {
   if (!settings.numbering.enabled) {
+    preserveEditorNumberingDefinition(styleSet, roles);
     for (const style of [roles.level1, roles.level2, roles.level3]) {
       if (style.pPr) {
         delete style.pPr.numPr;
@@ -648,6 +663,68 @@ const applyNumberingSettings = (
 
 type NumberingDefinitions = NonNullable<DocumentStyleSet["numbering"]>;
 type AbstractNumbering = NumberingDefinitions["abstractNums"][number];
+
+const preserveEditorNumberingDefinition = (
+  styleSet: DocumentStyleSet,
+  roles: RoleStyles,
+) => {
+  const numbering = styleSet.numbering;
+  const currentNumId = roles.level1.pPr?.numPr?.numId;
+  if (!numbering || currentNumId === undefined) {
+    return;
+  }
+  const currentInstance = numbering.nums.find(
+    (candidate) => candidate.numId === currentNumId,
+  );
+  const currentAbstract = numbering.abstractNums.find(
+    (candidate) => candidate.abstractNumId === currentInstance?.abstractNumId,
+  );
+  if (!currentAbstract || currentAbstract.name === EDITOR_NUMBERING_NAME) {
+    if (currentAbstract) {
+      ensureEditorNumberingMarkerStyle(styleSet, currentNumId);
+    }
+    return;
+  }
+
+  const preserved = createEditorNumberingDefinition(numbering);
+  preserved.multiLevelType = currentAbstract.multiLevelType;
+  preserved.levels = structuredClone(currentAbstract.levels);
+  const preservedNumId = numbering.nums.find(
+    (candidate) => candidate.abstractNumId === preserved.abstractNumId,
+  )?.numId;
+  if (preservedNumId !== undefined) {
+    ensureEditorNumberingMarkerStyle(styleSet, preservedNumId);
+  }
+};
+
+const ensureEditorNumberingMarkerStyle = (
+  styleSet: DocumentStyleSet,
+  numId: number,
+) => {
+  const styles = styleSet.styles.styles;
+  const existing = styles.find(
+    (style) =>
+      style.name === EDITOR_NUMBERING_STYLE_NAME && style.hidden === true,
+  );
+  if (existing) {
+    existing.pPr = { ...existing.pPr, numPr: { numId, ilvl: 0 } };
+    return;
+  }
+  let styleId = EDITOR_NUMBERING_STYLE_ID;
+  let suffix = 1;
+  while (styles.some((style) => style.styleId === styleId)) {
+    styleId = `${EDITOR_NUMBERING_STYLE_ID}${suffix}`;
+    suffix += 1;
+  }
+  styles.push({
+    styleId,
+    type: "paragraph",
+    name: EDITOR_NUMBERING_STYLE_NAME,
+    hidden: true,
+    semiHidden: true,
+    pPr: { numPr: { numId, ilvl: 0 } },
+  });
+};
 
 const createEditorNumberingDefinition = (
   numbering: NumberingDefinitions,
@@ -778,14 +855,35 @@ const applyPageSettings = (
   section: SectionProperties,
   page: StyleSetEditorSettings["page"],
 ) => {
+  const currentOrientation = section.orientation ?? "portrait";
+  let finalWidth = section.pageWidth ?? PAPER_SIZES_TWIPS.a4.width;
+  let finalHeight = section.pageHeight ?? PAPER_SIZES_TWIPS.a4.height;
   if (page.paperSize !== "preserve") {
     const dimensions = PAPER_SIZES_TWIPS[page.paperSize];
-    section.pageWidth =
+    finalWidth =
       page.orientation === "portrait" ? dimensions.width : dimensions.height;
-    section.pageHeight =
+    finalHeight =
       page.orientation === "portrait" ? dimensions.height : dimensions.width;
+  } else if (currentOrientation !== page.orientation) {
+    [finalWidth, finalHeight] = [finalHeight, finalWidth];
+  }
+
+  const horizontalMargins =
+    toTwips(page.marginLeftPt) + toTwips(page.marginRightPt);
+  const verticalMargins =
+    toTwips(page.marginTopPt) + toTwips(page.marginBottomPt);
+  if (horizontalMargins >= finalWidth || verticalMargins >= finalHeight) {
+    throw new HandlerError({
+      status: 400,
+      message: "Page margins must leave a printable area.",
+    });
+  }
+
+  if (page.paperSize !== "preserve") {
+    section.pageWidth = finalWidth;
+    section.pageHeight = finalHeight;
   } else if (
-    section.orientation !== page.orientation &&
+    currentOrientation !== page.orientation &&
     section.pageWidth !== undefined &&
     section.pageHeight !== undefined
   ) {

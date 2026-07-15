@@ -27,11 +27,13 @@ export default createSafeRootHandler(
         try: async () =>
           await createStyleSetEditorBuffer(source.preset, name, body.settings),
         catch: (cause) =>
-          new HandlerError({
-            status: 400,
-            message: "Could not build the style set.",
-            cause,
-          }),
+          HandlerError.is(cause)
+            ? cause
+            : new HandlerError({
+                status: 400,
+                message: "Could not build the style set.",
+                cause,
+              }),
       }),
     );
     const row = yield* Result.await(

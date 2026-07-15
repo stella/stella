@@ -56,7 +56,7 @@ export default createSafeRootHandler(
         safeDb,
         organizationId: session.activeOrganizationId,
         styleSetId: params.styleSetId,
-        name: existing.name,
+        replacementName: { type: "preserve" },
         buffer,
         recordAuditEvent,
       }),
