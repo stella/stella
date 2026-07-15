@@ -2,6 +2,9 @@ import { beforeEach, expect, test } from "bun:test";
 
 import {
   buildFormattingLocale,
+  getFormatter,
+  getFormattingLocale,
+  getMessageLocale,
   getLangDir,
   supportedLanguages,
   useI18nStore,
@@ -16,7 +19,13 @@ const resetToBootedEnglish = (): void => {
     loadedLang: "en",
     isLoaded: true,
     hasLoadedOnce: true,
+    region: "US",
+    regionalFormat: "auto",
+    calendar: "auto",
+    numberingSystem: "auto",
+    weekStart: "auto",
   });
+  void useI18nStore.getState().loadMessages("en");
 };
 
 beforeEach(() => {
@@ -102,12 +111,49 @@ test("buildFormattingLocale never builds an invalid tag for any language + regio
     const tag = buildFormattingLocale({
       lang,
       region: "BR",
+      regionalFormat: "auto",
       calendar: "islamic-umalqura",
       numberingSystem: "arab",
       weekStart: "sunday",
     });
     expect(() => new Intl.Locale(tag)).not.toThrow();
   }
+});
+
+test("Indian regional format uses lakh and crore grouping", () => {
+  useI18nStore.getState().setRegionalFormat("en-IN");
+
+  expect(getFormattingLocale()).toBe("en-IN");
+  expect(
+    getFormatter().number(12_345_678.9, {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+    }),
+  ).toBe("₹1,23,45,678.90");
+});
+
+test("regional format stays independent from the display language", async () => {
+  useI18nStore.getState().setRegionalFormat("en-IN");
+  await useI18nStore.getState().setLang("de");
+
+  expect(useI18nStore.getState().lang).toBe("de");
+  expect(getMessageLocale()).toBe("de");
+  expect(getFormattingLocale()).toBe("en-IN");
+});
+
+test("automatic regional format restores the detected language-region pair", () => {
+  useI18nStore.getState().setRegionalFormat("en-IN");
+  useI18nStore.getState().setRegionalFormat("auto");
+
+  expect(getFormattingLocale()).toBe("en-US");
+  expect(
+    getFormatter().number(12_345_678.9, {
+      style: "currency",
+      currency: "INR",
+      minimumFractionDigits: 2,
+    }),
+  ).toBe("₹12,345,678.90");
 });
 
 test("loadedLang and messages advance together", async () => {

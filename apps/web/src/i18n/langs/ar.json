@@ -44,6 +44,8 @@
     "numbersEastern": "العربية (٠١٢٣)",
     "numbersWestern": "الغربية (0123)",
     "palette": "لوحة الألوان",
+    "regionalFormat": "التنسيق الإقليمي",
+    "regionalFormatAuto": "تلقائي",
     "system": "النظام",
     "theme": "السمة",
     "title": "المظهر",

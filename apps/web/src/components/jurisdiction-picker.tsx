@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { CheckIcon, SearchIcon, StarIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type { CountryCode } from "@stll/country-codes";
 import {
@@ -12,6 +12,7 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";

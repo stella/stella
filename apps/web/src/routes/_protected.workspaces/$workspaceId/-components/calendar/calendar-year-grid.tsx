@@ -1,7 +1,6 @@
-import { useLocale } from "use-intl";
-
 import { cn } from "@stll/ui/lib/utils";
 
+import { useLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 
 import type { CalendarDay } from "./calendar-utils";

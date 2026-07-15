@@ -12,7 +12,7 @@ import {
   TrashIcon,
   WandSparklesIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type { ConditionNode, Operand } from "@stll/conditions";
 import { evaluateCondition, isSafeFieldPath } from "@stll/template-conditions";
@@ -50,6 +50,7 @@ import { MatterTargetPicker } from "@/components/matter-target-picker";
 import type { MatterTarget } from "@/components/matter-target-picker";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
+import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { DOCX_MIME, PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";

@@ -5,10 +5,10 @@ import {
   CalendarIcon,
   MinusIcon,
 } from "lucide-react";
-import { useLocale } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { useLocale } from "@/i18n/formatting-context";
 import type { WorkspaceEntity } from "@/lib/types";
 
 const PRIORITY_CONFIG: Record<

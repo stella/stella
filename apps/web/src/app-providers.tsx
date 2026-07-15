@@ -14,6 +14,7 @@ import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import {
   buildFormattingLocale,
   bundledEnglishMessages,
@@ -47,6 +48,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const messages = useI18nStore((s) => s.messages);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
   const region = useI18nStore((s) => s.region);
+  const regionalFormat = useI18nStore((s) => s.regionalFormat);
   const calendar = useI18nStore((s) => s.calendar);
   const numberingSystem = useI18nStore((s) => s.numberingSystem);
   const weekStart = useI18nStore((s) => s.weekStart);
@@ -103,14 +105,17 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
     : buildFormattingLocale({
         lang: locale,
         region,
+        regionalFormat,
         calendar,
         numberingSystem,
         weekStart,
       });
 
+  const messageLocale = preHydrationEnglish ? "en" : locale;
+
   return (
     <IntlProvider
-      locale={formattingLocale}
+      locale={messageLocale}
       // SAFETY: activeMessages is the fully-populated catalog for the active
       // locale. use-intl types its `messages` prop with the generated Messages
       // schema (literal string leaves, which also drives `t()` ICU-argument
@@ -124,7 +129,12 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
       }
       timeZone={resolveAppTimeZone()}
     >
-      {children}
+      <FormattingProvider
+        locale={formattingLocale}
+        timeZone={resolveAppTimeZone()}
+      >
+        {children}
+      </FormattingProvider>
     </IntlProvider>
   );
 };

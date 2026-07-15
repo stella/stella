@@ -4,13 +4,14 @@ import {
   LoaderIcon,
   NetworkIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type {
   ChatToolCallPart,
   ChatUITools,
 } from "@/components/chat/chat-ui-tools";
 import { keySpawnSubagents } from "@/components/chat/spawn-subagents-card.logic";
+import { useFormatter } from "@/i18n/formatting-context";
 
 type SpawnSubagentsPart = Extract<
   ChatToolCallPart,

@@ -10,7 +10,7 @@ import {
   UserIcon,
   XIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -40,6 +40,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { useLocale } from "@/i18n/formatting-context";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";

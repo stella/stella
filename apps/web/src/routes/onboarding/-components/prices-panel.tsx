@@ -1,6 +1,6 @@
 import { calcPrice } from "@pydantic/genai-prices";
 import type { ModelPrice, TieredPrices } from "@pydantic/genai-prices";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import {
   encodeModelSelection,
@@ -14,6 +14,7 @@ import type {
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { getProviderIcon } from "@/components/ai-provider-icons";
+import { useFormatter } from "@/i18n/formatting-context";
 import { optionalReadonlyArray } from "@/lib/arrays";
 
 // "Typical call" = one chat turn through an agent loop with tool

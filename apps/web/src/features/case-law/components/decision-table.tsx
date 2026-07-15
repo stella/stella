@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
 
 // Stable keys so loading rows never fall back to array-index keys.

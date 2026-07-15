@@ -24,7 +24,7 @@ import {
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type { DirectiveRange } from "@stll/folio-react";
 import { isClauseSlotName } from "@stll/template-conditions";
@@ -56,6 +56,7 @@ import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { FormulaEditor } from "@/components/conditions/formula-editor";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";

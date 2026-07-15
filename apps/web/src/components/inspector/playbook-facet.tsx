@@ -19,7 +19,7 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { ArrowRightIcon, CheckIcon, ScanSearchIcon, XIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
 
@@ -55,6 +55,7 @@ import type {
 import type { OverallRisk } from "@/components/inspector/playbook-risk-rollup";
 import { computeRiskRollup } from "@/components/inspector/playbook-risk-rollup";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors/api";

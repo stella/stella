@@ -6,7 +6,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/components/button";
@@ -26,6 +26,7 @@ import type {
   SearchFacets,
 } from "@/features/case-law/queries/decisions";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,

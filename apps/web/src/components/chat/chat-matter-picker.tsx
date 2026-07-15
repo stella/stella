@@ -3,7 +3,7 @@ import { useDeferredValue, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { ChevronDownIcon, SearchIcon } from "lucide-react";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import {
   Menu,
@@ -16,6 +16,7 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import { MatterIcon } from "@/components/matter-icon";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { compareByLocale } from "@/lib/collation";
 import { resolveMatterColor } from "@/lib/matter-colors";

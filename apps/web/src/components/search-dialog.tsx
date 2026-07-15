@@ -18,7 +18,7 @@ import {
   WandSparklesIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type {
   EntityKind,
@@ -64,6 +64,7 @@ import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
 } from "@/hooks/use-public-law-preview";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";

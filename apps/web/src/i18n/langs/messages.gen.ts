@@ -47,6 +47,8 @@ type Messages = {
     "numbersEastern": "Eastern (٠١٢٣)";
     "numbersWestern": "Western (0123)";
     "palette": "Palette";
+    "regionalFormat": "Regional format";
+    "regionalFormatAuto": "Automatic";
     "system": "System";
     "theme": "Theme";
     "title": "Appearance";

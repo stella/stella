@@ -18,7 +18,7 @@ import {
   SquareCheckIcon,
   UploadIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import {
   Avatar,
@@ -59,6 +59,7 @@ import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLocale } from "@/i18n/formatting-context";
 import {
   getFormatter,
   getFormattingLocale,

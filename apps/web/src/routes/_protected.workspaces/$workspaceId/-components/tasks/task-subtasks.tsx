@@ -1,7 +1,9 @@
 import { CheckCircle2Icon, CircleIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
+
+import { useFormatter } from "@/i18n/formatting-context";
 
 import { isTaskStatus } from "./task-detail-constants";
 import type { TaskStatus } from "./task-detail-constants";

@@ -44,6 +44,8 @@
     "numbersEastern": "Keleti (٠١٢٣)",
     "numbersWestern": "Nyugati (0123)",
     "palette": "Paletta",
+    "regionalFormat": "Regionális formátum",
+    "regionalFormatAuto": "Automatikus",
     "system": "Rendszer",
     "theme": "Téma",
     "title": "Megjelenés",

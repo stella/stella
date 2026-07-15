@@ -13,7 +13,7 @@ import {
   Trash2Icon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
@@ -64,6 +64,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";

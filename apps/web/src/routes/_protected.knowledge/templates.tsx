@@ -2,7 +2,7 @@ import { useCallback, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -10,6 +10,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
 import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";

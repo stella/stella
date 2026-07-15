@@ -1,10 +1,11 @@
 import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
 import { getClipFieldValueLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value.logic";
 import {

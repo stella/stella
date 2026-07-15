@@ -4,11 +4,12 @@ import {
   PlusIcon,
   RotateCcwIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { PlaybookListItem } from "@/routes/_protected.knowledge/-components/playbook-types";
 
 type PlaybookListProps = {

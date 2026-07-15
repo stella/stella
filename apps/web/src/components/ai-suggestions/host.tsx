@@ -30,7 +30,7 @@ import {
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type {
   AISuggestion,
@@ -59,6 +59,7 @@ import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 

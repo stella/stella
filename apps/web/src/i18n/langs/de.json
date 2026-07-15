@@ -44,6 +44,8 @@
     "numbersEastern": "Östlich (٠١٢٣)",
     "numbersWestern": "Westlich (0123)",
     "palette": "Palette",
+    "regionalFormat": "Regionalformat",
+    "regionalFormatAuto": "Automatisch",
     "system": "System",
     "theme": "Design",
     "title": "Darstellung",

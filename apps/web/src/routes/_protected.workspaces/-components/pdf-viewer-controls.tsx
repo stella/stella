@@ -10,13 +10,14 @@ import {
   DownloadIcon,
   PrinterIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import Tooltip from "@/components/tooltip";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
