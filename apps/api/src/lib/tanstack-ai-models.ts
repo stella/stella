@@ -4,11 +4,11 @@ import { createModel, extendAdapter } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
-import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
-import type {
-  BedrockConverseProviderOptions,
-  ResolvedBedrockAuth,
+import {
+  BedrockConverseTextAdapter,
+  resolveBedrockAuth,
 } from "@tanstack/ai-bedrock";
+import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
@@ -401,6 +401,8 @@ const createExtendedMistralAdapter = (
 };
 
 // The AWS SDK's default Node transport closes Converse event streams early in Bun.
+type ResolvedBedrockAuth = ReturnType<typeof resolveBedrockAuth>;
+
 class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   protected override buildClientConfig(
     resolved: ResolvedBedrockAuth,
