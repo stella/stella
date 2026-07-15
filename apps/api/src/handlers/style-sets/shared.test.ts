@@ -11,6 +11,7 @@ import {
 import {
   extractStyleSetBuffer,
   normalizeStyleSetName,
+  styleSetExportFileName,
   validateStyleSource,
 } from "@/api/lib/style-sets";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -31,6 +32,13 @@ describe("style set source extraction", () => {
     });
 
     expect(Result.isError(validateStyleSource(source))).toBe(true);
+  });
+
+  test("preserves the DOCX extension for long export names", () => {
+    const fileName = styleSetExportFileName("a".repeat(256));
+
+    expect(fileName).toHaveLength(255);
+    expect(fileName.endsWith(".docx")).toBe(true);
   });
 
   test("stores formatting without source document content", async () => {

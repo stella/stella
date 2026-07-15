@@ -7,7 +7,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const DOCX_EXTENSION = ".docx";
@@ -77,7 +77,7 @@ export const buildStyleSetKey = ({
   `${organizationId}/style-sets/${styleSetId}/${Bun.randomUUIDv7()}.docx`;
 
 export const styleSetExportFileName = (name: string): string =>
-  sanitizeFilename(`${name}.docx`);
+  sanitizeFilenamePreservingExtension(`${name}.docx`);
 
 type ReadStyleSetBufferOptions = {
   safeDb: SafeDb;

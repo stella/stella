@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import type { SanitizedFileName } from "./sanitize-filename";
-import { DOCX_EXT_RE, sanitizeFilename } from "./sanitize-filename";
+import {
+  DOCX_EXT_RE,
+  sanitizeFilename,
+  sanitizeFilenamePreservingExtension,
+} from "./sanitize-filename";
 
 describe("sanitizeFilename", () => {
   test("replaces control and header-unsafe characters", () => {
@@ -29,6 +33,15 @@ describe("sanitizeFilename", () => {
     // Compile-time check: result is assignable to SanitizedFileName
     const _branded: SanitizedFileName = result;
     expect(typeof _branded).toBe("string");
+  });
+
+  test("preserves the DOCX extension when truncating a long name", () => {
+    const fileName = sanitizeFilenamePreservingExtension(
+      `${"a".repeat(256)}.docx`,
+    );
+
+    expect(fileName).toHaveLength(255);
+    expect(fileName.endsWith(".docx")).toBe(true);
   });
 });
 

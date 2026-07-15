@@ -23,33 +23,8 @@ import {
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-
-const MAX_FILENAME_LENGTH = 255;
-
-/**
- * Sanitize a filename while preserving its extension. The base
- * name is truncated (not the extension) when the total exceeds
- * 255 characters.
- */
-export const sanitizeFilenamePreservingExtension = (name: string) => {
-  const lastDot = name.lastIndexOf(".");
-  if (lastDot === -1) {
-    return sanitizeFilename(name);
-  }
-
-  const ext = name.slice(lastDot); // includes the dot
-  const base = name.slice(0, lastDot);
-  const sanitizedBase = sanitizeFilename(base);
-  const maxBaseLength = MAX_FILENAME_LENGTH - ext.length;
-
-  if (maxBaseLength <= 0) {
-    return sanitizeFilename(name);
-  }
-
-  return sanitizeFilename(sanitizedBase.slice(0, maxBaseLength) + ext);
-};
 
 type CreateEntityFromBufferInput = {
   scopedDb: ScopedDb;

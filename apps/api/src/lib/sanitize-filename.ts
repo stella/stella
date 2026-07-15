@@ -23,6 +23,7 @@ export type SanitizedFileName = v.InferOutput<typeof sanitizedFileNameSchema>;
 // eslint-disable-next-line no-control-regex -- intentional: strip null byte and other unsafe characters
 const UNSAFE_CHARS_RE = /["/\\<>\r\n\0|*?:]/gu;
 const PATH_TRAVERSAL_RE = /\.\./gu;
+const MAX_FILENAME_LENGTH = 255;
 
 const stripLeadingAndTrailingDots = (name: string): string => {
   let start = 0;
@@ -50,6 +51,29 @@ export const sanitizeFilename = (name: string): SanitizedFileName => {
     sanitizedFileNameSchema,
     sanitizedWithoutEdgeDots.slice(0, 255) || "file",
   );
+};
+
+/**
+ * Sanitize a filename while preserving its extension. The base name is
+ * truncated, not the extension, when the total exceeds 255 characters.
+ */
+export const sanitizeFilenamePreservingExtension = (
+  name: string,
+): SanitizedFileName => {
+  const lastDot = name.lastIndexOf(".");
+  if (lastDot === -1) {
+    return sanitizeFilename(name);
+  }
+
+  const extension = name.slice(lastDot);
+  const sanitizedBase = sanitizeFilename(name.slice(0, lastDot));
+  const maxBaseLength = MAX_FILENAME_LENGTH - extension.length;
+
+  if (maxBaseLength <= 0) {
+    return sanitizeFilename(name);
+  }
+
+  return sanitizeFilename(sanitizedBase.slice(0, maxBaseLength) + extension);
 };
 
 /** Matches a trailing `.docx` extension (case-insensitive). */
