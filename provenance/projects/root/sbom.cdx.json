@@ -1292,6 +1292,9 @@
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
           },
           {
@@ -2281,7 +2284,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1080.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1083.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2330,13 +2333,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1080.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1083.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1080.0"
+      "version": "3.1083.0"
     },
     {
       "authors": [
@@ -2344,7 +2347,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1080.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1083.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2393,13 +2396,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1080.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1083.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1080.0"
+      "version": "3.1083.0"
     },
     {
       "authors": [
@@ -2407,7 +2410,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1080.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1083.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -2456,13 +2459,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1080.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1083.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1080.0"
+      "version": "3.1083.0"
     },
     {
       "authors": [
@@ -2470,7 +2473,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1080.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1083.0",
       "evidence": {
         "identity": [
           {
@@ -2518,13 +2521,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1080.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1083.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1080.0"
+      "version": "3.1083.0"
     },
     {
       "authors": [
@@ -2550,7 +2553,7 @@
         ],
         "occurrences": [
           {
-            "location": "scripts/rc-bailouts.ts#23"
+            "location": "scripts/rc-bailouts.ts#22"
           }
         ]
       },
@@ -2600,7 +2603,7 @@
         ],
         "occurrences": [
           {
-            "location": "scripts/rc-bailouts.ts#23"
+            "location": "scripts/rc-bailouts.ts#22"
           }
         ]
       },
@@ -2664,7 +2667,7 @@
         ],
         "occurrences": [
           {
-            "location": "scripts/rc-bailouts.ts#23"
+            "location": "scripts/rc-bailouts.ts#22"
           }
         ]
       },
@@ -2740,7 +2743,7 @@
         ],
         "occurrences": [
           {
-            "location": "scripts/rc-bailouts.ts#23"
+            "location": "scripts/rc-bailouts.ts#22"
           }
         ]
       },
@@ -4066,6 +4069,9 @@
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
           },
           {
@@ -4415,7 +4421,7 @@
             "location": "apps/web/src/client.tsx#2"
           },
           {
-            "location": "apps/web/src/components/drag-preview.tsx#13"
+            "location": "apps/web/src/components/drag-preview.tsx#12"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#2"
@@ -4427,10 +4433,10 @@
             "location": "apps/web/src/client.tsx#2"
           },
           {
-            "location": "apps/web/src/components/drag-preview.tsx#12"
+            "location": "apps/web/src/components/drag-preview.tsx#11"
           },
           {
-            "location": "apps/web/src/components/drag-preview.tsx#13"
+            "location": "apps/web/src/components/drag-preview.tsx#12"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#14"
@@ -4556,6 +4562,68 @@
       "evidence": {
         "identity": [
           {
+            "concludedValue": "node_modules/icu-minify/node_modules/@formatjs/icu-messageformat-parser/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/icu-minify/node_modules/@formatjs/icu-messageformat-parser/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/scripts/src/i18n-check.ts#15"
+          },
+          {
+            "location": "packages/scripts/src/i18n-check.ts#16"
+          },
+          {
+            "location": "packages/scripts/src/i18n-lint.ts#25"
+          },
+          {
+            "location": "packages/scripts/src/i18n-lint.ts#26"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/formatjs/formatjs.git"
+        }
+      ],
+      "group": "@formatjs",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "icu-messageformat-parser",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/icu-minify/node_modules/@formatjs/icu-messageformat-parser/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.12",
+      "scope": "required",
+      "tags": [
+        "parse"
+      ],
+      "type": "library",
+      "version": "3.5.12"
+    },
+    {
+      "bom-ref": "pkg:npm/@formatjs/icu-messageformat-parser@3.5.13",
+      "evidence": {
+        "identity": [
+          {
             "concludedValue": "node_modules/@formatjs/icu-messageformat-parser/package.json",
             "confidence": 0.7,
             "field": "purl",
@@ -4605,13 +4673,13 @@
           "value": "node_modules/@formatjs/icu-messageformat-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.12",
+      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.13",
       "scope": "required",
       "tags": [
         "parse"
       ],
       "type": "library",
-      "version": "3.5.12"
+      "version": "3.5.13"
     },
     {
       "bom-ref": "pkg:npm/@google/genai@2.10.0",
@@ -6382,6 +6450,9 @@
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
           },
           {
@@ -6519,7 +6590,7 @@
           "name": "Pydantic Team"
         }
       ],
-      "bom-ref": "pkg:npm/@pydantic/genai-prices@0.0.69",
+      "bom-ref": "pkg:npm/@pydantic/genai-prices@0.0.70",
       "description": "Calculate prices for calling LLM inference APIs",
       "evidence": {
         "identity": [
@@ -6571,10 +6642,10 @@
           "value": "node_modules/@pydantic/genai-prices/package.json"
         }
       ],
-      "purl": "pkg:npm/%40pydantic/genai-prices@0.0.69",
+      "purl": "pkg:npm/%40pydantic/genai-prices@0.0.70",
       "scope": "required",
       "type": "library",
-      "version": "0.0.69"
+      "version": "0.0.70"
     },
     {
       "bom-ref": "pkg:npm/@react-email/components@1.0.12",
@@ -6802,7 +6873,7 @@
           "name": "sinclairzx81"
         }
       ],
-      "bom-ref": "pkg:npm/@sinclair/typebox@0.34.49",
+      "bom-ref": "pkg:npm/@sinclair/typebox@0.34.50",
       "description": "Json Schema Type Builder with Static Type Resolution for TypeScript",
       "evidence": {
         "identity": [
@@ -6874,10 +6945,10 @@
           "value": "node_modules/@sinclair/typebox/package.json"
         }
       ],
-      "purl": "pkg:npm/%40sinclair/typebox@0.34.49",
+      "purl": "pkg:npm/%40sinclair/typebox@0.34.50",
       "scope": "required",
       "type": "library",
-      "version": "0.34.49"
+      "version": "0.34.50"
     },
     {
       "authors": [
@@ -7151,6 +7222,12 @@
           },
           {
             "location": "packages/cli/src/commands/auth.ts#4"
+          },
+          {
+            "location": "packages/cli/src/commands/compatibility.ts#1"
+          },
+          {
+            "location": "packages/cli/src/commands/compatibility.ts#2"
           },
           {
             "location": "packages/cli/src/context.ts#8"
@@ -7806,7 +7883,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#7"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#9"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#12"
@@ -7875,7 +7952,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#8"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#10"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#17"
@@ -7943,6 +8020,12 @@
           }
         ],
         "occurrences": [
+          {
+            "location": "apps/api/scripts/ai-provider-canary.ts#1"
+          },
+          {
+            "location": "apps/api/scripts/ai-provider-canary.ts#2"
+          },
           {
             "location": "apps/api/scripts/benchmark-chat-read-surface.ts#12"
           },
@@ -8064,7 +8147,7 @@
             "location": "apps/api/src/lib/tanstack-ai-generate.ts#1"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#6"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#8"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-models.ts#2"
@@ -8189,7 +8272,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-form@1.33.0",
+      "bom-ref": "pkg:npm/@tanstack/react-form@1.33.1",
       "description": "Powerful, type-safe forms for React.",
       "evidence": {
         "identity": [
@@ -8274,10 +8357,10 @@
           "value": "node_modules/@tanstack/react-form/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-form@1.33.0",
+      "purl": "pkg:npm/%40tanstack/react-form@1.33.1",
       "scope": "required",
       "type": "library",
-      "version": "1.33.0"
+      "version": "1.33.1"
     },
     {
       "authors": [
@@ -9534,6 +9617,9 @@
             "location": "apps/web/src/components/contact-picker.tsx#5"
           },
           {
+            "location": "apps/web/src/components/feedback-dialog.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#25"
           },
           {
@@ -10202,7 +10288,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.0.0-beta.34",
+      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.0.0-beta.47",
       "description": "React devtools for TanStack Table.",
       "evidence": {
         "identity": [
@@ -10254,10 +10340,10 @@
           "value": "node_modules/@tanstack/react-table-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.0.0-beta.34",
+      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.0.0-beta.47",
       "scope": "required",
       "type": "library",
-      "version": "9.0.0-beta.34"
+      "version": "9.0.0-beta.47"
     },
     {
       "authors": [
@@ -10265,7 +10351,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table@9.0.0-beta.34",
+      "bom-ref": "pkg:npm/@tanstack/react-table@9.0.0-beta.47",
       "description": "Headless UI for building powerful tables & datagrids for React.",
       "evidence": {
         "identity": [
@@ -10356,10 +10442,10 @@
           "value": "node_modules/@tanstack/react-table/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table@9.0.0-beta.34",
+      "purl": "pkg:npm/%40tanstack/react-table@9.0.0-beta.47",
       "scope": "required",
       "type": "library",
-      "version": "9.0.0-beta.34"
+      "version": "9.0.0-beta.47"
     },
     {
       "authors": [
@@ -10489,7 +10575,7 @@
       "version": "2.11.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/core@3.27.3",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -10559,13 +10645,13 @@
           "value": "node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.27.2",
+      "purl": "pkg:npm/%40tiptap/core@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.27.3",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -10614,13 +10700,13 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.27.3",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -10672,13 +10758,13 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.27.3",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -10727,13 +10813,13 @@
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.27.3",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -10782,13 +10868,13 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.27.3",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -10843,13 +10929,13 @@
           "value": "node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.27.3",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -10898,13 +10984,13 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-list@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-list@3.27.3",
       "description": "List extension for tiptap",
       "evidence": {
         "identity": [
@@ -10953,13 +11039,13 @@
           "value": "node_modules/@tiptap/extension-list/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-list@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-list@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.27.3",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -11020,13 +11106,13 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.27.3",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -11081,13 +11167,13 @@
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.27.3",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -11142,13 +11228,13 @@
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.27.3",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -11203,13 +11289,13 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.27.2",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.27.3",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -11285,13 +11371,13 @@
           "value": "node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.27.2",
+      "purl": "pkg:npm/%40tiptap/pm@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/react@3.27.3",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -12576,6 +12662,9 @@
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
           },
           {
@@ -12702,13 +12791,13 @@
           "value": "node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.27.2",
+      "purl": "pkg:npm/%40tiptap/react@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.27.2",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.27.3",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -12775,10 +12864,10 @@
           "value": "node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.27.2",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.27.3",
       "scope": "required",
       "type": "library",
-      "version": "3.27.2"
+      "version": "3.27.3"
     },
     {
       "authors": [
@@ -12852,7 +12941,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@7.0.6",
+      "bom-ref": "pkg:npm/astro@7.0.7",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -12907,13 +12996,13 @@
           "value": "node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@7.0.6",
+      "purl": "pkg:npm/astro@7.0.7",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "7.0.6"
+      "version": "7.0.7"
     },
     {
       "bom-ref": "pkg:npm/babel-plugin-react-compiler@1.0.0",
@@ -12935,10 +13024,7 @@
         ],
         "occurrences": [
           {
-            "location": "scripts/rc-bailouts.ts#27"
-          },
-          {
-            "location": "scripts/rc-bailouts.ts#28"
+            "location": "scripts/rc-bailouts.ts#23"
           }
         ]
       },
@@ -14144,6 +14230,12 @@
             "location": "apps/api/src/handlers/templates/configure-template-fields-service.ts#14"
           },
           {
+            "location": "apps/api/src/handlers/templates/create-blank.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/create-from-styles.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/templates/create-template-service.ts#14"
           },
           {
@@ -14777,6 +14869,9 @@
             "location": "packages/cli/src/auth/oauth-metadata.ts#3"
           },
           {
+            "location": "packages/cli/src/auth/scope-negotiation.ts#1"
+          },
+          {
             "location": "packages/cli/src/auth/scopes.ts#7"
           },
           {
@@ -14796,6 +14891,12 @@
           },
           {
             "location": "packages/cli/src/commands/auth.ts#5"
+          },
+          {
+            "location": "packages/cli/src/commands/compatibility.ts#3"
+          },
+          {
+            "location": "packages/cli/src/compatibility.ts#1"
           },
           {
             "location": "packages/cli/src/generate-skill.ts#9"
@@ -15594,9 +15695,6 @@
             "location": "apps/api/src/handlers/docx/diff-paragraphs.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/entities/compute-version-diff.ts#1"
-          },
-          {
             "location": "apps/api/src/lib/text-diff.ts#12"
           },
           {
@@ -15656,9 +15754,6 @@
         "occurrences": [
           {
             "location": "apps/api/src/handlers/docx/diff-paragraphs.ts#9"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/compute-version-diff.ts#1"
           },
           {
             "location": "apps/api/src/lib/text-diff.ts#12"
@@ -15888,6 +15983,1244 @@
         }
       ],
       "bom-ref": "pkg:npm/drizzle-orm@1.0.0-rc.1",
+      "description": "Drizzle ORM package for SQL databases",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@better-auth/drizzle-adapter/node_modules/drizzle-orm/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@better-auth/drizzle-adapter/node_modules/drizzle-orm/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/scripts/apply-search-migration.ts#16"
+          },
+          {
+            "location": "apps/api/scripts/backfill-image-thumbnails.ts#22"
+          },
+          {
+            "location": "apps/api/scripts/classify-citations.ts#20"
+          },
+          {
+            "location": "apps/api/scripts/ingestion-status.ts#12"
+          },
+          {
+            "location": "apps/api/scripts/seed-case-law.ts#20"
+          },
+          {
+            "location": "apps/api/scripts/seed-dev.ts#25"
+          },
+          {
+            "location": "apps/api/scripts/seed-test-user.ts#22"
+          },
+          {
+            "location": "apps/api/src/db/auth-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/auth-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/auth-schema.ts#10"
+          },
+          {
+            "location": "apps/api/src/db/columns.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/columns.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/json-utils.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/migrate.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/migrate.ts#4"
+          },
+          {
+            "location": "apps/api/src/db/rls.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/rls.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/rls.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/root.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/schema/common.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/schema/common.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/schema/common.ts#4"
+          },
+          {
+            "location": "apps/api/src/db/schema/common.ts#5"
+          },
+          {
+            "location": "apps/api/src/db/scoped.ts#8"
+          },
+          {
+            "location": "apps/api/src/db/scoped.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/audit-logs/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/audit-logs/read.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/billing-codes/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/billing-codes/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/billing-codes/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/billing-codes/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/citation-authority.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/citation-authority.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/corpus-index.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/language.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/read-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/search-sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/search.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/search.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/slug-backfill.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/slug-backfill.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/slug.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/erasure.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/ingestion/status.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/matter-links/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/matter-links/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/polarity/classifier.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/polarity/rule-engine.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/redistribution.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/search-index.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/catalogue/list-catalogue.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-prompt.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/data-scope.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/delete-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/delete-thread.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/get-thread-recap.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/get-thread-title.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/get-threads.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/get-threads.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/history-window.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/message-page.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/rename-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/send-message.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/skills.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/update-thread-model.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/update-thread.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/upload-files.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/categories.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/export.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/import.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/search-vector.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/template-links.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/variants.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/versions-restore.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/delete-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/read-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/search.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/contacts/update-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/dev/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/delete-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/read-list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/reorder.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/update-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/check-stamp.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/clip.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/compare-versions.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/compute-version-diff.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/copy-utils.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/create-from-buffer.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/delete-version.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/desktop-edit-handoffs.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/desktop-edit-session-utils.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/download-zip.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/finalize-desktop-edit-session.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/kanban-group-condition.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/kanban-group-condition.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/list-cursor.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/list-cursor.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/list-files.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/list-folders.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/move.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/open-desktop-edit-session.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/query-entities.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/query-entities.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/query-entities.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-group-counts.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-group-counts.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-property-facets.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-summaries.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-version-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-versions.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/release-desktop-edit-lock.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/rename.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/request-desktop-edit-takeover.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/respond-desktop-edit-takeover.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/restore-version.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/translate.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/update-version-description.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/update-version-label.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/upload-version.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/upload.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/version-diff-sources.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/expenses/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/expenses/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/expenses/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/expenses/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#11"
+          },
+          {
+            "location": "apps/api/src/handlers/fields/mark-column-flag.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/fields/update-cell-metadata.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/fields/upsert-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/files/field-file-refs.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/read-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/cancel.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/checkpoint.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/folio-collab/finalize.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts#17"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/add-entries.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/lock-invoice.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/remove-entries.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/transition.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/invoices/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/corpus-index.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/ingestion.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/read-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/redistribution.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search-index.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/legislation/search.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/connect.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/create-connection.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/create-connector.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/delete-connection.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/delete-connector.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/list-connections.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/list-connectors.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/oauth-callback.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/update-connection.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/mcp-connectors/update-native-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/delete-deepl-key.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/delete-web-search-key.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/read-anonymization-blacklist.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/approve.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/create-shared.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/delete-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/list-versions.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/materialize-run.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/positions-validation.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/resolve-standards.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/restore-version.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/route-playbooks.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/update-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/create-batch.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/delete-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/property-lock.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/update-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/entries-create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/entries-delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/entries-read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/entries-update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/resolve.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/rates/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/reports/export-view.ts#18"
+          },
+          {
+            "location": "apps/api/src/handlers/reports/report-export-queue.ts#18"
+          },
+          {
+            "location": "apps/api/src/handlers/search/ai.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/get.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/install.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/list-commands.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rename.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/upload.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/seed.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/tasks/assignees-remove.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/tasks/calendar.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/tasks/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/tasks/entity-links-delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/tasks/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/template-recipes/recipes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/categories.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/configure-template-fields-service.ts#15"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/create-template-service.ts#15"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/fill-to-workspace.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/prefill.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/record-use.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/save-document.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/versions.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/batch-delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/batch-update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/delete-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/export-csv.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/export-ledes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/export-pdf.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/read-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/read.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/split.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/timer-start.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/timer-stop.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/time-entries/update-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/abort.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/agent-skill.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/entity-create-tree.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/entity-create.ts#22"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/entity-version.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/uploads/finalize.ts#22"
+          },
+          {
+            "location": "apps/api/src/handlers/usage/create-hosted-management.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/usage/create-hosted-setup.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/usage/get-entitlement.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/verify/resolve-auth.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/view-templates/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/views/convert.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/views/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/views/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/views/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/views/reorder.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/views/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-allowlist.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/anonymization-terms.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/archive.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/cell-retry.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/delete-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/duplicate.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-activity.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-activity.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-justifications.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read-overview.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/read.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/unarchive.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/update-active.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/update-by-id.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/workspace-contacts-create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/workspace-contacts-delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/workspace-members-add.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/workspaces/workspace-members-remove.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/account-deletion-cleanup-queue.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/ai-config-loader.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/anonymization-allowlist.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/anonymization-blacklist.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/auth-artifacts.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#13"
+          },
+          {
+            "location": "apps/api/src/lib/auth.ts#14"
+          },
+          {
+            "location": "apps/api/src/lib/case-law/case-law-config-store.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/case-law-public-read-db.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/cell-lock.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db/assert-migrations-applied.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db-pagination.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/db-pagination.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/db-query-counter.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/delete-account.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-edit-handoffs.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-edit-session-predicates.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/desktop-edit-sessions.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/document-counter.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/entity-cap-lock.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/entity-filters.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/entity-filters.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/file-derivative-queue.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/folio-collab-sessions.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/groupable-sql.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/groupable-sql.ts#13"
+          },
+          {
+            "location": "apps/api/src/lib/health/probe-database.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/hosted-usage-provider/webhook-store.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/infosoud/agenda-import.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/backfill-statement-timeout.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/backfill-statement-timeout.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-query.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-query.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/oauth-connections.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/pg-error.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/report-export-recovery.ts#24"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/jobs.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/runner.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/scheduler/tasks/infosoud.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/search/contact-workspace-access-sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/contact-workspace-access-sql.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/search/index-chat.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/index-entity.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/search/index-global.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/index-global.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/search/pg-fts-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/query.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/query.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/search/sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/usage/usage-ledger.ts#32"
+          },
+          {
+            "location": "apps/api/src/lib/validated-org-user-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/generate-batch-shared.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/workflow-queue.ts#5"
+          },
+          {
+            "location": "apps/api/src/lib/workflow-target-queries.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/billing-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/compat-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/context.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/document-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/gateway/external-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/gateway/skills.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/matter-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/stella-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/template-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/adapter-health.ts#17"
+          },
+          {
+            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/backfill-corpus-storage.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/backfill-fulltext.ts#12"
+          },
+          {
+            "location": "apps/api/src/scripts/backfill-property-roles.ts#10"
+          },
+          {
+            "location": "apps/api/src/scripts/repair-case-law-jsonb.ts#35"
+          },
+          {
+            "location": "apps/api/src/scripts/resolve-citations.ts#18"
+          },
+          {
+            "location": "apps/legal-atlas-runner/src/db.ts#1"
+          },
+          {
+            "location": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts#1"
+          },
+          {
+            "location": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/auth-schema.ts#10"
+          },
+          {
+            "location": "apps/api/src/db/columns.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/rls.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/schema/common.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/schema/common.ts#4"
+          },
+          {
+            "location": "apps/api/src/db/schema/common.ts#5"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/query-entities.ts#13"
+          },
+          {
+            "location": "apps/api/src/db/migrate.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/root.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/migrate.ts#4"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://orm.drizzle.team"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/drizzle-team/drizzle-orm.git"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "drizzle-orm",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/better-auth/node_modules/drizzle-orm/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@better-auth/drizzle-adapter/node_modules/drizzle-orm/package.json"
+        }
+      ],
+      "purl": "pkg:npm/drizzle-orm@1.0.0-rc.1",
+      "scope": "required",
+      "tags": [
+        "orm",
+        "sql"
+      ],
+      "type": "library",
+      "version": "1.0.0-rc.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "Drizzle Team"
+        }
+      ],
+      "bom-ref": "pkg:npm/drizzle-orm@1.0.0-rc.4",
       "description": "Drizzle ORM package for SQL databases",
       "evidence": {
         "identity": [
@@ -16230,7 +17563,7 @@
             "location": "apps/api/src/handlers/entities/compare-versions.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/compute-version-diff.ts#2"
+            "location": "apps/api/src/handlers/entities/compute-version-diff.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#2"
@@ -17106,14 +18439,14 @@
           "value": "node_modules/drizzle-orm/package.json"
         }
       ],
-      "purl": "pkg:npm/drizzle-orm@1.0.0-rc.1",
+      "purl": "pkg:npm/drizzle-orm@1.0.0-rc.4",
       "scope": "required",
       "tags": [
         "orm",
         "sql"
       ],
       "type": "library",
-      "version": "1.0.0-rc.1"
+      "version": "1.0.0-rc.4"
     },
     {
       "authors": [
@@ -18111,7 +19444,10 @@
             "location": "apps/api/src/handlers/templates/clauses-unlink.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/create-blank.ts#1"
+            "location": "apps/api/src/handlers/templates/create-blank.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/create-from-styles.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/create.ts#2"
@@ -18446,7 +19782,7 @@
           "name": "Nicolas DUBIEN <github@dubien.org>"
         }
       ],
-      "bom-ref": "pkg:npm/fast-check@4.8.0",
+      "bom-ref": "pkg:npm/fast-check@4.9.0",
       "description": "Property based testing framework for JavaScript (like QuickCheck)",
       "evidence": {
         "identity": [
@@ -18495,13 +19831,13 @@
           "value": "node_modules/fast-check/package.json"
         }
       ],
-      "purl": "pkg:npm/fast-check@4.8.0",
+      "purl": "pkg:npm/fast-check@4.9.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.8.0"
+      "version": "4.9.0"
     },
     {
       "authors": [
@@ -19058,7 +20394,7 @@
             "location": "apps/web/src/components/empty-screen.tsx#10"
           },
           {
-            "location": "apps/web/src/components/feedback-dialog.tsx#1"
+            "location": "apps/web/src/components/feedback-dialog.tsx#2"
           },
           {
             "location": "apps/web/src/components/file-drop-zone.tsx#3"
@@ -19274,7 +20610,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#19"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx#11"
@@ -19511,7 +20847,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-helpers.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#9"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#23"
@@ -19557,9 +20893,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-subtasks.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#13"
@@ -19938,7 +21271,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.398.0",
+      "bom-ref": "pkg:npm/posthog-js@1.399.0",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -19994,10 +21327,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.398.0",
+      "purl": "pkg:npm/posthog-js@1.399.0",
       "scope": "required",
       "type": "library",
-      "version": "1.398.0"
+      "version": "1.399.0"
     },
     {
       "authors": [
@@ -20005,7 +21338,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.39.4",
+      "bom-ref": "pkg:npm/posthog-node@5.40.0",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -20050,10 +21383,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.39.4",
+      "purl": "pkg:npm/posthog-node@5.40.0",
       "scope": "required",
       "type": "library",
-      "version": "5.39.4"
+      "version": "5.40.0"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -20209,7 +21542,7 @@
       "version": "1.2.3"
     },
     {
-      "bom-ref": "pkg:npm/prosemirror-model@1.25.9",
+      "bom-ref": "pkg:npm/prosemirror-model@1.25.10",
       "description": "ProseMirror's document model",
       "evidence": {
         "identity": [
@@ -20260,10 +21593,10 @@
           "value": "node_modules/prosemirror-model/package.json"
         }
       ],
-      "purl": "pkg:npm/prosemirror-model@1.25.9",
+      "purl": "pkg:npm/prosemirror-model@1.25.10",
       "scope": "required",
       "type": "library",
-      "version": "1.25.9"
+      "version": "1.25.10"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-state@1.4.4",
@@ -20536,7 +21869,7 @@
             "location": "apps/web/src/client.tsx#2"
           },
           {
-            "location": "apps/web/src/components/drag-preview.tsx#13"
+            "location": "apps/web/src/components/drag-preview.tsx#12"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#2"
@@ -20548,10 +21881,10 @@
             "location": "apps/web/src/client.tsx#2"
           },
           {
-            "location": "apps/web/src/components/drag-preview.tsx#12"
+            "location": "apps/web/src/components/drag-preview.tsx#11"
           },
           {
-            "location": "apps/web/src/components/drag-preview.tsx#13"
+            "location": "apps/web/src/components/drag-preview.tsx#12"
           },
           {
             "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#14"
@@ -21899,6 +23232,9 @@
             "location": "packages/ui/src/components/bidi-text.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/brand-icons.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/breadcrumb.tsx#3"
           },
           {
@@ -22713,7 +24049,7 @@
             "location": "apps/web/src/components/empty-screen.tsx#11"
           },
           {
-            "location": "apps/web/src/components/feedback-dialog.tsx#2"
+            "location": "apps/web/src/components/feedback-dialog.tsx#3"
           },
           {
             "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#4"
@@ -22968,7 +24304,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#20"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx#12"
@@ -23289,7 +24625,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-helpers.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#24"
@@ -23334,7 +24670,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#3"
@@ -23676,6 +25012,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/scripts/ai-provider-canary.ts#3"
+          },
+          {
             "location": "apps/api/scripts/benchmark-chat-read-surface.ts#15"
           },
           {
@@ -23835,7 +25174,7 @@
             "location": "apps/api/src/lib/secret-brands.ts#17"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-generate.ts#9"
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#11"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-schema.ts#7"
@@ -23983,6 +25322,9 @@
           },
           {
             "location": "packages/cli/src/codegen.ts#13"
+          },
+          {
+            "location": "packages/cli/src/compatibility.ts#2"
           },
           {
             "location": "packages/conditions/src/schema.ts#13"
