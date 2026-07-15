@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import { validateParentIdForInsert } from "@/api/handlers/entities/validate-parent-id";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -23,33 +24,8 @@ import {
 } from "@/api/lib/file-derivative-queue";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { processExtraction } from "@/api/lib/search/process-extraction";
-
-const MAX_FILENAME_LENGTH = 255;
-
-/**
- * Sanitize a filename while preserving its extension. The base
- * name is truncated (not the extension) when the total exceeds
- * 255 characters.
- */
-const sanitizeFilenamePreservingExtension = (name: string) => {
-  const lastDot = name.lastIndexOf(".");
-  if (lastDot === -1) {
-    return sanitizeFilename(name);
-  }
-
-  const ext = name.slice(lastDot); // includes the dot
-  const base = name.slice(0, lastDot);
-  const sanitizedBase = sanitizeFilename(base);
-  const maxBaseLength = MAX_FILENAME_LENGTH - ext.length;
-
-  if (maxBaseLength <= 0) {
-    return sanitizeFilename(name);
-  }
-
-  return sanitizeFilename(sanitizedBase.slice(0, maxBaseLength) + ext);
-};
 
 type CreateEntityFromBufferInput = {
   scopedDb: ScopedDb;
@@ -60,6 +36,7 @@ type CreateEntityFromBufferInput = {
   buffer: Uint8Array | ArrayBuffer;
   fileName: string;
   mimeType: string;
+  parentId?: SafeId<"entity"> | null | undefined;
   scanWarnings?: string[] | undefined;
 };
 
@@ -71,13 +48,17 @@ class MissingFilePropertyError extends TaggedError("MissingFilePropertyError")<{
   message: string;
 }>() {}
 
+class InvalidParentError extends TaggedError("InvalidParentError")<{
+  message: string;
+}>() {}
+
 export type CreateEntityFromBufferResult = Result<
   {
     entityId: SafeId<"entity">;
     fieldId: SafeId<"field">;
     fileName: string;
   },
-  EntityLimitError | MissingFilePropertyError
+  EntityLimitError | InvalidParentError | MissingFilePropertyError
 >;
 
 /**
@@ -96,6 +77,7 @@ export const createEntityFromBuffer = async ({
   buffer,
   fileName: rawFileName,
   mimeType,
+  parentId,
   scanWarnings,
 }: CreateEntityFromBufferInput): Promise<CreateEntityFromBufferResult> => {
   const fileName = sanitizeFilenamePreservingExtension(rawFileName);
@@ -157,12 +139,26 @@ export const createEntityFromBuffer = async ({
         });
       }
 
+      // The earlier parent lookup is only a fail-fast preflight. Recheck and
+      // lock the row here so it cannot disappear between validation and insert.
+      if (parentId) {
+        const parentError = await validateParentIdForInsert({
+          tx,
+          parentId,
+          workspaceId,
+        });
+        if (parentError) {
+          throw new InvalidParentError({ message: parentError });
+        }
+      }
+
       const entityStamp = await allocateEntityStamp(tx, workspaceId);
 
       await tx.insert(entities).values({
         id: entityId,
         workspaceId,
         name: fileName,
+        parentId: parentId ?? null,
         createdBy: userId,
         docSequence: entityStamp.docSequence,
       });
@@ -227,6 +223,7 @@ export const createEntityFromBuffer = async ({
               mimeType,
               sizeBytes: bytes.byteLength,
               propertyId: fileProperty.id,
+              parentId: parentId ?? null,
             },
           },
         },
@@ -235,7 +232,7 @@ export const createEntityFromBuffer = async ({
   } catch (error) {
     await Promise.all(s3Keys.map(async (k) => await getS3().delete(k)));
 
-    if (EntityLimitError.is(error)) {
+    if (EntityLimitError.is(error) || InvalidParentError.is(error)) {
       return Result.err(error);
     }
 

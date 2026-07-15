@@ -1,8 +1,9 @@
 import React, { useRef, useState } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
   FolderPlusIcon,
+  FilePlus2Icon,
   LayoutTemplateIcon,
   PlusIcon,
   SquareCheckIcon,
@@ -20,8 +21,12 @@ import {
 } from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
+import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
+import { DOCX_MIME } from "@/lib/consts";
+import { toSafeId } from "@/lib/safe-id";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { NewDocumentFromTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
@@ -74,6 +79,8 @@ export const AddEntityMenu = ({
 }: AddEntityMenuProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [styleDialogOpen, setStyleDialogOpen] = useState(false);
+  const queryClient = useQueryClient();
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const isEntitiesLimitReached = useEntitiesCountLimit(workspaceId);
   const [isUploadPending, createFileEntities] =
@@ -84,6 +91,10 @@ export const AddEntityMenu = ({
   });
   const createEntities = useCreateEntities();
   const canUseTemplate = usePermissions({ template: ["use"] });
+  const canCreateStyledDocument = usePermissions({
+    entity: ["create"],
+    styleSet: ["use"],
+  });
   const t = useTranslations();
 
   if (isEntitiesLimitReached) {
@@ -151,6 +162,47 @@ export const AddEntityMenu = ({
     fileInputRef.current?.click();
   };
 
+  const handleCreateDocument = async (
+    name: string,
+    style: StyleSelection,
+  ): Promise<boolean> => {
+    const input = {
+      queryKey: entitiesKeys.all(workspaceId),
+      name,
+      parentId: parentId ? toSafeId<"entity">(parentId) : null,
+    };
+    const response =
+      style.type === "stella"
+        ? await api.entities({ workspaceId })["blank-document"].put(input)
+        : await api
+            .entities({ workspaceId })
+            ["blank-document-from-style-set"].put({
+              ...input,
+              styleSetId: toSafeId<"styleSet">(style.styleSetId),
+            });
+    if (response.error) {
+      stellaToast.add({
+        title: t("errors.actionFailed"),
+        type: "error",
+      });
+      return false;
+    }
+
+    await queryClient.invalidateQueries({
+      queryKey: entitiesKeys.all(workspaceId),
+    });
+    useInspectorStore.getState().openFile({
+      id: response.data.fieldId,
+      entityId: response.data.entityId,
+      label: response.data.fileName,
+      fileName: response.data.fileName,
+      mimeType: DOCX_MIME,
+      pdfFileId: null,
+      workspaceId,
+    });
+    return true;
+  };
+
   const fileInput = hasFileProperties ? (
     <input
       className="sr-only"
@@ -205,6 +257,15 @@ export const AddEntityMenu = ({
                 <UploadIcon />
                 {t("common.uploadFiles")}
               </MenuItem>
+              {canCreateStyledDocument && (
+                <MenuItem
+                  disabled={isWorkflowRunning}
+                  onClick={() => setStyleDialogOpen(true)}
+                >
+                  <FilePlus2Icon />
+                  {t("styleSets.newDocument")}
+                </MenuItem>
+              )}
               {canUseTemplate && (
                 <MenuItem
                   disabled={isWorkflowRunning}
@@ -243,6 +304,15 @@ export const AddEntityMenu = ({
           open={templateDialogOpen}
           parentId={parentId}
           workspaceId={workspaceId}
+        />
+      )}
+      {canCreateStyledDocument && (
+        <StyleSetPickerDialog
+          initialName={t("styleSets.untitledDocument")}
+          onCreate={handleCreateDocument}
+          onOpenChange={setStyleDialogOpen}
+          open={styleDialogOpen}
+          title={t("styleSets.newDocument")}
         />
       )}
     </>

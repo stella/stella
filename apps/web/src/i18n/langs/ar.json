@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "وحدات الاستخدام في هذه الفترة"
     }
   },
+  "styleSets": {
+    "create": "إنشاء",
+    "defaultBadge": "افتراضي",
+    "deleteConfirmation": "اكتب اسم مجموعة الأنماط للتأكيد.",
+    "deleteDescription": "لن تتغير المستندات والقوالب الحالية.",
+    "deleteFailed": "تعذر حذف مجموعة الأنماط",
+    "deleteTitle": "حذف مجموعة الأنماط؟",
+    "description": "تنسيق مستندات قابل لإعادة الاستخدام للقوالب والمستندات الجديدة",
+    "exportFailed": "تعذر تصدير مجموعة الأنماط",
+    "import": "استيراد مجموعة أنماط",
+    "importDescription": "تُستخرج الأنماط إلى ملف DOCX جديد خالٍ من المحتوى.",
+    "importTitle": "استيراد مجموعة أنماط",
+    "loadFailed": "تعذر تحميل مجموعات الأنماط",
+    "newDocument": "مستند جديد",
+    "pickerDescription": "اختر نظام التنسيق للملف الجديد.",
+    "renameTitle": "إعادة تسمية مجموعة الأنماط",
+    "replace": "استبدال المصدر",
+    "replaceFailed": "تعذر استبدال مجموعة الأنماط",
+    "replaced": "تم استبدال مجموعة الأنماط",
+    "saveFailed": "تعذر حفظ مجموعة الأنماط",
+    "savedDescription": "مجموعة أنماط محفوظة",
+    "sourceDocument": "ملف DOCX المصدر",
+    "stellaDescription": "تنسيق Stella القانوني الكامل والمحايد للمستندات",
+    "stellaStyle": "Stella Style",
+    "title": "مجموعات الأنماط",
+    "untitledDocument": "مستند بلا عنوان"
+  },
   "success": {
     "aiConfigDeleted": "تمت إزالة إعدادات AI",
     "aiConfigUpdated": "تم تحديث إعدادات AI",

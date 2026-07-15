@@ -148,6 +148,9 @@ export type McpCapabilityReason =
  *   reason.
  * - `native_tool_ui`: native-tool helper endpoints whose agent surface is a
  *   chat/native integration rather than the static MCP registry.
+ * - `compound_consent`: operations that require multiple independent OAuth
+ *   consent families; these stay first-party-only until the generic capability
+ *   path can enforce conjunctive scopes.
  */
 export type McpInternalReason =
   | "auth_plumbing"
@@ -169,7 +172,8 @@ export type McpInternalReason =
   | "public_indexing"
   | "search_ui"
   | "document_processing"
-  | "native_tool_ui";
+  | "native_tool_ui"
+  | "compound_consent";
 
 /**
  * Required per-handler MCP disposition. Making this a field on every handler

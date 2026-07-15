@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { createTemplateBuffer } from "@/api/handlers/templates/create-template-buffer";
 import {
   type CreatedTemplate,
   createStoredTemplate,
@@ -14,9 +13,10 @@ import type {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 const createBlankTemplateBodySchema = t.Object({
   name: tDefaultVarchar,
@@ -59,7 +59,7 @@ const createBlankTemplateHandler = async function* ({
     userId,
     buffer,
     name,
-    fileName: sanitizeFilename(`${name}.docx`),
+    fileName: sanitizeFilenamePreservingExtension(`${name}.docx`),
     categoryId,
     recordAuditEvent,
   });

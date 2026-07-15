@@ -6,6 +6,7 @@ import {
   ClipboardCheckIcon,
   LayoutTemplateIcon,
   PackageIcon,
+  PaletteIcon,
   TextQuoteIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -13,6 +14,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { usePermissions } from "@/hooks/use-permissions";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -25,10 +27,11 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 // on the Tools page. The sidebar entry was removed so the landing
 // doesn't advertise a deleted destination.
 type KnowledgeSection = {
-  key: "templates" | "clauses" | "playbooks" | "tools" | "agents";
+  key: "templates" | "styles" | "clauses" | "playbooks" | "tools" | "agents";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   to?:
     | "/knowledge/templates"
+    | "/knowledge/styles"
     | "/knowledge/clauses"
     | "/knowledge/playbooks"
     | "/knowledge/tools";
@@ -37,6 +40,7 @@ type KnowledgeSection = {
   titleKey: Extract<
     TranslationKey,
     | "knowledge.sections.templates.title"
+    | "styleSets.title"
     | "knowledge.sections.tools.title"
     | "knowledge.sections.agents.title"
     | "common.clauses"
@@ -58,6 +62,12 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
     titleKey: "knowledge.sections.templates.title",
   },
   {
+    key: "styles",
+    icon: PaletteIcon,
+    to: "/knowledge/styles",
+    titleKey: "styleSets.title",
+  },
+  {
     key: "clauses",
     icon: TextQuoteIcon,
     to: "/knowledge/clauses",
@@ -75,15 +85,22 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
 function KnowledgeLanding() {
   const t = useTranslations();
   const playbooksEnabled = usePlaybooksPreviewEnabled();
+  const canUseStyleSets = usePermissions({ styleSet: ["use"] });
 
   const sectionCards: ReactNode[] = [];
   for (const section of knowledgeSections) {
     if (section.key === "playbooks" && !playbooksEnabled) {
       continue;
     }
+    if (section.key === "styles" && !canUseStyleSets) {
+      continue;
+    }
     const Icon = section.icon;
     const title = t(section.titleKey);
-    const description = t(`knowledge.sections.${section.key}.description`);
+    const description =
+      section.key === "styles"
+        ? t("styleSets.description")
+        : t(`knowledge.sections.${section.key}.description`);
     const cardBody = (
       <>
         <div

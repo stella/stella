@@ -2274,6 +2274,33 @@ type Messages = {
       "usageUnitsThisPeriod": "Usage units this period";
     };
   };
+  "styleSets": {
+    "create": "Create";
+    "defaultBadge": "Default";
+    "deleteConfirmation": "Type the style set name to confirm.";
+    "deleteDescription": "Existing documents and templates will not change.";
+    "deleteFailed": "Style set could not be deleted";
+    "deleteTitle": "Delete style set?";
+    "description": "Reusable document formatting for templates and new documents";
+    "exportFailed": "Style set could not be exported";
+    "import": "Import style set";
+    "importDescription": "Styles are extracted into a fresh, content-free DOCX.";
+    "importTitle": "Import style set";
+    "loadFailed": "Style sets could not be loaded";
+    "newDocument": "New document";
+    "pickerDescription": "Choose the formatting system for the new file.";
+    "renameTitle": "Rename style set";
+    "replace": "Replace source";
+    "replaceFailed": "Style set could not be replaced";
+    "replaced": "Style set replaced";
+    "saveFailed": "Style set could not be saved";
+    "savedDescription": "Saved style set";
+    "sourceDocument": "Source DOCX";
+    "stellaDescription": "Stella's complete, neutral legal document formatting";
+    "stellaStyle": "Stella Style";
+    "title": "Style Sets";
+    "untitledDocument": "Untitled document";
+  };
   "success": {
     "aiConfigDeleted": "AI configuration removed";
     "aiConfigUpdated": "AI configuration updated";

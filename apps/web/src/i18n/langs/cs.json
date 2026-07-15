@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Jednotky využití za toto období"
     }
   },
+  "styleSets": {
+    "create": "Vytvořit",
+    "defaultBadge": "Výchozí",
+    "deleteConfirmation": "Pro potvrzení napište název sady stylů.",
+    "deleteDescription": "Existující dokumenty a vzory se nezmění.",
+    "deleteFailed": "Sadu stylů se nepodařilo odstranit",
+    "deleteTitle": "Odstranit sadu stylů?",
+    "description": "Opakovaně použitelné formátování dokumentů pro vzory a nové dokumenty",
+    "exportFailed": "Sadu stylů se nepodařilo exportovat",
+    "import": "Importovat sadu stylů",
+    "importDescription": "Styly se extrahují do nového DOCX bez obsahu.",
+    "importTitle": "Importovat sadu stylů",
+    "loadFailed": "Sady stylů se nepodařilo načíst",
+    "newDocument": "Nový dokument",
+    "pickerDescription": "Zvolte systém formátování nového souboru.",
+    "renameTitle": "Přejmenovat sadu stylů",
+    "replace": "Nahradit zdroj",
+    "replaceFailed": "Sadu stylů se nepodařilo nahradit",
+    "replaced": "Sada stylů byla nahrazena",
+    "saveFailed": "Sadu stylů se nepodařilo uložit",
+    "savedDescription": "Uložená sada stylů",
+    "sourceDocument": "Zdrojový DOCX",
+    "stellaDescription": "Kompletní neutrální formátování právních dokumentů Stella",
+    "stellaStyle": "Stella Style",
+    "title": "Sady stylů",
+    "untitledDocument": "Dokument bez názvu"
+  },
   "success": {
     "aiConfigDeleted": "Nastavení AI odebráno",
     "aiConfigUpdated": "Nastavení AI aktualizováno",

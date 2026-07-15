@@ -182,6 +182,7 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // dedicated read-only scope would understate what it does.
   reports: "stella:matters_write",
   skills: "stella:skills",
+  "style-sets": "stella:templates",
   tasks: "stella:matters_write",
   "template-recipes": "stella:templates",
   templates: "stella:templates",
@@ -227,17 +228,20 @@ const SCOPE_STRICTNESS: Record<string, number> = {
 };
 
 /**
- * Per-entry scope pins for `tool`/`covered` entries whose covering tool's scope
- * is incomparable with their domain scope (same strictness tier, different
- * consent family). Each pin is a reviewed decision; the pinned scope is still
- * checked against the covering tool, so a pin cannot under-claim. All current
- * entries back `save_document` / `delete_document` / `set_field_value`
+ * Per-entry scope pins. `tool`/`covered` pins resolve entries whose covering
+ * tool's scope is incomparable with their domain scope (same strictness tier,
+ * different consent family); capability pins cover exceptional endpoints that
+ * belong to a stricter consent family than the rest of their route domain.
+ * Tool-backed pins are still checked against the covering tool, so a pin cannot
+ * under-claim. Most current entries back `save_document` / `delete_document` /
+ * `set_field_value`.
  * (stella:documents_write) from domains mapped to stella:matters_write: the
  * capability is the same operation as the tool, so the generic path demands
  * the same consent.
  */
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
   "entities.create": "stella:documents_write",
+  "entities.create-blank-document": "stella:documents_write",
   "entities.delete": "stella:documents_write",
   "entities.delete-version": "stella:documents_write",
   "entities.move": "stella:documents_write",
@@ -327,6 +331,12 @@ const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
   "skills.get": { access: "read", destructive: false },
   "skills.list": { access: "read", destructive: false },
   "skills.list-commands": { access: "read", destructive: false },
+  "style-sets.download": { access: "read", destructive: false },
+  "style-sets.list": { access: "read", destructive: false },
+  "templates.create-from-style-set": {
+    access: "write",
+    destructive: false,
+  },
   "usage.get-entitlement": { access: "read", destructive: false },
   "workspaces.read-workflow-target-count": {
     access: "read",
@@ -1022,7 +1032,14 @@ const buildCatalog = async (): Promise<BuildResult> => {
       continue;
     }
 
-    let scope = scopeResolution.scope;
+    const override = ENTRY_SCOPE_OVERRIDES[id];
+    if (override !== undefined && !Object.hasOwn(SCOPE_STRICTNESS, override)) {
+      errors.push(
+        `capability "${id}" pins unknown scope "${override}" in ENTRY_SCOPE_OVERRIDES`,
+      );
+      continue;
+    }
+    let scope = override ?? scopeResolution.scope;
     if (
       endpoint.exposure.type === "tool" ||
       endpoint.exposure.type === "covered"
@@ -1031,7 +1048,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
         endpoint.exposure.type === "tool"
           ? endpoint.exposure.name
           : endpoint.exposure.by;
-      const override = ENTRY_SCOPE_OVERRIDES[id];
       const entryScope = resolveEntryScopeAgainstTool({
         id,
         domainScope: scopeResolution.scope,
@@ -1061,6 +1077,8 @@ const buildCatalog = async (): Promise<BuildResult> => {
           scopeOverrideUses.add(id);
         }
       }
+    } else if (override !== undefined && override !== scopeResolution.scope) {
+      scopeOverrideUses.add(id);
     }
 
     const inputSchema = buildInputSchema(endpoint.config);

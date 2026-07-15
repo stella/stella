@@ -7,7 +7,7 @@ import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-reg
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createFromLegalSourceBodySchema = t.Object({
@@ -48,7 +48,7 @@ export default createSafeHandler(
       );
     }
 
-    const fileName = sanitizeFilename(`${name}.docx`);
+    const fileName = sanitizeFilenamePreservingExtension(`${name}.docx`);
 
     const created = yield* Result.await(
       createEntityFromBuffer({
@@ -99,7 +99,10 @@ export default createSafeHandler(
 );
 
 const toHandlerError = (
-  error: { _tag: "EntityLimitError" } | { _tag: "MissingFilePropertyError" },
+  error:
+    | { _tag: "EntityLimitError" }
+    | { _tag: "InvalidParentError" }
+    | { _tag: "MissingFilePropertyError" },
 ): HandlerError => {
   switch (error._tag) {
     case "EntityLimitError":
@@ -116,6 +119,10 @@ const toHandlerError = (
         message:
           "This matter is missing a file property, so the document could not be created.",
       });
+    case "InvalidParentError":
+      return unreachable(
+        "Legal-source document creation cannot specify a parent entity",
+      );
     default:
       return unreachable("Unhandled createEntityFromBuffer error tag");
   }

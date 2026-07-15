@@ -125,6 +125,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
   const canCreateMatter = usePermissions({ workspace: ["create"] });
+  const canUseStyleSets = usePermissions({ styleSet: ["use"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const { state, toggleSidebar, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
@@ -351,6 +352,9 @@ export function AppSidebar(props: AppSidebarProps) {
 
   const knowledgeRecents: ContextAction[] = [];
   for (const s of knowledgeSections) {
+    if (s.key === "styles" && !canUseStyleSets) {
+      continue;
+    }
     if (s.key !== "playbooks" || playbooksPreviewEnabled) {
       const Icon = s.icon;
       knowledgeRecents.push({

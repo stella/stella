@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Jednostki użycia w tym okresie"
     }
   },
+  "styleSets": {
+    "create": "Utwórz",
+    "defaultBadge": "Domyślny",
+    "deleteConfirmation": "Wpisz nazwę zestawu stylów, aby potwierdzić.",
+    "deleteDescription": "Istniejące dokumenty i szablony nie ulegną zmianie.",
+    "deleteFailed": "Nie udało się usunąć zestawu stylów",
+    "deleteTitle": "Usunąć zestaw stylów?",
+    "description": "Formatowanie dokumentów wielokrotnego użytku dla szablonów i nowych dokumentów",
+    "exportFailed": "Nie udało się wyeksportować zestawu stylów",
+    "import": "Importuj zestaw stylów",
+    "importDescription": "Style są wyodrębniane do nowego pliku DOCX bez treści.",
+    "importTitle": "Importuj zestaw stylów",
+    "loadFailed": "Nie udało się wczytać zestawów stylów",
+    "newDocument": "Nowy dokument",
+    "pickerDescription": "Wybierz system formatowania nowego pliku.",
+    "renameTitle": "Zmień nazwę zestawu stylów",
+    "replace": "Zastąp źródło",
+    "replaceFailed": "Nie udało się zastąpić zestawu stylów",
+    "replaced": "Zestaw stylów zastąpiony",
+    "saveFailed": "Nie udało się zapisać zestawu stylów",
+    "savedDescription": "Zapisany zestaw stylów",
+    "sourceDocument": "Źródłowy DOCX",
+    "stellaDescription": "Kompletne, neutralne formatowanie dokumentów prawnych Stella",
+    "stellaStyle": "Stella Style",
+    "title": "Zestawy stylów",
+    "untitledDocument": "Dokument bez tytułu"
+  },
   "success": {
     "aiConfigDeleted": "Konfiguracja AI usunięta",
     "aiConfigUpdated": "Konfiguracja AI zaktualizowana",

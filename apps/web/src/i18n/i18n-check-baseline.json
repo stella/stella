@@ -171,6 +171,8 @@
     "settings.organization.practiceJurisdictions",
     "settings.organization.usageStatusActive",
     "settings.organization.usageStatusCancelled",
+    "styleSets.defaultBadge",
+    "styleSets.newDocument",
     "success.documentCreated",
     "tasks.dueDate",
     "tasks.myTasksTitle",
@@ -205,6 +207,7 @@
     "workspaces.filters.noMatches",
     "workspaces.filters.to",
     "workspaces.members.noMembersFound",
+    "workspaces.newDocument",
     "workspaces.newFolder",
     "workspaces.ownerType.personal",
     "workspaces.parties.partyRoles.expert_witness",
@@ -1839,6 +1842,20 @@
       "sk"
     ],
     "settings.organization.documentTypes.title": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "styleSets.stellaStyle": [
       "ar",
       "cs",
       "de",

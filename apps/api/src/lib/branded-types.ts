@@ -70,6 +70,7 @@ export type SafeIdType =
   | "rateTable"
   | "reportExport"
   | "schedulerJobRun"
+  | "styleSet"
   | "taskAssignee"
   | "task"
   | "template"

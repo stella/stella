@@ -3,10 +3,10 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, entityVersions, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
+import { validateParentId } from "@/api/handlers/entities/validate-parent-id";
 import { checkEntityCreateCapacityForInsert } from "@/api/handlers/uploads/entity-create";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeHandler } from "@/api/lib/api-handlers";
@@ -34,32 +34,6 @@ export type CreateEntitiesHandlerProps = {
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: CreateEntityBodySchema;
-};
-
-const validateParentId = async (
-  tx: Transaction,
-  parentId: SafeId<"entity">,
-  workspaceId: SafeId<"workspace">,
-): Promise<string | null> => {
-  const parent = await tx.query.entities.findFirst({
-    where: {
-      id: { eq: parentId },
-      workspaceId: { eq: workspaceId },
-    },
-    columns: {
-      kind: true,
-    },
-  });
-
-  if (!parent) {
-    return "Parent entity not found in this workspace";
-  }
-
-  if (parent.kind !== "folder") {
-    return "Parent entity must be a folder";
-  }
-
-  return null;
 };
 
 export const createEntitiesHandler = async function* ({
@@ -101,7 +75,7 @@ export const createEntitiesHandler = async function* ({
       }
 
       if (parentId) {
-        const error = await validateParentId(tx, parentId, workspaceId);
+        const error = await validateParentId({ tx, parentId, workspaceId });
         if (error) {
           return { ok: false as const, status: 400 as const, message: error };
         }

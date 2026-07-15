@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Használati egységek ebben az időszakban"
     }
   },
+  "styleSets": {
+    "create": "Létrehozás",
+    "defaultBadge": "Alapértelmezett",
+    "deleteConfirmation": "A megerősítéshez írja be a stíluskészlet nevét.",
+    "deleteDescription": "A meglévő dokumentumok és sablonok nem változnak.",
+    "deleteFailed": "A stíluskészlet nem törölhető",
+    "deleteTitle": "Törli a stíluskészletet?",
+    "description": "Újrahasznosítható dokumentumformázás sablonokhoz és új dokumentumokhoz",
+    "exportFailed": "A stíluskészlet nem exportálható",
+    "import": "Stíluskészlet importálása",
+    "importDescription": "A stílusok egy új, tartalom nélküli DOCX-fájlba kerülnek.",
+    "importTitle": "Stíluskészlet importálása",
+    "loadFailed": "A stíluskészletek nem tölthetők be",
+    "newDocument": "Új dokumentum",
+    "pickerDescription": "Válassza ki az új fájl formázási rendszerét.",
+    "renameTitle": "Stíluskészlet átnevezése",
+    "replace": "Forrás cseréje",
+    "replaceFailed": "A stíluskészlet nem cserélhető",
+    "replaced": "Stíluskészlet lecserélve",
+    "saveFailed": "A stíluskészlet nem menthető",
+    "savedDescription": "Mentett stíluskészlet",
+    "sourceDocument": "Forrás DOCX",
+    "stellaDescription": "A Stella teljes, semleges jogi dokumentumformázása",
+    "stellaStyle": "Stella Style",
+    "title": "Stíluskészletek",
+    "untitledDocument": "Névtelen dokumentum"
+  },
   "success": {
     "aiConfigDeleted": "AI-konfiguráció eltávolítva",
     "aiConfigUpdated": "AI-konfiguráció frissítve",

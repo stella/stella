@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Jednotky využitia za toto obdobie"
     }
   },
+  "styleSets": {
+    "create": "Vytvoriť",
+    "defaultBadge": "Predvolené",
+    "deleteConfirmation": "Na potvrdenie zadajte názov sady štýlov.",
+    "deleteDescription": "Existujúce dokumenty a vzory sa nezmenia.",
+    "deleteFailed": "Sadu štýlov sa nepodarilo odstrániť",
+    "deleteTitle": "Odstrániť sadu štýlov?",
+    "description": "Opakovane použiteľné formátovanie dokumentov pre vzory a nové dokumenty",
+    "exportFailed": "Sadu štýlov sa nepodarilo exportovať",
+    "import": "Importovať sadu štýlov",
+    "importDescription": "Štýly sa extrahujú do nového DOCX bez obsahu.",
+    "importTitle": "Importovať sadu štýlov",
+    "loadFailed": "Sady štýlov sa nepodarilo načítať",
+    "newDocument": "Nový dokument",
+    "pickerDescription": "Vyberte systém formátovania nového súboru.",
+    "renameTitle": "Premenovať sadu štýlov",
+    "replace": "Nahradiť zdroj",
+    "replaceFailed": "Sadu štýlov sa nepodarilo nahradiť",
+    "replaced": "Sada štýlov bola nahradená",
+    "saveFailed": "Sadu štýlov sa nepodarilo uložiť",
+    "savedDescription": "Uložená sada štýlov",
+    "sourceDocument": "Zdrojový DOCX",
+    "stellaDescription": "Kompletné neutrálne formátovanie právnych dokumentov Stella",
+    "stellaStyle": "Stella Style",
+    "title": "Sady štýlov",
+    "untitledDocument": "Dokument bez názvu"
+  },
   "success": {
     "aiConfigDeleted": "Konfigurácia AI odstránená",
     "aiConfigUpdated": "Konfigurácia AI aktualizovaná",

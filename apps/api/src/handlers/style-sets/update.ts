@@ -1,0 +1,85 @@
+import { Result } from "better-result";
+import { and, eq, isNull } from "drizzle-orm";
+import { t } from "elysia";
+
+import { styleSets } from "@/api/db/schema";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  normalizeStyleSetName,
+  styleSetColumns,
+  styleSetExportFileName,
+} from "@/api/lib/style-sets";
+
+const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
+const bodySchema = t.Object({ name: tDefaultVarchar });
+
+const config = {
+  permissions: { styleSet: ["update"] },
+  mcp: { type: "capability", reason: "template_authoring_ui" },
+  params: paramsSchema,
+  body: bodySchema,
+} satisfies HandlerConfig;
+
+export default createSafeRootHandler(
+  config,
+  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
+    const name = yield* normalizeStyleSetName(body.name);
+    const row = yield* Result.await(
+      safeDb(async (tx) => {
+        const [existing] = await tx
+          .select({ name: styleSets.name })
+          .from(styleSets)
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+              isNull(styleSets.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (!existing) {
+          return null;
+        }
+
+        const [updated] = await tx
+          .update(styleSets)
+          .set({
+            name,
+            fileName: styleSetExportFileName(name),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(styleSets.id, params.styleSetId),
+              eq(styleSets.organizationId, session.activeOrganizationId),
+              isNull(styleSets.deletedAt),
+            ),
+          )
+          .returning(styleSetColumns);
+
+        if (updated) {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
+            resourceId: updated.id,
+            workspaceId: null,
+            changes: { name: { old: existing.name, new: updated.name } },
+          });
+        }
+
+        return updated ?? null;
+      }),
+    );
+
+    if (!row) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Style set not found" }),
+      );
+    }
+    return Result.ok(row);
+  },
+);

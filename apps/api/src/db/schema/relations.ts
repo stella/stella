@@ -82,6 +82,7 @@ import {
 } from "./properties";
 import { reportExports } from "./reports";
 import { agentSkillResources, agentSkills } from "./skills";
+import { styleSets } from "./style-sets";
 import {
   extractedContent,
   searchDocuments,
@@ -101,6 +102,7 @@ export const relations = defineRelations(
   {
     agentSkills,
     agentSkillResources,
+    styleSets,
     user,
     contacts,
     contactRelationships,

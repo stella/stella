@@ -2271,6 +2271,33 @@
       "usageUnitsThisPeriod": "Šio laikotarpio naudojimo vienetai"
     }
   },
+  "styleSets": {
+    "create": "Kurti",
+    "defaultBadge": "Numatytasis",
+    "deleteConfirmation": "Patvirtinkite įvesdami stilių rinkinio pavadinimą.",
+    "deleteDescription": "Esami dokumentai ir šablonai nepasikeis.",
+    "deleteFailed": "Nepavyko ištrinti stilių rinkinio",
+    "deleteTitle": "Ištrinti stilių rinkinį?",
+    "description": "Pakartotinai naudojamas dokumentų formatavimas šablonams ir naujiems dokumentams",
+    "exportFailed": "Nepavyko eksportuoti stilių rinkinio",
+    "import": "Importuoti stilių rinkinį",
+    "importDescription": "Stiliai ištraukiami į naują DOCX failą be turinio.",
+    "importTitle": "Importuoti stilių rinkinį",
+    "loadFailed": "Nepavyko įkelti stilių rinkinių",
+    "newDocument": "Naujas dokumentas",
+    "pickerDescription": "Pasirinkite naujo failo formatavimo sistemą.",
+    "renameTitle": "Pervadinti stilių rinkinį",
+    "replace": "Pakeisti šaltinį",
+    "replaceFailed": "Nepavyko pakeisti stilių rinkinio",
+    "replaced": "Stilių rinkinys pakeistas",
+    "saveFailed": "Nepavyko išsaugoti stilių rinkinio",
+    "savedDescription": "Išsaugotas stilių rinkinys",
+    "sourceDocument": "Šaltinio DOCX",
+    "stellaDescription": "Išsamus neutralus Stella teisinių dokumentų formatavimas",
+    "stellaStyle": "Stella Style",
+    "title": "Stilių rinkiniai",
+    "untitledDocument": "Dokumentas be pavadinimo"
+  },
   "success": {
     "aiConfigDeleted": "AI konfigūracija pašalinta",
     "aiConfigUpdated": "AI konfigūracija atnaujinta",

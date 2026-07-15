@@ -118,6 +118,12 @@ export const AppBreadcrumbs = () => {
     ),
     defineBreadcrumb(["/knowledge/templates"], <TemplatesBreadcrumb />),
     defineBreadcrumb(
+      ["/knowledge/styles"],
+      <BreadcrumbLink to="/knowledge/styles">
+        {t("styleSets.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
       ["/contacts/"],
       <BreadcrumbLink to="/contacts">
         {t("navigation.contacts")}

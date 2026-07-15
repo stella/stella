@@ -103,6 +103,21 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("staff can manage style sets; interns may use them; externals cannot", () => {
+    for (const role of ["owner", "admin", "member"] as const) {
+      for (const action of ["use", "create", "update", "delete"] as const) {
+        expect(roles[role].authorize({ styleSet: [action] }).success).toBe(
+          true,
+        );
+      }
+    }
+    expect(roles.intern.authorize({ styleSet: ["use"] }).success).toBe(true);
+    expect(roles.intern.authorize({ styleSet: ["create"] }).success).toBe(
+      false,
+    );
+    expect(roles.external.authorize({ styleSet: ["use"] }).success).toBe(false);
+  });
+
   test("only owner and admin can approve playbooks", () => {
     for (const role of ["owner", "admin"] as const) {
       expect(roles[role].authorize({ playbook: ["approve"] }).success).toBe(

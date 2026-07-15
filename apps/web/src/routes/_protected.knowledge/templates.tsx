@@ -7,9 +7,12 @@ import { useFormatter, useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { StyleSetPickerDialog } from "@/features/style-sets/style-set-picker-dialog";
+import type { StyleSelection } from "@/features/style-sets/style-set-picker-dialog";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/_protected.knowledge/-components/template-list";
 import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
@@ -91,6 +94,7 @@ function RouteComponent() {
   });
   const [view, setView] = useState<View>({ kind: "list" });
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [stylePickerOpen, setStylePickerOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null,
   );
@@ -140,15 +144,15 @@ function RouteComponent() {
   // Uploading a template drops you straight into the Studio: create it (the
   // server discovers fields from the DOCX), then open the editor. Field/clause
   // config now happens in the Studio, so there's no separate configure step.
-  const [creating, setCreating] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const openUploadedTemplate = useCallback(
     async (file: File) => {
-      setCreating(true);
+      setUploading(true);
       const response = await api.templates.put({
         file,
         name: file.name.replace(DOCX_EXTENSION_RE, ""),
       });
-      setCreating(false);
+      setUploading(false);
       if (response.error) {
         stellaToast.add({
           type: "error",
@@ -178,19 +182,15 @@ function RouteComponent() {
     [t, invalidateTemplates],
   );
 
-  // Blank templates always use a complete Folio style system. The dedicated
-  // styles endpoint extracts only sanitized styles from the source DOCX and
-  // rebuilds a content-free document.
   const openBlankTemplate = useCallback(
-    async (styleSource?: File) => {
-      setCreating(true);
-      const name = styleSource
-        ? styleSource.name.replace(DOCX_EXTENSION_RE, "")
-        : t("templates.untitledTemplate");
-      const response = styleSource
-        ? await api.templates.styles.put({ name, styleSource })
-        : await api.templates.blank.put({ name });
-      setCreating(false);
+    async (name: string, style: StyleSelection) => {
+      const response =
+        style.type === "stella"
+          ? await api.templates.blank.put({ name })
+          : await api.templates["style-set"].put({
+              name,
+              styleSetId: toSafeId<"styleSet">(style.styleSetId),
+            });
       if (response.error) {
         stellaToast.add({
           type: "error",
@@ -200,7 +200,7 @@ function RouteComponent() {
             t("common.unexpectedError"),
           ),
         });
-        return;
+        return false;
       }
       const created = response.data;
       invalidateTemplates();
@@ -216,6 +216,7 @@ function RouteComponent() {
           createdAt: new Date(created.createdAt),
         },
       });
+      return true;
     },
     [t, invalidateTemplates],
   );
@@ -285,7 +286,7 @@ function RouteComponent() {
     );
   }
 
-  if (creating) {
+  if (uploading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
@@ -294,24 +295,28 @@ function RouteComponent() {
   }
 
   return (
-    <TemplateList
-      categories={categories}
-      onCategoriesChanged={invalidateCategories}
-      onCategorySelect={handleCategorySelect}
-      onCreateBlank={() => {
-        void openBlankTemplate();
-      }}
-      onCreateFromStyles={(file) => {
-        void openBlankTemplate(file);
-      }}
-      onDeleted={invalidateTemplates}
-      onDiscovered={(file) => {
-        void openUploadedTemplate(file);
-      }}
-      onSelect={(template) => setView({ kind: "detail", template })}
-      selectedCategoryId={selectedCategoryId}
-      templates={templates}
-    />
+    <>
+      <TemplateList
+        categories={categories}
+        onCategoriesChanged={invalidateCategories}
+        onCategorySelect={handleCategorySelect}
+        onCreateBlank={() => setStylePickerOpen(true)}
+        onDeleted={invalidateTemplates}
+        onDiscovered={(file) => {
+          void openUploadedTemplate(file);
+        }}
+        onSelect={(template) => setView({ kind: "detail", template })}
+        selectedCategoryId={selectedCategoryId}
+        templates={templates}
+      />
+      <StyleSetPickerDialog
+        initialName={t("templates.untitledTemplate")}
+        onCreate={openBlankTemplate}
+        onOpenChange={setStylePickerOpen}
+        open={stylePickerOpen}
+        title={t("templates.newTemplate")}
+      />
+    </>
   );
 }
 
