@@ -99,7 +99,10 @@ export default createSafeHandler(
 );
 
 const toHandlerError = (
-  error: { _tag: "EntityLimitError" } | { _tag: "MissingFilePropertyError" },
+  error:
+    | { _tag: "EntityLimitError" }
+    | { _tag: "InvalidParentError" }
+    | { _tag: "MissingFilePropertyError" },
 ): HandlerError => {
   switch (error._tag) {
     case "EntityLimitError":
@@ -116,6 +119,10 @@ const toHandlerError = (
         message:
           "This matter is missing a file property, so the document could not be created.",
       });
+    case "InvalidParentError":
+      return unreachable(
+        "Legal-source document creation cannot specify a parent entity",
+      );
     default:
       return unreachable("Unhandled createEntityFromBuffer error tag");
   }

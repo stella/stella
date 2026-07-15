@@ -54,7 +54,10 @@ export const createBlankDocument = async ({
 };
 
 const toHandlerError = (
-  error: { _tag: "EntityLimitError" } | { _tag: "MissingFilePropertyError" },
+  error:
+    | { _tag: "EntityLimitError" }
+    | { _tag: "InvalidParentError"; message: string }
+    | { _tag: "MissingFilePropertyError" },
 ): HandlerError => {
   switch (error._tag) {
     case "EntityLimitError":
@@ -67,6 +70,8 @@ const toHandlerError = (
         status: 422,
         message: "This matter is missing a file property.",
       });
+    case "InvalidParentError":
+      return new HandlerError({ status: 400, message: error.message });
     default:
       return unreachable("Unhandled createEntityFromBuffer error tag");
   }

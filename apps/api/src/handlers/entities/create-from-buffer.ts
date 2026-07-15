@@ -10,6 +10,10 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
+import {
+  checkEntityCreateTargetForInsert,
+  entityCreateWriteErrorMessage,
+} from "@/api/handlers/uploads/entity-create";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -47,13 +51,17 @@ class MissingFilePropertyError extends TaggedError("MissingFilePropertyError")<{
   message: string;
 }>() {}
 
+class InvalidParentError extends TaggedError("InvalidParentError")<{
+  message: string;
+}>() {}
+
 export type CreateEntityFromBufferResult = Result<
   {
     entityId: SafeId<"entity">;
     fieldId: SafeId<"field">;
     fileName: string;
   },
-  EntityLimitError | MissingFilePropertyError
+  EntityLimitError | InvalidParentError | MissingFilePropertyError
 >;
 
 /**
@@ -132,6 +140,26 @@ export const createEntityFromBuffer = async ({
         throw new EntityLimitError({
           message: "Entities limit reached",
         });
+      }
+
+      // Recheck and lock both foreign-key targets in the insert transaction.
+      // The earlier property/parent lookups are only fail-fast preflights; they
+      // cannot protect this write from a concurrent deletion.
+      const targetResult = await checkEntityCreateTargetForInsert({
+        tx,
+        workspaceId,
+        propertyId: fileProperty.id,
+        parentId: parentId ?? null,
+      });
+      if (Result.isError(targetResult)) {
+        const message = entityCreateWriteErrorMessage(targetResult.error);
+        if (
+          targetResult.error === "parent-not-found" ||
+          targetResult.error === "parent-type-mismatch"
+        ) {
+          throw new InvalidParentError({ message });
+        }
+        throw new MissingFilePropertyError({ message });
       }
 
       const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -214,7 +242,11 @@ export const createEntityFromBuffer = async ({
   } catch (error) {
     await Promise.all(s3Keys.map(async (k) => await getS3().delete(k)));
 
-    if (EntityLimitError.is(error)) {
+    if (
+      EntityLimitError.is(error) ||
+      InvalidParentError.is(error) ||
+      MissingFilePropertyError.is(error)
+    ) {
       return Result.err(error);
     }
 

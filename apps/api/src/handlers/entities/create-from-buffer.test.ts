@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { describe, expect, mock, test } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import {
   documentCounters,
   entities,
   entityVersions,
   fields,
+  properties,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -50,6 +51,11 @@ const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
 const parentId = toSafeId<"entity">("00000000-0000-0000-0000-000000000005");
 
 describe("createEntityFromBuffer", () => {
+  beforeEach(() => {
+    s3WriteMock.mockClear();
+    s3DeleteMock.mockClear();
+  });
+
   test("writes an entity create audit log with the DB insert", async () => {
     let nextDocumentSequence = 0;
     let insertedEntity: unknown;
@@ -68,6 +74,7 @@ describe("createEntityFromBuffer", () => {
         },
       },
       $count: async () => 0,
+      select: createTargetSelect({ parentKind: "folder" }),
       insert: (table: unknown) => ({
         values: (values: unknown) => {
           if (table === documentCounters) {
@@ -144,4 +151,91 @@ describe("createEntityFromBuffer", () => {
       expect.objectContaining({ parentId, workspaceId }),
     );
   });
+
+  test("locks and rechecks the parent in the insert transaction", async () => {
+    const locks: TargetLock[] = [];
+    const tx = {
+      query: {
+        properties: {
+          findMany: async () => [
+            {
+              id: propertyId,
+              content: { type: "file" as const },
+            },
+          ],
+        },
+      },
+      $count: async () => 0,
+      select: createTargetSelect({
+        parentKind: null,
+        onLock: (lock) => locks.push(lock),
+      }),
+    };
+    const { getCallCount, scopedDb } = createScopedDbMock(tx);
+    const recordAuditEvent = mock(async () => {});
+
+    const result = await createEntityFromBuffer({
+      scopedDb,
+      organizationId,
+      workspaceId,
+      userId,
+      recordAuditEvent,
+      buffer: new TextEncoder().encode("docx bytes"),
+      fileName: "Generated Agreement.docx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      parentId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toEqual(
+        expect.objectContaining({
+          _tag: "InvalidParentError",
+          message: "Parent entity not found in this workspace",
+        }),
+      );
+    }
+    expect(getCallCount()).toBe(2);
+    expect(locks).toEqual([
+      { strength: "update", target: "property" },
+      { strength: "update", target: "parent" },
+    ]);
+    expect(s3WriteMock).toHaveBeenCalledTimes(1);
+    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).not.toHaveBeenCalled();
+  });
 });
+
+type TargetLock = {
+  strength: unknown;
+  target: "parent" | "property";
+};
+
+type CreateTargetSelectOptions = {
+  parentKind: "document" | "folder" | null;
+  onLock?: (lock: TargetLock) => void;
+};
+
+const createTargetSelect =
+  ({ parentKind, onLock }: CreateTargetSelectOptions) =>
+  (_selection: unknown) => ({
+    from: (table: unknown) => ({
+      where: () => ({
+        limit: () => ({
+          for: async (strength: unknown) => {
+            const target = table === properties ? "property" : "parent";
+            onLock?.({ strength, target });
+
+            if (table === properties) {
+              return [{ content: { type: "file" as const }, id: propertyId }];
+            }
+            if (table === entities && parentKind !== null) {
+              return [{ id: parentId, kind: parentKind }];
+            }
+            return [];
+          },
+        }),
+      }),
+    }),
+  });
