@@ -144,15 +144,15 @@ function RouteComponent() {
   // Uploading a template drops you straight into the Studio: create it (the
   // server discovers fields from the DOCX), then open the editor. Field/clause
   // config now happens in the Studio, so there's no separate configure step.
-  const [creating, setCreating] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const openUploadedTemplate = useCallback(
     async (file: File) => {
-      setCreating(true);
+      setUploading(true);
       const response = await api.templates.put({
         file,
         name: file.name.replace(DOCX_EXTENSION_RE, ""),
       });
-      setCreating(false);
+      setUploading(false);
       if (response.error) {
         stellaToast.add({
           type: "error",
@@ -184,7 +184,6 @@ function RouteComponent() {
 
   const openBlankTemplate = useCallback(
     async (name: string, style: StyleSelection) => {
-      setCreating(true);
       const response =
         style.type === "stella"
           ? await api.templates.blank.put({ name })
@@ -192,7 +191,6 @@ function RouteComponent() {
               name,
               styleSetId: toSafeId<"styleSet">(style.styleSetId),
             });
-      setCreating(false);
       if (response.error) {
         stellaToast.add({
           type: "error",
@@ -288,7 +286,7 @@ function RouteComponent() {
     );
   }
 
-  if (creating) {
+  if (uploading) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
