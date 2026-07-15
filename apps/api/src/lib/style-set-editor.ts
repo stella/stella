@@ -56,9 +56,7 @@ export const readStyleSetEditorPreset = async (
   buffer: Buffer,
   name: string,
 ): Promise<EditablePreset> => {
-  const reviewer = await FolioDocxReviewer.fromBuffer(
-    Uint8Array.from(buffer).buffer,
-  );
+  const reviewer = await FolioDocxReviewer.fromBuffer(toArrayBuffer(buffer));
   const document = reviewer.toDocument();
   const firstParagraph = document.package.document.content.find(
     (block) => block.type === "paragraph",
@@ -525,6 +523,18 @@ const textFormatting = (family: string, sizePt: number): TextFormatting => ({
   fontSize: sizePt * HALF_POINTS_PER_POINT,
   fontSizeCs: sizePt * HALF_POINTS_PER_POINT,
 });
+
+const toArrayBuffer = (bytes: Uint8Array): ArrayBuffer => {
+  if (bytes.buffer instanceof ArrayBuffer) {
+    return bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength,
+    );
+  }
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+};
 
 const applyAlignment = (formatting: ParagraphFormatting, value: Alignment) => {
   if (value !== "preserve") {

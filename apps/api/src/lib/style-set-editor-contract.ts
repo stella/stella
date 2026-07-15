@@ -2,7 +2,11 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 const fontFamilySchema = t.String({ minLength: 1, maxLength: 128 });
-const fontSizeSchema = t.Number({ minimum: 1, maximum: 400 });
+const fontSizeSchema = t.Number({
+  minimum: 1,
+  maximum: 400,
+  multipleOf: 0.5,
+});
 const paragraphSpacingSchema = t.Number({ minimum: 0, maximum: 1440 });
 const alignmentSchema = t.UnionEnum([
   "preserve",

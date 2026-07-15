@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { FormEvent } from "react";
+import type { SubmitEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -215,18 +215,16 @@ const LoadedStyleSetEditor = ({
     await finishSave(response.error);
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
-    try {
-      await save();
-    } catch (error) {
+    save().catch((error: unknown) => {
       setSaving(false);
       stellaToast.add({
         type: "error",
         title: t("styleSets.editor.saveFailed"),
         description: userErrorFromThrown(error, t("common.unexpectedError")),
       });
-    }
+    });
   };
 
   return (

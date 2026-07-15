@@ -67,6 +67,7 @@ export const StyleSetEditorControls = ({
                   })
                 }
                 suffix={t(POINTS_TRANSLATION_KEY)}
+                step={0.5}
                 value={settings.body.fontSizePt}
               />
               <AlignmentField
@@ -274,7 +275,7 @@ const ControlSection = ({
   </section>
 );
 
-const ParagraphStyleSection = ({
+const ParagraphStyleSection = <TStyle extends ParagraphStyleSettings>({
   id,
   title,
   value,
@@ -282,8 +283,8 @@ const ParagraphStyleSection = ({
 }: {
   id: string;
   title: string;
-  value: ParagraphStyleSettings;
-  onChange: (value: ParagraphStyleSettings) => void;
+  value: TStyle;
+  onChange: (value: TStyle) => void;
 }) => (
   <ControlSection title={title}>
     <FontField
@@ -382,6 +383,7 @@ type NumberFieldProps = {
   value: number;
   min: number;
   max: number;
+  step?: number;
   onChange: (value: number) => void;
 } & (
   | { label: string; suffix: string; labelKey?: never; suffixKey?: never }
@@ -398,6 +400,7 @@ const NumberField = ({
   value,
   min,
   max,
+  step = 0.25,
   onChange,
   label,
   suffix,
@@ -419,11 +422,18 @@ const NumberField = ({
           min={min}
           onChange={(event) => {
             const next = event.currentTarget.valueAsNumber;
-            if (Number.isFinite(next)) {
+            if (
+              Number.isFinite(next) &&
+              next >= min &&
+              next <= max &&
+              !event.currentTarget.validity.stepMismatch
+            ) {
               onChange(next);
+            } else if (event.currentTarget.value === "") {
+              onChange(min);
             }
           }}
-          step={0.25}
+          step={step}
           type="number"
           value={value}
         />
@@ -452,6 +462,7 @@ const StyleSizeField = ({
       max={400}
       min={1}
       onChange={onChange}
+      step={0.5}
       suffix={t(POINTS_TRANSLATION_KEY)}
       value={value}
     />
@@ -523,7 +534,14 @@ const AlignmentField = ({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{t("folio.alignmentGroup")}</FieldLabel>
-      <Select onValueChange={onChange} value={value}>
+      <Select
+        onValueChange={(nextValue) => {
+          if (nextValue !== null) {
+            onChange(nextValue);
+          }
+        }}
+        value={value}
+      >
         <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>
@@ -554,7 +572,14 @@ const LineSpacingField = ({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{t("styleSets.editor.lineSpacing")}</FieldLabel>
-      <Select onValueChange={onChange} value={value}>
+      <Select
+        onValueChange={(nextValue) => {
+          if (nextValue !== null) {
+            onChange(nextValue);
+          }
+        }}
+        value={value}
+      >
         <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>
@@ -585,7 +610,14 @@ const NumberingFormatField = ({
   return (
     <Field className="col-span-2">
       <FieldLabel htmlFor={id}>{t("styleSets.editor.numberFormat")}</FieldLabel>
-      <Select onValueChange={onChange} value={value}>
+      <Select
+        onValueChange={(nextValue) => {
+          if (nextValue !== null) {
+            onChange(nextValue);
+          }
+        }}
+        value={value}
+      >
         <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>
@@ -624,7 +656,14 @@ const PaperSizeField = ({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{t("styleSets.editor.paperSize")}</FieldLabel>
-      <Select onValueChange={onChange} value={value}>
+      <Select
+        onValueChange={(nextValue) => {
+          if (nextValue !== null) {
+            onChange(nextValue);
+          }
+        }}
+        value={value}
+      >
         <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>
@@ -654,7 +693,14 @@ const OrientationField = ({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{t("styleSets.editor.orientation")}</FieldLabel>
-      <Select onValueChange={onChange} value={value}>
+      <Select
+        onValueChange={(nextValue) => {
+          if (nextValue !== null) {
+            onChange(nextValue);
+          }
+        }}
+        value={value}
+      >
         <SelectTrigger id={id}>
           <SelectValue />
         </SelectTrigger>

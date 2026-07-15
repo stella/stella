@@ -1,3 +1,4 @@
+import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
 import { createDocx, createEmptyDocument } from "@stll/folio-core/server";
@@ -7,8 +8,21 @@ import {
   applyStyleSetEditorSettings,
   readStyleSetEditorPreset,
 } from "@/api/lib/style-set-editor";
+import { styleSetEditorSettingsSchema } from "@/api/lib/style-set-editor-contract";
 
 describe("style set visual editing", () => {
+  test("accepts only font sizes representable as OOXML half-points", () => {
+    const { settings } = createStellaStyleEditorPreset();
+
+    expect(Value.Check(styleSetEditorSettingsSchema, settings)).toBe(true);
+    expect(
+      Value.Check(styleSetEditorSettingsSchema, {
+        ...settings,
+        body: { ...settings.body, fontSizePt: 10.25 },
+      }),
+    ).toBe(false);
+  });
+
   test("round-trips curated settings through the DOCX package", async () => {
     const source = createStellaStyleEditorPreset();
     const editedSettings = structuredClone(source.settings);

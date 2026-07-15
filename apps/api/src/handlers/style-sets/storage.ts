@@ -243,7 +243,7 @@ export const replaceStoredStyleSet = async ({
           }
           if (
             expectedUpdatedAt &&
-            locked.updatedAt.toISOString() !== expectedUpdatedAt
+            locked.updatedAt.getTime() !== new Date(expectedUpdatedAt).getTime()
           ) {
             return { type: "version-conflict" as const };
           }

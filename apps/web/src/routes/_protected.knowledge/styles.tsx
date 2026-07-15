@@ -123,38 +123,32 @@ const StyleSetsPage = () => {
     window.open(response.data.presignedUrl, "_blank");
   };
 
-  const downloadHandler = (styleSet: StyleSetItem) => async () => {
-    try {
-      await download(styleSet);
-    } catch (error) {
+  const downloadHandler = (styleSet: StyleSetItem) => () => {
+    download(styleSet).catch((error: unknown) => {
       showThrownError(
         t("styleSets.exportFailed"),
         error,
         t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
-    }
+    });
   };
 
-  const handleReplace = async (file: File) => {
-    try {
-      await replace(file);
-    } catch (error) {
+  const handleReplace = (file: File) => {
+    replace(file).catch((error: unknown) => {
       setBusy(false);
       showThrownError(
         t("styleSets.replaceFailed"),
         error,
         t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
-    }
+    });
   };
 
-  const handleReplaceInputChange = async (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handleReplaceInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.currentTarget.files?.item(0);
     event.currentTarget.value = "";
     if (file) {
-      await handleReplace(file);
+      handleReplace(file);
     }
   };
 
@@ -443,17 +437,15 @@ const StyleSetFormDialog = ({
     onOpenChange(false);
   };
 
-  const handleSave = async () => {
-    try {
-      await save();
-    } catch (error) {
+  const handleSave = () => {
+    save().catch((error: unknown) => {
       setSaving(false);
       showThrownError(
         t("styleSets.saveFailed"),
         error,
         t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
-    }
+    });
   };
 
   return (
