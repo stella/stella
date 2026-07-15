@@ -426,7 +426,7 @@ const NumberField = ({
               Number.isFinite(next) &&
               next >= min &&
               next <= max &&
-              !event.currentTarget.validity.stepMismatch
+              Number.isInteger((next - min) / step)
             ) {
               onChange(next);
             } else if (event.currentTarget.value === "") {
