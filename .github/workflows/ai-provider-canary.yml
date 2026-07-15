@@ -100,13 +100,25 @@ jobs:
         run: bun run canary:ai-provider -- --provider "${{ matrix.provider }}"
 
   require-provider-coverage:
-    name: Require configured provider coverage
+    name: Require selected provider coverage
     if: always()
     needs: provider-canary
     runs-on: ubuntu-latest
     timeout-minutes: 2
-    permissions: {}
+    permissions:
+      contents: read
     steps:
+      - name: Checkout default branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
       - name: Download configured-provider markers
         id: download
         continue-on-error: true
@@ -116,11 +128,11 @@ jobs:
           path: canary-ran
           merge-multiple: true
 
-      - name: Require at least one configured provider
+      - name: Require selected provider coverage
         env:
           DOWNLOAD_OUTCOME: ${{ steps.download.outcome }}
-        run: |
-          if [[ "$DOWNLOAD_OUTCOME" != "success" ]] || [[ -z "$(find canary-ran -type f -print -quit 2>/dev/null)" ]]; then
-            echo "::error title=No AI provider canary coverage::Configure at least one supported provider repository secret."
-            exit 1
-          fi
+          PROVIDER_SELECTION: ${{ github.event_name == 'workflow_dispatch' && inputs.provider || 'all' }}
+        run: >-
+          bun apps/api/scripts/ai-provider-canary-coverage.ts
+          --provider "$PROVIDER_SELECTION"
+          --download-outcome "$DOWNLOAD_OUTCOME"
