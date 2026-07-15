@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
+import { validateParentIdForInsert } from "@/api/handlers/entities/validate-parent-id";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
@@ -10,10 +11,6 @@ import {
 import { pdfDerivativeStateForFile } from "@/api/handlers/files/gotenberg";
 import { thumbnailDerivativeStateForFile } from "@/api/handlers/files/image-derivative";
 import { createFileKey } from "@/api/handlers/files/utils";
-import {
-  checkEntityCreateTargetForInsert,
-  entityCreateWriteErrorMessage,
-} from "@/api/handlers/uploads/entity-create";
 import { captureError } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -142,24 +139,17 @@ export const createEntityFromBuffer = async ({
         });
       }
 
-      // Recheck and lock both foreign-key targets in the insert transaction.
-      // The earlier property/parent lookups are only fail-fast preflights; they
-      // cannot protect this write from a concurrent deletion.
-      const targetResult = await checkEntityCreateTargetForInsert({
-        tx,
-        workspaceId,
-        propertyId: fileProperty.id,
-        parentId: parentId ?? null,
-      });
-      if (Result.isError(targetResult)) {
-        const message = entityCreateWriteErrorMessage(targetResult.error);
-        if (
-          targetResult.error === "parent-not-found" ||
-          targetResult.error === "parent-type-mismatch"
-        ) {
-          throw new InvalidParentError({ message });
+      // The earlier parent lookup is only a fail-fast preflight. Recheck and
+      // lock the row here so it cannot disappear between validation and insert.
+      if (parentId) {
+        const parentError = await validateParentIdForInsert({
+          tx,
+          parentId,
+          workspaceId,
+        });
+        if (parentError) {
+          throw new InvalidParentError({ message: parentError });
         }
-        throw new MissingFilePropertyError({ message });
       }
 
       const entityStamp = await allocateEntityStamp(tx, workspaceId);
@@ -242,11 +232,7 @@ export const createEntityFromBuffer = async ({
   } catch (error) {
     await Promise.all(s3Keys.map(async (k) => await getS3().delete(k)));
 
-    if (
-      EntityLimitError.is(error) ||
-      InvalidParentError.is(error) ||
-      MissingFilePropertyError.is(error)
-    ) {
+    if (EntityLimitError.is(error) || InvalidParentError.is(error)) {
       return Result.err(error);
     }
 

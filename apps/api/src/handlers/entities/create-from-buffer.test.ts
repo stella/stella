@@ -6,7 +6,6 @@ import {
   entities,
   entityVersions,
   fields,
-  properties,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -74,7 +73,7 @@ describe("createEntityFromBuffer", () => {
         },
       },
       $count: async () => 0,
-      select: createTargetSelect({ parentKind: "folder" }),
+      select: createParentSelect({ parentKind: "folder" }),
       insert: (table: unknown) => ({
         values: (values: unknown) => {
           if (table === documentCounters) {
@@ -153,7 +152,7 @@ describe("createEntityFromBuffer", () => {
   });
 
   test("locks and rechecks the parent in the insert transaction", async () => {
-    const locks: TargetLock[] = [];
+    const locks: unknown[] = [];
     const tx = {
       query: {
         properties: {
@@ -166,10 +165,10 @@ describe("createEntityFromBuffer", () => {
         },
       },
       $count: async () => 0,
-      select: createTargetSelect({
+      select: createParentSelect({
         parentKind: null,
-        onLock: (lock) => {
-          locks.push(lock);
+        onLock: (strength) => {
+          locks.push(strength);
         },
       }),
     };
@@ -199,40 +198,27 @@ describe("createEntityFromBuffer", () => {
       );
     }
     expect(getCallCount()).toBe(2);
-    expect(locks).toEqual([
-      { strength: "update", target: "property" },
-      { strength: "update", target: "parent" },
-    ]);
+    expect(locks).toEqual(["update"]);
     expect(s3WriteMock).toHaveBeenCalledTimes(1);
     expect(s3DeleteMock).toHaveBeenCalledTimes(1);
     expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 });
 
-type TargetLock = {
-  strength: unknown;
-  target: "parent" | "property";
-};
-
-type CreateTargetSelectOptions = {
+type CreateParentSelectOptions = {
   parentKind: "document" | "folder" | null;
-  onLock?: (lock: TargetLock) => void;
+  onLock?: (strength: unknown) => void;
 };
 
-const createTargetSelect =
-  ({ parentKind, onLock }: CreateTargetSelectOptions) =>
+const createParentSelect =
+  ({ parentKind, onLock }: CreateParentSelectOptions) =>
   (_selection: unknown) => ({
-    from: (table: unknown) => ({
+    from: (_table: unknown) => ({
       where: () => ({
         limit: () => ({
           for: async (strength: unknown) => {
-            const target = table === properties ? "property" : "parent";
-            onLock?.({ strength, target });
-
-            if (table === properties) {
-              return [{ content: { type: "file" as const }, id: propertyId }];
-            }
-            if (table === entities && parentKind !== null) {
+            onLock?.(strength);
+            if (parentKind !== null) {
               return [{ id: parentId, kind: parentKind }];
             }
             return [];

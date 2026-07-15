@@ -1,4 +1,8 @@
+import { and, eq } from "drizzle-orm";
+
 import type { Transaction } from "@/api/db/root";
+import { entities } from "@/api/db/schema";
+import type { EntityKind } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ValidateParentIdOptions = {
@@ -20,6 +24,29 @@ export const validateParentId = async ({
     columns: { kind: true },
   });
 
+  return getParentValidationError(parent);
+};
+
+export const validateParentIdForInsert = async ({
+  tx,
+  parentId,
+  workspaceId,
+}: ValidateParentIdOptions): Promise<string | null> => {
+  const parentRows = await tx
+    .select({ kind: entities.kind })
+    .from(entities)
+    .where(
+      and(eq(entities.id, parentId), eq(entities.workspaceId, workspaceId)),
+    )
+    .limit(1)
+    .for("update");
+
+  return getParentValidationError(parentRows.at(0));
+};
+
+const getParentValidationError = (
+  parent: { kind: EntityKind } | undefined,
+): string | null => {
   if (!parent) {
     return "Parent entity not found in this workspace";
   }
