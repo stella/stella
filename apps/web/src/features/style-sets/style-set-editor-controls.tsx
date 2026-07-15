@@ -307,7 +307,17 @@ const ParagraphStyleSection = <TStyle extends ParagraphStyleSettings>({
       onChange={(alignment) => onChange({ ...value, alignment })}
       value={value.alignment}
     />
-    <SpacingFields id={id} onChange={onChange} value={value} />
+    <SpacingFields
+      id={id}
+      onSpaceAfterChange={(spaceAfterPt) =>
+        onChange({ ...value, spaceAfterPt })
+      }
+      onSpaceBeforeChange={(spaceBeforePt) =>
+        onChange({ ...value, spaceBeforePt })
+      }
+      spaceAfterPt={value.spaceAfterPt}
+      spaceBeforePt={value.spaceBeforePt}
+    />
   </ControlSection>
 );
 
@@ -490,12 +500,16 @@ const BoldField = ({
 
 const SpacingFields = ({
   id,
-  value,
-  onChange,
+  spaceBeforePt,
+  spaceAfterPt,
+  onSpaceBeforeChange,
+  onSpaceAfterChange,
 }: {
   id: string;
-  value: ParagraphStyleSettings;
-  onChange: (value: ParagraphStyleSettings) => void;
+  spaceBeforePt: number;
+  spaceAfterPt: number;
+  onSpaceBeforeChange: (value: number) => void;
+  onSpaceAfterChange: (value: number) => void;
 }) => {
   const t = useTranslations();
   return (
@@ -505,18 +519,18 @@ const SpacingFields = ({
         label={t("styleSets.editor.spaceBefore")}
         max={1440}
         min={0}
-        onChange={(spaceBeforePt) => onChange({ ...value, spaceBeforePt })}
+        onChange={onSpaceBeforeChange}
         suffix={t(POINTS_TRANSLATION_KEY)}
-        value={value.spaceBeforePt}
+        value={spaceBeforePt}
       />
       <NumberField
         id={`${id}-after`}
         label={t("styleSets.editor.spaceAfter")}
         max={1440}
         min={0}
-        onChange={(spaceAfterPt) => onChange({ ...value, spaceAfterPt })}
+        onChange={onSpaceAfterChange}
         suffix={t(POINTS_TRANSLATION_KEY)}
-        value={value.spaceAfterPt}
+        value={spaceAfterPt}
       />
     </>
   );
