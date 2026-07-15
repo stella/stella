@@ -11,6 +11,7 @@ import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const DOCX_EXTENSION = ".docx";
+export const STYLE_SET_DOWNLOAD_TTL_SECONDS = 15 * 60;
 
 export const normalizeStyleSetName = (
   name: string,

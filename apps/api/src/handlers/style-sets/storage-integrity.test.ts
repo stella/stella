@@ -16,18 +16,19 @@ describe("style set storage integrity", () => {
     expect(rowDelete).toBeGreaterThan(storageDelete);
   });
 
-  test("persists replacement cleanup state before deleting the old package", () => {
+  test("retains replaced packages until their download URLs expire", () => {
     const source = readHandler("storage");
     const persistCleanupKey = source.indexOf("cleanupS3Key: locked.s3Key");
-    const storageDelete = source.indexOf("getS3().delete(replaced.oldS3Key)");
+    const scheduleCleanup = source.indexOf("s3Key: replaced.oldS3Key");
     const clearCleanupKey = source.indexOf(
       ".set({ cleanupS3Key: null })",
-      storageDelete,
+      scheduleCleanup,
     );
 
     expect(persistCleanupKey).toBeGreaterThan(-1);
-    expect(storageDelete).toBeGreaterThan(persistCleanupKey);
-    expect(clearCleanupKey).toBeGreaterThan(storageDelete);
+    expect(scheduleCleanup).toBeGreaterThan(persistCleanupKey);
+    expect(clearCleanupKey).toBeGreaterThan(scheduleCleanup);
+    expect(source).not.toContain("getS3().delete(replaced.oldS3Key)");
   });
 
   test("awaits rejected import cleanup", () => {

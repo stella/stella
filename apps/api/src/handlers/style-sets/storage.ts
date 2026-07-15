@@ -11,8 +11,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
+import { enqueueStyleSetPackageCleanup } from "@/api/lib/style-set-package-cleanup-queue";
 import {
   buildStyleSetKey,
+  STYLE_SET_DOWNLOAD_TTL_SECONDS,
   styleSetColumns,
   styleSetExportFileName,
 } from "@/api/lib/style-sets";
@@ -152,7 +154,10 @@ export const replaceStoredStyleSet = async ({
     const existing = yield* Result.await(
       safeDb(async (tx) => {
         const [styleSet] = await tx
-          .select({ cleanupS3Key: styleSets.cleanupS3Key })
+          .select({
+            cleanupS3Key: styleSets.cleanupS3Key,
+            updatedAt: styleSets.updatedAt,
+          })
           .from(styleSets)
           .where(
             and(
@@ -175,11 +180,20 @@ export const replaceStoredStyleSet = async ({
       const cleanupS3Key = existing.cleanupS3Key;
       yield* Result.await(
         Result.tryPromise({
-          try: async () => await getS3().delete(cleanupS3Key),
+          try: async () =>
+            await enqueueStyleSetPackageCleanup({
+              s3Key: cleanupS3Key,
+              delayMs: Math.max(
+                0,
+                existing.updatedAt.getTime() +
+                  STYLE_SET_DOWNLOAD_TTL_SECONDS * 1000 -
+                  Date.now(),
+              ),
+            }),
           catch: (cause) =>
             new HandlerError({
               status: 500,
-              message: "Could not finish the previous style set cleanup.",
+              message: "Could not schedule the previous style set cleanup.",
               cause,
             }),
         }),
@@ -319,11 +333,12 @@ export const replaceStoredStyleSet = async ({
 
       persisted = true;
       const cleanupResult = await Result.tryPromise({
-        try: async () => await getS3().delete(replaced.oldS3Key),
+        try: async () =>
+          await enqueueStyleSetPackageCleanup({ s3Key: replaced.oldS3Key }),
         catch: (cause) =>
           new HandlerError({
             status: 500,
-            message: "Could not clean up the previous style set package.",
+            message: "Could not schedule previous style set cleanup.",
             cause,
           }),
       });

@@ -107,6 +107,7 @@ import {
   refreshS3,
 } from "@/api/lib/s3";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
+import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
 import { initWorkflowWorker } from "@/api/lib/workflow-queue";
 
 const HEALTH_PATH = "/health";
@@ -535,6 +536,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ worker for durable account-deletion storage cleanup.
   const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
 
+  // BullMQ worker for style set packages retained past download URL expiry.
+  const styleSetPackageCleanupWorker = initStyleSetPackageCleanupWorker();
+
   // BullMQ worker for queued view→report exports.
   const reportExportWorker = initReportExportWorker();
 
@@ -565,6 +569,7 @@ const startServer = async (): Promise<void> => {
         workflowWorker.close(),
         fileDerivativeWorker.close(),
         accountDeletionCleanupWorker.close(),
+        styleSetPackageCleanupWorker.close(),
         reportExportWorker.close(),
       ]),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),

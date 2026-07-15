@@ -119,17 +119,19 @@ const SavedStyleEditorLoader = ({
   if (query.isError || !query.data) {
     return <StyleSetEditorError />;
   }
+  const expectedUpdatedAt = new Date(query.data.updatedAt).toISOString();
   return (
     <LoadedStyleSetEditor
       initialName={query.data.name}
       initialSettings={query.data.settings}
+      key={expectedUpdatedAt}
       onOpenChange={onOpenChange}
       onSaved={onSaved}
       organizationId={organizationId}
       saveTarget={{
         type: "saved",
         styleSetId,
-        expectedUpdatedAt: new Date(query.data.updatedAt).toISOString(),
+        expectedUpdatedAt,
       }}
     />
   );

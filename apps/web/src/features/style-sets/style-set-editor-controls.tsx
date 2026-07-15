@@ -21,6 +21,7 @@ import type {
 } from "@/features/style-sets/style-set-editor-types";
 
 const POINTS_TRANSLATION_KEY = "styleSets.editor.points";
+const POINTS_PER_TWIP = 0.05;
 const LOWER_LETTER_NUMBERING_SAMPLE = "(a)";
 const LOWER_ROMAN_NUMBERING_SAMPLE = "(i)";
 const UPPER_LETTER_NUMBERING_SAMPLE = "(A)";
@@ -418,7 +419,7 @@ const NumberField = ({
   suffixKey,
 }: NumberFieldProps) => {
   const t = useTranslations();
-  const resolvedStep = step ?? 0.25;
+  const resolvedStep = step ?? POINTS_PER_TWIP;
   const resolvedLabel = labelKey ? t(labelKey) : label;
   const resolvedSuffix = suffixKey ? t(suffixKey) : suffix;
   return (
