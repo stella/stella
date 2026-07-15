@@ -1,17 +1,17 @@
-import { diffArrays } from "diff";
 import { and, desc, eq, lt } from "drizzle-orm";
+
+import { compareDocxVersions } from "@stll/folio-core/server";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entityVersions } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { tokenize } from "@/api/handlers/docx/diff-paragraphs";
-import { extractText } from "@/api/handlers/docx/extract-text";
+import { countVersionDiffWords } from "@/api/handlers/entities/version-diff-word-counts";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-const WORD_RE = /[\p{L}\p{N}_]+/u;
+const VERSION_DIFF_STATS_SCOPES = ["text"] as const;
 
 /**
  * Compute word-level diff stats between a version and its
@@ -131,31 +131,10 @@ export const computeVersionDiffStats = async ({
       .arrayBuffer(),
   ]);
 
-  // Extract text from both
-  const [newExtracted, prevExtracted] = await Promise.all([
-    extractText(new Uint8Array(newBuffer)),
-    extractText(new Uint8Array(prevBuffer)),
-  ]);
-
-  const newText = newExtracted.paragraphs.map((p) => p.text).join("\n");
-  const prevText = prevExtracted.paragraphs.map((p) => p.text).join("\n");
-
-  // Word-level diff using the same tokenizer as the redline engine
-  const newTokens = tokenize(newText);
-  const prevTokens = tokenize(prevText);
-  const diffs = diffArrays(prevTokens, newTokens);
-
-  let wordsAdded = 0;
-  let wordsRemoved = 0;
-
-  for (const change of diffs) {
-    const wordCount = change.value.filter((w) => WORD_RE.test(w)).length;
-    if (change.added) {
-      wordsAdded += wordCount;
-    } else if (change.removed) {
-      wordsRemoved += wordCount;
-    }
-  }
+  const diff = await compareDocxVersions(prevBuffer, newBuffer, {
+    include: VERSION_DIFF_STATS_SCOPES,
+  });
+  const { wordsAdded, wordsRemoved } = countVersionDiffWords(diff);
 
   await scopedDb(async (tx) => {
     // audit: skip — derived diff stats cache, not a user-facing state
