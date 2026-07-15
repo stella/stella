@@ -6,11 +6,11 @@ import {
   compareDocxVersions,
   generateRedlineDocx,
 } from "@stll/folio-core/server";
-import type { FolioVersionDiff } from "@stll/folio-core/server";
 
 import { member, user } from "@/api/db/auth-schema";
 import { desktopEditSessions, entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import { countVersionDiffWords } from "@/api/handlers/entities/version-diff-word-counts";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -18,46 +18,6 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
-
-const WORD_RE = /[\p{L}\p{N}_]+/gu;
-
-const countWords = (text: string): number => text.match(WORD_RE)?.length ?? 0;
-
-type DiffWordCounts = { wordsAdded: number; wordsRemoved: number };
-
-/**
- * Word-level add/remove counts derived from the folio block diff: `ins`/`del`
- * segments of modified blocks plus the full text of added/deleted blocks.
- * Moves and format-only changes relocate or restyle existing words, so they
- * leave the counts untouched.
- */
-const countDiffWords = (diff: FolioVersionDiff): DiffWordCounts => {
-  let wordsAdded = 0;
-  let wordsRemoved = 0;
-
-  for (const change of diff.changes) {
-    if (change.type === "added") {
-      wordsAdded += countWords(change.text);
-      continue;
-    }
-    if (change.type === "deleted") {
-      wordsRemoved += countWords(change.text);
-      continue;
-    }
-    if (change.type !== "modified") {
-      continue;
-    }
-    for (const segment of change.segments) {
-      if (segment.type === "ins") {
-        wordsAdded += countWords(segment.text);
-      } else if (segment.type === "del") {
-        wordsRemoved += countWords(segment.text);
-      }
-    }
-  }
-
-  return { wordsAdded, wordsRemoved };
-};
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -221,7 +181,7 @@ export default createSafeHandler(
       }),
     );
 
-    const { wordsAdded, wordsRemoved } = countDiffWords(compared.diff);
+    const { wordsAdded, wordsRemoved } = countVersionDiffWords(compared.diff);
     const docxBase64 = Buffer.from(compared.redline.buffer).toString("base64");
 
     return Result.ok({
