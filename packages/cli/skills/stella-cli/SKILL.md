@@ -89,7 +89,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 243
+Beyond the curated commands above, the CLI generates 247
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. They follow the same `stella <domain> <action>` shape (a colliding

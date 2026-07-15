@@ -274,11 +274,15 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
 | `style-sets.create` | write | stella:templates | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
+| `style-sets.create-from-editor` | write | stella:templates | — | generic invoke → `stella style-sets create-from-editor` |
 | `style-sets.delete` | write, destructive | stella:templates | — | generic invoke → `stella style-sets delete` |
 | `style-sets.download` | read | stella:templates | — | generic invoke → `stella style-sets download` |
 | `style-sets.list` | read | stella:templates | — | generic invoke → `stella style-sets list` |
+| `style-sets.read-editor` | read | stella:templates | — | generic invoke → `stella style-sets read-editor` |
+| `style-sets.read-stella-editor` | read | stella:templates | — | generic invoke → `stella style-sets read-stella-editor` |
 | `style-sets.replace` | write | stella:templates | — | generic invoke: file I/O — not runnable via CLI/JSON (describe only) |
 | `style-sets.update` | write | stella:templates | — | generic invoke → `stella style-sets update` |
+| `style-sets.update-from-editor` | write | stella:templates | — | generic invoke → `stella style-sets update-from-editor` |
 
 ## tasks
 

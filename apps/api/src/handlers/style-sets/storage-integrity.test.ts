@@ -17,7 +17,7 @@ describe("style set storage integrity", () => {
   });
 
   test("persists replacement cleanup state before deleting the old package", () => {
-    const source = readHandler("replace");
+    const source = readHandler("storage");
     const persistCleanupKey = source.indexOf("cleanupS3Key: locked.s3Key");
     const storageDelete = source.indexOf("getS3().delete(replaced.oldS3Key)");
     const clearCleanupKey = source.indexOf(
@@ -31,14 +31,17 @@ describe("style set storage integrity", () => {
   });
 
   test("awaits rejected import cleanup", () => {
-    const source = readHandler("create");
+    const source = readHandler("storage");
     const rejectedCleanup = source.indexOf(
       "Could not clean up the rejected style set package.",
     );
-
-    expect(rejectedCleanup).toBeGreaterThan(-1);
-    expect(source.lastIndexOf("await Result.tryPromise")).toBeLessThan(
+    const awaitedCleanup = source.lastIndexOf(
+      "await Result.tryPromise",
       rejectedCleanup,
     );
+
+    expect(rejectedCleanup).toBeGreaterThan(-1);
+    expect(awaitedCleanup).toBeGreaterThan(-1);
+    expect(awaitedCleanup).toBeLessThan(rejectedCleanup);
   });
 });

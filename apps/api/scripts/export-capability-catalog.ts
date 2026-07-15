@@ -304,6 +304,8 @@ const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
  *   metered by the framework, same as `templates.fill-preview`).
  * - `skills.get` / `skills.list` / `skills.list-commands`: `chat:["create"]`
  *   gates pure skill-catalog reads.
+ * - `style-sets.read-editor` / `style-sets.read-stella-editor`:
+ *   `styleSet:["use"]` gates pure formatting-preset reads.
  * - `usage.get-entitlement`: `organizationSettings:["update"]` gates a pure
  *   entitlement/remaining-units read (the Phase 1 judgment call, now pinned).
  * - `workspaces.read-workflow-target-count`: `workspace:["update"]` gates a
@@ -333,6 +335,8 @@ const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
   "skills.list-commands": { access: "read", destructive: false },
   "style-sets.download": { access: "read", destructive: false },
   "style-sets.list": { access: "read", destructive: false },
+  "style-sets.read-editor": { access: "read", destructive: false },
+  "style-sets.read-stella-editor": { access: "read", destructive: false },
   "templates.create-from-style-set": {
     access: "write",
     destructive: false,
