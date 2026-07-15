@@ -48112,6 +48112,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             alignment: {
@@ -48162,6 +48163,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             bold: {
@@ -48212,6 +48214,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             bold: {
@@ -48285,6 +48288,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             bold: {
@@ -48358,6 +48362,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             bold: {
@@ -48814,6 +48819,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             alignment: {
@@ -48864,6 +48870,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             bold: {
@@ -48914,6 +48921,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             bold: {
@@ -48987,6 +48995,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             bold: {
@@ -49060,6 +49069,7 @@ export const generatedRouteMap: RouteNode = {
                             fontSizePt: {
                               minimum: 1,
                               maximum: 400,
+                              multipleOf: 0.5,
                               type: "number",
                             },
                             bold: {
