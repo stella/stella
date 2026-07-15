@@ -397,12 +397,15 @@ const numberedParagraphStyleSettings = (
   formatting: ResolvedStyleFormatting,
   numberingLevel: NumberingLevel | undefined,
   level: 1 | 2 | 3,
-): StyleSetEditorSettings["level1"] => ({
-  ...paragraphStyleSettings(formatting),
-  numberingFormat: numberingFormat(numberingLevel, level),
-  indentLeftPt: fromTwips(numberingLevel?.pPr?.indentLeft ?? 0),
-  hangingPt: fromTwips(Math.abs(numberingLevel?.pPr?.indentFirstLine ?? 0)),
-});
+): StyleSetEditorSettings["level1"] => {
+  const indentFirstLine = numberingLevel?.pPr?.indentFirstLine ?? 0;
+  return {
+    ...paragraphStyleSettings(formatting),
+    numberingFormat: numberingFormat(numberingLevel, level),
+    indentLeftPt: fromTwips(numberingLevel?.pPr?.indentLeft ?? 0),
+    hangingPt: fromTwips(Math.max(0, -indentFirstLine)),
+  };
+};
 
 const numberingFormat = (
   level: NumberingLevel | undefined,
@@ -641,11 +644,16 @@ const applyNumberingSettings = (
       existingLevels[index],
     );
     applyNumberingFormat(level, levelSettingsValue.numberingFormat, index + 1);
+    const authoredFirstLineIndent = level.pPr?.indentFirstLine ?? 0;
+    const indentFirstLine =
+      levelSettingsValue.hangingPt > 0
+        ? -toTwips(levelSettingsValue.hangingPt)
+        : Math.max(0, authoredFirstLineIndent);
     level.pPr = {
       ...level.pPr,
       indentLeft: toTwips(levelSettingsValue.indentLeftPt),
-      indentFirstLine: -toTwips(levelSettingsValue.hangingPt),
-      hangingIndent: levelSettingsValue.hangingPt > 0,
+      indentFirstLine,
+      hangingIndent: indentFirstLine < 0,
     };
   }
 

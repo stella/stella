@@ -266,16 +266,18 @@ export const replaceStoredStyleSet = async ({
             return { type: "version-conflict" as const };
           }
 
-          const nextName =
+          const replacementValues =
             replacementName.type === "replace"
-              ? replacementName.value
-              : locked.name;
+              ? {
+                  name: replacementName.value,
+                  fileName: styleSetExportFileName(replacementName.value),
+                }
+              : {};
 
           const [row] = await tx
             .update(styleSets)
             .set({
-              name: nextName,
-              fileName: styleSetExportFileName(nextName),
+              ...replacementValues,
               s3Key,
               cleanupS3Key: locked.s3Key,
               sizeBytes: buffer.byteLength,
@@ -297,7 +299,9 @@ export const replaceStoredStyleSet = async ({
               resourceId: row.id,
               workspaceId: null,
               changes: {
-                name: { old: locked.name, new: row.name },
+                ...(replacementName.type === "replace" && {
+                  name: { old: locked.name, new: row.name },
+                }),
                 sizeBytes: { old: locked.sizeBytes, new: row.sizeBytes },
               },
             });

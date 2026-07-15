@@ -50,7 +50,8 @@ describe("style set storage integrity", () => {
     const storage = readHandler("storage");
     const replace = readHandler("replace");
 
-    expect(storage).toContain(": locked.name;");
+    expect(storage).not.toContain(": locked.name;");
+    expect(storage).toContain('replacementName.type === "replace"');
     expect(replace).toContain('replacementName: { type: "preserve" }');
   });
 });

@@ -107,6 +107,40 @@ describe("style set visual editing", () => {
     expect(projectedLevel?.lvlText).toBe("Article %1, paragraph %3");
   });
 
+  test("preserves unsupported positive first-line numbering indents", async () => {
+    const source = createStellaStyleEditorPreset();
+    const firstLevel = source.preset.styleSet.numbering?.abstractNums
+      .find((definition) => definition.abstractNumId === 1)
+      ?.levels.find((item) => item.ilvl === 0);
+    if (!firstLevel) {
+      throw new Error("Expected clause level 1");
+    }
+    firstLevel.pPr = {
+      ...firstLevel.pPr,
+      indentFirstLine: 240,
+      hangingIndent: false,
+    };
+    const buffer = Buffer.from(
+      new Uint8Array(
+        await createDocx(createEmptyDocument({ preset: source.preset })),
+      ),
+    );
+
+    const reopened = await readStyleSetEditorPreset(buffer, "Custom");
+    const projected = applyStyleSetEditorSettings(
+      reopened.preset,
+      "Custom",
+      reopened.settings,
+    );
+    const projectedFirstLevel = projected.styleSet.numbering?.abstractNums
+      .find((definition) => definition.abstractNumId === 1)
+      ?.levels.find((item) => item.ilvl === 0);
+
+    expect(reopened.settings.level1.hangingPt).toBe(0);
+    expect(projectedFirstLevel?.pPr?.indentFirstLine).toBe(240);
+    expect(projectedFirstLevel?.pPr?.hangingIndent).toBe(false);
+  });
+
   test("reuses the editor numbering definition after numbering is toggled", () => {
     const source = createStellaStyleEditorPreset();
     const disabledSettings = structuredClone(source.settings);
