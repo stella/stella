@@ -1,4 +1,5 @@
 import type { ModelRole } from "@stll/ai-catalog";
+
 import type { TanStackTextProvider } from "@/api/lib/tanstack-ai-models";
 
 export const CANARY_PROVIDERS = [
