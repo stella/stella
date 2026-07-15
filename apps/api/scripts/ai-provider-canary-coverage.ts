@@ -4,9 +4,18 @@ import {
 } from "./ai-provider-canary-config";
 import type { CanaryProviderSelection } from "./ai-provider-canary-config";
 
+type CanaryCoverageArgs = {
+  downloadOutcome: string | undefined;
+  selection: CanaryProviderSelection;
+};
+
+const flagValue = (args: string[], flag: string): string | undefined => {
+  const flagIndex = args.indexOf(flag);
+  return flagIndex === -1 ? undefined : args.at(flagIndex + 1);
+};
+
 const parseProviderSelection = (args: string[]): CanaryProviderSelection => {
-  const providerFlagIndex = args.indexOf("--provider");
-  const value = args.at(providerFlagIndex + 1);
+  const value = flagValue(args, "--provider");
   if (value === "all" || (value !== undefined && isCanaryProvider(value))) {
     return value;
   }
@@ -14,10 +23,17 @@ const parseProviderSelection = (args: string[]): CanaryProviderSelection => {
   throw new TypeError("Pass --provider followed by all or a canary provider.");
 };
 
+export const parseCanaryCoverageArgs = (
+  args: string[],
+): CanaryCoverageArgs => ({
+  downloadOutcome: flagValue(args, "--download-outcome"),
+  selection: parseProviderSelection(args),
+});
+
 const run = (): void => {
-  const args = Bun.argv.slice(2);
-  const selection = parseProviderSelection(args);
-  const downloadOutcome = args.at(args.indexOf("--download-outcome") + 1);
+  const { downloadOutcome, selection } = parseCanaryCoverageArgs(
+    Bun.argv.slice(2),
+  );
   const configuredProviders =
     downloadOutcome === "success"
       ? [...new Bun.Glob("*").scanSync({ cwd: "canary-ran", onlyFiles: true })]
