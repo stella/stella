@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog.json";
 
 describe("style set document capability scopes", () => {
-  test("separates Stella Style and custom Style Set consent", () => {
+  test("separates stella Style and custom Style Set consent", () => {
     const stellaStyle = capabilityCatalog.find(
       ({ id }) => id === "entities.create-blank-document",
     );
