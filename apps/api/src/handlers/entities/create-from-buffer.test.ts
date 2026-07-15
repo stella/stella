@@ -168,7 +168,9 @@ describe("createEntityFromBuffer", () => {
       $count: async () => 0,
       select: createTargetSelect({
         parentKind: null,
-        onLock: (lock) => locks.push(lock),
+        onLock: (lock) => {
+          locks.push(lock);
+        },
       }),
     };
     const { getCallCount, scopedDb } = createScopedDbMock(tx);
