@@ -9,9 +9,9 @@ import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { STYLE_SET_DOWNLOAD_TTL_SECONDS } from "@/api/lib/style-sets";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
-const PRESIGN_EXPIRES_IN = 900;
 const config = {
   permissions: { styleSet: ["use"] },
   mcp: { type: "capability", reason: "template_authoring_ui" },
@@ -49,7 +49,7 @@ export default createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.STYLE_SET,
           resourceId: styleSet.id,
           s3Key: styleSet.s3Key,
-          expiresInSeconds: PRESIGN_EXPIRES_IN,
+          expiresInSeconds: STYLE_SET_DOWNLOAD_TTL_SECONDS,
           fileName: styleSet.fileName,
           organizationId: session.activeOrganizationId,
           metadata: { sizeBytes: styleSet.sizeBytes },

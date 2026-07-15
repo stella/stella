@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { PropsWithChildren, ReactNode } from "react";
+import type { ChangeEvent, PropsWithChildren, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -9,7 +9,9 @@ import {
   PencilIcon,
   PlusIcon,
   RefreshCwIcon,
+  Settings2Icon,
   Trash2Icon,
+  UploadIcon,
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
@@ -28,6 +30,8 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { StyleSetEditorDialog } from "@/features/style-sets/style-set-editor-dialog";
+import type { StyleSetEditorTarget } from "@/features/style-sets/style-set-editor-types";
 import {
   styleSetsKeys,
   styleSetsOptions,
@@ -40,6 +44,7 @@ import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
 const protectedRouteApi = getRouteApi("/_protected");
+const UNEXPECTED_ERROR_TRANSLATION_KEY = "common.unexpectedError";
 
 type StyleSetListResponse = Awaited<
   ReturnType<(typeof api)["style-sets"]["get"]>
@@ -64,10 +69,13 @@ const StyleSetsPage = () => {
   const canUpdate = usePermissions({ styleSet: ["update"] });
   const canDelete = usePermissions({ styleSet: ["delete"] });
   const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replaceTargetRef = useRef<StyleSetItem | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [renameTarget, setRenameTarget] = useState<StyleSetItem | null>(null);
-  const [replaceTarget, setReplaceTarget] = useState<StyleSetItem | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<StyleSetItem | null>(null);
+  const [editorTarget, setEditorTarget] = useState<StyleSetEditorTarget | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
 
   const invalidate = async () => {
@@ -77,8 +85,8 @@ const StyleSetsPage = () => {
   };
 
   const replace = async (file: File) => {
-    const target = replaceTarget;
-    setReplaceTarget(null);
+    const target = replaceTargetRef.current;
+    replaceTargetRef.current = null;
     if (!target || !isDocxFile(file)) {
       stellaToast.add({ type: "error", title: t("templates.invalidFileType") });
       return;
@@ -92,7 +100,7 @@ const StyleSetsPage = () => {
       showError(
         t("styleSets.replaceFailed"),
         response.error,
-        t("common.unexpectedError"),
+        t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
       return;
     }
@@ -108,19 +116,19 @@ const StyleSetsPage = () => {
       showError(
         t("styleSets.exportFailed"),
         response.error,
-        t("common.unexpectedError"),
+        t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
       return;
     }
     window.open(response.data.presignedUrl, "_blank");
   };
 
-  const handleDownload = (styleSet: StyleSetItem) => {
+  const downloadHandler = (styleSet: StyleSetItem) => () => {
     download(styleSet).catch((error: unknown) => {
       showThrownError(
         t("styleSets.exportFailed"),
         error,
-        t("common.unexpectedError"),
+        t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
     });
   };
@@ -131,9 +139,17 @@ const StyleSetsPage = () => {
       showThrownError(
         t("styleSets.replaceFailed"),
         error,
-        t("common.unexpectedError"),
+        t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
     });
+  };
+
+  const handleReplaceInputChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.item(0);
+    event.currentTarget.value = "";
+    if (file) {
+      handleReplace(file);
+    }
   };
 
   const remove = async () => {
@@ -149,7 +165,7 @@ const StyleSetsPage = () => {
       showError(
         t("styleSets.deleteFailed"),
         response.error,
-        t("common.unexpectedError"),
+        t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
       throw toAPIError(response.error);
     }
@@ -174,10 +190,23 @@ const StyleSetsPage = () => {
           </p>
         </div>
         {canCreate && (
-          <Button onClick={() => setImportOpen(true)} size="sm">
-            <PlusIcon />
-            {t("styleSets.import")}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={() => setImportOpen(true)}
+              size="sm"
+              variant="outline"
+            >
+              <UploadIcon />
+              {t("styleSets.import")}
+            </Button>
+            <Button
+              onClick={() => setEditorTarget({ type: "stella" })}
+              size="sm"
+            >
+              <PlusIcon />
+              {t("styleSets.create")}
+            </Button>
+          </div>
         )}
       </div>
       <ul className="flex-1 divide-y overflow-y-auto">
@@ -185,9 +214,21 @@ const StyleSetsPage = () => {
           description={t("styleSets.stellaDescription")}
           name={t("styleSets.stellaStyle")}
           trailing={
-            <span className="bg-muted rounded-full px-2 py-1 text-xs font-medium">
-              {t("styleSets.defaultBadge")}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="bg-muted rounded-full px-2 py-1 text-xs font-medium">
+                {t("styleSets.defaultBadge")}
+              </span>
+              {canCreate && (
+                <Button
+                  aria-label={t("styleSets.editor.createFromStella")}
+                  onClick={() => setEditorTarget({ type: "stella" })}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <Settings2Icon />
+                </Button>
+              )}
+            </div>
           }
         />
         {data.items.map((styleSet) => (
@@ -201,7 +242,7 @@ const StyleSetsPage = () => {
               <div className="flex items-center gap-1">
                 <Button
                   aria-label={t("common.download")}
-                  onClick={() => handleDownload(styleSet)}
+                  onClick={downloadHandler(styleSet)}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -209,6 +250,19 @@ const StyleSetsPage = () => {
                 </Button>
                 {canUpdate && (
                   <>
+                    <Button
+                      aria-label={t("common.edit")}
+                      onClick={() =>
+                        setEditorTarget({
+                          type: "saved",
+                          styleSetId: styleSet.id,
+                        })
+                      }
+                      size="icon-xs"
+                      variant="ghost"
+                    >
+                      <Settings2Icon />
+                    </Button>
                     <Button
                       aria-label={t("common.rename")}
                       onClick={() => setRenameTarget(styleSet)}
@@ -221,7 +275,7 @@ const StyleSetsPage = () => {
                       aria-label={t("styleSets.replace")}
                       disabled={busy}
                       onClick={() => {
-                        setReplaceTarget(styleSet);
+                        replaceTargetRef.current = styleSet;
                         replaceInputRef.current?.click();
                       }}
                       size="icon-xs"
@@ -249,13 +303,7 @@ const StyleSetsPage = () => {
       <input
         accept=".docx"
         className="hidden"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.item(0);
-          event.currentTarget.value = "";
-          if (file) {
-            handleReplace(file);
-          }
-        }}
+        onChange={handleReplaceInputChange}
         ref={replaceInputRef}
         type="file"
       />
@@ -291,6 +339,17 @@ const StyleSetsPage = () => {
         open={deleteTarget !== null}
         title={t("styleSets.deleteTitle")}
       />
+      {editorTarget && (
+        <StyleSetEditorDialog
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditorTarget(null);
+            }
+          }}
+          onSaved={invalidate}
+          target={editorTarget}
+        />
+      )}
     </div>
   );
 };
@@ -370,7 +429,7 @@ const StyleSetFormDialog = ({
       showError(
         t("styleSets.saveFailed"),
         response.error,
-        t("common.unexpectedError"),
+        t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
       return;
     }
@@ -384,7 +443,7 @@ const StyleSetFormDialog = ({
       showThrownError(
         t("styleSets.saveFailed"),
         error,
-        t("common.unexpectedError"),
+        t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
     });
   };
@@ -456,7 +515,7 @@ const ImportStyleSetDialog = ({
   />
 );
 
-const RenameStyleSetDialog = ({
+const renameStyleSetDialog = ({
   styleSet,
   onOpenChange,
   onRenamed,
@@ -474,6 +533,8 @@ const RenameStyleSetDialog = ({
       styleSet={styleSet}
     />
   ) : null;
+
+const RenameStyleSetDialog = renameStyleSetDialog;
 
 const showError = (
   title: string,

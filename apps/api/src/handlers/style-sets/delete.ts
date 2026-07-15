@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
+import { deleteQueuedStyleSetPackages } from "@/api/lib/style-set-package-cleanup-queue";
 
 const paramsSchema = t.Object({ styleSetId: tSafeId("styleSet") });
 const config = {
@@ -80,9 +81,10 @@ export default createSafeRootHandler(
     yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await Promise.all(
-            deleted.s3Keys.map(async (s3Key) => await getS3().delete(s3Key)),
-          ),
+          await Promise.all([
+            deleteQueuedStyleSetPackages(params.styleSetId),
+            ...deleted.s3Keys.map(async (s3Key) => await getS3().delete(s3Key)),
+          ]),
         catch: (cause) =>
           new HandlerError({
             status: 500,

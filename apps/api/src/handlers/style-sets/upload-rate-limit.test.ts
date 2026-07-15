@@ -17,6 +17,16 @@ describe("style set upload rate-limit routing", () => {
         request("POST", "/v1/style-sets/style-set-id/source"),
       ),
     ).toBe(true);
+    expect(
+      isStyleSetUploadRateLimitedRequest(
+        request("PUT", "/v1/style-sets/editor"),
+      ),
+    ).toBe(true);
+    expect(
+      isStyleSetUploadRateLimitedRequest(
+        request("POST", "/v1/style-sets/style-set-id/editor"),
+      ),
+    ).toBe(true);
   });
 
   test("leaves non-upload style-set requests in the shared API bucket", () => {

@@ -11,6 +11,7 @@ import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const DOCX_EXTENSION = ".docx";
+export const STYLE_SET_DOWNLOAD_TTL_SECONDS = 15 * 60;
 
 export const normalizeStyleSetName = (
   name: string,
@@ -79,20 +80,26 @@ export const buildStyleSetKey = ({
 export const styleSetExportFileName = (name: string): string =>
   sanitizeFilenamePreservingExtension(`${name}.docx`);
 
-type ReadStyleSetBufferOptions = {
+type ReadStyleSetPackageOptions = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   styleSetId: SafeId<"styleSet">;
 };
 
-export const readStyleSetBuffer = async ({
+export const readStyleSetPackage = async ({
   safeDb,
   organizationId,
   styleSetId,
-}: ReadStyleSetBufferOptions): Promise<Result<Buffer, HandlerError>> => {
+}: ReadStyleSetPackageOptions): Promise<
+  Result<{ buffer: Buffer; name: string; updatedAt: Date }, HandlerError>
+> => {
   const styleSetResult = await safeDb(async (tx) => {
     const [styleSet] = await tx
-      .select({ s3Key: styleSets.s3Key })
+      .select({
+        name: styleSets.name,
+        s3Key: styleSets.s3Key,
+        updatedAt: styleSets.updatedAt,
+      })
       .from(styleSets)
       .where(
         and(
@@ -118,10 +125,14 @@ export const readStyleSetBuffer = async ({
       new HandlerError({ status: 404, message: "Style set not found" }),
     );
   }
-  const { s3Key } = styleSetResult.value;
+  const { name, s3Key, updatedAt } = styleSetResult.value;
 
   return await Result.tryPromise({
-    try: async () => Buffer.from(await getS3().file(s3Key).arrayBuffer()),
+    try: async () => ({
+      buffer: Buffer.from(await getS3().file(s3Key).arrayBuffer()),
+      name,
+      updatedAt,
+    }),
     catch: (cause) =>
       new HandlerError({
         status: 500,
@@ -129,6 +140,16 @@ export const readStyleSetBuffer = async ({
         cause,
       }),
   });
+};
+
+export const readStyleSetBuffer = async (
+  options: ReadStyleSetPackageOptions,
+): Promise<Result<Buffer, HandlerError>> => {
+  const styleSetPackage = await readStyleSetPackage(options);
+  if (Result.isError(styleSetPackage)) {
+    return Result.err(styleSetPackage.error);
+  }
+  return Result.ok(styleSetPackage.value.buffer);
 };
 
 export const styleSetColumns = {

@@ -530,6 +530,10 @@ export const CAPABILITY_DISPATCH = {
   "style-sets.create": {
     load: async () => await import("@/api/handlers/style-sets/create"),
   },
+  "style-sets.create-from-editor": {
+    load: async () =>
+      await import("@/api/handlers/style-sets/create-from-editor"),
+  },
   "style-sets.delete": {
     load: async () => await import("@/api/handlers/style-sets/delete"),
   },
@@ -539,11 +543,22 @@ export const CAPABILITY_DISPATCH = {
   "style-sets.list": {
     load: async () => await import("@/api/handlers/style-sets/list"),
   },
+  "style-sets.read-editor": {
+    load: async () => await import("@/api/handlers/style-sets/read-editor"),
+  },
+  "style-sets.read-stella-editor": {
+    load: async () =>
+      await import("@/api/handlers/style-sets/read-stella-editor"),
+  },
   "style-sets.replace": {
     load: async () => await import("@/api/handlers/style-sets/replace"),
   },
   "style-sets.update": {
     load: async () => await import("@/api/handlers/style-sets/update"),
+  },
+  "style-sets.update-from-editor": {
+    load: async () =>
+      await import("@/api/handlers/style-sets/update-from-editor"),
   },
   "tasks.assignees-add": {
     load: async () => await import("@/api/handlers/tasks/assignees-add"),
