@@ -2,7 +2,7 @@ import path from "node:path";
 
 const PROPERTY_FLAG = "--property";
 const TEST_FILE_GLOB = "src/**/*.test.{ts,tsx}";
-const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/;
+const MODULE_MOCK_PATTERN = /\bmock\.module\s*\(/u;
 const PROPERTY_TEST_MARKER = "fc.assert";
 
 const apiRoot = path.resolve(import.meta.dir, "..");
@@ -42,9 +42,9 @@ for (const { source, testPath } of classifiedTests) {
   regularTests.push(testPath);
 }
 
-const runTests = async (testFiles: string[], isolate: boolean) => {
+const runTests = (testFiles: string[], isolate: boolean) => {
   if (testFiles.length === 0) {
-    return 0;
+    return Promise.resolve(0);
   }
 
   const executionMode = isolate ? "isolated" : "shared-process";

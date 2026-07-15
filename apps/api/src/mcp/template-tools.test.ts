@@ -69,6 +69,10 @@ void mock.module(
 // into ai-field-generator.test.ts (Bun's mock.module is global).
 void mock.module("@/api/lib/ai-config-loader", () => ({
   loadOrgAIConfig: loadOrgAIConfigMock,
+  loadOrgSettingsForAuth: mock(async () => ({
+    orgAIConfig: null,
+    promptCachingEnabled: false,
+  })),
   loadPromptCachingPreference: mock(async () => false),
 }));
 
