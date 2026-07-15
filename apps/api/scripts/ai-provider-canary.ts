@@ -198,6 +198,7 @@ const capabilityProbes = [
     run: async (context, signal) => {
       await runToolProbe({
         context,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
         prompt: TOOL_SCHEMA_PROMPT,
         role: CAPABILITY_ROLE,
         signal,
@@ -212,6 +213,7 @@ const capabilityProbes = [
     run: async (context, signal) => {
       await runToolProbe({
         context,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
         prompt: TOOL_SCHEMA_PROMPT,
         role: CAPABILITY_ROLE,
         signal,
@@ -312,6 +314,7 @@ const runToolCallRoundTripProbe = async ({
 
   const output = await runToolProbe({
     context,
+    maxOutputTokens: modelRoleMaxOutputTokens(TOOL_CALL_ROLE),
     prompt: TOOL_ROUND_TRIP_PROMPT,
     role: TOOL_CALL_ROLE,
     signal,
@@ -338,6 +341,7 @@ const runToolCallRoundTripProbe = async ({
 
 type RunToolProbeOptions = {
   context: CanaryContext;
+  maxOutputTokens: number;
   prompt: string;
   role: ModelRole;
   signal: AbortSignal;
@@ -346,6 +350,7 @@ type RunToolProbeOptions = {
 
 const runToolProbe = async ({
   context: { config, provider },
+  maxOutputTokens,
   prompt,
   role,
   signal,
@@ -373,7 +378,7 @@ const runToolProbe = async ({
     modelOptions: mergeGenerationOptions({
       caching: NO_CACHING,
       model,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      maxOutputTokens,
       serviceTier: "standard",
       temperature: 0,
     }),
