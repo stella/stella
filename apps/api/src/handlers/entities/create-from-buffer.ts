@@ -33,7 +33,7 @@ const MAX_FILENAME_LENGTH = 255;
  * name is truncated (not the extension) when the total exceeds
  * 255 characters.
  */
-const sanitizeFilenamePreservingExtension = (name: string) => {
+export const sanitizeFilenamePreservingExtension = (name: string) => {
   const lastDot = name.lastIndexOf(".");
   if (lastDot === -1) {
     return sanitizeFilename(name);

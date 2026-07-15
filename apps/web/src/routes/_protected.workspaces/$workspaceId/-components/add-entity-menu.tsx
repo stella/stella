@@ -166,18 +166,20 @@ export const AddEntityMenu = ({
     name: string,
     style: StyleSelection,
   ): Promise<boolean> => {
-    const response = await api.entities({ workspaceId })["blank-document"].put({
+    const input = {
       queryKey: entitiesKeys.all(workspaceId),
       name,
       parentId: parentId ? toSafeId<"entity">(parentId) : null,
-      style:
-        style.type === "stella"
-          ? style
-          : {
-              type: "custom",
+    };
+    const response =
+      style.type === "stella"
+        ? await api.entities({ workspaceId })["blank-document"].put(input)
+        : await api
+            .entities({ workspaceId })
+            ["blank-document-from-style-set"].put({
+              ...input,
               styleSetId: toSafeId<"styleSet">(style.styleSetId),
-            },
-    });
+            });
     if (response.error) {
       stellaToast.add({
         title: t("errors.actionFailed"),

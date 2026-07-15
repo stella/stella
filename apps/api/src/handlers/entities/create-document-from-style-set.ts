@@ -3,22 +3,26 @@ import { t } from "elysia";
 
 import { createBlankDocument } from "@/api/handlers/entities/create-blank-document-service";
 import { createSafeHandler } from "@/api/lib/api-handlers";
-import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { readStyleSetBuffer } from "@/api/lib/style-sets";
 
 const bodySchema = t.Object({
   name: t.String({ minLength: 1, maxLength: 256 }),
   parentId: t.Optional(t.Nullable(tSafeId("entity"))),
+  styleSetId: tSafeId("styleSet"),
 });
 
+const config = {
+  permissions: { entity: ["create"], styleSet: ["use"] },
+  mcp: { type: "capability", reason: "template_authoring_ui" },
+  body: bodySchema,
+} satisfies HandlerConfig;
+
 export default createSafeHandler(
-  {
-    body: bodySchema,
-    permissions: { entity: ["create"] },
-    mcp: { type: "capability", reason: "document_processing" },
-  },
+  config,
   async function* ({
+    safeDb,
     scopedDb,
     session,
     user,
@@ -27,14 +31,10 @@ export default createSafeHandler(
     recordAuditEvent,
   }) {
     const buffer = yield* Result.await(
-      Result.tryPromise({
-        try: async () => await createTemplateBuffer({ type: "stella" }),
-        catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Could not create the document.",
-            cause,
-          }),
+      readStyleSetBuffer({
+        safeDb,
+        organizationId: session.activeOrganizationId,
+        styleSetId: body.styleSetId,
       }),
     );
 

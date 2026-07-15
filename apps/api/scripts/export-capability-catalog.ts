@@ -242,6 +242,7 @@ const SCOPE_STRICTNESS: Record<string, number> = {
 const ENTRY_SCOPE_OVERRIDES: Record<string, string> = {
   "entities.create": "stella:documents_write",
   "entities.create-blank-document": "stella:documents_write",
+  "entities.create-document-from-style-set": "stella:templates",
   "entities.delete": "stella:documents_write",
   "entities.delete-version": "stella:documents_write",
   "entities.move": "stella:documents_write",
@@ -310,7 +311,7 @@ const HANDLER_KIND_OVERRIDES: Record<string, HandlerKind> = {};
  *   pure count read used before running a workflow.
  */
 const ACCESS_OVERRIDES: Record<string, AccessClassification> = {
-  "entities.create-blank-document": {
+  "entities.create-document-from-style-set": {
     access: "write",
     destructive: false,
   },

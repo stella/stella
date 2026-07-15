@@ -9684,7 +9684,7 @@ export const generatedRouteMap: RouteNode = {
                 partPath: "name",
               },
             ],
-            inputOnly: ["body.parentId", "body.style"],
+            inputOnly: ["body.parentId"],
             paginated: false,
             destructive: false,
             scope: "documents_write",
@@ -9694,7 +9694,7 @@ export const generatedRouteMap: RouteNode = {
               properties: {
                 body: {
                   type: "object",
-                  required: ["name", "style"],
+                  required: ["name"],
                   properties: {
                     name: {
                       minLength: 1,
@@ -9716,36 +9716,95 @@ export const generatedRouteMap: RouteNode = {
                         },
                       ],
                     },
-                    style: {
+                  },
+                },
+                params: {
+                  type: "object",
+                  properties: {
+                    workspaceId: {
+                      type: "string",
+                    },
+                  },
+                  required: ["workspaceId"],
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "create-document-from-style-set": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["entities", "create-document-from-style-set"],
+            capabilityId: "entities.create-document-from-style-set",
+            access: "write",
+            flags: [
+              {
+                flag: "--workspace",
+                prop: "workspace",
+                kind: "string",
+                required: true,
+                repeatable: false,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--name",
+                prop: "name",
+                required: true,
+                part: "body",
+                partPath: "name",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--style-set-id",
+                prop: "styleSetId",
+                required: true,
+                part: "body",
+                partPath: "styleSetId",
+              },
+            ],
+            inputOnly: ["body.parentId"],
+            paginated: false,
+            destructive: false,
+            scope: "templates",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                body: {
+                  type: "object",
+                  required: ["name", "styleSetId"],
+                  properties: {
+                    name: {
+                      minLength: 1,
+                      maxLength: 256,
+                      type: "string",
+                    },
+                    parentId: {
+                      nullable: true,
                       anyOf: [
                         {
-                          type: "object",
-                          required: ["type"],
-                          properties: {
-                            type: {
-                              const: "stella",
-                              type: "string",
-                            },
-                          },
+                          minLength: 36,
+                          maxLength: 36,
+                          pattern:
+                            "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                          type: "string",
                         },
                         {
-                          type: "object",
-                          required: ["type", "styleSetId"],
-                          properties: {
-                            type: {
-                              const: "custom",
-                              type: "string",
-                            },
-                            styleSetId: {
-                              minLength: 36,
-                              maxLength: 36,
-                              pattern:
-                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-                              type: "string",
-                            },
-                          },
+                          type: "null",
                         },
                       ],
+                    },
+                    styleSetId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
                     },
                   },
                 },

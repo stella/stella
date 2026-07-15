@@ -37,7 +37,8 @@ void mock.module("@/api/lib/file-derivative-queue", () => ({
   initFileDerivativeWorker: mock(() => undefined),
 }));
 
-const { createEntityFromBuffer } = await import("./create-from-buffer");
+const { createEntityFromBuffer, sanitizeFilenamePreservingExtension } =
+  await import("./create-from-buffer");
 
 const organizationId = toSafeId<"organization">(
   "00000000-0000-0000-0000-000000000001",
@@ -50,6 +51,15 @@ const propertyId = toSafeId<"property">("00000000-0000-0000-0000-000000000004");
 const parentId = toSafeId<"entity">("00000000-0000-0000-0000-000000000005");
 
 describe("createEntityFromBuffer", () => {
+  test("preserves the DOCX extension when truncating a long name", () => {
+    const fileName = sanitizeFilenamePreservingExtension(
+      `${"a".repeat(256)}.docx`,
+    );
+
+    expect(fileName).toHaveLength(255);
+    expect(fileName.endsWith(".docx")).toBe(true);
+  });
+
   test("writes an entity create audit log with the DB insert", async () => {
     let nextDocumentSequence = 0;
     let insertedEntity: unknown;

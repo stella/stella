@@ -7,6 +7,7 @@ import compareVersions from "@/api/handlers/entities/compare-versions";
 import copyToWorkspace from "@/api/handlers/entities/copy-to-workspace";
 import createEntities from "@/api/handlers/entities/create";
 import createBlankDocument from "@/api/handlers/entities/create-blank-document";
+import createDocumentFromStyleSet from "@/api/handlers/entities/create-document-from-style-set";
 import createFromLegalSource from "@/api/handlers/entities/create-from-legal-source";
 import deleteEntities from "@/api/handlers/entities/delete";
 import deleteVersion from "@/api/handlers/entities/delete-version";
@@ -95,6 +96,11 @@ export const entitiesRoute = new Elysia({
     body: createBlankDocument.config.body,
     invalidateQuery: true,
     permissions: createBlankDocument.config.permissions,
+  })
+  .put("/blank-document-from-style-set", createDocumentFromStyleSet.handler, {
+    body: createDocumentFromStyleSet.config.body,
+    invalidateQuery: true,
+    permissions: createDocumentFromStyleSet.config.permissions,
   })
   .post("/upload", uploadEntity.handler, {
     body: uploadEntity.config.body,

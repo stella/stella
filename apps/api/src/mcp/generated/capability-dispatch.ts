@@ -193,6 +193,10 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/entities/create-blank-document"),
   },
+  "entities.create-document-from-style-set": {
+    load: async () =>
+      await import("@/api/handlers/entities/create-document-from-style-set"),
+  },
   "entities.create-from-legal-source": {
     load: async () =>
       await import("@/api/handlers/entities/create-from-legal-source"),
