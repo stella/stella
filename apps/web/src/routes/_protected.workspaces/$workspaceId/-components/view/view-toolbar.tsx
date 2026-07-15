@@ -18,7 +18,7 @@ import {
   WandSparklesIcon,
   WrapTextIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -43,6 +43,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
+import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";

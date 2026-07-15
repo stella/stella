@@ -2,13 +2,14 @@ import { Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
+import { useLocale } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { prefetchRouteQuery } from "@/lib/react-query";

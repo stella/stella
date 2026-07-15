@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { CheckIcon, XIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
@@ -10,6 +10,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
+import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
 import { getDisplayName } from "@/routes/_protected.workspaces/-components/team-avatars";
 import type {

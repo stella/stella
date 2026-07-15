@@ -3,11 +3,12 @@ import type { UIEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { CalendarIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useLocale } from "@/i18n/formatting-context";
 import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";

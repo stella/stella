@@ -70,19 +70,12 @@ export const formatDateInTimeZone = ({
 
 type FormatIsoDateForDisplayProps = {
   isoDate: string;
-  countryCode?: string;
 };
 
 export const formatIsoDateForDisplay = ({
   isoDate,
-  countryCode,
 }: FormatIsoDateForDisplayProps) => {
   const [year, month, day] = isoDate.split("-");
-
-  if (countryCode === "IN" && year && month && day) {
-    return `${day}-${month}-${year}`;
-  }
-
   const date = new Date(Number(year), Number(month) - 1, Number(day));
 
   return date.toLocaleDateString("en-GB", {

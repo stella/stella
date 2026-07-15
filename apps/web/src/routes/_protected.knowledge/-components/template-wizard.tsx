@@ -8,7 +8,7 @@ import {
   PlusIcon,
   XIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type { ConditionNode } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
@@ -37,6 +37,7 @@ import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { useLocale } from "@/i18n/formatting-context";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";

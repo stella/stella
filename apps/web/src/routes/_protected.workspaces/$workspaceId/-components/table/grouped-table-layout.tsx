@@ -7,12 +7,13 @@ import {
 } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
 import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import type {
   EntityKind,
   PropertyId,

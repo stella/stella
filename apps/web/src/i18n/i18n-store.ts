@@ -210,7 +210,17 @@ export const getTranslator = () => translator;
 
 export type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
 export type NumberingPreference = "auto" | "latn" | "arab";
+export type RegionalFormatPreference = "auto" | "en-IN";
 export type WeekStartPreference = "auto" | "saturday" | "sunday" | "monday";
+
+export const REGIONAL_FORMATS = ["en-IN"] as const satisfies readonly Exclude<
+  RegionalFormatPreference,
+  "auto"
+>[];
+
+export const REGIONAL_FORMAT_LABELS = {
+  "en-IN": "English (India)",
+} as const satisfies Record<Exclude<RegionalFormatPreference, "auto">, string>;
 
 const WEEK_START_KEYWORD = {
   saturday: "sat",
@@ -221,6 +231,7 @@ const WEEK_START_KEYWORD = {
 type FormattingLocaleOptions = {
   lang: SupportedLanguage;
   region: string;
+  regionalFormat: RegionalFormatPreference;
   calendar: CalendarPreference;
   numberingSystem: NumberingPreference;
   weekStart: WeekStartPreference;
@@ -239,22 +250,27 @@ type FormattingLocaleOptions = {
 export const buildFormattingLocale = ({
   lang,
   region,
+  regionalFormat,
   calendar,
   numberingSystem,
   weekStart,
 }: FormattingLocaleOptions): string => {
-  // Skip the detected region when the language already encodes one (e.g.
-  // pt-BR): appending would build an invalid tag like "pt-BR-BR".
-  const base = region && !lang.includes("-") ? `${lang}-${region}` : lang;
+  // A regional-format override is a complete locale because Intl grouping is
+  // language-sensitive: en-IN uses lakhs/crores while de-IN does not. In auto
+  // mode, skip the detected region when the UI language already encodes one
+  // (e.g. pt-BR), which avoids an invalid tag like "pt-BR-BR".
+  const autoBase = region && !lang.includes("-") ? `${lang}-${region}` : lang;
+  const base = regionalFormat === "auto" ? autoBase : regionalFormat;
+  const formattingLanguage = new Intl.Locale(base).language;
   const calendarSystem = calendar === "auto" ? "gregory" : calendar;
-  const autoNumbers = lang === "ar" ? "arab" : "latn";
+  const autoNumbers = formattingLanguage === "ar" ? "arab" : "latn";
   const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;
 
   // Unicode extension keywords, kept in canonical (alphabetical) order: ca, fw, nu.
   const keywords: string[] = [];
   // Pin Arabic to an explicit calendar (some CLDR regions default to a
   // non-Gregorian one) and carry any non-Gregorian opt-in.
-  if (calendarSystem !== "gregory" || lang === "ar") {
+  if (calendarSystem !== "gregory" || formattingLanguage === "ar") {
     keywords.push(`ca-${calendarSystem}`);
   }
   if (weekStart !== "auto") {
@@ -288,6 +304,7 @@ type State = {
   // Detected browser region subtag (e.g. "SA"); not persisted — re-detected
   // each boot. Drives region-specific formatting and the first day of week.
   region: string;
+  regionalFormat: RegionalFormatPreference;
   calendar: CalendarPreference;
   numberingSystem: NumberingPreference;
   weekStart: WeekStartPreference;
@@ -298,6 +315,7 @@ type Actions = {
   loadMessages: (lang: SupportedLanguage) => Promise<void>;
   setCalendar: (calendar: CalendarPreference) => void;
   setNumberingSystem: (numberingSystem: NumberingPreference) => void;
+  setRegionalFormat: (regionalFormat: RegionalFormatPreference) => void;
   setWeekStart: (weekStart: WeekStartPreference) => void;
 };
 
@@ -322,6 +340,7 @@ type ApplyMessagesArgs = {
   lang: SupportedLanguage;
   messages: LocaleMessages;
   region: string;
+  regionalFormat: RegionalFormatPreference;
   calendar: CalendarPreference;
   numberingSystem: NumberingPreference;
   weekStart: WeekStartPreference;
@@ -331,6 +350,7 @@ const applyMessages = ({
   lang,
   messages,
   region,
+  regionalFormat,
   calendar,
   numberingSystem,
   weekStart,
@@ -343,6 +363,7 @@ const applyMessages = ({
     buildFormattingLocale({
       lang,
       region,
+      regionalFormat,
       calendar,
       numberingSystem,
       weekStart,
@@ -357,6 +378,7 @@ const recomputeFormatterForState = (state: State): void => {
     buildFormattingLocale({
       lang: state.loadedLang,
       region: state.region,
+      regionalFormat: state.regionalFormat,
       calendar: state.calendar,
       numberingSystem: state.numberingSystem,
       weekStart: state.weekStart,
@@ -378,6 +400,7 @@ export const useI18nStore = create<State & Actions>()(
       // non-English locale cannot skip the spinner before its bundle arrives.
       hasLoadedOnce: false,
       region: defaultRegion,
+      regionalFormat: "auto",
       calendar: "auto",
       numberingSystem: "auto",
       weekStart: "auto",
@@ -410,6 +433,7 @@ export const useI18nStore = create<State & Actions>()(
             lang: fallback.loadedLang,
             messages: fallback.messages,
             region: fallback.region,
+            regionalFormat: fallback.regionalFormat,
             calendar: fallback.calendar,
             numberingSystem: fallback.numberingSystem,
             weekStart: fallback.weekStart,
@@ -426,11 +450,13 @@ export const useI18nStore = create<State & Actions>()(
           return;
         }
 
-        const { region, calendar, numberingSystem, weekStart } = get();
+        const { region, regionalFormat, calendar, numberingSystem, weekStart } =
+          get();
         applyMessages({
           lang,
           messages,
           region,
+          regionalFormat,
           calendar,
           numberingSystem,
           weekStart,
@@ -458,6 +484,11 @@ export const useI18nStore = create<State & Actions>()(
         recomputeFormatterForState(get());
       },
 
+      setRegionalFormat: (regionalFormat) => {
+        set({ regionalFormat });
+        recomputeFormatterForState(get());
+      },
+
       setWeekStart: (weekStart) => {
         set({ weekStart });
         recomputeFormatterForState(get());
@@ -470,6 +501,7 @@ export const useI18nStore = create<State & Actions>()(
         lang: state.lang,
         calendar: state.calendar,
         numberingSystem: state.numberingSystem,
+        regionalFormat: state.regionalFormat,
         weekStart: state.weekStart,
       }),
       onRehydrateStorage: () => (state) => {
@@ -501,11 +533,16 @@ export const getFormattingLocale = (): string => {
   return buildFormattingLocale({
     lang: state.loadedLang,
     region: state.region,
+    regionalFormat: state.regionalFormat,
     calendar: state.calendar,
     numberingSystem: state.numberingSystem,
     weekStart: state.weekStart,
   });
 };
+
+/** The message language, without regional formatting overrides. */
+export const getMessageLocale = (): SupportedLanguage =>
+  useI18nStore.getState().loadedLang;
 
 const waitForHydration = async (): Promise<void> => {
   if (useI18nStore.persist.hasHydrated()) {

@@ -44,6 +44,8 @@
     "numbersEastern": "Východní (٠١٢٣)",
     "numbersWestern": "Západní (0123)",
     "palette": "Paleta",
+    "regionalFormat": "Formát data a čísel",
+    "regionalFormatAuto": "Automaticky",
     "system": "Systém",
     "theme": "Vzhled",
     "title": "Vzhled",

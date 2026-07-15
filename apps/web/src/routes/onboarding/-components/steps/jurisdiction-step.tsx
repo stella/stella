@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 import createGlobe from "cobe";
 import { XIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Form } from "@stll/ui/components/form";
@@ -11,6 +11,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLocale } from "@/i18n/formatting-context";
 import {
   COUNTRY_POINTS,
   countryName,

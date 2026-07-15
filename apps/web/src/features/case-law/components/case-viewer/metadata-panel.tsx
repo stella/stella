@@ -1,11 +1,12 @@
 import { useState } from "react";
 
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { getDocumentAstMetadata } from "@stll/legal-ast/document-ast";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { sanitizeHref } from "@/lib/sanitize-href";

@@ -44,6 +44,8 @@
     "numbersEastern": "Ida (٠١٢٣)",
     "numbersWestern": "Lääne (0123)",
     "palette": "Palett",
+    "regionalFormat": "Piirkondlik vorming",
+    "regionalFormatAuto": "Automaatne",
     "system": "Süsteem",
     "theme": "Teema",
     "title": "Välimus",

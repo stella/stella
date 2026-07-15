@@ -1,4 +1,4 @@
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -8,6 +8,8 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
+
+import { useFormatter } from "@/i18n/formatting-context";
 
 /** Model-context estimate for a chat thread's next send, as returned by the
  *  chat-messages endpoint. The five breakdown parts sum to `estimatedTokens`,

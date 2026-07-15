@@ -12,7 +12,7 @@ import {
   SearchIcon,
   XIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { EU_MEMBER_STATES } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
@@ -48,6 +48,7 @@ import {
   ResponsiveActionToolbar,
   ResponsiveActionToolbarItem,
 } from "@/components/responsive-action-toolbar";
+import { useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { compareByLocale } from "@/lib/collation";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";

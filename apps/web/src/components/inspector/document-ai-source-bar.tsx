@@ -7,7 +7,7 @@ import {
   ChevronRightIcon,
   LoaderCircleIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { FileTab } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";

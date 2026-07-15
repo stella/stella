@@ -33,7 +33,6 @@ type State = {
   folderState: FolderState;
   filesystemSelectedIds: Set<string>;
   expandedTableRowEntityId: string | null;
-  primaryJurisdictionCountryCode: string | null;
 };
 
 type Actions = {
@@ -71,7 +70,6 @@ type Actions = {
   setFilesystemSelectedIds: (selectedIds: Set<string>) => void;
   clearFilesystemSelectedIds: () => void;
   setExpandedTableRowEntityId: (entityId: string | null) => void;
-  setPrimaryJurisdictionCountryCode: (code: string | null) => void;
 };
 
 const initialPdfViewerState = (): PdfViewerState => ({
@@ -136,7 +134,6 @@ export const useWorkspaceStore = create<State & Actions>()(
     },
     filesystemSelectedIds: new Set(),
     expandedTableRowEntityId: null,
-    primaryJurisdictionCountryCode: null,
 
     syncJustifications: (justifications) =>
       set((state) => {
@@ -262,7 +259,5 @@ export const useWorkspaceStore = create<State & Actions>()(
       set((state) => {
         state.expandedTableRowEntityId = entityId;
       }),
-    setPrimaryJurisdictionCountryCode: (primaryJurisdictionCountryCode) =>
-      set({ primaryJurisdictionCountryCode }),
   })),
 );

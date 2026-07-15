@@ -88,6 +88,7 @@ import {
 } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { logger } from "@/api/lib/observability/logger";
 import {
   getRequestContext,
@@ -274,6 +275,7 @@ const api = new Elysia()
         "Content-Type",
         "Authorization",
         "MCP-Protocol-Version",
+        FORMATTING_LOCALE_HEADER,
         SESSION_ID_HEADER,
       ],
       exposeHeaders: [

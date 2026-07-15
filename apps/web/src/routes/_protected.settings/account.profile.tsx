@@ -46,6 +46,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import {
   LANG_ENDONYMS,
+  REGIONAL_FORMAT_LABELS,
+  REGIONAL_FORMATS,
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
@@ -73,7 +75,13 @@ export const Route = createFileRoute("/_protected/settings/account/profile")({
 });
 
 const SESSION_ROW_KEYS = ["a", "b", "c"];
-const PREFERENCE_ROW_KEYS = ["language", "calendar", "weekStart", "numbers"];
+const PREFERENCE_ROW_KEYS = [
+  "language",
+  "regionalFormat",
+  "calendar",
+  "weekStart",
+  "numbers",
+];
 
 // Mirrors the real profile fragment: settings header, the timezone +
 // word-edit-identity Frame, and the sessions section, so the layout does
@@ -808,6 +816,8 @@ const LocalePreferences = () => {
   const t = useTranslations();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
+  const regionalFormat = useI18nStore((s) => s.regionalFormat);
+  const setRegionalFormat = useI18nStore((s) => s.setRegionalFormat);
   const calendar = useI18nStore((s) => s.calendar);
   const setCalendar = useI18nStore((s) => s.setCalendar);
   const weekStart = useI18nStore((s) => s.weekStart);
@@ -839,6 +849,34 @@ const LocalePreferences = () => {
               {supportedLanguages.map((code) => (
                 <SelectItem key={code} value={code}>
                   {LANG_ENDONYMS[code]}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </PreferenceRow>
+
+        <PreferenceRow
+          htmlFor="regional-format-select"
+          label={t("appearance.regionalFormat")}
+        >
+          <Select
+            onValueChange={(value) => {
+              if (value) {
+                setRegionalFormat(value);
+              }
+            }}
+            value={regionalFormat}
+          >
+            <SelectTrigger className="w-56" id="regional-format-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="auto">
+                {t("appearance.regionalFormatAuto")}
+              </SelectItem>
+              {REGIONAL_FORMATS.map((code) => (
+                <SelectItem key={code} value={code}>
+                  {REGIONAL_FORMAT_LABELS[code]}
                 </SelectItem>
               ))}
             </SelectPopup>

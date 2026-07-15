@@ -44,6 +44,8 @@
     "numbersEastern": "Orientales (٠١٢٣)",
     "numbersWestern": "Occidentales (0123)",
     "palette": "Paleta",
+    "regionalFormat": "Formato regional",
+    "regionalFormatAuto": "Automático",
     "system": "Sistema",
     "theme": "Tema",
     "title": "Apariencia",

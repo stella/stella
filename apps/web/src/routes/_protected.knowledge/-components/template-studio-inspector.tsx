@@ -18,7 +18,7 @@ import {
   SplitIcon,
   TextQuoteIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type {
   DirectiveRange,
@@ -61,6 +61,7 @@ import { registerInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
 import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray, optionalReadonlyArray } from "@/lib/arrays";

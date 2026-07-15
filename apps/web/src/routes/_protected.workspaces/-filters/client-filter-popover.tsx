@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { CheckIcon, XIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
@@ -9,6 +9,7 @@ import { Input } from "@stll/ui/components/input";
 import { Separator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useLocale } from "@/i18n/formatting-context";
 import { compareByLocale } from "@/lib/collation";
 import type { Workspace } from "@/routes/_protected.workspaces/-types";
 

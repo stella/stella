@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon, XIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -19,6 +19,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-picker-popover";
 import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/components/date-picker-popover";
 import { UserAvatar } from "@/components/user-avatar";
+import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";

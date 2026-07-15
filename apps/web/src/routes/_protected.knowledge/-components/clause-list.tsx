@@ -8,7 +8,7 @@ import {
   UploadIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -23,6 +23,7 @@ import {
   ResponsiveActionToolbarItem,
 } from "@/components/responsive-action-toolbar";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import {

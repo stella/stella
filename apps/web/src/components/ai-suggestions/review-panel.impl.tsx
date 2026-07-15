@@ -17,7 +17,7 @@ import {
   LoaderCircleIcon,
   XIcon,
 } from "lucide-react";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { diffWordSegments } from "@stll/folio-react";
 import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio-react";
@@ -55,6 +55,7 @@ import type {
   ReviewSuggestionPreview,
 } from "@/components/ai-suggestions/review-store";
 import Tooltip from "@/components/tooltip";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth";
 import { compareByLocale } from "@/lib/collation";
 import { toAuthClientError } from "@/lib/errors/auth";

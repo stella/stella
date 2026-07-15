@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 
 import { useDebouncedCallback } from "use-debounce";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/components/input";
 import {
@@ -17,6 +17,7 @@ import type {
   DecisionListFilters,
   SearchFacets,
 } from "@/features/case-law/queries/decisions";
+import { useFormatter } from "@/i18n/formatting-context";
 
 type DecisionFiltersProps = {
   filters: DecisionListFilters;

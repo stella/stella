@@ -15,7 +15,7 @@ import {
   Trash2Icon,
   UploadIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
@@ -45,6 +45,7 @@ import {
 } from "@/components/inspector/inspector-store";
 import { MarkdownIcon } from "@/components/markdown-icon";
 import { useMountEffect } from "@/hooks/use-effect";
+import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
 import { MARKDOWN_MIME, isMarkdownFile } from "@/lib/consts";

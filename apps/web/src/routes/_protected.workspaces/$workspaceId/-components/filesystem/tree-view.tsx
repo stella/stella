@@ -27,7 +27,7 @@ import {
   FolderOpenIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -55,6 +55,7 @@ import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useLocale } from "@/i18n/formatting-context";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";

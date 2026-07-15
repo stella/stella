@@ -22,7 +22,7 @@ import {
   SquareCheckIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type { OptionColor } from "@stll/api/types";
 import {
@@ -57,6 +57,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useFormatter } from "@/i18n/formatting-context";
 import type {
   EntityKind,
   WorkspaceEntity,

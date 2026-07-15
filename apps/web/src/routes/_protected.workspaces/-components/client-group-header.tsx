@@ -1,11 +1,11 @@
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
-import { useFormatter } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useFormatter } from "@/i18n/formatting-context";
 import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
 
 type ClientGroupHeaderProps = {

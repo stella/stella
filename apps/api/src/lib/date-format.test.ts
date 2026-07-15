@@ -31,13 +31,4 @@ describe("date format helpers", () => {
       }),
     ).toBe("29 Jul 2025");
   });
-
-  test("formats ISO dates as DD-MM-YYYY for Indian organizations", () => {
-    expect(
-      formatIsoDateForDisplay({
-        isoDate: "2025-07-29",
-        countryCode: "IN",
-      }),
-    ).toBe("29-07-2025");
-  });
 });

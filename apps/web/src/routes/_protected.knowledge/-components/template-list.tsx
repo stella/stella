@@ -17,7 +17,7 @@ import {
   WandSparklesIcon,
   XIcon,
 } from "lucide-react";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
@@ -68,6 +68,7 @@ import type { ContextMenuAction } from "@/components/context-menu";
 import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";

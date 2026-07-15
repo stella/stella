@@ -158,19 +158,11 @@ function RouteComponent() {
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
-  const workspace = Route.useLoaderData();
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- sync-state: updates store with primaryJurisdictionCountryCode from loader data on workspace change
-  useEffect(() => {
-    useWorkspaceStore
-      .getState()
-      .setPrimaryJurisdictionCountryCode(
-        workspace?.primaryJurisdictionCountryCode ?? null,
-      );
-  }, [workspace]);
-
-  const previewClearTimersRef = useRef(
-    new Map<string, ReturnType<typeof setTimeout>>(),
+  // Lazy state singleton (mutated in place, identity stable): avoids both
+  // the render-scope ref write (React Compiler bailout) and per-render
+  // allocation.
+  const [previewClearTimers] = useState(
+    () => new Map<string, ReturnType<typeof setTimeout>>(),
   );
 
   const handleWorkspaceSSEEvent = ({
