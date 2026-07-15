@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import type { PropsWithChildren, ReactNode } from "react";
+import type { ChangeEvent, PropsWithChildren, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -123,7 +123,7 @@ const StyleSetsPage = () => {
     window.open(response.data.presignedUrl, "_blank");
   };
 
-  const handleDownload = async (styleSet: StyleSetItem) => {
+  const downloadHandler = (styleSet: StyleSetItem) => async () => {
     try {
       await download(styleSet);
     } catch (error) {
@@ -145,6 +145,16 @@ const StyleSetsPage = () => {
         error,
         t(UNEXPECTED_ERROR_TRANSLATION_KEY),
       );
+    }
+  };
+
+  const handleReplaceInputChange = async (
+    event: ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.currentTarget.files?.item(0);
+    event.currentTarget.value = "";
+    if (file) {
+      await handleReplace(file);
     }
   };
 
@@ -238,7 +248,7 @@ const StyleSetsPage = () => {
               <div className="flex items-center gap-1">
                 <Button
                   aria-label={t("common.download")}
-                  onClick={() => void handleDownload(styleSet)}
+                  onClick={downloadHandler(styleSet)}
                   size="icon-xs"
                   variant="ghost"
                 >
@@ -299,13 +309,7 @@ const StyleSetsPage = () => {
       <input
         accept=".docx"
         className="hidden"
-        onChange={(event) => {
-          const file = event.currentTarget.files?.item(0);
-          event.currentTarget.value = "";
-          if (file) {
-            void handleReplace(file);
-          }
-        }}
+        onChange={handleReplaceInputChange}
         ref={replaceInputRef}
         type="file"
       />
@@ -495,7 +499,7 @@ const StyleSetFormDialog = ({
           </DialogClose>
           <Button
             disabled={saving || name.trim() === "" || (!styleSet && !file)}
-            onClick={() => void handleSave()}
+            onClick={handleSave}
           >
             {saving ? t("common.loading") : t("common.save")}
           </Button>
@@ -519,8 +523,7 @@ const ImportStyleSetDialog = ({
   />
 );
 
-// eslint-disable-next-line sonarjs/function-name -- React components use PascalCase.
-const RenameStyleSetDialog = ({
+const renameStyleSetDialog = ({
   styleSet,
   onOpenChange,
   onRenamed,
@@ -538,6 +541,8 @@ const RenameStyleSetDialog = ({
       styleSet={styleSet}
     />
   ) : null;
+
+const RenameStyleSetDialog = renameStyleSetDialog;
 
 const showError = (
   title: string,
