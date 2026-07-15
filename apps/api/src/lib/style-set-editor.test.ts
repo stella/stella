@@ -200,7 +200,7 @@ describe("style set visual editing", () => {
 
   test("treats an omitted section orientation as portrait", () => {
     const source = createStellaStyleEditorPreset();
-    source.preset.sectionProperties.orientation = undefined;
+    delete source.preset.sectionProperties.orientation;
     const originalWidth = source.preset.sectionProperties.pageWidth;
     const originalHeight = source.preset.sectionProperties.pageHeight;
     const settings = structuredClone(source.settings);

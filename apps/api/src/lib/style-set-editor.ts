@@ -687,7 +687,11 @@ const preserveEditorNumberingDefinition = (
   }
 
   const preserved = createEditorNumberingDefinition(numbering);
-  preserved.multiLevelType = currentAbstract.multiLevelType;
+  if (currentAbstract.multiLevelType === undefined) {
+    delete preserved.multiLevelType;
+  } else {
+    preserved.multiLevelType = currentAbstract.multiLevelType;
+  }
   preserved.levels = structuredClone(currentAbstract.levels);
   const preservedNumId = numbering.nums.find(
     (candidate) => candidate.abstractNumId === preserved.abstractNumId,
