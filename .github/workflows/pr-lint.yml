@@ -1,18 +1,17 @@
 name: PR Lint
 
 on:
-  pull_request:
+  pull_request_target:
     # Run once when the PR opens, then only when a maintainer explicitly
-    # adds the "run-pr-lint" label.
+    # trusts a fork with "run-ci" or requests a rerun with "run-pr-lint".
+    # This metadata-only workflow must never check out or execute PR code.
     types: [opened, labeled]
-    branches-ignore:
-      - "dependabot/**"
 
 concurrency:
   # Keep manual reruns cancellable, but do not let unrelated label
   # events cancel an in-flight `run-pr-lint` execution.
   group: >-
-    ${{ github.workflow }}-${{ github.ref }}-${{
+    ${{ github.workflow }}-${{ github.event.pull_request.number }}-${{
       github.event.action == 'labeled' && github.event.label.name || 'opened'
     }}
   cancel-in-progress: true
@@ -25,8 +24,12 @@ permissions:
 jobs:
   pr-lint:
     if: >-
-      github.event.action != 'labeled'
-      || github.event.label.name == 'run-pr-lint'
+      github.event.pull_request.user.login != 'dependabot[bot]'
+      && (github.event.pull_request.head.repo.full_name == github.repository
+          || contains(github.event.pull_request.labels.*.name, 'run-ci'))
+      && (github.event.action != 'labeled'
+          || github.event.label.name == 'run-ci'
+          || github.event.label.name == 'run-pr-lint')
     # Reusable workflow only consumes the auto-provided GITHUB_TOKEN.
     # Do not switch to `secrets: inherit` — that widens the blast radius
     # if the reusable ever starts touching named secrets.
