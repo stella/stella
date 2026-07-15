@@ -26,7 +26,12 @@ import {
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
 } from "@stll/ai-catalog";
-import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
+import type {
+  AIProvider,
+  BYOKProvider,
+  ModelRole,
+  TanStackAIProvider,
+} from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
 import {
@@ -54,10 +59,7 @@ export type { AIProvider, BYOKProvider, ModelRole };
 
 type TanStackTextAdapterFactory = (modelId: string) => AnyTextAdapter;
 
-export type TanStackTextProvider = Exclude<
-  AIProvider,
-  "azure_foundry" | "huggingface" | "openai_compatible"
->;
+export type TanStackTextProvider = TanStackAIProvider;
 
 const INSTANCE_PROVIDER_PREFERENCE = [
   "openrouter",
