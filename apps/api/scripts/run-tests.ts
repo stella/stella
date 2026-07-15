@@ -42,9 +42,9 @@ for (const { source, testPath } of classifiedTests) {
   regularTests.push(testPath);
 }
 
-const runTests = (testFiles: string[], isolate: boolean) => {
+const runTests = async (testFiles: string[], isolate: boolean) => {
   if (testFiles.length === 0) {
-    return Promise.resolve(0);
+    return 0;
   }
 
   const executionMode = isolate ? "isolated" : "shared-process";
@@ -64,7 +64,7 @@ const runTests = (testFiles: string[], isolate: boolean) => {
     stdout: "inherit",
     stderr: "inherit",
   });
-  return child.exited;
+  return await child.exited;
 };
 
 const regularExitCode = await runTests(regularTests, false);
