@@ -1,10 +1,14 @@
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
+import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { createModel, extendAdapter } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
-import { bedrockText } from "@tanstack/ai-bedrock";
-import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
+import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
+import type {
+  BedrockConverseProviderOptions,
+  ResolvedBedrockAuth,
+} from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
@@ -396,11 +400,25 @@ const createExtendedMistralAdapter = (
   return mistral(modelId, apiKey);
 };
 
+// The AWS SDK's default Node transport closes Converse event streams early in Bun.
+class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
+  protected override buildClientConfig(
+    resolved: ResolvedBedrockAuth,
+    region: string,
+    endpoint: string | undefined,
+  ) {
+    return {
+      ...super.buildClientConfig(resolved, region, endpoint),
+      requestHandler: new FetchHttpHandler(),
+    };
+  }
+}
+
 const createBedrockTextAdapter = (
   model: never,
   config?: BedrockTextAdapterConfig,
 ): AnyTextAdapter => {
-  const adapter = bedrockText(model, config);
+  const adapter = new BunBedrockTextAdapter(config ?? {}, model);
   return {
     kind: "text",
     name: adapter.name,
