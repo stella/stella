@@ -1,7 +1,22 @@
-import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 
-export const CANARY_PROVIDERS = TANSTACK_AI_PROVIDERS;
+import type { TanStackTextProvider } from "@/api/lib/tanstack-ai-models";
+
+const defineCanaryProviders = <
+  const TProviders extends readonly TanStackTextProvider[],
+>(
+  providers: TProviders &
+    ([TanStackTextProvider] extends [TProviders[number]] ? unknown : never),
+): TProviders => providers;
+
+export const CANARY_PROVIDERS = defineCanaryProviders([
+  "google",
+  "openrouter",
+  "openai",
+  "anthropic",
+  "bedrock",
+  "mistral",
+]);
 
 export type CanaryProvider = (typeof CANARY_PROVIDERS)[number];
 export type CanaryProviderSelection = "all" | CanaryProvider;
