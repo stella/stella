@@ -400,7 +400,7 @@ const NumberField = ({
   value,
   min,
   max,
-  step = 0.25,
+  step,
   onChange,
   label,
   suffix,
@@ -408,6 +408,7 @@ const NumberField = ({
   suffixKey,
 }: NumberFieldProps) => {
   const t = useTranslations();
+  const resolvedStep = step ?? 0.25;
   const resolvedLabel = labelKey ? t(labelKey) : label;
   const resolvedSuffix = suffixKey ? t(suffixKey) : suffix;
   return (
@@ -426,14 +427,14 @@ const NumberField = ({
               Number.isFinite(next) &&
               next >= min &&
               next <= max &&
-              Number.isInteger((next - min) / step)
+              Number.isInteger((next - min) / resolvedStep)
             ) {
               onChange(next);
             } else if (event.currentTarget.value === "") {
               onChange(min);
             }
           }}
-          step={step}
+          step={resolvedStep}
           type="number"
           value={value}
         />
