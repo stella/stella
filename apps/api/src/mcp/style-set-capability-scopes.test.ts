@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog.json";
 
 describe("style set document capability scopes", () => {
-  test("separates stella Style and custom Style Set consent", () => {
+  test("keeps compound custom Style Set consent out of the catalog", () => {
     const stellaStyle = capabilityCatalog.find(
       ({ id }) => id === "entities.create-blank-document",
     );
@@ -12,10 +12,9 @@ describe("style set document capability scopes", () => {
     );
 
     expect(stellaStyle?.scope).toBe("stella:documents_write");
-    expect(customStyleSet?.scope).toBe("stella:templates");
+    expect(customStyleSet).toBeUndefined();
     expect(JSON.stringify(stellaStyle?.inputSchema)).not.toContain(
       "styleSetId",
     );
-    expect(JSON.stringify(customStyleSet?.inputSchema)).toContain("styleSetId");
   });
 });

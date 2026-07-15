@@ -15,7 +15,7 @@ const bodySchema = t.Object({
 
 const config = {
   permissions: { entity: ["create"], styleSet: ["use"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: { type: "internal", reason: "compound_consent" },
   body: bodySchema,
 } satisfies HandlerConfig;
 

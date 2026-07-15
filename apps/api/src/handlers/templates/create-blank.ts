@@ -16,7 +16,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 const createBlankTemplateBodySchema = t.Object({
   name: tDefaultVarchar,
@@ -59,7 +59,7 @@ const createBlankTemplateHandler = async function* ({
     userId,
     buffer,
     name,
-    fileName: sanitizeFilename(`${name}.docx`),
+    fileName: sanitizeFilenamePreservingExtension(`${name}.docx`),
     categoryId,
     recordAuditEvent,
   });

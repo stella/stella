@@ -17,7 +17,7 @@ import { createTemplateBuffer } from "@/api/lib/create-template-buffer";
 import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createTemplateFromStylesBodySchema = t.Object({
@@ -82,7 +82,7 @@ const createTemplateFromStylesHandler = async function* ({
     userId,
     buffer,
     name,
-    fileName: sanitizeFilename(`${name}.docx`),
+    fileName: sanitizeFilenamePreservingExtension(`${name}.docx`),
     recordAuditEvent,
   });
 };

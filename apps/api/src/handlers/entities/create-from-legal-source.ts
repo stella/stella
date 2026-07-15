@@ -7,7 +7,7 @@ import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-reg
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createFromLegalSourceBodySchema = t.Object({
@@ -48,7 +48,7 @@ export default createSafeHandler(
       );
     }
 
-    const fileName = sanitizeFilename(`${name}.docx`);
+    const fileName = sanitizeFilenamePreservingExtension(`${name}.docx`);
 
     const created = yield* Result.await(
       createEntityFromBuffer({

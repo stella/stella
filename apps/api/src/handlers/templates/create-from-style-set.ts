@@ -14,7 +14,7 @@ import type {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { readStyleSetBuffer } from "@/api/lib/style-sets";
 
 const bodySchema = t.Object({
@@ -56,7 +56,7 @@ const createTemplateFromStyleSetHandler = async function* ({
     userId,
     buffer,
     name: body.name,
-    fileName: sanitizeFilename(`${body.name}.docx`),
+    fileName: sanitizeFilenamePreservingExtension(`${body.name}.docx`),
     categoryId: body.categoryId,
     recordAuditEvent,
   });
