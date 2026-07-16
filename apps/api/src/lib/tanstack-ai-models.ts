@@ -5,10 +5,7 @@ import type { AnyTextAdapter } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
 import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
-import type {
-  BedrockConverseProviderOptions,
-  ResolvedBedrockAuth,
-} from "@tanstack/ai-bedrock";
+import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
@@ -400,18 +397,14 @@ const createExtendedMistralAdapter = (
   return mistral(modelId, apiKey);
 };
 
-// The AWS SDK's default Node transport closes Converse event streams early in Bun.
+// The AWS SDK's default Node HTTP/2 transport closes Converse streams early in Bun.
 class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
-  protected override buildClientConfig(
-    resolved: ResolvedBedrockAuth,
-    region: string,
-    endpoint: string | undefined,
-  ) {
-    return {
-      // eslint-disable-next-line typescript/no-unsafe-argument -- Oxc loses this re-exported upstream type; the override uses the base method's exact parameter type.
-      ...super.buildClientConfig(resolved, region, endpoint),
-      requestHandler: new FetchHttpHandler(),
-    };
+  private readonly requestHandler = new FetchHttpHandler();
+
+  protected override async getClient() {
+    const client = await super.getClient();
+    client.config.requestHandler = this.requestHandler;
+    return client;
   }
 }
 
