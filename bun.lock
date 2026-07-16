@@ -44,6 +44,7 @@
         "@opentelemetry/api-logs": "^0.220.0",
         "@react-email/render": "^2.0.10",
         "@sinclair/typebox": "^0.34.50",
+        "@smithy/fetch-http-handler": "^5.4.6",
         "@stll/ai-catalog": "workspace:*",
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",

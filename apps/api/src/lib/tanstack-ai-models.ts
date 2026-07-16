@@ -1,9 +1,10 @@
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
+import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { createModel, extendAdapter } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
-import { bedrockText } from "@tanstack/ai-bedrock";
+import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
 import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
@@ -396,11 +397,22 @@ const createExtendedMistralAdapter = (
   return mistral(modelId, apiKey);
 };
 
+// The AWS SDK's default Node HTTP/2 transport closes Converse streams early in Bun.
+class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
+  private readonly requestHandler = new FetchHttpHandler();
+
+  protected override async getClient() {
+    const client = await super.getClient();
+    client.config.requestHandler = this.requestHandler;
+    return client;
+  }
+}
+
 const createBedrockTextAdapter = (
   model: never,
   config?: BedrockTextAdapterConfig,
 ): AnyTextAdapter => {
-  const adapter = bedrockText(model, config);
+  const adapter = new BunBedrockTextAdapter(config ?? {}, model);
   return {
     kind: "text",
     name: adapter.name,
