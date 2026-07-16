@@ -19,21 +19,13 @@ import {
   mergeGenerationOptions,
   resolveTanStackTextModel,
 } from "@/api/lib/tanstack-ai-generate";
-import type { TanStackTextProvider } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 
-import { modelRoleMaxOutputTokens } from "./ai-provider-canary-config";
-
-const CANARY_PROVIDERS = [
-  "google",
-  "openrouter",
-  "openai",
-  "anthropic",
-  "bedrock",
-  "mistral",
-] as const satisfies readonly TanStackTextProvider[];
-
-type CanaryProvider = (typeof CANARY_PROVIDERS)[number];
+import {
+  CANARY_PROVIDERS,
+  modelRoleMaxOutputTokens,
+} from "./ai-provider-canary-config";
+import type { CanaryProvider } from "./ai-provider-canary-config";
 
 const CAPABILITY_ROLE = "fast" satisfies ModelRole;
 const TOOL_CALL_ROLE = "chat" satisfies ModelRole;
