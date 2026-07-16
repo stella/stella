@@ -4813,6 +4813,15 @@ export const generatedRouteMap: RouteNode = {
                 part: "query",
                 partPath: "to",
               },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--to-exclusive",
+                prop: "toExclusive",
+                required: false,
+                part: "query",
+                partPath: "toExclusive",
+              },
             ],
             inputOnly: [],
             paginated: true,
@@ -4856,6 +4865,10 @@ export const generatedRouteMap: RouteNode = {
                       type: "string",
                     },
                     to: {
+                      format: "date-time",
+                      type: "string",
+                    },
+                    toExclusive: {
                       format: "date-time",
                       type: "string",
                     },

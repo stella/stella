@@ -12,6 +12,7 @@ export type AuditLogsPageKey = {
   userId?: string | undefined;
   from?: string | undefined;
   to?: string | undefined;
+  toExclusive?: string | undefined;
   limit?: number | undefined;
   cursor?: string | undefined;
 };
@@ -29,6 +30,7 @@ export const auditLogKeys = {
         userId: key.userId,
         from: key.from,
         to: key.to,
+        toExclusive: key.toExclusive,
         limit: key.limit,
         cursor: key.cursor,
       },
@@ -49,6 +51,7 @@ export const fetchAuditLogs = async (query: AuditLogsPageKey) => {
     userId?: string;
     from?: string;
     to?: string;
+    toExclusive?: string;
     limit?: number;
     cursor?: string;
   } = {};
@@ -73,6 +76,9 @@ export const fetchAuditLogs = async (query: AuditLogsPageKey) => {
   }
   if (query.to !== undefined) {
     cleanedQuery.to = query.to;
+  }
+  if (query.toExclusive !== undefined) {
+    cleanedQuery.toExclusive = query.toExclusive;
   }
   if (query.limit !== undefined) {
     cleanedQuery.limit = query.limit;

@@ -5,51 +5,64 @@ import { member, user } from "@/api/db/auth-schema";
 import { auditLogs } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
+} from "@/api/lib/audit-log";
 import { escapeCSV } from "@/api/lib/csv";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
-import { readAuditLogsQuerySchema, toAuditLogConditions } from "./read";
+import {
+  readAuditLogsQuerySchema,
+  toAuditLogConditions,
+  validateAuditLogFilter,
+} from "./query";
 
 const config = {
   permissions: { auditLog: ["read"] },
   mcp: { type: "internal", reason: "ui_navigation_state" },
   query: readAuditLogsQuerySchema,
-  audit: {
-    action: AUDIT_ACTION.DOWNLOAD,
-    resourceType: AUDIT_RESOURCE_TYPE.AUDIT_LOG,
-    getResourceId: () => "organization-logs",
-  },
 } satisfies HandlerConfig;
 
 const exportAuditLogs = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, query, set }) {
+  async function* ({ safeDb, session, recordAuditEvent, query, set }) {
+    const invalid = validateAuditLogFilter(query);
+    if (invalid !== null) {
+      return Result.err(new HandlerError({ status: 400, message: invalid }));
+    }
+
     const conditions = [
       eq(auditLogs.organizationId, session.activeOrganizationId),
       ...toAuditLogConditions(query),
     ];
 
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select()
+    const exportResult = yield* Result.await(
+      safeDb(async (tx) => {
+        const rows = await tx
+          .select({
+            createdAt: auditLogs.createdAt,
+            userId: auditLogs.userId,
+            action: auditLogs.action,
+            resourceType: auditLogs.resourceType,
+            resourceId: auditLogs.resourceId,
+            changes: auditLogs.changes,
+          })
           .from(auditLogs)
           .where(and(...conditions))
           .orderBy(desc(auditLogs.createdAt), desc(auditLogs.id))
-          .limit(LIMITS.exportRowLimit),
-      ),
-    );
+          .limit(LIMITS.exportRowLimit + 1);
 
-    // Batch-fetch user names/emails
-    const userIds = [
-      ...new Set(rows.flatMap((row) => (row.userId ? [row.userId] : []))),
-    ];
-    const userDetails =
-      userIds.length > 0
-        ? yield* Result.await(
-            safeDb((tx) =>
-              tx
+        if (rows.length > LIMITS.exportRowLimit) {
+          return { type: "tooLarge" as const };
+        }
+
+        const userIds = [...new Set(rows.map((row) => row.userId))];
+        const userDetails =
+          userIds.length > 0
+            ? await tx
                 .select({ id: user.id, name: user.name, email: user.email })
                 .from(user)
                 .innerJoin(member, eq(member.userId, user.id))
@@ -58,12 +71,37 @@ const exportAuditLogs = createSafeRootHandler(
                     eq(member.organizationId, session.activeOrganizationId),
                     inArray(user.id, userIds),
                   ),
-                ),
-            ),
-          )
-        : [];
+                )
+            : [];
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DOWNLOAD,
+          resourceType: AUDIT_RESOURCE_TYPE.AUDIT_LOG,
+          resourceId: ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
+        });
+
+        return {
+          type: "complete" as const,
+          rows,
+          userDetails,
+        };
+      }),
+    );
+
+    if (exportResult.type === "tooLarge") {
+      return Result.err(
+        new HandlerError({
+          status: 413,
+          message: `The export exceeds ${LIMITS.exportRowLimit} rows. Narrow the filters and try again.`,
+        }),
+      );
+    }
+
     const userMap = new Map(
-      userDetails.map((u) => [u.id, { name: u.name, email: u.email }]),
+      exportResult.userDetails.map((actor) => [
+        actor.id,
+        { name: actor.name, email: actor.email },
+      ]),
     );
 
     const headers = [
@@ -78,7 +116,7 @@ const exportAuditLogs = createSafeRootHandler(
 
     const csvRows = [headers.join(",")];
 
-    for (const row of rows) {
+    for (const row of exportResult.rows) {
       const u = row.userId ? userMap.get(row.userId) : undefined;
       const userName = u?.name ?? "";
       const userEmail = u?.email ?? "";

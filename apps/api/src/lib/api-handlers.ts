@@ -11,19 +11,12 @@ import { status } from "elysia";
 import type { ModelRole } from "@stll/ai-catalog";
 import type { PermissionInput, roles } from "@stll/permissions";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureRequestError } from "@/api/lib/analytics/capture";
-import type {
-  AuditRecorder,
-  AuditAction,
-  AuditResourceType,
-  FieldDiffs,
-  AuditEvent,
-} from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -206,28 +199,6 @@ export type McpExposure =
   | { type: "capability"; reason: McpCapabilityReason }
   | { type: "internal"; reason: McpInternalReason };
 
-export type AuditConfig<
-  TBody = unknown,
-  TParams = unknown,
-  TQuery = unknown,
-  TResult = unknown,
-> = {
-  action: AuditAction;
-  resourceType: AuditResourceType;
-  getResourceId: (
-    ctx: { body: TBody; params: TParams; query: TQuery },
-    result: TResult,
-  ) => string;
-  getChanges?: (
-    ctx: { body: TBody; params: TParams; query: TQuery },
-    result: TResult,
-  ) => FieldDiffs | null;
-  getMetadata?: (
-    ctx: { body: TBody; params: TParams; query: TQuery },
-    result: TResult,
-  ) => Record<string, unknown> | null;
-};
-
 /**
  * Per-handler usage metering opt-in. When set, the framework:
  *  - runs `assertUsageAvailable` pre-flight with a fixed
@@ -256,16 +227,10 @@ export type UsageMeteringConfig = {
   modelRole?: ModelRole;
 };
 
-export type HandlerConfig<
-  TBody = unknown,
-  TParams = unknown,
-  TQuery = unknown,
-  TAuditResult = unknown,
-> = InputSchema & {
+export type HandlerConfig = InputSchema & {
   permissions: PermissionInput;
   requiresUsage?: UsageMeteringConfig;
   mcp: McpExposure;
-  audit?: AuditConfig<TBody, TParams, TQuery, TAuditResult> | false;
 };
 
 export type SessionHandlerConfig = InputSchema & {
@@ -569,58 +534,6 @@ const createSafeScopedHandler = <
         code: API_ERROR_CODE.forbidden,
         message: "Forbidden",
       });
-    }
-
-    let hasLogged = false;
-
-    if (config.audit !== undefined && config.audit !== false) {
-      const recordAudit = async (tx: Transaction, result: unknown) => {
-        if (hasLogged || config.audit === undefined || config.audit === false) {
-          return;
-        }
-        const reqCtx = {
-          body: ctx.body,
-          params: ctx.params,
-          query: ctx.query,
-        };
-        const changes = config.audit.getChanges
-          ? config.audit.getChanges(reqCtx, result)
-          : null;
-        if (config.audit.getChanges && changes === null) {
-          return;
-        }
-        const resourceId = config.audit.getResourceId(reqCtx, result);
-        const metadata = config.audit.getMetadata?.(reqCtx, result);
-
-        const auditEvent: AuditEvent = {
-          action: config.audit.action,
-          resourceType: config.audit.resourceType,
-          resourceId,
-          changes,
-        };
-        if (metadata) {
-          auditEvent.metadata = metadata;
-        }
-
-        await ctx.recordAuditEvent(tx, auditEvent);
-        hasLogged = true;
-      };
-
-      const originalSafeDb = ctx.safeDb;
-      ctx.safeDb = async (fn, retry) =>
-        await originalSafeDb(async (tx) => {
-          const result = await fn(tx);
-          await recordAudit(tx, result);
-          return result;
-        }, retry);
-
-      const originalScopedDb = ctx.scopedDb;
-      ctx.scopedDb = async (fn) =>
-        await originalScopedDb(async (tx) => {
-          const result = await fn(tx);
-          await recordAudit(tx, result);
-          return result;
-        });
     }
 
     // Resolve the metering context only when enforcement is on. It reads

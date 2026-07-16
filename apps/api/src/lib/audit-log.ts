@@ -18,6 +18,8 @@ export const AUDIT_ACTION = {
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
+export const ORGANIZATION_AUDIT_LOG_RESOURCE_ID = "organization-logs";
+
 export const AUDIT_RESOURCE_TYPE = {
   AUDIT_LOG: "audit_log",
   AGENT_SKILL: "agent_skill",

@@ -2229,7 +2229,7 @@ type Messages = {
       "auditLogs": "Activity logs";
       "auditLogsAction": "Action";
       "auditLogsActionAccess": "Access";
-      "auditLogsActionCreate": "Create";
+      "auditLogsActionCreate": "Creation";
       "auditLogsActionDelete": "Delete";
       "auditLogsActionDownload": "Download";
       "auditLogsActionExecute": "Execute";
@@ -2240,13 +2240,18 @@ type Messages = {
       "auditLogsEmpty": "No activity logs found.";
       "auditLogsError": "Failed to load activity logs.";
       "auditLogsExport": "Export logs";
+      "auditLogsExportFailed": "Couldn't export activity logs.";
+      "auditLogsExportTooLarge": "This export contains too many rows. Narrow the filters and try again.";
       "auditLogsExporting": "Exporting...";
       "auditLogsFrom": "From date";
       "auditLogsLoading": "Loading logs...";
       "auditLogsResourceId": "Resource ID";
       "auditLogsResourceType": "Resource Type";
+      "auditLogsResourceTypePlaceholder": "e.g. workspace";
       "auditLogsTime": "Time";
       "auditLogsTo": "To date";
+      "auditLogsUserId": "User ID";
+      "auditLogsUserIdPlaceholder": "Filter by user ID";
       "documentTypes": {
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)";
         "deleteFailed": "Couldn't delete document type";

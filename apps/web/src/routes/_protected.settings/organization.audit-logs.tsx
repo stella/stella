@@ -27,10 +27,13 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getFormattingLocale } from "@/i18n/i18n-store";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { APIError, toAPIError } from "@/lib/errors/api";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { toAuditLogDateRange } from "@/routes/_protected.settings/-queries/audit-log-date-range";
 import {
   auditLogOptions,
   type fetchAuditLogs,
@@ -40,8 +43,19 @@ import {
 export const Route = createFileRoute(
   "/_protected/settings/organization/audit-logs",
 )({
+  loader: async ({ context }) => {
+    await prefetchRouteQuery(
+      context.queryClient,
+      auditLogOptions({ key: { limit: AUDIT_LOG_PAGE_LIMIT } }),
+      (error: unknown) => {
+        getAnalytics().captureError(error);
+      },
+    );
+  },
   component: AuditLogsPage,
 });
+
+const AUDIT_LOG_PAGE_LIMIT = 20;
 
 function AuditLogsPage() {
   const t = useTranslations();
@@ -49,9 +63,6 @@ function AuditLogsPage() {
   const [cursorHistory, setCursorHistory] = useState<(string | undefined)[]>(
     [],
   );
-  const limit = 20;
-
-  // Filter states
   const [filterAction, setFilterAction] = useState<string>("");
   const [filterResourceType, setFilterResourceType] = useState<string>("");
   const [filterUserId, setFilterUserId] = useState<string>("");
@@ -59,6 +70,10 @@ function AuditLogsPage() {
   const [filterTo, setFilterTo] = useState<string | null>(null);
 
   const [exporting, setExporting] = useState(false);
+  const dateRange = toAuditLogDateRange({
+    from: filterFrom,
+    to: filterTo,
+  });
 
   const handleFilterChange = <T,>(setter: (val: T) => void, val: T) => {
     setter(val);
@@ -67,16 +82,16 @@ function AuditLogsPage() {
   };
 
   const queryParams: AuditLogsPageKey = {
-    limit,
+    limit: AUDIT_LOG_PAGE_LIMIT,
     cursor,
     action: filterAction || undefined,
     resourceType: filterResourceType || undefined,
     userId: filterUserId || undefined,
-    from: filterFrom ? new Date(filterFrom).toISOString() : undefined,
-    to: filterTo ? new Date(filterTo).toISOString() : undefined,
+    from: dateRange.from,
+    toExclusive: dateRange.toExclusive,
   };
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, isFetching } = useQuery({
     ...auditLogOptions({ key: queryParams }),
     placeholderData: keepPreviousData,
   });
@@ -99,39 +114,45 @@ function AuditLogsPage() {
 
   const handleExport = async () => {
     setExporting(true);
-    const result = await Result.tryPromise(async () => {
-      const cleanParams: Record<string, string> = {};
-      if (filterAction) {
-        cleanParams["action"] = filterAction;
-      }
-      if (filterResourceType) {
-        cleanParams["resourceType"] = filterResourceType;
-      }
-      if (filterUserId) {
-        cleanParams["userId"] = filterUserId;
-      }
-      if (filterFrom) {
-        cleanParams["from"] = new Date(filterFrom).toISOString();
-      }
-      if (filterTo) {
-        cleanParams["to"] = new Date(filterTo).toISOString();
-      }
+    const result = await Result.tryPromise({
+      try: async () => {
+        const cleanParams: Record<string, string> = {};
+        if (filterAction) {
+          cleanParams["action"] = filterAction;
+        }
+        if (filterResourceType) {
+          cleanParams["resourceType"] = filterResourceType;
+        }
+        if (filterUserId) {
+          cleanParams["userId"] = filterUserId;
+        }
+        if (dateRange.from) {
+          cleanParams["from"] = dateRange.from;
+        }
+        if (dateRange.toExclusive) {
+          cleanParams["toExclusive"] = dateRange.toExclusive;
+        }
 
-      const response = await api["audit-logs"].export.get({
-        query: cleanParams,
-      });
+        const response = await api["audit-logs"].export.get({
+          query: cleanParams,
+        });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+        return response.data;
+      },
+      catch: (error) => error,
     });
 
     setExporting(false);
 
     if (Result.isError(result)) {
       stellaToast.add({
-        title: "Export failed",
+        title:
+          APIError.is(result.error) && result.error.status === 413
+            ? t("settings.organization.auditLogsExportTooLarge")
+            : t("settings.organization.auditLogsExportFailed"),
         type: "error",
       });
       return;
@@ -145,6 +166,16 @@ function AuditLogsPage() {
     }
   };
 
+  const handleExportClick = () => {
+    void handleExport().catch((error: unknown) => {
+      getAnalytics().captureError(error);
+      stellaToast.add({
+        title: t("settings.organization.auditLogsExportFailed"),
+        type: "error",
+      });
+    });
+  };
+
   return (
     <>
       <div className="mb-6 flex items-center justify-between">
@@ -154,9 +185,7 @@ function AuditLogsPage() {
         />
         <Button
           disabled={exporting}
-          onClick={() => {
-            void handleExport();
-          }}
+          onClick={handleExportClick}
           variant="outline"
         >
           {exporting
@@ -175,11 +204,13 @@ function AuditLogsPage() {
                   className="text-muted-foreground text-xs font-medium"
                   htmlFor="userId-input"
                 >
-                  {t("common.user")} ID
+                  {t("settings.organization.auditLogsUserId")}
                 </label>
                 <Input
                   id="userId-input"
-                  placeholder="Filter by User ID"
+                  placeholder={t(
+                    "settings.organization.auditLogsUserIdPlaceholder",
+                  )}
                   value={filterUserId}
                   onChange={(e) =>
                     handleFilterChange(setFilterUserId, e.target.value)
@@ -246,7 +277,9 @@ function AuditLogsPage() {
                 </label>
                 <Input
                   id="resourceType-input"
-                  placeholder="e.g. workspace"
+                  placeholder={t(
+                    "settings.organization.auditLogsResourceTypePlaceholder",
+                  )}
                   value={filterResourceType}
                   onChange={(e) =>
                     handleFilterChange(setFilterResourceType, e.target.value)
@@ -315,14 +348,14 @@ function AuditLogsPage() {
 
             <div className="flex items-center justify-between px-2">
               <Button
-                disabled={cursorHistory.length === 0 || isLoading}
+                disabled={cursorHistory.length === 0 || isFetching}
                 onClick={handlePrevPage}
                 variant="outline"
               >
                 {t("common.previous")}
               </Button>
               <Button
-                disabled={!data?.nextCursor || isLoading}
+                disabled={!data?.nextCursor || isFetching}
                 onClick={handleNextPage}
                 variant="outline"
               >
@@ -395,26 +428,53 @@ function AuditLogsTableBody({
             {new Date(log.createdAt).toLocaleString(getFormattingLocale())}
           </TableCell>
           <TableCell className="font-mono text-xs">
-            {log.user ? `${log.user.name} (${log.user.email})` : log.userId}
+            <bdi>{log.actor}</bdi>
           </TableCell>
-          <TableCell className="text-xs font-medium capitalize">
-            {log.action}
+          <TableCell className="text-xs font-medium">
+            <AuditActionLabel action={log.action} />
           </TableCell>
-          <TableCell className="text-xs">{log.resourceType}</TableCell>
+          <TableCell className="text-xs">
+            <bdi>{log.resourceType}</bdi>
+          </TableCell>
           <TableCell
             className="max-w-[120px] truncate font-mono text-xs"
             title={log.resourceId}
           >
-            {log.resourceId}
+            <bdi>{log.resourceId}</bdi>
           </TableCell>
           <TableCell
             className="max-w-[200px] truncate font-mono text-xs"
             title={log.changes ? JSON.stringify(log.changes) : ""}
           >
-            {log.changes ? JSON.stringify(log.changes) : "-"}
+            <bdi>{log.changes ? JSON.stringify(log.changes) : "-"}</bdi>
           </TableCell>
         </TableRow>
       ))}
     </>
   );
+}
+
+function AuditActionLabel({ action }: { action: string }) {
+  const t = useTranslations();
+
+  if (action === "create") {
+    return t("settings.organization.auditLogsActionCreate");
+  }
+  if (action === "update") {
+    return t("settings.organization.auditLogsActionUpdate");
+  }
+  if (action === "delete") {
+    return t("settings.organization.auditLogsActionDelete");
+  }
+  if (action === "download") {
+    return t("settings.organization.auditLogsActionDownload");
+  }
+  if (action === "execute") {
+    return t("settings.organization.auditLogsActionExecute");
+  }
+  if (action === "access") {
+    return t("settings.organization.auditLogsActionAccess");
+  }
+
+  return <bdi>{action}</bdi>;
 }
