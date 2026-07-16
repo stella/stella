@@ -1083,8 +1083,9 @@ describe("chat tool schemas", () => {
 
     expect(
       chunks.find((chunk) => chunk.type === EventType.TOOL_CALL_END),
-    ).toMatchObject({
-      input: { question: "Which one?", nullableNote: null },
+    ).toHaveProperty("input", {
+      question: "Which one?",
+      nullableNote: null,
     });
   });
 
