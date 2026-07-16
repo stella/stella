@@ -25,7 +25,7 @@ jobs:
   provider-canary:
     name: ${{ matrix.provider }} capability contract
     runs-on: ubuntu-latest
-    # Serial probe timeouts total 220 seconds; leave room for runner setup and install.
+    # Serial probe timeouts total 245 seconds; leave room for runner setup and install.
     timeout-minutes: 10
     permissions:
       contents: read
