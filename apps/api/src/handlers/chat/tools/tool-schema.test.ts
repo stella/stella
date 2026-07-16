@@ -1,5 +1,6 @@
 import {
   convertSchemaToJsonSchema,
+  EventType,
   parseWithStandardSchema,
   toolDefinition,
   type StreamChunk,
@@ -1081,7 +1082,7 @@ describe("chat tool schemas", () => {
     }
 
     expect(
-      chunks.find((chunk) => chunk.type === "TOOL_CALL_END"),
+      chunks.find((chunk) => chunk.type === EventType.TOOL_CALL_END),
     ).toMatchObject({
       input: { question: "Which one?", nullableNote: null },
     });
