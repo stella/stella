@@ -7,8 +7,7 @@
  * BEFORE validation, where a hard failure would bounce the whole batch:
  *
  * - `kind` used instead of the `type` discriminator;
- * - an operation serialized as a JSON string inside `operations`;
- * - `null` standing in for an omitted optional field (see `stripNullValues`).
+ * - an operation serialized as a JSON string inside `operations`.
  *
  * The former `id` -> `blockId` alias repair is intentionally gone: under
  * the versioned contract `id` is the operation id (echoed in
@@ -29,32 +28,6 @@ const parseJsonObject = (text: string): JsonObject | null => {
   } catch {
     return null;
   }
-};
-
-/**
- * OpenAI's strict Structured Outputs requires every property to appear in
- * `required`, so its adapter null-widens each optional property and the model
- * is then obliged to send `null` for the ones it means to omit: the envelope's
- * `version`, an operation's `id`, `parties[].signatory`. Folio's contract never
- * coerces and rejects those nulls outright, so drop the keys instead — absent
- * is what the schema means by optional, and no folio field accepts a null.
- */
-const stripNullValues = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map(stripNullValues);
-  }
-  if (!isJsonObject(value)) {
-    return value;
-  }
-
-  const result: JsonObject = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (entry === null) {
-      continue;
-    }
-    result[key] = stripNullValues(entry);
-  }
-  return result;
 };
 
 const normalizeOperation = (value: unknown): JsonObject | null => {
@@ -96,8 +69,7 @@ const normalizeOperation = (value: unknown): JsonObject | null => {
 export const normalizeActiveDocxEditToolInput = (
   input: string,
 ): string | null => {
-  const stripped = stripNullValues(parseJsonObject(input));
-  const parsed = isJsonObject(stripped) ? stripped : null;
+  const parsed = parseJsonObject(input);
   if (!parsed || !Array.isArray(parsed["operations"])) {
     return null;
   }

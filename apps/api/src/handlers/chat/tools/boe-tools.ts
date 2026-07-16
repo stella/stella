@@ -40,7 +40,7 @@ export const createBoeTools = () => ({
       "Search Spain's consolidated legislation (~50,000 norms) by free text, title, department, legal range (Ley, Real Decreto, etc.), subject matter, or publication date. Use this to discover laws by topic before fetching their full text. Returns titles + BOE identifiers (e.g. BOE-A-1889-4763) you can pass to boe_get_law.",
     inputSchema: toTanStackToolSchema(
       v.strictObject({
-        text: v.nullish(
+        text: v.optional(
           v.pipe(
             v.string(),
             v.description(
@@ -48,19 +48,19 @@ export const createBoeTools = () => ({
             ),
           ),
         ),
-        title: v.nullish(
+        title: v.optional(
           v.pipe(
             v.string(),
             v.description("Phrase-exact match restricted to the title."),
           ),
         ),
-        departmentCode: v.nullish(
+        departmentCode: v.optional(
           v.pipe(
             v.string(),
             v.description("Department code from the BOE auxiliary table."),
           ),
         ),
-        legalRangeCode: v.nullish(
+        legalRangeCode: v.optional(
           v.pipe(
             v.string(),
             v.description(
@@ -68,7 +68,7 @@ export const createBoeTools = () => ({
             ),
           ),
         ),
-        matterCode: v.nullish(
+        matterCode: v.optional(
           v.pipe(
             v.string(),
             v.description(
@@ -76,21 +76,21 @@ export const createBoeTools = () => ({
             ),
           ),
         ),
-        dateFrom: v.nullish(
+        dateFrom: v.optional(
           v.pipe(
             v.string(),
             v.regex(/^\d{8}$/),
             v.description("Lower bound on publication date (YYYYMMDD)."),
           ),
         ),
-        dateTo: v.nullish(
+        dateTo: v.optional(
           v.pipe(
             v.string(),
             v.regex(/^\d{8}$/),
             v.description("Upper bound on publication date (YYYYMMDD)."),
           ),
         ),
-        offset: v.nullish(
+        offset: v.optional(
           v.pipe(
             v.number(),
             v.integer(),
@@ -99,7 +99,7 @@ export const createBoeTools = () => ({
             v.description("Zero-based result offset for pagination."),
           ),
         ),
-        limit: v.nullish(
+        limit: v.optional(
           v.pipe(
             v.number(),
             v.integer(),
@@ -111,31 +111,8 @@ export const createBoeTools = () => ({
       }),
     ),
   }).server(
-    // Every filter is spelled out rather than spread: strict mode obliges the
-    // model to send `null` for the filters it omits, and the BOE client reads an
-    // absent filter as `undefined`.
-    async ({
-      text,
-      title,
-      departmentCode,
-      legalRangeCode,
-      matterCode,
-      dateFrom,
-      dateTo,
-      offset,
-      limit,
-    }) =>
-      await searchConsolidatedLegislation({
-        text: text ?? undefined,
-        title: title ?? undefined,
-        departmentCode: departmentCode ?? undefined,
-        legalRangeCode: legalRangeCode ?? undefined,
-        matterCode: matterCode ?? undefined,
-        dateFrom: dateFrom ?? undefined,
-        dateTo: dateTo ?? undefined,
-        offset: offset ?? undefined,
-        limit: limit ?? undefined,
-      }),
+    async ({ limit, offset, ...query }) =>
+      await searchConsolidatedLegislation({ ...query, limit, offset }),
   ),
 
   boe_get_law: toolDefinition({
@@ -145,19 +122,19 @@ export const createBoeTools = () => ({
     inputSchema: toTanStackToolSchema(
       v.strictObject({
         lawId: lawIdSchema,
-        metadata: v.nullish(
+        metadata: v.optional(
           v.pipe(
             v.boolean(),
             v.description("Include metadata section. Default true."),
           ),
         ),
-        analysis: v.nullish(
+        analysis: v.optional(
           v.pipe(
             v.boolean(),
             v.description("Include legal analysis section. Default true."),
           ),
         ),
-        fullText: v.nullish(
+        fullText: v.optional(
           v.pipe(
             v.boolean(),
             v.description(
@@ -165,7 +142,7 @@ export const createBoeTools = () => ({
             ),
           ),
         ),
-        eli: v.nullish(
+        eli: v.optional(
           v.pipe(
             v.boolean(),
             v.description(
@@ -176,13 +153,7 @@ export const createBoeTools = () => ({
       }),
     ),
   }).server(
-    async ({ lawId, metadata, analysis, fullText, eli }) =>
-      await getConsolidatedLaw(lawId, {
-        metadata: metadata ?? undefined,
-        analysis: analysis ?? undefined,
-        fullText: fullText ?? undefined,
-        eli: eli ?? undefined,
-      }),
+    async ({ lawId, ...sections }) => await getConsolidatedLaw(lawId, sections),
   ),
 
   boe_get_law_structure: toolDefinition({
@@ -223,7 +194,7 @@ export const createBoeTools = () => ({
     inputSchema: toTanStackToolSchema(
       v.strictObject({
         lawId: lawIdSchema,
-        relationType: v.nullish(
+        relationType: v.optional(
           v.pipe(
             v.picklist([
               RELATION_TYPES.modifies,

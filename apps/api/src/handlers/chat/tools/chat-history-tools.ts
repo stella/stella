@@ -31,7 +31,7 @@ const searchChatHistoryInputSchema = v.strictObject({
     v.maxLength(LIMITS.searchQueryMaxLength),
     v.description("Text to search in earlier messages in this chat thread."),
   ),
-  limit: v.nullish(
+  limit: v.optional(
     v.pipe(
       v.number(),
       v.integer(),
@@ -49,7 +49,7 @@ const expandChatHistoryInputSchema = v.strictObject({
     v.uuid(),
     v.description("Message ID returned by search-chat-history."),
   ),
-  before: v.nullish(
+  before: v.optional(
     v.pipe(
       v.number(),
       v.integer(),
@@ -59,7 +59,7 @@ const expandChatHistoryInputSchema = v.strictObject({
     ),
     2,
   ),
-  after: v.nullish(
+  after: v.optional(
     v.pipe(
       v.number(),
       v.integer(),

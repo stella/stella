@@ -56,14 +56,14 @@ const spawnSubagentsInputSchema = v.strictObject({
           v.maxLength(4000),
           v.description("The subtask for this subagent to complete."),
         ),
-        context: v.nullish(
+        context: v.optional(
           v.pipe(
             v.string(),
             v.maxLength(4000),
             v.description("Optional background/context the subagent needs."),
           ),
         ),
-        expectedOutput: v.nullish(
+        expectedOutput: v.optional(
           v.pipe(
             v.string(),
             v.maxLength(1000),
@@ -72,7 +72,7 @@ const spawnSubagentsInputSchema = v.strictObject({
             ),
           ),
         ),
-        model: v.nullish(
+        model: v.optional(
           v.pipe(
             v.string(),
             v.description(
@@ -336,15 +336,12 @@ export const createSpawnSubagentsTool = (
           orgAIConfig: props.orgAIConfig,
           role: "fast",
           modelId: resolveValidatedSubagentModelId({
-            subModel: sub.model ?? undefined,
+            subModel: sub.model,
             modelInfo: fastModelInfo,
           }),
-          system: buildSubagentSystemPrompt(sub.expectedOutput ?? undefined),
+          system: buildSubagentSystemPrompt(sub.expectedOutput),
           messages: [
-            buildSubagentUserMessage({
-              task: sub.task,
-              context: sub.context ?? undefined,
-            }),
+            buildSubagentUserMessage({ task: sub.task, context: sub.context }),
           ],
           tools,
           abortSignal:

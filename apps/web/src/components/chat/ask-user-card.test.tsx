@@ -117,14 +117,7 @@ describe("ask-user clarification card", () => {
     expect(html).toContain("Which jurisdiction should I use?");
   });
 
-  test("renders a question whose options and default arrive as null", () => {
-    // The exact shape OpenAI sends. Its strict Structured Outputs mode requires
-    // every property to sit in `required`, so the adapter null-widens the
-    // optional ones and the model must send `null` for the fields it omits —
-    // it cannot leave them out. Verbatim from a persisted tool call:
-    //   {"question":"…","reason":"…","options":null,"default":null}
-    // The card renders the model's raw arguments, so it has to survive the null
-    // rather than dereference it.
+  test("renders historical arguments whose optional fields are null", () => {
     const argumentsOnlyPart = {
       arguments: JSON.stringify({
         analysis: "The user wants a Florida non-compete.",
@@ -155,8 +148,6 @@ describe("ask-user clarification card", () => {
       <AskUserCard onSubmit={() => {}} part={normalized} />,
     );
 
-    // A null `options` means free text, exactly as an absent one does: the
-    // question renders, with a text input and no option chips.
     expect(html).toContain("legal name.");
     expect(html).toContain('type="text"');
     expect(html).toContain('type="submit"');
