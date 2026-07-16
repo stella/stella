@@ -117,6 +117,43 @@ describe("ask-user clarification card", () => {
     expect(html).toContain("Which jurisdiction should I use?");
   });
 
+  test("renders historical arguments whose optional fields are null", () => {
+    const argumentsOnlyPart = {
+      arguments: JSON.stringify({
+        analysis: "The user wants a Florida non-compete.",
+        questions: [
+          {
+            question: "Please provide the employer's legal name.",
+            reason: "Required party identifier for the agreement.",
+            options: null,
+            default: null,
+          },
+        ],
+      }),
+      id: "tool-call-ask-user",
+      state: "input-complete",
+      name: "ask-user",
+      type: "tool-call",
+    } satisfies AskUserPart;
+
+    const [message] = withParsedToolCallInputs([
+      { id: "message-1", parts: [argumentsOnlyPart], role: "assistant" },
+    ]);
+    const normalized = message?.parts[0];
+    if (normalized?.type !== "tool-call" || normalized.name !== "ask-user") {
+      throw new Error("Expected a normalized ask-user tool-call part");
+    }
+
+    const html = renderWithIntl(
+      <AskUserCard onSubmit={() => {}} part={normalized} />,
+    );
+
+    expect(html).toContain("legal name.");
+    expect(html).toContain('type="text"');
+    expect(html).toContain('type="submit"');
+    expect(html).not.toContain('type="button"');
+  });
+
   test("keeps option chips out of form submission semantics", () => {
     const html = renderWithIntl(
       <AskUserCard

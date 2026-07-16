@@ -1,7 +1,9 @@
 import {
   convertSchemaToJsonSchema,
+  EventType,
   parseWithStandardSchema,
   toolDefinition,
+  type StreamChunk,
   type Tool,
 } from "@tanstack/ai";
 import {
@@ -998,6 +1000,95 @@ describe("chat tool schemas", () => {
     });
   }
 
+  test("the installed OpenAI adapter restores omitted optional tool inputs", async () => {
+    const adapter = createOpenaiChat("gpt-5.2", "test-key");
+    const argumentsJson =
+      '{"question":"Which one?","options":null,"nullableNote":null}';
+    Reflect.set(adapter, "client", {
+      responses: {
+        create: () =>
+          (async function* () {
+            yield {
+              type: "response.created",
+              response: {
+                id: "response-1",
+                model: "gpt-5.2",
+                status: "in_progress",
+              },
+            };
+            yield {
+              type: "response.output_item.added",
+              output_index: 0,
+              item: {
+                type: "function_call",
+                id: "call-1",
+                name: "ask_user",
+              },
+            };
+            yield {
+              type: "response.function_call_arguments.delta",
+              item_id: "call-1",
+              delta: argumentsJson,
+            };
+            yield {
+              type: "response.function_call_arguments.done",
+              item_id: "call-1",
+              arguments: argumentsJson,
+            };
+            yield {
+              type: "response.completed",
+              response: {
+                id: "response-1",
+                model: "gpt-5.2",
+                status: "completed",
+                output: [
+                  {
+                    type: "function_call",
+                    id: "call-1",
+                    name: "ask_user",
+                    arguments: argumentsJson,
+                  },
+                ],
+                usage: {
+                  input_tokens: 1,
+                  output_tokens: 1,
+                  total_tokens: 2,
+                },
+              },
+            };
+          })(),
+      },
+    });
+    const chunks: StreamChunk[] = [];
+    const tool = {
+      name: "ask_user",
+      description: "Ask a question.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          question: { type: "string" },
+          options: { type: "array", items: { type: "string" } },
+          nullableNote: { type: ["string", "null"] },
+        },
+        required: ["question", "nullableNote"],
+      },
+    } satisfies Tool;
+
+    for await (const chunk of adapter.chatStream({
+      ...commonProviderOptions([tool]),
+      model: adapter.model,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(
+      chunks.find((chunk) => chunk.type === EventType.TOOL_CALL_END),
+    ).toHaveProperty("input", {
+      question: "Which one?",
+      nullableNote: null,
+    });
+  });
+
   test("Anthropic keeps an ordinary web_search function distinct from its native web-search tool", () => {
     const ordinaryWebSearch: Tool = {
       name: "web_search",
@@ -1042,17 +1133,58 @@ describe("chat tool schemas", () => {
   // offline, so a schema that would 400 in production fails here first, even
   // under USE_MOCK_AI. It also fails if the @tanstack/openai-base patch
   // (patches/) stops applying, e.g. after a version bump.
+  test("OpenAI falls back from strict mode when an anyOf variant needs null widening", () => {
+    const inputSchema = {
+      type: "object",
+      properties: {
+        value: {
+          anyOf: [
+            {
+              type: "object",
+              properties: {
+                kind: { const: "optional" },
+                note: { type: "string" },
+              },
+              required: ["kind"],
+            },
+            {
+              type: "object",
+              properties: {
+                kind: { const: "nullable" },
+                note: { type: ["string", "null"] },
+              },
+              required: ["kind", "note"],
+            },
+          ],
+        },
+      },
+      required: ["value"],
+    };
+
+    const converted = convertFunctionToolToAdapterFormat({
+      name: "store_variant",
+      description: "Store a union variant.",
+      inputSchema,
+    });
+
+    expect(converted.strict).toBe(false);
+    expect(converted.parameters).toEqual(inputSchema);
+  });
+
   test("every registered chat tool converts to strict-legal OpenAI parameters or the deliberate non-strict fallback", () => {
     const tools = buildFullCoverageChatTools();
 
     // Free-form map inputs (`v.record(...)`, `additionalProperties: true`)
     // cannot be expressed under strict mode, which requires every object node
     // closed with its keys enumerated; the adapter must send those tools with
-    // `strict: false`. fill_template, save_clause and save_template degrade
-    // for open maps; set_field_value for its deliberately typeless
-    // `content.value` node. Growing this list is a deliberate trade: prefer
-    // closed schemas so a tool keeps strict-mode adherence.
+    // `strict: false`. apply-active-docx-edits degrades because an `anyOf`
+    // variant needs optional-field widening that cannot be safely inverted;
+    // fill_template, save_clause and save_template for open maps;
+    // set_field_value for its deliberately typeless `content.value` node.
+    // Growing this list is a deliberate trade: prefer closed schemas so a tool
+    // keeps strict-mode adherence.
     const expectedNonStrictTools = [
+      "apply-active-docx-edits",
       "fill_template",
       "save_clause",
       "save_template",

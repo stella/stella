@@ -392,7 +392,7 @@ export const AskUserCard = ({
         {/* Questions */}
         <div className="border-border/50 space-y-3 border-t px-3 py-3">
           {input.questions.map((q, i) => {
-            const hasOptions = q.options !== undefined && q.options.length > 0;
+            const hasOptions = (q.options?.length ?? 0) > 0;
             return (
               <div className="space-y-1.5" key={q.question}>
                 <p className="text-xs font-medium">

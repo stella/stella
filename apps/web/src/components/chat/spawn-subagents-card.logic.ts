@@ -1,8 +1,9 @@
+// Historical persisted tool-call arguments can contain provider-emitted nulls.
 type SpawnSubagent = {
   task: string;
-  context?: string | undefined;
-  expectedOutput?: string | undefined;
-  model?: string | undefined;
+  context?: string | null | undefined;
+  expectedOutput?: string | null | undefined;
+  model?: string | null | undefined;
 };
 
 export type KeyedSpawnSubagent<T extends SpawnSubagent> = {

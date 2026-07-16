@@ -1,46 +1,71 @@
-diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converter.js
-index 6977689012fb8caccc28e1bcde4154b69b60cc46..18bd07c23e75adb3a367b376ae9846d330554e6a 100644
---- a/dist/esm/utils/schema-converter.js
-+++ b/dist/esm/utils/schema-converter.js
-@@ -42,7 +42,32 @@ const TYPE_INDICATOR_KEYWORDS = [
-   "$ref"
- ];
- function isStrictModeCompatible(schema) {
--  return !containsStrictUnsupportedKeyword(schema) && !containsTypelessSchema(schema);
-+  return !containsStrictUnsupportedKeyword(schema) && !containsTypelessSchema(schema) && !containsOpenObject(schema);
-+}
-+// PATCH (stella): strict mode compiles the schema into a constrained-decoding
-+// grammar, so every object must be closed: `additionalProperties: false`, with
-+// every key enumerated. A free-form map has no grammar and 400s the request.
-+// `containsTypelessSchema` never walks `additionalProperties`, and
-+// `coerceStrictSchema` only closes objects that have a `properties` key, so a
-+// map input reaches the API with `strict: true` and poisons the whole call.
-+// Two distinct 400s result: `additionalProperties: {}` (from a record schema)
-+// fails with "schema must have a 'type' key", `additionalProperties: true` with
-+// "'additionalProperties' is required to be supplied and to be false". Flag both,
-+// so such tools take the existing `strict: false` fallback instead.
-+function containsOpenObject(node) {
-+  if (Array.isArray(node)) {
-+    return node.some(containsOpenObject);
-+  }
-+  if (node === null || typeof node !== "object") return false;
-+  const isObjectSchema = node.type === "object" || Array.isArray(node.type) && node.type.includes("object");
-+  if (isObjectSchema) {
-+    // An omitted `additionalProperties` is fine only when `properties` is
-+    // present: `coerceStrictSchema` closes that node. Without it there is
-+    // nothing to close and no keys to enumerate.
-+    if ("additionalProperties" in node && node.additionalProperties !== false) return true;
-+    if (!node.properties) return true;
-+  }
-+  return Object.values(node).some(containsOpenObject);
- }
- function containsStrictUnsupportedKeyword(node) {
-   if (Array.isArray(node)) {
+diff --git a/dist/esm/adapters/chat-completions-text.js b/dist/esm/adapters/chat-completions-text.js
+index 37c893be39cc765d9ea3eeaf06fdad6999fd3e9f..d1fbd7cf18f636f505dbadfbf1188092226d3312 100644
+--- a/dist/esm/adapters/chat-completions-text.js
++++ b/dist/esm/adapters/chat-completions-text.js
+@@ -3,7 +3,7 @@ import { BaseTextAdapter } from "@tanstack/ai/adapters";
+ import { toRunErrorPayload, toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
+ import { generateId } from "@tanstack/ai-utils";
+ import { extractRequestOptions } from "../utils/request-options.js";
+-import { makeStructuredOutputCompatible } from "../utils/schema-converter.js";
++import { createToolInputNormalizer, makeStructuredOutputCompatible } from "../utils/schema-converter.js";
+ import { buildChatCompletionsUsage } from "../usage.js";
+ import { convertToolsToChatCompletionsFormat } from "./chat-completions-tool-converter.js";
+ class OpenAIBaseChatCompletionsTextAdapter extends BaseTextAdapter {
+@@ -464,6 +464,7 @@ class OpenAIBaseChatCompletionsTextAdapter extends BaseTextAdapter {
+    * Override this in subclasses to handle provider-specific stream behavior.
+    */
+   async *processStreamChunks(stream, options, aguiState) {
++    const normalizeToolInput = createToolInputNormalizer(options.tools);
+     let accumulatedContent = "";
+     let hasEmittedTextMessageStart = false;
+     let lastModel;
+@@ -640,7 +641,10 @@ class OpenAIBaseChatCompletionsTextAdapter extends BaseTextAdapter {
+               if (toolCall.arguments) {
+                 try {
+                   const parsed = JSON.parse(toolCall.arguments);
+-                  parsedInput = parsed && typeof parsed === "object" ? parsed : {};
++                  parsedInput = normalizeToolInput(
++                    toolCall.name,
++                    parsed && typeof parsed === "object" ? parsed : {}
++                  );
+                 } catch (parseError) {
+                   options.logger.errors(
+                     `${this.name}.processStreamChunks tool-args JSON parse failed`,
+@@ -691,7 +695,10 @@ class OpenAIBaseChatCompletionsTextAdapter extends BaseTextAdapter {
+           if (toolCall.arguments) {
+             try {
+               const parsed = JSON.parse(toolCall.arguments);
+-              parsedInput = parsed && typeof parsed === "object" ? parsed : {};
++              parsedInput = normalizeToolInput(
++                toolCall.name,
++                parsed && typeof parsed === "object" ? parsed : {}
++              );
+             } catch (parseError) {
+               options.logger.errors(
+                 `${this.name}.processStreamChunks tool-args JSON parse failed (drain)`,
 diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
-index 64b80b74b3d56b7486f7978b1c1585c12a4d5b39..2c994e76c6d0107319677f63eed9675a83e36184 100644
+index 89f5ed36472e180766a82e1d53e60ce6a8539abe..7b263b6d1a69a457ecc9c74940dcd88a28ba2092 100644
 --- a/dist/esm/adapters/responses-text.js
 +++ b/dist/esm/adapters/responses-text.js
-@@ -761,8 +761,8 @@ class OpenAIResponsesTextAdapter extends BaseTextAdapter {
+@@ -3,7 +3,7 @@ import { BaseTextAdapter } from "@tanstack/ai/adapters";
+ import { toRunErrorPayload, toRunErrorRawEvent } from "@tanstack/ai/adapter-internals";
+ import { generateId } from "@tanstack/ai-utils";
+ import { extractRequestOptions } from "../utils/request-options.js";
+-import { makeStructuredOutputCompatible } from "../utils/schema-converter.js";
++import { createToolInputNormalizer, makeStructuredOutputCompatible } from "../utils/schema-converter.js";
+ import { buildResponsesUsage } from "../usage.js";
+ import { convertToolsToResponsesFormat } from "./responses-tool-converter.js";
+ class OpenAIBaseResponsesTextAdapter extends BaseTextAdapter {
+@@ -551,6 +551,7 @@ class OpenAIBaseResponsesTextAdapter extends BaseTextAdapter {
+    * - error
+    */
+   async *processStreamChunks(stream, toolCallMetadata, options, aguiState) {
++    const normalizeToolInput = createToolInputNormalizer(options.tools);
+     let accumulatedContent = "";
+     let accumulatedReasoning = "";
+     let hasStreamedContentDeltas = false;
+@@ -760,9 +761,9 @@ class OpenAIBaseResponsesTextAdapter extends BaseTextAdapter {
+               stepType: "thinking"
              };
            }
 -          if (contentPart.type === "output_text") {
@@ -51,7 +76,31 @@ index 64b80b74b3d56b7486f7978b1c1585c12a4d5b39..2c994e76c6d0107319677f63eed9675a
              hasStreamedReasoningDeltas = true;
            }
            const partChunk = handleContentPart(contentPart);
-@@ -976,6 +976,32 @@ class OpenAIResponsesTextAdapter extends BaseTextAdapter {
+@@ -882,7 +883,10 @@ class OpenAIBaseResponsesTextAdapter extends BaseTextAdapter {
+           if (chunk.arguments) {
+             try {
+               const parsed = JSON.parse(chunk.arguments);
+-              parsedInput = parsed && typeof parsed === "object" ? parsed : {};
++              parsedInput = normalizeToolInput(
++                name,
++                parsed && typeof parsed === "object" ? parsed : {}
++              );
+             } catch (parseError) {
+               options.logger.errors(
+                 `${this.name}.processStreamChunks tool-args JSON parse failed`,
+@@ -943,7 +947,10 @@ class OpenAIBaseResponsesTextAdapter extends BaseTextAdapter {
+               if (rawArgs) {
+                 try {
+                   const parsed = JSON.parse(rawArgs);
+-                  parsedInput = parsed && typeof parsed === "object" ? parsed : {};
++                  parsedInput = normalizeToolInput(
++                    name,
++                    parsed && typeof parsed === "object" ? parsed : {}
++                  );
+                 } catch (parseError) {
+                   options.logger.errors(
+                     `${this.name}.processStreamChunks tool-args JSON parse failed (output_item.done backfill)`,
+@@ -976,6 +983,32 @@ class OpenAIBaseResponsesTextAdapter extends BaseTextAdapter {
            }
          }
          if (chunk.type === "response.completed") {
@@ -84,3 +133,222 @@ index 64b80b74b3d56b7486f7978b1c1585c12a4d5b39..2c994e76c6d0107319677f63eed9675a
            for (const item of chunk.response.output) {
              if (item.type !== "function_call" || !item.id) continue;
              const metadata = toolCallMetadata.get(item.id) ?? {
+@@ -1008,7 +1041,10 @@ class OpenAIBaseResponsesTextAdapter extends BaseTextAdapter {
+               if (rawArgs) {
+                 try {
+                   const parsed = JSON.parse(rawArgs);
+-                  parsedInput = parsed && typeof parsed === "object" ? parsed : {};
++                  parsedInput = normalizeToolInput(
++                    name,
++                    parsed && typeof parsed === "object" ? parsed : {}
++                  );
+                 } catch (parseError) {
+                   options.logger.errors(
+                     `${this.name}.processStreamChunks tool-args JSON parse failed (response.completed backfill)`,
+diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converter.js
+index 6977689012fb8caccc28e1bcde4154b69b60cc46..795874ca720098f422ca963a632169e8205a3a1d 100644
+--- a/dist/esm/utils/schema-converter.js
++++ b/dist/esm/utils/schema-converter.js
+@@ -1,3 +1,4 @@
++import { undoNullWidening } from "@tanstack/ai-utils";
+ const SUPPORTED_STRING_FORMATS = /* @__PURE__ */ new Set([
+   "date-time",
+   "time",
+@@ -22,7 +23,43 @@ function stripUnsupportedFormats(node) {
+   return out;
+ }
+ function makeStructuredOutputCompatible(schema, originalRequired) {
+-  return stripUnsupportedFormats(coerceStrictSchema(schema, originalRequired));
++  return makeStructuredOutputCompatibleWithMap(schema, originalRequired).schema;
++}
++function makeStructuredOutputCompatibleWithMap(schema, originalRequired) {
++  const { schema: strictSchema, nullWideningMap } = coerceStrictSchema(
++    schema,
++    originalRequired
++  );
++  return {
++    schema: stripUnsupportedFormats(strictSchema),
++    nullWideningMap
++  };
++}
++function createToolInputNormalizer(tools) {
++  const maps = /* @__PURE__ */ new Map();
++  const seenNames = /* @__PURE__ */ new Set();
++  const ambiguousNames = /* @__PURE__ */ new Set();
++  for (const tool of tools ?? []) {
++    if (ambiguousNames.has(tool.name)) continue;
++    if (seenNames.has(tool.name)) {
++      maps.delete(tool.name);
++      ambiguousNames.add(tool.name);
++      continue;
++    }
++    seenNames.add(tool.name);
++    const inputSchema = tool.inputSchema ?? {
++      type: "object",
++      properties: {},
++      required: []
++    };
++    if (!isStrictModeCompatible(inputSchema)) continue;
++    const { nullWideningMap } = makeStructuredOutputCompatibleWithMap(
++      inputSchema,
++      inputSchema.required || []
++    );
++    if (nullWideningMap) maps.set(tool.name, nullWideningMap);
++  }
++  return (toolName, input) => undoNullWidening(input, maps.get(toolName));
+ }
+ const STRICT_UNSUPPORTED_KEYWORDS = [
+   "oneOf",
+@@ -42,7 +79,38 @@ const TYPE_INDICATOR_KEYWORDS = [
+   "$ref"
+ ];
+ function isStrictModeCompatible(schema) {
+-  return !containsStrictUnsupportedKeyword(schema) && !containsTypelessSchema(schema);
++  return !containsStrictUnsupportedKeyword(schema) && !containsTypelessSchema(schema) && !containsOpenObject(schema) && !containsUntrackableAnyOfWidening(schema);
++}
++function containsUntrackableAnyOfWidening(schema) {
++  if (schema === null || typeof schema !== "object" || Array.isArray(schema)) {
++    return false;
++  }
++  return coerceStrictSchema(schema).hasUntrackableAnyOfWidening;
++}
++// PATCH (stella): strict mode compiles the schema into a constrained-decoding
++// grammar, so every object must be closed: `additionalProperties: false`, with
++// every key enumerated. A free-form map has no grammar and 400s the request.
++// `containsTypelessSchema` never walks `additionalProperties`, and
++// `coerceStrictSchema` only closes objects that have a `properties` key, so a
++// map input reaches the API with `strict: true` and poisons the whole call.
++// Two distinct 400s result: `additionalProperties: {}` (from a record schema)
++// fails with "schema must have a 'type' key", `additionalProperties: true` with
++// "'additionalProperties' is required to be supplied and to be false". Flag both,
++// so such tools take the existing `strict: false` fallback instead.
++function containsOpenObject(node) {
++  if (Array.isArray(node)) {
++    return node.some(containsOpenObject);
++  }
++  if (node === null || typeof node !== "object") return false;
++  const isObjectSchema = node.type === "object" || Array.isArray(node.type) && node.type.includes("object");
++  if (isObjectSchema) {
++    // An omitted `additionalProperties` is fine only when `properties` is
++    // present: `coerceStrictSchema` closes that node. Without it there is
++    // nothing to close and no keys to enumerate.
++    if ("additionalProperties" in node && node.additionalProperties !== false) return true;
++    if (!node.properties) return true;
++  }
++  return Object.values(node).some(containsOpenObject);
+ }
+ function containsStrictUnsupportedKeyword(node) {
+   if (Array.isArray(node)) {
+@@ -82,24 +150,41 @@ function containsTypelessSchema(node) {
+     (child) => isTypelessSchema(child) || containsTypelessSchema(child)
+   );
+ }
++function pruneMap(map) {
++  return Object.keys(map).length > 0 ? map : void 0;
++}
+ function coerceStrictSchema(schema, originalRequired) {
+   const result = { ...schema };
++  const nullWideningMap = {};
++  let hasUntrackableAnyOfWidening = false;
+   const required = originalRequired ?? (Array.isArray(result["required"]) ? result["required"] : []);
+   if (result.type === "object" && result.properties) {
+     const properties = { ...result.properties };
+     const allPropertyNames = Object.keys(properties);
++    const propertyMaps = {};
+     for (const propName of allPropertyNames) {
+       let prop = properties[propName];
+       const wasOptional = !required.includes(propName);
++      let childMap;
++      let widenedHere = false;
+       if (prop.type === "object" && prop.properties) {
+-        prop = coerceStrictSchema(prop, prop.required || []);
++        const nested = coerceStrictSchema(prop, prop.required || []);
++        prop = nested.schema;
++        childMap = nested.nullWideningMap;
++        hasUntrackableAnyOfWidening ||= nested.hasUntrackableAnyOfWidening;
+       } else if (prop.type === "array" && prop.items) {
++        const nested = coerceStrictSchema(prop.items, prop.items.required || []);
+         prop = {
+           ...prop,
+-          items: coerceStrictSchema(prop.items, prop.items.required || [])
++          items: nested.schema
+         };
++        childMap = nested.nullWideningMap ? { items: nested.nullWideningMap } : void 0;
++        hasUntrackableAnyOfWidening ||= nested.hasUntrackableAnyOfWidening;
+       } else if (prop.anyOf) {
+-        prop = coerceStrictSchema(prop, prop.required || []);
++        const nested = coerceStrictSchema(prop, prop.required || []);
++        prop = nested.schema;
++        childMap = nested.nullWideningMap;
++        hasUntrackableAnyOfWidening ||= nested.hasUntrackableAnyOfWidening;
+       } else if (prop.oneOf) {
+         throw new Error(
+           "oneOf is not supported in OpenAI structured output schemas. Check the supported outputs here: https://platform.openai.com/docs/guides/structured-outputs#supported-types"
+@@ -109,37 +194,64 @@ function coerceStrictSchema(schema, originalRequired) {
+         if (prop.anyOf) {
+           if (!prop.anyOf.some((v) => v.type === "null")) {
+             prop = { ...prop, anyOf: [...prop.anyOf, { type: "null" }] };
++            widenedHere = true;
+           }
+         } else if (prop.type && !Array.isArray(prop.type)) {
+           prop = { ...prop, type: [prop.type, "null"] };
++          widenedHere = true;
+         } else if (Array.isArray(prop.type) && !prop.type.includes("null")) {
+           prop = { ...prop, type: [...prop.type, "null"] };
++          widenedHere = true;
+         }
+       }
+       properties[propName] = prop;
++      if (childMap || widenedHere) {
++        propertyMaps[propName] = {
++          ...childMap ?? {},
++          ...widenedHere ? { widened: true } : {}
++        };
++      }
+     }
+     result.properties = properties;
+     result.required = allPropertyNames;
+     result.additionalProperties = false;
++    if (Object.keys(propertyMaps).length > 0) {
++      nullWideningMap.properties = propertyMaps;
++    }
+   }
+   if (result.type === "array" && result.items) {
+-    result.items = coerceStrictSchema(result.items, result.items.required || []);
++    const nested = coerceStrictSchema(result.items, result.items.required || []);
++    result.items = nested.schema;
++    if (nested.nullWideningMap) {
++      nullWideningMap.items = nested.nullWideningMap;
++    }
++    hasUntrackableAnyOfWidening ||= nested.hasUntrackableAnyOfWidening;
+   }
+   if (result.anyOf && Array.isArray(result.anyOf)) {
+-    result.anyOf = result.anyOf.map(
++    const variants = result.anyOf.map(
+       (variant) => coerceStrictSchema(variant, variant.required || [])
+     );
++    result.anyOf = variants.map((variant) => variant.schema);
++    hasUntrackableAnyOfWidening ||= variants.some(
++      (variant) => variant.nullWideningMap !== void 0 || variant.hasUntrackableAnyOfWidening
++    );
+   }
+   if (result.oneOf) {
+     throw new Error(
+       "oneOf is not supported in OpenAI structured output schemas. Check the supported outputs here: https://platform.openai.com/docs/guides/structured-outputs#supported-types"
+     );
+   }
+-  return result;
++  return {
++    schema: result,
++    nullWideningMap: pruneMap(nullWideningMap),
++    hasUntrackableAnyOfWidening
++  };
+ }
+ export {
++  createToolInputNormalizer,
+   isStrictModeCompatible,
+   makeStructuredOutputCompatible,
++  makeStructuredOutputCompatibleWithMap,
+   stripUnsupportedFormats
+ };
+ //# sourceMappingURL=schema-converter.js.map

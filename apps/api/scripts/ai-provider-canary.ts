@@ -41,13 +41,14 @@ const TOOL_ROUND_TRIP_COUNT = 7;
 const TOOL_ROUND_TRIP_RESULT = "stella-tool-round-trip-ok";
 const TOOL_ROUND_TRIP_PROMPT =
   `Call ${TOOL_ROUND_TRIP_NAME} exactly once with value "${TOOL_ROUND_TRIP_VALUE}" ` +
-  `and count ${TOOL_ROUND_TRIP_COUNT}. Then reply with only the confirmation ` +
-  "value returned by the tool.";
+  `and count ${TOOL_ROUND_TRIP_COUNT}. Do not include optionalNote. Then reply ` +
+  "with only the confirmation value returned by the tool.";
 
 const SAFE_CANARY_ERROR_MESSAGES = new Set([
   "Canary resolved an unexpected provider model.",
   "Provider did not execute the canary tool exactly once.",
   "Provider returned unexpected canary tool arguments.",
+  "Provider did not preserve an omitted optional tool argument.",
   "Provider did not return the canary tool result.",
   "Provider returned no text.",
 ]);
@@ -124,6 +125,7 @@ const openMapTool = toolDefinition({
 
 const toolRoundTripInputSchema = v.strictObject({
   count: v.literal(TOOL_ROUND_TRIP_COUNT),
+  optionalNote: v.optional(v.literal("must-not-be-sent")),
   value: v.literal(TOOL_ROUND_TRIP_VALUE),
 });
 
@@ -326,6 +328,11 @@ const runToolCallRoundTripProbe = async ({
     observedInput["value"] !== TOOL_ROUND_TRIP_VALUE
   ) {
     throw new TypeError("Provider returned unexpected canary tool arguments.");
+  }
+  if ("optionalNote" in observedInput) {
+    throw new TypeError(
+      "Provider did not preserve an omitted optional tool argument.",
+    );
   }
   if (output.trim() !== TOOL_ROUND_TRIP_RESULT) {
     throw new TypeError("Provider did not return the canary tool result.");
