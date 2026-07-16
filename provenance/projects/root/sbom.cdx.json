@@ -632,6 +632,21 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-editor-controls.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
           },
           {
@@ -855,6 +870,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -3409,6 +3430,21 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-editor-controls.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
           },
           {
@@ -3632,6 +3668,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -5790,6 +5832,21 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-editor-controls.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
           },
           {
@@ -6013,6 +6070,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -8555,6 +8618,9 @@
             "location": "apps/web/src/features/case-law/queries/decisions.ts#1"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-queries.ts#1"
+          },
+          {
             "location": "apps/web/src/hooks/use-chrome-query.ts#3"
           },
           {
@@ -8957,6 +9023,12 @@
             "location": "apps/web/src/components/usage/usage-limit-modal.tsx#1"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#4"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#3"
+          },
+          {
             "location": "apps/web/src/router.tsx#1"
           },
           {
@@ -9072,6 +9144,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#3"
@@ -9665,6 +9740,12 @@
             "location": "apps/web/src/features/case-law/components/decision-table.tsx#1"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#5"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#4"
+          },
+          {
             "location": "apps/web/src/router.tsx#2"
           },
           {
@@ -9768,6 +9849,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/skills.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#4"
@@ -10070,7 +10154,7 @@
             "location": "apps/web/src/lib/beta-features.ts#1"
           },
           {
-            "location": "apps/web/src/routeTree.gen.ts#1625"
+            "location": "apps/web/src/routeTree.gen.ts#1647"
           },
           {
             "location": "apps/web/src/lib/beta-features.ts#2"
@@ -12002,6 +12086,21 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-editor-controls.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
           },
           {
@@ -12225,6 +12324,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -13597,6 +13702,15 @@
             "location": "apps/api/src/handlers/entities/copy-utils.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/create-blank-document-service.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/create-blank-document.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/create-document-from-style-set.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/create-from-buffer.ts#1"
           },
           {
@@ -14146,6 +14260,39 @@
             "location": "apps/api/src/handlers/skills/upload.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/style-sets/create-from-editor.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/create.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/download.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/read-editor.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/read-stella-editor.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/replace.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/storage.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/update-from-editor.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/update.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/tasks/assignees-add.ts#1"
           },
           {
@@ -14231,6 +14378,9 @@
           },
           {
             "location": "apps/api/src/handlers/templates/create-blank.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/create-from-style-set.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/create-from-styles.ts#1"
@@ -14639,6 +14789,9 @@
           },
           {
             "location": "apps/api/src/lib/sse-broadcast.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/style-sets.ts#1"
           },
           {
             "location": "apps/api/src/lib/subprocess.ts#1"
@@ -15140,6 +15293,9 @@
           },
           {
             "location": "apps/api/src/lib/scheduler/bullmq.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/style-set-package-cleanup-queue.ts#1"
           },
           {
             "location": "apps/api/src/lib/workflow-queue.ts#2"
@@ -16448,6 +16604,9 @@
             "location": "apps/api/src/handlers/entities/upload.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entities/validate-parent-id.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/version-diff-sources.ts#11"
           },
           {
@@ -16704,6 +16863,24 @@
           },
           {
             "location": "apps/api/src/handlers/skills/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/download.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/replace.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/storage.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/tasks/assignees-remove.ts#2"
@@ -17070,6 +17247,9 @@
           },
           {
             "location": "apps/api/src/lib/search/sql.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/style-sets.ts#2"
           },
           {
             "location": "apps/api/src/lib/usage/usage-ledger.ts#32"
@@ -17686,6 +17866,9 @@
             "location": "apps/api/src/handlers/entities/upload.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/entities/validate-parent-id.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/version-diff-sources.ts#11"
           },
           {
@@ -17942,6 +18125,24 @@
           },
           {
             "location": "apps/api/src/handlers/skills/update.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/download.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/replace.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/storage.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/update.ts#2"
           },
           {
             "location": "apps/api/src/handlers/tasks/assignees-remove.ts#2"
@@ -18310,6 +18511,9 @@
             "location": "apps/api/src/lib/search/sql.ts#1"
           },
           {
+            "location": "apps/api/src/lib/style-sets.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/usage/usage-ledger.ts#32"
           },
           {
@@ -18480,6 +18684,9 @@
           },
           {
             "location": "apps/api/src/handlers/me/routes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/routes.ts#2"
           },
           {
             "location": "apps/api/src/handlers/uploads/routes.ts#2"
@@ -18845,6 +19052,12 @@
           },
           {
             "location": "apps/api/src/handlers/entities/copy-to-workspace.ts#4"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/create-blank-document.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/create-document-from-style-set.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/create-from-legal-source.ts#2"
@@ -19351,6 +19564,33 @@
             "location": "apps/api/src/handlers/smoke/routes.ts#26"
           },
           {
+            "location": "apps/api/src/handlers/style-sets/create.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/download.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/read-editor.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/replace.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/update-from-editor.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/style-sets/update.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/tasks/assignees-add.ts#2"
           },
           {
@@ -19445,6 +19685,9 @@
           },
           {
             "location": "apps/api/src/handlers/templates/create-blank.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/create-from-style-set.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/create-from-styles.ts#2"
@@ -19727,6 +19970,12 @@
           },
           {
             "location": "apps/api/src/lib/security-headers.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/style-set-editor-contract.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/style-set-editor-contract.ts#2"
           },
           {
             "location": "apps/api/src/lib/views-schema.ts#2"
@@ -20502,6 +20751,9 @@
             "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#3"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#1"
           },
           {
@@ -20610,7 +20862,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#20"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx#11"
@@ -20646,7 +20898,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#10"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#8"
@@ -20694,7 +20949,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#10"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar.tsx#7"
@@ -22572,6 +22827,21 @@
             "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
           },
           {
+            "location": "apps/web/src/features/style-sets/style-set-editor-controls.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#1"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#1"
+          },
+          {
             "location": "apps/web/src/lib/analytics/analytics-provider.tsx#1"
           },
           {
@@ -22795,6 +23065,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -24148,9 +24424,6 @@
             "location": "apps/web/src/components/sidebar.tsx#8"
           },
           {
-            "location": "apps/web/src/components/stella-wordmark.tsx#3"
-          },
-          {
             "location": "apps/web/src/components/theme-picker.tsx#2"
           },
           {
@@ -24176,6 +24449,18 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/decision-table.tsx#2"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-controls.tsx#3"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-editor-dialog.tsx#6"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-picker-dialog.tsx#6"
+          },
+          {
+            "location": "apps/web/src/features/style-sets/style-set-preview.tsx#3"
           },
           {
             "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#6"
@@ -24304,7 +24589,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#21"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx#12"
@@ -24343,10 +24628,13 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#11"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/styles.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#5"
@@ -24442,7 +24730,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#11"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#3"
@@ -24509,9 +24797,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-year-grid.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#17"
@@ -24652,9 +24937,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-badges.tsx#8"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#6"
           },
           {
@@ -24710,9 +24992,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/client-group-header.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#13"
