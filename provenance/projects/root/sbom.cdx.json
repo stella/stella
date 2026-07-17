@@ -7016,6 +7016,142 @@
     {
       "authors": [
         {
+          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/javascript/)"
+        }
+      ],
+      "bom-ref": "pkg:npm/@smithy/fetch-http-handler@5.4.6",
+      "description": "Provides a way to make requests",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@aws-sdk/client-bedrock-runtime/node_modules/@smithy/fetch-http-handler/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@aws-sdk/client-bedrock-runtime/node_modules/@smithy/fetch-http-handler/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/smithy-lang/smithy-typescript/tree/main/packages/fetch-http-handler"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/smithy-lang/smithy-typescript.git"
+        }
+      ],
+      "group": "@smithy",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "fetch-http-handler",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/nested-clients/node_modules/@smithy/fetch-http-handler/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/middleware-websocket/node_modules/@smithy/fetch-http-handler/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/credential-provider-http/node_modules/@smithy/fetch-http-handler/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/client-cognito-identity/node_modules/@smithy/fetch-http-handler/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@aws-sdk/client-bedrock-runtime/node_modules/@smithy/fetch-http-handler/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40smithy/fetch-http-handler@5.4.6",
+      "scope": "required",
+      "type": "library",
+      "version": "5.4.6"
+    },
+    {
+      "authors": [
+        {
+          "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
+        }
+      ],
+      "bom-ref": "pkg:npm/@smithy/fetch-http-handler@5.6.4",
+      "description": "Provides a way to make requests",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@smithy/fetch-http-handler/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@smithy/fetch-http-handler/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#2"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/smithy-lang/smithy-typescript/tree/main/packages/fetch-http-handler"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/smithy-lang/smithy-typescript.git"
+        }
+      ],
+      "group": "@smithy",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "fetch-http-handler",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@smithy/fetch-http-handler/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40smithy/fetch-http-handler@5.6.4",
+      "scope": "required",
+      "type": "library",
+      "version": "5.6.4"
+    },
+    {
+      "authors": [
+        {
           "name": "Colin McDonnell"
         }
       ],
@@ -7477,10 +7613,10 @@
             "location": "apps/api/src/lib/tanstack-ai-caching.ts#6"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#4"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#5"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#5"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#6"
           },
           {
             "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#5"
@@ -7544,10 +7680,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#6"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#7"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#7"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#8"
           },
           {
             "location": "packages/ai-catalog/src/index.ts#21"
@@ -7754,10 +7890,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#8"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#9"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#9"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#10"
           },
           {
             "location": "packages/ai-catalog/src/index.ts#22"
@@ -7887,10 +8023,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#10"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#11"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#11"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#12"
           }
         ]
       },
@@ -7949,10 +8085,10 @@
             "location": "apps/api/src/lib/tanstack-ai-generate.ts#9"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#12"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#13"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#13"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#14"
           }
         ]
       },
@@ -8018,7 +8154,7 @@
             "location": "apps/api/src/lib/tanstack-ai-generate.ts#10"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#17"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#18"
           },
           {
             "location": "packages/ai-catalog/src/index.ts#23"
@@ -8213,10 +8349,10 @@
             "location": "apps/api/src/lib/tanstack-ai-generate.ts#8"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#2"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#3"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#3"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#4"
           },
           {
             "location": "apps/api/src/lib/tanstack-ai-schema.ts#5"
@@ -14800,7 +14936,7 @@
             "location": "apps/api/src/lib/tanstack-ai-agent.ts#3"
           },
           {
-            "location": "apps/api/src/lib/tanstack-ai-models.ts#18"
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#19"
           },
           {
             "location": "apps/api/src/lib/timezone.ts#1"

@@ -41,6 +41,8 @@ Project: root
 - @react-email/render 2.0.6 — MIT
 - @resvg/resvg-js 2.6.2 — MPL-2.0
 - @sinclair/typebox 0.34.50 — MIT
+- @smithy/fetch-http-handler 5.4.6 — Apache-2.0
+- @smithy/fetch-http-handler 5.6.4 — Apache-2.0
 - @standard-schema/spec 1.1.0 — MIT
 - @streamdown/cjk 1.0.3 — Apache-2.0
 - @streamdown/math 1.0.2 — Apache-2.0
