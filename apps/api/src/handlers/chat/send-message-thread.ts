@@ -13,9 +13,10 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { PG_ERROR } from "@/api/lib/pg-error";
+import { PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
 
 type ReadThreadValidationStateProps = {
+  organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
@@ -27,6 +28,7 @@ type ThreadValidationState = {
 };
 
 export const readThreadValidationState = async ({
+  organizationId,
   safeDb,
   threadId,
   userId,
@@ -40,6 +42,7 @@ export const readThreadValidationState = async ({
         tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
+            organizationId: { eq: organizationId },
             userId: { eq: userId },
           },
           columns: {
@@ -107,6 +110,7 @@ export type ChatThreadState =
 type LoadThreadError = HandlerError<400 | 404 | 409> | SafeDbError;
 
 const MAX_THREAD_CLAIM_ATTEMPTS = 3;
+const CHAT_THREADS_PRIMARY_KEY_CONSTRAINT = "chat_threads_pkey";
 
 export const loadThread = async (
   props: LoadThreadProps,
@@ -130,7 +134,7 @@ const loadThreadAttempt = async ({
   workspaceId,
 }: LoadThreadAttemptProps): Promise<Result<ChatThreadState, LoadThreadError>> =>
   await Result.gen(async function* () {
-    // Look the thread up by id+user only. Filtering by workspaceId
+    // Look the thread up by id+organization+user only. Filtering by workspaceId
     // here would mask a scope mismatch — a thread persisted with
     // workspaceId=X but requested as global would look "missing"
     // and the insert below would then collide on the PK. We want a
@@ -151,6 +155,7 @@ const loadThreadAttempt = async ({
         tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
+            organizationId: { eq: organizationId },
             userId: { eq: userId },
           },
           columns: {
@@ -222,6 +227,8 @@ const loadThreadAttempt = async ({
           .where(
             and(
               eq(chatThreads.id, threadId),
+              eq(chatThreads.organizationId, organizationId),
+              eq(chatThreads.userId, userId),
               eq(chatThreads.rollbackToken, rollbackToken),
             ),
           )
@@ -288,7 +295,13 @@ const loadThreadAttempt = async ({
             await tx
               .update(chatThreads)
               .set({ title })
-              .where(eq(chatThreads.id, threadId));
+              .where(
+                and(
+                  eq(chatThreads.id, threadId),
+                  eq(chatThreads.organizationId, organizationId),
+                  eq(chatThreads.userId, userId),
+                ),
+              );
 
             await recordAuditEvent(tx, {
               action: AUDIT_ACTION.UPDATE,
@@ -338,7 +351,9 @@ const loadThreadAttempt = async ({
     if (Result.isError(insertResult)) {
       if (
         !DatabaseError.is(insertResult.error) ||
-        insertResult.error.code !== PG_ERROR.UNIQUE_VIOLATION
+        insertResult.error.code !== PG_ERROR.UNIQUE_VIOLATION ||
+        pgErrorFields(insertResult.error)["error.cause.pg_constraint"] !==
+          CHAT_THREADS_PRIMARY_KEY_CONSTRAINT
       ) {
         return Result.err(insertResult.error);
       }

@@ -112,6 +112,7 @@ export const rollbackUnpersistedChatSideEffects = async ({
       .where(
         and(
           eq(chatThreads.id, threadId),
+          eq(chatThreads.userId, userId),
           eq(chatThreads.rollbackToken, threadState.rollbackToken),
           notExists(
             tx

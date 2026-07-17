@@ -1,8 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { PG_ERROR } from "@/api/lib/pg-error";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { loadThread } from "./send-message-thread";
@@ -22,20 +27,21 @@ const otherWorkspaceId = toSafeId<"workspace">(
 describe("send-message thread loading", () => {
   test("rejects an existing thread whose scope differs from the request", async () => {
     const insert = mock(() => ({ values: async () => undefined }));
+    const findFirst = mock(async () => ({
+      chatModel: null,
+      contextMatterIds: [],
+      dataWorkspaceIds: [otherWorkspaceId],
+      id: threadId,
+      title: "Existing thread",
+      rollbackToken: null,
+      webSearchEnabled: false,
+      workspaceId: otherWorkspaceId,
+    }));
     const { safeDb } = createScopedDbMock({
       insert,
       query: {
         chatThreads: {
-          findFirst: async () => ({
-            chatModel: null,
-            contextMatterIds: [],
-            dataWorkspaceIds: [otherWorkspaceId],
-            id: threadId,
-            title: "Existing thread",
-            rollbackToken: null,
-            webSearchEnabled: false,
-            workspaceId: otherWorkspaceId,
-          }),
+          findFirst,
         },
       },
     });
@@ -61,6 +67,15 @@ describe("send-message thread loading", () => {
       status: 400,
     });
     expect(insert).not.toHaveBeenCalled();
+    expect(findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: { eq: threadId },
+          organizationId: { eq: organizationId },
+          userId: { eq: userId },
+        },
+      }),
+    );
   });
 
   test("initializes a workspace thread with its workspace in the data scope", async () => {
@@ -124,6 +139,48 @@ describe("send-message thread loading", () => {
     expect(result.value.type).toBe("created");
     expect(claimReturning).toHaveBeenCalledTimes(1);
     expect(insertValues).toHaveBeenCalledTimes(1);
+  });
+
+  test("propagates an audit unique violation instead of treating it as a thread race", async () => {
+    const auditUniqueError = new DatabaseError({
+      code: PG_ERROR.UNIQUE_VIOLATION,
+      message: "Audit event already exists",
+      cause: Object.assign(new Error("duplicate audit event"), {
+        code: PG_ERROR.UNIQUE_VIOLATION,
+        constraint: "audit_log_event_id_key",
+      }),
+    });
+    const tx = asTestRaw<Transaction>({
+      insert: () => ({ values: async () => undefined }),
+      query: { chatThreads: { findFirst: async () => null } },
+    });
+    const safeDb: SafeDb = async (callback) =>
+      await Result.tryPromise({
+        try: async () => await callback(tx),
+        catch: () => auditUniqueError,
+      });
+    const recordAuditEvent = mock(async () => {
+      throw auditUniqueError;
+    });
+
+    const result = await loadThread({
+      initialContextMatterIds: [],
+      isAnonymized: false,
+      organizationId,
+      recordAuditEvent,
+      safeDb,
+      threadId,
+      title: "New thread",
+      userId,
+      workspaceId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("Expected the audit write to fail");
+    }
+    expect(result.error).toBe(auditUniqueError);
+    expect(recordAuditEvent).toHaveBeenCalledTimes(1);
   });
 });
 

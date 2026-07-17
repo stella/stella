@@ -310,6 +310,7 @@ const sendMessage = createSafeRootHandler(
     const hasActiveDocxFileClient = body.activeFile?.supportsDocxEdits === true;
     const validationThreadState = yield* Result.await(
       readThreadValidationState({
+        organizationId: session.activeOrganizationId,
         safeDb,
         threadId: body.threadId,
         userId: user.id,
