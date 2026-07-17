@@ -1,9 +1,10 @@
 {
   "as-casts": {
-    "count": 2,
+    "count": 3,
     "files": {
       "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts": 1,
-      "apps/web/src/app-providers.tsx": 1
+      "apps/web/src/app-providers.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions.ts": 1
     }
   },
   "nullish-array-fallback": {
@@ -35,12 +36,12 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 618,
+    "count": 619,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
       "apps/api/src/dev/register-mock-ai.ts": 1,
-      "apps/api/src/handlers/audit-logs/read.ts": 1,
+      "apps/api/src/handlers/audit-logs/query.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/corpus-storage.ts": 2,
@@ -88,7 +89,6 @@
       "apps/api/src/handlers/chat/upload-files.ts": 3,
       "apps/api/src/handlers/clauses/import.ts": 4,
       "apps/api/src/handlers/clauses/search-vector.ts": 1,
-      "apps/api/src/handlers/clauses/template-links.ts": 3,
       "apps/api/src/handlers/contacts/create.ts": 1,
       "apps/api/src/handlers/contacts/update-by-id.ts": 1,
       "apps/api/src/handlers/docx/adapt-ai-fields.ts": 1,
@@ -194,6 +194,7 @@
       "apps/api/src/lib/search/index-global.ts": 5,
       "apps/api/src/lib/search/pg-fts-provider.ts": 2,
       "apps/api/src/lib/tanstack-ai-models.ts": 8,
+      "apps/api/src/lib/template-clause-links.ts": 3,
       "apps/api/src/lib/workflow-queue.ts": 9,
       "apps/api/src/lib/workflow-target-queries.ts": 2,
       "apps/api/src/lib/workflow/generate-batch-mock.ts": 5,
@@ -319,6 +320,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/view-templates.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx": 1,
@@ -333,7 +335,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 496,
+    "count": 504,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -348,7 +350,7 @@
       "apps/api/src/lib/errors/utils.ts": 1,
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/sse.ts": 1,
-      "apps/api/src/lib/workflow-queue.ts": 3,
+      "apps/api/src/lib/workflow-queue.ts": 2,
       "apps/api/src/lib/workflow/utils.ts": 1,
       "apps/api/src/lib/workflow/verdict-engine.ts": 3,
       "apps/api/src/scheduler/scheduler.ts": 1,
@@ -356,8 +358,11 @@
       "apps/web/src/app-providers.tsx": 1,
       "apps/web/src/client.tsx": 2,
       "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 1,
-      "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 3,
-      "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 2,
+      "apps/web/src/components/ai-suggestions/accept-all-button.tsx": 1,
+      "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 5,
+      "apps/web/src/components/ai-suggestions/review-bar.tsx": 2,
+      "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
+      "apps/web/src/components/ai-suggestions/use-review-actions.ts": 4,
       "apps/web/src/components/app-sidebar.tsx": 14,
       "apps/web/src/components/auth/otp-panel.tsx": 1,
       "apps/web/src/components/auth/sign-in-dialog.tsx": 2,
@@ -462,7 +467,7 @@
       "apps/web/src/routes/_protected.settings/organization.members.tsx": 1,
       "apps/web/src/routes/_protected.todos/index.tsx": 2,
       "apps/web/src/routes/_protected.tsx": 1,
-      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 6,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 7,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 4,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form.tsx": 1,
@@ -533,7 +538,7 @@
     }
   },
   "cross-handler-imports": {
-    "count": 257,
+    "count": 255,
     "files": {
       "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 1,
       "apps/api/src/handlers/catalogue/install-skill.ts": 1,
@@ -565,7 +570,7 @@
       "apps/api/src/handlers/docx/resolve-clause-slots.ts": 2,
       "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts": 1,
       "apps/api/src/handlers/entities/compare-versions.ts": 1,
-      "apps/api/src/handlers/entities/compute-version-diff.ts": 3,
+      "apps/api/src/handlers/entities/compute-version-diff.ts": 1,
       "apps/api/src/handlers/entities/copy-to-workspace.ts": 3,
       "apps/api/src/handlers/entities/copy-utils.ts": 4,
       "apps/api/src/handlers/entities/create-from-buffer.ts": 4,
@@ -639,11 +644,12 @@
     }
   },
   "cross-route-private-imports": {
-    "count": 216,
+    "count": 215,
     "files": {
       "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 8,
       "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
+      "apps/web/src/components/ai-suggestions/use-review-actions.ts": 1,
       "apps/web/src/components/app-sidebar.tsx": 9,
       "apps/web/src/components/breadcrumbs/chat-breadcrumb.tsx": 2,
       "apps/web/src/components/breadcrumbs/clauses-breadcrumb.tsx": 1,
@@ -679,7 +685,6 @@
       "apps/web/src/components/inspector/email-html-viewer.tsx": 1,
       "apps/web/src/components/inspector/entity-metadata-panel.tsx": 8,
       "apps/web/src/components/inspector/external-reference-panel.tsx": 1,
-      "apps/web/src/components/inspector/file-download-service.ts": 1,
       "apps/web/src/components/inspector/file-facets.tsx": 1,
       "apps/web/src/components/inspector/file-tab-panel.tsx": 6,
       "apps/web/src/components/inspector/inspector-panel.tsx": 5,
@@ -712,7 +717,6 @@
       "apps/web/src/routes/_protected.dev_.autocomplete.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-field-mention-extension.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx": 1,

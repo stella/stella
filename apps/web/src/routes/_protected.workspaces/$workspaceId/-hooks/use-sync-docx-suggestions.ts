@@ -53,8 +53,9 @@ export const useSyncDocxSuggestions = ({
     // block, and those rows are skipped until a later data change re-runs
     // this effect with a ready editor.
     const snapshot = editorRef.current?.createAIEditSnapshot() ?? null;
+    const snapshotBlocks = snapshot ? snapshot.blocks : [];
     const blocksById = new Map<string, SnapshotBlock>(
-      (snapshot?.blocks ?? []).map((block) => [block.id, block]),
+      snapshotBlocks.map((block) => [block.id, block]),
     );
 
     const items = data.items.flatMap((row): ReviewSuggestion[] => {
