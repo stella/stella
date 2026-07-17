@@ -1,11 +1,4 @@
-import type React from "react";
-
-import type {
-  AnalysisAnnotation,
-  AnalysisHeading,
-} from "@stll/legal-ast/analysis";
-
-import type { TranslationKey } from "@/i18n/types";
+import type { AnalysisHeading } from "@stll/legal-ast/analysis";
 
 export type {
   AnalysisAnnotation,
@@ -60,45 +53,6 @@ export const getCategoryVar = (category: string): string => {
   const idx = hashString(category) % OPTION_VARS.length;
   // idx is in [0, length); indexing is safe.
   return OPTION_VARS[idx] ?? "";
-};
-
-/** Inline style for using a category color. */
-export const categoryColorStyle = (category: string): React.CSSProperties => ({
-  borderInlineStartColor: `var(${getCategoryVar(category)})`,
-});
-
-/** Inline style for subtle line (low opacity). */
-export const categoryLineStyle = (category: string): React.CSSProperties => ({
-  borderInlineStartColor: `color-mix(in srgb, var(${getCategoryVar(category)}) 25%, transparent)`,
-});
-
-/** i18n key for a category. Used with useTranslations(). */
-const CATEGORY_I18N: Record<string, TranslationKey> = {
-  facts: "caseLaw.analysis.categories.facts",
-  "procedural-history": "caseLaw.analysis.categories.procedural-history",
-  reasoning: "caseLaw.analysis.categories.reasoning",
-  holding: "caseLaw.analysis.categories.holding",
-};
-
-/**
- * Get the translated label for a category.
- * Pass the `t` function from useTranslations().
- * Falls back to capitalising the raw key for unknown categories.
- */
-export const formatCategoryLabel = (category: string): string =>
-  category.replace(/-/gu, " ");
-
-/** Get the i18n message key for a core category, or null. */
-export const getCategoryI18nKey = (category: string): TranslationKey | null =>
-  CATEGORY_I18N[category] ?? null;
-
-/**
- * Flatten the heading tree into a list of all annotations
- * with their parent heading context.
- */
-export type FlatAnnotation = AnalysisAnnotation & {
-  headingLabel: string;
-  category: string;
 };
 
 export type FlatAnalysisHeading = AnalysisHeading & {
@@ -159,28 +113,6 @@ export const buildSectionMap = (
 
   walk(headings);
   return map;
-};
-
-export const flattenAnnotations = (
-  headings: readonly AnalysisHeading[],
-): FlatAnnotation[] => {
-  const result: FlatAnnotation[] = [];
-
-  const walk = (nodes: readonly AnalysisHeading[]) => {
-    for (const node of nodes) {
-      for (const annotation of node.annotations) {
-        result.push({
-          ...annotation,
-          headingLabel: node.label,
-          category: node.category,
-        });
-      }
-      walk(node.children);
-    }
-  };
-
-  walk(headings);
-  return result;
 };
 
 export const flattenAnalysisHeadings = (

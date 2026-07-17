@@ -288,11 +288,6 @@ type BuildChatSystemPromptProps = {
   userId?: SafeId<"user"> | undefined;
 };
 
-export const buildChatSystemPrompt = async (
-  props: BuildChatSystemPromptProps,
-): Promise<Result<string, HandlerError<403 | 404> | SafeDbError>> =>
-  (await buildChatSystemPromptParts(props)).map(({ fullPrompt }) => fullPrompt);
-
 export const buildChatSystemPromptParts = async ({
   activeDecision,
   activeExternal,

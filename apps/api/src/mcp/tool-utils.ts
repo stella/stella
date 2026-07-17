@@ -3,7 +3,6 @@ import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
-import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
@@ -795,13 +794,6 @@ export const buildCaseLawDecisionUrl = ({
 
   return `${basePath}/${decisionSlug}`;
 };
-
-export const getOrgTools = (context: McpRequestContext) =>
-  createOrgTools({
-    accessibleWorkspaceIds: context.accessibleWorkspaceIds,
-    organizationId: context.organizationId,
-    scopedDb: context.scopedDb,
-  });
 
 export const invokeAiTool = async <TArgs extends Record<string, unknown>>({
   args,

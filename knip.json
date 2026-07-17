@@ -34,22 +34,30 @@
         "src/handlers/docx/generate-spa-filled.ts",
         "src/handlers/docx/prepare-spa-template.ts",
         "src/tests/load/*.ts",
-        "drizzle.config.ts"
+        "drizzle.config.ts",
+        "src/**/*.test.ts",
+        "scripts/**/*.test.ts"
       ],
       "ignoreDependencies": ["@electric-sql/pglite"]
     },
     "apps/web": {
-      "entry": ["src/main.tsx", "src/server.ts!", "vite.config.ts"],
-      "ignore": [
-        "public/dark-mode-init.js",
-        "src/routeTree.gen.ts",
-        "src/lib/anonymize/gazetteer.ts",
-        "src/lib/anonymize/pdf-content-stream.ts",
-        "src/lib/anonymize/pdf-redact.ts",
-        "src/lib/anonymize/redaction-map.ts",
-        "src/lib/pdf/use-anonymized-field-ids.ts"
+      "entry": [
+        "src/client.tsx",
+        "src/server.ts!",
+        "start-runtime.js!",
+        "vite.config.ts",
+        "src/**/*.test.ts",
+        "src/**/*.test.tsx",
+        "e2e/**/*.spec.ts",
+        "e2e/**/*.ts"
       ],
-      "ignoreDependencies": ["react-grab", "@libpdf/core", "idb"]
+      "ignore": ["public/dark-mode-init.js", "src/routeTree.gen.ts"],
+      "ignoreDependencies": [
+        "react-grab",
+        "@libpdf/core",
+        "@stll/docx-core",
+        "@stll/docx-utils"
+      ]
     },
     "apps/landing": {
       "entry": [
