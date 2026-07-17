@@ -20,6 +20,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { extractFormattingLocale } from "@/api/lib/locale";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import {
+  excludedEntityKindsForView,
+  viewIncludesListItems,
+} from "@/api/lib/views";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseViewLayout } from "@/api/lib/views-schema";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -78,6 +82,14 @@ const METADATA_COLUMNS = [
   { id: "_version", header: "Version" },
 ] as const;
 
+const LIST_COLUMNS = [
+  { id: "_name", header: "Name" },
+  { id: "_list-item-type", header: "Type" },
+  { id: "_status", header: "Status" },
+  { id: "_priority", header: "Priority" },
+  { id: "_due-date", header: "Due date" },
+] as const;
+
 const CELL_FLAG_IDS = [
   "needs-review",
   "important",
@@ -111,6 +123,11 @@ type ExportColumn =
   | {
       type: "metadata";
       id: (typeof METADATA_COLUMNS)[number]["id"];
+      header: string;
+    }
+  | {
+      type: "list";
+      id: (typeof LIST_COLUMNS)[number]["id"];
       header: string;
     };
 
@@ -252,7 +269,15 @@ export const buildExportColumns = (
       ? []
       : [{ type: "metadata" as const, id: column.id, header: column.header }],
   );
+  const listColumns = viewIncludesListItems(layout.filters)
+    ? LIST_COLUMNS.flatMap((column) =>
+        hiddenIds.has(column.id)
+          ? []
+          : [{ type: "list" as const, id: column.id, header: column.header }],
+      )
+    : [];
   const defaultColumns: ExportColumn[] = [
+    ...listColumns,
     ...propertyColumns,
     ...metadataColumns,
   ];
@@ -578,6 +603,37 @@ const buildMetadataExportCell = (
   return buildTextExportCell(formatMetadataColumn(column, entity, locale));
 };
 
+const buildListExportCell = (
+  column: Extract<ExportColumn, { type: "list" }>,
+  entity: QueryEntityResult,
+  locale: string,
+): ExportCell => {
+  if (column.id === "_name") {
+    return buildTextExportCell(entity.name ?? "");
+  }
+  if (column.id === "_list-item-type") {
+    return buildTextExportCell(entity.listItemType ?? "task");
+  }
+  if (column.id === "_status") {
+    return buildTextExportCell(entity.status?.replaceAll("_", " ") ?? "");
+  }
+  if (column.id === "_priority") {
+    return buildTextExportCell(entity.priority ?? "");
+  }
+  return buildTextExportCell(
+    entity.dueDate ? formatExportDate(entity.dueDate, locale) : "",
+  );
+};
+
+const buildNonPropertyExportCell = (
+  column: Exclude<ExportColumn, { type: "property" }>,
+  entity: QueryEntityResult,
+  locale: string,
+): ExportCell =>
+  column.type === "list"
+    ? buildListExportCell(column, entity, locale)
+    : buildMetadataExportCell(column, entity, locale);
+
 const getExportCellStyle = (
   metadata: QueryEntityResult["cellMetadata"][number]["metadata"] | undefined,
 ): ExportCellStyle => {
@@ -624,8 +680,7 @@ export const buildExportTable = (
           justificationByFieldId: options.justificationByFieldId,
         });
       }
-
-      return buildMetadataExportCell(column, entity, locale);
+      return buildNonPropertyExportCell(column, entity, locale);
     });
   }),
 });
@@ -851,7 +906,7 @@ const exportTableView = createSafeHandler(
         limit: LIMITS.exportRowLimit,
         fieldMode: "visible",
         fieldIds,
-        excludedKinds: ["folder", "task"],
+        excludedKinds: excludedEntityKindsForView(layout.filters),
       }),
     );
 

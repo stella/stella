@@ -122,6 +122,7 @@ const entity = (
   updatedAt: "2026-01-02T00:00:00.000Z",
   status: null,
   priority: null,
+  listItemType: null,
   dueDate: null,
   agendaKind: "task",
   startAt: null,
@@ -151,6 +152,59 @@ const entity = (
 });
 
 describe("table export", () => {
+  test("adds List columns and values for task-scoped tables", () => {
+    const columns = buildExportColumns(
+      tableLayout({
+        filters: [
+          {
+            type: "predicate",
+            operand: { type: "kind" },
+            op: "in",
+            value: ["task"],
+          },
+        ],
+      }),
+      [],
+    );
+    const table = buildExportTable(
+      columns,
+      [
+        entity([], {
+          kind: "task",
+          name: "Confirm signing authority",
+          listItemType: "requirement",
+          status: "in_review",
+          priority: "high",
+          dueDate: "2026-07-20",
+        }),
+      ],
+      "en",
+      {
+        link: {
+          baseUrl: "https://example.test",
+          workspaceId: "workspace-1",
+          viewId: "view-1",
+        },
+        justificationByFieldId: new Map(),
+      },
+    );
+
+    expect(columns.slice(0, 5).map((column) => column.header)).toEqual([
+      "Name",
+      "Type",
+      "Status",
+      "Priority",
+      "Due date",
+    ]);
+    expect(table.rows.at(0)?.slice(0, 5)).toMatchObject([
+      { value: "Confirm signing authority" },
+      { value: "requirement" },
+      { value: "in review" },
+      { value: "high" },
+      { value: "Jul 20, 2026" },
+    ]);
+  });
+
   test("applies table order after hidden columns", () => {
     const columns = buildExportColumns(
       tableLayout({

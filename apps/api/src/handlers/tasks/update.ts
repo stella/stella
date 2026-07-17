@@ -4,7 +4,8 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities } from "@/api/db/schema";
+import { entities, LIST_ITEM_TYPES } from "@/api/db/schema";
+import type { ListItemType } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -46,6 +47,7 @@ const updateTaskBodySchema = t.Object({
   status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
   priority: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  listItemType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
   startAt: t.Optional(agendaDateTimeSchema),
   endAt: t.Optional(agendaDateTimeSchema),
   occurredAt: t.Optional(agendaDateTimeSchema),
@@ -67,19 +69,20 @@ const updateTaskBodySchema = t.Object({
   recurrence: t.Optional(t.Nullable(agendaRecurrenceSchema)),
   sortOrder: t.Optional(t.Nullable(t.String({ maxLength: 64 }))),
 });
+type UpdateTaskBody = Static<typeof updateTaskBodySchema>;
 
 const toDateOrNull = (value: string | null | undefined): Date | null =>
   value ? new Date(value) : null;
 
 type AgendaKindValidationResult =
-  | { agendaKind: AgendaItemKind | undefined; status: "ok" }
+  | { agendaKind: AgendaItemKind | null; status: "ok" }
   | { error: HandlerError; status: "error" };
 
 const validateAgendaKind = (
   value: string | undefined,
 ): AgendaKindValidationResult => {
   if (value === undefined) {
-    return { agendaKind: undefined, status: "ok" };
+    return { agendaKind: null, status: "ok" };
   }
   if (includes(AGENDA_ITEM_KINDS, value)) {
     return { agendaKind: value, status: "ok" };
@@ -93,11 +96,132 @@ const validateAgendaKind = (
   };
 };
 
+type ListItemTypeValidationResult =
+  | { listItemType: ListItemType | null; status: "ok" }
+  | { error: HandlerError; status: "error" };
+
+const validateListItemType = (
+  value: string | undefined,
+): ListItemTypeValidationResult => {
+  if (value === undefined) {
+    return { listItemType: null, status: "ok" };
+  }
+  if (includes(LIST_ITEM_TYPES, value)) {
+    return { listItemType: value, status: "ok" };
+  }
+  return {
+    error: new HandlerError({
+      status: 400,
+      message: "Invalid list item type",
+    }),
+    status: "error",
+  };
+};
+
+const validateTaskFields = (
+  body: UpdateTaskBody,
+): ListItemTypeValidationResult => {
+  if (body.status !== undefined && !includes(TASK_STATUSES, body.status)) {
+    return {
+      error: new HandlerError({ status: 400, message: "Invalid task status" }),
+      status: "error",
+    };
+  }
+  if (
+    body.priority !== undefined &&
+    !includes(ENTITY_PRIORITIES, body.priority)
+  ) {
+    return {
+      error: new HandlerError({
+        status: 400,
+        message: "Invalid task priority",
+      }),
+      status: "error",
+    };
+  }
+  return validateListItemType(body.listItemType);
+};
+
+type TaskInputValidationResult =
+  | {
+      agendaKind: AgendaItemKind | null;
+      listItemType: ListItemType | null;
+      status: "ok";
+    }
+  | { error: HandlerError; status: "error" };
+
+const validateTaskInput = (body: UpdateTaskBody): TaskInputValidationResult => {
+  const agendaKindResult = validateAgendaKind(body.agendaKind);
+  if (agendaKindResult.status === "error") {
+    return agendaKindResult;
+  }
+  const taskFieldsResult = validateTaskFields(body);
+  if (taskFieldsResult.status === "error") {
+    return taskFieldsResult;
+  }
+  return {
+    agendaKind: agendaKindResult.agendaKind,
+    listItemType: taskFieldsResult.listItemType,
+    status: "ok",
+  };
+};
+
+type ValidAgendaFields = Extract<
+  ReturnType<typeof validateAgendaFields>,
+  { status: "ok" }
+>;
+
+type TaskUpdateValuesOptions = {
+  agendaFields: ValidAgendaFields;
+  agendaKind: AgendaItemKind | null;
+  body: UpdateTaskBody;
+  listItemType: ListItemType | null;
+};
+
+const taskUpdateValues = ({
+  agendaFields,
+  agendaKind,
+  body,
+  listItemType,
+}: TaskUpdateValuesOptions) => ({
+  ...(body.name !== undefined && { name: body.name }),
+  ...(agendaKind !== null && { agendaKind }),
+  ...(body.status !== undefined && { status: body.status }),
+  ...(body.priority !== undefined && { priority: body.priority }),
+  ...(body.dueDate !== undefined && { dueDate: body.dueDate }),
+  ...(listItemType !== null && { listItemType }),
+  ...(body.startAt !== undefined && { startAt: toDateOrNull(body.startAt) }),
+  ...(body.endAt !== undefined && { endAt: toDateOrNull(body.endAt) }),
+  ...(body.occurredAt !== undefined && {
+    occurredAt: toDateOrNull(body.occurredAt),
+  }),
+  ...(body.remindAt !== undefined && {
+    remindAt: toDateOrNull(body.remindAt),
+  }),
+  ...(body.allDay !== undefined && { allDay: body.allDay }),
+  ...(body.timeZone !== undefined && { timeZone: body.timeZone }),
+  ...(body.location !== undefined && { location: body.location }),
+  ...(body.onlineMeetingUrl !== undefined && {
+    onlineMeetingUrl: body.onlineMeetingUrl,
+  }),
+  ...(body.availability !== undefined && {
+    availability: agendaFields.availability,
+  }),
+  ...(body.sensitivity !== undefined && {
+    sensitivity: agendaFields.sensitivity,
+  }),
+  ...(body.organizer !== undefined && { organizer: body.organizer }),
+  ...(body.attendees !== undefined && { attendees: agendaFields.attendees }),
+  ...(body.recurrence !== undefined && { recurrence: body.recurrence }),
+  ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
+  updatedAt: new Date(),
+});
+
 export type UpdateTaskHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: Static<typeof updateTaskBodySchema>;
+  body: UpdateTaskBody;
 };
 
 // Shared task-update logic reused by the HTTP handler and the
@@ -108,24 +232,11 @@ export const updateTaskHandler = async function* ({
   recordAuditEvent,
   body,
 }: UpdateTaskHandlerProps) {
-  const agendaKindResult = validateAgendaKind(body.agendaKind);
-  if (agendaKindResult.status === "error") {
-    return Result.err(agendaKindResult.error);
+  const inputResult = validateTaskInput(body);
+  if (inputResult.status === "error") {
+    return Result.err(inputResult.error);
   }
-  const { agendaKind } = agendaKindResult;
-  if (body.status !== undefined && !includes(TASK_STATUSES, body.status)) {
-    return Result.err(
-      new HandlerError({ status: 400, message: "Invalid task status" }),
-    );
-  }
-  if (
-    body.priority !== undefined &&
-    !includes(ENTITY_PRIORITIES, body.priority)
-  ) {
-    return Result.err(
-      new HandlerError({ status: 400, message: "Invalid task priority" }),
-    );
-  }
+  const { agendaKind, listItemType } = inputResult;
   const agendaFields = validateAgendaFields({
     attendees: body.attendees,
     availability: body.availability,
@@ -139,64 +250,14 @@ export const updateTaskHandler = async function* ({
     safeDb(async (tx) => {
       const rows = await tx
         .update(entities)
-        .set({
-          ...(body.name !== undefined && { name: body.name }),
-          ...(agendaKind !== undefined && {
+        .set(
+          taskUpdateValues({
+            agendaFields,
             agendaKind,
+            body,
+            listItemType,
           }),
-          ...(body.status !== undefined && {
-            status: body.status,
-          }),
-          ...(body.priority !== undefined && {
-            priority: body.priority,
-          }),
-          ...(body.dueDate !== undefined && {
-            dueDate: body.dueDate,
-          }),
-          ...(body.startAt !== undefined && {
-            startAt: toDateOrNull(body.startAt),
-          }),
-          ...(body.endAt !== undefined && {
-            endAt: toDateOrNull(body.endAt),
-          }),
-          ...(body.occurredAt !== undefined && {
-            occurredAt: toDateOrNull(body.occurredAt),
-          }),
-          ...(body.remindAt !== undefined && {
-            remindAt: toDateOrNull(body.remindAt),
-          }),
-          ...(body.allDay !== undefined && {
-            allDay: body.allDay,
-          }),
-          ...(body.timeZone !== undefined && {
-            timeZone: body.timeZone,
-          }),
-          ...(body.location !== undefined && {
-            location: body.location,
-          }),
-          ...(body.onlineMeetingUrl !== undefined && {
-            onlineMeetingUrl: body.onlineMeetingUrl,
-          }),
-          ...(body.availability !== undefined && {
-            availability: agendaFields.availability,
-          }),
-          ...(body.sensitivity !== undefined && {
-            sensitivity: agendaFields.sensitivity,
-          }),
-          ...(body.organizer !== undefined && {
-            organizer: body.organizer,
-          }),
-          ...(body.attendees !== undefined && {
-            attendees: agendaFields.attendees,
-          }),
-          ...(body.recurrence !== undefined && {
-            recurrence: body.recurrence,
-          }),
-          ...(body.sortOrder !== undefined && {
-            sortOrder: body.sortOrder,
-          }),
-          updatedAt: new Date(),
-        })
+        )
         .where(
           and(
             eq(entities.id, body.taskId),

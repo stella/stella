@@ -350,6 +350,68 @@ export const CAPABILITY_DISPATCH = {
   "legislation.search": {
     load: async () => await import("@/api/handlers/legislation/search"),
   },
+  "lists.accept-generation-candidate": {
+    load: async () =>
+      await import("@/api/handlers/lists/accept-generation-candidate"),
+  },
+  "lists.create": {
+    load: async () => await import("@/api/handlers/lists/create"),
+  },
+  "lists.create-column": {
+    load: async () => await import("@/api/handlers/lists/create-column"),
+  },
+  "lists.create-generation": {
+    load: async () => await import("@/api/handlers/lists/create-generation"),
+  },
+  "lists.create-item-comment": {
+    load: async () => await import("@/api/handlers/lists/create-item-comment"),
+  },
+  "lists.create-item-source": {
+    load: async () => await import("@/api/handlers/lists/create-item-source"),
+  },
+  "lists.create-section": {
+    load: async () => await import("@/api/handlers/lists/create-section"),
+  },
+  "lists.read": { load: async () => await import("@/api/handlers/lists/read") },
+  "lists.read-by-id": {
+    load: async () => await import("@/api/handlers/lists/read-by-id"),
+  },
+  "lists.read-generation-candidates": {
+    load: async () =>
+      await import("@/api/handlers/lists/read-generation-candidates"),
+  },
+  "lists.read-generations": {
+    load: async () => await import("@/api/handlers/lists/read-generations"),
+  },
+  "lists.read-item-activity": {
+    load: async () => await import("@/api/handlers/lists/read-item-activity"),
+  },
+  "lists.read-item-sources": {
+    load: async () => await import("@/api/handlers/lists/read-item-sources"),
+  },
+  "lists.read-items": {
+    load: async () => await import("@/api/handlers/lists/read-items"),
+  },
+  "lists.reject-generation-candidate": {
+    load: async () =>
+      await import("@/api/handlers/lists/reject-generation-candidate"),
+  },
+  "lists.review-item": {
+    load: async () => await import("@/api/handlers/lists/review-item"),
+  },
+  "lists.submit-generation-candidates": {
+    load: async () =>
+      await import("@/api/handlers/lists/submit-generation-candidates"),
+  },
+  "lists.update-by-id": {
+    load: async () => await import("@/api/handlers/lists/update-by-id"),
+  },
+  "lists.update-item": {
+    load: async () => await import("@/api/handlers/lists/update-item"),
+  },
+  "lists.verify-item-source": {
+    load: async () => await import("@/api/handlers/lists/verify-item-source"),
+  },
   "organization-settings.preview": {
     load: async () =>
       await import("@/api/handlers/organization-settings/preview"),

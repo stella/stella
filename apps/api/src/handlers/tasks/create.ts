@@ -7,6 +7,8 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   entities,
   entityVersions,
+  legalListItems,
+  LIST_ITEM_TYPES,
   taskAssignees,
   workspaces,
 } from "@/api/db/schema";
@@ -55,6 +57,11 @@ const createTaskBodySchema = t.Object({
   status: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
   priority: t.Optional(t.String({ minLength: 1, maxLength: 16 })),
   dueDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  listItemType: t.Optional(t.String({ minLength: 1, maxLength: 32 })),
+  listId: t.Optional(tSafeId("legalList")),
+  listSectionId: t.Optional(tSafeId("legalListSection")),
+  listPosition: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
+  listDescription: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
   startAt: t.Optional(agendaDateTimeSchema),
   endAt: t.Optional(agendaDateTimeSchema),
   occurredAt: t.Optional(agendaDateTimeSchema),
@@ -90,6 +97,7 @@ export type CreateTaskEntityHandlerProps = {
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
   body: Static<typeof createTaskBodySchema>;
+  entityId?: SafeId<"entity">;
 };
 
 // Shared task-creation logic reused by the HTTP handler and the
@@ -101,10 +109,12 @@ export const createTaskEntityHandler = async function* ({
   userId,
   recordAuditEvent,
   body,
+  entityId: requestedEntityId,
 }: CreateTaskEntityHandlerProps) {
   const agendaKind = body.agendaKind ?? AGENDA_ITEM_KIND.TASK;
   const taskStatus = body.status ?? "open";
   const taskPriority = body.priority ?? "none";
+  const listItemType = body.listItemType ?? "task";
 
   if (!includes(AGENDA_ITEM_KINDS, agendaKind)) {
     return Result.err(
@@ -119,6 +129,19 @@ export const createTaskEntityHandler = async function* ({
   if (!includes(ENTITY_PRIORITIES, taskPriority)) {
     return Result.err(
       new HandlerError({ status: 400, message: "Invalid task priority" }),
+    );
+  }
+  if (!includes(LIST_ITEM_TYPES, listItemType)) {
+    return Result.err(
+      new HandlerError({ status: 400, message: "Invalid list item type" }),
+    );
+  }
+  if (body.listSectionId !== undefined && body.listId === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "A List section requires a List",
+      }),
     );
   }
   const agendaFields = validateAgendaFields({
@@ -172,11 +195,48 @@ export const createTaskEntityHandler = async function* ({
         }
       }
 
-      const entityId = createSafeId<"entity">();
+      if (body.listId) {
+        const list = await tx.query.legalLists.findFirst({
+          where: {
+            id: { eq: body.listId },
+            workspaceId: { eq: workspaceId },
+            status: { eq: "active" },
+          },
+          columns: { id: true },
+        });
+        if (!list) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "Active List not found in this workspace",
+          };
+        }
+      }
+
+      if (body.listSectionId && body.listId) {
+        const section = await tx.query.legalListSections.findFirst({
+          where: {
+            id: { eq: body.listSectionId },
+            listId: { eq: body.listId },
+            workspaceId: { eq: workspaceId },
+          },
+          columns: { id: true },
+        });
+        if (!section) {
+          return {
+            ok: false as const,
+            status: 400 as const,
+            message: "List section not found in this List",
+          };
+        }
+      }
+
+      const entityId = requestedEntityId ?? createSafeId<"entity">();
       await tx.insert(entities).values({
         id: entityId,
         workspaceId,
         kind: "task",
+        listItemType,
         parentId: body.parentId ?? null,
         name: body.name,
         createdBy: userId,
@@ -212,6 +272,18 @@ export const createTaskEntityHandler = async function* ({
         .update(entities)
         .set({ currentVersionId: entityVersionId })
         .where(eq(entities.id, entityId));
+
+      if (body.listId) {
+        await tx.insert(legalListItems).values({
+          entityId,
+          workspaceId,
+          listId: body.listId,
+          sectionId: body.listSectionId ?? null,
+          position: body.listPosition ?? entityId,
+          description: body.listDescription ?? null,
+          addedBy: userId,
+        });
+      }
 
       if (body.assigneeIds !== undefined && body.assigneeIds.length > 0) {
         const members = await tx.query.workspaceMembers.findMany({
@@ -258,7 +330,9 @@ export const createTaskEntityHandler = async function* ({
         resourceId: entityId,
         metadata: {
           kind: "task",
+          listItemType,
           agendaKind,
+          ...(body.listId && { listId: body.listId }),
           ...(body.parentId && { parentId: body.parentId }),
         },
       });

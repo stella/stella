@@ -9,6 +9,8 @@ import {
   XCircleIcon,
 } from "lucide-react";
 
+import type { TranslationKey } from "@/i18n/types";
+
 /** Normalize a date value that may be a Date object (Eden
  *  transforms `format: "date"`) or a YYYY-MM-DD string. */
 export const toISODate = (v: string | Date | null | undefined): string => {
@@ -40,14 +42,38 @@ export const TASK_PRIORITIES = [
   "low",
 ] as const;
 
+export const LIST_ITEM_TYPES = [
+  "task",
+  "fact",
+  "issue",
+  "requirement",
+  "event",
+] as const;
+
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+export type ListItemType = (typeof LIST_ITEM_TYPES)[number];
+
+export const ITEM_TYPE_TRANSLATION_KEYS = {
+  event: "common.itemTypeValues.event",
+  fact: "common.itemTypeValues.fact",
+  issue: "knowledge.playbooks.issueLabel",
+  requirement: "common.itemTypeValues.requirement",
+  task: "search.kinds.task",
+} as const satisfies Record<ListItemType, TranslationKey>;
 
 export const isTaskStatus = (v: string | null): v is TaskStatus =>
   v !== null && TASK_STATUSES.some((status) => status === v);
 
 export const isTaskPriority = (v: string | null): v is TaskPriority =>
   v !== null && TASK_PRIORITIES.some((priority) => priority === v);
+
+export const isListItemType = (
+  value: string | null | undefined,
+): value is ListItemType =>
+  value !== null &&
+  value !== undefined &&
+  LIST_ITEM_TYPES.some((itemType) => itemType === value);
 
 export const STATUS_ICONS = {
   open: CircleIcon,

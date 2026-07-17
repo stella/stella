@@ -29,6 +29,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { excludedEntityKindsForView } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
 const templateRefSchema = t.Union([
@@ -142,7 +143,7 @@ const exportViewReport = createSafeHandler(
         limit: LIMITS.reportExportMaxRows + 1,
         fieldMode: "visible",
         fieldIds: [],
-        excludedKinds: ["folder", "task"],
+        excludedKinds: excludedEntityKindsForView(layout.filters),
       }),
     );
     if (isReportRowCountOverCap(cappedRowsResult.entities.length)) {

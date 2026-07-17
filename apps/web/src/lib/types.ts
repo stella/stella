@@ -249,6 +249,7 @@ export type WorkspaceEntity = {
   version: number;
   status: string | null;
   priority: string | null;
+  listItemType: string | null;
   dueDate: string | null;
   agendaKind: AgendaItemKind;
   startAt: string | null;

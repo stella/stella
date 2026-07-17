@@ -5,11 +5,16 @@ import {
   CalendarIcon,
   MinusIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
 import { useLocale } from "@/i18n/formatting-context";
 import type { WorkspaceEntity } from "@/lib/types";
+import {
+  isListItemType,
+  ITEM_TYPE_TRANSLATION_KEYS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 
 const PRIORITY_CONFIG: Record<
   string,
@@ -39,6 +44,7 @@ type TaskBadgesProps = {
 
 export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
   const locale = useLocale();
+  const t = useTranslations();
 
   if (entity.kind !== "task") {
     return null;
@@ -51,8 +57,12 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
   const overdue = entity.dueDate
     ? isOverdue(entity.dueDate, entity.status)
     : false;
+  const listItemType = isListItemType(entity.listItemType)
+    ? entity.listItemType
+    : "task";
+  const showItemType = listItemType !== "task";
 
-  if (!priorityCfg && !entity.dueDate) {
+  if (!priorityCfg && !entity.dueDate && !showItemType) {
     return null;
   }
 
@@ -63,6 +73,11 @@ export const TaskBadges = ({ entity, className }: TaskBadgesProps) => {
         className,
       )}
     >
+      {showItemType && (
+        <span className="bg-muted rounded px-1.5 py-0.5">
+          {t(ITEM_TYPE_TRANSLATION_KEYS[listItemType])}
+        </span>
+      )}
       {priorityCfg && (
         <priorityCfg.icon className={cn("size-3", priorityCfg.className)} />
       )}

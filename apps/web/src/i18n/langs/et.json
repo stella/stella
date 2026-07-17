@@ -813,6 +813,11 @@
     "import": "Impordi",
     "invite": "Kutsu",
     "invoices": "Arved",
+    "itemTypeValues": {
+      "event": "Sündmus",
+      "fact": "Asjaolu",
+      "requirement": "Nõue"
+    },
     "kind": "Liik",
     "language": "Keel",
     "languages": {

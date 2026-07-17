@@ -8,6 +8,7 @@ export type API = typeof api;
 export { toSafeId } from "@/api/lib/branded-types";
 export type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 export type { Page } from "@/api/lib/pagination";
+export type { LegalListSourceLocator } from "@/api/lib/lists/types";
 
 export type PropertyTable = typeof properties.$inferSelect;
 export type PropertyContent = SchemaValidators.PropertyContent;

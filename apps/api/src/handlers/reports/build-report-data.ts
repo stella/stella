@@ -35,6 +35,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { excludedEntityKindsForView } from "@/api/lib/views";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 /** Report display locale. i18n of the default report is out of scope; the data
@@ -524,7 +525,7 @@ export const buildReportData = async ({
         limit: LIMITS.reportExportMaxRows + 1,
         fieldMode: "visible",
         fieldIds,
-        excludedKinds: ["folder", "task"],
+        excludedKinds: excludedEntityKindsForView(layout.filters),
       }),
     );
 

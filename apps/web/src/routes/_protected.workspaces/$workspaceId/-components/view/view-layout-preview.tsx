@@ -353,6 +353,7 @@ const mockTask = ({
   version: 1,
   status,
   priority: priority ?? null,
+  listItemType: "task",
   dueDate: null,
   agendaKind: "task",
   startAt: null,

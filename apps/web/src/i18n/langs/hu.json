@@ -813,6 +813,11 @@
     "import": "Importálás",
     "invite": "Meghívás",
     "invoices": "Számlák",
+    "itemTypeValues": {
+      "event": "Esemény",
+      "fact": "Tény",
+      "requirement": "Követelmény"
+    },
     "kind": "Fajta",
     "language": "Nyelv",
     "languages": {

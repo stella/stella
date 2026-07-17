@@ -19,7 +19,8 @@ import {
   prefetchRouteQuery,
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
-import type { ViewLayout, WorkspaceView } from "@/lib/types";
+import type { EntityKind, ViewLayout, WorkspaceView } from "@/lib/types";
+import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";
 import {
@@ -162,6 +163,11 @@ export const Route = createFileRoute(
     const fieldMode = shouldLoadVisibleFields ? "visible" : "full";
 
     if (activeView.layout.type === "table") {
+      const excludedKinds: EntityKind[] = includesListItems(
+        activeView.layout.filters,
+      )
+        ? ["folder"]
+        : ["folder", "task"];
       await ensureRouteInfiniteQueryData(
         queryClient,
         entitiesWindowOptions({
@@ -169,7 +175,7 @@ export const Route = createFileRoute(
           filters: activeView.layout.filters,
           sorts: activeView.layout.sorts,
           limit: DEFAULT_ENTITY_WINDOW_SIZE,
-          excludedKinds: ["folder", "task"],
+          excludedKinds,
           fieldMode,
           fieldIds,
         }),

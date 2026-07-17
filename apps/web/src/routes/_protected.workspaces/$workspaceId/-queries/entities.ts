@@ -89,6 +89,7 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
     version: entity.version,
     status: entity.status,
     priority: entity.priority,
+    listItemType: entity.listItemType,
     dueDate: entity.dueDate,
     agendaKind: entity.agendaKind,
     startAt: entity.startAt,

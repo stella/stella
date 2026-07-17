@@ -9,7 +9,11 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
-import { getDefaultViews, localizeDefaultViewName } from "@/api/lib/views";
+import {
+  getDefaultViews,
+  localizeDefaultViewName,
+  normalizeDefaultViewLayout,
+} from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 
 const config = {
@@ -27,18 +31,25 @@ const toViewResponse = (
   },
   lang: SupportedLang,
   layout = parseViewLayoutSafe(view.layout),
-) => ({
-  version: 1 as const,
-  id: view.id,
-  name: localizeDefaultViewName({
-    lang,
-    layoutType: layout.type,
+) => {
+  const normalizedLayout = normalizeDefaultViewLayout({
+    layout,
     name: view.name,
-  }),
-  layout,
-  position: view.position,
-  createdAt: view.createdAt.toISOString(),
-});
+  });
+
+  return {
+    version: 1 as const,
+    id: view.id,
+    name: localizeDefaultViewName({
+      lang,
+      layoutType: normalizedLayout.type,
+      name: view.name,
+    }),
+    layout: normalizedLayout,
+    position: view.position,
+    createdAt: view.createdAt.toISOString(),
+  };
+};
 
 const readViews = createSafeHandler(
   config,

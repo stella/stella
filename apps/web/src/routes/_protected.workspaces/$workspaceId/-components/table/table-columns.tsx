@@ -1,8 +1,17 @@
 import { useMemo } from "react";
 
-import { ClockIcon, HashIcon, UserIcon } from "lucide-react";
+import {
+  CalendarIcon,
+  CircleDotIcon,
+  ClockIcon,
+  FlagIcon,
+  HashIcon,
+  ShapesIcon,
+  TextIcon,
+  UserIcon,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import type { WorkspaceProperty, WorkspaceView } from "@/lib/types";
 import {
@@ -19,6 +28,13 @@ import type {
   TableHeaderContext,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
+  isListItemType,
+  isTaskPriority,
+  isTaskStatus,
+  ITEM_TYPE_TRANSLATION_KEYS,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
+import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
+import {
   getInternalColId,
   getInternalPropertyId,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
@@ -26,6 +42,11 @@ import {
 const selectColId = getInternalColId("select");
 const addPropertyColId = getInternalColId("add-property");
 const ADD_PROPERTY_COLUMN_SIZE = 48;
+const listNameColId = getInternalPropertyId("name");
+const listItemTypeColId = getInternalPropertyId("list-item-type");
+const listStatusColId = getInternalPropertyId("status");
+const listPriorityColId = getInternalPropertyId("priority");
+const listDueDateColId = getInternalPropertyId("due-date");
 
 export const DEFAULT_TABLE_COLUMN_MIN_SIZE = 64;
 
@@ -43,6 +64,7 @@ export const useTableColumns = ({
   view,
 }: UseTableColumnsOptions): TableColumnDef[] => {
   const t = useTranslations();
+  const format = useFormatter();
 
   return useMemo(() => {
     const columnDefs: TableColumnDef[] = [
@@ -57,6 +79,95 @@ export const useTableColumns = ({
         size: 48,
       },
     ];
+
+    if (includesListItems(view.layout.filters)) {
+      columnDefs.push(
+        {
+          id: listNameColId,
+          accessorFn: (row) => row.name,
+          header: createMetadataHeader({
+            icon: TextIcon,
+            label: t("common.name"),
+            sortHint: "text",
+          }),
+          cell: ({ row }) => (
+            <span className="truncate font-medium" dir="auto">
+              {row.original.name}
+            </span>
+          ),
+          size: 260,
+        },
+        {
+          id: listItemTypeColId,
+          accessorFn: (row) => row.listItemType,
+          enableSorting: false,
+          header: createMetadataHeader({
+            icon: ShapesIcon,
+            label: t("common.type"),
+            sortHint: "text",
+          }),
+          cell: ({ row }) => {
+            const itemType = isListItemType(row.original.listItemType)
+              ? row.original.listItemType
+              : "task";
+            return t(ITEM_TYPE_TRANSLATION_KEYS[itemType]);
+          },
+          size: 140,
+        },
+        {
+          id: listStatusColId,
+          accessorFn: (row) => row.status,
+          header: createMetadataHeader({
+            icon: CircleDotIcon,
+            label: t("tasks.status"),
+            sortHint: "text",
+          }),
+          cell: ({ row }) =>
+            isTaskStatus(row.original.status)
+              ? t(`tasks.statusValues.${row.original.status}`)
+              : null,
+          size: 140,
+        },
+        {
+          id: listPriorityColId,
+          accessorFn: (row) => row.priority,
+          header: createMetadataHeader({
+            icon: FlagIcon,
+            label: t("tasks.priority"),
+            sortHint: "text",
+          }),
+          cell: ({ row }) =>
+            isTaskPriority(row.original.priority)
+              ? t(`tasks.priorityValues.${row.original.priority}`)
+              : null,
+          size: 120,
+        },
+        {
+          id: listDueDateColId,
+          accessorFn: (row) => row.dueDate,
+          header: createMetadataHeader({
+            icon: CalendarIcon,
+            label: t("tasks.dueDate"),
+            sortHint: "date",
+          }),
+          cell: ({ row }) => {
+            if (!row.original.dueDate) {
+              return null;
+            }
+            return format.dateTime(
+              new Date(`${row.original.dueDate}T00:00:00Z`),
+              {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+                timeZone: "UTC",
+              },
+            );
+          },
+          size: 140,
+        },
+      );
+    }
 
     // A graded playbook position materializes two sibling properties: the ASK
     // (ai-model / manual-input) and its verdict (playbook-verdict, carrying the
@@ -134,7 +245,7 @@ export const useTableColumns = ({
     });
 
     return columnDefs;
-  }, [properties, t, view.layout.filters]);
+  }, [format, properties, t, view.layout.filters]);
 };
 
 type MetadataHeaderOptions = {

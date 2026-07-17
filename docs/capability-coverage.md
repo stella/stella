@@ -181,6 +181,31 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `legislation.read-by-id` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella legislation read-by-id` |
 | `legislation.search` | read | stella:read | FEATURE_PUBLIC_LAW | generic invoke → `stella capability legislation search` |
 
+## lists
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `lists.accept-generation-candidate` | write | stella:matters_write | — | generic invoke → `stella lists accept-generation-candidate` |
+| `lists.create` | write | stella:matters_write | — | generic invoke → `stella lists create` |
+| `lists.create-column` | write | stella:matters_write | — | generic invoke → `stella lists create-column` |
+| `lists.create-generation` | write | stella:matters_write | — | generic invoke → `stella lists create-generation` |
+| `lists.create-item-comment` | write | stella:matters_write | — | generic invoke → `stella lists create-item-comment` |
+| `lists.create-item-source` | write | stella:matters_write | — | generic invoke → `stella lists create-item-source` |
+| `lists.create-section` | write | stella:matters_write | — | generic invoke → `stella lists create-section` |
+| `lists.read` | read | stella:matters_write | — | generic invoke → `stella lists read` |
+| `lists.read-by-id` | read | stella:matters_write | — | generic invoke → `stella lists read-by-id` |
+| `lists.read-generation-candidates` | read | stella:matters_write | — | generic invoke → `stella lists read-generation-candidates` |
+| `lists.read-generations` | read | stella:matters_write | — | generic invoke → `stella lists read-generations` |
+| `lists.read-item-activity` | read | stella:matters_write | — | generic invoke → `stella lists read-item-activity` |
+| `lists.read-item-sources` | read | stella:matters_write | — | generic invoke → `stella lists read-item-sources` |
+| `lists.read-items` | read | stella:matters_write | — | generic invoke → `stella lists read-items` |
+| `lists.reject-generation-candidate` | write | stella:matters_write | — | generic invoke → `stella lists reject-generation-candidate` |
+| `lists.review-item` | write | stella:matters_write | — | generic invoke → `stella lists review-item` |
+| `lists.submit-generation-candidates` | write | stella:matters_write | — | generic invoke → `stella lists submit-generation-candidates` |
+| `lists.update-by-id` | write | stella:matters_write | — | generic invoke → `stella lists update-by-id` |
+| `lists.update-item` | write | stella:matters_write | — | generic invoke → `stella lists update-item` |
+| `lists.verify-item-source` | write | stella:matters_write | — | generic invoke → `stella lists verify-item-source` |
+
 ## organization-settings
 
 | Capability | Access | Scope | Feature | Reachable via |

@@ -813,6 +813,11 @@
     "import": "Importuoti",
     "invite": "Pakviesti",
     "invoices": "Sąskaitos",
+    "itemTypeValues": {
+      "event": "Įvykis",
+      "fact": "Faktas",
+      "requirement": "Reikalavimas"
+    },
     "kind": "Rūšis",
     "language": "Kalba",
     "languages": {

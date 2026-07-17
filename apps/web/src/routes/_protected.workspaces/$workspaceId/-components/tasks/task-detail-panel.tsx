@@ -21,6 +21,7 @@ import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   isTaskPriority,
+  isListItemType,
   isTaskStatus,
   toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
@@ -28,6 +29,7 @@ import { LinksSection } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import {
   AssigneePicker,
   DatePickerPopover,
+  ItemTypeSelect,
   MetadataRow,
   PrioritySelect,
   StatusSelect,
@@ -40,7 +42,11 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
-import type { TaskPriority, TaskStatus } from "./task-detail-constants";
+import type {
+  ListItemType,
+  TaskPriority,
+  TaskStatus,
+} from "./task-detail-constants";
 
 // -- Component --
 
@@ -88,6 +94,7 @@ export const TaskDetailPanel = ({
       status?: string;
       priority?: string;
       dueDate?: string | null;
+      listItemType?: string;
     }) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -208,6 +215,13 @@ export const TaskDetailPanel = ({
     updateMutation.mutate({ taskId, dueDate: value });
   };
 
+  const handleItemTypeChange = (value: ListItemType | null) => {
+    if (!value) {
+      return;
+    }
+    updateMutation.mutate({ taskId, listItemType: value });
+  };
+
   const handleSubtaskToggle = (
     subtaskId: string,
     currentStatus: string | null,
@@ -310,6 +324,9 @@ export const TaskDetailPanel = ({
   const currentPriority = isTaskPriority(task.priority)
     ? task.priority
     : "none";
+  const currentItemType = isListItemType(task.listItemType)
+    ? task.listItemType
+    : "task";
 
   const dueDateISO = toISODate(task.dueDate);
   const isOverdue =
@@ -407,6 +424,13 @@ export const TaskDetailPanel = ({
 
         {/* Metadata */}
         <div className="space-y-3 px-4 py-3">
+          <MetadataRow label={tCommon("type")}>
+            <ItemTypeSelect
+              onChange={handleItemTypeChange}
+              value={currentItemType}
+            />
+          </MetadataRow>
+
           <MetadataRow label={t("status")}>
             <StatusSelect onChange={handleStatusChange} value={currentStatus} />
           </MetadataRow>
