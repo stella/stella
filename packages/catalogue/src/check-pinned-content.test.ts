@@ -5,6 +5,7 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 import {
   archiveSizeLimitError,
   checkFrontmatterLimits,
+  pinnedLicenseMismatchError,
   registerResourcePath,
   resourceContentLimitError,
   resourcePathLimitError,
@@ -28,6 +29,30 @@ describe("pinned skill install-limit preflight", () => {
 
     expect(errors.some((error) => error.includes("description"))).toBe(true);
     expect(errors.some((error) => error.includes("metadata has"))).toBe(true);
+  });
+
+  test("requires the pinned license to match the reviewed manifest", () => {
+    expect(
+      pinnedLicenseMismatchError({
+        catalogueLicense: "MIT",
+        slug: "missing-license",
+        upstreamLicense: null,
+      }),
+    ).toContain("license does not match");
+    expect(
+      pinnedLicenseMismatchError({
+        catalogueLicense: "MIT",
+        slug: "changed-license",
+        upstreamLicense: "Apache-2.0",
+      }),
+    ).toContain("license does not match");
+    expect(
+      pinnedLicenseMismatchError({
+        catalogueLicense: "MIT",
+        slug: "matching-license",
+        upstreamLicense: " mit ",
+      }),
+    ).toBeNull();
   });
 
   test("rejects decoded resource characters below the byte fetch cap", () => {

@@ -8,6 +8,7 @@ import {
 import type { LoadedGithubSkillEntry } from "@stll/catalogue";
 import type { LoadedCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
+import { catalogueLicensesMatch } from "@stll/catalogue/schema";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fetchGithubCatalogueSkillPackage } from "@/api/lib/skill-package";
@@ -143,7 +144,12 @@ export const resolveCatalogueSkillPackage = async (
     if (Result.isError(fetched)) {
       return Result.err(fetched.error);
     }
-    if (fetched.value.license?.trim() !== entry.license) {
+    if (
+      !catalogueLicensesMatch({
+        catalogueLicense: entry.license,
+        upstreamLicense: fetched.value.license,
+      })
+    ) {
       return Result.err(
         new HandlerError({
           status: 502,

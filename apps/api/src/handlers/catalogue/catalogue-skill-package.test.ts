@@ -90,7 +90,7 @@ describe("resolveCatalogueSkillPackage", () => {
             compatibility: null,
             contentHash: "hash",
             description: "Upstream skill.",
-            license: "CC-BY-4.0",
+            license: "cc-by-4.0",
             metadata: {},
             // Upstream frontmatter name deliberately differs from the slug.
             name: "jurisrank-upstream-name",
