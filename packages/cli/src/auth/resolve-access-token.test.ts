@@ -1,0 +1,231 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+import {
+  readCredentialFile,
+  upsertCredential,
+  writeCredentialFile,
+} from "./credential-store.js";
+import type { StoredCredential } from "./credential-store.js";
+import { resolveAccessToken } from "./resolve-access-token.js";
+
+/**
+ * A mock stella server exposing both the RFC 8414 metadata document and the
+ * `/oauth2/token` endpoint, plus a total request counter so a test can assert
+ * the offline-instant fast path made no network call at all.
+ */
+const startMockProvider = (
+  handleTokenRequest: (body: URLSearchParams) => Response,
+) => {
+  let requestCount = 0;
+  const server = Bun.serve({
+    fetch: async (request) => {
+      requestCount += 1;
+      const url = new URL(request.url);
+      if (url.pathname === "/.well-known/oauth-authorization-server") {
+        return Response.json({
+          authorization_endpoint: `http://127.0.0.1:${server.port}/oauth2/authorize`,
+          issuer: `http://127.0.0.1:${server.port}`,
+          token_endpoint: `http://127.0.0.1:${server.port}/oauth2/token`,
+        });
+      }
+      if (url.pathname === "/oauth2/token") {
+        return handleTokenRequest(new URLSearchParams(await request.text()));
+      }
+      return new Response("not found", { status: 404 });
+    },
+    hostname: "127.0.0.1",
+    port: 0,
+  });
+
+  return {
+    close: () => {
+      void server.stop(true);
+    },
+    getRequestCount: () => requestCount,
+    serverUrl: `http://127.0.0.1:${server.port}`,
+  };
+};
+
+describe("resolveAccessToken", () => {
+  let configDir: string;
+
+  beforeEach(async () => {
+    configDir = await mkdtemp(
+      path.join(os.tmpdir(), "stella-cli-resolve-token-test-"),
+    );
+  });
+
+  afterEach(async () => {
+    await rm(configDir, { force: true, recursive: true });
+  });
+
+  const buildCredential = (
+    serverUrl: string,
+    overrides: Partial<StoredCredential> = {},
+  ): StoredCredential => ({
+    accessToken: "old-access-token",
+    clientId: "client-id",
+    createdAt: 0,
+    expiresAt: 10_000,
+    orgId: "org-1",
+    refreshToken: "old-refresh-token",
+    scope: "openid stella:read",
+    serverUrl,
+    tokenType: "Bearer",
+    updatedAt: 0,
+    ...overrides,
+  });
+
+  const seedCredential = async (
+    credential: StoredCredential,
+  ): Promise<void> => {
+    await writeCredentialFile(
+      configDir,
+      upsertCredential(
+        { credentials: [], defaultOrgByServer: {}, version: 1 },
+        credential,
+      ),
+    );
+  };
+
+  test("returns the stored token with no network call when the credential is comfortably valid", async () => {
+    const provider = startMockProvider(
+      () => new Response("should not be called", { status: 500 }),
+    );
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now + 60_000 }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      expect(result.status).toBe("ok");
+      if (result.status === "ok") {
+        expect(result.token).toBe("old-access-token");
+      }
+      expect(provider.getRequestCount()).toBe(0);
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("refreshes, persists, and returns the rotated token when the stored token is expired", async () => {
+    const provider = startMockProvider((body) =>
+      body.get("grant_type") === "refresh_token" &&
+      body.get("refresh_token") === "old-refresh-token"
+        ? Response.json({
+            access_token: "new-access-token",
+            expires_in: 900,
+            refresh_token: "new-refresh-token",
+            scope: "openid stella:read",
+            token_type: "Bearer",
+          })
+        : Response.json({ error: "invalid_grant" }, { status: 400 }),
+    );
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      expect(result.status).toBe("ok");
+      if (result.status === "ok") {
+        expect(result.token).toBe("new-access-token");
+      }
+
+      const persisted = await readCredentialFile(configDir);
+      const stored = persisted.credentials.at(0);
+      expect(stored?.accessToken).toBe("new-access-token");
+      expect(stored?.refreshToken).toBe("new-refresh-token");
+      expect(stored?.expiresAt).toBe(now + 900 * 1000);
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("reports refresh-failed when the token endpoint rejects the refresh", async () => {
+    const provider = startMockProvider(() =>
+      Response.json({ error: "invalid_grant" }, { status: 400 }),
+    );
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      expect(result.status).toBe("refresh-failed");
+      if (result.status === "refresh-failed") {
+        expect(result.error._tag).toBe("TokenRefreshError");
+      }
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("reports refresh-failed without a network call when the expired credential has no refresh token", async () => {
+    const provider = startMockProvider(
+      () => new Response("should not be called", { status: 500 }),
+    );
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, {
+          expiresAt: now - 1000,
+          refreshToken: undefined,
+        }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      expect(result.status).toBe("refresh-failed");
+      if (result.status === "refresh-failed") {
+        expect(result.error._tag).toBe("NoRefreshTokenError");
+      }
+      expect(provider.getRequestCount()).toBe(0);
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("reports unauthenticated when no credential is stored for the server", async () => {
+    const provider = startMockProvider(
+      () => new Response("should not be called", { status: 500 }),
+    );
+    try {
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now: Date.now(),
+      });
+
+      expect(result.status).toBe("unauthenticated");
+      expect(provider.getRequestCount()).toBe(0);
+    } finally {
+      provider.close();
+    }
+  });
+});

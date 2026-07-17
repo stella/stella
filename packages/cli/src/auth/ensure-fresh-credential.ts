@@ -22,6 +22,25 @@ import { refreshAccessToken } from "./token-exchange.js";
 /** How much of a credential's remaining lifetime triggers a proactive refresh. */
 const REFRESH_SKEW_MS = 30_000;
 
+/**
+ * Shared message for the "expired, and no way to refresh" terminal state, used
+ * both here and by the `resolveAccessToken` accessor so the two callers never
+ * drift.
+ */
+export const NO_REFRESH_TOKEN_MESSAGE =
+  "The stored access token has expired and no refresh token is available. Run `stella auth login` again.";
+
+/**
+ * Whether `credential` is expired or within `REFRESH_SKEW_MS` of expiring at
+ * `now` — i.e. a proactive refresh is worth attempting. Callers gate the
+ * network-bearing discovery + token exchange on this so a comfortably-valid
+ * credential stays offline-instant.
+ */
+export const credentialNeedsRefresh = (
+  credential: Pick<StoredCredential, "expiresAt">,
+  now: number,
+): boolean => credential.expiresAt - REFRESH_SKEW_MS <= now;
+
 export type EnsureFreshCredentialInput = {
   readonly configDir: string;
   readonly credential: StoredCredential;
@@ -41,16 +60,13 @@ export const ensureFreshCredential = async (
   input: EnsureFreshCredentialInput,
 ): Promise<Result<StoredCredential, CliAuthError>> => {
   const now = input.now ?? Date.now();
-  if (input.credential.expiresAt - REFRESH_SKEW_MS > now) {
+  if (!credentialNeedsRefresh(input.credential, now)) {
     return Result.ok(input.credential);
   }
 
   if (!input.credential.refreshToken) {
     return Result.err(
-      new NoRefreshTokenError({
-        message:
-          "The stored access token has expired and no refresh token is available. Run `stella auth login` again.",
-      }),
+      new NoRefreshTokenError({ message: NO_REFRESH_TOKEN_MESSAGE }),
     );
   }
 
