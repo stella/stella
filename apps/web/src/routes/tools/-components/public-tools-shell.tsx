@@ -41,6 +41,7 @@ function PublicToolsTopBar() {
       >
         <Link
           className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+          from="/tools"
           to="/tools"
         >
           {t("knowledge.sections.tools.title")}
