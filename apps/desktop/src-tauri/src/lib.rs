@@ -2,6 +2,7 @@ mod bridge;
 mod commands;
 mod config;
 mod deep_link;
+mod diagnostics;
 #[cfg(test)]
 mod e2e;
 mod i18n;
