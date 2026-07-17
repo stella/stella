@@ -651,7 +651,13 @@ export const createActiveDocxEditTool = () =>
       "inline emphasis; in `replace` write plain text, since redlined " +
       "replacements are not re-formatted. See each schema field for its " +
       "semantics.",
-    needsApproval: true,
+    // No approval gate: this tool never writes to the document — it only
+    // queues suggestions into the client review panel, where the user
+    // reviews and applies each one (behind the editor's own unlock
+    // prompt). The client auto-runs the queue-only executor on arrival,
+    // the same way the folio-agents read tools auto-run. The meaningful
+    // human gate is the per-suggestion Accept, not a chat approval click.
+    needsApproval: false,
     inputSchema: repairingInputToolSchema,
     outputSchema: toTanStackToolSchema(outputSchema),
   });

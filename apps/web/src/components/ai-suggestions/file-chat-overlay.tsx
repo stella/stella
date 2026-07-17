@@ -53,13 +53,16 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   getActiveDocxEditApprovalPart,
+  isApplyActiveDocxEditsInput,
   isApprovalPart,
   parseCompletedToolCallArguments,
+  selectUnresolvedActiveDocxEditToolCallParts,
   selectUnresolvedFolioAgentDocToolCallParts,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   ApprovalToolPart,
+  UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
@@ -1635,6 +1638,69 @@ const FileChatOverlayInner = ({
       void runFolioAgentDocToolCall(part);
     }
   }, [messages, runFolioAgentDocToolCall]);
+
+  // Auto-run watcher for the queue-only `apply-active-docx-edits` tool.
+  // It carries no approval gate (it never writes to the document — it
+  // only queues suggestions into the review panel), so nothing else
+  // resolves it; this effect queues the operations via the tool-call
+  // handler and answers the call with the queued ids, exactly what the
+  // old approval branch did on approve. Tracks dispatched `toolCallId`s
+  // in a ref so a re-render can't double-run the same call.
+  const executedActiveDocxEditToolCallIdsRef = useRef<Set<string> | null>(null);
+  executedActiveDocxEditToolCallIdsRef.current ??= new Set<string>();
+  const runActiveDocxEditToolCall = useLatestCallback(
+    async (part: UnresolvedActiveDocxEditToolCallPart) => {
+      try {
+        const input = parseCompletedToolCallArguments(part);
+        const output = isApplyActiveDocxEditsInput(input)
+          ? handleActiveDocxEditToolCall(input)
+          : { version: 1 as const, applied: [], queued: [], skipped: [] };
+        await addToolResult({
+          output,
+          tool: "apply-active-docx-edits",
+          toolCallId: part.id,
+        });
+      } catch (toolCallError) {
+        // Allow a retry on a later render of the same unresolved part.
+        executedActiveDocxEditToolCallIdsRef.current?.delete(part.id);
+        getAnalytics().captureError(toolCallError);
+        try {
+          await addToolResult({
+            output: {
+              version: 1 as const,
+              applied: [],
+              queued: [],
+              skipped: [],
+            },
+            tool: "apply-active-docx-edits",
+            toolCallId: part.id,
+          });
+        } catch (reportError) {
+          getAnalytics().captureError(reportError);
+        }
+      }
+    },
+  );
+  useExternalSyncEffect(() => {
+    const message = messages.at(-1);
+    if (!message || message.role !== "assistant") {
+      return;
+    }
+
+    const executedIds = executedActiveDocxEditToolCallIdsRef.current;
+    if (!executedIds) {
+      return;
+    }
+
+    const partsToRun = selectUnresolvedActiveDocxEditToolCallParts(
+      message.parts,
+      executedIds,
+    );
+    for (const part of partsToRun) {
+      executedIds.add(part.id);
+      void runActiveDocxEditToolCall(part);
+    }
+  }, [messages, runActiveDocxEditToolCall]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
