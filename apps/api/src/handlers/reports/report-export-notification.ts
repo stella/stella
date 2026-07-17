@@ -230,21 +230,21 @@ const finalizeNotificationStatus = async ({
 }: FinalizeNotificationStatusOptions): Promise<NotificationFinalizationResult> => {
   const result = await Result.tryPromise(
     async () =>
-      await scopedDb(
-        async (tx) =>
-          // audit: skip — delivery bookkeeping on an already-audited export row.
-          await tx
-            .update(reportExports)
-            .set({ notificationStatus: status })
-            .where(
-              and(
-                eq(reportExports.id, exportId),
-                eq(reportExports.workspaceId, workspaceId),
-                eq(reportExports.notificationStatus, "sending"),
-              ),
-            )
-            .returning({ id: reportExports.id }),
-      ),
+      await scopedDb(async (tx) => {
+        // audit: skip — delivery bookkeeping on an already-audited export row.
+        const updatedRows = await tx
+          .update(reportExports)
+          .set({ notificationStatus: status })
+          .where(
+            and(
+              eq(reportExports.id, exportId),
+              eq(reportExports.workspaceId, workspaceId),
+              eq(reportExports.notificationStatus, "sending"),
+            ),
+          )
+          .returning({ id: reportExports.id });
+        return updatedRows;
+      }),
   );
   if (Result.isError(result)) {
     captureNotificationError(result.error, {
