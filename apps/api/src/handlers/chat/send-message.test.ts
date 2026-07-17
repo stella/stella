@@ -60,9 +60,12 @@ const orgAIConfig = {
   },
 } satisfies OrgAIConfig;
 
+const emptyOrderedRows = () =>
+  Object.assign(Promise.resolve([]), { limit: async () => [] });
+
 const selectChatMessages = () => ({
   from: () => ({
-    where: () => ({ orderBy: async () => [] }),
+    where: () => ({ orderBy: emptyOrderedRows }),
   }),
 });
 
