@@ -533,7 +533,7 @@
     }
   },
   "cross-handler-imports": {
-    "count": 265,
+    "count": 257,
     "files": {
       "apps/api/src/handlers/catalogue/bundled-skill-resources.ts": 1,
       "apps/api/src/handlers/catalogue/install-skill.ts": 1,
@@ -562,7 +562,7 @@
       "apps/api/src/handlers/docx/ai-field-generator.ts": 1,
       "apps/api/src/handlers/docx/ai-skill-tools.ts": 3,
       "apps/api/src/handlers/docx/registry-org-gate.ts": 1,
-      "apps/api/src/handlers/docx/resolve-clause-slots.ts": 3,
+      "apps/api/src/handlers/docx/resolve-clause-slots.ts": 2,
       "apps/api/src/handlers/entities/checkpoint-desktop-edit-session.ts": 1,
       "apps/api/src/handlers/entities/compare-versions.ts": 1,
       "apps/api/src/handlers/entities/compute-version-diff.ts": 3,
@@ -599,14 +599,8 @@
       "apps/api/src/handlers/reports/report-export-queue.ts": 4,
       "apps/api/src/handlers/template-recipes/definition.ts": 1,
       "apps/api/src/handlers/templates/check-template.ts": 3,
-      "apps/api/src/handlers/templates/check.ts": 5,
+      "apps/api/src/handlers/templates/check.ts": 4,
       "apps/api/src/handlers/templates/clause-slots.ts": 2,
-      "apps/api/src/handlers/templates/clauses-link.ts": 1,
-      "apps/api/src/handlers/templates/clauses-list.ts": 1,
-      "apps/api/src/handlers/templates/clauses-slot-update.ts": 1,
-      "apps/api/src/handlers/templates/clauses-sync-all.ts": 1,
-      "apps/api/src/handlers/templates/clauses-sync.ts": 1,
-      "apps/api/src/handlers/templates/clauses-unlink.ts": 1,
       "apps/api/src/handlers/templates/configure-template-fields-service.ts": 3,
       "apps/api/src/handlers/templates/create-template-service.ts": 3,
       "apps/api/src/handlers/templates/create.ts": 1,

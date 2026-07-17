@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { listTemplateClausesHandler } from "@/api/handlers/clauses/template-links";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
@@ -14,6 +13,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
+import { listTemplateClausesHandler } from "@/api/lib/template-clause-links";
 
 const checkTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),

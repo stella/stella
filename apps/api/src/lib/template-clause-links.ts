@@ -1,3 +1,4 @@
+/** Shared template-clause link operations used by the clause and template slices. */
 import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";

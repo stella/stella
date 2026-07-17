@@ -10,9 +10,9 @@ import {
   clauseBodyToPlainText,
   clauseBodyToRichPatch,
 } from "@/api/handlers/clauses/clause-to-patch";
-import { isVariantDeleted } from "@/api/handlers/clauses/template-links";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isVariantDeleted } from "@/api/lib/template-clause-links";
 
 import type { ClauseSlot } from "./discover-clause-slots";
 import type { RichPatchValue } from "./types";

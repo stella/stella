@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { syncClauseHandler } from "@/api/handlers/clauses/template-links";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { syncClauseHandler } from "@/api/lib/template-clause-links";
 
 const syncTemplateClauseParamsSchema = t.Object({
   templateId: tSafeId("template"),
