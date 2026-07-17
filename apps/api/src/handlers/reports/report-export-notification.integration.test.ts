@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
 import type {
   ReportExportNotificationStatus,
@@ -12,6 +13,7 @@ import { notifyReportExportStatus } from "@/api/handlers/reports/report-export-n
 import type { ReportExportNotificationEmail } from "@/api/handlers/reports/report-export-notification";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -315,7 +317,8 @@ const scopedDbFor = ({
 }: {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
-}) => createScopedDb(testDb, [workspaceId], ids.orgA, userId);
+}): ScopedDb =>
+  asTestRaw<ScopedDb>(createScopedDb(testDb, [workspaceId], ids.orgA, userId));
 
 type CreateRecordingDeliveryOptions = {
   sendError?: Error;
