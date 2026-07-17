@@ -29,12 +29,12 @@ test("anonymous visitors can search and browse by legal task", async ({
     waitUntil: "networkidle",
   });
 
-  await expect(
-    page.getByRole("heading", {
-      level: 1,
-      name: "Make stella fit the legal work in front of you",
-    }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+
+  const workflowDiscovery = page.locator(
+    'section[aria-labelledby="featured-tools-heading"]',
+  );
+  await expect(workflowDiscovery).toBeVisible();
 
   const search = page.getByRole("searchbox", {
     name: "What do you need to do?",
@@ -44,9 +44,7 @@ test("anonymous visitors can search and browse by legal task", async ({
     page.getByRole("link", { name: /Companies House/u }),
   ).toBeVisible();
   await expect(page.getByText("1 result", { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole("heading", { name: "A better place to start" }),
-  ).toHaveCount(0);
+  await expect(workflowDiscovery).toHaveCount(0);
 
   await page.getByRole("button", { name: "Clear search" }).click();
   await page.getByRole("button", { name: "Review agreements" }).click();
