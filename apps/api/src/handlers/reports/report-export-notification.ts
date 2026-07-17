@@ -60,32 +60,30 @@ export const notifyReportExportStatus = async ({
 }: NotifyReportExportStatusOptions): Promise<ReportExportNotificationResult> => {
   const claimResult = await Result.tryPromise(
     async () =>
-      await scopedDb(
-        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that require-audit-on-mutation scans inside this arrow
-        async (tx) => {
-          // audit: skip — atomic delivery-bookkeeping claim on an
-          // already-audited export row.
-          return await tx
-            .update(reportExports)
-            .set({
-              notificationAttemptedAt: new Date(),
-              notificationStatus: "sending",
-            })
-            .where(
-              and(
-                eq(reportExports.id, exportId),
-                eq(reportExports.workspaceId, workspaceId),
-                eq(reportExports.requestedBy, userId),
-                eq(reportExports.notificationStatus, "pending"),
-                inArray(reportExports.status, ["completed", "failed"]),
-              ),
-            )
-            .returning({
-              lang: reportExports.notificationLang,
-              status: reportExports.status,
-            });
-        },
-      ),
+      await scopedDb(async (tx) => {
+        // audit: skip — atomic delivery-bookkeeping claim on an
+        // already-audited export row.
+        const claimedRows = await tx
+          .update(reportExports)
+          .set({
+            notificationAttemptedAt: new Date(),
+            notificationStatus: "sending",
+          })
+          .where(
+            and(
+              eq(reportExports.id, exportId),
+              eq(reportExports.workspaceId, workspaceId),
+              eq(reportExports.requestedBy, userId),
+              eq(reportExports.notificationStatus, "pending"),
+              inArray(reportExports.status, ["completed", "failed"]),
+            ),
+          )
+          .returning({
+            lang: reportExports.notificationLang,
+            status: reportExports.status,
+          });
+        return claimedRows;
+      }),
   );
   if (Result.isError(claimResult)) {
     captureNotificationError(claimResult.error, {
