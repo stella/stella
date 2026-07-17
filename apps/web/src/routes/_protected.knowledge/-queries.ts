@@ -11,12 +11,18 @@ import { toSafeId } from "@/lib/safe-id";
 
 const SKILLS_PAGE_SIZE = 100;
 const PLAYBOOKS_PAGE_SIZE = 50;
+const TEMPLATES_PAGE_SIZE = 50;
 
 type SkillsPageKey = {
   limit: number;
 };
 
 type PlaybooksPageKey = {
+  limit: number;
+};
+
+type TemplatesPageKey = {
+  categoryId: string | null;
   limit: number;
 };
 
@@ -42,10 +48,10 @@ export const knowledgeKeys = {
   },
   templates: {
     all: (organizationId: string) => ["templates", organizationId],
-    list: (organizationId: string, categoryId?: string | null) => [
+    list: (organizationId: string, { categoryId, limit }: TemplatesPageKey) => [
       ...knowledgeKeys.templates.all(organizationId),
       "list",
-      { categoryId: categoryId ?? null },
+      { categoryId, limit },
     ],
     detail: (organizationId: string, templateId: string) => [
       ...knowledgeKeys.templates.all(organizationId),
@@ -151,16 +157,24 @@ export const templatesOptions = (
   organizationId: string,
   categoryId?: string | null,
 ) =>
-  queryOptions({
-    queryKey: knowledgeKeys.templates.list(organizationId, categoryId),
-    queryFn: async ({ signal }) => {
+  infiniteQueryOptions({
+    queryKey: knowledgeKeys.templates.list(organizationId, {
+      categoryId: categoryId ?? null,
+      limit: TEMPLATES_PAGE_SIZE,
+    }),
+    queryFn: async ({ pageParam, signal }) => {
       const query: {
         categoryId?: SafeId<"templateCategory"> | "uncategorized";
-      } = {};
+        limit: number;
+        cursor?: string;
+      } = { limit: TEMPLATES_PAGE_SIZE };
       if (categoryId === "uncategorized") {
         query.categoryId = "uncategorized";
       } else if (categoryId) {
         query.categoryId = toSafeId<"templateCategory">(categoryId);
+      }
+      if (pageParam !== "") {
+        query.cursor = pageParam;
       }
       const response = await api.templates.get({
         query,
@@ -173,6 +187,8 @@ export const templatesOptions = (
 
       return response.data;
     },
+    initialPageParam: "",
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
