@@ -60,8 +60,7 @@ const orgAIConfig = {
   },
 } satisfies OrgAIConfig;
 
-const emptyOrderedRows = () =>
-  Object.assign([], { limit: async () => [] });
+const emptyOrderedRows = () => Object.assign([], { limit: async () => [] });
 
 const selectChatMessages = () => ({
   from: () => ({
