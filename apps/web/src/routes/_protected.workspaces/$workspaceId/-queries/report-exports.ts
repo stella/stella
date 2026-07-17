@@ -7,6 +7,7 @@ import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 export const REPORT_EXPORTS_PAGE_SIZE = 20;
+const REPORT_EXPORT_HISTORY_POLL_INTERVAL_MS = 2000;
 
 type ReportExportsHistoryKey = {
   limit: number;
@@ -62,6 +63,20 @@ export const reportExportsHistoryOptions = (
     },
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    refetchInterval: (query) => {
+      const pages = query.state.data?.pages;
+      if (pages === undefined) {
+        return false;
+      }
+      const hasNonTerminalExport = pages.some((page) =>
+        page.items.some(
+          ({ status }) => status === "queued" || status === "running",
+        ),
+      );
+      return hasNonTerminalExport
+        ? REPORT_EXPORT_HISTORY_POLL_INTERVAL_MS
+        : false;
+    },
   });
 
 export const reportExportDetailOptions = (
