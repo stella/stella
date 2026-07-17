@@ -1,9 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
-import type { SQL } from "drizzle-orm";
+import { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
+import { chatThreads } from "@/api/db/schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -122,6 +123,15 @@ describe("send message context-matter authorization", () => {
 });
 
 describe("send message disconnect handling", () => {
+  test("treats every thread mutation as rollback ownership adoption", () => {
+    const adoptionUpdate = chatThreads.rollbackToken.onUpdateFn?.();
+    if (!(adoptionUpdate instanceof SQL)) {
+      throw new Error("Expected rollback ownership to have a SQL update hook");
+    }
+
+    expect(new PgDialect().sqlToQuery(adoptionUpdate).sql).toBe("null");
+  });
+
   test("does not create a thread when the request is already aborted", async () => {
     const abortController = new AbortController();
     abortController.abort();
