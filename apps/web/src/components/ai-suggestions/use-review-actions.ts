@@ -318,19 +318,28 @@ export const useReviewActions = ({
   );
 
   const acceptOne = useLatestCallback(async (item: ReviewSuggestion) => {
-    if (item.status !== "pending") {
+    // Claim synchronously from the LIVE store, not the render-time snapshot:
+    // a rapid double-click fires two acceptOne calls that both captured a
+    // "pending" item, so checking `item.status` lets both through. Reading
+    // the current status and flipping it to "applying" here — before any
+    // await — lets only the first proceed.
+    const current = useReviewStore
+      .getState()
+      .sessions[entityId]?.find((suggestion) => suggestion.id === item.id);
+    if (current === undefined || current.status !== "pending") {
       return;
     }
+    // Optimistic "Applying…" claim (the card feels responsive; the editor
+    // apply is synchronous and React hasn't painted between mutations).
+    updateSuggestion(entityId, item.id, { status: "applying" });
     const unlocked = await ensureUnlocked();
     if (!unlocked) {
+      // Release the claim so a cancelled unlock leaves the card actionable.
+      updateSuggestion(entityId, item.id, { status: "pending" });
       return;
     }
-    // Optimistic state — the card shows "Applying…" the instant the user
-    // clicks. Without this the click feels dead because the editor apply
-    // is synchronous and React hasn't painted between state mutations.
-    // Yield to the macrotask queue before the actual apply so the
-    // "applying" status can paint first.
-    updateSuggestion(entityId, item.id, { status: "applying" });
+    // Yield to the macrotask queue so the "applying" status can paint before
+    // the synchronous editor apply.
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
