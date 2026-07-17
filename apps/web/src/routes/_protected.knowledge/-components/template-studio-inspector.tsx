@@ -1022,6 +1022,12 @@ export const StudioInsertRow = () => {
             setCaretInLoop(actions.isCaretInLoop());
           }
         }}
+        onOpenChangeComplete={(open) => {
+          if (!open && preserveEditorFocusRef.current) {
+            preserveEditorFocusRef.current = false;
+            actions.focusEditor();
+          }
+        }}
       >
         <MenuTrigger
           aria-label={t("templates.studio.insert")}
