@@ -124,6 +124,37 @@ export const apiUploadDocx = async (
   };
 };
 
+type UploadTemplateOptions = {
+  file: { name: string; mimeType: string; buffer: Buffer };
+  name: string;
+};
+
+export const apiUploadTemplate = async (
+  request: APIRequestContext,
+  { file, name }: UploadTemplateOptions,
+) => {
+  const response = await request.put(url("/templates"), {
+    timeout: API_REQUEST_TIMEOUT_MS,
+    multipart: {
+      file,
+      name,
+    },
+  });
+  if (!response.ok()) {
+    throw new Error(
+      `PUT /templates -> ${String(response.status())}: ${await response.text()}`,
+    );
+  }
+  return (await response.json()) as {
+    id: string;
+    name: string;
+    fileName: string;
+    fieldCount: number;
+    sizeBytes: number;
+    createdAt: string;
+  };
+};
+
 export const apiDownloadFileField = async (
   request: APIRequestContext,
   workspaceId: string,
