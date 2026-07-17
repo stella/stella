@@ -46,8 +46,8 @@ const requesterExports: {
   timestamp: string;
 }[] = [];
 
-const readRequesterExportPage = (cursor: string | undefined) =>
-  Result.gen(() =>
+const readRequesterExportPage = async (cursor: string | undefined) =>
+  await Result.gen(() =>
     readReportExportHistory({
       cursor,
       limit: 2,
