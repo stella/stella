@@ -147,7 +147,7 @@ describe("send message disconnect rollback", () => {
     const insertValues = mock(async () => {
       abortController.abort();
     });
-    const deleteWhere = mock(async () => undefined);
+    const deleteReturning = mock(async () => [{ id: threadId }]);
 
     const result = await sendMessage.handler(
       createContext({
@@ -156,12 +156,17 @@ describe("send message disconnect rollback", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          delete: () => ({ where: deleteWhere }),
+          delete: () => ({
+            where: () => ({ returning: deleteReturning }),
+          }),
           insert: () => ({ values: insertValues }),
           query: {
             chatThreads: { findFirst: async () => null },
             organizationSettings: { findFirst: async () => null },
           },
+          select: () => ({
+            from: () => ({ where: () => undefined }),
+          }),
         },
       }),
     );
@@ -171,6 +176,42 @@ describe("send message disconnect rollback", () => {
       response: { message: "Client disconnected before AI work started" },
     });
     expect(insertValues).toHaveBeenCalledTimes(1);
-    expect(deleteWhere).toHaveBeenCalledTimes(1);
+    expect(deleteReturning).toHaveBeenCalledTimes(1);
+  });
+
+  test("preserves a newly created thread when another request has added a message", async () => {
+    const abortController = new AbortController();
+    const insertValues = mock(async () => {
+      abortController.abort();
+    });
+    const deleteReturning = mock(async () => []);
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          delete: () => ({
+            where: () => ({ returning: deleteReturning }),
+          }),
+          insert: () => ({ values: insertValues }),
+          query: {
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: () => ({
+            from: () => ({ where: () => undefined }),
+          }),
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(deleteReturning).toHaveBeenCalledTimes(1);
   });
 });

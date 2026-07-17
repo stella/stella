@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notExists } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -1790,7 +1790,24 @@ const rollbackUnpersistedChatSideEffects = async ({
   }
 
   const threadRollbackResult = await safeDb(async (tx) => {
-    await tx.delete(chatThreads).where(eq(chatThreads.id, threadId));
+    const deletedThreads = await tx
+      .delete(chatThreads)
+      .where(
+        and(
+          eq(chatThreads.id, threadId),
+          notExists(
+            tx
+              .select({ id: chatMessages.id })
+              .from(chatMessages)
+              .where(eq(chatMessages.threadId, chatThreads.id)),
+          ),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+
+    if (deletedThreads.length === 0) {
+      return;
+    }
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.DELETE,
