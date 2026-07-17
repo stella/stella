@@ -40,7 +40,7 @@
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
       "apps/api/src/dev/register-mock-ai.ts": 1,
-      "apps/api/src/handlers/audit-logs/read.ts": 1,
+      "apps/api/src/handlers/audit-logs/query.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/case-law/corpus-index.ts": 12,
       "apps/api/src/handlers/case-law/corpus-storage.ts": 2,
@@ -643,7 +643,7 @@
     }
   },
   "cross-route-private-imports": {
-    "count": 201,
+    "count": 199,
     "files": {
       "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 2,
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 8,
@@ -678,7 +678,6 @@
       "apps/web/src/components/inspector/email-html-viewer.tsx": 1,
       "apps/web/src/components/inspector/entity-metadata-panel.tsx": 8,
       "apps/web/src/components/inspector/external-reference-panel.tsx": 1,
-      "apps/web/src/components/inspector/file-download-service.ts": 1,
       "apps/web/src/components/inspector/file-facets.tsx": 1,
       "apps/web/src/components/inspector/file-tab-panel.tsx": 6,
       "apps/web/src/components/inspector/inspector-panel.tsx": 5,
@@ -709,7 +708,6 @@
       "apps/web/src/routes/_protected.contacts/index.tsx": 1,
       "apps/web/src/routes/_protected.dev_.autocomplete.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-field-mention-extension.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx": 1,
