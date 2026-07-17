@@ -25,20 +25,17 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const MAX_USER_ID_LENGTH = 128;
 
-const withoutKey = <T>(
-  record: Record<string, T>,
-  key: string,
-): Record<string, T> =>
-  Object.fromEntries(
-    Object.entries(record).filter(([entryKey]) => entryKey !== key),
-  );
-
 export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
   persist(
     (set, get) => ({
       exports: {},
       finish: (exportId) => {
-        set((state) => ({ exports: withoutKey(state.exports, exportId) }));
+        set((state) => {
+          const { [exportId]: finishedExport, ...exports } = state.exports;
+          return finishedExport === undefined
+            ? { exports: state.exports }
+            : { exports };
+        });
       },
       registerToast: (exportId, toastId) => {
         set((state) => ({
@@ -46,8 +43,8 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
         }));
       },
       takeToast: (exportId) => {
-        const toastId = get().toastIds[exportId];
-        set((state) => ({ toastIds: withoutKey(state.toastIds, exportId) }));
+        const { [exportId]: toastId, ...toastIds } = get().toastIds;
+        set({ toastIds });
         return toastId;
       },
       track: (reportExport) => {
