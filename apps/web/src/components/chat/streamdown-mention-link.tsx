@@ -653,7 +653,7 @@ const FolioBlockChip = ({
     const state = useInspectorStore.getState();
     const docxTabId = pickActiveDocxTabId(state);
     if (docxTabId !== null) {
-      state.requestBlockScroll(docxTabId, blockId);
+      state.requestBlockScroll({ tabId: docxTabId, blockId });
     }
     // Always also broadcast — the overlay editor isn't tracked in
     // the inspector store, so the store path alone is a no-op
