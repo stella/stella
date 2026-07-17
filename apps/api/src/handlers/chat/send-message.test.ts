@@ -10,11 +10,16 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-void mock.module("@/api/lib/web-search/load-org-keys", () => ({
-  loadWebSearchProvidersForOrg: async () => ({
+let webSearchProviderLoadHook: (() => void) | undefined;
+const loadWebSearchProvidersForOrgMock = mock(async () => {
+  webSearchProviderLoadHook?.();
+  return {
     urlFetcher: null,
     webSearchProvider: null,
-  }),
+  };
+});
+void mock.module("@/api/lib/web-search/load-org-keys", () => ({
+  loadWebSearchProvidersForOrg: loadWebSearchProvidersForOrgMock,
 }));
 
 const upsertChatThreadSearchDocumentMock = mock(async () => undefined);
@@ -88,6 +93,11 @@ const selectChatMessages = () => ({
 
 const createContext = ({
   contextMatterIds,
+  message = {
+    id: messageId,
+    role: "user",
+    parts: [{ type: "text", content: "Summarize the selected matters" }],
+  },
   request = new Request("http://localhost/v1/chat/send"),
   transaction = {
     query: {
@@ -98,6 +108,7 @@ const createContext = ({
   },
 }: {
   contextMatterIds: SendMessageCtx["body"]["contextMatterIds"];
+  message?: SendMessageCtx["body"]["message"];
   request?: Request;
   transaction?: unknown;
 }): SendMessageCtx => {
@@ -108,11 +119,7 @@ const createContext = ({
       threadId,
       sendMode: CHAT_SEND_MODE.rawOverride,
       contextMatterIds,
-      message: {
-        id: messageId,
-        role: "user",
-        parts: [{ type: "text", content: "Summarize the selected matters" }],
-      },
+      message,
     },
     createAuditRecorder: () => async () => {},
     getAccessibleWorkspaces: async () => [
@@ -189,6 +196,81 @@ describe("send message disconnect handling", () => {
       response: { message: "Client disconnected before AI work started" },
     });
     expect(insert).not.toHaveBeenCalled();
+  });
+
+  test("does not start validation providers after a preflight disconnect", async () => {
+    const abortController = new AbortController();
+    const findChatThread = mock(async () => {
+      abortController.abort();
+      return null;
+    });
+    loadExternalMcpToolsForUserMock.mockClear();
+    loadWebSearchProvidersForOrgMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        message: {
+          id: messageId,
+          role: "assistant",
+          parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
+        },
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          query: {
+            chatThreads: { findFirst: findChatThread },
+            organizationSettings: { findFirst: async () => null },
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(loadWebSearchProvidersForOrgMock).not.toHaveBeenCalled();
+    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+  });
+
+  test("does not discover connectors after disconnecting during web provider load", async () => {
+    const abortController = new AbortController();
+    webSearchProviderLoadHook = () => {
+      webSearchProviderLoadHook = undefined;
+      abortController.abort();
+    };
+    loadExternalMcpToolsForUserMock.mockClear();
+    loadWebSearchProvidersForOrgMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        message: {
+          id: messageId,
+          role: "assistant",
+          parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
+        },
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          query: {
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+        },
+      }),
+    );
+    webSearchProviderLoadHook = undefined;
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(loadWebSearchProvidersForOrgMock).toHaveBeenCalledTimes(1);
+    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
   });
 
   test("deletes an exclusively owned thread when the request aborts during creation", async () => {
@@ -313,6 +395,60 @@ describe("send message disconnect handling", () => {
     expect(new PgDialect().sqlToQuery(claimUpdate.updatedAt).sql).toContain(
       '"chat_threads"."updated_at"',
     );
+  });
+
+  test("does not update existing thread pins after disconnecting during its history read", async () => {
+    const abortController = new AbortController();
+    const update = mock(() => ({
+      set: () => ({ where: async () => undefined }),
+    }));
+    const selectWithAbort = () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [],
+          orderBy: () => {
+            abortController.abort();
+            return emptyOrderedRows();
+          },
+        }),
+      }),
+    });
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [activeWorkspaceId],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectWithAbort,
+          update,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(update).not.toHaveBeenCalled();
   });
 
   test("rolls back when the client disconnects during context compaction", async () => {

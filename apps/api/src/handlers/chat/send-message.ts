@@ -360,12 +360,30 @@ const sendMessage = createSafeRootHandler(
     // generator via `.return()`, which unwinds this `finally` like a normal
     // early `return` would.
     try {
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
       // Resolve the org's web-search providers once (BYOK key first,
       // platform env key as fallback) and reuse for both the validation
       // and streaming tool sets.
       const webSearchProviders = await loadWebSearchProvidersForOrg(
         session.activeOrganizationId,
       );
+
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
 
       // Only load external MCP tools for validation when the incoming
       // message actually carries a part that needs them — an ordinary
@@ -449,6 +467,29 @@ const sendMessage = createSafeRootHandler(
           workspaceId,
         }),
       );
+
+      // Existing-thread pin changes are durable side effects, so stop before
+      // applying them when any earlier validation or thread read observed a
+      // client disconnect. Created threads still need their rollback token
+      // cleaned up on this exit path.
+      if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: [],
+            userId: user.id,
+          }),
+        );
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
 
       // The thread's persisted chat-model override wins over the org/instance
       // default, but the dev-only body override still wins over everything
