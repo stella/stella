@@ -17,6 +17,10 @@ use tokio::task::JoinHandle;
 
 use crate::config;
 pub use crate::config::normalize_api_base_url;
+use crate::diagnostics::{
+  DiagnosticSession, DiagnosticStoreLoadIssue, DiagnosticUpdate, DiagnosticsInput,
+  render_diagnostics,
+};
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
 use crate::types::*;
 use zip::ZipArchive;
@@ -2071,38 +2075,38 @@ impl SessionManager {
   }
 
   fn get_diagnostics_text(&self) -> String {
-    let diagnostics = serde_json::json!({
-        "generatedAt": chrono_now(),
-        "platform": {
-            "arch": std::env::consts::ARCH,
-            "os": std::env::consts::OS,
-            "framework": "tauri",
-        },
-        "app": {
-            "bridgePort": self.bridge_port,
-            "runningSince": self.running_since,
-            "supportRoot": self.support_root.to_string_lossy(),
-            "temporaryWorkingCopiesRoot": self.edit_root.to_string_lossy(),
-        },
-        "linkedAccount": self.linked_account,
-        "storeLoadIssue": self.store_load_issue.as_ref().map(|i| format!("{i:?}")),
-        "notificationPreferences": self.notification_preferences,
-        "update": self.update,
-        "sessions": self.sessions.values().map(|s| {
-            serde_json::json!({
-                "hasLocalCopy": true,
-                "id": s.id,
-                "lastCheckpointAt": s.last_checkpoint_at,
-                "lastError": s.last_error,
-                "pendingFinalize": s.pending_finalize,
-                "status": s.status,
-                "takeoverDetected": s.takeover_detected,
-            })
-        }).collect::<Vec<_>>(),
-        "cleanupPathsQueued": self.cleanup_paths.len(),
-    });
-
-    serde_json::to_string_pretty(&diagnostics).unwrap_or_default()
+    render_diagnostics(DiagnosticsInput {
+      generated_at: chrono_now(),
+      bridge_port: self.bridge_port,
+      running_since: &self.running_since,
+      linked_account_present: self.linked_account.is_some(),
+      store_load_issue: self.store_load_issue.as_ref().map(|issue| match issue {
+        StoreLoadIssue::InvalidStore => DiagnosticStoreLoadIssue::InvalidStore,
+        StoreLoadIssue::UnreadableStore => DiagnosticStoreLoadIssue::UnreadableStore,
+      }),
+      notification_preferences: &self.notification_preferences,
+      update: DiagnosticUpdate {
+        configured: self.update.base_url.is_some(),
+        channel_configured: self.update.channel.is_some(),
+        current_version: self.update.current_version.as_deref(),
+        last_checked_at: self.update.last_checked_at.as_deref(),
+        latest_version: self.update.latest_version.as_deref(),
+        update_available: self.update.update_available,
+        update_ready: self.update.update_ready,
+      },
+      sessions: self
+        .sessions
+        .values()
+        .map(|session| DiagnosticSession {
+          status: session.status,
+          has_last_checkpoint: session.last_checkpoint_at.is_some(),
+          has_last_error: session.last_error.is_some(),
+          pending_finalize: session.pending_finalize,
+          takeover_detected: session.takeover_detected,
+        })
+        .collect(),
+      cleanup_paths_queued: self.cleanup_paths.len(),
+    })
   }
 }
 
@@ -2683,6 +2687,86 @@ mod tests {
     assert_eq!(sanitize_path_segment(""), "session");
     assert_eq!(sanitize_path_segment("."), "session");
     assert_eq!(sanitize_path_segment("   "), "session");
+  }
+
+  #[test]
+  fn diagnostics_export_redacts_private_session_and_account_data() {
+    let mut manager = SessionManager::new();
+    manager.support_root = PathBuf::from("/Users/alice/Client Matter/support");
+    manager.edit_root = PathBuf::from("/Users/alice/Client Matter/editing");
+    manager.linked_account = Some(LinkedAccountSnapshot {
+      email: "attorney@example.com".to_string(),
+      name: Some("Private Attorney".to_string()),
+      verified_at: "private-verification-time".to_string(),
+    });
+    manager.store_load_issue = Some(StoreLoadIssue::InvalidStore);
+    manager.update.base_url = Some("https://private-api.example.com".to_string());
+    manager.update.channel = Some("secret-channel".to_string());
+    manager.update.current_hash = Some("private-current-hash".to_string());
+    manager.update.latest_hash = Some("private-latest-hash".to_string());
+    manager.update.latest_version = Some("9.9.9".to_string());
+    manager.update.status_message = "private status details".to_string();
+    manager.update.update_available = true;
+
+    let mut persisted = persisted_session_for_test("private-session-id");
+    persisted.file_name = "Client Matter.docx".to_string();
+    persisted.file_path = "/Users/alice/Client Matter.docx".to_string();
+    persisted.last_checkpoint_at = Some("private-checkpoint-time".to_string());
+    persisted.last_error =
+      Some("upload failed for /Users/alice/Client Matter.docx".to_string());
+    persisted.pending_finalize = true;
+    persisted.status = SessionStatus::Error;
+    persisted.takeover_detected = true;
+    manager.sessions.insert(
+      persisted.id.clone(),
+      desktop_session_for_test(persisted, "private-session-token"),
+    );
+    manager
+      .cleanup_paths
+      .insert("/Users/alice/Client Matter/orphan.docx".to_string());
+
+    let diagnostics = manager.get_diagnostics_text();
+    let parsed: serde_json::Value = serde_json::from_str(&diagnostics).unwrap();
+
+    for private_value in [
+      "/Users/alice",
+      "Client Matter",
+      "attorney@example.com",
+      "Private Attorney",
+      "private-verification-time",
+      "private-api.example.com",
+      "secret-channel",
+      "private-current-hash",
+      "private-latest-hash",
+      "private status details",
+      "private-session-id",
+      "private-session-token",
+      "private-checkpoint-time",
+      "upload failed",
+    ] {
+      assert!(!diagnostics.contains(private_value));
+    }
+
+    assert!(parsed.get("linkedAccount").is_none());
+    assert!(parsed["app"].get("supportRoot").is_none());
+    assert!(parsed["app"].get("temporaryWorkingCopiesRoot").is_none());
+    assert!(parsed["update"].get("baseUrl").is_none());
+    assert!(parsed["update"].get("channel").is_none());
+    assert!(parsed["update"].get("currentHash").is_none());
+    assert!(parsed["update"].get("latestHash").is_none());
+    assert!(parsed["update"].get("statusMessage").is_none());
+    assert_eq!(parsed["linkedAccountPresent"], true);
+    assert_eq!(parsed["storeLoadIssue"], "invalidStore");
+    assert_eq!(parsed["update"]["configured"], true);
+    assert_eq!(parsed["update"]["channelConfigured"], true);
+    assert_eq!(parsed["update"]["latestVersion"], "9.9.9");
+    assert_eq!(parsed["sessions"]["total"], 1);
+    assert_eq!(parsed["sessions"]["byStatus"]["error"], 1);
+    assert_eq!(parsed["sessions"]["withLastCheckpoint"], 1);
+    assert_eq!(parsed["sessions"]["withLastError"], 1);
+    assert_eq!(parsed["sessions"]["pendingFinalize"], 1);
+    assert_eq!(parsed["sessions"]["takeoverDetected"], 1);
+    assert_eq!(parsed["cleanupPathsQueued"], 1);
   }
 
   #[test]
