@@ -56,6 +56,55 @@ const SAFE_CANARY_ERROR_MESSAGES = new Set([
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+const SAFE_PROVIDER_CODES = new Set([
+  "aborted",
+  "api_error",
+  "authentication_error",
+  "billing_error",
+  "error",
+  "incomplete",
+  "invalid_prompt",
+  "invalid_request",
+  "invalid_request_error",
+  "not_found_error",
+  "overloaded_error",
+  "parse-error",
+  "permission_error",
+  "provider_error",
+  "rate_limit_error",
+  "rate_limit_exceeded",
+  "refusal",
+  "server_error",
+  "timeout",
+  "timeout_error",
+]);
+
+type CanaryRunStage =
+  | "before-tool-call"
+  | "after-tool-call"
+  | "after-tool-result";
+
+const providerCode = (error: unknown, depth = 0): string | null => {
+  if (!isRecord(error)) {
+    return null;
+  }
+  const code = error["code"];
+  if (typeof code === "string" && SAFE_PROVIDER_CODES.has(code)) {
+    return code;
+  }
+
+  if (depth >= 3) {
+    return null;
+  }
+  for (const key of ["rawEvent", "error", "cause"] as const) {
+    const nestedCode = providerCode(error[key], depth + 1);
+    if (nestedCode !== null) {
+      return nestedCode;
+    }
+  }
+  return null;
+};
+
 const providerStatus = (error: unknown, depth = 0): number | null => {
   if (!isRecord(error)) {
     return null;
@@ -84,12 +133,16 @@ const providerStatus = (error: unknown, depth = 0): number | null => {
   return null;
 };
 
-class CanaryProviderRunError extends TypeError {
+export class CanaryProviderRunError extends TypeError {
+  readonly code: string | null;
+  readonly stage: CanaryRunStage;
   readonly status: number | null;
 
-  constructor(event: unknown) {
+  constructor(event: unknown, stage: CanaryRunStage) {
     super("Provider stream failed.");
     this.name = "CanaryProviderRunError";
+    this.code = providerCode(event);
+    this.stage = stage;
     this.status = providerStatus(event);
   }
 }
@@ -386,12 +439,19 @@ const runToolProbe = async ({
     tools: [projectedTool],
   });
   let output = "";
+  let stage: CanaryRunStage = "before-tool-call";
   for await (const chunk of stream) {
     if (chunk.type === EventType.TEXT_MESSAGE_CONTENT && chunk.delta) {
       output += chunk.delta;
     }
+    if (chunk.type === EventType.TOOL_CALL_END) {
+      stage = "after-tool-call";
+    }
+    if (chunk.type === EventType.TOOL_CALL_RESULT) {
+      stage = "after-tool-result";
+    }
     if (chunk.type === EventType.RUN_ERROR) {
-      throw new CanaryProviderRunError(chunk);
+      throw new CanaryProviderRunError(chunk, stage);
     }
   }
   requireNonEmptyText(output);
@@ -455,15 +515,19 @@ const parseProvider = (args: string[]): CanaryProvider => {
   );
 };
 
-const errorSummary = (error: unknown, signal: AbortSignal): string => {
+export const errorSummary = (error: unknown, signal: AbortSignal): string => {
   if (signal.aborted) {
     return "timeout";
   }
 
   if (error instanceof CanaryProviderRunError) {
-    return error.status === null
-      ? "provider stream error"
-      : `provider HTTP ${error.status}`;
+    if (error.status !== null) {
+      return `provider HTTP ${error.status}`;
+    }
+    const stage = error.stage.replaceAll("-", " ");
+    return error.code === null
+      ? `provider stream error ${stage}`
+      : `provider stream error ${stage} (${error.code})`;
   }
 
   if (

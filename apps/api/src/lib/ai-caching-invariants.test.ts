@@ -38,8 +38,9 @@ describe("TanStack AI is the only live app provider SDK boundary", () => {
     const glob = new Glob("**/*.ts");
     const allowed = new Set([
       "lib/tanstack-ai-models.ts",
-      // This is the final-request contract matrix. It deliberately constructs the
-      // real adapters with intercepted clients; it is not imported by app code.
+      // These contract tests deliberately construct real adapters with intercepted
+      // clients; they are not imported by app code.
+      "handlers/chat/tools/provider-null-normalization.property.test.ts",
       "handlers/chat/tools/tool-schema.test.ts",
     ]);
     const forbiddenPackages = [

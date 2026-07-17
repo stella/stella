@@ -48,7 +48,11 @@ import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import { COMPARE_VERSIONS_TOOL_NAME } from "@/api/handlers/chat/tools/version-compare-tools";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS } from "@/api/lib/provider-safe-json-schema";
+import {
+  PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
+  providerSafeJsonSchemaOptionsForTanStackProvider,
+} from "@/api/lib/provider-safe-json-schema";
+import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
@@ -1086,6 +1090,169 @@ describe("chat tool schemas", () => {
     ).toHaveProperty("input", {
       question: "Which one?",
       nullableNote: null,
+    });
+  });
+
+  test("the installed Mistral adapter restores omitted optional tool inputs", async () => {
+    const adapter = createMistralText("mistral-large-latest", "test-key");
+    const argumentsJson =
+      '{"question":"Which one?","mode":null,"nullableNote":null,"acceptAnything":null,"rejectAnything":null}';
+    let request: unknown;
+    Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
+      request = payload;
+      return (async function* () {
+        yield {
+          id: "response-1",
+          model: "mistral-large-latest",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "call-1",
+                    type: "function",
+                    function: {
+                      name: "ask_user",
+                      arguments: argumentsJson,
+                    },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        };
+        yield {
+          id: "response-1",
+          model: "mistral-large-latest",
+          choices: [
+            {
+              index: 0,
+              delta: {},
+              finish_reason: "tool_calls",
+            },
+          ],
+          usage: {
+            prompt_tokens: 1,
+            completion_tokens: 1,
+            total_tokens: 2,
+          },
+        };
+      })();
+    });
+    const chunks: StreamChunk[] = [];
+    const projectedInputSchema = projectSchemaInputJsonSchema(
+      toTanStackToolSchema(
+        v.strictObject({
+          question: v.string(),
+          mode: v.optional(v.literal("must-not-be-sent")),
+          nullableNote: v.nullable(v.string()),
+        }),
+      ),
+      providerSafeJsonSchemaOptionsForTanStackProvider("mistral"),
+    );
+    const inputSchema = convertSchemaToJsonSchema(projectedInputSchema);
+    if (!inputSchema?.properties) {
+      throw new TypeError(
+        "Expected projected Mistral input schema properties.",
+      );
+    }
+    // Boolean schemas are valid JSON Schema even though TanStack's public
+    // JSONSchema type currently models only object schemas.
+    Reflect.set(inputSchema.properties, "acceptAnything", true);
+    Reflect.set(inputSchema.properties, "rejectAnything", false);
+    const tool = {
+      name: "ask_user",
+      description: "Ask a question.",
+      inputSchema,
+    } satisfies Tool;
+
+    for await (const chunk of adapter.chatStream({
+      ...commonProviderOptions([tool]),
+      model: adapter.model,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(request).toMatchObject({
+      tools: [
+        {
+          function: {
+            parameters: {
+              properties: {
+                mode: {
+                  type: ["string", "null"],
+                  enum: ["must-not-be-sent", null],
+                },
+                acceptAnything: {
+                  anyOf: [true, { type: "null" }],
+                },
+                rejectAnything: {
+                  anyOf: [false, { type: "null" }],
+                },
+              },
+              required: [
+                "question",
+                "mode",
+                "nullableNote",
+                "acceptAnything",
+                "rejectAnything",
+              ],
+            },
+          },
+        },
+      ],
+    });
+    expect(
+      chunks.find((chunk) => chunk.type === EventType.TOOL_CALL_END),
+    ).toHaveProperty("input", {
+      question: "Which one?",
+      nullableNote: null,
+      acceptAnything: null,
+    });
+  });
+
+  test("the installed Mistral adapter preserves composed schemas under non-strict fallback", async () => {
+    const adapter = createMistralText("mistral-large-latest", "test-key");
+    let request: unknown;
+    Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
+      request = payload;
+      return emptyProviderStream();
+    });
+    const inputSchema = {
+      type: "object",
+      properties: {
+        value: {
+          oneOf: [{ type: "string" }, { type: "number" }],
+        },
+      },
+      required: [],
+    };
+
+    await consumeProviderStream(
+      adapter.chatStream({
+        ...commonProviderOptions([
+          {
+            name: "store_value",
+            description: "Store a value.",
+            inputSchema,
+          },
+        ]),
+        model: adapter.model,
+      }),
+    );
+
+    expect(request).toMatchObject({
+      tools: [
+        {
+          function: {
+            parameters: inputSchema,
+            strict: false,
+          },
+        },
+      ],
     });
   });
 
