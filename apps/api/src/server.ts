@@ -108,7 +108,7 @@ import {
 } from "@/api/lib/s3";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
-import { initWorkflowWorker } from "@/api/lib/workflow-queue";
+import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
 const HEALTH_PATH = "/health";
 const DEFAULT_API_PORT = 3001;
@@ -531,7 +531,7 @@ const startServer = async (): Promise<void> => {
   const fileDerivativeWorker = initFileDerivativeWorker();
 
   // BullMQ workflow worker for AI extraction.
-  const workflowWorker = initWorkflowWorker();
+  const workflowWorkers = initWorkflowWorkers();
 
   // BullMQ worker for durable account-deletion storage cleanup.
   const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
@@ -566,7 +566,7 @@ const startServer = async (): Promise<void> => {
     });
     await Promise.race([
       Promise.allSettled([
-        workflowWorker.close(),
+        workflowWorkers.close(),
         fileDerivativeWorker.close(),
         accountDeletionCleanupWorker.close(),
         styleSetPackageCleanupWorker.close(),
