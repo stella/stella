@@ -1,3 +1,5 @@
+import { isRecord } from "../shared/guards.js";
+import { registryFetch } from "../shared/http.js";
 import {
   EdgarAPIError,
   EdgarRequestError,
@@ -8,7 +10,6 @@ import type { EdgarCompany, EdgarRawSubmission } from "./types.js";
 import { padCik, validateCik } from "./validation.js";
 
 const SUBMISSIONS_BASE = "https://data.sec.gov/submissions";
-const TIMEOUT_MS = 10_000;
 
 // The SEC publishes a hard rule: every request to data.sec.gov and
 // www.sec.gov MUST identify the caller via a `User-Agent` header
@@ -37,9 +38,6 @@ const assertUserAgent = (userAgent: string): void => {
   }
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isOptionalStringArray = (value: unknown): boolean =>
   value === undefined ||
   (Array.isArray(value) && value.every((item) => typeof item === "string"));
@@ -62,14 +60,13 @@ const isEdgarRawSubmission = (value: unknown): value is EdgarRawSubmission =>
       value["formerNames"].every(isEdgarFormerName))) &&
   isOptionalRecord(value["filings"]);
 
-const edgarGet = async (
+const edgarGet = (
   url: string,
   userAgent: string,
-): Promise<EdgarRawSubmission | null> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+): Promise<EdgarRawSubmission | null> =>
+  registryFetch({
+    url,
+    init: {
       headers: {
         "User-Agent": userAgent,
         Accept: "application/json",
@@ -77,58 +74,51 @@ const edgarGet = async (
         // reduce bandwidth; Bun's fetch already negotiates this.
         Host: "data.sec.gov",
       },
-    });
-  } catch (error) {
-    throw new EdgarRequestError(url, "EDGAR request failed", { cause: error });
-  }
+    },
+    isExpectedShape: isEdgarRawSubmission,
+    wrapRequestError: (cause) =>
+      new EdgarRequestError(url, "EDGAR request failed", { cause }),
+    wrapParseError: (response, cause) =>
+      new EdgarAPIError({
+        message: "EDGAR returned a non-JSON response",
+        httpStatus: response.status,
+        cause,
+      }),
+    wrapShapeError: (response) =>
+      new EdgarAPIError({
+        message: "EDGAR returned an unexpected response shape",
+        httpStatus: response.status,
+      }),
+    onErrorResponse: async (response) => {
+      if (response.status === 404) {
+        return null;
+      }
 
-  if (response.status === 404) {
-    return null;
-  }
+      if (response.status === 403) {
+        // 403 is almost always a missing or unrecognised User-Agent;
+        // flag it distinctly from generic 5xx so operators know to fix
+        // the env.
+        throw new EdgarAPIError({
+          message:
+            "EDGAR returned 403 (likely missing or rejected User-Agent header). Set EDGAR_USER_AGENT to '<App name> <contact@email>'.",
+          httpStatus: 403,
+        });
+      }
 
-  if (response.status === 403) {
-    // 403 is almost always a missing or unrecognised User-Agent; flag
-    // it distinctly from generic 5xx so operators know to fix the env.
-    throw new EdgarAPIError({
-      message:
-        "EDGAR returned 403 (likely missing or rejected User-Agent header). Set EDGAR_USER_AGENT to '<App name> <contact@email>'.",
-      httpStatus: 403,
-    });
-  }
-
-  if (!response.ok) {
-    let upstreamMessage: string | null = null;
-    try {
-      const body = await response.text();
-      upstreamMessage = body.length > 0 ? body.slice(0, 200) : null;
-    } catch {
-      // non-readable body
-    }
-    throw new EdgarAPIError({
-      message: `EDGAR ${response.status}: ${upstreamMessage ?? response.statusText}`,
-      httpStatus: response.status,
-      upstreamMessage,
-    });
-  }
-
-  let json: unknown;
-  try {
-    json = await response.json();
-  } catch (error) {
-    throw new EdgarAPIError({
-      message: "EDGAR returned a non-JSON response",
-      httpStatus: response.status,
-      cause: error,
-    });
-  }
-  if (!isEdgarRawSubmission(json)) {
-    throw new EdgarAPIError({
-      message: "EDGAR returned an unexpected response shape",
-      httpStatus: response.status,
-    });
-  }
-  return json;
-};
+      let upstreamMessage: string | null = null;
+      try {
+        const body = await response.text();
+        upstreamMessage = body.length > 0 ? body.slice(0, 200) : null;
+      } catch {
+        // non-readable body
+      }
+      throw new EdgarAPIError({
+        message: `EDGAR ${response.status}: ${upstreamMessage ?? response.statusText}`,
+        httpStatus: response.status,
+        upstreamMessage,
+      });
+    },
+  });
 
 // ---------------------------------------------------------------------------
 // Public API

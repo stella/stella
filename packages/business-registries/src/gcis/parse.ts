@@ -1,3 +1,4 @@
+import { trimToNull } from "../shared/strings.js";
 import type {
   GcisCompany,
   GcisCompanyStatus,
@@ -128,11 +129,6 @@ const parseRocDate = (input: string | undefined): string | null => {
   return `${String(gregorianYear).padStart(4, "0")}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 };
 
-const emptyToNull = (input: string | undefined): string | null => {
-  const trimmed = input?.trim();
-  return trimmed || null;
-};
-
 const numberOrNull = (input: number | undefined): number | null =>
   typeof input === "number" && Number.isFinite(input) ? input : null;
 
@@ -145,18 +141,18 @@ export const parseCompany = (raw: GcisRawCompany, now?: Date): GcisCompany => {
   const taxId = raw.Business_Accounting_NO;
   return {
     taxId,
-    name: emptyToNull(raw.Company_Name) ?? taxId,
+    name: trimToNull(raw.Company_Name) ?? taxId,
     capitalAmount: numberOrNull(raw.Capital_Stock_Amount),
     paidInCapitalAmount: numberOrNull(raw.Paid_In_Capital_Amount),
-    responsibleName: emptyToNull(raw.Responsible_Name),
-    location: emptyToNull(raw.Company_Location),
-    registerOrganization: emptyToNull(raw.Register_Organization_Desc),
-    setupDateRoc: emptyToNull(raw.Company_Setup_Date),
+    responsibleName: trimToNull(raw.Responsible_Name),
+    location: trimToNull(raw.Company_Location),
+    registerOrganization: trimToNull(raw.Register_Organization_Desc),
+    setupDateRoc: trimToNull(raw.Company_Setup_Date),
     setupDate: parseRocDate(raw.Company_Setup_Date),
-    lastChangeDateRoc: emptyToNull(raw.Change_Of_Approval_Data),
+    lastChangeDateRoc: trimToNull(raw.Change_Of_Approval_Data),
     lastChangeDate: parseRocDate(raw.Change_Of_Approval_Data),
     status: parseStatus(raw, now),
-    statusDescription: emptyToNull(raw.Company_Status_Desc),
+    statusDescription: trimToNull(raw.Company_Status_Desc),
     registryUrl: buildRegistryUrl(taxId),
   };
 };
@@ -166,7 +162,7 @@ export const parseSearchEntry = (
   now?: Date,
 ): GcisSearchResult => ({
   taxId: raw.Business_Accounting_NO,
-  name: emptyToNull(raw.Company_Name) ?? raw.Business_Accounting_NO,
-  location: emptyToNull(raw.Company_Location),
+  name: trimToNull(raw.Company_Name) ?? raw.Business_Accounting_NO,
+  location: trimToNull(raw.Company_Location),
   status: parseStatus(raw, now),
 });

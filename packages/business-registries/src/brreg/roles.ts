@@ -15,6 +15,8 @@
 // (`fratraadt` / `avregistrert`) instead of dropping them, and keep
 // the role group's `sistEndret` as the change date.
 
+import { isRecord } from "../shared/guards.js";
+import { registryFetch } from "../shared/http.js";
 import {
   BrregAPIError,
   BrregRequestError,
@@ -23,7 +25,6 @@ import {
 import { normalizeOrgnr, validateOrgnr } from "./validation.js";
 
 const BASE = "https://data.brreg.no/enhetsregisteret/api";
-const TIMEOUT_MS = 10_000;
 const MIN_BIRTH_YEAR = 1900;
 
 // ---------------------------------------------------------------------------
@@ -227,9 +228,6 @@ export const parseRolesResponse = (
 // HTTP client
 // ---------------------------------------------------------------------------
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
 const isRawRoleType = (value: unknown): value is BrregRawRoleType =>
   isRecord(value) && typeof value["kode"] === "string";
 
@@ -285,68 +283,51 @@ const parseUpstreamMessage = (value: unknown): string | null => {
   return null;
 };
 
-const brregGetRoles = async (
-  url: string,
-): Promise<BrregRawRolesResponse | null> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch (error) {
-    throw new BrregRequestError(url, "Brreg roles request failed", {
-      cause: error,
-    });
-  }
-
-  if (response.status === 404 || response.status === 410) {
-    return null;
-  }
-
-  if (!response.ok) {
-    let upstreamMessage: string | null = null;
-    // Brreg's error envelope is JSON, but upstream proxies
-    // (Cloudflare / nginx) can intercept and return HTML error pages
-    // — feeding those to `response.json()` throws a SyntaxError that
-    // would mask the real status. Guard on Content-Type. The
-    // statusText fallback covers HTTP/2 (where it is typically empty).
-    if (response.headers.get("content-type")?.includes("application/json")) {
-      try {
-        upstreamMessage = parseUpstreamMessage(await response.json());
-      } catch {
-        // non-JSON body despite the header — ignore
-      }
-    }
-    throw new BrregAPIError({
-      message: `Brreg ${response.status}: ${upstreamMessage ?? (response.statusText || "API error")}`,
-      httpStatus: response.status,
-      upstreamMessage,
-    });
-  }
-
-  try {
-    const body: unknown = await response.json();
-    if (!isRawRolesResponse(body)) {
-      throw new BrregAPIError({
+const brregGetRoles = (url: string): Promise<BrregRawRolesResponse | null> =>
+  registryFetch({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    isExpectedShape: isRawRolesResponse,
+    wrapRequestError: (cause) =>
+      new BrregRequestError(url, "Brreg roles request failed", { cause }),
+    wrapParseError: (response, cause) =>
+      new BrregAPIError({
+        message: `Brreg ${response.status}: invalid JSON payload`,
+        httpStatus: response.status,
+        upstreamMessage: null,
+        cause,
+      }),
+    wrapShapeError: (response) =>
+      new BrregAPIError({
         message: `Brreg ${response.status}: unexpected roles payload shape`,
         httpStatus: response.status,
         upstreamMessage: null,
+      }),
+    onErrorResponse: async (response) => {
+      if (response.status === 404 || response.status === 410) {
+        return null;
+      }
+
+      let upstreamMessage: string | null = null;
+      // Brreg's error envelope is JSON, but upstream proxies
+      // (Cloudflare / nginx) can intercept and return HTML error pages
+      // — feeding those to `response.json()` throws a SyntaxError that
+      // would mask the real status. Guard on Content-Type. The
+      // statusText fallback covers HTTP/2 (where it is typically empty).
+      if (response.headers.get("content-type")?.includes("application/json")) {
+        try {
+          upstreamMessage = parseUpstreamMessage(await response.json());
+        } catch {
+          // non-JSON body despite the header — ignore
+        }
+      }
+      throw new BrregAPIError({
+        message: `Brreg ${response.status}: ${upstreamMessage ?? (response.statusText || "API error")}`,
+        httpStatus: response.status,
+        upstreamMessage,
       });
-    }
-    return body;
-  } catch (error) {
-    if (error instanceof BrregAPIError) {
-      throw error;
-    }
-    throw new BrregAPIError({
-      message: `Brreg ${response.status}: invalid JSON payload`,
-      httpStatus: response.status,
-      upstreamMessage: null,
-      cause: error,
-    });
-  }
-};
+    },
+  });
 
 /**
  * Look up the officer roster for a Norwegian entity by orgnr.

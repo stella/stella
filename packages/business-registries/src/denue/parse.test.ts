@@ -74,6 +74,22 @@ describe("parseEstablishment", () => {
     expect(establishment.address).toBeNull();
   });
 
+  test("preserves a literal '0' exterior/local number", () => {
+    // A house or local number of "0" is a real address atom; only the
+    // postal code treats "0" as an absent-value sentinel.
+    const establishment = parseEstablishment({
+      Id: "34185",
+      Nombre: "TIENDA CENTRO",
+      Tipo_vialidad: "CALLE",
+      Calle: "HIDALGO",
+      Num_Exterior: "0",
+      NumLocal: "0",
+    });
+
+    expect(establishment.address?.line1).toBe("CALLE HIDALGO 0");
+    expect(establishment.unitNumber).toBe("0");
+  });
+
   test("parses two-part location as municipality and state", () => {
     const establishment = parseEstablishment({
       Id: "34185",

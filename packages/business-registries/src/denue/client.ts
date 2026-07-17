@@ -1,3 +1,4 @@
+import { performRegistryRequest } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   DenueAPIError,
@@ -81,18 +82,17 @@ const denueGet = async (
   url: string,
   options: DenueClientOptions,
 ): Promise<DenueResponse> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(options.timeoutMs ?? TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch {
-    throw new DenueRequestError(
-      redactToken(url, options),
-      "DENUE request failed",
-    );
-  }
+  // DENUE returns text bodies (empty = no match, a plain-string array
+  // for error envelopes even on 200) and needs the API token redacted
+  // out of every error, so the body is decoded as text below; only the
+  // request + timeout + RequestError wrapping is shared.
+  const response = await performRegistryRequest({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    timeoutMs: options.timeoutMs ?? TIMEOUT_MS,
+    wrapRequestError: () =>
+      new DenueRequestError(redactToken(url, options), "DENUE request failed"),
+  });
 
   if (response.status === 401 || response.status === 403) {
     throw new DenueAuthError(

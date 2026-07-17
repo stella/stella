@@ -1,3 +1,5 @@
+import { isRecord } from "../shared/guards.js";
+import { registryFetch } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   CompaniesHouseAPIError,
@@ -21,7 +23,6 @@ import type {
 import { normalizeCompanyNumber, validateCompanyNumber } from "./validation.js";
 
 const COMPANIES_HOUSE_BASE = "https://api.company-information.service.gov.uk";
-const TIMEOUT_MS = 10_000;
 const DEFAULT_SEARCH_LIMIT = 20;
 // Companies House caps each /search/companies page at 100; requesting
 // more returns 400. Clamp to keep the adapter useful even when callers
@@ -60,9 +61,6 @@ const buildAuthHeader = (apiKey: string): string => {
   const token = btoa(`${apiKey}:`);
   return `Basic ${token}`;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isOptionalRecord = (value: unknown): boolean =>
   value === undefined || isRecord(value);
@@ -161,68 +159,57 @@ const readUpstreamMessage = async (
   }
 };
 
-const companiesHouseGet = async <T>(
+const companiesHouseGet = <T>(
   url: string,
   apiKey: string,
   isExpectedShape: (value: unknown) => value is T,
-): Promise<T | null> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+): Promise<T | null> =>
+  registryFetch({
+    url,
+    init: {
       headers: {
         Authorization: buildAuthHeader(apiKey),
         Accept: "application/json",
       },
-    });
-  } catch (error) {
-    throw new CompaniesHouseRequestError(
-      url,
-      "Companies House request failed",
-      { cause: error },
-    );
-  }
+    },
+    isExpectedShape,
+    wrapRequestError: (cause) =>
+      new CompaniesHouseRequestError(url, "Companies House request failed", {
+        cause,
+      }),
+    wrapParseError: (response, cause) =>
+      new CompaniesHouseAPIError({
+        message: "Companies House returned a non-JSON response",
+        httpStatus: response.status,
+        cause,
+      }),
+    wrapShapeError: (response) =>
+      new CompaniesHouseAPIError({
+        message: "Companies House returned an unexpected response shape",
+        httpStatus: response.status,
+      }),
+    onErrorResponse: async (response) => {
+      if (response.status === 404) {
+        return null;
+      }
 
-  if (response.status === 404) {
-    return null;
-  }
+      if (response.status === 401 || response.status === 403) {
+        const upstreamMessage = await readUpstreamMessage(response);
+        throw new CompaniesHouseAuthError(
+          `Companies House rejected the API key (${response.status}). Verify COMPANIES_HOUSE_API_KEY is set to a live key from https://developer.company-information.service.gov.uk.${
+            upstreamMessage ? ` Upstream: ${upstreamMessage}` : ""
+          }`,
+        );
+      }
 
-  if (response.status === 401 || response.status === 403) {
-    const upstreamMessage = await readUpstreamMessage(response);
-    throw new CompaniesHouseAuthError(
-      `Companies House rejected the API key (${response.status}). Verify COMPANIES_HOUSE_API_KEY is set to a live key from https://developer.company-information.service.gov.uk.${
-        upstreamMessage ? ` Upstream: ${upstreamMessage}` : ""
-      }`,
-    );
-  }
-
-  if (!response.ok) {
-    const upstreamMessage = await readUpstreamMessage(response);
-    throw new CompaniesHouseAPIError({
-      message: `Companies House ${response.status}: ${upstreamMessage ?? response.statusText}`,
-      httpStatus: response.status,
-      upstreamMessage,
-    });
-  }
-
-  let json: unknown;
-  try {
-    json = await response.json();
-  } catch (error) {
-    throw new CompaniesHouseAPIError({
-      message: "Companies House returned a non-JSON response",
-      httpStatus: response.status,
-      cause: error,
-    });
-  }
-  if (!isExpectedShape(json)) {
-    throw new CompaniesHouseAPIError({
-      message: "Companies House returned an unexpected response shape",
-      httpStatus: response.status,
-    });
-  }
-  return json;
-};
+      const upstreamMessage = await readUpstreamMessage(response);
+      throw new CompaniesHouseAPIError({
+        message: `Companies House ${response.status}: ${upstreamMessage ?? response.statusText}`,
+        httpStatus: response.status,
+        upstreamMessage,
+      });
+    },
+  });
 
 // ---------------------------------------------------------------------------
 // Public API

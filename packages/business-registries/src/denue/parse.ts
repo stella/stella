@@ -1,3 +1,4 @@
+import { trimToNull } from "../shared/strings.js";
 import type {
   DenueAddress,
   DenueCoordinates,
@@ -9,12 +10,15 @@ import type {
 const DENUE_WEB_BASE = "https://www.inegi.org.mx/app/mapa/denue/default.aspx";
 const MEXICO_COUNTRY = "MX" as const;
 
-const emptyToNull = (input: string | undefined): string | null => {
-  const trimmed = input?.trim();
-  if (!trimmed || trimmed === "0") {
-    return null;
-  }
-  return trimmed;
+// DENUE emits "0" as an absent-value sentinel for the postal code (there
+// is no CP 00000), so we collapse it to null. This is deliberately NOT
+// applied to the general string fields: a blanket `=== "0"` rule used to
+// discard legitimate "0" address atoms (a house or local number can be
+// "0"). Every other field uses plain `trimToNull`, matching the GCIS
+// adapter and the shared helper.
+const postalCodeToNull = (input: string | undefined): string | null => {
+  const trimmed = trimToNull(input);
+  return trimmed === "0" ? null : trimmed;
 };
 
 const numberOrNull = (input: string | undefined): number | null => {
@@ -39,7 +43,7 @@ type ParseLocationResult = {
 const parseLocation = (
   rawLocation: string | undefined,
 ): ParseLocationResult => {
-  const text = emptyToNull(rawLocation);
+  const text = trimToNull(rawLocation);
   if (!text) {
     return {
       locality: null,
@@ -66,12 +70,12 @@ const parseCoordinates = (raw: DenueRawEstablishment): DenueCoordinates => ({
 });
 
 const parseAddress = (raw: DenueRawEstablishment): DenueAddress | null => {
-  const streetType = emptyToNull(raw.Tipo_vialidad);
-  const street = emptyToNull(raw.Calle);
-  const exterior = emptyToNull(raw.Num_Exterior);
-  const interior = emptyToNull(raw.Num_Interior);
-  const neighborhood = emptyToNull(raw.Colonia);
-  const postalCode = emptyToNull(raw.CP);
+  const streetType = trimToNull(raw.Tipo_vialidad);
+  const street = trimToNull(raw.Calle);
+  const exterior = trimToNull(raw.Num_Exterior);
+  const interior = trimToNull(raw.Num_Interior);
+  const neighborhood = trimToNull(raw.Colonia);
+  const postalCode = postalCodeToNull(raw.CP);
   const location = parseLocation(raw.Ubicacion);
 
   const line1 = [streetType, street, exterior].filter(Boolean).join(" ");
@@ -108,20 +112,20 @@ export const parseEstablishment = (
   const id = raw.Id;
   return {
     id,
-    clee: emptyToNull(raw.CLEE),
-    name: emptyToNull(raw.Nombre) ?? id,
-    legalName: emptyToNull(raw.Razon_social),
-    activityClass: emptyToNull(raw.Clase_actividad),
-    employeeStratum: emptyToNull(raw.Estrato),
-    unitType: emptyToNull(raw.Tipo),
+    clee: trimToNull(raw.CLEE),
+    name: trimToNull(raw.Nombre) ?? id,
+    legalName: trimToNull(raw.Razon_social),
+    activityClass: trimToNull(raw.Clase_actividad),
+    employeeStratum: trimToNull(raw.Estrato),
+    unitType: trimToNull(raw.Tipo),
     address: parseAddress(raw),
     coordinates: parseCoordinates(raw),
-    phone: emptyToNull(raw.Telefono),
-    email: emptyToNull(raw.Correo_e),
-    website: emptyToNull(raw.Sitio_internet),
-    shoppingCenter: emptyToNull(raw.CentroComercial),
-    shoppingCenterType: emptyToNull(raw.TipoCentroComercial),
-    unitNumber: emptyToNull(raw.NumLocal),
+    phone: trimToNull(raw.Telefono),
+    email: trimToNull(raw.Correo_e),
+    website: trimToNull(raw.Sitio_internet),
+    shoppingCenter: trimToNull(raw.CentroComercial),
+    shoppingCenterType: trimToNull(raw.TipoCentroComercial),
+    unitNumber: trimToNull(raw.NumLocal),
     registryUrl: buildRegistryUrl(id),
   };
 };

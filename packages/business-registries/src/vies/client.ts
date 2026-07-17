@@ -1,3 +1,4 @@
+import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
 import {
   ViesAPIError,
   ViesRequestError,
@@ -14,7 +15,6 @@ import {
 } from "./validation.js";
 
 const BASE = "https://ec.europa.eu/taxation_customs/vies/rest-api";
-const TIMEOUT_MS = 10_000;
 
 /**
  * Validate an EU VAT number against the VIES (VAT Information
@@ -66,15 +66,12 @@ export const validateVat = async (input: string): Promise<ViesValidation> => {
   }
   const url = `${BASE}/ms/${parsed.country}/vat/${encodeURIComponent(parsed.vat)}`;
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch (error) {
-    throw new ViesRequestError(url, "VIES request failed", { cause: error });
-  }
+  const response = await performRegistryRequest({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    wrapRequestError: (cause) =>
+      new ViesRequestError(url, "VIES request failed", { cause }),
+  });
 
   if (!response.ok) {
     throw new ViesAPIError({
@@ -83,23 +80,21 @@ export const validateVat = async (input: string): Promise<ViesValidation> => {
     });
   }
 
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch (error) {
-    throw new ViesAPIError({
-      message: "VIES returned a non-JSON body",
-      httpStatus: response.status,
-      cause: error,
-    });
-  }
-
-  if (!isViesRawResponse(body)) {
-    throw new ViesAPIError({
-      message: "VIES response did not match the expected shape",
-      httpStatus: response.status,
-    });
-  }
+  const body = await readRegistryJson({
+    response,
+    isExpectedShape: isViesRawResponse,
+    wrapParseError: (cause) =>
+      new ViesAPIError({
+        message: "VIES returned a non-JSON body",
+        httpStatus: response.status,
+        cause,
+      }),
+    wrapShapeError: () =>
+      new ViesAPIError({
+        message: "VIES response did not match the expected shape",
+        httpStatus: response.status,
+      }),
+  });
 
   return parseValidation(body, parsed);
 };

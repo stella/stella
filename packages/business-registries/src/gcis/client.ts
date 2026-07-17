@@ -1,3 +1,4 @@
+import { performRegistryRequest } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   GcisAPIError,
@@ -45,15 +46,17 @@ const buildUrl = (
 };
 
 const gcisGet = async (url: string): Promise<GcisResponse> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch (error) {
-    throw new GcisRequestError(url, "GCIS request failed", { cause: error });
-  }
+  // GCIS serves text/HTML sentinels (empty body = no match, a Chinese
+  // "system busy" HTML page on 200) so the body is decoded as text
+  // below rather than via the shared JSON reader; only the request +
+  // timeout + RequestError wrapping is shared.
+  const response = await performRegistryRequest({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    timeoutMs: TIMEOUT_MS,
+    wrapRequestError: (cause) =>
+      new GcisRequestError(url, "GCIS request failed", { cause }),
+  });
 
   if (!response.ok) {
     let upstreamText: string | null = null;

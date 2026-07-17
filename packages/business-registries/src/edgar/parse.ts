@@ -1,3 +1,4 @@
+import { trimToNull } from "../shared/strings.js";
 import type {
   EdgarAddress,
   EdgarCompany,
@@ -24,26 +25,18 @@ const RECENT_FILINGS_LIMIT = 5;
 // enough to infer a lifecycle event such as delisting.
 const STALE_FILING_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 
-const nonEmpty = (value: string | null | undefined): string | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-};
-
 export const parseAddress = (raw: EdgarRawAddress): EdgarAddress => {
-  const street = [nonEmpty(raw.street1), nonEmpty(raw.street2)]
+  const street = [trimToNull(raw.street1), trimToNull(raw.street2)]
     .filter(Boolean)
     .join(", ");
   // SEC encodes US states in `stateOrCountry` (two-letter codes) and
   // non-US locations in `stateOrCountryDescription` / `country`. Both
   // can be empty; prefer the description, fall back to the code.
   const region =
-    nonEmpty(raw.stateOrCountryDescription) ?? nonEmpty(raw.stateOrCountry);
-  const city = nonEmpty(raw.city);
-  const postalCode = nonEmpty(raw.zipCode);
-  const country = nonEmpty(raw.country) ?? nonEmpty(raw.countryCode);
+    trimToNull(raw.stateOrCountryDescription) ?? trimToNull(raw.stateOrCountry);
+  const city = trimToNull(raw.city);
+  const postalCode = trimToNull(raw.zipCode);
+  const country = trimToNull(raw.country) ?? trimToNull(raw.countryCode);
 
   const composite = [
     street.length > 0 ? street : null,
@@ -66,8 +59,8 @@ export const parseAddress = (raw: EdgarRawAddress): EdgarAddress => {
 
 const parseFormerName = (raw: EdgarRawFormerName): EdgarFormerName => ({
   name: raw.name,
-  from: nonEmpty(raw.from ?? null),
-  to: nonEmpty(raw.to ?? null),
+  from: trimToNull(raw.from ?? null),
+  to: trimToNull(raw.to ?? null),
 });
 
 // `filings.recent` is a structure-of-arrays. Zip the first N entries
@@ -96,10 +89,10 @@ const parseRecentFilings = (
       accessionNumber,
       form,
       filingDate,
-      reportDate: nonEmpty(raw.reportDate?.[i] ?? null),
-      acceptanceDateTime: nonEmpty(raw.acceptanceDateTime?.[i] ?? null),
-      primaryDocument: nonEmpty(raw.primaryDocument?.[i] ?? null),
-      primaryDocDescription: nonEmpty(raw.primaryDocDescription?.[i] ?? null),
+      reportDate: trimToNull(raw.reportDate?.[i] ?? null),
+      acceptanceDateTime: trimToNull(raw.acceptanceDateTime?.[i] ?? null),
+      primaryDocument: trimToNull(raw.primaryDocument?.[i] ?? null),
+      primaryDocDescription: trimToNull(raw.primaryDocDescription?.[i] ?? null),
     });
   }
   return filings;
@@ -153,11 +146,11 @@ export const parseSubmission = (
   return {
     cik,
     name: raw.name,
-    sic: nonEmpty(raw.sic ?? null),
-    sicDescription: nonEmpty(raw.sicDescription ?? null),
+    sic: trimToNull(raw.sic ?? null),
+    sicDescription: trimToNull(raw.sicDescription ?? null),
     tickers: raw.tickers ?? [],
     exchanges: raw.exchanges ?? [],
-    ein: nonEmpty(raw.ein ?? null),
+    ein: trimToNull(raw.ein ?? null),
     addresses: {
       mailing: raw.addresses?.mailing
         ? parseAddress(raw.addresses.mailing)

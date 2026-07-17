@@ -1,3 +1,5 @@
+import { isRecord } from "../shared/guards.js";
+import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   OrsrAPIError,
@@ -19,16 +21,12 @@ const BASE = "https://sluzby.orsr.sk/api/legal-person";
 const SEARCH_URL = BASE;
 const EXTRACT_URL = `${BASE}/extract`;
 
-const TIMEOUT_MS = 10_000;
 const DEFAULT_SEARCH_LIMIT = 50;
 
 // The search endpoint accepts a `Take` parameter but does not document
 // a hard upper bound. Treat 100 as the safe ceiling so a runaway caller
 // cannot ask for thousands of rows on the chat path.
 const MAX_SEARCH_LIMIT = 100;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isOrsrSearchHit = (value: unknown): value is OrsrRawSearchHit =>
   isRecord(value) && typeof value["id"] === "number";
@@ -65,15 +63,12 @@ const orsrGet = async <T>(
   url: string,
   isExpectedShape: (value: unknown) => value is T,
 ): Promise<T> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch (error) {
-    throw new OrsrRequestError(url, "ORSR request failed", { cause: error });
-  }
+  const response = await performRegistryRequest({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    wrapRequestError: (cause) =>
+      new OrsrRequestError(url, "ORSR request failed", { cause }),
+  });
 
   if (!response.ok) {
     let body: OrsrRawErrorResponse = {};
@@ -89,27 +84,23 @@ const orsrGet = async <T>(
     });
   }
 
-  let body: unknown;
-  try {
-    body = await response.json();
-  } catch (error) {
-    throw new OrsrAPIError({
-      message: `ORSR ${response.status}: invalid JSON payload`,
-      httpStatus: response.status,
-      upstreamMessage: null,
-      cause: error,
-    });
-  }
-
-  if (!isExpectedShape(body)) {
-    throw new OrsrAPIError({
-      message: `ORSR ${response.status}: unexpected JSON payload shape`,
-      httpStatus: response.status,
-      upstreamMessage: null,
-    });
-  }
-
-  return body;
+  return readRegistryJson({
+    response,
+    isExpectedShape,
+    wrapParseError: (cause) =>
+      new OrsrAPIError({
+        message: `ORSR ${response.status}: invalid JSON payload`,
+        httpStatus: response.status,
+        upstreamMessage: null,
+        cause,
+      }),
+    wrapShapeError: () =>
+      new OrsrAPIError({
+        message: `ORSR ${response.status}: unexpected JSON payload shape`,
+        httpStatus: response.status,
+        upstreamMessage: null,
+      }),
+  });
 };
 
 const buildSearchUrl = (filterValue: string, take?: number): string => {

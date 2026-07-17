@@ -1,3 +1,5 @@
+import { isRecord } from "../shared/guards.js";
+import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   RechercheEntreprisesAPIError,
@@ -16,15 +18,11 @@ import { normalizeSiren, validateSiren, validateSiret } from "./validation.js";
 const BASE = "https://recherche-entreprises.api.gouv.fr";
 const SEARCH_URL = `${BASE}/search`;
 
-const TIMEOUT_MS = 10_000;
 const DEFAULT_SEARCH_LIMIT = 25;
 // Upstream documents 25 results per page, max per_page = 25 on the
 // production endpoint. Clamp client-side so the dispatch layer can
 // forward any caller-supplied limit safely.
 const MAX_SEARCH_LIMIT = 25;
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isRechercheEstablishment = (value: unknown): boolean =>
   isRecord(value) && typeof value["siret"] === "string";
@@ -76,19 +74,16 @@ const parseErrorBody = (value: unknown): RechercheEntreprisesErrorResponse => {
 const rechercheEntreprisesGet = async (
   url: string,
 ): Promise<RechercheEntreprisesSearchResponse> => {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(TIMEOUT_MS),
-      headers: { Accept: "application/json" },
-    });
-  } catch (error) {
-    throw new RechercheEntreprisesRequestError(
-      url,
-      "recherche-entreprises request failed",
-      { cause: error },
-    );
-  }
+  const response = await performRegistryRequest({
+    url,
+    init: { headers: { Accept: "application/json" } },
+    wrapRequestError: (cause) =>
+      new RechercheEntreprisesRequestError(
+        url,
+        "recherche-entreprises request failed",
+        { cause },
+      ),
+  });
 
   if (!response.ok) {
     let body: RechercheEntreprisesErrorResponse = {};
@@ -105,31 +100,28 @@ const rechercheEntreprisesGet = async (
     });
   }
 
-  let payload: unknown;
-  try {
-    payload = await response.json();
-  } catch (error) {
-    // A malformed body on an otherwise-200 response (the upstream
-    // very occasionally serves truncated JSON during peak load)
-    // would otherwise bubble out as a bare SyntaxError, bypass
-    // `mapRechercheEntreprisesError`, and surface as HTTP 500. Wrap
-    // it so the dispatch layer translates it to 502 like every other
-    // upstream failure.
-    throw new RechercheEntreprisesAPIError({
-      message: `recherche-entreprises returned an unparseable JSON body (HTTP ${response.status})`,
-      httpStatus: response.status,
-      upstreamMessage: null,
-      cause: error,
-    });
-  }
-  if (!isRechercheSearchResponse(payload)) {
-    throw new RechercheEntreprisesAPIError({
-      message: `recherche-entreprises returned an unexpected JSON body shape (HTTP ${response.status})`,
-      httpStatus: response.status,
-      upstreamMessage: null,
-    });
-  }
-  return payload;
+  return readRegistryJson({
+    response,
+    isExpectedShape: isRechercheSearchResponse,
+    // A malformed body on an otherwise-200 response (the upstream very
+    // occasionally serves truncated JSON during peak load) would
+    // otherwise bubble out as a bare SyntaxError, bypass the error
+    // mapping, and surface as HTTP 500. Wrap it so the dispatch layer
+    // translates it to 502 like every other upstream failure.
+    wrapParseError: (cause) =>
+      new RechercheEntreprisesAPIError({
+        message: `recherche-entreprises returned an unparseable JSON body (HTTP ${response.status})`,
+        httpStatus: response.status,
+        upstreamMessage: null,
+        cause,
+      }),
+    wrapShapeError: () =>
+      new RechercheEntreprisesAPIError({
+        message: `recherche-entreprises returned an unexpected JSON body shape (HTTP ${response.status})`,
+        httpStatus: response.status,
+        upstreamMessage: null,
+      }),
+  });
 };
 
 /**

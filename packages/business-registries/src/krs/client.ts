@@ -1,3 +1,5 @@
+import { isRecord } from "../shared/guards.js";
+import { performRegistryRequest } from "../shared/http.js";
 import { KrsAPIError, KrsRequestError, KrsValidationError } from "./errors.js";
 import { parseEntity } from "./parse.js";
 import type {
@@ -18,9 +20,6 @@ const TIMEOUT_MS = 10_000;
 // the first. Honour the documented ~5 rps soft cap by issuing the
 // second probe sequentially rather than racing.
 const REGISTER_PROBE_ORDER: readonly KrsRegisterCode[] = ["RejP", "RejS"];
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const isKrsLookupResponse = (value: unknown): value is KrsLookupResponse =>
   isRecord(value) && (value["odpis"] === undefined || isRecord(value["odpis"]));
@@ -150,15 +149,19 @@ const krsFetchOptions = (): RequestInit => {
 const krsGet = async (
   url: string,
 ): Promise<{ status: number; body: KrsLookupResponse | null }> => {
-  let response: Response;
-  try {
-    response = await fetch(url, krsFetchOptions());
-  } catch (error) {
-    const cause = error instanceof Error ? `: ${error.message}` : "";
-    throw new KrsRequestError(url, `KRS request failed${cause}`, {
-      cause: error,
-    });
-  }
+  // KRS pins Certum CA certs via Bun's non-standard `tls` fetch option
+  // (see krsFetchOptions); it is passed straight through the shared
+  // request layer's `init` escape hatch.
+  const response = await performRegistryRequest({
+    url,
+    init: krsFetchOptions(),
+    wrapRequestError: (error) => {
+      const suffix = error instanceof Error ? `: ${error.message}` : "";
+      return new KrsRequestError(url, `KRS request failed${suffix}`, {
+        cause: error,
+      });
+    },
+  });
 
   if (response.status === 404) {
     // KRS returns a JSON problem-details body on 404; we don't read

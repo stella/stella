@@ -1,3 +1,4 @@
+import { trimToNull } from "../shared/strings.js";
 import type {
   CompaniesHouseAccounts,
   CompaniesHouseAddress,
@@ -21,14 +22,6 @@ import type {
 const COMPANIES_HOUSE_PROFILE_URL =
   "https://find-and-update.company-information.service.gov.uk/company/";
 
-const nonEmpty = (value: string | null | undefined): string | null => {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-};
-
 const parseIntOrNull = (
   value: string | number | null | undefined,
 ): number | null => {
@@ -49,15 +42,15 @@ const parseIntOrNull = (
 export const parseAddress = (
   raw: CompaniesHouseRawAddress,
 ): CompaniesHouseAddress => {
-  const premises = nonEmpty(raw.premises);
-  const addressLine1 = nonEmpty(raw.address_line_1);
-  const addressLine2 = nonEmpty(raw.address_line_2);
-  const locality = nonEmpty(raw.locality);
-  const region = nonEmpty(raw.region);
-  const postalCode = nonEmpty(raw.postal_code);
-  const country = nonEmpty(raw.country);
-  const poBox = nonEmpty(raw.po_box);
-  const careOf = nonEmpty(raw.care_of);
+  const premises = trimToNull(raw.premises);
+  const addressLine1 = trimToNull(raw.address_line_1);
+  const addressLine2 = trimToNull(raw.address_line_2);
+  const locality = trimToNull(raw.locality);
+  const region = trimToNull(raw.region);
+  const postalCode = trimToNull(raw.postal_code);
+  const country = trimToNull(raw.country);
+  const poBox = trimToNull(raw.po_box);
+  const careOf = trimToNull(raw.care_of);
 
   // Compose a single-line address in UK postal order:
   //   care_of, po_box, premises + address_line_1, address_line_2,
@@ -100,7 +93,7 @@ const parseStatus = (
 ): CompaniesHouseEntityStatus => {
   // company_status is documented but optional on the wire; treat
   // missing as "unknown" rather than guessing from related fields.
-  const code = nonEmpty(raw.company_status);
+  const code = trimToNull(raw.company_status);
   if (!code) {
     return { type: "unknown" };
   }
@@ -111,7 +104,7 @@ const parseStatus = (
     case "dissolved": {
       return {
         type: "dissolved",
-        dissolvedAt: nonEmpty(raw.date_of_cessation),
+        dissolvedAt: trimToNull(raw.date_of_cessation),
       };
     }
     case "liquidation": {
@@ -132,7 +125,7 @@ const parseStatus = (
     case "converted-closed": {
       return {
         type: "converted-closed",
-        closedAt: nonEmpty(raw.date_of_cessation),
+        closedAt: trimToNull(raw.date_of_cessation),
       };
     }
     case "open": {
@@ -165,14 +158,16 @@ const parseAccounts = (
   // deprecated aliases would otherwise surface as `null` — try the
   // current field first and fall back to the deprecated one.
   const lastMadeUpTo =
-    nonEmpty(raw.last_accounts?.period_end_on) ??
-    nonEmpty(raw.last_accounts?.made_up_to);
+    trimToNull(raw.last_accounts?.period_end_on) ??
+    trimToNull(raw.last_accounts?.made_up_to);
   const nextMadeUpTo =
-    nonEmpty(raw.next_accounts?.period_end_on) ?? nonEmpty(raw.next_made_up_to);
+    trimToNull(raw.next_accounts?.period_end_on) ??
+    trimToNull(raw.next_made_up_to);
   // Same deprecation: `accounts.next_due` and `accounts.overdue` are
   // legacy aliases of `next_accounts.due_on` and `next_accounts.overdue`.
   // Read the current field first.
-  const nextDue = nonEmpty(raw.next_accounts?.due_on) ?? nonEmpty(raw.next_due);
+  const nextDue =
+    trimToNull(raw.next_accounts?.due_on) ?? trimToNull(raw.next_due);
   const overdue = raw.next_accounts?.overdue ?? raw.overdue ?? false;
   if (
     lastMadeUpTo === null &&
@@ -192,9 +187,9 @@ const parseConfirmationStatement = (
     return null;
   }
   return {
-    lastMadeUpTo: nonEmpty(raw.last_made_up_to),
-    nextMadeUpTo: nonEmpty(raw.next_made_up_to),
-    nextDue: nonEmpty(raw.next_due),
+    lastMadeUpTo: trimToNull(raw.last_made_up_to),
+    nextMadeUpTo: trimToNull(raw.next_made_up_to),
+    nextDue: trimToNull(raw.next_due),
     overdue: raw.overdue ?? false,
   };
 };
@@ -203,8 +198,8 @@ const parsePreviousName = (
   raw: CompaniesHouseRawPreviousName,
 ): CompaniesHousePreviousName => ({
   name: raw.name,
-  effectiveFrom: nonEmpty(raw.effective_from),
-  ceasedOn: nonEmpty(raw.ceased_on),
+  effectiveFrom: trimToNull(raw.effective_from),
+  ceasedOn: trimToNull(raw.ceased_on),
 });
 
 const profileUrl = (companyNumber: string): string =>
@@ -216,12 +211,12 @@ export const parseCompanyProfile = (
   companyNumber: raw.company_number,
   name: raw.company_name,
   status: parseStatus(raw),
-  statusDetail: nonEmpty(raw.company_status_detail),
-  type: nonEmpty(raw.type),
-  subtype: nonEmpty(raw.subtype),
-  jurisdiction: nonEmpty(raw.jurisdiction),
-  dateOfCreation: nonEmpty(raw.date_of_creation),
-  dateOfCessation: nonEmpty(raw.date_of_cessation),
+  statusDetail: trimToNull(raw.company_status_detail),
+  type: trimToNull(raw.type),
+  subtype: trimToNull(raw.subtype),
+  jurisdiction: trimToNull(raw.jurisdiction),
+  dateOfCreation: trimToNull(raw.date_of_creation),
+  dateOfCessation: trimToNull(raw.date_of_cessation),
   registeredOfficeAddress: raw.registered_office_address
     ? parseAddress(raw.registered_office_address)
     : null,
@@ -267,14 +262,14 @@ export const parseSearchItem = (
   companyNumber: raw.company_number,
   name: raw.title,
   status: parseSearchStatus(raw),
-  type: nonEmpty(raw.company_type),
-  dateOfCreation: nonEmpty(raw.date_of_creation),
-  dateOfCessation: nonEmpty(raw.date_of_cessation),
+  type: trimToNull(raw.company_type),
+  dateOfCreation: trimToNull(raw.date_of_creation),
+  dateOfCessation: trimToNull(raw.date_of_cessation),
   // Prefer the upstream-formatted snippet; fall back to composing one
   // from the structured `address` block when present. Search rows
   // routinely set only `address_snippet`.
   address:
-    nonEmpty(raw.address_snippet) ??
+    trimToNull(raw.address_snippet) ??
     (raw.address ? parseAddress(raw.address).textAddress : null),
   registryUrl: profileUrl(raw.company_number),
 });
@@ -322,17 +317,17 @@ export const parseOfficer = (
       // null here rather than echoing the raw code as a title.
       title: null,
     },
-    appointedOn: nonEmpty(raw.appointed_on),
+    appointedOn: trimToNull(raw.appointed_on),
     // Pre-1992 officers carry their appointment as a bound date rather
     // than an exact day (`is_pre_1992_appointment: true`). Surfacing
     // `appointedOn` as null without `appointedBefore` would falsely
     // imply Companies House had no appointment data on file.
-    appointedBefore: nonEmpty(raw.appointed_before),
-    resignedOn: nonEmpty(raw.resigned_on),
-    isResigned: Boolean(nonEmpty(raw.resigned_on)),
-    occupation: nonEmpty(raw.occupation),
-    nationality: nonEmpty(raw.nationality),
-    countryOfResidence: nonEmpty(raw.country_of_residence),
+    appointedBefore: trimToNull(raw.appointed_before),
+    resignedOn: trimToNull(raw.resigned_on),
+    isResigned: Boolean(trimToNull(raw.resigned_on)),
+    occupation: trimToNull(raw.occupation),
+    nationality: trimToNull(raw.nationality),
+    countryOfResidence: trimToNull(raw.country_of_residence),
     // Corporate / managing officers for registered-overseas entities
     // ship their location as `principal_office_address` instead of
     // the usual correspondence `address` — both are documented and
@@ -341,11 +336,11 @@ export const parseOfficer = (
     dateOfBirth,
     identification: ident
       ? {
-          type: nonEmpty(ident.identification_type),
-          legalAuthority: nonEmpty(ident.legal_authority),
-          legalForm: nonEmpty(ident.legal_form),
-          placeRegistered: nonEmpty(ident.place_registered),
-          registrationNumber: nonEmpty(ident.registration_number),
+          type: trimToNull(ident.identification_type),
+          legalAuthority: trimToNull(ident.legal_authority),
+          legalForm: trimToNull(ident.legal_form),
+          placeRegistered: trimToNull(ident.place_registered),
+          registrationNumber: trimToNull(ident.registration_number),
         }
       : null,
   };
