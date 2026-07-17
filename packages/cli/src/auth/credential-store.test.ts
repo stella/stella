@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, rm, stat } from "node:fs/promises";
+import {
+  chmod,
+  mkdtemp,
+  readdir,
+  rename,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -16,7 +24,7 @@ import {
   upsertCredential,
   writeCredentialFile,
 } from "./credential-store.js";
-import type { StoredCredential } from "./credential-store.js";
+import type { AtomicWriteOps, StoredCredential } from "./credential-store.js";
 
 const buildCredential = (
   overrides: Partial<StoredCredential> = {},
@@ -76,6 +84,19 @@ describe("credential file round-trip (tmp XDG dir)", () => {
     });
   });
 
+  test("a genuinely-absent file is silent (never signed in, not corruption)", async () => {
+    const warnings: string[] = [];
+    const file = await readCredentialFile(configDir, (message) =>
+      warnings.push(message),
+    );
+    expect(file).toEqual({
+      credentials: [],
+      defaultOrgByServer: {},
+      version: 1,
+    });
+    expect(warnings).toEqual([]);
+  });
+
   test("round-trips a written credential file exactly", async () => {
     const credential = buildCredential();
     const written = upsertCredential(
@@ -119,14 +140,75 @@ describe("credential file round-trip (tmp XDG dir)", () => {
     expect(stats.mode & 0o777).toBe(0o600);
   });
 
-  test("ignores a malformed credentials file instead of throwing", async () => {
+  test("warns (with the path) and falls back to empty on a non-JSON file", async () => {
     await Bun.write(credentialsFilePath(configDir), "not json");
-    const file = await readCredentialFile(configDir);
+    const warnings: string[] = [];
+    const file = await readCredentialFile(configDir, (message) =>
+      warnings.push(message),
+    );
     expect(file).toEqual({
       credentials: [],
       defaultOrgByServer: {},
       version: 1,
     });
+    expect(warnings).toHaveLength(1);
+    expect(warnings.at(0)).toContain(credentialsFilePath(configDir));
+    expect(warnings.at(0)).toContain("not valid JSON");
+  });
+
+  test("warns and falls back to empty on a schema-mismatched file", async () => {
+    await Bun.write(
+      credentialsFilePath(configDir),
+      JSON.stringify({ credentials: "not-an-array", version: 99 }),
+    );
+    const warnings: string[] = [];
+    const file = await readCredentialFile(configDir, (message) =>
+      warnings.push(message),
+    );
+    expect(file.credentials).toEqual([]);
+    expect(warnings).toHaveLength(1);
+    expect(warnings.at(0)).toContain("schema");
+  });
+
+  test("a successful write leaves no temp files behind", async () => {
+    await writeCredentialFile(
+      configDir,
+      upsertCredential(await readCredentialFile(configDir), buildCredential()),
+    );
+    expect(await readdir(configDir)).toEqual(["credentials.json"]);
+  });
+
+  test("a failed write leaves the existing credential store intact", async () => {
+    const original = upsertCredential(
+      await readCredentialFile(configDir),
+      buildCredential({ orgId: "org-1" }),
+    );
+    await writeCredentialFile(configDir, original);
+
+    // Inject a `rename` that throws to simulate a crash at the atomic point,
+    // after the temp file is written but before it replaces the live file.
+    const failingRename: AtomicWriteOps = {
+      writeFile: async (filePath, data, options) =>
+        await writeFile(filePath, data, options),
+      chmod: async (filePath, mode) => await chmod(filePath, mode),
+      rename: () => {
+        throw new Error("simulated crash before rename");
+      },
+      rm: async (filePath) => await rm(filePath, { force: true }),
+    };
+
+    const replacement = upsertCredential(
+      original,
+      buildCredential({ accessToken: "new-token", orgId: "org-2" }),
+    );
+    await expect(
+      writeCredentialFile(configDir, replacement, failingRename),
+    ).rejects.toThrow("simulated crash before rename");
+
+    // Live file is byte-for-byte the pre-failure store: no truncation, no
+    // partial write, and the failed temp was cleaned up.
+    expect(await readCredentialFile(configDir)).toEqual(original);
+    expect(await readdir(configDir)).toEqual(["credentials.json"]);
   });
 });
 

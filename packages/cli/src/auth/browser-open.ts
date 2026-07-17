@@ -32,6 +32,10 @@ export const openInBrowser = async (url: string): Promise<boolean> => {
   // (the old `Bun.spawn` ignored all three streams too); a bound `error`
   // handler keeps an async spawn failure (ENOENT) from throwing on the emitter.
   const child = spawn(file, args, { detached: true, stdio: "ignore" });
+  // Drop the child from the parent's event loop reference count so a slow or
+  // GUI-detaching opener can never keep the CLI alive after login completes;
+  // the `exit`/`error` listeners below still settle the race while we wait.
+  child.unref();
 
   // Mirror the old logic: succeed on a zero exit code, fail on a spawn error,
   // and bound the wait so a hung opener can never stall the CLI. Each executor

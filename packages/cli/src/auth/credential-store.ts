@@ -13,7 +13,14 @@
 // `aws`/`gh` multi-profile credential file pattern.
 
 import { Result } from "better-result";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -85,39 +92,125 @@ const EMPTY_FILE: CredentialFile = {
 export const credentialsFilePath = (configDir: string): string =>
   path.join(configDir, "credentials.json");
 
+/** A genuinely-absent file (never signed in) vs. an unreadable/corrupt one. */
+const isMissingFileError = (error: unknown): boolean => {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return false;
+  }
+  return error.code === "ENOENT";
+};
+
+const corruptionWarning = (filePath: string, reason: string): string =>
+  `stella: credentials file ${filePath} ${reason}; delete it and run 'stella auth login' to re-authenticate.`;
+
+/**
+ * Read the credential store. A genuinely-missing file (the user has never
+ * signed in) resolves to the empty store silently. Anything else — an
+ * unreadable file, invalid JSON, or a schema mismatch — is corruption, not
+ * "not signed in": it warns to stderr with the file path (so the user can
+ * delete it and re-login) and still falls back to the empty store so the
+ * command degrades onto the unauthenticated path instead of crashing.
+ *
+ * `warn` is injectable so callers (and tests) can capture the corruption
+ * notice; it defaults to the process's stderr, matching the rest of the CLI.
+ */
 export const readCredentialFile = async (
   configDir: string,
+  warn: (message: string) => void = (message) =>
+    void process.stderr.write(`${message}\n`),
 ): Promise<CredentialFile> => {
   const filePath = credentialsFilePath(configDir);
 
-  const raw = await Result.tryPromise(
-    async () => await readFile(filePath, "utf-8"),
-  );
+  const raw = await Result.tryPromise({
+    // Preserve the raw Node error (the single-arg form wraps it) so the ENOENT
+    // "genuinely absent" case can be told apart from an unreadable file.
+    try: async (): Promise<string> => await readFile(filePath, "utf-8"),
+    catch: (cause) => cause,
+  });
   if (Result.isError(raw)) {
+    if (!isMissingFileError(raw.error)) {
+      warn(corruptionWarning(filePath, "could not be read"));
+    }
     return EMPTY_FILE;
   }
 
   const parsedJson = Result.try((): unknown => JSON.parse(raw.value));
   if (Result.isError(parsedJson)) {
+    warn(corruptionWarning(filePath, "is not valid JSON"));
     return EMPTY_FILE;
   }
 
   const parsed = v.safeParse(credentialFileSchema, parsedJson.value);
-  return parsed.success ? parsed.output : EMPTY_FILE;
+  if (!parsed.success) {
+    warn(corruptionWarning(filePath, "does not match the expected schema"));
+    return EMPTY_FILE;
+  }
+  return parsed.output;
 };
 
+/**
+ * The filesystem primitives the atomic write uses, injectable so a test can
+ * simulate a mid-write failure (e.g. a throwing `rename`) and assert the live
+ * file is never left partially written. Defaults to `node:fs/promises`.
+ */
+export type AtomicWriteOps = {
+  writeFile: (
+    path: string,
+    data: string,
+    options: { mode: number },
+  ) => Promise<void>;
+  chmod: (path: string, mode: number) => Promise<void>;
+  rename: (oldPath: string, newPath: string) => Promise<void>;
+  rm: (path: string) => Promise<void>;
+};
+
+const defaultAtomicWriteOps: AtomicWriteOps = {
+  writeFile: async (filePath, data, options) =>
+    await writeFile(filePath, data, options),
+  chmod: async (filePath, mode) => await chmod(filePath, mode),
+  rename: async (oldPath, newPath) => await rename(oldPath, newPath),
+  rm: async (filePath) => await rm(filePath, { force: true }),
+};
+
+/**
+ * Persist the whole credential store. The write is atomic: the serialized file
+ * lands in a sibling temp file (0600) and is then `rename`d over the live file,
+ * so a crash mid-write can never truncate an existing store and lose every
+ * org's credentials — a reader sees either the old file or the new one, never a
+ * partial. The temp shares the target directory so the rename stays on one
+ * filesystem (a cross-device rename is not atomic). A failed write drops the
+ * temp and never touches the live file.
+ *
+ * Concurrent writers are out of scope (a last-writer-wins read-modify-write
+ * race remains); this fix targets only the truncation/corruption mode, which
+ * atomic replace eliminates.
+ */
 export const writeCredentialFile = async (
   configDir: string,
   file: CredentialFile,
+  fsOps: AtomicWriteOps = defaultAtomicWriteOps,
 ): Promise<void> => {
   const filePath = credentialsFilePath(configDir);
   await mkdir(configDir, { mode: 0o700, recursive: true });
-  await writeFile(filePath, `${JSON.stringify(file, null, 2)}\n`, {
-    mode: CREDENTIALS_FILE_MODE,
+
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  const written = await Result.tryPromise(async () => {
+    await fsOps.writeFile(tempPath, `${JSON.stringify(file, null, 2)}\n`, {
+      mode: CREDENTIALS_FILE_MODE,
+    });
+    // `writeFile`'s `mode` only applies on creation; force it so the temp (and
+    // thus the renamed-in live file) is always 0600 regardless of umask. The
+    // rename replaces the target inode, so this also tightens a pre-existing
+    // looser-permission credentials file.
+    await fsOps.chmod(tempPath, CREDENTIALS_FILE_MODE);
+    await fsOps.rename(tempPath, filePath);
   });
-  // `writeFile`'s `mode` option only applies when the file is created; force
-  // it on every write so a pre-existing looser-permission file gets fixed.
-  await chmod(filePath, CREDENTIALS_FILE_MODE);
+  if (Result.isError(written)) {
+    // Best-effort cleanup so a failed write leaves no temp litter behind; the
+    // live file was never opened, so it is already intact.
+    await Result.tryPromise(async () => await fsOps.rm(tempPath));
+    throw written.error;
+  }
 };
 
 const credentialKey = (serverUrl: string, orgId: string): string =>
