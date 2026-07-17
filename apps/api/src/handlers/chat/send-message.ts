@@ -1500,10 +1500,10 @@ type LoadThreadError = HandlerError<400 | 404 | 409> | SafeDbError;
 
 const MAX_THREAD_CLAIM_ATTEMPTS = 3;
 
-const loadThread = (
+const loadThread = async (
   props: LoadThreadProps,
 ): Promise<Result<LoadThreadResult, LoadThreadError>> =>
-  loadThreadAttempt({ ...props, claimAttempt: 0 });
+  await loadThreadAttempt({ ...props, claimAttempt: 0 });
 
 type LoadThreadAttemptProps = LoadThreadProps & {
   claimAttempt: number;
@@ -1540,8 +1540,8 @@ const loadThreadAttempt = async ({
       rollbackToken: string | null;
     };
 
-    const lookup = () =>
-      safeDb((tx) =>
+    const lookup = async () =>
+      await safeDb((tx) =>
         tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
@@ -1607,7 +1607,7 @@ const loadThreadAttempt = async ({
       const claimResult = await safeDb(async (tx) => {
         // audit: skip — clears an ephemeral rollback-ownership token; the
         // thread's user-facing state is unchanged
-        return await tx
+        const claimQuery = tx
           .update(chatThreads)
           .set({ rollbackToken: null })
           .where(
@@ -1617,6 +1617,7 @@ const loadThreadAttempt = async ({
             ),
           )
           .returning({ id: chatThreads.id });
+        return await claimQuery;
       });
       if (Result.isError(claimResult)) {
         return Result.err(claimResult.error);
