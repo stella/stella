@@ -472,6 +472,9 @@ export const CAPABILITY_DISPATCH = {
   "reports.export-view": {
     load: async () => await import("@/api/handlers/reports/export-view"),
   },
+  "reports.list-exports": {
+    load: async () => await import("@/api/handlers/reports/list-exports"),
+  },
   "reports.list-templates": {
     load: async () => await import("@/api/handlers/reports/list-templates"),
   },

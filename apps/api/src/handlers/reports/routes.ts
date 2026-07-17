@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import cloneBuiltinReportTemplate from "@/api/handlers/reports/clone-builtin";
 import exportViewReport from "@/api/handlers/reports/export-view";
+import listReportExports from "@/api/handlers/reports/list-exports";
 import listReportTemplates from "@/api/handlers/reports/list-templates";
 import readReportExport from "@/api/handlers/reports/read-export";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -13,6 +14,11 @@ export const reportsRoute = new Elysia({
   .use(permissionMacro)
   .guard({
     validateWorkspaceAccess: true,
+  })
+  .get("/", listReportExports.handler, {
+    params: listReportExports.config.params,
+    permissions: listReportExports.config.permissions,
+    query: listReportExports.config.query,
   })
   .get("/templates", listReportTemplates.handler, {
     params: listReportTemplates.config.params,

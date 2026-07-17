@@ -8,8 +8,10 @@
     }
   },
   "nullish-array-fallback": {
-    "count": 0,
-    "files": {}
+    "count": 1,
+    "files": {
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx": 1
+    }
   },
   "barrel-index-files": {
     "count": 0,
@@ -20,7 +22,7 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 9,
+    "count": 10,
     "files": {
       "apps/web/src/components/ai-suggestions/use-review-actions.ts": 1,
       "apps/web/src/components/chat/rehype-anon-spans.ts": 1,
@@ -29,7 +31,8 @@
       "apps/web/src/lib/relative-time.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-field-manifest.ts": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-preview.tsx": 2,
-      "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1
+      "apps/web/src/routes/_protected.settings/-components/account/connected-apps-card.tsx": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracking.ts": 1
     }
   },
   "raw-use-effect-suppressions": {
@@ -37,7 +40,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 620,
+    "count": 619,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -169,12 +172,12 @@
       "apps/api/src/handlers/workspaces/duplicate.ts": 7,
       "apps/api/src/handlers/workspaces/generate-bounding-boxes.ts": 1,
       "apps/api/src/handlers/workspaces/read.ts": 2,
+      "apps/api/src/lib/account-deletion-steps.ts": 4,
       "apps/api/src/lib/analytics/posthog.ts": 1,
       "apps/api/src/lib/anonymization-blacklist.ts": 1,
       "apps/api/src/lib/auth.ts": 2,
       "apps/api/src/lib/cell-lock.ts": 1,
       "apps/api/src/lib/deepl/client.ts": 3,
-      "apps/api/src/lib/delete-account.ts": 4,
       "apps/api/src/lib/document-reference.ts": 2,
       "apps/api/src/lib/docx-stamp.ts": 2,
       "apps/api/src/lib/email/ses.ts": 1,
@@ -283,7 +286,8 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 8,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio-slash-menu.tsx": 3,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 4,
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/-queries.ts": 1,
       "apps/web/src/routes/_protected.knowledge/clauses.tsx": 1,
@@ -337,7 +341,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 509,
+    "count": 514,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -455,7 +459,8 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-fields.tsx": 6,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-inspector.tsx": 7,
-      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 5,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio-slash-menu.tsx": 2,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/-components/template-versions-tab.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
       "apps/web/src/routes/_protected.knowledge/templates.tsx": 3,
@@ -505,6 +510,8 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog.tsx": 2,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-history.tsx": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker.tsx": 2,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx": 5,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts": 3,

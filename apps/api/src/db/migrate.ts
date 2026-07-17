@@ -4,9 +4,10 @@ import { drizzle } from "drizzle-orm/bun-sql";
 import { migrate } from "drizzle-orm/bun-sql/migrator";
 import nodePath from "node:path";
 
-// Relative import (not the `@/api` alias): this script ships as a loose
+// Relative imports (not the `@/api` alias): this script ships as a loose
 // file in the runtime image, which has no tsconfig to resolve paths.
 import { resolveDatabaseUrl } from "../db-url";
+import { runOnlineMigrations } from "./online-migrations";
 
 // Migrations run through Bun's SQL client — the same driver the API uses
 // at runtime — so TLS is negotiated identically. The drizzle-kit CLI
@@ -72,6 +73,19 @@ const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
 try {
   await client.unsafe(bootstrapRoleSql);
   await migrate(drizzle({ client }), { migrationsFolder });
+  await runOnlineMigrations({
+    reserve: async () => {
+      const connection = await client.reserve();
+      return {
+        execute: async (query, params = []) => {
+          await connection.unsafe(query, [...params]);
+        },
+        query: async (query, params = []) =>
+          await connection.unsafe(query, [...params]),
+        release: () => connection.release(),
+      };
+    },
+  });
   // eslint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface (no app logger in this minimal-env task)
   console.info("[migrate] migrations applied");
 } catch (error) {

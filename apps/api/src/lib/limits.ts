@@ -165,6 +165,10 @@ export const LIMITS = {
    *  the metered model calls; exceeding it at enqueue/build time is a typed
    *  error rather than a truncated report. */
   reportExportMaxRows: 500,
+  /** Default and maximum receipt-history page sizes. History remains bounded
+   *  even for matters with years of report exports. */
+  reportExportsPageSizeDefault: 20,
+  reportExportsPageSizeMax: 100,
   auditLogPageSizeDefault: 50,
   auditLogPageSizeMax: 200,
   contactsCount: 10_000,

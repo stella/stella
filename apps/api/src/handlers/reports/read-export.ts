@@ -11,11 +11,14 @@
  */
 
 import { Result } from "better-result";
+import { and, eq } from "drizzle-orm";
 
+import { reportExports } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { getS3 } from "@/api/lib/s3";
 import { presignDownloadUrl } from "@/api/lib/s3-presign";
 
 /** Presigned result URLs are short-lived; the client fetches immediately. */
@@ -66,25 +69,57 @@ const readReportExport = createSafeHandler(
       row.mode === "download" &&
       row.resultS3Key
     ) {
-      downloadUrl = yield* Result.await(
+      const resultS3Key = row.resultS3Key;
+      const objectExists = yield* Result.await(
         Result.tryPromise({
-          try: async () =>
-            await presignDownloadUrl(row.resultS3Key ?? "", {
-              expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
-              fileName: downloadFileName(row.resultS3Key ?? ""),
-              scope: {
-                organizationId: session.activeOrganizationId,
-                workspaceId,
-              },
-            }),
+          try: async () => await getS3().exists(resultS3Key),
           catch: (cause) =>
             new HandlerError({
               status: 500,
-              message: "Failed to sign the download URL.",
+              message: "Failed to verify the report export.",
               cause,
             }),
         }),
       );
+      if (!objectExists) {
+        yield* Result.await(
+          safeDb(async (tx) => {
+            // audit: skip — lifecycle bookkeeping for an already-audited
+            // export whose temporary S3 object no longer exists.
+            await tx
+              .update(reportExports)
+              .set({ resultS3Key: null })
+              .where(
+                and(
+                  eq(reportExports.id, params.exportId),
+                  eq(reportExports.workspaceId, workspaceId),
+                  eq(reportExports.requestedBy, user.id),
+                  eq(reportExports.resultS3Key, resultS3Key),
+                ),
+              );
+          }),
+        );
+      } else {
+        downloadUrl = yield* Result.await(
+          Result.tryPromise({
+            try: async () =>
+              await presignDownloadUrl(resultS3Key, {
+                expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
+                fileName: downloadFileName(resultS3Key),
+                scope: {
+                  organizationId: session.activeOrganizationId,
+                  workspaceId,
+                },
+              }),
+            catch: (cause) =>
+              new HandlerError({
+                status: 500,
+                message: "Failed to sign the download URL.",
+                cause,
+              }),
+          }),
+        );
+      }
     }
 
     return Result.ok({
