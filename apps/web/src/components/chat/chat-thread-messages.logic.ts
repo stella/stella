@@ -1,4 +1,7 @@
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type {
+  ChatAnonRestoration,
+  PersistedChatMessage,
+} from "@/components/chat/chat-ui-tools";
 
 type TurnBodyItem = {
   message: PersistedChatMessage;
@@ -50,4 +53,70 @@ export const buildMessageTurns = (
     turns.push({ type: "orphan", body: [{ message, index }] });
   }
   return turns;
+};
+
+export const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] =
+  Object.freeze([]);
+
+/**
+ * De-dupe placeholder -> original pairs across multiple parts in a
+ * single assistant message so the rehype plugin builds one pattern
+ * per stream.
+ */
+export const collectAnonRestorations = (
+  message: PersistedChatMessage,
+): readonly ChatAnonRestoration[] => {
+  const seen = new Map<string, string>();
+  const restorationPairs = message.metadata?.anonRestorations?.pairs;
+  if (restorationPairs) {
+    for (const pair of restorationPairs) {
+      if (!seen.has(pair.placeholder)) {
+        seen.set(pair.placeholder, pair.original);
+      }
+    }
+  }
+  return [...seen.entries()].map(([placeholder, original]) => ({
+    placeholder,
+    original,
+  }));
+};
+
+/**
+ * Resolve the restoration pairs that match what *this user message*
+ * actually sent: walks forward from a user message's index and uses
+ * the first assistant message's server-emitted metadata pairs, which
+ * were produced by the same `PipelineContext` the request body
+ * crossed. Returns an empty array while the assistant is still
+ * streaming, if the turn was sent raw, or if the user message never
+ * got a reply — all of these render the user message without pills,
+ * matching the audit story (no anonymization -> no audit cue).
+ *
+ * INVARIANT the walk relies on, mirrored from `buildMessageTurns`:
+ * every non-user message between one user message and the next
+ * belongs to that user message's turn, and the backend persists at
+ * most one assistant message per turn. A retry/regenerate does not
+ * append a second assistant message alongside the first — the
+ * backend's `replace-last-assistant` persistence plan (see
+ * `apps/api/src/handlers/chat/persist-message.ts`) deletes the prior
+ * assistant row in place, and the client's `chat.reload()` truncates
+ * the live array back to the last user message before streaming a
+ * replacement. So the walk MUST stop at the next user message: if it
+ * kept going past it, a later turn's assistant reply (or a stray
+ * user message left with no reply after a failed/queued send) could
+ * get attached to an earlier, unrelated user message.
+ */
+export const getFollowingAssistantRestorations = (
+  messages: readonly PersistedChatMessage[],
+  userMessageIndex: number,
+): readonly ChatAnonRestoration[] => {
+  for (let index = userMessageIndex + 1; index < messages.length; index += 1) {
+    const candidate = messages[index];
+    if (!candidate || candidate.role === "user") {
+      break;
+    }
+    if (candidate.role === "assistant") {
+      return collectAnonRestorations(candidate);
+    }
+  }
+  return EMPTY_RESTORATION_PAIRS;
 };
