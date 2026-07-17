@@ -1,18 +1,11 @@
--- Drizzle wraps pending migrations in one transaction, while PostgreSQL
--- requires CREATE INDEX CONCURRENTLY to run outside a transaction block.
--- Split the migrator transaction so existing exports remain writable. Drop a
--- possible invalid index left by an interrupted build before retrying.
--- stella-migration-safety: reviewed destructive-change - this migration only drops its own new index name before rebuilding it online; an interrupted concurrent build may leave that index invalid, and rerunning this same migration restores it.
--- squawk-ignore transaction-nesting
-COMMIT;
+-- The Bun/Drizzle migrator owns one transaction for the migration SQL and its
+-- bookkeeping row. Keep this index build inside that transaction so both are
+-- atomic. report_exports is a recently introduced job table; bound lock
+-- acquisition and build time to avoid a prolonged write interruption.
+SET LOCAL lock_timeout = '1s';
 --> statement-breakpoint
-SET lock_timeout = '1s';
+SET LOCAL statement_timeout = '30s';
 --> statement-breakpoint
-SET statement_timeout = '0';
+-- squawk-ignore require-concurrent-index-creation
+CREATE INDEX "report_exports_workspace_requester_created_idx" ON "report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id");
 --> statement-breakpoint
-DROP INDEX CONCURRENTLY IF EXISTS "report_exports_workspace_requester_created_idx";
---> statement-breakpoint
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "report_exports_workspace_requester_created_idx" ON "report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id");
---> statement-breakpoint
--- squawk-ignore transaction-nesting, ban-uncommitted-transaction
-BEGIN;
