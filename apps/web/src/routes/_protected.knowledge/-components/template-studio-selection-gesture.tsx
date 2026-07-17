@@ -656,6 +656,12 @@ const FillReveal = ({
   </span>
 );
 
+/** Popover buttons act on the captured selection; preventing mousedown keeps
+ * focus (and the painted selection) in the editor while clicking. */
+const keepEditorFocus = (event: { preventDefault: () => void }) => {
+  event.preventDefault();
+};
+
 const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
   const t = useTranslations();
   const filled = useFillReveal();
