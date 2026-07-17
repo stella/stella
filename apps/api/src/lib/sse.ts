@@ -162,20 +162,6 @@ const handleMessage = (message: string) => {
   }
 };
 
-const initRedis = async () => {
-  try {
-    const subscriber = createRedisClient();
-    await subscriber.subscribe(REDIS_CHANNEL, (message) => {
-      handleMessage(message);
-    });
-    logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
-  } catch (error: unknown) {
-    logger.error("sse.redis_connection_failed", connectionErrorFields(error));
-  }
-};
-
-void initRedis();
-
 /**
  * Broadcast an SSE event to all API instances via Redis pub/sub.
  * Every instance (including this one) receives the message on the
@@ -270,9 +256,95 @@ const sendKeepAlive = () => {
   }
 };
 
-const keepAliveTimer = setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS);
-keepAliveTimer.unref();
+// ── Lifecycle ────────────────────────────────────────────
+//
+// Importing this module must have no side effects: it is pulled in
+// transitively by ~24 modules (via invalidate-query-macro.ts, which most
+// routes.ts files use), so an eager Redis connection or timer here would
+// fire for every process that imports the route tree, including the
+// exact-mirror schema guard and the test runner. `startSse`/`stopSse` make
+// the keep-alive timer and the cross-instance Redis subscriber an explicit
+// lifecycle that only the server's boot/shutdown path drives, mirroring the
+// BullMQ `init*Worker` / `.close()` pairs in server.ts.
 
-logger.info("sse.initialized", {
-  keepAliveIntervalMs: KEEP_ALIVE_INTERVAL_MS,
-});
+let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
+let redisSubscriber: ReturnType<typeof createRedisClient> | null = null;
+let started = false;
+
+/**
+ * Start the SSE keep-alive heartbeat and the cross-instance Redis
+ * subscriber. Idempotent: a second call while already started is a no-op.
+ *
+ * Redis connection failure is fail-soft (logged, not thrown) so a
+ * single-instance deployment without Redis still serves local SSE events
+ * via `broadcastLocal`/`broadcastLocalToOrganization`.
+ *
+ * Ordering hazard: `broadcast`/`broadcastToOrganization`/
+ * `broadcastSessionEvent` can be called before `startSse` runs (they only
+ * touch the independent lazy publisher in sse-broadcast.ts and the local
+ * `connections` registry, neither of which this function owns). A publish
+ * that happens in that window still reaches every already-subscribed
+ * instance; the only thing this instance can miss is its own event, since
+ * its subscriber has not attached yet. Callers must call `startSse` before
+ * accepting traffic (server.ts does so before `api.listen()`) to keep that
+ * window closed in practice, matching the timing the previous
+ * import-time `void initRedis()` had.
+ */
+export const startSse = (): void => {
+  if (started) {
+    return;
+  }
+  started = true;
+
+  keepAliveTimer = setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS);
+  keepAliveTimer.unref();
+
+  void (async () => {
+    const subscriber = createRedisClient();
+    try {
+      await subscriber.subscribe(REDIS_CHANNEL, (message) => {
+        handleMessage(message);
+      });
+      if (!started) {
+        // stopSse ran while the connection was still being established;
+        // do not hand a live client to a lifecycle that already stopped.
+        subscriber.close();
+        return;
+      }
+      redisSubscriber = subscriber;
+      logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
+    } catch (error: unknown) {
+      logger.error("sse.redis_connection_failed", connectionErrorFields(error));
+      subscriber.close();
+    }
+  })();
+
+  logger.info("sse.initialized", {
+    keepAliveIntervalMs: KEEP_ALIVE_INTERVAL_MS,
+  });
+};
+
+/**
+ * Stop the keep-alive heartbeat and close the Redis subscriber. Safe to
+ * call when `startSse` was never called, and safe to call more than once.
+ */
+export const stopSse = (): void => {
+  if (!started) {
+    return;
+  }
+  started = false;
+
+  if (keepAliveTimer) {
+    clearInterval(keepAliveTimer);
+    keepAliveTimer = null;
+  }
+
+  if (redisSubscriber) {
+    try {
+      redisSubscriber.close();
+    } catch (error: unknown) {
+      logger.warn("sse.redis_close_failed", { "error.type": errorTag(error) });
+    }
+    redisSubscriber = null;
+  }
+};
