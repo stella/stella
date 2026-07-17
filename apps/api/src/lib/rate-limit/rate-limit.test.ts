@@ -120,12 +120,12 @@ describe("RedisRateLimitContext", () => {
           clientClosed = true;
         },
         send: async () =>
-          await new Promise<[number, number, string]>((resolve) => {
+          await new Promise<[number, number]>((resolve) => {
             settleCommand = () => {
               if (!clientClosed) {
                 lateMutationApplied = true;
               }
-              resolve([1, WINDOW_MS, "window-timeout"]);
+              resolve([1, WINDOW_MS]);
             };
           }),
       }),
@@ -151,6 +151,116 @@ describe("RedisRateLimitContext", () => {
     context.kill();
   });
 
+  test("refunds an increment that reached Redis after the client already timed out", async () => {
+    const redisState = createFakeRedisState();
+    const fakeClient = new FakeRedisClient(redisState);
+    let releaseLateReply: (() => void) | undefined;
+    let delayNextIncrement = true;
+    const context = new RedisRateLimitContext({
+      createRedis: () => ({
+        send: async (command, args) => {
+          // Apply against shared state synchronously -- mirroring Redis
+          // executing the EVAL -- but withhold the reply until the test
+          // releases it, simulating a reply that arrives after the client
+          // gave up waiting.
+          const applyResultPromise = fakeClient.send(command, args);
+          const script = requiredArg(args, 0);
+          if (
+            command === "EVAL" &&
+            script.includes('redis.call("HSET"') &&
+            delayNextIncrement
+          ) {
+            delayNextIncrement = false;
+            return await new Promise<unknown>((resolve) => {
+              releaseLateReply = () => {
+                applyResultPromise.then(resolve).catch(() => undefined);
+              };
+            });
+          }
+          return await applyResultPromise;
+        },
+      }),
+      failurePolicy: "fail_open_local",
+      onRedisError: () => undefined,
+      scheduleTimeout: (callback) => {
+        queueMicrotask(callback);
+        return () => undefined;
+      },
+    });
+    context.init(RATE_LIMIT_OPTIONS);
+
+    const key = requestKey("api:client");
+    const counter = await context.increment(key, WINDOW_MS, 1000);
+    // The client-side timeout fires first, so the caller only sees the
+    // local fallback counter -- but Redis already applied the increment.
+    expect(counter.count).toBe(1);
+
+    await context.decrement(key);
+    releaseLateReply?.();
+    await Promise.resolve();
+
+    // A separate, healthy context proves the earlier increment was
+    // refunded in Redis rather than left as a permanent over-count: a
+    // fresh request against the same counter starts back at 1, not 2.
+    const healthyContext = createContext(redisState);
+    expect(
+      (
+        await healthyContext.increment(
+          requestKey("api:client"),
+          WINDOW_MS,
+          1000,
+        )
+      ).count,
+    ).toBe(1);
+    healthyContext.kill();
+    context.kill();
+  });
+
+  test("does not refund an increment that never reached Redis", async () => {
+    const redisState = createFakeRedisState();
+    const fakeClient = new FakeRedisClient(redisState);
+    const context = new RedisRateLimitContext({
+      createRedis: () => ({
+        send: async (command, args) => {
+          const script = requiredArg(args, 0);
+          if (command === "EVAL" && script.includes('redis.call("HSET"')) {
+            // Never resolves: this increment genuinely never reached Redis.
+            return await new Promise<unknown>(() => {
+              // Intentionally left pending.
+            });
+          }
+          return await fakeClient.send(command, args);
+        },
+      }),
+      failurePolicy: "fail_open_local",
+      onRedisError: () => undefined,
+      scheduleTimeout: (callback) => {
+        queueMicrotask(callback);
+        return () => undefined;
+      },
+    });
+    context.init(RATE_LIMIT_OPTIONS);
+
+    const key = requestKey("api:client");
+    const counter = await context.increment(key, WINDOW_MS, 1000);
+    expect(counter.count).toBe(1);
+
+    await context.decrement(key);
+
+    const healthyContext = createContext(redisState);
+    expect(
+      (
+        await healthyContext.increment(
+          requestKey("api:client"),
+          WINDOW_MS,
+          1000,
+        )
+      ).count,
+    ).toBe(1);
+    healthyContext.kill();
+    context.kill();
+  });
+
   test("suppresses fallback refunds without affecting healthy keys", async () => {
     const decrementedKeys: string[] = [];
     let failNextIncrement = true;
@@ -163,9 +273,9 @@ describe("RedisRateLimitContext", () => {
               failNextIncrement = false;
               throw new TypeError("Redis unavailable");
             }
-            return [1, WINDOW_MS, "window-healthy"];
+            return [1, WINDOW_MS];
           }
-          if (script.includes("~= ARGV[1]")) {
+          if (script.includes('redis.call("HDEL"')) {
             decrementedKeys.push(requiredArg(args, 2));
             return 0;
           }
@@ -258,9 +368,9 @@ describe("RedisRateLimitContext", () => {
 });
 
 type FakeRedisEntry = {
+  attempts: Set<string>;
   count: number;
   expiresAt: number;
-  windowId: string;
 };
 
 type FakeRedisState = {
@@ -297,7 +407,7 @@ class FakeRedisClient {
         requiredArg(args, 4),
       );
     }
-    if (script.includes("~= ARGV[1]")) {
+    if (script.includes('redis.call("HDEL"')) {
       return this.decrement(key, requiredArg(args, 3));
     }
     throw new TypeError("Unexpected Redis script");
@@ -306,34 +416,32 @@ class FakeRedisClient {
   private increment(
     key: string,
     durationMs: number,
-    candidateWindowId: string,
-  ): [number, number, string] {
+    attemptId: string,
+  ): [number, number] {
     const current = this.state.entries.get(key);
     if (current === undefined || current.expiresAt <= this.state.now) {
       this.state.entries.set(key, {
+        attempts: new Set([attemptId]),
         count: 1,
         expiresAt: this.state.now + durationMs,
-        windowId: candidateWindowId,
       });
-      return [1, durationMs, candidateWindowId];
+      return [1, durationMs];
     }
     current.count += 1;
-    return [
-      current.count,
-      current.expiresAt - this.state.now,
-      current.windowId,
-    ];
+    current.attempts.add(attemptId);
+    return [current.count, current.expiresAt - this.state.now];
   }
 
-  private decrement(key: string, expectedWindowId: string): number {
+  private decrement(key: string, attemptId: string): number {
     const current = this.state.entries.get(key);
     if (
       current === undefined ||
       current.count <= 0 ||
-      current.windowId !== expectedWindowId
+      !current.attempts.has(attemptId)
     ) {
-      return 0;
+      return current?.count ?? 0;
     }
+    current.attempts.delete(attemptId);
     current.count -= 1;
     return current.count;
   }

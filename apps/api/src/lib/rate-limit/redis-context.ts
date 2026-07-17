@@ -16,21 +16,35 @@ const REDIS_COMMAND_TIMEOUT_MS = 500;
 const REFUND_PROVENANCE_CLEANUP_INTERVAL_MS = 60_000;
 const FAIL_CLOSED_COUNT = Number.MAX_SAFE_INTEGER;
 
+// Every increment attempt is tagged with a client-generated attempt id
+// (ARGV[2]) that the script records unconditionally, independent of
+// whether it started a fresh window. A later refund matches on that same
+// attempt id (see DECREMENT_SCRIPT) rather than on the window as a whole,
+// so the caller never needs to learn a server-assigned window id to issue
+// a safe refund -- see the comment on RefundProvenance for why that
+// matters when the increment's reply is lost to a client-side timeout.
 const INCREMENT_SCRIPT = `
 local current = redis.call("HINCRBY", KEYS[1], "count", 1)
 local ttl = redis.call("PTTL", KEYS[1])
 if current == 1 or ttl < 0 then
-  redis.call("HSET", KEYS[1], "window", ARGV[2])
   redis.call("PEXPIRE", KEYS[1], ARGV[1])
   ttl = tonumber(ARGV[1])
 end
-return { current, ttl, redis.call("HGET", KEYS[1], "window") }
+redis.call("HSET", KEYS[1], "attempt:" .. ARGV[2], "1")
+return { current, ttl }
 `;
 
+// Refunds only apply if this exact attempt id is still recorded on the
+// key: a genuinely-lost increment (never reached Redis) leaves no marker
+// and this safely no-ops instead of wrongly decrementing. An expired or
+// recreated window also carries no marker for an old attempt id, so a
+// late refund can never bleed into a different window's count.
 const DECREMENT_SCRIPT = `
-if redis.call("HGET", KEYS[1], "window") ~= ARGV[1] then
+local attemptField = "attempt:" .. ARGV[1]
+if redis.call("HGET", KEYS[1], attemptField) == false then
   return tonumber(redis.call("HGET", KEYS[1], "count") or "0")
 end
+redis.call("HDEL", KEYS[1], attemptField)
 local current = tonumber(redis.call("HGET", KEYS[1], "count") or "0")
 if current <= 0 then
   return 0
@@ -74,15 +88,21 @@ type RateLimitCounter = {
   start: number;
 };
 
-type RedisIncrement = {
-  counter: RateLimitCounter;
-  windowId: string;
-};
-
 type RefundProvenance = {
+  /**
+   * The attempt id sent with the increment EVAL. Kept even when the
+   * increment's own reply never arrived (client-side timeout): Redis may
+   * have already applied that EVAL before the timeout fired, and
+   * DECREMENT_SCRIPT's attempt-id match makes refunding against an
+   * unconfirmed attempt safe either way -- it decrements only if Redis
+   * actually recorded this attempt, and no-ops otherwise. Discarding
+   * provenance on timeout (the previous behavior) traded that bounded
+   * ambiguity for a guaranteed permanent over-count whenever the EVAL had
+   * in fact landed.
+   */
+  attemptId: string;
   counterKey: string;
   expiresAt: number;
-  windowId: string;
 };
 
 class RedisRateLimitReplyError extends TaggedError("RedisRateLimitReplyError")<{
@@ -160,21 +180,42 @@ export class RedisRateLimitContext implements Context {
       effectiveDuration,
       now,
     );
-    const candidateWindowId = Bun.randomUUIDv7();
-    const redisResult = await Result.tryPromise(async () => {
-      const reply = await this.sendCommand("EVAL", [
-        INCREMENT_SCRIPT,
-        "1",
-        redisRateLimitKey(counterKey),
-        String(effectiveDuration),
-        candidateWindowId,
-      ]);
-      return parseIncrementReply(reply, effectiveDuration, now);
+    const attemptId = Bun.randomUUIDv7();
+    // Identity `catch` keeps the raw thrown error (e.g. TimeoutError)
+    // instead of Result.tryPromise's default UnhandledException wrapping,
+    // so the TimeoutError.is() check below can actually discriminate an
+    // ambiguous client-side timeout from other Redis failures.
+    const redisResult = await Result.tryPromise({
+      try: async () => {
+        const reply = await this.sendCommand("EVAL", [
+          INCREMENT_SCRIPT,
+          "1",
+          redisRateLimitKey(counterKey),
+          String(effectiveDuration),
+          attemptId,
+        ]);
+        return parseIncrementReply(reply, effectiveDuration, now);
+      },
+      catch: (error: unknown) => error,
     });
     if (Result.isError(redisResult)) {
       this.onRedisError(redisResult.error, "increment");
       if (requestId !== null) {
-        this.refundProvenanceByRequest.delete(requestId);
+        if (TimeoutError.is(redisResult.error)) {
+          // The client gave up waiting, but the EVAL may already have
+          // reached and executed on Redis -- there is no way to tell from
+          // here. Retain provenance keyed by the attempt id we sent (not
+          // a window id, since we never received one) so a later
+          // decrement() can still attempt a refund; DECREMENT_SCRIPT
+          // resolves the ambiguity server-side.
+          this.refundProvenanceByRequest.set(requestId, {
+            attemptId,
+            counterKey,
+            expiresAt: now + effectiveDuration,
+          });
+        } else {
+          this.refundProvenanceByRequest.delete(requestId);
+        }
       }
       if (this.failurePolicy === "fail_open_local") {
         return fallbackCounter;
@@ -187,12 +228,12 @@ export class RedisRateLimitContext implements Context {
     }
     if (requestId !== null) {
       this.refundProvenanceByRequest.set(requestId, {
+        attemptId,
         counterKey,
-        expiresAt: redisResult.value.counter.nextReset.getTime(),
-        windowId: redisResult.value.windowId,
+        expiresAt: redisResult.value.nextReset.getTime(),
       });
     }
-    return redisResult.value.counter;
+    return redisResult.value;
   }
 
   async decrement(key: string): Promise<void> {
@@ -212,7 +253,7 @@ export class RedisRateLimitContext implements Context {
           DECREMENT_SCRIPT,
           "1",
           redisRateLimitKey(provenance.counterKey),
-          provenance.windowId,
+          provenance.attemptId,
         ]),
     );
     if (Result.isError(result)) {
@@ -336,7 +377,7 @@ export const createRedisRateLimit = ({
   scope,
 }: CreateRedisRateLimitOptions): RedisRateLimitBinding => ({
   // Keep the context and request-token generator paired: the token lets a
-  // failed request refund only the Redis window that admitted it.
+  // failed request refund only the specific increment attempt it made.
   context: new RedisRateLimitContext({ failurePolicy }),
   generator: requestScopedGenerator(scope),
 });
@@ -348,8 +389,8 @@ const parseIncrementReply = (
   reply: unknown,
   durationMs: number,
   now: number,
-): RedisIncrement => {
-  if (!Array.isArray(reply) || reply.length !== 3) {
+): RateLimitCounter => {
+  if (!Array.isArray(reply) || reply.length !== 2) {
     throw new RedisRateLimitReplyError({
       message: "Redis returned an invalid rate-limit counter reply",
       reply,
@@ -357,14 +398,11 @@ const parseIncrementReply = (
   }
   const count = Number(reply.at(0));
   const ttlMs = Number(reply.at(1));
-  const rawWindowId: unknown = reply.at(2);
   if (
     !Number.isFinite(count) ||
     !Number.isFinite(ttlMs) ||
     count < 1 ||
-    ttlMs < 0 ||
-    typeof rawWindowId !== "string" ||
-    rawWindowId.length === 0
+    ttlMs < 0
   ) {
     throw new RedisRateLimitReplyError({
       message: "Redis returned invalid rate-limit counter values",
@@ -373,12 +411,9 @@ const parseIncrementReply = (
   }
   const nextReset = new Date(now + ttlMs);
   return {
-    counter: {
-      count,
-      nextReset,
-      start: nextReset.getTime() - durationMs,
-    },
-    windowId: rawWindowId,
+    count,
+    nextReset,
+    start: nextReset.getTime() - durationMs,
   };
 };
 
