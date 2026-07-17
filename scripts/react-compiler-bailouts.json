@@ -72,7 +72,7 @@
   "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx::ChatAnonymizedToggle": 0,
   "apps/web/src/routes/_protected.chat/-components/chat-web-search-toggle.tsx::ChatWebSearchToggle": 0,
   "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx::ThreadsSheet": 0,
-  "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts::useChatSession": 23,
+  "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts::useChatSession": 22,
   "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts::useWorkspaceChatMentionRegistration": 4,
   "apps/web/src/routes/_protected.chat/index.tsx::ChatIndex": 4,
   "apps/web/src/routes/_protected.chat/index.tsx::LandingItemText": 0,
