@@ -97,7 +97,7 @@ export const ReportExportTracker = ({
       const toast = {
         type: "error" as const,
         title: t("workspaces.views.reportExport.failed"),
-        description: t("common.unexpectedError"),
+        description: settledDetail.error ?? t("common.unexpectedError"),
       };
       if (toastId === undefined) {
         stellaToast.add(toast);
