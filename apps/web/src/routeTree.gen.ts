@@ -60,6 +60,7 @@ import { Route as ProtectedSettingsOrganizationMembersRouteImport } from './rout
 import { Route as ProtectedSettingsOrganizationMatterNumberingRouteImport } from './routes/_protected.settings/organization.matter-numbering'
 import { Route as ProtectedSettingsOrganizationDocumentTypesRouteImport } from './routes/_protected.settings/organization.document-types'
 import { Route as ProtectedSettingsOrganizationCatalogueRouteImport } from './routes/_protected.settings/organization.catalogue'
+import { Route as ProtectedSettingsOrganizationAuditLogsRouteImport } from './routes/_protected.settings/organization.audit-logs'
 import { Route as ProtectedSettingsOrganizationAnonymizationRouteImport } from './routes/_protected.settings/organization.anonymization'
 import { Route as ProtectedSettingsOrganizationAiRouteImport } from './routes/_protected.settings/organization.ai'
 import { Route as ProtectedSettingsAccountProfileRouteImport } from './routes/_protected.settings/account.profile'
@@ -355,6 +356,12 @@ const ProtectedSettingsOrganizationCatalogueRoute =
     path: '/catalogue',
     getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
   } as any)
+const ProtectedSettingsOrganizationAuditLogsRoute =
+  ProtectedSettingsOrganizationAuditLogsRouteImport.update({
+    id: '/audit-logs',
+    path: '/audit-logs',
+    getParentRoute: () => ProtectedSettingsOrganizationRouteRoute,
+  } as any)
 const ProtectedSettingsOrganizationAnonymizationRoute =
   ProtectedSettingsOrganizationAnonymizationRouteImport.update({
     id: '/anonymization',
@@ -513,6 +520,7 @@ export interface FileRoutesByFullPath {
   '/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
+  '/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
   '/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
@@ -575,6 +583,7 @@ export interface FileRoutesByTo {
   '/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
+  '/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
   '/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
@@ -647,6 +656,7 @@ export interface FileRoutesById {
   '/_protected/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/_protected/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/_protected/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
+  '/_protected/settings/organization/audit-logs': typeof ProtectedSettingsOrganizationAuditLogsRoute
   '/_protected/settings/organization/catalogue': typeof ProtectedSettingsOrganizationCatalogueRoute
   '/_protected/settings/organization/document-types': typeof ProtectedSettingsOrganizationDocumentTypesRoute
   '/_protected/settings/organization/matter-numbering': typeof ProtectedSettingsOrganizationMatterNumberingRoute
@@ -719,6 +729,7 @@ export interface FileRouteTypes {
     | '/settings/account/profile'
     | '/settings/organization/ai'
     | '/settings/organization/anonymization'
+    | '/settings/organization/audit-logs'
     | '/settings/organization/catalogue'
     | '/settings/organization/document-types'
     | '/settings/organization/matter-numbering'
@@ -781,6 +792,7 @@ export interface FileRouteTypes {
     | '/settings/account/profile'
     | '/settings/organization/ai'
     | '/settings/organization/anonymization'
+    | '/settings/organization/audit-logs'
     | '/settings/organization/catalogue'
     | '/settings/organization/document-types'
     | '/settings/organization/matter-numbering'
@@ -852,6 +864,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/account/profile'
     | '/_protected/settings/organization/ai'
     | '/_protected/settings/organization/anonymization'
+    | '/_protected/settings/organization/audit-logs'
     | '/_protected/settings/organization/catalogue'
     | '/_protected/settings/organization/document-types'
     | '/_protected/settings/organization/matter-numbering'
@@ -1249,6 +1262,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsOrganizationCatalogueRouteImport
       parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
     }
+    '/_protected/settings/organization/audit-logs': {
+      id: '/_protected/settings/organization/audit-logs'
+      path: '/audit-logs'
+      fullPath: '/settings/organization/audit-logs'
+      preLoaderRoute: typeof ProtectedSettingsOrganizationAuditLogsRouteImport
+      parentRoute: typeof ProtectedSettingsOrganizationRouteRoute
+    }
     '/_protected/settings/organization/anonymization': {
       id: '/_protected/settings/organization/anonymization'
       path: '/anonymization'
@@ -1470,6 +1490,7 @@ const ProtectedKnowledgeRouteRouteWithChildren =
 interface ProtectedSettingsOrganizationRouteRouteChildren {
   ProtectedSettingsOrganizationAiRoute: typeof ProtectedSettingsOrganizationAiRoute
   ProtectedSettingsOrganizationAnonymizationRoute: typeof ProtectedSettingsOrganizationAnonymizationRoute
+  ProtectedSettingsOrganizationAuditLogsRoute: typeof ProtectedSettingsOrganizationAuditLogsRoute
   ProtectedSettingsOrganizationCatalogueRoute: typeof ProtectedSettingsOrganizationCatalogueRoute
   ProtectedSettingsOrganizationDocumentTypesRoute: typeof ProtectedSettingsOrganizationDocumentTypesRoute
   ProtectedSettingsOrganizationMatterNumberingRoute: typeof ProtectedSettingsOrganizationMatterNumberingRoute
@@ -1483,6 +1504,8 @@ const ProtectedSettingsOrganizationRouteRouteChildren: ProtectedSettingsOrganiza
     ProtectedSettingsOrganizationAiRoute: ProtectedSettingsOrganizationAiRoute,
     ProtectedSettingsOrganizationAnonymizationRoute:
       ProtectedSettingsOrganizationAnonymizationRoute,
+    ProtectedSettingsOrganizationAuditLogsRoute:
+      ProtectedSettingsOrganizationAuditLogsRoute,
     ProtectedSettingsOrganizationCatalogueRoute:
       ProtectedSettingsOrganizationCatalogueRoute,
     ProtectedSettingsOrganizationDocumentTypesRoute:

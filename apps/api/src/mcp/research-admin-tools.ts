@@ -15,7 +15,7 @@ import {
   type AuditLogFilter,
   queryAuditLogPage,
   validateAuditLogFilter,
-} from "@/api/handlers/audit-logs/read";
+} from "@/api/handlers/audit-logs/query";
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/workspace-members-add";
@@ -550,6 +550,7 @@ const handleListAuditLogTool: McpToolHandler = async ({ args, context }) => {
     queryAuditLogPage({
       safeDb: context.safeDb,
       organizationId: context.organizationId,
+      recordAuditEvent: context.recordAuditEvent,
       query: filter,
     }),
   );

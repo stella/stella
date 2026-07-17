@@ -17,7 +17,8 @@ const AUTH_ARTIFACT_TABLES = new Set([
 
 const isAllowedFile = (context) => {
   const filename = context.filename ?? context.getFilename?.() ?? "";
-  return filename.endsWith(HELPER_FILE);
+  const normalized = filename.replace(/\\/g, "/");
+  return normalized.endsWith(HELPER_FILE);
 };
 
 const containsHelperCall = (node, seen = new WeakSet()): boolean => {

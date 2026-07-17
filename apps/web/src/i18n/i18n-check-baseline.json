@@ -22,6 +22,8 @@
     "organization.invitations.emailAddressLabel",
     "search.kinds.matter",
     "search.updatedWithinOptions.day",
+    "settings.organization.auditLogsActionDelete",
+    "settings.organization.auditLogsActionDownload",
     "tasks.clearDate",
     "tasks.priorityValues.none",
     "tasks.status",
@@ -1770,6 +1772,9 @@
     ],
     "settings.account.desktop": [
       "de"
+    ],
+    "settings.organization.auditLogsAction": [
+      "fr"
     ],
     "settings.organization.documentTypes.addPlaceholder": [
       "ar",

@@ -26,6 +26,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { downloadFile } from "@/lib/utils";
 import {
   CategoryFormDialog,
   CategoryMobileFilterBar,
@@ -36,7 +37,6 @@ import type {
   CategoryOps,
 } from "@/routes/_protected.knowledge/-components/category-sidebar";
 import { ClauseImportDialog } from "@/routes/_protected.knowledge/-components/clause-import-dialog";
-import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 // ── Types ────────────────────────────────────────────
 

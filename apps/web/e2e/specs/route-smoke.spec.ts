@@ -123,6 +123,10 @@ const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
     path: "/settings/organization/anonymization",
   },
   {
+    template: "/settings/organization/audit-logs",
+    path: "/settings/organization/audit-logs",
+  },
+  {
     template: "/settings/organization/catalogue",
     path: "/settings/organization/catalogue",
     expectation: { kind: "redirectsTo", to: "/knowledge/tools" },

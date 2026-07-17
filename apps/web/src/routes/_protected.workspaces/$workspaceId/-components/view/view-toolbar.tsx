@@ -60,6 +60,7 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { downloadFile } from "@/lib/utils";
 import {
   PLAYBOOK_PICKER_LIMIT,
   playbooksOptions,
@@ -70,7 +71,6 @@ import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { resolveDocumentTypeClassifier } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
-import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";

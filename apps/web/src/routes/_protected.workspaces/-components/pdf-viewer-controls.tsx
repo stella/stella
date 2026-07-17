@@ -24,13 +24,13 @@ import { DOCX_MIME } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { fetchWithTimeout } from "@/lib/fetch";
+import { downloadFile } from "@/lib/utils";
 import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
 import {
   fetchPrintPdf,
   printPdfBuffer,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-print";
 import { PeekPdfControls } from "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer";
-import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const SCALE_OFFSET_STEP = 0.2;
