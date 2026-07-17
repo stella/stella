@@ -1,4 +1,6 @@
 import { describe, expect, mock, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
@@ -207,5 +209,66 @@ describe("send message disconnect handling", () => {
       response: { message: "Client disconnected before AI work started" },
     });
     expect(deleteReturning).toHaveBeenCalledTimes(1);
+  });
+
+  test("preserves thread recency when adopting rollback ownership", async () => {
+    const abortController = new AbortController();
+    const claimUpdates: { rollbackToken: null; updatedAt: SQL }[] = [];
+    const setClaimValues = mock(
+      (values: { rollbackToken: null; updatedAt: SQL }) => {
+        claimUpdates.push(values);
+        abortController.abort();
+        return {
+          where: () => ({ returning: async () => [{ id: threadId }] }),
+        };
+      },
+    );
+    const selectMessages = () => ({
+      from: () => ({
+        where: () => ({ orderBy: async () => [] }),
+      }),
+    });
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          query: {
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                rollbackToken: "pending-rollback",
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectMessages,
+          update: () => ({ set: setClaimValues }),
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    const claimUpdate = claimUpdates.at(0);
+    if (!claimUpdate) {
+      throw new Error("Expected the rollback ownership claim to update");
+    }
+    expect(claimUpdate.rollbackToken).toBeNull();
+    expect(new PgDialect().sqlToQuery(claimUpdate.updatedAt).sql).toContain(
+      '"chat_threads"."updated_at"',
+    );
   });
 });

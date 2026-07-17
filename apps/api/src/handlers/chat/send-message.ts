@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, notExists } from "drizzle-orm";
+import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -1609,7 +1609,10 @@ const loadThreadAttempt = async ({
         // thread's user-facing state is unchanged
         const claimQuery = tx
           .update(chatThreads)
-          .set({ rollbackToken: null })
+          .set({
+            rollbackToken: null,
+            updatedAt: sql`${chatThreads.updatedAt}`,
+          })
           .where(
             and(
               eq(chatThreads.id, threadId),
