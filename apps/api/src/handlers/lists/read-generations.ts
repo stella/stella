@@ -38,23 +38,21 @@ const readGenerations = createSafeHandler(
   async function* ({ safeDb, workspaceId, params, query }) {
     const limit = query.limit ?? LIMITS.legalListGenerationRunsPageSizeDefault;
     const parts = query.cursor ? decodePaginationCursor(query.cursor) : null;
-    const cursor = parts?.at(0);
-    if (query.cursor && !isUuidPaginationCursorPart(cursor)) {
+    const rawCursor = parts?.at(0);
+    if (query.cursor && !isUuidPaginationCursorPart(rawCursor)) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
     }
+    const cursor = isUuidPaginationCursorPart(rawCursor)
+      ? brandPersistedLegalListGenerationRunId(rawCursor)
+      : null;
     const conditions = [
       eq(legalListGenerationRuns.workspaceId, workspaceId),
       eq(legalListGenerationRuns.listId, params.listId),
     ];
-    if (cursor && isUuidPaginationCursorPart(cursor)) {
-      conditions.push(
-        lt(
-          legalListGenerationRuns.id,
-          brandPersistedLegalListGenerationRunId(cursor),
-        ),
-      );
+    if (cursor !== null) {
+      conditions.push(lt(legalListGenerationRuns.id, cursor));
     }
     const rows = yield* Result.await(
       safeDb((tx) =>
