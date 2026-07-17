@@ -106,43 +106,11 @@ export const filterToolEntries = <T extends ToolFilterEntry>(
 
 export const sortToolEntries = <T extends ToolFilterEntry>(
   entries: readonly T[],
-  recommendedSlugs: readonly string[],
 ): readonly T[] => {
-  const recommended = new Set(recommendedSlugs);
   const collator = getCollator(SOURCE_LOCALE);
-  return entries.toSorted((left, right) => {
-    const leftRecommended = recommended.has(left.slug);
-    const rightRecommended = recommended.has(right.slug);
-    if (leftRecommended !== rightRecommended) {
-      return leftRecommended ? -1 : 1;
-    }
-    return collator.compare(left.displayName, right.displayName);
-  });
-};
-
-/**
- * Invert `recommended.json` (jurisdiction -> slugs) into slug ->
- * jurisdictions so a card can show a "Recommended in CZ, EU" badge.
- * Jurisdiction codes are returned sorted for stable rendering.
- */
-export const invertRecommendedMap = (
-  recommended: Readonly<Record<string, readonly string[]>>,
-): ReadonlyMap<string, readonly string[]> => {
-  const bySlug = new Map<string, string[]>();
-  for (const [jurisdiction, slugs] of Object.entries(recommended)) {
-    for (const slug of slugs) {
-      const existing = bySlug.get(slug);
-      if (existing) {
-        existing.push(jurisdiction);
-      } else {
-        bySlug.set(slug, [jurisdiction]);
-      }
-    }
-  }
-  for (const jurisdictions of bySlug.values()) {
-    jurisdictions.sort();
-  }
-  return bySlug;
+  return entries.toSorted((left, right) =>
+    collator.compare(left.displayName, right.displayName),
+  );
 };
 
 export const collectPracticeAreas = (
@@ -167,27 +135,4 @@ export const collectJurisdictions = (
     }
   }
   return [...set].toSorted();
-};
-
-export type CatalogueStats = {
-  toolCount: number;
-  contributorCount: number;
-};
-
-/**
- * Social-proof counters for the catalogue header. Contributors are the
- * distinct non-blank author names across the bundle, so a malformed
- * manifest with an empty author cannot inflate the count.
- */
-export const catalogueStats = (
-  entries: readonly { author?: string | undefined }[],
-): CatalogueStats => {
-  const authors = new Set<string>();
-  for (const entry of entries) {
-    const author = entry.author?.trim();
-    if (author) {
-      authors.add(author);
-    }
-  }
-  return { toolCount: entries.length, contributorCount: authors.size };
 };

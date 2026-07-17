@@ -2145,6 +2145,47 @@
       "repoLink": "Explorar las entradas del catálogo",
       "title": "Aportar una herramienta"
     },
+    "discovery": {
+      "allBody": "Explora flujos de trabajo reutilizables, fuentes públicas fiables y funciones incluidas con stella.",
+      "allTitle": "Todas las herramientas",
+      "contractReviewBody": "Revisa contratos mercantiles cláusula por cláusula según un manual de negociación, con las desviaciones y propuestas de redacción claramente señaladas.",
+      "editorsPick": "Selección editorial",
+      "exampleReview": "Ejemplo de revisión",
+      "featuredTitle": "Un buen punto de partida",
+      "fromCommunity": "De la comunidad",
+      "groups": {
+        "dataSources": "Fuentes de datos e integraciones",
+        "dataSourcesBody": "Conecta registros oficiales y servicios especializados cuando un asunto requiera información externa.",
+        "included": "Incluido con stella",
+        "includedBody": "Funciones esenciales listas para usar sin añadir otra habilidad ni crear una cuenta aparte.",
+        "skillsBody": "Flujos jurídicos reutilizables cuyas instrucciones puedes revisar antes de añadirlos."
+      },
+      "heroBody": "Las habilidades son flujos jurídicos reutilizables. Añade una para revisar contratos, investigar jurisprudencia o preparar documentos siempre con el mismo método.",
+      "heroTitle": "Adapta stella al trabajo jurídico que tienes delante",
+      "howBody": "Una habilidad convierte un método jurídico en instrucciones que puedes examinar. Añádela una vez y reutiliza el mismo enfoque cada vez que surja la tarea.",
+      "howTitle": "¿Qué es una habilidad?",
+      "includedBadge": "Incluido",
+      "jurisRankBody": "Evalúa la autoridad de los precedentes de la Corte Suprema argentina mediante su influencia en citas y su evolución doctrinal.",
+      "noResults": "Todavía no hay herramientas que coincidan con esta búsqueda.",
+      "openSkill": "Explorar habilidad",
+      "review": {
+        "aligned": "Alineada",
+        "governingLaw": "Ley aplicable",
+        "liabilityCap": "Límite de responsabilidad",
+        "missing": "No indicada",
+        "outsidePlaybook": "Fuera del manual",
+        "termination": "Terminación"
+      },
+      "searchPlaceholder": "¿Qué necesitas hacer?",
+      "tasks": {
+        "prepareDocuments": "Preparar documentos",
+        "protectClientData": "Proteger datos del cliente",
+        "researchPrecedents": "Investigar precedentes",
+        "reviewAgreements": "Revisar contratos",
+        "verifyOrganizations": "Verificar una organización"
+      },
+      "tasksTitle": "Empieza por una tarea jurídica"
+    },
     "documentation": "Documentación",
     "downloadUpstream": "Descargar el archivo de origen",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Derecho tecnológico",
       "whiteCollarCrime": "Delitos económicos"
     },
-    "recommendedIn": "Recomendado en {codes}",
-    "stats": "{toolCount, plural, one {# herramienta} other {# herramientas}} · {contributorCount, plural, one {# colaborador} other {# colaboradores}}",
     "tokenHelp": "Cómo obtener un token",
     "viewOnGithub": "Ver en GitHub"
   },

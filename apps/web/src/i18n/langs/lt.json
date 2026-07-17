@@ -2145,6 +2145,47 @@
       "repoLink": "Naršyti katalogo įrašus",
       "title": "Pateikti įrankį"
     },
+    "discovery": {
+      "allBody": "Peržiūrėkite pakartotinai naudojamas darbo eigas, patikimus viešus duomenų šaltinius ir į „stella“ įtrauktas galimybes.",
+      "allTitle": "Visi įrankiai",
+      "contractReviewBody": "Tikrinkite komercines sutartis punktas po punkto pagal derybų gaires, aiškiai pažymėdami nukrypimus ir siūlomus pakeitimus.",
+      "editorsPick": "Redakcijos pasirinkimas",
+      "exampleReview": "Tikrinimo pavyzdys",
+      "featuredTitle": "Gera vieta pradėti",
+      "fromCommunity": "Iš bendruomenės",
+      "groups": {
+        "dataSources": "Duomenų šaltiniai ir integracijos",
+        "dataSourcesBody": "Prijunkite oficialius registrus ir specializuotas paslaugas, kai bylai reikia išorinės informacijos.",
+        "included": "Įtraukta į „stella“",
+        "includedBody": "Pagrindinės galimybės, paruoštos naudoti be atskiro įgūdžio ar paskyros.",
+        "skillsBody": "Pakartotinai naudojamos teisinės darbo eigos su instrukcijomis, kurias galite patikrinti prieš pridėdami."
+      },
+      "heroBody": "Įgūdžiai yra pakartotinai naudojamos teisinės darbo eigos. Pridėkite įgūdį sutartims tikrinti, precedentams tirti ar dokumentams rengti tuo pačiu metodu kiekvieną kartą.",
+      "heroTitle": "Pritaikykite „stella“ dabartiniam teisiniam darbui",
+      "howBody": "Įgūdis teisinį metodą paverčia patikrinamomis instrukcijomis. Pridėkite vieną kartą ir naudokite tą patį būdą kiekvieną kartą, kai užduotis pasikartoja.",
+      "howTitle": "Kas yra įgūdis?",
+      "includedBadge": "Įtraukta",
+      "jurisRankBody": "Įvertinkite Argentinos Aukščiausiojo Teismo precedentų autoritetą pagal citavimo įtaką ir doktrinos raidą.",
+      "noResults": "Šios paieškos dar neatitinka jokie įrankiai.",
+      "openSkill": "Peržiūrėti įgūdį",
+      "review": {
+        "aligned": "Atitinka",
+        "governingLaw": "Taikytina teisė",
+        "liabilityCap": "Atsakomybės riba",
+        "missing": "Nenurodyta",
+        "outsidePlaybook": "Neatitinka gairių",
+        "termination": "Nutraukimas"
+      },
+      "searchPlaceholder": "Ką turite padaryti?",
+      "tasks": {
+        "prepareDocuments": "Rengti dokumentus",
+        "protectClientData": "Apsaugoti kliento duomenis",
+        "researchPrecedents": "Tirti precedentus",
+        "reviewAgreements": "Tikrinti sutartis",
+        "verifyOrganizations": "Patikrinti organizaciją"
+      },
+      "tasksTitle": "Pradėkite nuo teisinės užduoties"
+    },
     "documentation": "Dokumentacija",
     "downloadUpstream": "Atsisiųsti pirminės saugyklos archyvą",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Technologijų teisė",
       "whiteCollarCrime": "Ekonominiai nusikaltimai"
     },
-    "recommendedIn": "Rekomenduojama {codes}",
-    "stats": "{toolCount, plural, one {# įrankis} few {# įrankiai} many {# įrankio} other {# įrankių}} · {contributorCount, plural, one {# bendraautoris} few {# bendraautoriai} many {# bendraautorio} other {# bendraautorių}}",
     "tokenHelp": "Kaip gauti tokeną",
     "viewOnGithub": "Peržiūrėti „GitHub“"
   },

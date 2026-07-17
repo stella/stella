@@ -2145,6 +2145,47 @@
       "repoLink": "Przeglądaj wpisy katalogu",
       "title": "Dodaj narzędzie"
     },
+    "discovery": {
+      "allBody": "Poznaj wielokrotnego użytku procesy, wiarygodne publiczne źródła danych i funkcje dostępne w stelli.",
+      "allTitle": "Wszystkie narzędzia",
+      "contractReviewBody": "Sprawdzaj umowy handlowe klauzula po klauzuli według instrukcji negocjacyjnej, z jasno wskazanymi odstępstwami i propozycjami zmian.",
+      "editorsPick": "Wybór redakcji",
+      "exampleReview": "Przykład analizy",
+      "featuredTitle": "Dobre miejsce na początek",
+      "fromCommunity": "Od społeczności",
+      "groups": {
+        "dataSources": "Źródła danych i integracje",
+        "dataSourcesBody": "Połącz wiarygodne rejestry i wyspecjalizowane usługi, gdy sprawa wymaga informacji zewnętrznych.",
+        "included": "W zestawie ze stellą",
+        "includedBody": "Podstawowe funkcje gotowe do użycia bez dodawania osobnej umiejętności lub konta.",
+        "skillsBody": "Wielokrotnego użytku procesy prawne z instrukcjami, które można sprawdzić przed dodaniem."
+      },
+      "heroBody": "Umiejętności to wielokrotnego użytku procesy prawne. Dodaj jedną, aby analizować umowy, badać precedensy lub przygotowywać dokumenty zawsze tą samą metodą.",
+      "heroTitle": "Dostosuj stellę do bieżącej pracy prawnej",
+      "howBody": "Umiejętność zapisuje metodę prawną jako możliwe do sprawdzenia instrukcje. Dodaj ją raz, a potem korzystaj z tego samego podejścia przy każdym takim zadaniu.",
+      "howTitle": "Czym jest umiejętność?",
+      "includedBadge": "W zestawie",
+      "jurisRankBody": "Oceń autorytet precedensów argentyńskiego Sądu Najwyższego na podstawie wpływu cytowań i rozwoju doktryny.",
+      "noResults": "Żadne narzędzia nie pasują jeszcze do tego wyszukiwania.",
+      "openSkill": "Poznaj umiejętność",
+      "review": {
+        "aligned": "Zgodna",
+        "governingLaw": "Prawo właściwe",
+        "liabilityCap": "Limit odpowiedzialności",
+        "missing": "Nie podano",
+        "outsidePlaybook": "Poza instrukcją",
+        "termination": "Rozwiązanie"
+      },
+      "searchPlaceholder": "Co chcesz zrobić?",
+      "tasks": {
+        "prepareDocuments": "Przygotować dokumenty",
+        "protectClientData": "Chronić dane klienta",
+        "researchPrecedents": "Zbadać precedensy",
+        "reviewAgreements": "Przeanalizować umowy",
+        "verifyOrganizations": "Zweryfikować organizację"
+      },
+      "tasksTitle": "Zacznij od zadania prawnego"
+    },
     "documentation": "Dokumentacja",
     "downloadUpstream": "Pobierz archiwum źródłowe",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Prawo nowych technologii",
       "whiteCollarCrime": "Przestępczość gospodarcza"
     },
-    "recommendedIn": "Zalecane w {codes}",
-    "stats": "{toolCount, plural, one {# narzędzie} few {# narzędzia} many {# narzędzi} other {# narzędzia}} · {contributorCount, plural, one {# współtwórca} few {# współtwórców} many {# współtwórców} other {# współtwórcy}}",
     "tokenHelp": "Jak uzyskać token",
     "viewOnGithub": "Wyświetl w serwisie GitHub"
   },

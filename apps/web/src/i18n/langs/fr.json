@@ -2145,6 +2145,47 @@
       "repoLink": "Parcourir les entrées du catalogue",
       "title": "Proposer un outil"
     },
+    "discovery": {
+      "allBody": "Explorez des méthodes réutilisables, des sources de données publiques fiables et les fonctions incluses dans stella.",
+      "allTitle": "Tous les outils",
+      "contractReviewBody": "Analysez les contrats commerciaux clause par clause selon un guide de négociation, avec les écarts et propositions de rédaction clairement signalés.",
+      "editorsPick": "Choix de la rédaction",
+      "exampleReview": "Exemple d’analyse",
+      "featuredTitle": "Un bon point de départ",
+      "fromCommunity": "Proposé par la communauté",
+      "groups": {
+        "dataSources": "Sources de données et intégrations",
+        "dataSourcesBody": "Connectez des registres de référence et des services spécialisés lorsqu’un dossier exige des informations externes.",
+        "included": "Inclus dans stella",
+        "includedBody": "Fonctions essentielles prêtes à l’emploi, sans compétence ni compte supplémentaire.",
+        "skillsBody": "Méthodes juridiques réutilisables dont vous pouvez examiner les instructions avant de les ajouter."
+      },
+      "heroBody": "Les compétences sont des méthodes juridiques réutilisables. Ajoutez-en une pour analyser des contrats, rechercher des précédents ou préparer des documents selon la même méthode à chaque fois.",
+      "heroTitle": "Adaptez stella au travail juridique du moment",
+      "howBody": "Une compétence formalise une méthode juridique sous forme d’instructions consultables. Ajoutez-la une fois, puis réutilisez la même approche chaque fois que la tâche se présente.",
+      "howTitle": "Qu’est-ce qu’une compétence ?",
+      "includedBadge": "Inclus",
+      "jurisRankBody": "Évaluez l’autorité des précédents de la Cour suprême argentine grâce à leur influence citationnelle et à leur évolution doctrinale.",
+      "noResults": "Aucun outil ne correspond encore à cette recherche.",
+      "openSkill": "Découvrir la compétence",
+      "review": {
+        "aligned": "Conforme",
+        "governingLaw": "Droit applicable",
+        "liabilityCap": "Plafond de responsabilité",
+        "missing": "Non renseigné",
+        "outsidePlaybook": "Hors du guide",
+        "termination": "Résiliation"
+      },
+      "searchPlaceholder": "Que devez-vous faire ?",
+      "tasks": {
+        "prepareDocuments": "Préparer des documents",
+        "protectClientData": "Protéger les données client",
+        "researchPrecedents": "Rechercher des précédents",
+        "reviewAgreements": "Analyser des contrats",
+        "verifyOrganizations": "Vérifier une organisation"
+      },
+      "tasksTitle": "Commencez par une tâche juridique"
+    },
     "documentation": "Documentation",
     "downloadUpstream": "Télécharger l’archive en amont",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Droit des technologies",
       "whiteCollarCrime": "Droit pénal des affaires"
     },
-    "recommendedIn": "Recommandé dans {codes}",
-    "stats": "{toolCount, plural, one {# outil} other {# outils}} · {contributorCount, plural, one {# contributeur} other {# contributeurs}}",
     "tokenHelp": "Comment obtenir un jeton",
     "viewOnGithub": "Voir sur GitHub"
   },

@@ -2145,6 +2145,47 @@
       "repoLink": "Katalógusbejegyzések böngészése",
       "title": "Eszköz beküldése"
     },
+    "discovery": {
+      "allBody": "Fedezze fel az újrahasználható munkafolyamatokat, a megbízható nyilvános adatforrásokat és a stellában elérhető funkciókat.",
+      "allTitle": "Minden eszköz",
+      "contractReviewBody": "Vizsgálja át a kereskedelmi szerződéseket záradékról záradékra a tárgyalási útmutató alapján, jól látható eltérésekkel és módosítási javaslatokkal.",
+      "editorsPick": "Szerkesztői ajánlások",
+      "exampleReview": "Példa az ellenőrzésre",
+      "featuredTitle": "Jó kiindulópont",
+      "fromCommunity": "A közösségtől",
+      "groups": {
+        "dataSources": "Adatforrások és integrációk",
+        "dataSourcesBody": "Kapcsoljon hiteles nyilvántartásokat és szakszolgáltatásokat az ügyhöz szükséges külső információkhoz.",
+        "included": "A stella része",
+        "includedBody": "Azonnal használható alapfunkciók külön készség vagy fiók hozzáadása nélkül.",
+        "skillsBody": "Újrahasználható jogi munkafolyamatok, amelyek utasításait hozzáadás előtt ellenőrizheti."
+      },
+      "heroBody": "A készségek újrahasználható jogi munkafolyamatok. Adjon hozzá egyet szerződések ellenőrzéséhez, precedensek kutatásához vagy dokumentumok következetes elkészítéséhez.",
+      "heroTitle": "Igazítsa a stellát az aktuális jogi feladathoz",
+      "howBody": "A készség egy jogi módszert ellenőrizhető utasításokba foglal. Egyszer kell hozzáadni, utána ugyanaz a megközelítés minden hasonló feladatnál használható.",
+      "howTitle": "Mi az a készség?",
+      "includedBadge": "Tartalmazza",
+      "jurisRankBody": "Értékelje az argentin Legfelsőbb Bíróság precedenseinek súlyát az idézési hatás és a dogmatikai fejlődés alapján.",
+      "noResults": "Még nincs a keresésnek megfelelő eszköz.",
+      "openSkill": "Készség megtekintése",
+      "review": {
+        "aligned": "Megfelelő",
+        "governingLaw": "Irányadó jog",
+        "liabilityCap": "Felelősségi korlát",
+        "missing": "Nincs megadva",
+        "outsidePlaybook": "Az útmutatón kívül",
+        "termination": "Megszüntetés"
+      },
+      "searchPlaceholder": "Mit szeretne elvégezni?",
+      "tasks": {
+        "prepareDocuments": "Dokumentumok készítése",
+        "protectClientData": "Ügyféladatok védelme",
+        "researchPrecedents": "Precedensek kutatása",
+        "reviewAgreements": "Szerződések ellenőrzése",
+        "verifyOrganizations": "Szervezet ellenőrzése"
+      },
+      "tasksTitle": "Kezdje egy jogi feladattal"
+    },
     "documentation": "Dokumentáció",
     "downloadUpstream": "Forrásarchívum letöltése",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Technológiai jog",
       "whiteCollarCrime": "Gazdasági bűncselekmények"
     },
-    "recommendedIn": "Ajánlott itt: {codes}",
-    "stats": "{toolCount, plural, one {# eszköz} other {# eszköz}} · {contributorCount, plural, one {# közreműködő} other {# közreműködő}}",
     "tokenHelp": "Token beszerzése",
     "viewOnGithub": "Megtekintés a GitHubon"
   },

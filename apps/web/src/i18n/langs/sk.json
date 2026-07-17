@@ -2145,6 +2145,47 @@
       "repoLink": "Prehľadávať položky katalógu",
       "title": "Prispieť nástrojom"
     },
+    "discovery": {
+      "allBody": "Preskúmajte opakovane použiteľné postupy, dôveryhodné verejné zdroje údajov a funkcie zahrnuté v stelle.",
+      "allTitle": "Všetky nástroje",
+      "contractReviewBody": "Kontrolujte obchodné zmluvy ustanovenie po ustanovení podľa vyjednávacieho manuálu s jasne označenými odchýlkami a návrhmi zmien.",
+      "editorsPick": "Výber redakcie",
+      "exampleReview": "Ukážka kontroly",
+      "featuredTitle": "Dobré miesto, kde začať",
+      "fromCommunity": "Od komunity",
+      "groups": {
+        "dataSources": "Zdroje údajov a integrácie",
+        "dataSourcesBody": "Pripojte autoritatívne registre a špecializované služby, keď spis vyžaduje externé informácie.",
+        "included": "Súčasťou stelly",
+        "includedBody": "Základné funkcie pripravené na použitie bez pridania samostatnej zručnosti alebo účtu.",
+        "skillsBody": "Opakovane použiteľné právne postupy s pokynmi, ktoré si môžete pred pridaním prezrieť."
+      },
+      "heroBody": "Zručnosti sú opakovane použiteľné právne postupy. Pridajte si postup na kontrolu zmlúv, rešerš autorít alebo prípravu dokumentov a pracujte vždy rovnakou metódou.",
+      "heroTitle": "Prispôsobte stellu právnej práci, ktorú práve riešite",
+      "howBody": "Zručnosť prevádza právnu metódu do kontrolovateľných pokynov. Pridajte ju raz a rovnaký postup potom použite vždy, keď ho potrebujete.",
+      "howTitle": "Čo je zručnosť?",
+      "includedBadge": "Súčasťou",
+      "jurisRankBody": "Posúďte autoritu precedensov argentínskeho Najvyššieho súdu podľa citačného vplyvu a doktrinálneho vývoja.",
+      "noResults": "Tomuto vyhľadávaniu zatiaľ nezodpovedajú žiadne nástroje.",
+      "openSkill": "Preskúmať zručnosť",
+      "review": {
+        "aligned": "V súlade",
+        "governingLaw": "Rozhodné právo",
+        "liabilityCap": "Limit zodpovednosti",
+        "missing": "Neuvedené",
+        "outsidePlaybook": "Mimo manuálu",
+        "termination": "Ukončenie"
+      },
+      "searchPlaceholder": "Čo potrebujete urobiť?",
+      "tasks": {
+        "prepareDocuments": "Pripraviť dokumenty",
+        "protectClientData": "Chrániť údaje klienta",
+        "researchPrecedents": "Vyhľadať precedensy",
+        "reviewAgreements": "Skontrolovať zmluvy",
+        "verifyOrganizations": "Preveriť organizáciu"
+      },
+      "tasksTitle": "Začnite právnou úlohou"
+    },
     "documentation": "Dokumentácia",
     "downloadUpstream": "Stiahnuť archív zdrojového repozitára",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Technológie",
       "whiteCollarCrime": "Hospodárska kriminalita"
     },
-    "recommendedIn": "Odporúčané v {codes}",
-    "stats": "{toolCount, plural, one {# nástroj} few {# nástroje} many {# nástroja} other {# nástrojov}} · {contributorCount, plural, one {# prispievateľ} few {# prispievatelia} many {# prispievateľa} other {# prispievateľov}}",
     "tokenHelp": "Ako získať token",
     "viewOnGithub": "Zobraziť na GitHube"
   },

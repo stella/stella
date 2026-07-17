@@ -297,7 +297,7 @@
     "empty": "Žádné položky neodpovídají aktuálnímu filtru.",
     "filter": {
       "mcps": "Integrace",
-      "nativeTools": "Vždy dostupné",
+      "nativeTools": "Vestavěné nástroje",
       "skills": "Dovednosti"
     },
     "filterHint": "Filtrováno: {codes}",
@@ -2145,6 +2145,47 @@
       "repoLink": "Procházet položky katalogu",
       "title": "Přispět nástrojem"
     },
+    "discovery": {
+      "allBody": "Prozkoumejte opakovaně použitelné postupy, důvěryhodné veřejné zdroje dat a funkce obsažené ve stelle.",
+      "allTitle": "Všechny nástroje",
+      "contractReviewBody": "Kontrolujte obchodní smlouvy ustanovení po ustanovení podle vyjednávacího manuálu, s přehledně označenými odchylkami a návrhy změn.",
+      "editorsPick": "Výběr redakce",
+      "exampleReview": "Ukázka kontroly",
+      "featuredTitle": "Dobré místo, kde začít",
+      "fromCommunity": "Od komunity",
+      "groups": {
+        "dataSources": "Datové zdroje a integrace",
+        "dataSourcesBody": "Připojte autoritativní rejstříky a specializované služby, když případ vyžaduje externí informace.",
+        "included": "Součástí stelly",
+        "includedBody": "Základní funkce připravené k použití bez přidání samostatné dovednosti nebo účtu.",
+        "skillsBody": "Opakovaně použitelné právní postupy s instrukcemi, které si můžete před přidáním prohlédnout."
+      },
+      "heroBody": "Dovednosti jsou opakovaně použitelné právní postupy. Přidejte si postup pro kontrolu smluv, rešerši autorit nebo přípravu dokumentů a pracujte pokaždé stejnou metodou.",
+      "heroTitle": "Přizpůsobte stellu právní práci, kterou právě řešíte",
+      "howBody": "Dovednost převádí právní metodu do kontrolovatelných instrukcí. Přidejte ji jednou a stejný postup pak použijte pokaždé, když jej potřebujete.",
+      "howTitle": "Co je dovednost?",
+      "includedBadge": "Součástí",
+      "jurisRankBody": "Posuďte autoritu precedentů argentinského Nejvyššího soudu podle citačního vlivu a doktrinálního vývoje.",
+      "noResults": "Tomuto hledání zatím neodpovídají žádné nástroje.",
+      "openSkill": "Prozkoumat dovednost",
+      "review": {
+        "aligned": "V souladu",
+        "governingLaw": "Rozhodné právo",
+        "liabilityCap": "Limit odpovědnosti",
+        "missing": "Neuvedeno",
+        "outsidePlaybook": "Mimo manuál",
+        "termination": "Ukončení"
+      },
+      "searchPlaceholder": "Co potřebujete udělat?",
+      "tasks": {
+        "prepareDocuments": "Připravit dokumenty",
+        "protectClientData": "Chránit data klienta",
+        "researchPrecedents": "Vyhledat precedenty",
+        "reviewAgreements": "Zkontrolovat smlouvy",
+        "verifyOrganizations": "Prověřit organizaci"
+      },
+      "tasksTitle": "Začněte právním úkolem"
+    },
     "documentation": "Dokumentace",
     "downloadUpstream": "Stáhnout archiv zdrojového repozitáře",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Technologie",
       "whiteCollarCrime": "Hospodářská kriminalita"
     },
-    "recommendedIn": "Doporučeno v {codes}",
-    "stats": "{toolCount, plural, one {# nástroj} few {# nástroje} many {# nástroje} other {# nástrojů}} · {contributorCount, plural, one {# přispěvatel} few {# přispěvatelé} many {# přispěvatele} other {# přispěvatelů}}",
     "tokenHelp": "Jak získat token",
     "viewOnGithub": "Zobrazit na GitHubu"
   },

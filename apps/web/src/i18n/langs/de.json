@@ -2145,6 +2145,47 @@
       "repoLink": "Katalogeinträge durchsuchen",
       "title": "Werkzeug beitragen"
     },
+    "discovery": {
+      "allBody": "Entdecken Sie wiederverwendbare Arbeitsabläufe, verlässliche öffentliche Datenquellen und in stella enthaltene Funktionen.",
+      "allTitle": "Alle Werkzeuge",
+      "contractReviewBody": "Prüfen Sie Wirtschaftsverträge Klausel für Klausel anhand eines Verhandlungsleitfadens; Abweichungen und Änderungsvorschläge werden klar hervorgehoben.",
+      "editorsPick": "Empfehlungen der Redaktion",
+      "exampleReview": "Beispielprüfung",
+      "featuredTitle": "Ein guter Ausgangspunkt",
+      "fromCommunity": "Aus der Community",
+      "groups": {
+        "dataSources": "Datenquellen und Integrationen",
+        "dataSourcesBody": "Binden Sie maßgebliche Register und spezialisierte Dienste ein, wenn eine Akte externe Informationen erfordert.",
+        "included": "In stella enthalten",
+        "includedBody": "Kernfunktionen, die ohne zusätzlichen Skill oder separates Konto sofort einsatzbereit sind.",
+        "skillsBody": "Wiederverwendbare juristische Arbeitsabläufe mit Anweisungen, die Sie vor dem Hinzufügen prüfen können."
+      },
+      "heroBody": "Skills sind wiederverwendbare juristische Arbeitsabläufe. Fügen Sie einen hinzu, um Verträge zu prüfen, Rechtsquellen zu recherchieren oder Dokumente stets nach derselben Methode vorzubereiten.",
+      "heroTitle": "Passen Sie stella an Ihre aktuelle juristische Arbeit an",
+      "howBody": "Ein Skill bildet eine juristische Methode in einsehbaren Anweisungen ab. Einmal hinzugefügt, lässt sich derselbe Ansatz bei jeder passenden Aufgabe wiederverwenden.",
+      "howTitle": "Was ist ein Skill?",
+      "includedBadge": "Enthalten",
+      "jurisRankBody": "Bewerten Sie die Autorität argentinischer Supreme-Court-Präzedenzfälle anhand ihres Zitationseinflusses und ihrer dogmatischen Entwicklung.",
+      "noResults": "Noch keine Werkzeuge entsprechen dieser Suche.",
+      "openSkill": "Skill ansehen",
+      "review": {
+        "aligned": "Konform",
+        "governingLaw": "Anwendbares Recht",
+        "liabilityCap": "Haftungsgrenze",
+        "missing": "Nicht angegeben",
+        "outsidePlaybook": "Außerhalb des Leitfadens",
+        "termination": "Kündigung"
+      },
+      "searchPlaceholder": "Was möchten Sie erledigen?",
+      "tasks": {
+        "prepareDocuments": "Dokumente vorbereiten",
+        "protectClientData": "Mandantendaten schützen",
+        "researchPrecedents": "Präzedenzfälle recherchieren",
+        "reviewAgreements": "Verträge prüfen",
+        "verifyOrganizations": "Organisation prüfen"
+      },
+      "tasksTitle": "Mit einer juristischen Aufgabe beginnen"
+    },
     "documentation": "Dokumentation",
     "downloadUpstream": "Upstream-Archiv herunterladen",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Technologierecht",
       "whiteCollarCrime": "Wirtschaftsstrafrecht"
     },
-    "recommendedIn": "Empfohlen in {codes}",
-    "stats": "{toolCount, plural, one {# Werkzeug} other {# Werkzeuge}} · {contributorCount, plural, one {# Mitwirkender} other {# Mitwirkende}}",
     "tokenHelp": "So erhalten Sie ein Token",
     "viewOnGithub": "Auf GitHub ansehen"
   },

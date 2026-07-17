@@ -2145,6 +2145,47 @@
       "repoLink": "Sirvi kataloogi kirjeid",
       "title": "Lisa tööriist"
     },
+    "discovery": {
+      "allBody": "Tutvuge korduskasutatavate töövoogude, usaldusväärsete avalike andmeallikate ja stellasse kuuluvate võimalustega.",
+      "allTitle": "Kõik tööriistad",
+      "contractReviewBody": "Vaadake ärilepingud läbirääkimisjuhendi alusel punkt-punktilt läbi; kõrvalekalded ja muudatusettepanekud tuuakse selgelt esile.",
+      "editorsPick": "Toimetaja valik",
+      "exampleReview": "Läbivaatuse näide",
+      "featuredTitle": "Hea koht alustamiseks",
+      "fromCommunity": "Kogukonnalt",
+      "groups": {
+        "dataSources": "Andmeallikad ja integratsioonid",
+        "dataSourcesBody": "Ühendage ametlikud registrid ja eriteenused, kui toimik vajab välist teavet.",
+        "included": "stellaga kaasas",
+        "includedBody": "Põhivõimalused, mida saab kasutada ilma eraldi oskust või kontot lisamata.",
+        "skillsBody": "Korduskasutatavad õigustöö vood, mille juhiseid saate enne lisamist kontrollida."
+      },
+      "heroBody": "Oskused on korduskasutatavad õigustöö vood. Lisage oskus, et lepinguid läbi vaadata, pretsedente uurida või dokumente alati sama meetodiga koostada.",
+      "heroTitle": "Kohandage stella käsil oleva õigustööga",
+      "howBody": "Oskus koondab õigusmeetodi kontrollitavateks juhisteks. Lisage see üks kord ja kasutage sama lähenemist iga kord, kui ülesanne tekib.",
+      "howTitle": "Mis on oskus?",
+      "includedBadge": "Kaasas",
+      "jurisRankBody": "Hinnake Argentina ülemkohtu pretsedentide autoriteeti viitamismõju ja doktrinaalse arengu kaudu.",
+      "noResults": "Sellele otsingule vastavaid tööriistu veel ei ole.",
+      "openSkill": "Tutvu oskusega",
+      "review": {
+        "aligned": "Kooskõlas",
+        "governingLaw": "Kohaldatav õigus",
+        "liabilityCap": "Vastutuse piir",
+        "missing": "Määramata",
+        "outsidePlaybook": "Juhendist väljas",
+        "termination": "Lõpetamine"
+      },
+      "searchPlaceholder": "Mida peate tegema?",
+      "tasks": {
+        "prepareDocuments": "Koosta dokumente",
+        "protectClientData": "Kaitse kliendiandmeid",
+        "researchPrecedents": "Uuri pretsedente",
+        "reviewAgreements": "Vaata lepinguid läbi",
+        "verifyOrganizations": "Kontrolli organisatsiooni"
+      },
+      "tasksTitle": "Alustage õigusülesandest"
+    },
     "documentation": "Dokumentatsioon",
     "downloadUpstream": "Laadi lähtehoidla arhiiv alla",
     "installConfirm": {
@@ -2184,8 +2225,6 @@
       "technology": "Tehnoloogiaõigus",
       "whiteCollarCrime": "Majanduskuriteod"
     },
-    "recommendedIn": "Soovitatud {codes} jaoks",
-    "stats": "{toolCount, plural, one {# tööriist} other {# tööriista}} · {contributorCount, plural, one {# kaastöötaja} other {# kaastöötajat}}",
     "tokenHelp": "Kuidas token hankida",
     "viewOnGithub": "Vaata GitHubis"
   },

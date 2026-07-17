@@ -300,7 +300,7 @@ type Messages = {
     "empty": "No entries match the current filter.";
     "filter": {
       "mcps": "Integrations";
-      "nativeTools": "Always available";
+      "nativeTools": "Built-in tools";
       "skills": "Skills";
     };
     "filterHint": "Filtered to {codes}";
@@ -2148,6 +2148,47 @@ type Messages = {
       "repoLink": "Browse catalogue entries";
       "title": "Contribute a tool";
     };
+    "discovery": {
+      "allBody": "Explore reusable workflows, trusted public data sources, and capabilities included with stella.";
+      "allTitle": "All tools";
+      "contractReviewBody": "Review commercial agreements clause by clause against a negotiation playbook, with deviations and suggested redlines surfaced clearly.";
+      "editorsPick": "Editor's picks";
+      "exampleReview": "Example review";
+      "featuredTitle": "A better place to start";
+      "fromCommunity": "From the community";
+      "groups": {
+        "dataSources": "Data sources and integrations";
+        "dataSourcesBody": "Connect authoritative registries and specialist services when a matter needs external information.";
+        "included": "Included with stella";
+        "includedBody": "Core capabilities that are ready to use without adding a separate skill or account.";
+        "skillsBody": "Reusable legal workflows with instructions you can inspect before adding them.";
+      };
+      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.";
+      "heroTitle": "Make stella fit the legal work in front of you";
+      "howBody": "A skill packages a legal method as inspectable instructions. Add it once, then reuse the same approach whenever the task comes up.";
+      "howTitle": "What is a skill?";
+      "includedBadge": "Included";
+      "jurisRankBody": "Assess the authority of Argentine Supreme Court precedents through citation influence and doctrinal evolution.";
+      "noResults": "No tools match this search yet.";
+      "openSkill": "Explore skill";
+      "review": {
+        "aligned": "Aligned";
+        "governingLaw": "Governing law";
+        "liabilityCap": "Liability cap";
+        "missing": "Not provided";
+        "outsidePlaybook": "Outside playbook";
+        "termination": "Termination";
+      };
+      "searchPlaceholder": "What do you need to do?";
+      "tasks": {
+        "prepareDocuments": "Prepare documents";
+        "protectClientData": "Protect client data";
+        "researchPrecedents": "Research precedents";
+        "reviewAgreements": "Review agreements";
+        "verifyOrganizations": "Verify an organization";
+      };
+      "tasksTitle": "Start with a legal task";
+    };
     "documentation": "Documentation";
     "downloadUpstream": "Download upstream archive";
     "installConfirm": {
@@ -2187,8 +2228,6 @@ type Messages = {
       "technology": "Technology";
       "whiteCollarCrime": "White-collar crime";
     };
-    "recommendedIn": "Recommended in {codes}";
-    "stats": "{toolCount, plural, one {# tool} other {# tools}} · {contributorCount, plural, one {# contributor} other {# contributors}}";
     "tokenHelp": "How to get a token";
     "viewOnGithub": "View on GitHub";
   };
