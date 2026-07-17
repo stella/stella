@@ -15,16 +15,19 @@ export type { ReportExportDeliveryMode, TrackedReportExport };
 type ReportExportTrackingStore = {
   exports: Record<string, TrackedReportExport>;
   finish: (exportId: string) => void;
+  registerToast: (exportId: string, toastId: string) => void;
+  takeToast: (exportId: string) => string | undefined;
   track: (reportExport: Omit<TrackedReportExport, "trackedAt">) => void;
+  toastIds: Record<string, string>;
 };
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const toastIds = new Map<string, string>();
+const MAX_USER_ID_LENGTH = 128;
 
 export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       exports: {},
       finish: (exportId) => {
         set((state) => {
@@ -32,6 +35,20 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
           delete exports[exportId];
           return { exports };
         });
+      },
+      registerToast: (exportId, toastId) => {
+        set((state) => ({
+          toastIds: { ...state.toastIds, [exportId]: toastId },
+        }));
+      },
+      takeToast: (exportId) => {
+        const toastId = get().toastIds[exportId];
+        set((state) => {
+          const toastIds = { ...state.toastIds };
+          delete toastIds[exportId];
+          return { toastIds };
+        });
+        return toastId;
       },
       track: (reportExport) => {
         set((state) => {
@@ -44,11 +61,12 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
           };
         });
       },
+      toastIds: {},
     }),
     {
       name: "stella.report-exports.active",
       partialize: ({ exports }) => ({ exports }),
-      version: 1,
+      version: 2,
       merge: (persisted, current) => ({
         ...current,
         exports: readTrackedExports(persisted),
@@ -61,14 +79,11 @@ export const registerReportExportToast = (
   exportId: string,
   toastId: string,
 ) => {
-  toastIds.set(exportId, toastId);
+  useReportExportTrackingStore.getState().registerToast(exportId, toastId);
 };
 
-export const takeReportExportToast = (exportId: string) => {
-  const toastId = toastIds.get(exportId);
-  toastIds.delete(exportId);
-  return toastId;
-};
+export const takeReportExportToast = (exportId: string) =>
+  useReportExportTrackingStore.getState().takeToast(exportId);
 
 const readTrackedExports = (
   persisted: unknown,
@@ -104,6 +119,10 @@ const isTrackedReportExport = (
     UUID_PATTERN.test(value.workspaceId) &&
     "mode" in value &&
     (value.mode === "workspace" || value.mode === "download") &&
+    "requestedBy" in value &&
+    typeof value.requestedBy === "string" &&
+    value.requestedBy.length > 0 &&
+    value.requestedBy.length <= MAX_USER_ID_LENGTH &&
     "trackedAt" in value &&
     typeof value.trackedAt === "number" &&
     Number.isFinite(value.trackedAt)

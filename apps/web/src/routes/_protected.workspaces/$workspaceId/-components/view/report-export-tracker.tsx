@@ -1,5 +1,5 @@
 import { useQueries, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
@@ -20,6 +20,7 @@ import {
   takeReportExportToast,
   useReportExportTrackingStore,
 } from "./report-export-tracking";
+import { trackedExportsForRequester } from "./report-export-tracking.logic";
 
 const POLL_INTERVAL_MS = 2000;
 
@@ -34,11 +35,13 @@ export const ReportExportTracker = ({
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const requestedBy = useRouteContext({
+    from: "/_protected",
+    select: (context) => context.user.id,
+  });
   const trackedExports = useReportExportTrackingStore(
     useShallow((state) =>
-      Object.values(state.exports).filter(
-        (reportExport) => reportExport.workspaceId === workspaceId,
-      ),
+      trackedExportsForRequester(state.exports, requestedBy, workspaceId),
     ),
   );
   const results = useQueries({
@@ -83,12 +86,15 @@ export const ReportExportTracker = ({
       .catch((error: unknown) => analytics.captureError(error));
 
     if (settledDetail === undefined) {
-      if (toastId !== undefined) {
-        stellaToast.update(toastId, {
-          type: "error",
-          title: t("workspaces.views.reportExport.failed"),
-          description: t("common.unexpectedError"),
-        });
+      const toast = {
+        type: "error" as const,
+        title: t("workspaces.views.reportExport.failed"),
+        description: t("common.unexpectedError"),
+      };
+      if (toastId === undefined) {
+        stellaToast.add(toast);
+      } else {
+        stellaToast.update(toastId, toast);
       }
       return;
     }
@@ -131,7 +137,9 @@ export const ReportExportTracker = ({
         action: {
           label: t("common.download"),
           onClick: () => {
-            void handleDownload();
+            handleDownload().catch((error: unknown) =>
+              analytics.captureError(error),
+            );
           },
         },
       };
@@ -175,7 +183,9 @@ export const ReportExportTracker = ({
         action: {
           label: t("workspaces.views.reportExport.openReport"),
           onClick: () => {
-            void handleOpen();
+            handleOpen().catch((error: unknown) =>
+              analytics.captureError(error),
+            );
           },
         },
       };

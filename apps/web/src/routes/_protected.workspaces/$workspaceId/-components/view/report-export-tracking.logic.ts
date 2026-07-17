@@ -3,6 +3,7 @@ export type ReportExportDeliveryMode = "workspace" | "download";
 export type TrackedReportExport = {
   exportId: string;
   mode: ReportExportDeliveryMode;
+  requestedBy: string;
   trackedAt: number;
   workspaceId: string;
 };
@@ -41,3 +42,14 @@ export const nextTrackedAt = (
   }
   return trackedAt;
 };
+
+export const trackedExportsForRequester = (
+  trackedExports: Record<string, TrackedReportExport>,
+  requestedBy: string,
+  workspaceId: string,
+): TrackedReportExport[] =>
+  Object.values(trackedExports).filter(
+    (reportExport) =>
+      reportExport.requestedBy === requestedBy &&
+      reportExport.workspaceId === workspaceId,
+  );

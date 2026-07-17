@@ -46,6 +46,17 @@ const requesterExports: {
   timestamp: string;
 }[] = [];
 
+const readRequesterExportPage = (cursor: string | undefined) =>
+  Result.gen(() =>
+    readReportExportHistory({
+      cursor,
+      limit: 2,
+      requestedBy: ids.userA1,
+      safeDb,
+      workspaceId: ids.wsA1,
+    }),
+  );
+
 beforeAll(async () => {
   const fixture = await getRlsFixture();
   testDb = fixture.testDb;
@@ -105,15 +116,7 @@ describe("report export history", () => {
 
     for (let pageNumber = 0; pageNumber < 7; pageNumber++) {
       // oxlint-disable-next-line no-await-in-loop -- each cursor comes from the preceding page
-      const result = await Result.gen(() =>
-        readReportExportHistory({
-          cursor,
-          limit: 2,
-          requestedBy: ids.userA1,
-          safeDb,
-          workspaceId: ids.wsA1,
-        }),
-      );
+      const result = await readRequesterExportPage(cursor);
       if (Result.isError(result)) {
         throw result.error;
       }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouteContext } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -77,13 +77,17 @@ export const ExportReportControl = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
+  const requestedBy = useRouteContext({
+    from: "/_protected",
+    select: (context) => context.user.id,
+  });
 
   const handleStarted = (exportId: string, mode: ReportExportDeliveryMode) => {
     const toastId = stellaToast.loading(t("common.preparing"));
     registerReportExportToast(exportId, toastId);
     useReportExportTrackingStore
       .getState()
-      .track({ exportId, mode, workspaceId });
+      .track({ exportId, mode, requestedBy, workspaceId });
     queryClient
       .invalidateQueries({ queryKey: reportExportsKeys.all(workspaceId) })
       .catch((error: unknown) => analytics.captureError(error));

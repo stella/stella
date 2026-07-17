@@ -44,7 +44,8 @@ export const ReportExportHistory = ({
       workspaceId,
     }),
   );
-  const reportExports = data?.pages.flatMap((page) => page.items) ?? [];
+  const reportExports =
+    data === undefined ? [] : data.pages.flatMap((page) => page.items);
 
   const handleDownload = async (exportId: string) => {
     setActiveActionId(exportId);
@@ -81,6 +82,18 @@ export const ReportExportHistory = ({
     }
   };
 
+  const handleDownloadClick = (exportId: string) => {
+    handleDownload(exportId).catch((error: unknown) =>
+      analytics.captureError(error),
+    );
+  };
+
+  const handleOpenClick = (entityId: string) => {
+    handleOpen(entityId).catch((error: unknown) =>
+      analytics.captureError(error),
+    );
+  };
+
   let content = (
     <p className="text-muted-foreground text-sm">{t("common.noResults")}</p>
   );
@@ -115,8 +128,8 @@ export const ReportExportHistory = ({
             </div>
             <ReportExportHistoryAction
               activeActionId={activeActionId}
-              onDownload={handleDownload}
-              onOpen={handleOpen}
+              onDownload={handleDownloadClick}
+              onOpen={handleOpenClick}
               reportExport={reportExport}
             />
           </li>
@@ -142,7 +155,9 @@ export const ReportExportHistory = ({
           className="mt-2 w-full"
           disabled={isFetchingNextPage}
           onClick={() => {
-            void fetchNextPage();
+            fetchNextPage().catch((error: unknown) =>
+              analytics.captureError(error),
+            );
           }}
           size="sm"
           type="button"
@@ -171,8 +186,8 @@ const REPORT_EXPORT_MODE_KEYS = {
 
 type ReportExportHistoryActionProps = {
   activeActionId: string | null;
-  onDownload: (exportId: string) => Promise<void>;
-  onOpen: (entityId: string) => Promise<void>;
+  onDownload: (exportId: string) => void;
+  onOpen: (entityId: string) => void;
   reportExport: {
     id: string;
     mode: ReportExportDeliveryMode;
@@ -197,7 +212,7 @@ const ReportExportHistoryAction = ({
       <Button
         disabled={activeActionId === reportExport.id}
         onClick={() => {
-          void onDownload(reportExport.id);
+          onDownload(reportExport.id);
         }}
         size="sm"
         type="button"
@@ -217,7 +232,7 @@ const ReportExportHistoryAction = ({
     <Button
       disabled={activeActionId === resultEntityId}
       onClick={() => {
-        void onOpen(resultEntityId);
+        onOpen(resultEntityId);
       }}
       size="sm"
       type="button"

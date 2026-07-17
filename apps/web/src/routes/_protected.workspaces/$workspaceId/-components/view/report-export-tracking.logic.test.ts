@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   nextTrackedAt,
   retainNewestTrackedExports,
+  trackedExportsForRequester,
 } from "./report-export-tracking.logic";
 import type { TrackedReportExport } from "./report-export-tracking.logic";
 
@@ -12,6 +13,7 @@ const trackedExport = (
 ): TrackedReportExport => ({
   exportId: `export-${index}`,
   mode: "workspace",
+  requestedBy: "user-1",
   trackedAt,
   workspaceId: "workspace-1",
 });
@@ -48,5 +50,17 @@ describe("report export tracking bounds", () => {
         50,
       ),
     ).toBe(52);
+  });
+
+  test("selects active exports by both requester and workspace", () => {
+    const retained = retainNewestTrackedExports([
+      trackedExport(1),
+      { ...trackedExport(2), requestedBy: "user-2" },
+      { ...trackedExport(3), workspaceId: "workspace-2" },
+    ]);
+
+    expect(
+      trackedExportsForRequester(retained, "user-1", "workspace-1"),
+    ).toEqual([trackedExport(1)]);
   });
 });

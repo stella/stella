@@ -3,6 +3,7 @@ import { and, desc, eq, lt, or } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
+import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   parsePgTimestampCursorValue,
@@ -16,7 +17,17 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import type { Page } from "@/api/lib/pagination";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
+
+type ReportExportHistoryItem = Pick<
+  typeof reportExports.$inferSelect,
+  "id" | "mode" | "resultEntityId" | "status"
+> & {
+  createdAt: string;
+};
+
+type ReportExportHistoryPage = Page<ReportExportHistoryItem>;
 
 type ReportExportHistoryOptions = {
   cursor: string | undefined;
@@ -60,7 +71,7 @@ export const readReportExportHistory = async function* ({
   requestedBy,
   safeDb,
   workspaceId,
-}: ReportExportHistoryOptions) {
+}: ReportExportHistoryOptions): SafeHandlerGenerator<ReportExportHistoryPage> {
   const cursorResult = parseReportExportCursor(cursor);
   if (Result.isError(cursorResult)) {
     return Result.err(cursorResult.error);
