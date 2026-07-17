@@ -8,7 +8,6 @@
  * keep `pendingOperation` for a later revert) and can never drift.
  */
 
-import { useRef } from "react";
 import type { RefObject } from "react";
 
 import { useRouteContext } from "@tanstack/react-router";
@@ -32,6 +31,16 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
+
+/**
+ * Per-suggestion server-mutation ordering queue, keyed by the globally unique
+ * suggestion id. Module-level (not a per-hook ref) so it is SHARED across every
+ * surface that mounts `useReviewActions` for the same suggestion — the review
+ * bar and the inspector panel are normally co-mounted, and an accept from one
+ * plus a revert from the other must still serialize against each other.
+ * Entries self-clean once their tail promise settles, so the map cannot grow.
+ */
+const docxSuggestionMutationChain = new Map<string, Promise<unknown>>();
 
 type ApplyOutcome = {
   status: "accepted" | "skipped";
@@ -222,21 +231,20 @@ export const useReviewActions = ({
   // AFTER the accept's resolve completes (server ends accepted, then the
   // revert legitimately flips it back to pending — consistent). Optimistic
   // local state changes stay immediate; only the network calls are ordered.
-  const mutationChainRef = useRef<Map<string, Promise<unknown>>>(new Map());
   const runSerialized = useLatestCallback(
     async (
       id: string,
       task: () => Promise<DocxResolveResult>,
     ): Promise<DocxResolveResult> => {
-      const prev = mutationChainRef.current.get(id) ?? Promise.resolve();
+      const prev = docxSuggestionMutationChain.get(id) ?? Promise.resolve();
       const next = prev.then(
         async () => await task(),
         async () => await task(),
       );
-      mutationChainRef.current.set(id, next);
+      docxSuggestionMutationChain.set(id, next);
       void next.finally(() => {
-        if (mutationChainRef.current.get(id) === next) {
-          mutationChainRef.current.delete(id);
+        if (docxSuggestionMutationChain.get(id) === next) {
+          docxSuggestionMutationChain.delete(id);
         }
       });
       return await next;

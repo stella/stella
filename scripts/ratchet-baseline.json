@@ -20,8 +20,9 @@
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 8,
+    "count": 9,
     "files": {
+      "apps/web/src/components/ai-suggestions/use-review-actions.ts": 1,
       "apps/web/src/components/chat/rehype-anon-spans.ts": 1,
       "apps/web/src/components/conditions/formula-editor.tsx": 1,
       "apps/web/src/lib/jurisdictions.ts": 1,
