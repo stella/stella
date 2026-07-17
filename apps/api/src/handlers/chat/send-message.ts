@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notExists } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -1493,7 +1493,7 @@ type LoadThreadResult =
   | {
       type: "created";
       data: ThreadRecord;
-      rollbackMarker: Date;
+      rollbackToken: string;
     };
 
 const MAX_THREAD_CLAIM_ATTEMPTS = 3;
@@ -1536,7 +1536,7 @@ const loadThreadAttempt = async ({
       dataWorkspaceIds: SafeId<"workspace">[];
       webSearchEnabled: boolean;
       chatModel: string | null;
-      updatedAt: Date;
+      rollbackToken: string | null;
     };
 
     const lookup = async () =>
@@ -1554,7 +1554,7 @@ const loadThreadAttempt = async ({
             dataWorkspaceIds: true,
             webSearchEnabled: true,
             chatModel: true,
-            updatedAt: true,
+            rollbackToken: true,
           },
         }),
       );
@@ -1591,26 +1591,30 @@ const loadThreadAttempt = async ({
       });
     };
 
-    // A created row remains rollback-owned only while its updatedAt marker is
-    // unchanged. Every adopter CAS-advances that marker before using the row.
+    // A created row remains rollback-owned only while its token is unchanged.
+    // Every adopter CAS-clears that token before using the row.
     // If rollback deletes first, the failed CAS retries and creates/claims the
     // replacement; if adoption wins, the creator's guarded delete is a no-op.
     const claimExisting = async (existing: ExistingThreadRow) => {
-      const claimedAt = new Date(
-        Math.max(Date.now(), existing.updatedAt.getTime() + 1),
-      );
-      return await safeDb(async (tx) =>
+      if (existing.rollbackToken === null) {
+        return Result.ok(true);
+      }
+      const claimResult = await safeDb(async (tx) =>
         await tx
           .update(chatThreads)
-          .set({ updatedAt: claimedAt })
+          .set({ rollbackToken: null })
           .where(
             and(
               eq(chatThreads.id, threadId),
-              eq(chatThreads.updatedAt, existing.updatedAt),
+              eq(chatThreads.rollbackToken, existing.rollbackToken),
             ),
           )
           .returning({ id: chatThreads.id }),
       );
+      if (Result.isError(claimResult)) {
+        return claimResult;
+      }
+      return Result.ok(claimResult.value.length > 0);
     };
 
     const retryAfterClaimRace = async () => {
@@ -1643,7 +1647,7 @@ const loadThreadAttempt = async ({
         return Result.err(existingResult.error);
       }
       const claimed = yield* Result.await(claimExisting(thread));
-      if (claimed.length === 0) {
+      if (!claimed) {
         return yield* Result.await(retryAfterClaimRace());
       }
       const windowedMessages = yield* Result.await(
@@ -1684,7 +1688,7 @@ const loadThreadAttempt = async ({
     const initialDataWorkspaceIds: SafeId<"workspace">[] = workspaceId
       ? [workspaceId]
       : [];
-    const rollbackMarker = new Date();
+    const rollbackToken = Bun.randomUUIDv7();
 
     const insertResult = await safeDb(async (tx) => {
       await tx.insert(chatThreads).values({
@@ -1694,7 +1698,7 @@ const loadThreadAttempt = async ({
         userId,
         workspaceId,
         contextMatterIds: initialContextMatterIds,
-        updatedAt: rollbackMarker,
+        rollbackToken,
         // Workspace-scoped chats embed at minimum their own
         // workspace's content. Global chats start with no
         // embedded workspace data; subsequent messages widen
@@ -1739,7 +1743,7 @@ const loadThreadAttempt = async ({
           return Result.err(recoveredResult.error);
         }
         const claimed = yield* Result.await(claimExisting(recovered));
-        if (claimed.length === 0) {
+        if (!claimed) {
           return yield* Result.await(retryAfterClaimRace());
         }
         const recoveredMessages = yield* Result.await(
@@ -1758,7 +1762,7 @@ const loadThreadAttempt = async ({
 
     return Result.ok<LoadThreadResult>({
       type: "created",
-      rollbackMarker,
+      rollbackToken,
       data: {
         id: threadId,
         workspaceId,
@@ -1867,7 +1871,13 @@ const rollbackUnpersistedChatSideEffects = async ({
       .where(
         and(
           eq(chatThreads.id, threadId),
-          eq(chatThreads.updatedAt, threadState.rollbackMarker),
+          eq(chatThreads.rollbackToken, threadState.rollbackToken),
+          notExists(
+            tx
+              .select({ id: chatMessages.id })
+              .from(chatMessages)
+              .where(eq(chatMessages.threadId, chatThreads.id)),
+          ),
         ),
       )
       .returning({ id: chatThreads.id });

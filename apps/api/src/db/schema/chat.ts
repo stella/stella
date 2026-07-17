@@ -49,6 +49,7 @@ export const chatThreads = p.pgTable(
       .$type<"ai" | "user">()
       .notNull()
       .default("user"),
+    rollbackToken: p.text("rollback_token"),
     /**
      * Matters the chat draws context from. Empty array (the
      * default) means "no specific matters pinned" — the AI
