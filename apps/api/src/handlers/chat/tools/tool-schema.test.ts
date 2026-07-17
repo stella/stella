@@ -16,7 +16,7 @@ import { createGeminiChat } from "@tanstack/ai-gemini";
 import { createMistralText } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import { convertFunctionToolToAdapterFormat } from "@tanstack/ai-openai/tools";
-import { createOpenRouterResponsesText } from "@tanstack/ai-openrouter";
+import { createOpenRouterText } from "@tanstack/ai-openrouter";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
@@ -122,33 +122,6 @@ const consumeProviderStream = async (
   for await (const _chunk of stream) {
     // Consume the fake provider stream so request mapping runs to completion.
   }
-};
-
-const collectInstalledOpenRouterChunks = async (
-  ...events: unknown[]
-): Promise<StreamChunk[]> => {
-  const adapter = createOpenRouterResponsesText("openai/gpt-5.2", "test-key");
-  Reflect.set(adapter, "orClient", {
-    beta: {
-      responses: {
-        send: () =>
-          (async function* () {
-            yield* events;
-          })(),
-      },
-    },
-  });
-  const chunks: StreamChunk[] = [];
-
-  for await (const chunk of adapter.chatStream({
-    logger: resolveDebugOption(false),
-    messages: [{ role: "user", content: "Answer carefully." }],
-    model: adapter.model,
-  })) {
-    chunks.push(chunk);
-  }
-
-  return chunks;
 };
 
 const requireRecord = (
@@ -364,18 +337,13 @@ const providerRequestProbes: ProviderRequestProbe[] = [
   {
     provider: "openrouter",
     capture: async (tools) => {
-      const adapter = createOpenRouterResponsesText(
-        "openai/gpt-5.2",
-        "test-key",
-      );
+      const adapter = createOpenRouterText("openai/gpt-5.2", "test-key");
       let request: unknown;
       Reflect.set(adapter, "orClient", {
-        beta: {
-          responses: {
-            send: (payload: unknown) => {
-              request = payload;
-              return emptyProviderStream();
-            },
+        chat: {
+          send: (payload: unknown) => {
+            request = payload;
+            return emptyProviderStream();
           },
         },
       });
@@ -388,14 +356,11 @@ const providerRequestProbes: ProviderRequestProbe[] = [
       return requireRecord(request, "OpenRouter SDK request");
     },
     toolsFromRequest: (request) => {
-      const responsesRequest = requireRecord(
-        request["responsesRequest"],
-        "OpenRouter responses request",
+      const chatRequest = requireRecord(
+        request["chatRequest"],
+        "OpenRouter chat request",
       );
-      return requireArray(
-        responsesRequest["tools"],
-        "OpenRouter request tools",
-      );
+      return requireArray(chatRequest["tools"], "OpenRouter request tools");
     },
   },
   {
@@ -1292,181 +1257,190 @@ describe("chat tool schemas", () => {
     });
   });
 
-  test("the installed OpenRouter adapter recovers completed response text", async () => {
-    const adapter = createOpenRouterResponsesText("openai/gpt-5.2", "test-key");
+  test("the installed OpenRouter adapter projects a complete tool-call round trip", async () => {
+    const adapter = createOpenRouterText("openai/gpt-5.2", "test-key");
+    const requests: unknown[] = [];
+    let invocationCount = 0;
     Reflect.set(adapter, "orClient", {
-      beta: {
-        responses: {
-          send: () =>
-            (async function* () {
+      chat: {
+        send: (request: unknown) => {
+          requests.push(request);
+          invocationCount += 1;
+          if (invocationCount === 1) {
+            return (async function* () {
               yield {
-                type: "response.created",
-                sequenceNumber: 0,
-                response: { model: adapter.model, output: [] },
-              };
-              yield {
-                type: "response.content_part.added",
-                sequenceNumber: 1,
-                outputIndex: 0,
-                contentIndex: 0,
-                itemId: "message-1",
-                part: { type: "output_text", text: "" },
-              };
-              yield {
-                type: "response.completed",
-                sequenceNumber: 2,
-                response: {
-                  model: adapter.model,
-                  output: [
-                    {
-                      id: "message-1",
-                      type: "message",
-                      role: "assistant",
-                      status: "completed",
-                      content: [
+                id: "completion-1",
+                model: adapter.model,
+                choices: [
+                  {
+                    delta: {
+                      toolCalls: [
                         {
-                          type: "output_text",
-                          text: "Recovered final answer",
-                          annotations: [],
+                          index: 0,
+                          id: "call-round-trip",
+                          type: "function",
+                          function: {
+                            name: "round_trip",
+                            arguments: '{"value":"stella"}',
+                          },
                         },
                       ],
                     },
-                  ],
-                  usage: {
-                    inputTokens: 5,
-                    outputTokens: 3,
-                    totalTokens: 8,
+                    finishReason: null,
                   },
+                ],
+              };
+              yield {
+                id: "completion-1",
+                model: adapter.model,
+                choices: [{ delta: {}, finishReason: "tool_calls" }],
+                usage: {
+                  promptTokens: 5,
+                  completionTokens: 3,
+                  totalTokens: 8,
                 },
               };
-            })(),
+            })();
+          }
+
+          return (async function* () {
+            yield {
+              id: "completion-2",
+              model: adapter.model,
+              choices: [
+                {
+                  delta: { content: "round-trip-complete" },
+                  finishReason: null,
+                },
+              ],
+            };
+            yield {
+              id: "completion-2",
+              model: adapter.model,
+              choices: [{ delta: {}, finishReason: "stop" }],
+              usage: {
+                promptTokens: 8,
+                completionTokens: 2,
+                totalTokens: 10,
+              },
+            };
+          })();
         },
       },
     });
+    const executedValues: string[] = [];
+    const roundTripTool = toolDefinition({
+      name: "round_trip",
+      description: "Return a confirmation value.",
+      inputSchema: toTanStackToolSchema(v.strictObject({ value: v.string() })),
+    }).server(({ value }) => {
+      executedValues.push(value);
+      return { confirmation: "round-trip-complete" };
+    });
+    const modelOptions = {
+      maxCompletionTokens: 64,
+    };
+    Reflect.set(modelOptions, "serviceTier", "flex");
     const chunks: StreamChunk[] = [];
 
     for await (const chunk of adapter.chatStream({
       logger: resolveDebugOption(false),
-      messages: [{ role: "user", content: "Answer carefully." }],
+      messages: [{ role: "user", content: "Run the round-trip tool." }],
       model: adapter.model,
+      modelOptions,
+      tools: [roundTripTool],
     })) {
       chunks.push(chunk);
     }
 
     expect(
-      chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT),
-    ).toEqual([
-      expect.objectContaining({
-        delta: "Recovered final answer",
-        content: "Recovered final answer",
-      }),
-    ]);
-    const eventTypes = chunks.map((chunk) => chunk.type);
-    const startIndex = eventTypes.indexOf(EventType.TEXT_MESSAGE_START);
-    const contentIndex = eventTypes.indexOf(EventType.TEXT_MESSAGE_CONTENT);
-    const endIndex = eventTypes.indexOf(EventType.TEXT_MESSAGE_END);
-    const finishedIndex = eventTypes.indexOf(EventType.RUN_FINISHED);
-
-    expect(startIndex).toBeGreaterThanOrEqual(0);
-    expect(contentIndex).toBeGreaterThan(startIndex);
-    expect(endIndex).toBeGreaterThan(contentIndex);
-    expect(finishedIndex).toBeGreaterThan(endIndex);
-  });
-
-  test("the installed OpenRouter adapter recovers output_text.done text", async () => {
-    const chunks = await collectInstalledOpenRouterChunks(
-      {
-        type: "response.created",
-        sequenceNumber: 0,
-        response: { model: "openai/gpt-5.2", output: [] },
-      },
-      {
-        type: "response.output_text.done",
-        sequenceNumber: 1,
-        outputIndex: 0,
-        contentIndex: 0,
-        itemId: "message-1",
-        logprobs: [],
-        text: "Recovered done-event answer",
-      },
-      {
-        type: "response.completed",
-        sequenceNumber: 2,
-        response: {
-          model: "openai/gpt-5.2",
-          output: [],
-          usage: {
-            inputTokens: 5,
-            outputTokens: 3,
-            totalTokens: 8,
-          },
-        },
-      },
+      chunks.find((chunk) => chunk.type === EventType.TOOL_CALL_END),
+    ).toMatchObject({
+      toolCallId: "call-round-trip",
+      toolCallName: "round_trip",
+      input: { value: "stella" },
+    });
+    const toolResult = await roundTripTool.execute?.(
+      { value: "stella" },
+      { emitCustomEvent: () => undefined },
     );
+    if (toolResult === undefined) {
+      throw new TypeError("Expected the round-trip tool to return a result.");
+    }
 
-    expect(
-      chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT),
-    ).toEqual([
-      expect.objectContaining({
-        delta: "Recovered done-event answer",
-        content: "Recovered done-event answer",
-      }),
-    ]);
-  });
-
-  test("the installed OpenRouter adapter recovers completed outputText", async () => {
-    const chunks = await collectInstalledOpenRouterChunks({
-      type: "response.completed",
-      sequenceNumber: 1,
-      response: {
-        model: "openai/gpt-5.2",
-        output: [],
-        outputText: "Recovered outputText answer",
-        usage: {
-          inputTokens: 5,
-          outputTokens: 3,
-          totalTokens: 8,
+    for await (const chunk of adapter.chatStream({
+      logger: resolveDebugOption(false),
+      messages: [
+        { role: "user", content: "Run the round-trip tool." },
+        {
+          role: "assistant",
+          content: null,
+          toolCalls: [
+            {
+              id: "call-round-trip",
+              type: "function",
+              function: {
+                name: "round_trip",
+                arguments: '{"value":"stella"}',
+              },
+            },
+          ],
         },
-      },
-    });
-
-    expect(
-      chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT),
-    ).toEqual([
-      expect.objectContaining({
-        delta: "Recovered outputText answer",
-        content: "Recovered outputText answer",
-      }),
-    ]);
-  });
-
-  test("the installed OpenRouter adapter normalizes raw completed output_text", async () => {
-    const chunks = await collectInstalledOpenRouterChunks({
-      isUnknown: true,
-      raw: {
-        type: "response.completed",
-        sequence_number: 1,
-        response: {
-          model: "openai/gpt-5.2",
-          output: [],
-          output_text: "Recovered raw output_text answer",
-          usage: {
-            input_tokens: 5,
-            output_tokens: 3,
-            total_tokens: 8,
-          },
+        {
+          role: "tool",
+          toolCallId: "call-round-trip",
+          content: JSON.stringify(toolResult),
         },
-      },
-    });
+      ],
+      model: adapter.model,
+      modelOptions,
+      tools: [roundTripTool],
+    })) {
+      chunks.push(chunk);
+    }
 
+    expect(executedValues).toEqual(["stella"]);
+    expect(requests).toHaveLength(2);
     expect(
       chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT),
     ).toEqual([
       expect.objectContaining({
-        delta: "Recovered raw output_text answer",
-        content: "Recovered raw output_text answer",
+        delta: "round-trip-complete",
+        content: "round-trip-complete",
       }),
     ]);
+
+    const secondRequest = requireRecord(requests.at(1), "second SDK request");
+    const chatRequest = requireRecord(
+      secondRequest["chatRequest"],
+      "second OpenRouter chat request",
+    );
+    expect(chatRequest).toMatchObject({
+      maxCompletionTokens: 64,
+      serviceTier: "flex",
+    });
+    expect(chatRequest["messages"]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: "assistant",
+          content: null,
+          toolCalls: [
+            expect.objectContaining({
+              id: "call-round-trip",
+              function: {
+                name: "round_trip",
+                arguments: '{"value":"stella"}',
+              },
+            }),
+          ],
+        }),
+        expect.objectContaining({
+          role: "tool",
+          toolCallId: "call-round-trip",
+          content: '{"confirmation":"round-trip-complete"}',
+        }),
+      ]),
+    );
   });
 
   test("Anthropic keeps an ordinary web_search function distinct from its native web-search tool", () => {

@@ -44,9 +44,8 @@ export const getTemperatureForRole = (role: ModelRole): number =>
  * disabled case.
  *
  * When `enabled`, `scopeKey` carries an optional stable string
- * used as the OpenAI `promptCacheKey` (cache-shard routing) and
- * surfaces in telemetry. `null` means no routing key; opportunistic
- * caching only.
+ * used as the OpenAI `prompt_cache_key` (cache-shard routing) and surfaces in
+ * telemetry. `null` means no routing key; opportunistic caching only.
  */
 export type CachingDecision =
   | { enabled: false; reason: "org-disabled" }

@@ -13,8 +13,8 @@ import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import {
-  createOpenRouterResponsesText,
-  type OpenRouterResponsesTextProviderOptions,
+  createOpenRouterText,
+  type OpenRouterTextModelOptions,
 } from "@tanstack/ai-openrouter";
 import { Result, panic } from "better-result";
 
@@ -48,8 +48,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
 const BYOK_CACHE_MAX = 64;
-const OPENROUTER_RESPONSES_MODEL_OPTIONS: OpenRouterResponsesTextProviderOptions =
-  {};
+
+type StellaOpenRouterTextModelOptions = OpenRouterTextModelOptions & {
+  // Supported by OpenRouter Chat Completions and its SDK, but currently
+  // omitted from @tanstack/ai-openrouter's public model-options type.
+  serviceTier?: "default" | "flex" | undefined;
+};
+
+const OPENROUTER_CHAT_MODEL_OPTIONS: StellaOpenRouterTextModelOptions = {};
 
 const isAIProvider = (value: string): value is AIProvider =>
   AI_PROVIDER_VALUES.has(value);
@@ -109,7 +115,7 @@ type TanStackModelOptionsByProvider = {
   google: StellaGeminiTextProviderOptions;
   mistral: MistralTextProviderOptions;
   openai: OpenAITextProviderOptions;
-  openrouter: OpenRouterResponsesTextProviderOptions;
+  openrouter: StellaOpenRouterTextModelOptions;
 };
 
 export type TanStackModelOptions<
@@ -374,11 +380,11 @@ const createExtendedOpenRouterAdapter = (
   modelId: string,
   apiKey: string,
 ): AnyTextAdapter => {
-  const openrouter = extendAdapter(createOpenRouterResponsesText, [
+  const openrouter = extendAdapter(createOpenRouterText, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
-      modelOptions: OPENROUTER_RESPONSES_MODEL_OPTIONS,
+      modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
     }),
   ]);
   return openrouter(modelId, apiKey);
@@ -1044,7 +1050,7 @@ const OPENROUTER_REASONING_EFFORT_BY_ROLE = {
 
 const tanStackOpenRouterModelOptionsForRole = ({
   role,
-}: TanStackModelOptionsForRoleInput<"openrouter">): OpenRouterResponsesTextProviderOptions => {
+}: TanStackModelOptionsForRoleInput<"openrouter">): StellaOpenRouterTextModelOptions => {
   const effort = OPENROUTER_REASONING_EFFORT_BY_ROLE[role];
   return {
     temperature: 0,
@@ -1076,7 +1082,7 @@ export function tanStackModelOptionsForRole(
 ): OpenAITextProviderOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"openrouter">,
-): OpenRouterResponsesTextProviderOptions;
+): StellaOpenRouterTextModelOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<TanStackTextProvider>,
 ): TanStackModelOptions {
