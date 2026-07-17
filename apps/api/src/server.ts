@@ -107,6 +107,7 @@ import {
   refreshS3,
 } from "@/api/lib/s3";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
+import { startSse, stopSse } from "@/api/lib/sse";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
@@ -519,6 +520,12 @@ const startS3RefreshLoop = () => {
 // schema mirror — must yield the fully constructed `api` without any of
 // these side effects (no DB, no Redis, no listen).
 const startServer = async (): Promise<void> => {
+  // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
+  // first, before any awaited setup below, so its connection timing
+  // matches the previous import-time behavior and completes well before
+  // `api.listen()` starts accepting requests.
+  startSse();
+
   // Schema-drift fail-fast. If the runtime expects migrations
   // the database has not received, exit before serving any
   // request against a stale schema.
@@ -564,6 +571,7 @@ const startServer = async (): Promise<void> => {
         "error.type": errorTag(error),
       });
     });
+    stopSse();
     await Promise.race([
       Promise.allSettled([
         workflowWorkers.close(),
