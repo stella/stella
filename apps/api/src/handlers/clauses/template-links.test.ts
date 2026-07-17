@@ -4,11 +4,11 @@ import {
   clauseBodyToPlainText,
   clauseBodyToRichPatch,
 } from "@/api/handlers/clauses/clause-to-patch";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   isOutdatedLink,
   isVariantDeleted,
 } from "@/api/lib/template-clause-links";
-import { toSafeId } from "@/api/lib/branded-types";
 
 describe("isOutdatedLink", () => {
   test("true when the pinned version trails the clause's current one", () => {
