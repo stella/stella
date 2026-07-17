@@ -142,12 +142,12 @@ describe("send message disconnect handling", () => {
     expect(insert).not.toHaveBeenCalled();
   });
 
-  test("preserves a committed thread when the request aborts during creation", async () => {
+  test("deletes an exclusively owned thread when the request aborts during creation", async () => {
     const abortController = new AbortController();
     const insertValues = mock(async () => {
       abortController.abort();
     });
-    const deleteThread = mock(() => ({ where: async () => undefined }));
+    const deleteReturning = mock(async () => [{ id: threadId }]);
 
     const result = await sendMessage.handler(
       createContext({
@@ -156,7 +156,9 @@ describe("send message disconnect handling", () => {
           signal: abortController.signal,
         }),
         transaction: {
-          delete: deleteThread,
+          delete: () => ({
+            where: () => ({ returning: deleteReturning }),
+          }),
           insert: () => ({ values: insertValues }),
           query: {
             chatThreads: { findFirst: async () => null },
@@ -171,6 +173,39 @@ describe("send message disconnect handling", () => {
       response: { message: "Client disconnected before AI work started" },
     });
     expect(insertValues).toHaveBeenCalledTimes(1);
-    expect(deleteThread).not.toHaveBeenCalled();
+    expect(deleteReturning).toHaveBeenCalledTimes(1);
+  });
+
+  test("preserves a thread whose ownership marker changed before rollback", async () => {
+    const abortController = new AbortController();
+    const insertValues = mock(async () => {
+      abortController.abort();
+    });
+    const deleteReturning = mock(async () => []);
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          delete: () => ({
+            where: () => ({ returning: deleteReturning }),
+          }),
+          insert: () => ({ values: insertValues }),
+          query: {
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(deleteReturning).toHaveBeenCalledTimes(1);
   });
 });

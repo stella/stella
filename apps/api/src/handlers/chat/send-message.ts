@@ -515,6 +515,16 @@ const sendMessage = createSafeRootHandler(
       });
 
       if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: [],
+            userId: user.id,
+          }),
+        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1483,9 +1493,23 @@ type LoadThreadResult =
   | {
       type: "created";
       data: ThreadRecord;
+      rollbackMarker: Date;
     };
 
-const loadThread = async ({
+const MAX_THREAD_CLAIM_ATTEMPTS = 3;
+
+const loadThread = async (
+  props: LoadThreadProps,
+): Promise<
+  Result<LoadThreadResult, HandlerError<400 | 404 | 409> | SafeDbError>
+> => await loadThreadAttempt({ ...props, claimAttempt: 0 });
+
+type LoadThreadAttemptProps = LoadThreadProps & {
+  claimAttempt: number;
+};
+
+const loadThreadAttempt = async ({
+  claimAttempt,
   initialContextMatterIds,
   isAnonymized,
   organizationId,
@@ -1495,8 +1519,8 @@ const loadThread = async ({
   title,
   userId,
   workspaceId,
-}: LoadThreadProps): Promise<
-  Result<LoadThreadResult, HandlerError<400 | 404> | SafeDbError>
+}: LoadThreadAttemptProps): Promise<
+  Result<LoadThreadResult, HandlerError<400 | 404 | 409> | SafeDbError>
 > =>
   await Result.gen(async function* () {
     // Look the thread up by id+user only. Filtering by workspaceId
@@ -1512,6 +1536,7 @@ const loadThread = async ({
       dataWorkspaceIds: SafeId<"workspace">[];
       webSearchEnabled: boolean;
       chatModel: string | null;
+      updatedAt: Date;
     };
 
     const lookup = async () =>
@@ -1529,6 +1554,7 @@ const loadThread = async ({
             dataWorkspaceIds: true,
             webSearchEnabled: true,
             chatModel: true,
+            updatedAt: true,
           },
         }),
       );
@@ -1565,11 +1591,60 @@ const loadThread = async ({
       });
     };
 
+    // A created row remains rollback-owned only while its updatedAt marker is
+    // unchanged. Every adopter CAS-advances that marker before using the row.
+    // If rollback deletes first, the failed CAS retries and creates/claims the
+    // replacement; if adoption wins, the creator's guarded delete is a no-op.
+    const claimExisting = async (existing: ExistingThreadRow) => {
+      const claimedAt = new Date(
+        Math.max(Date.now(), existing.updatedAt.getTime() + 1),
+      );
+      return await safeDb(async (tx) =>
+        await tx
+          .update(chatThreads)
+          .set({ updatedAt: claimedAt })
+          .where(
+            and(
+              eq(chatThreads.id, threadId),
+              eq(chatThreads.updatedAt, existing.updatedAt),
+            ),
+          )
+          .returning({ id: chatThreads.id }),
+      );
+    };
+
+    const retryAfterClaimRace = async () => {
+      if (claimAttempt >= MAX_THREAD_CLAIM_ATTEMPTS) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Chat thread changed concurrently; retry request",
+          }),
+        );
+      }
+      return await loadThreadAttempt({
+        claimAttempt: claimAttempt + 1,
+        initialContextMatterIds,
+        isAnonymized,
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+        threadId,
+        title,
+        userId,
+        workspaceId,
+      });
+    };
+
     const thread = yield* Result.await(lookup());
     if (thread) {
       const existingResult = buildExisting(thread);
       if (Result.isError(existingResult)) {
         return Result.err(existingResult.error);
+      }
+      const claimed = yield* Result.await(claimExisting(thread));
+      if (claimed.length === 0) {
+        return yield* Result.await(retryAfterClaimRace());
       }
       const windowedMessages = yield* Result.await(
         loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
@@ -1609,6 +1684,7 @@ const loadThread = async ({
     const initialDataWorkspaceIds: SafeId<"workspace">[] = workspaceId
       ? [workspaceId]
       : [];
+    const rollbackMarker = new Date();
 
     const insertResult = await safeDb(async (tx) => {
       await tx.insert(chatThreads).values({
@@ -1618,6 +1694,7 @@ const loadThread = async ({
         userId,
         workspaceId,
         contextMatterIds: initialContextMatterIds,
+        updatedAt: rollbackMarker,
         // Workspace-scoped chats embed at minimum their own
         // workspace's content. Global chats start with no
         // embedded workspace data; subsequent messages widen
@@ -1661,6 +1738,10 @@ const loadThread = async ({
         if (Result.isError(recoveredResult)) {
           return Result.err(recoveredResult.error);
         }
+        const claimed = yield* Result.await(claimExisting(recovered));
+        if (claimed.length === 0) {
+          return yield* Result.await(retryAfterClaimRace());
+        }
         const recoveredMessages = yield* Result.await(
           loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
         );
@@ -1677,6 +1758,7 @@ const loadThread = async ({
 
     return Result.ok<LoadThreadResult>({
       type: "created",
+      rollbackMarker,
       data: {
         id: threadId,
         workspaceId,
@@ -1775,7 +1857,35 @@ const rollbackUnpersistedChatSideEffects = async ({
     return fileRollbackResult;
   }
 
-  return Result.ok();
+  if (threadState.type !== "created") {
+    return Result.ok();
+  }
+
+  const threadRollbackResult = await safeDb(async (tx) => {
+    const deletedThreads = await tx
+      .delete(chatThreads)
+      .where(
+        and(
+          eq(chatThreads.id, threadId),
+          eq(chatThreads.updatedAt, threadState.rollbackMarker),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+
+    if (deletedThreads.length === 0) {
+      return;
+    }
+
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.DELETE,
+      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
+      resourceId: threadId,
+      workspaceId: threadState.data.workspaceId,
+      metadata: { reason: "rollback_unpersisted_chat_side_effects" },
+    });
+  });
+
+  return threadRollbackResult.andThen(() => Result.ok());
 };
 
 type PrepareChatContextProps = {
