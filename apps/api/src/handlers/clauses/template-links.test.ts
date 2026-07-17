@@ -7,7 +7,7 @@ import {
 import {
   isOutdatedLink,
   isVariantDeleted,
-} from "@/api/handlers/clauses/template-links";
+} from "@/api/lib/template-clause-links";
 import { toSafeId } from "@/api/lib/branded-types";
 
 describe("isOutdatedLink", () => {

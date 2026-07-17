@@ -4,7 +4,7 @@ import { t } from "elysia";
 import {
   linkClauseBodySchema,
   linkClauseHandler,
-} from "@/api/handlers/clauses/template-links";
+} from "@/api/lib/template-clause-links";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { updateClauseSlotHandler } from "@/api/handlers/clauses/template-links";
+import { updateClauseSlotHandler } from "@/api/lib/template-clause-links";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
