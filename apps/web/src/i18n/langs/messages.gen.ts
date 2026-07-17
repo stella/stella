@@ -904,6 +904,11 @@ type Messages = {
     "import": "Import";
     "invite": "Invite";
     "invoices": "Invoices";
+    "itemTypeValues": {
+      "event": "Event";
+      "fact": "Fact";
+      "requirement": "Requirement";
+    };
     "kind": "Kind";
     "language": "Language";
     "languages": {

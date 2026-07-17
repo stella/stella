@@ -6,6 +6,7 @@ import {
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "@tanstack/react-router";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -59,6 +60,7 @@ import type { WorkspaceView } from "@/lib/types";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
+import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import {
@@ -165,6 +167,7 @@ export const ViewSwitcher = ({
   onViewChange,
 }: ViewSwitcherProps) => {
   const t = useTranslations();
+  const navigate = useNavigate();
   const canCreateView = usePermissions({ view: ["create"] });
   const { data: views = [] } = useQuery(viewsOptions(workspaceId));
   const createView = useCreateView(workspaceId);
@@ -242,7 +245,16 @@ export const ViewSwitcher = ({
                   })
                 }
                 onReorder={handleReorder}
-                onSelect={() => onViewChange(view.id)}
+                onSelect={() => {
+                  if (includesListItems(view.layout.filters)) {
+                    void navigate({
+                      to: "/workspaces/$workspaceId/lists",
+                      params: { workspaceId },
+                    });
+                    return;
+                  }
+                  onViewChange(view.id);
+                }}
                 onStartRename={() => setRenamingViewId(view.id)}
                 onStopRename={() =>
                   setRenamingViewId((current) =>

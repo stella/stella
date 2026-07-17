@@ -53,9 +53,30 @@ export const brandPersistedEntityVersionId = (
   entityVersionId: string,
 ): SafeId<"entityVersion"> => toSafeId<"entityVersion">(entityVersionId);
 
-export const brandPersistedDocxSuggestionId = (
-  docxSuggestionId: string,
-): SafeId<"docxSuggestion"> => toSafeId<"docxSuggestion">(docxSuggestionId);
+  export const brandPersistedDocxSuggestionId = (
+    docxSuggestionId: string,
+  ): SafeId<"docxSuggestion"> => toSafeId<"docxSuggestion">(docxSuggestionId);
+export const brandPersistedLegalListId = (
+  listId: string,
+): SafeId<"legalList"> => toSafeId<"legalList">(listId);
+
+export const brandPersistedLegalListSectionId = (
+  sectionId: string,
+): SafeId<"legalListSection"> => toSafeId<"legalListSection">(sectionId);
+
+export const brandPersistedLegalListGenerationRunId = (
+  runId: string,
+): SafeId<"legalListGenerationRun"> =>
+  toSafeId<"legalListGenerationRun">(runId);
+
+export const brandPersistedLegalListItemSourceId = (
+  sourceId: string,
+): SafeId<"legalListItemSource"> => toSafeId<"legalListItemSource">(sourceId);
+
+export const brandPersistedLegalListGenerationCandidateId = (
+  candidateId: string,
+): SafeId<"legalListGenerationCandidate"> =>
+  toSafeId<"legalListGenerationCandidate">(candidateId);
 
 export const brandPersistedPropertyId = (
   propertyId: string,

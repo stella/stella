@@ -101,6 +101,7 @@ export type QueryEntityResult = {
   updatedAt: string | null;
   status: string | null;
   priority: string | null;
+  listItemType: string | null;
   dueDate: string | null;
   agendaKind: AgendaItemKind;
   startAt: string | null;
@@ -369,7 +370,8 @@ const dateSortKey = ({
   type: "date",
 });
 
-const displayedNameExpr = (): SQL => sql`${entities.displayName}`;
+const displayedNameExpr = (): SQL =>
+  sql`CASE WHEN ${entities.kind} = 'task' THEN ${entities.name} ELSE ${entities.displayName} END`;
 
 const propertySortValueExpr = (propertyId: string): SQL => sql`(
   SELECT COALESCE(
@@ -792,6 +794,7 @@ const queryEntitiesGenerator = async function* ({
           lastEditedByDeletedAt: lastEditor.deletedAt,
           status: entities.status,
           priority: entities.priority,
+          listItemType: entities.listItemType,
           dueDate: entities.dueDate,
           agendaKind: entities.agendaKind,
           startAt: entities.startAt,
@@ -1043,6 +1046,7 @@ const queryEntitiesGenerator = async function* ({
       updatedAt: entity.updatedAt?.toISOString() ?? null,
       status: entity.status,
       priority: entity.priority,
+      listItemType: entity.listItemType,
       dueDate: entity.dueDate,
       agendaKind: entity.agendaKind ?? AGENDA_ITEM_KIND.TASK,
       startAt: entity.startAt?.toISOString() ?? null,

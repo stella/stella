@@ -97,6 +97,7 @@ const createEntity = (overrides: Partial<EntityInput>): EntityInput => ({
   version: 1,
   status: null,
   priority: null,
+  listItemType: "event",
   dueDate: null,
   agendaKind: "event",
   startAt: null,

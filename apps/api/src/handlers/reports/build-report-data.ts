@@ -30,6 +30,7 @@ import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { isDocumentTypeClassifierShape } from "@/api/lib/properties/create-schema";
+import { excludedEntityKindsForView } from "@/api/lib/views";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { buildExportColumns } from "@/api/lib/views/export-columns";
 import { formatFieldContent } from "@/api/lib/views/export-format";
@@ -526,7 +527,7 @@ export const buildReportData = async ({
         limit: LIMITS.reportExportMaxRows + 1,
         fieldMode: "visible",
         fieldIds,
-        excludedKinds: ["folder", "task"],
+        excludedKinds: excludedEntityKindsForView(layout.filters),
       }),
     );
 

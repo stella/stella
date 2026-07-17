@@ -14,7 +14,7 @@ import { useSyncJustificationChunks } from "@/components/workspaces/hooks/use-sy
 import { workspaceTableFeatures } from "@/components/workspaces/table/table-features";
 import { useMountEffect } from "@/hooks/use-effect";
 import { detached } from "@/lib/detached";
-import type { WorkspaceView } from "@/lib/types";
+import type { EntityKind, WorkspaceView } from "@/lib/types";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
   useEntitiesWindowOptions,
@@ -32,6 +32,7 @@ import {
   useTableColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
+import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
@@ -71,7 +72,10 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     openIfAIUnavailable();
   });
 
-  if (view.layout.groupByPropertyId) {
+  if (
+    view.layout.groupByPropertyId &&
+    !includesListItems(view.layout.filters)
+  ) {
     return (
       <GroupedTableLayout
         key={tableKey}
@@ -90,6 +94,10 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const t = useTranslations();
   const tableState = useTableState({ workspaceId, view });
   const updateView = useUpdateView(workspaceId);
+  const showListItems = includesListItems(view.layout.filters);
+  const excludedKinds: EntityKind[] = showListItems
+    ? ["folder"]
+    : ["folder", "task"];
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const columns = useTableColumns({ properties, view });
@@ -109,7 +117,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         filters: view.layout.filters,
         sorts: view.layout.sorts,
         limit: DEFAULT_ENTITY_WINDOW_SIZE,
-        excludedKinds: ["folder", "task"],
+        excludedKinds,
         fieldMode: "visible",
         fieldIds,
       }),
@@ -120,11 +128,13 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       toTableEntities(
         data.pages.flatMap((window) =>
           window.entities.filter(
-            (entity) => entity.kind !== "folder" && entity.kind !== "task",
+            (entity) =>
+              entity.kind !== "folder" &&
+              (showListItems || entity.kind !== "task"),
           ),
         ),
       ),
-    [data.pages],
+    [data.pages, showListItems],
   );
   const justificationEntityIdChunks = useMemo(
     () =>

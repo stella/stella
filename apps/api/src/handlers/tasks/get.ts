@@ -77,6 +77,7 @@ const readTaskById = createSafeHandler(
                 status: true,
                 priority: true,
                 dueDate: true,
+                listItemType: true,
                 agendaKind: true,
                 startAt: true,
                 endAt: true,

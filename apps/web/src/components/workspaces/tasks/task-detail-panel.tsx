@@ -27,6 +27,7 @@ import {
 } from "@/components/inspector/inspector-tabs-store";
 import {
   isTaskPriority,
+  isListItemType,
   isTaskStatus,
   localISODate,
   toISODate,
@@ -39,6 +40,7 @@ import { LinksSection } from "@/components/workspaces/tasks/task-links";
 import {
   AssigneePicker,
   DatePickerPopover,
+  ItemTypeSelect,
   MetadataRow,
   OwnerPicker,
   PrioritySelect,
@@ -59,7 +61,11 @@ import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { taskDetailOptions, taskKeys } from "@/lib/workspaces/queries/tasks";
 
-import type { TaskPriority, TaskStatus } from "./task-detail-constants";
+import type {
+  ListItemType,
+  TaskPriority,
+  TaskStatus,
+} from "./task-detail-constants";
 
 // -- Component --
 
@@ -121,6 +127,7 @@ const TaskDetailPanelContent = ({
       priority?: string;
       dueDate?: string | null;
       workflowReason?: string;
+      listItemType?: string;
     }) => {
       const response = await api
         .tasks({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -342,6 +349,13 @@ const TaskDetailPanelContent = ({
     workflowMutation.mutate({ workingTargetDate: value });
   };
 
+  const handleItemTypeChange = (value: ListItemType | null) => {
+    if (!value) {
+      return;
+    }
+    updateMutation.mutate({ taskId, listItemType: value });
+  };
+
   const handleSubtaskToggle = (
     subtaskId: string,
     currentStatus: string | null,
@@ -444,6 +458,9 @@ const TaskDetailPanelContent = ({
   const currentPriority = isTaskPriority(task.priority)
     ? task.priority
     : "none";
+  const currentItemType = isListItemType(task.listItemType)
+    ? task.listItemType
+    : "task";
 
   const dueDateISO = toISODate(task.dueDate);
   const isOverdue =
@@ -574,6 +591,13 @@ const TaskDetailPanelContent = ({
 
         {/* Metadata */}
         <div className="space-y-3 px-4 py-3">
+          <MetadataRow label={tCommon("type")}>
+            <ItemTypeSelect
+              onChange={handleItemTypeChange}
+              value={currentItemType}
+            />
+          </MetadataRow>
+
           <MetadataRow label={t("status")}>
             <StatusSelect onChange={handleStatusChange} value={currentStatus} />
           </MetadataRow>

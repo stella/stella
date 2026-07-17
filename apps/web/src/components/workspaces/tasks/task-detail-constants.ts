@@ -22,6 +22,7 @@ import type {
 
 export { isTaskPriority, isTaskStatus, TASK_PRIORITIES, TASK_STATUSES };
 export type { TaskPriority, TaskStatus };
+import type { TranslationKey } from "@/i18n/types";
 
 /** Normalize a date value that may be a Date object (Eden
  *  transforms `format: "date"`) or a YYYY-MM-DD string. */
@@ -44,6 +45,31 @@ export const localISODate = (date = new Date()): string => {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+export const LIST_ITEM_TYPES = [
+  "task",
+  "fact",
+  "issue",
+  "requirement",
+  "event",
+] as const;
+
+export type ListItemType = (typeof LIST_ITEM_TYPES)[number];
+
+export const ITEM_TYPE_TRANSLATION_KEYS = {
+  event: "common.itemTypeValues.event",
+  fact: "common.itemTypeValues.fact",
+  issue: "knowledge.playbooks.issueLabel",
+  requirement: "common.itemTypeValues.requirement",
+  task: "search.kinds.task",
+} as const satisfies Record<ListItemType, TranslationKey>;
+
+export const isListItemType = (
+  value: string | null | undefined,
+): value is ListItemType =>
+  value !== null &&
+  value !== undefined &&
+  LIST_ITEM_TYPES.some((itemType) => itemType === value);
 
 export const STATUS_ICONS = {
   open: CircleIcon,
