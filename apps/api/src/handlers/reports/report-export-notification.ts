@@ -60,8 +60,10 @@ export const notifyReportExportStatus = async ({
 }: NotifyReportExportStatusOptions): Promise<ReportExportNotificationResult> => {
   const claimResult = await Result.tryPromise(
     async () =>
-      await scopedDb((tx) =>
-        tx
+      await scopedDb(async (tx) => {
+        // audit: skip — atomic delivery-bookkeeping claim on an
+        // already-audited export row.
+        return await tx
           .update(reportExports)
           .set({
             notificationAttemptedAt: new Date(),
@@ -79,8 +81,8 @@ export const notifyReportExportStatus = async ({
           .returning({
             lang: reportExports.notificationLang,
             status: reportExports.status,
-          }),
-      ),
+          });
+      }),
   );
   if (Result.isError(claimResult)) {
     captureNotificationError(claimResult.error, {

@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
 import type {
   ReportExportNotificationStatus,
@@ -316,7 +315,7 @@ const scopedDbFor = ({
 }: {
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
-}): ScopedDb => createScopedDb(testDb, [workspaceId], ids.orgA, userId);
+}) => createScopedDb(testDb, [workspaceId], ids.orgA, userId);
 
 type CreateRecordingDeliveryOptions = {
   sendError?: Error;

@@ -33,8 +33,8 @@ export const listPendingReportExportNotifications = async () => {
     .orderBy(asc(reportExports.createdAt), asc(reportExports.id))
     .limit(REPORT_EXPORT_NOTIFICATION_RECONCILE_LIMIT);
 
-  const abandonedExportIds = rows.flatMap(({ exportId, userId }) =>
-    userId === null ? [exportId] : [],
+  const abandonedExportIds = rows.flatMap((row) =>
+    row.userId === null ? [row.exportId] : [],
   );
   let suppressed = 0;
   if (abandonedExportIds.length > 0) {
