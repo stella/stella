@@ -21,6 +21,8 @@ export * from "./schema/relations";
 export {
   ACCOUNT_DELETION_REQUEST_STATUSES,
   BILLING_STATUS,
+  CHAT_TITLE_SOURCE,
+  CHAT_TITLE_SOURCES,
   ENTITY_KINDS,
   EXPENSE_CATEGORIES,
   PROPERTY_ROLES,
@@ -48,6 +50,7 @@ export type {
   CellMetadata,
   ChatCompactionSummary,
   ChatMessageRole,
+  ChatTitleSource,
   ClauseBody,
   ClauseMetadata,
   ConditionNode,

@@ -2,7 +2,8 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
+import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -97,17 +98,22 @@ Assistant: ${assistantText}`,
         },
       });
 
-      if (!currentThread || currentThread.titleSource !== "user") {
+      // Only replace a still-default placeholder title. A "user" rename or a
+      // prior "ai" title is left untouched: the generator writes once, and a
+      // rename that raced this fire-and-forget path must win.
+      if (!currentThread || !aiTitlingMayReplace(currentThread.titleSource)) {
         return false;
       }
 
       const updatedRows = await tx
         .update(chatThreads)
-        .set({ title, titleSource: "ai" })
+        .set({ title, titleSource: CHAT_TITLE_SOURCE.AI })
         .where(
           and(
             eq(chatThreads.id, threadId),
-            eq(chatThreads.titleSource, "user"),
+            // Re-check inside the UPDATE so a rename committing between the
+            // read above and this write cannot be clobbered.
+            eq(chatThreads.titleSource, CHAT_TITLE_SOURCE.DEFAULT),
           ),
         )
         .returning({ id: chatThreads.id });
@@ -123,7 +129,10 @@ Assistant: ${assistantText}`,
         workspaceId: threadWorkspaceId,
         changes: {
           title: { old: currentThread.title, new: title },
-          titleSource: { old: currentThread.titleSource, new: "ai" },
+          titleSource: {
+            old: currentThread.titleSource,
+            new: CHAT_TITLE_SOURCE.AI,
+          },
         },
       });
 

@@ -3,7 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { defaultDatabaseRetry } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -79,7 +79,13 @@ const renameThread = createSafeRootHandler(
           return [];
         }
 
-        await tx.update(chatThreads).set({ title }).where(threadPredicate());
+        // Stamp titleSource="user" so the fire-and-forget AI title generator
+        // (which only replaces "default") can never overwrite this rename,
+        // even when it lands after a just-created thread's rename.
+        await tx
+          .update(chatThreads)
+          .set({ title, titleSource: CHAT_TITLE_SOURCE.USER })
+          .where(threadPredicate());
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
