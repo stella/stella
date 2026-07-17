@@ -144,6 +144,7 @@ export default defineConfig({
     "no-raw-public-law-seo/no-raw-public-law-seo": "off",
     "public-case-law-db-boundary/public-case-law-db-boundary": "off",
     "require-contained-handler/require-contained-handler": "error",
+    "require-function-replacer/require-function-replacer": "error",
     "no-void": ["error", { allowAsStatement: true }],
 
     // --- Disabled ultracite defaults ---
@@ -349,6 +350,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/require-eden-error-check.ts",
+    "./.oxlint-plugins/require-function-replacer.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
     "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/no-bare-error.ts",

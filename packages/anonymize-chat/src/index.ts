@@ -215,7 +215,7 @@ const restoreLiteralPlaceholders = (
 ): string => {
   let result = text;
   for (const [sentinel, placeholder] of restoreMap) {
-    result = result.replaceAll(sentinel, placeholder);
+    result = result.replaceAll(sentinel, () => placeholder);
   }
   return result;
 };

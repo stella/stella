@@ -580,11 +580,14 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     }
     // Drop new uploads into knowledge/ by default. The user can rename
     // afterward if they want a different folder.
+    const extMatch = /(?<ext>\.[^.]+)?$/u.exec(sanitizedName);
+    const ext = extMatch?.groups?.["ext"] ?? "";
+    const stem = ext ? sanitizedName.slice(0, -ext.length) : sanitizedName;
     let path = `knowledge/${sanitizedName}`;
     let suffix = 1;
     while (existingPaths.has(path)) {
       suffix += 1;
-      path = `knowledge/${sanitizedName.replace(/(?<ext>\.[^.]+)?$/u, `-${suffix}$<ext>`)}`;
+      path = `knowledge/${stem}-${suffix}${ext}`;
     }
     if (binary) {
       uploadResource.mutate({ path, file });

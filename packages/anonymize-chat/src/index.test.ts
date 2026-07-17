@@ -113,7 +113,10 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
           let redactedText = fullText;
           for (const [idx, entity] of entities.entries()) {
             const placeholder = `[${entity.label.toUpperCase()}_${idx + 1}]`;
-            redactedText = redactedText.replaceAll(entity.text, placeholder);
+            redactedText = redactedText.replaceAll(
+              entity.text,
+              () => placeholder,
+            );
             redactionMap.set(placeholder, entity.text);
             operatorMap.set(placeholder, "replace");
           }
@@ -139,7 +142,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     deanonymise: (redactedText, redactionMap) => {
       let result = redactedText;
       for (const [placeholder, original] of redactionMap) {
-        result = result.replaceAll(placeholder, original);
+        result = result.replaceAll(placeholder, () => original);
       }
       return result;
     },

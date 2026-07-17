@@ -110,9 +110,9 @@ export const toScopeKey = (pattern: string, now: Date): string => {
   const mm = String(now.getMonth() + 1).padStart(2, "0");
 
   return pattern
-    .replaceAll("{YYYY}", yyyy)
-    .replaceAll("{YY}", yy)
-    .replaceAll("{MM}", mm)
+    .replaceAll("{YYYY}", () => yyyy)
+    .replaceAll("{YY}", () => yy)
+    .replaceAll("{MM}", () => mm)
     .replaceAll("{SEQ}", "");
 };
 
@@ -143,8 +143,8 @@ export const toReference = ({
   const paddedSeq = String(seq).padStart(padding, "0");
 
   return pattern
-    .replaceAll("{YYYY}", yyyy)
-    .replaceAll("{YY}", yy)
-    .replaceAll("{MM}", mm)
-    .replaceAll("{SEQ}", paddedSeq);
+    .replaceAll("{YYYY}", () => yyyy)
+    .replaceAll("{YY}", () => yy)
+    .replaceAll("{MM}", () => mm)
+    .replaceAll("{SEQ}", () => paddedSeq);
 };

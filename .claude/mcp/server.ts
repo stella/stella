@@ -169,7 +169,7 @@ const parseMarkdownLinks = (line: string) => {
 const stripMarkdownFormatting = (value: string) => {
   let text = value;
   for (const { title, matchedText } of parseMarkdownLinks(value)) {
-    text = text.replaceAll(matchedText, title);
+    text = text.replaceAll(matchedText, () => title);
   }
 
   return text

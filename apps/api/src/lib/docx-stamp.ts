@@ -293,7 +293,7 @@ const ensureContentType = async (archive: DocxArchive): Promise<void> => {
     ` ContentType="${CUSTOM_PROPS_CONTENT_TYPE}"/>`;
   archive.zip.file(
     CONTENT_TYPES_PATH,
-    ct.replace("</Types>", `${override}\n</Types>`),
+    ct.replace("</Types>", () => `${override}\n</Types>`),
   );
 };
 
@@ -330,7 +330,7 @@ const ensureCustomPropsRelationship = async (
     relsPath,
     rels.replace(
       "</Relationships>",
-      `<Relationship Id=${rel}\n</Relationships>`,
+      () => `<Relationship Id=${rel}\n</Relationships>`,
     ),
   );
 };
@@ -718,13 +718,13 @@ const addFooterReference = (docXml: string, footerRId: string): string => {
 
   // If there's already a sectPr, add footer reference inside
   if (docXml.includes("<w:sectPr")) {
-    return docXml.replace(SECT_PR_RE, `$<sect>\n    ${footerRef}`);
+    return docXml.replace(SECT_PR_RE, (match) => `${match}\n    ${footerRef}`);
   }
 
   // No sectPr: create one before </w:body>
   return docXml.replace(
     CLOSING_BODY_RE,
-    `<w:sectPr>${footerRef}</w:sectPr>\n</w:body>`,
+    () => `<w:sectPr>${footerRef}</w:sectPr>\n</w:body>`,
   );
 };
 
