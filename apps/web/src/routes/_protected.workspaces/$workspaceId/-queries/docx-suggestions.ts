@@ -13,10 +13,6 @@ const DOCX_SUGGESTIONS_HYDRATION_LIMIT = 200;
 // past any realistic pending set for one entity; a capped pending hydration is
 // reported (never silently truncated) so the missing tail is observable.
 const DOCX_SUGGESTIONS_PENDING_MAX = 1000;
-// Resolved history (accepted / rejected) is hydrated best-effort so the panel's
-// reviewed section survives a reload, capped per status so old resolutions can
-// never starve the pending set. Truncating this tail is acceptable.
-const DOCX_SUGGESTIONS_RESOLVED_MAX = 200;
 
 type DocxSuggestionsKey = {
   workspaceId: string;
@@ -80,14 +76,14 @@ export const docxSuggestionsOptions = ({
         return { items, nextCursor };
       };
 
-      // Hydrate pending completely and resolved history best-effort, in
-      // parallel to minimize round-trips. Pending is never truncated by
-      // history because it pages under its own high cap.
-      const [pending, accepted, rejected] = await Promise.all([
-        pageStatus("pending", DOCX_SUGGESTIONS_PENDING_MAX),
-        pageStatus("accepted", DOCX_SUGGESTIONS_RESOLVED_MAX),
-        pageStatus("rejected", DOCX_SUGGESTIONS_RESOLVED_MAX),
-      ]);
+      // Hydrate only the PENDING rows — the actionable set — and page them
+      // completely so history can never crowd them out. Resolved rows are
+      // deliberately not re-fetched on reload: accepted changes already live
+      // in the document (as tracked changes) and rejected ones are gone, so
+      // the reviewed section simply starts empty. This also keeps hydration to
+      // a single request per document open (the route network budget), rather
+      // than fanning out to a request per status.
+      const pending = await pageStatus("pending", DOCX_SUGGESTIONS_PENDING_MAX);
 
       // A live cursor after the pending loop means the cap stopped us short
       // with more pending rows still available. Surface it so a truncated
@@ -100,8 +96,6 @@ export const docxSuggestionsOptions = ({
         );
       }
 
-      return {
-        items: [...pending.items, ...accepted.items, ...rejected.items],
-      };
+      return { items: pending.items };
     },
   });
