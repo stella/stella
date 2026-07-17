@@ -134,7 +134,6 @@
     "billable": "قابل للفوترة",
     "billedAmount": "المبلغ المُفوتر",
     "codes": {
-      "active": "نشط",
       "activity": "النشاط",
       "activityCode": "رمز النشاط",
       "codeLabel": "الرمز",
@@ -558,8 +557,7 @@
     },
     "suggestionStatus": {
       "accepted": "مُطبَّق",
-      "rejected": "مرفوض",
-      "stale": "قديم"
+      "rejected": "مرفوض"
     },
     "tabToAsk": "→ للسؤال: «{prompt}»",
     "thinking": "العمل مع السياق",
@@ -629,6 +627,7 @@
       "read_changes": "قراءة التغييرات المتعقبة",
       "read_comments": "قراءة التعليقات",
       "read_document": "قراءة المستند",
+      "remember": "الحفظ في الذاكرة",
       "reply_comment": "الرد على التعليق",
       "resolve_comment": "حل التعليق",
       "run-stella-query": "قراءة بيانات الملف",
@@ -772,6 +771,7 @@
   "common": {
     "accept": "قبول",
     "actions": "الإجراءات",
+    "active": "نشط",
     "add": "إضافة",
     "all": "الكل",
     "and": "و",
@@ -798,6 +798,7 @@
       "socialSecurityNumber": "رقم الضمان الاجتماعي",
       "taxIdentificationNumber": "الرقم الضريبي"
     },
+    "archive": "أرشفة",
     "back": "رجوع",
     "cancel": "إلغاء",
     "captions": "التسميات التوضيحية",
@@ -944,6 +945,7 @@
     "rename": "إعادة تسمية",
     "required": "مطلوب",
     "reset": "إعادة تعيين",
+    "restore": "استعادة",
     "retry": "إعادة المحاولة",
     "role": "الدور",
     "run": "تشغيل",
@@ -963,6 +965,7 @@
     "signOut": "تسجيل الخروج",
     "somethingWentWrong": "حدث خطأ ما",
     "sort": "فرز",
+    "stale": "قديم",
     "status": "الحالة",
     "stepProgress": "{current} من {total}",
     "summarizeChanges": "تلخيص التغييرات",
@@ -1971,7 +1974,6 @@
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restore": "Restore",
         "restoreFailed": "Failed to restore version",
         "restoredToast": "Version restored",
         "versionHistory": "Version history"
@@ -2068,6 +2070,44 @@
     "rawLabel": "مصدر Markdown",
     "showFormatted": "منسَّق",
     "showRaw": "عرض المصدر الخام"
+  },
+  "memory": {
+    "addPlaceholder": "أضف ملاحظة ليتذكرها المساعد…",
+    "alreadyExistsToast": "هذه الذاكرة محفوظة بالفعل",
+    "archivedEmpty": "لا توجد ذاكرة مؤرشفة.",
+    "archivedToast": "تمت أرشفة الذاكرة",
+    "createdToast": "تم الحفظ في الذاكرة",
+    "empty": "لا توجد ذاكرة بعد.",
+    "kinds": {
+      "decision": "قرار",
+      "fact": "حقيقة",
+      "instruction": "تعليمات",
+      "preference": "تفضيل",
+      "relationship": "علاقة"
+    },
+    "matterPicker": {
+      "empty": "اختر ملفًا لعرض ذاكرته.",
+      "placeholder": "اختر ملفًا"
+    },
+    "pageDescription": "ملاحظات وسياق يتذكرها المساعد عبر المحادثات.",
+    "pageTitle": "الذاكرة",
+    "provenance": "{source} · {date}",
+    "restoredToast": "تمت استعادة الذاكرة",
+    "sources": {
+      "extracted": "مُستخرَج",
+      "tool": "أداة",
+      "user": "أضفته أنت"
+    },
+    "suggestionsDescription": "اقترح المساعد تذكُّر هذه العناصر. اقبلها للاحتفاظ بها أو ارفضها لتجاهلها.",
+    "suggestionsTitle": "اقتراحات",
+    "tabs": {
+      "firm": "مكتبة الفريق",
+      "matter": "هذا الملف",
+      "mine": "ملاحظاتي"
+    },
+    "views": {
+      "archived": "مؤرشفة"
+    }
   },
   "navigation": {
     "chat": "محادثة",
@@ -2166,7 +2206,6 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "نشط",
       "addProvider": "إضافة مزوّد",
       "addProviderFirst": "أضف مزوّدًا أولًا",
       "apiKey": "مفتاح API",
@@ -2500,6 +2539,11 @@
       "matterNumbering": "ترقيم الملفات",
       "matterNumberingDescription": "اضبط كيفية توليد أرقام مراجع الملفات الجديدة",
       "membersDescription": "أدِر من له حق الوصول إلى هذه المؤسسة وأي دعوات معلَّقة",
+      "memoryExtraction": {
+        "description": "عند التفعيل، تراجع stella في الخلفية سلاسل المحادثات المُلخَّصة وتقترح عناصر ذاكرة يجب أن يؤكدها شخص قبل أن تؤثر على المساعد. يعمل ذلك باستخدام مفتاح مزوّد الذكاء الاصطناعي الخاص بفريقك، لذا اتركه مُعطَّلاً ما لم ترغب في احتساب استخدام الذكاء الاصطناعي هذا في الخلفية على مفتاحك.",
+        "title": "استخراج الذاكرة",
+        "toggleLabel": "اقتراح عناصر الذاكرة من سجل المحادثات في الخلفية"
+      },
       "pendingInvitations": "الدعوات المعلَّقة",
       "practiceJurisdictions": "الولايات القضائية",
       "practiceJurisdictionsDescription": "اختر الولايات القضائية ذات الصلة بك.",
@@ -2529,7 +2573,6 @@
       "usageManageError": "تعذّر فتح إدارة الاستخدام المُستضافة",
       "usageManuallyManaged": "مُدار يدويًا",
       "usageSeats": "{count, plural, zero {# مقعد} one {مقعد واحد} two {مقعدان} few {# مقاعد} many {# مقعدًا} other {# مقعد}}",
-      "usageStatusActive": "نشط",
       "usageStatusCancelled": "مُلغى",
       "usageStatusPastDue": "متأخر السداد",
       "usageStatusPaused": "موقوف مؤقتًا",
@@ -2628,6 +2671,7 @@
     "matterNumberingUpdated": "تم تحديث ترقيم الملفات",
     "memberAdded": "تمت إضافة العضو",
     "memberRemoved": "تمت إزالة العضو",
+    "memoryExtractionUpdated": "تم تحديث تفضيل استخراج الذاكرة",
     "organizationUpdated": "تم تحديث المؤسسة",
     "otherSessionsRevoked": "تم إبطال الجلسات الأخرى",
     "partyAdded": "تمت إضافة الطرف",
@@ -3066,7 +3110,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "أرشفة",
     "copyToMatter": {
       "copied": "تم النسخ إلى الملف",
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",

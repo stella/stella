@@ -35,6 +35,10 @@ export const brandPersistedStyleSetId = (
   styleSetId: string,
 ): SafeId<"styleSet"> => toSafeId<"styleSet">(styleSetId);
 
+export const brandPersistedAiMemoryId = (
+  aiMemoryId: string,
+): SafeId<"aiMemory"> => toSafeId<"aiMemory">(aiMemoryId);
+
 export const brandPersistedEntityId = (entityId: string): SafeId<"entity"> =>
   toSafeId<"entity">(entityId);
 

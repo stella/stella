@@ -137,7 +137,6 @@ type Messages = {
     "billable": "Billable";
     "billedAmount": "Billed amount";
     "codes": {
-      "active": "Active";
       "activity": "Activity";
       "activityCode": "Activity code";
       "codeLabel": "Code";
@@ -562,7 +561,6 @@ type Messages = {
     "suggestionStatus": {
       "accepted": "Applied";
       "rejected": "Rejected";
-      "stale": "Stale";
     };
     "tabToAsk": "→ to ask: \"{prompt}\"";
     "thinking": "Working with context";
@@ -632,6 +630,7 @@ type Messages = {
       "read_changes": "Reading tracked changes";
       "read_comments": "Reading comments";
       "read_document": "Reading document";
+      "remember": "Remembering";
       "reply_comment": "Replying to comment";
       "resolve_comment": "Resolving comment";
       "run-stella-query": "Reading workspace data";
@@ -775,6 +774,7 @@ type Messages = {
   "common": {
     "accept": "Accept";
     "actions": "Actions";
+    "active": "Active";
     "add": "Add";
     "all": "All";
     "and": "And";
@@ -801,6 +801,7 @@ type Messages = {
       "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
+    "archive": "Archive";
     "back": "Back";
     "cancel": "Cancel";
     "captions": "Captions";
@@ -947,6 +948,7 @@ type Messages = {
     "rename": "Rename";
     "required": "Required";
     "reset": "Reset";
+    "restore": "Restore";
     "retry": "Retry";
     "role": "Role";
     "run": "Run";
@@ -966,6 +968,7 @@ type Messages = {
     "signOut": "Sign out";
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
+    "stale": "Stale";
     "status": "Status";
     "stepProgress": "{current} of {total}";
     "summarizeChanges": "Summarize changes";
@@ -1974,7 +1977,6 @@ type Messages = {
       };
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.";
-        "restore": "Restore";
         "restoreFailed": "Failed to restore version";
         "restoredToast": "Version restored";
         "versionHistory": "Version history";
@@ -2071,6 +2073,44 @@ type Messages = {
     "rawLabel": "Markdown source";
     "showFormatted": "Formatted";
     "showRaw": "Show raw";
+  };
+  "memory": {
+    "addPlaceholder": "Add a note for the assistant to remember…";
+    "alreadyExistsToast": "This memory is already saved";
+    "archivedEmpty": "No archived memory.";
+    "archivedToast": "Memory archived";
+    "createdToast": "Memory saved";
+    "empty": "No memory yet.";
+    "kinds": {
+      "decision": "Decision";
+      "fact": "Fact";
+      "instruction": "Instruction";
+      "preference": "Preference";
+      "relationship": "Relationship";
+    };
+    "matterPicker": {
+      "empty": "Select a matter to view its memory.";
+      "placeholder": "Select a matter";
+    };
+    "pageDescription": "Notes and context the assistant remembers across chats.";
+    "pageTitle": "Memory";
+    "provenance": "{source} · {date}";
+    "restoredToast": "Memory restored";
+    "sources": {
+      "extracted": "Extracted";
+      "tool": "Tool";
+      "user": "Added by you";
+    };
+    "suggestionsDescription": "The assistant proposed remembering these. Accept to keep them, decline to discard.";
+    "suggestionsTitle": "Suggestions";
+    "tabs": {
+      "firm": "Firm library";
+      "matter": "This matter";
+      "mine": "My notes";
+    };
+    "views": {
+      "archived": "Archived";
+    };
   };
   "navigation": {
     "chat": "Chat";
@@ -2169,7 +2209,6 @@ type Messages = {
   };
   "organization": {
     "aiConfig": {
-      "active": "Active";
       "addProvider": "Add provider";
       "addProviderFirst": "Add a provider first";
       "apiKey": "API key";
@@ -2503,6 +2542,11 @@ type Messages = {
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";
+      "memoryExtraction": {
+        "description": "When on, stella reviews summarized chat threads in the background and proposes memories for a human to confirm before they influence the assistant. This runs on your organization's own AI provider key, so leave it off unless you want that background AI usage billed to your key.";
+        "title": "Memory extraction";
+        "toggleLabel": "Suggest memories from chat history in the background";
+      };
       "pendingInvitations": "Pending invitations";
       "practiceJurisdictions": "Jurisdictions";
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.";
@@ -2532,7 +2576,6 @@ type Messages = {
       "usageManageError": "Could not open hosted usage management";
       "usageManuallyManaged": "Manually managed";
       "usageSeats": "{count, plural, one {# seat} other {# seats}}";
-      "usageStatusActive": "Active";
       "usageStatusCancelled": "Cancelled";
       "usageStatusPastDue": "Past due";
       "usageStatusPaused": "Paused";
@@ -2631,6 +2674,7 @@ type Messages = {
     "matterNumberingUpdated": "Matter numbering updated";
     "memberAdded": "Member added";
     "memberRemoved": "Member removed";
+    "memoryExtractionUpdated": "Memory extraction preference updated";
     "organizationUpdated": "Organization updated";
     "otherSessionsRevoked": "Other sessions revoked";
     "partyAdded": "Party added";
@@ -3069,7 +3113,6 @@ type Messages = {
     };
   };
   "workspaces": {
-    "archiveMatter": "Archive";
     "copyToMatter": {
       "copied": "Copied to Matter";
       "copyOption": "Copy (keep original)";

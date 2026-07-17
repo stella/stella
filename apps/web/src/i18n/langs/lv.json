@@ -134,7 +134,6 @@
     "billable": "Apmaksājams",
     "billedAmount": "Rēķinā iekļautā summa",
     "codes": {
-      "active": "Aktīvs",
       "activity": "Darbība",
       "activityCode": "Darbības kods",
       "codeLabel": "Kods",
@@ -558,8 +557,7 @@
     },
     "suggestionStatus": {
       "accepted": "Lietots",
-      "rejected": "Noraidīts",
-      "stale": "Novecojis"
+      "rejected": "Noraidīts"
     },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
     "thinking": "Strādāju ar kontekstu",
@@ -629,6 +627,7 @@
       "read_changes": "Reģistrēto izmaiņu lasīšana",
       "read_comments": "Komentāru lasīšana",
       "read_document": "Dokumenta lasīšana",
+      "remember": "Saglabāšana atmiņā",
       "reply_comment": "Atbildēšana uz komentāru",
       "resolve_comment": "Komentāra atrisināšana",
       "run-stella-query": "Lietas datu lasīšana",
@@ -772,6 +771,7 @@
   "common": {
     "accept": "Pieņemt",
     "actions": "Darbības",
+    "active": "Aktīvs",
     "add": "Pievienot",
     "all": "Visi",
     "and": "And",
@@ -798,6 +798,7 @@
       "socialSecurityNumber": "Sociālās apdrošināšanas numurs",
       "taxIdentificationNumber": "Nodokļu maksātāja numurs"
     },
+    "archive": "Arhivēt",
     "back": "Atpakaļ",
     "cancel": "Atcelt",
     "captions": "Subtitri",
@@ -944,6 +945,7 @@
     "rename": "Pārdēvēt",
     "required": "Obligāts",
     "reset": "Atiestatīt",
+    "restore": "Atjaunot",
     "retry": "Mēģināt vēlreiz",
     "role": "Loma",
     "run": "Palaist",
@@ -963,6 +965,7 @@
     "signOut": "Atslēgties",
     "somethingWentWrong": "Kaut kas nogāja greizi",
     "sort": "Kārtot",
+    "stale": "Novecojis",
     "status": "Statuss",
     "stepProgress": "{current} no {total}",
     "summarizeChanges": "Apkopot izmaiņas",
@@ -1971,7 +1974,6 @@
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restore": "Restore",
         "restoreFailed": "Failed to restore version",
         "restoredToast": "Version restored",
         "versionHistory": "Version history"
@@ -2068,6 +2070,44 @@
     "rawLabel": "Markdown source",
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
+  },
+  "memory": {
+    "addPlaceholder": "Pievienojiet piezīmi, kas asistentam jāatceras…",
+    "alreadyExistsToast": "Šī atmiņa jau ir saglabāta",
+    "archivedEmpty": "Nav arhivētu atmiņu.",
+    "archivedToast": "Atmiņa arhivēta",
+    "createdToast": "Saglabāts atmiņā",
+    "empty": "Atmiņā vēl nekā nav.",
+    "kinds": {
+      "decision": "Lēmums",
+      "fact": "Fakts",
+      "instruction": "Norādījums",
+      "preference": "Vēlme",
+      "relationship": "Saistība"
+    },
+    "matterPicker": {
+      "empty": "Izvēlieties lietu, lai skatītu tās atmiņu.",
+      "placeholder": "Izvēlieties lietu"
+    },
+    "pageDescription": "Piezīmes un konteksts, ko asistents atceras visās sarunās.",
+    "pageTitle": "Atmiņa",
+    "provenance": "{source} · {date}",
+    "restoredToast": "Atmiņa atjaunota",
+    "sources": {
+      "extracted": "Iegūts",
+      "tool": "Rīks",
+      "user": "Jūsu pievienots"
+    },
+    "suggestionsDescription": "Asistents ieteica tos iegaumēt. Pieņemiet, lai tos saglabātu, vai noraidiet, lai tos atmestu.",
+    "suggestionsTitle": "Ieteikumi",
+    "tabs": {
+      "firm": "Komandas bibliotēka",
+      "matter": "Šī lieta",
+      "mine": "Manas piezīmes"
+    },
+    "views": {
+      "archived": "Arhivēta"
+    }
   },
   "navigation": {
     "chat": "Tērzēšana",
@@ -2166,7 +2206,6 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "Aktīvs",
       "addProvider": "Pievienot pakalpojumu sniedzēju",
       "addProviderFirst": "Vispirms pievienojiet pakalpojumu sniedzēju",
       "apiKey": "API atslēga",
@@ -2500,6 +2539,11 @@
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Kad ieslēgts, stella fonā pārskata apkopotos sarunu pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu komandas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
+        "title": "Atmiņas iegūšana",
+        "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
+      },
       "pendingInvitations": "Gaidošie uzaicinājumi",
       "practiceJurisdictions": "Jurisdikcijas",
       "practiceJurisdictionsDescription": "Atlasiet jums atbilstošās jurisdikcijas.",
@@ -2529,7 +2573,6 @@
       "usageManageError": "Neizdevās atvērt mitinātā lietojuma pārvaldību",
       "usageManuallyManaged": "Pārvaldīts manuāli",
       "usageSeats": "{count, plural, zero {# vietu} one {# vieta} other {# vietas}}",
-      "usageStatusActive": "Aktīvs",
       "usageStatusCancelled": "Atcelts",
       "usageStatusPastDue": "Nokavēts maksājums",
       "usageStatusPaused": "Apturēts",
@@ -2628,6 +2671,7 @@
     "matterNumberingUpdated": "Lietu numerācija atjaunināta",
     "memberAdded": "Dalībnieks pievienots",
     "memberRemoved": "Dalībnieks noņemts",
+    "memoryExtractionUpdated": "Atmiņas iegūšanas iestatījums atjaunināts",
     "organizationUpdated": "Organizācija atjaunināta",
     "otherSessionsRevoked": "Pārējās sesijas beigtas",
     "partyAdded": "Puse pievienota",
@@ -3066,7 +3110,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Arhivēt",
     "copyToMatter": {
       "copied": "Nokopēts lietā",
       "copyOption": "Kopēt (saglabāt oriģinālu)",

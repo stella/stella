@@ -134,7 +134,6 @@
     "billable": "Arveldatav",
     "billedAmount": "Arveldatud summa",
     "codes": {
-      "active": "Aktiivne",
       "activity": "Tegevus",
       "activityCode": "Tegevuskood",
       "codeLabel": "Kood",
@@ -558,8 +557,7 @@
     },
     "suggestionStatus": {
       "accepted": "Rakendatud",
-      "rejected": "Tagasi lükatud",
-      "stale": "Aegunud"
+      "rejected": "Tagasi lükatud"
     },
     "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "thinking": "Töötan kontekstiga",
@@ -629,6 +627,7 @@
       "read_changes": "Jälitatud muudatuste lugemine",
       "read_comments": "Kommentaaride lugemine",
       "read_document": "Dokumendi lugemine",
+      "remember": "Mällu salvestamine",
       "reply_comment": "Kommentaarile vastamine",
       "resolve_comment": "Kommentaari lahendamine",
       "run-stella-query": "Toimiku andmete lugemine",
@@ -772,6 +771,7 @@
   "common": {
     "accept": "Nõustu",
     "actions": "Toimingud",
+    "active": "Aktiivne",
     "add": "Lisa",
     "all": "Kõik",
     "and": "And",
@@ -798,6 +798,7 @@
       "socialSecurityNumber": "Sotsiaalkindlustuse number",
       "taxIdentificationNumber": "Maksukohustuslase number"
     },
+    "archive": "Arhiveeri",
     "back": "Tagasi",
     "cancel": "Tühista",
     "captions": "Subtiitrid",
@@ -944,6 +945,7 @@
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
     "reset": "Lähtesta",
+    "restore": "Taasta",
     "retry": "Proovi uuesti",
     "role": "Roll",
     "run": "Käivita",
@@ -963,6 +965,7 @@
     "signOut": "Logi välja",
     "somethingWentWrong": "Midagi läks valesti",
     "sort": "Sorteeri",
+    "stale": "Aegunud",
     "status": "Olek",
     "stepProgress": "{current} / {total}",
     "summarizeChanges": "Võta muudatused kokku",
@@ -1971,7 +1974,6 @@
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restore": "Restore",
         "restoreFailed": "Failed to restore version",
         "restoredToast": "Version restored",
         "versionHistory": "Version history"
@@ -2068,6 +2070,44 @@
     "rawLabel": "Markdown source",
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
+  },
+  "memory": {
+    "addPlaceholder": "Lisage märkus, mille assistent peaks meelde jätma…",
+    "alreadyExistsToast": "See mälu on juba salvestatud",
+    "archivedEmpty": "Arhiveeritud mälu puudub.",
+    "archivedToast": "Mälu arhiveeritud",
+    "createdToast": "Mällu salvestatud",
+    "empty": "Mälus pole veel midagi.",
+    "kinds": {
+      "decision": "Otsus",
+      "fact": "Fakt",
+      "instruction": "Juhis",
+      "preference": "Eelistus",
+      "relationship": "Suhe"
+    },
+    "matterPicker": {
+      "empty": "Valige toimik, et näha selle mälu.",
+      "placeholder": "Valige toimik"
+    },
+    "pageDescription": "Märkused ja kontekst, mida assistent vestlustes meeles peab.",
+    "pageTitle": "Mälu",
+    "provenance": "{source} · {date}",
+    "restoredToast": "Mälu taastatud",
+    "sources": {
+      "extracted": "Eraldatud",
+      "tool": "Tööriist",
+      "user": "Teie lisatud"
+    },
+    "suggestionsDescription": "Assistent tegi ettepaneku need meelde jätta. Nõustuge, et need alles hoida, või lükake tagasi, et need kõrvale jätta.",
+    "suggestionsTitle": "Soovitused",
+    "tabs": {
+      "firm": "Meeskonna teek",
+      "matter": "See toimik",
+      "mine": "Minu märkused"
+    },
+    "views": {
+      "archived": "Arhiveeritud"
+    }
   },
   "navigation": {
     "chat": "Vestlus",
@@ -2166,7 +2206,6 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "Aktiivne",
       "addProvider": "Lisa teenusepakkuja",
       "addProviderFirst": "Lisa esmalt teenusepakkuja",
       "apiKey": "API-võti",
@@ -2500,6 +2539,11 @@
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Kui see on sisse lülitatud, vaatab stella taustal kokkuvõtlikke vestlusi ja pakub mälukirjeid, mille inimene peab kinnitama, enne kui need assistenti mõjutavad. See kasutab teie meeskonna enda AI-teenusepakkuja võtit, seega jätke see välja, kui te ei soovi, et see taustal toimuv AI-kasutus arvestataks teie võtmele.",
+        "title": "Mälu ekstraktimine",
+        "toggleLabel": "Paku taustal mälukirjeid vestluste ajaloost"
+      },
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
@@ -2529,7 +2573,6 @@
       "usageManageError": "Majutatud kasutuse haldust ei saanud avada",
       "usageManuallyManaged": "Käsitsi hallatud",
       "usageSeats": "{count, plural, one {# koht} other {# kohta}}",
-      "usageStatusActive": "Aktiivne",
       "usageStatusCancelled": "Tühistatud",
       "usageStatusPastDue": "Tasumata",
       "usageStatusPaused": "Peatatud",
@@ -2628,6 +2671,7 @@
     "matterNumberingUpdated": "Toimikute nummerdamine uuendatud",
     "memberAdded": "Liige lisatud",
     "memberRemoved": "Liige eemaldatud",
+    "memoryExtractionUpdated": "Mälu ekstraktimise eelistus uuendatud",
     "organizationUpdated": "Organisatsioon uuendatud",
     "otherSessionsRevoked": "Muud seansid lõpetatud",
     "partyAdded": "Osapool lisatud",
@@ -3066,7 +3110,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Arhiveeri",
     "copyToMatter": {
       "copied": "Kopeeritud toimikusse",
       "copyOption": "Kopeeri (säilita originaal)",

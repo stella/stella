@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { AIConfigCard } from "@/routes/_protected.settings/-components/organization/ai-config-card";
 import { DeepLKeyCard } from "@/routes/_protected.settings/-components/organization/deepl-key-card";
+import { MemoryExtractionCard } from "@/routes/_protected.settings/-components/organization/memory-extraction-card";
 import { PromptCachingCard } from "@/routes/_protected.settings/-components/organization/prompt-caching-card";
 import { WebSearchKeysCard } from "@/routes/_protected.settings/-components/organization/web-search-keys-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
@@ -22,6 +23,7 @@ function AIConfigPage() {
       />
       <AIConfigCard />
       <PromptCachingCard />
+      <MemoryExtractionCard />
       <div className="my-8 border-t" />
       <DeepLKeyCard />
       <div className="my-8 border-t" />

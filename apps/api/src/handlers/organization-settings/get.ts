@@ -20,6 +20,7 @@ type OrganizationSettingsRow = {
   matterNumberPattern: string;
   practiceJurisdictions: PracticeJurisdiction[];
   promptCachingEnabled: boolean;
+  memoryExtractionEnabled: boolean;
 };
 
 export const projectOrganizationSettingsRow = (
@@ -31,6 +32,7 @@ export const projectOrganizationSettingsRow = (
     row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
   practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
   promptCachingEnabled: row?.promptCachingEnabled ?? true,
+  memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
 });
 
 const readOrganizationSettings = createSafeRootHandler(
@@ -45,6 +47,7 @@ const readOrganizationSettings = createSafeRootHandler(
             matterNumberPadding: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
+            memoryExtractionEnabled: true,
           },
         }),
       ),

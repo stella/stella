@@ -68,6 +68,7 @@ import { Route as ProtectedSettingsOrganizationAuditLogsRouteImport } from './ro
 import { Route as ProtectedSettingsOrganizationAnonymizationRouteImport } from './routes/_protected.settings/organization.anonymization'
 import { Route as ProtectedSettingsOrganizationAiRouteImport } from './routes/_protected.settings/organization.ai'
 import { Route as ProtectedSettingsAccountProfileRouteImport } from './routes/_protected.settings/account.profile'
+import { Route as ProtectedSettingsAccountMemoryRouteImport } from './routes/_protected.settings/account.memory'
 import { Route as ProtectedSettingsAccountDesktopRouteImport } from './routes/_protected.settings/account.desktop'
 import { Route as ProtectedSettingsAccountConnectionsRouteImport } from './routes/_protected.settings/account.connections'
 import { Route as ProtectedSettingsAccountBetaRouteImport } from './routes/_protected.settings/account.beta'
@@ -407,6 +408,12 @@ const ProtectedSettingsAccountProfileRoute =
     path: '/account/profile',
     getParentRoute: () => ProtectedSettingsRouteRoute,
   } as any)
+const ProtectedSettingsAccountMemoryRoute =
+  ProtectedSettingsAccountMemoryRouteImport.update({
+    id: '/account/memory',
+    path: '/account/memory',
+    getParentRoute: () => ProtectedSettingsRouteRoute,
+  } as any)
 const ProtectedSettingsAccountDesktopRoute =
   ProtectedSettingsAccountDesktopRouteImport.update({
     id: '/account/desktop',
@@ -553,6 +560,7 @@ export interface FileRoutesByFullPath {
   '/settings/account/beta': typeof ProtectedSettingsAccountBetaRoute
   '/settings/account/connections': typeof ProtectedSettingsAccountConnectionsRoute
   '/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
+  '/settings/account/memory': typeof ProtectedSettingsAccountMemoryRoute
   '/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
@@ -621,6 +629,7 @@ export interface FileRoutesByTo {
   '/settings/account/beta': typeof ProtectedSettingsAccountBetaRoute
   '/settings/account/connections': typeof ProtectedSettingsAccountConnectionsRoute
   '/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
+  '/settings/account/memory': typeof ProtectedSettingsAccountMemoryRoute
   '/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
@@ -699,6 +708,7 @@ export interface FileRoutesById {
   '/_protected/settings/account/beta': typeof ProtectedSettingsAccountBetaRoute
   '/_protected/settings/account/connections': typeof ProtectedSettingsAccountConnectionsRoute
   '/_protected/settings/account/desktop': typeof ProtectedSettingsAccountDesktopRoute
+  '/_protected/settings/account/memory': typeof ProtectedSettingsAccountMemoryRoute
   '/_protected/settings/account/profile': typeof ProtectedSettingsAccountProfileRoute
   '/_protected/settings/organization/ai': typeof ProtectedSettingsOrganizationAiRoute
   '/_protected/settings/organization/anonymization': typeof ProtectedSettingsOrganizationAnonymizationRoute
@@ -777,6 +787,7 @@ export interface FileRouteTypes {
     | '/settings/account/beta'
     | '/settings/account/connections'
     | '/settings/account/desktop'
+    | '/settings/account/memory'
     | '/settings/account/profile'
     | '/settings/organization/ai'
     | '/settings/organization/anonymization'
@@ -845,6 +856,7 @@ export interface FileRouteTypes {
     | '/settings/account/beta'
     | '/settings/account/connections'
     | '/settings/account/desktop'
+    | '/settings/account/memory'
     | '/settings/account/profile'
     | '/settings/organization/ai'
     | '/settings/organization/anonymization'
@@ -922,6 +934,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/account/beta'
     | '/_protected/settings/account/connections'
     | '/_protected/settings/account/desktop'
+    | '/_protected/settings/account/memory'
     | '/_protected/settings/account/profile'
     | '/_protected/settings/organization/ai'
     | '/_protected/settings/organization/anonymization'
@@ -1382,6 +1395,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProtectedSettingsAccountProfileRouteImport
       parentRoute: typeof ProtectedSettingsRouteRoute
     }
+    '/_protected/settings/account/memory': {
+      id: '/_protected/settings/account/memory'
+      path: '/account/memory'
+      fullPath: '/settings/account/memory'
+      preLoaderRoute: typeof ProtectedSettingsAccountMemoryRouteImport
+      parentRoute: typeof ProtectedSettingsRouteRoute
+    }
     '/_protected/settings/account/desktop': {
       id: '/_protected/settings/account/desktop'
       path: '/account/desktop'
@@ -1634,6 +1654,7 @@ interface ProtectedSettingsRouteRouteChildren {
   ProtectedSettingsAccountBetaRoute: typeof ProtectedSettingsAccountBetaRoute
   ProtectedSettingsAccountConnectionsRoute: typeof ProtectedSettingsAccountConnectionsRoute
   ProtectedSettingsAccountDesktopRoute: typeof ProtectedSettingsAccountDesktopRoute
+  ProtectedSettingsAccountMemoryRoute: typeof ProtectedSettingsAccountMemoryRoute
   ProtectedSettingsAccountProfileRoute: typeof ProtectedSettingsAccountProfileRoute
 }
 
@@ -1646,6 +1667,7 @@ const ProtectedSettingsRouteRouteChildren: ProtectedSettingsRouteRouteChildren =
     ProtectedSettingsAccountConnectionsRoute:
       ProtectedSettingsAccountConnectionsRoute,
     ProtectedSettingsAccountDesktopRoute: ProtectedSettingsAccountDesktopRoute,
+    ProtectedSettingsAccountMemoryRoute: ProtectedSettingsAccountMemoryRoute,
     ProtectedSettingsAccountProfileRoute: ProtectedSettingsAccountProfileRoute,
   }
 

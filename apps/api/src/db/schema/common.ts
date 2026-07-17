@@ -14,6 +14,7 @@ import { jsonb } from "@/api/db/columns";
 import {
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  aiMemoryPolicies,
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
   chatThreadCompactionPolicies,
@@ -371,6 +372,7 @@ export {
 export {
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  aiMemoryPolicies,
   chatMessagePolicies,
   chatMessageSearchDocumentPolicies,
   chatThreadCompactionPolicies,

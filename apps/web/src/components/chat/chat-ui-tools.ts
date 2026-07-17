@@ -153,6 +153,7 @@ const CHAT_TOOL_TITLE_KEYS = {
   read_changes: "chat.tool.read_changes",
   read_comments: "chat.tool.read_comments",
   read_document: "chat.tool.read_document",
+  remember: "chat.tool.remember",
   reply_comment: "chat.tool.reply_comment",
   resolve_comment: "chat.tool.resolve_comment",
   "read-skill-resource": "chat.tool.read-skill-resource",

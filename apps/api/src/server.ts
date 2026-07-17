@@ -51,6 +51,7 @@ import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
+import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { operatorRoute } from "@/api/handlers/operator/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
@@ -431,6 +432,7 @@ const api = new Elysia()
   .use(mcpRoute)
   .use(aiAutocompleteRoute)
   .use(feedbackPublicRoute)
+  .use(memoriesRoute)
   .use(devPublicRoute)
   .use(smokeRoute)
   .use(operatorRoute)

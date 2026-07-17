@@ -134,7 +134,6 @@
     "billable": "Abrechenbar",
     "billedAmount": "Abgerechneter Betrag",
     "codes": {
-      "active": "Aktiv",
       "activity": "Aktivität",
       "activityCode": "Aktivitätscode",
       "codeLabel": "Code",
@@ -558,8 +557,7 @@
     },
     "suggestionStatus": {
       "accepted": "Angewendet",
-      "rejected": "Abgelehnt",
-      "stale": "Veraltet"
+      "rejected": "Abgelehnt"
     },
     "tabToAsk": "→ zum Fragen: „{prompt}“",
     "thinking": "Arbeite mit Kontext",
@@ -629,6 +627,7 @@
       "read_changes": "Nachverfolgte Änderungen lesen",
       "read_comments": "Kommentare lesen",
       "read_document": "Dokument lesen",
+      "remember": "Erinnerung speichern",
       "reply_comment": "Auf Kommentar antworten",
       "resolve_comment": "Kommentar erledigen",
       "run-stella-query": "Akten-Daten lesen",
@@ -772,6 +771,7 @@
   "common": {
     "accept": "Annehmen",
     "actions": "Aktionen",
+    "active": "Aktiv",
     "add": "Hinzufügen",
     "all": "Alle",
     "and": "And",
@@ -798,6 +798,7 @@
       "socialSecurityNumber": "Sozialversicherungsnummer",
       "taxIdentificationNumber": "Steuer-Identifikationsnummer"
     },
+    "archive": "Archivieren",
     "back": "Zurück",
     "cancel": "Abbrechen",
     "captions": "Untertitel",
@@ -944,6 +945,7 @@
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "reset": "Zurücksetzen",
+    "restore": "Wiederherstellen",
     "retry": "Erneut versuchen",
     "role": "Rolle",
     "run": "Ausführen",
@@ -963,6 +965,7 @@
     "signOut": "Abmelden",
     "somethingWentWrong": "Etwas ist schiefgelaufen",
     "sort": "Sortieren",
+    "stale": "Veraltet",
     "status": "Status",
     "stepProgress": "{current} von {total}",
     "summarizeChanges": "Änderungen zusammenfassen",
@@ -1971,7 +1974,6 @@
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restore": "Restore",
         "restoreFailed": "Failed to restore version",
         "restoredToast": "Version restored",
         "versionHistory": "Version history"
@@ -2068,6 +2070,44 @@
     "rawLabel": "Markdown source",
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
+  },
+  "memory": {
+    "addPlaceholder": "Fügen Sie eine Notiz hinzu, die sich der Assistent merken soll…",
+    "alreadyExistsToast": "Diese Erinnerung ist bereits gespeichert",
+    "archivedEmpty": "Keine archivierten Erinnerungen.",
+    "archivedToast": "Erinnerung archiviert",
+    "createdToast": "Im Gedächtnis gespeichert",
+    "empty": "Noch nichts im Gedächtnis.",
+    "kinds": {
+      "decision": "Entscheidung",
+      "fact": "Tatsache",
+      "instruction": "Anweisung",
+      "preference": "Präferenz",
+      "relationship": "Beziehung"
+    },
+    "matterPicker": {
+      "empty": "Wählen Sie eine Akte, um ihr Gedächtnis anzuzeigen.",
+      "placeholder": "Akte auswählen"
+    },
+    "pageDescription": "Notizen und Kontext, die sich der Assistent über Chats hinweg merkt.",
+    "pageTitle": "Gedächtnis",
+    "provenance": "{source} · {date}",
+    "restoredToast": "Erinnerung wiederhergestellt",
+    "sources": {
+      "extracted": "Extrahiert",
+      "tool": "Werkzeug",
+      "user": "Von Ihnen hinzugefügt"
+    },
+    "suggestionsDescription": "Der Assistent hat vorgeschlagen, sich diese zu merken. Nehmen Sie sie an, um sie zu behalten, oder lehnen Sie sie ab, um sie zu verwerfen.",
+    "suggestionsTitle": "Vorschläge",
+    "tabs": {
+      "firm": "Team-Bibliothek",
+      "matter": "Diese Akte",
+      "mine": "Meine Notizen"
+    },
+    "views": {
+      "archived": "Archiviert"
+    }
   },
   "navigation": {
     "chat": "Chat",
@@ -2166,7 +2206,6 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "Aktiv",
       "addProvider": "Provider hinzufügen",
       "addProviderFirst": "Zuerst Provider hinzufügen",
       "apiKey": "API-Schlüssel",
@@ -2500,6 +2539,11 @@
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Wenn aktiviert, prüft stella zusammengefasste Chatverläufe im Hintergrund und schlägt Erinnerungen vor, die eine Person bestätigen muss, bevor sie den Assistenten beeinflussen. Dies läuft über den eigenen KI-Anbieterschlüssel Ihres Teams, lassen Sie es daher deaktiviert, sofern Sie diese Hintergrund-KI-Nutzung nicht über Ihren Schlüssel abrechnen möchten.",
+        "title": "Gedächtnis-Extraktion",
+        "toggleLabel": "Im Hintergrund Erinnerungen aus dem Chatverlauf vorschlagen"
+      },
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
       "practiceJurisdictionsDescription": "Wählen Sie die für Sie relevanten Jurisdiktionen aus.",
@@ -2529,7 +2573,6 @@
       "usageManageError": "Gehostete Nutzungsverwaltung konnte nicht geöffnet werden",
       "usageManuallyManaged": "Manuell verwaltet",
       "usageSeats": "{count, plural, one {# Platz} other {# Plätze}}",
-      "usageStatusActive": "Aktiv",
       "usageStatusCancelled": "Gekündigt",
       "usageStatusPastDue": "Überfällig",
       "usageStatusPaused": "Pausiert",
@@ -2628,6 +2671,7 @@
     "matterNumberingUpdated": "Aktennummerierung aktualisiert",
     "memberAdded": "Mitglied hinzugefügt",
     "memberRemoved": "Mitglied entfernt",
+    "memoryExtractionUpdated": "Einstellung zur Gedächtnis-Extraktion aktualisiert",
     "organizationUpdated": "Organisation aktualisiert",
     "otherSessionsRevoked": "Andere Sitzungen beendet",
     "partyAdded": "Partei hinzugefügt",
@@ -3066,7 +3110,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archivieren",
     "copyToMatter": {
       "copied": "In Akte kopiert",
       "copyOption": "Kopieren (Original behalten)",

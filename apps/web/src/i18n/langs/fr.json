@@ -134,7 +134,6 @@
     "billable": "Facturable",
     "billedAmount": "Montant facturé",
     "codes": {
-      "active": "Actif",
       "activity": "Activité",
       "activityCode": "Code d'activité",
       "codeLabel": "Code",
@@ -558,8 +557,7 @@
     },
     "suggestionStatus": {
       "accepted": "Appliqué",
-      "rejected": "Rejeté",
-      "stale": "Obsolète"
+      "rejected": "Rejeté"
     },
     "tabToAsk": "→ pour demander : « {prompt} »",
     "thinking": "Traitement du contexte",
@@ -629,6 +627,7 @@
       "read_changes": "Lecture des modifications suivies",
       "read_comments": "Lecture des commentaires",
       "read_document": "Lecture du document",
+      "remember": "Mémorisation",
       "reply_comment": "Réponse au commentaire",
       "resolve_comment": "Résolution du commentaire",
       "run-stella-query": "Lecture des données du dossier",
@@ -772,6 +771,7 @@
   "common": {
     "accept": "Accepter",
     "actions": "Actions",
+    "active": "Actif",
     "add": "Ajouter",
     "all": "Tous",
     "and": "And",
@@ -798,6 +798,7 @@
       "socialSecurityNumber": "Numéro de sécurité sociale",
       "taxIdentificationNumber": "Numéro fiscal"
     },
+    "archive": "Archiver",
     "back": "Retour",
     "cancel": "Annuler",
     "captions": "Légendes",
@@ -944,6 +945,7 @@
     "rename": "Renommer",
     "required": "Obligatoire",
     "reset": "Réinitialiser",
+    "restore": "Restaurer",
     "retry": "Réessayer",
     "role": "Rôle",
     "run": "Exécuter",
@@ -963,6 +965,7 @@
     "signOut": "Se déconnecter",
     "somethingWentWrong": "Une erreur est survenue",
     "sort": "Trier",
+    "stale": "Obsolète",
     "status": "Statut",
     "stepProgress": "{current} sur {total}",
     "summarizeChanges": "Résumer les modifications",
@@ -1971,7 +1974,6 @@
       },
       "versions": {
         "confirmRestore": "Your current draft will be replaced with this version's content.",
-        "restore": "Restore",
         "restoreFailed": "Failed to restore version",
         "restoredToast": "Version restored",
         "versionHistory": "Version history"
@@ -2068,6 +2070,44 @@
     "rawLabel": "Markdown source",
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
+  },
+  "memory": {
+    "addPlaceholder": "Ajoutez une note dont l'assistant se souviendra…",
+    "alreadyExistsToast": "Cette mémoire est déjà enregistrée",
+    "archivedEmpty": "Aucune mémoire archivée.",
+    "archivedToast": "Mémoire archivée",
+    "createdToast": "Enregistré dans la mémoire",
+    "empty": "Encore rien en mémoire.",
+    "kinds": {
+      "decision": "Décision",
+      "fact": "Fait",
+      "instruction": "Instruction",
+      "preference": "Préférence",
+      "relationship": "Relation"
+    },
+    "matterPicker": {
+      "empty": "Sélectionnez un dossier pour afficher sa mémoire.",
+      "placeholder": "Sélectionner un dossier"
+    },
+    "pageDescription": "Notes et contexte dont l'assistant se souvient d'un chat à l'autre.",
+    "pageTitle": "Mémoire",
+    "provenance": "{source} · {date}",
+    "restoredToast": "Mémoire restaurée",
+    "sources": {
+      "extracted": "Extrait",
+      "tool": "Outil",
+      "user": "Ajouté par vous"
+    },
+    "suggestionsDescription": "L'assistant a proposé de mémoriser ces éléments. Acceptez pour les conserver ou refusez pour les ignorer.",
+    "suggestionsTitle": "Suggestions",
+    "tabs": {
+      "firm": "Bibliothèque de l'équipe",
+      "matter": "Ce dossier",
+      "mine": "Mes notes"
+    },
+    "views": {
+      "archived": "Archivées"
+    }
   },
   "navigation": {
     "chat": "Chat",
@@ -2166,7 +2206,6 @@
   },
   "organization": {
     "aiConfig": {
-      "active": "Actif",
       "addProvider": "Ajouter un fournisseur",
       "addProviderFirst": "Ajoutez d’abord un fournisseur",
       "apiKey": "Clé API",
@@ -2500,6 +2539,11 @@
       "matterNumbering": "Numérotation des dossiers",
       "matterNumberingDescription": "Configurez la génération des nouveaux numéros de référence des dossiers",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Lorsque cette option est activée, stella examine en arrière-plan les fils de discussion résumés et propose des souvenirs qu'une personne doit confirmer avant qu'ils n'influencent l'assistant. Cela fonctionne avec la propre clé de fournisseur d'IA de votre équipe ; laissez-la donc désactivée, sauf si vous souhaitez que cette utilisation d'IA en arrière-plan soit facturée sur votre clé.",
+        "title": "Extraction de mémoire",
+        "toggleLabel": "Suggérer des souvenirs à partir de l'historique de chat en arrière-plan"
+      },
       "pendingInvitations": "Invitations en attente",
       "practiceJurisdictions": "Juridictions",
       "practiceJurisdictionsDescription": "Sélectionnez les juridictions qui vous concernent.",
@@ -2529,7 +2573,6 @@
       "usageManageError": "Impossible d’ouvrir la gestion de l’utilisation hébergée",
       "usageManuallyManaged": "Géré manuellement",
       "usageSeats": "{count, plural, one {# siège} other {# sièges}}",
-      "usageStatusActive": "Actif",
       "usageStatusCancelled": "Annulé",
       "usageStatusPastDue": "En retard de paiement",
       "usageStatusPaused": "En pause",
@@ -2628,6 +2671,7 @@
     "matterNumberingUpdated": "Numérotation des dossiers mise à jour",
     "memberAdded": "Membre ajouté",
     "memberRemoved": "Membre retiré",
+    "memoryExtractionUpdated": "Préférence d'extraction de mémoire mise à jour",
     "organizationUpdated": "Organisation mise à jour",
     "otherSessionsRevoked": "Autres sessions révoquées",
     "partyAdded": "Partie ajoutée",
@@ -3066,7 +3110,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archiver",
     "copyToMatter": {
       "copied": "Copié dans le dossier",
       "copyOption": "Copier (conserver l'original)",

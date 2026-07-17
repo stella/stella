@@ -219,7 +219,7 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
         <div className="flex items-center justify-between gap-2">
           <div className="bg-muted flex flex-wrap items-center gap-2 rounded border px-3 py-2">
             <span className="text-muted-foreground text-xs">
-              {t("aiConfig.active")}:
+              {tCommon("active")}:
             </span>
             {config.providers.map((providerConfig) => (
               <span

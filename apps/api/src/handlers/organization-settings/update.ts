@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -13,10 +14,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
 
+import { resolveMemoryExtractionEnabledAt } from "./memory-extraction-consent";
+
 const updateOrganizationSettingsBodySchema = t.Object({
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
+  memoryExtractionEnabled: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -73,16 +77,41 @@ export const updateOrganizationSettingsHandler = async function* ({
 
   yield* Result.await(
     safeDb(async (tx) => {
-      // Only touch promptCachingEnabled when the body carries it;
-      // omitting it from the upsert set keeps a concurrent toggle
-      // request from being clobbered by a stale read.
+      // Only touch the AI toggles when the body carries them; omitting
+      // them from the upsert set keeps a concurrent toggle request from
+      // being clobbered by a stale read.
       const wantsPromptCachingUpdate = body.promptCachingEnabled !== undefined;
-      const existing = wantsPromptCachingUpdate
+      const wantsMemoryExtractionUpdate =
+        body.memoryExtractionEnabled !== undefined;
+      const wantsAiToggleUpdate =
+        wantsPromptCachingUpdate || wantsMemoryExtractionUpdate;
+
+      // Serialize consent transitions, including the initial insert, so a
+      // concurrent disable/enable pair cannot leave extraction enabled with
+      // a cleared consent timestamp.
+      if (wantsAiToggleUpdate) {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtext(${organizationId}))`,
+        );
+      }
+
+      const existing = wantsAiToggleUpdate
         ? await tx.query.organizationSettings.findFirst({
             where: { organizationId: { eq: organizationId } },
-            columns: { promptCachingEnabled: true },
+            columns: {
+              promptCachingEnabled: true,
+              memoryExtractionEnabled: true,
+            },
           })
         : undefined;
+      const memoryExtractionEnabledAt =
+        body.memoryExtractionEnabled === undefined
+          ? undefined
+          : resolveMemoryExtractionEnabledAt({
+              currentEnabled: existing?.memoryExtractionEnabled ?? false,
+              nextEnabled: body.memoryExtractionEnabled,
+              now: new Date(),
+            });
 
       // Insert path needs schema defaults for any required column
       // the body did not carry. Matter columns are NOT NULL with
@@ -101,6 +130,14 @@ export const updateOrganizationSettingsHandler = async function* ({
           ...(wantsPromptCachingUpdate
             ? { promptCachingEnabled: body.promptCachingEnabled }
             : {}),
+          ...(wantsMemoryExtractionUpdate
+            ? {
+                memoryExtractionEnabled: body.memoryExtractionEnabled,
+                ...(memoryExtractionEnabledAt !== undefined
+                  ? { memoryExtractionEnabledAt }
+                  : {}),
+              }
+            : {}),
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -113,6 +150,14 @@ export const updateOrganizationSettingsHandler = async function* ({
               : {}),
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
+              : {}),
+            ...(wantsMemoryExtractionUpdate
+              ? {
+                  memoryExtractionEnabled: body.memoryExtractionEnabled,
+                  ...(memoryExtractionEnabledAt !== undefined
+                    ? { memoryExtractionEnabledAt }
+                    : {}),
+                }
               : {}),
             updatedAt: new Date(),
           },
@@ -144,6 +189,16 @@ export const updateOrganizationSettingsHandler = async function* ({
                 },
               }
             : {}),
+          ...(wantsMemoryExtractionUpdate &&
+          body.memoryExtractionEnabled !==
+            (existing?.memoryExtractionEnabled ?? false)
+            ? {
+                memoryExtractionEnabled: {
+                  old: existing?.memoryExtractionEnabled ?? false,
+                  new: body.memoryExtractionEnabled,
+                },
+              }
+            : {}),
         },
       });
     }),
@@ -158,6 +213,9 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...(body.promptCachingEnabled !== undefined
       ? { promptCachingEnabled: body.promptCachingEnabled }
+      : {}),
+    ...(body.memoryExtractionEnabled !== undefined
+      ? { memoryExtractionEnabled: body.memoryExtractionEnabled }
       : {}),
   });
 };

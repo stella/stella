@@ -25,6 +25,7 @@ export const ORGANIZATION_AUDIT_LOG_RESOURCE_ID = "organization-logs";
 export const AUDIT_RESOURCE_TYPE = {
   AUDIT_LOG: "audit_log",
   AGENT_SKILL: "agent_skill",
+  AI_MEMORY: "ai_memory",
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
   CHAT_FILE: "chat_file",
