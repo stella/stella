@@ -221,6 +221,17 @@ const sendMessage = createSafeRootHandler(
     session,
     user,
   }) {
+    const isClientConnectionAborted = () => request.signal.aborted;
+
+    if (isClientConnectionAborted()) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
     yield* requireTanStackAIAvailableForRole({
       orgConfig: orgAIConfig,
       role: "chat",
@@ -503,9 +514,17 @@ const sendMessage = createSafeRootHandler(
         workspaceId: workspaceId ?? undefined,
       });
 
-      const isClientConnectionAborted = () => request.signal.aborted;
-
       if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: [],
+            userId: user.id,
+          }),
+        );
         return Result.err(
           new HandlerError({
             status: 400,

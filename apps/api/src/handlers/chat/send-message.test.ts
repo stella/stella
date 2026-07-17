@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
@@ -7,7 +7,14 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
-import sendMessage from "./send-message";
+void mock.module("@/api/lib/web-search/load-org-keys", () => ({
+  loadWebSearchProvidersForOrg: async () => ({
+    urlFetcher: null,
+    webSearchProvider: null,
+  }),
+}));
+
+const sendMessage = (await import("./send-message")).default;
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
 
@@ -41,16 +48,20 @@ const orgAIConfig = {
 
 const createContext = ({
   contextMatterIds,
-}: {
-  contextMatterIds: SendMessageCtx["body"]["contextMatterIds"];
-}): SendMessageCtx => {
-  const { safeDb, scopedDb } = createScopedDbMock({
+  request = new Request("http://localhost/v1/chat/send"),
+  transaction = {
     query: {
       organizationSettings: {
         findFirst: async () => null,
       },
     },
-  });
+  },
+}: {
+  contextMatterIds: SendMessageCtx["body"]["contextMatterIds"];
+  request?: Request;
+  transaction?: unknown;
+}): SendMessageCtx => {
+  const { safeDb, scopedDb } = createScopedDbMock(transaction);
 
   return asTestRaw<SendMessageCtx>({
     body: {
@@ -75,7 +86,7 @@ const createContext = ({
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
-    request: new Request("http://localhost/v1/chat/send"),
+    request,
     route: "/v1/chat/send",
     safeDb,
     scopedDb,
@@ -105,5 +116,61 @@ describe("send message context-matter authorization", () => {
       code: 403,
       response: { message: "contextMatterIds includes inaccessible matter" },
     });
+  });
+});
+
+describe("send message disconnect rollback", () => {
+  test("does not create a thread when the request is already aborted", async () => {
+    const abortController = new AbortController();
+    abortController.abort();
+    const insert = mock(() => ({ values: async () => undefined }));
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: { insert },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  test("deletes a newly created thread when the request aborts during creation", async () => {
+    const abortController = new AbortController();
+    const insertValues = mock(async () => {
+      abortController.abort();
+    });
+    const deleteWhere = mock(async () => undefined);
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          delete: () => ({ where: deleteWhere }),
+          insert: () => ({ values: insertValues }),
+          query: {
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(insertValues).toHaveBeenCalledTimes(1);
+    expect(deleteWhere).toHaveBeenCalledTimes(1);
   });
 });
