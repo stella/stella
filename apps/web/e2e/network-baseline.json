@@ -1294,7 +1294,7 @@
       "GET /api/auth/organization/get-active-member-role": 1024,
       "GET /api/auth/organization/list": 1024,
       "GET /health": 1024,
-      "GET /v1/audit-logs": 4096,
+      "GET /v1/audit-logs": 8192,
       "GET /v1/chat/threads": 4096,
       "GET /v1/organization-settings/ai-availability": 1024,
       "GET /v1/workspaces/navigation": 20480

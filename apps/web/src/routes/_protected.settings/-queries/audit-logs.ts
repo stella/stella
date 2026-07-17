@@ -41,20 +41,13 @@ export type AuditLogOptionsInput = {
   key: AuditLogsPageKey;
 };
 
+type AuditLogsRequestQuery = {
+  [Key in keyof AuditLogsPageKey]?: Exclude<AuditLogsPageKey[Key], undefined>;
+};
+
 export const fetchAuditLogs = async (query: AuditLogsPageKey) => {
   // Construct a query object with only defined keys to satisfy exactOptionalPropertyTypes
-  const cleanedQuery: {
-    workspaceId?: SafeId<"workspace">;
-    action?: string;
-    resourceType?: string;
-    resourceId?: string;
-    userId?: string;
-    from?: string;
-    to?: string;
-    toExclusive?: string;
-    limit?: number;
-    cursor?: string;
-  } = {};
+  const cleanedQuery: AuditLogsRequestQuery = {};
 
   if (query.workspaceId !== undefined) {
     cleanedQuery.workspaceId = query.workspaceId;
