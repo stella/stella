@@ -97,6 +97,9 @@ export type StudioActions = {
   focusField: (path: string) => void;
   /** Move the document caret to an exact document position. */
   focusPosition: (pos: number) => void;
+  /** Restore keyboard focus without moving the selection, and return the
+   * editor element for overlay focus-management contracts. */
+  focusEditor: () => HTMLElement | null;
   /** Live fill preview in the document: path → value (plain text, or
    *  formatted spans for lookup renderings), or null to clear. */
   setFillPreview: (values: Record<string, TemplatePreviewValue> | null) => void;

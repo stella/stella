@@ -622,6 +622,7 @@ export const TemplateStudioPage = ({
         actionsRef.current?.focusAdjacentField(direction),
       focusField: (path) => actionsRef.current?.focusField(path),
       focusPosition: (pos) => actionsRef.current?.focusPosition(pos),
+      focusEditor: () => actionsRef.current?.focusEditor() ?? null,
       setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
       insertExistingField: (path, formatKey) =>
         actionsRef.current?.insertExistingField(path, formatKey),
@@ -2512,6 +2513,11 @@ export const TemplateStudioPage = ({
       view.focus();
       editorRef.current?.getEditorRef()?.scrollToPosition(pos);
       flashDirectiveAt(view, pos);
+    },
+    focusEditor: () => {
+      const view = editorViewRef.current;
+      view?.focus();
+      return view?.dom ?? null;
     },
     renameFieldPath: (oldPath, newPath) => {
       const view = editorViewRef.current;
