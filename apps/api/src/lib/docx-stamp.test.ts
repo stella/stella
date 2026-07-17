@@ -307,6 +307,86 @@ describe("placeholder replacement", () => {
   });
 });
 
+describe("special replacement patterns in dynamic values", () => {
+  // Workspace `reference` (the source of `stamp`) is free-form user text
+  // (see apps/api/src/handlers/workspaces/update-by-id.ts), so it can contain
+  // sequences that String.prototype.replace treats specially inside a
+  // *replacement* string: $& = the whole match, $' = text after the match,
+  // etc. A naive `.replace(needle, dynamicString)` call would silently splice
+  // in matched/surrounding XML instead of the literal stamp text. These
+  // cases exercise every dynamic-value splice site (custom property upsert,
+  // footer paragraph creation and update, and placeholder substitution) with
+  // both patterns.
+  const baseUrl = "https://stella.legal";
+  const specialPatterns = ["$&", "$'"];
+
+  const expectedEscape = (value: string): string =>
+    value
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;");
+
+  for (const pattern of specialPatterns) {
+    test(`stamp containing "${pattern}" survives injecting into a fresh DOCX`, async () => {
+      const stamp = `2026/001/015${pattern}.v3`;
+      const code = "kx8mq2n4p3";
+      const docx = await makeDocx();
+      const stamped = await injectStamp(docx, stamp, code, baseUrl);
+
+      const customXml = await readZipFile(stamped, "docProps/custom.xml");
+      expect(customXml).toContain(expectedEscape(stamp));
+      expect(customXml?.match(/<\/Properties>/gu)).toHaveLength(1);
+
+      const footer = await readZipFile(stamped, "word/footer1.xml");
+      expect(footer).toContain(expectedEscape(stamp));
+      expect(footer?.match(/<\/w:ftr>/gu)).toHaveLength(1);
+    });
+
+    test(`stamp containing "${pattern}" survives updating an existing stamp`, async () => {
+      const stamp = `2026/002/099${pattern}.v1`;
+      const code = "abcdefghjk";
+      const docx = await makeDocx();
+      const first = await injectStamp(
+        docx,
+        "2026/001/001.v1",
+        "aaaaaaaaaa",
+        baseUrl,
+      );
+      const second = await injectStamp(first, stamp, code, baseUrl);
+
+      const customXml = await readZipFile(second, "docProps/custom.xml");
+      expect(customXml).toContain(expectedEscape(stamp));
+      expect(customXml?.match(/<\/Properties>/gu)).toHaveLength(1);
+
+      const footer = await readZipFile(second, "word/footer1.xml");
+      expect(footer).toContain(expectedEscape(stamp));
+      expect(footer?.match(/<\/w:ftr>/gu)).toHaveLength(1);
+    });
+
+    test(`stamp containing "${pattern}" survives {{STELLA_REF}} placeholder replacement`, async () => {
+      const stamp = `2026/003/007${pattern}.v2`;
+      const code = "mnpqrstuvw";
+      const docx = await makeDocx({
+        documentXml: [
+          '<?xml version="1.0" encoding="UTF-8"?>',
+          `<w:document xmlns:w="${W_NS}" xmlns:r="${R_NS}">`,
+          "<w:body>",
+          "<w:p><w:r><w:t>Doc: {{STELLA_REF}}</w:t></w:r></w:p>",
+          "<w:sectPr></w:sectPr>",
+          "</w:body>",
+          "</w:document>",
+        ].join("\n"),
+      });
+
+      const stamped = await injectStamp(docx, stamp, code, baseUrl);
+      const docXml = await readZipFile(stamped, "word/document.xml");
+      expect(docXml).toContain(`Doc: ${expectedEscape(stamp)}`);
+      expect(docXml?.match(/<\/w:body>/gu)).toHaveLength(1);
+    });
+  }
+});
+
 describe("extractStamp", () => {
   const stamp = "2026/001/015.v3";
   const code = "kx8mq2n4p3";
