@@ -1,21 +1,23 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type ReportExportDeliveryMode = "workspace" | "download";
+import {
+  nextTrackedAt,
+  retainNewestTrackedExports,
+} from "./report-export-tracking.logic";
+import type {
+  ReportExportDeliveryMode,
+  TrackedReportExport,
+} from "./report-export-tracking.logic";
 
-export type TrackedReportExport = {
-  exportId: string;
-  mode: ReportExportDeliveryMode;
-  workspaceId: string;
-};
+export type { ReportExportDeliveryMode, TrackedReportExport };
 
 type ReportExportTrackingStore = {
   exports: Record<string, TrackedReportExport>;
   finish: (exportId: string) => void;
-  track: (reportExport: TrackedReportExport) => void;
+  track: (reportExport: Omit<TrackedReportExport, "trackedAt">) => void;
 };
 
-const MAX_TRACKED_EXPORTS = 100;
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const toastIds = new Map<string, string>();
@@ -32,12 +34,15 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
         });
       },
       track: (reportExport) => {
-        set((state) => ({
-          exports: {
-            ...state.exports,
-            [reportExport.exportId]: reportExport,
-          },
-        }));
+        set((state) => {
+          const trackedAt = nextTrackedAt(state.exports, Date.now());
+          return {
+            exports: retainNewestTrackedExports([
+              ...Object.values(state.exports),
+              { ...reportExport, trackedAt },
+            ]),
+          };
+        });
       },
     }),
     {
@@ -78,17 +83,9 @@ const readTrackedExports = (
     return {};
   }
 
-  const exports: Record<string, TrackedReportExport> = {};
-  for (const value of Object.values(persisted.exports).slice(
-    0,
-    MAX_TRACKED_EXPORTS,
-  )) {
-    if (!isTrackedReportExport(value)) {
-      continue;
-    }
-    exports[value.exportId] = value;
-  }
-  return exports;
+  return retainNewestTrackedExports(
+    Object.values(persisted.exports).filter(isTrackedReportExport),
+  );
 };
 
 const isTrackedReportExport = (
@@ -106,6 +103,9 @@ const isTrackedReportExport = (
     typeof value.workspaceId === "string" &&
     UUID_PATTERN.test(value.workspaceId) &&
     "mode" in value &&
-    (value.mode === "workspace" || value.mode === "download")
+    (value.mode === "workspace" || value.mode === "download") &&
+    "trackedAt" in value &&
+    typeof value.trackedAt === "number" &&
+    Number.isFinite(value.trackedAt)
   );
 };

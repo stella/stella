@@ -6,9 +6,13 @@
 -- squawk-ignore transaction-nesting
 COMMIT;
 --> statement-breakpoint
+SET lock_timeout = '1s';
+--> statement-breakpoint
+SET statement_timeout = '5s';
+--> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "report_exports_workspace_requester_created_idx";
 --> statement-breakpoint
-CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON "report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id");
+CREATE INDEX CONCURRENTLY IF NOT EXISTS "report_exports_workspace_requester_created_idx" ON "report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id");
 --> statement-breakpoint
 -- squawk-ignore transaction-nesting, ban-uncommitted-transaction
 BEGIN;
