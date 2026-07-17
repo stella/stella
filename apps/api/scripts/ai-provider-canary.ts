@@ -1,7 +1,6 @@
-import { isDeepStrictEqual } from "node:util";
-
 import { chat, EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { Tool } from "@tanstack/ai";
+import { isDeepStrictEqual } from "node:util";
 import * as v from "valibot";
 
 import {
@@ -548,7 +547,9 @@ const runWeeklyToolShapeProbe = async ({
     );
   }
   if (output.trim() !== WEEKLY_TOOL_RESULT) {
-    throw new TypeError("Provider did not return the weekly canary tool result.");
+    throw new TypeError(
+      "Provider did not return the weekly canary tool result.",
+    );
   }
 };
 
@@ -624,10 +625,7 @@ const requireNonEmptyText = (output: string): void => {
   }
 };
 
-const modelSelections = (
-  provider: CanaryProvider,
-  rotatedModelId?: string,
-) => {
+const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
   const modelIdForRole = (role: ModelRole) =>
     rotatedModelId !== undefined &&
     isBYOKModelRoleSupported({ modelId: rotatedModelId, provider, role })
@@ -673,7 +671,16 @@ const createCanaryConfig = ({
 
 const flagValue = (args: string[], flag: string): string | undefined => {
   const flagIndex = args.indexOf(flag);
-  return flagIndex === -1 ? undefined : args.at(flagIndex + 1);
+  if (flagIndex === -1) {
+    return undefined;
+  }
+
+  const value = args.at(flagIndex + 1);
+  if (value === undefined || value.startsWith("--")) {
+    throw new TypeError(`Pass ${flag} followed by a value.`);
+  }
+
+  return value;
 };
 
 const parseProvider = (args: string[]): CanaryProvider => {
@@ -792,7 +799,7 @@ const run = async (): Promise<void> => {
         `${rotation.modelId}, roles=${rotation.modelRoles.join(",")}, ` +
         `tool-shape=${rotation.toolShape}`,
     );
-    failures = await runWeeklyCanaryProbes(weeklyContext, 0, failures);
+    failures = await runWeeklyCanaryProbes(weeklyContext, failures);
   }
 
   if (failures > 0) {
@@ -841,41 +848,36 @@ const runProbes = async (
 
 const runWeeklyCanaryProbes = async (
   context: WeeklyCanaryContext,
-  index: number,
   failures: number,
 ): Promise<number> => {
-  const role = context.rotation.modelRoles.at(index);
-  if (role !== undefined) {
+  let totalFailures = failures;
+
+  for (const role of context.rotation.modelRoles) {
     const label = `weekly-role-${role}:${context.rotation.modelId}`;
     const signal = AbortSignal.timeout(MODEL_ROLE_PROBE_TIMEOUT_MS);
     try {
+      // oxlint-disable-next-line no-await-in-loop -- role probes must stay sequential so the failure count and console output stay ordered.
       await runWeeklyModelRoleProbe({ context, role, signal });
       console.log(`[ai-canary] ${context.provider}/${label}: passed`);
-      return await runWeeklyCanaryProbes(context, index + 1, failures);
     } catch (error) {
       console.error(
         `[ai-canary] ${context.provider}/${label}: failed (${errorSummary(error, signal)})`,
       );
-      return await runWeeklyCanaryProbes(context, index + 1, failures + 1);
+      totalFailures += 1;
     }
   }
 
-  if (index !== context.rotation.modelRoles.length) {
-    return failures;
-  }
-
-  const label =
-    `weekly-tool-${context.rotation.toolShape}:` + context.rotation.modelId;
+  const label = `weekly-tool-${context.rotation.toolShape}:${context.rotation.modelId}`;
   const signal = AbortSignal.timeout(TOOL_ROUND_TRIP_PROBE_TIMEOUT_MS);
   try {
     await runWeeklyToolShapeProbe({ context, signal });
     console.log(`[ai-canary] ${context.provider}/${label}: passed`);
-    return failures;
+    return totalFailures;
   } catch (error) {
     console.error(
       `[ai-canary] ${context.provider}/${label}: failed (${errorSummary(error, signal)})`,
     );
-    return failures + 1;
+    return totalFailures + 1;
   }
 };
 

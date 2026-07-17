@@ -3,8 +3,9 @@ name: AI provider canary
 on:
   schedule:
     # The weekly tier is a superset of the daily tier, so it replaces Monday's
-    # daily run instead of duplicating the same provider calls.
-    - cron: "17 3 * * 2-7"
+    # daily run instead of duplicating the same provider calls. GitHub Actions
+    # day-of-week accepts 0-6 (0 = Sunday); Tuesday-Sunday is "0,2-6".
+    - cron: "17 3 * * 0,2-6"
     - cron: "17 3 * * 1"
   workflow_dispatch:
     inputs:
