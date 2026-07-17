@@ -18,6 +18,7 @@ import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import {
   McpAuthenticationError,
+  McpGatewayLoadError,
   McpOrganizationAccessError,
 } from "@/api/mcp/errors";
 import { getMcpInstructions } from "@/api/mcp/instructions";
@@ -26,7 +27,11 @@ import {
   getMcpWwwAuthenticateHeader,
 } from "@/api/mcp/metadata";
 import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
-import { closestToolNames, structuredErrorResult } from "@/api/mcp/tool-utils";
+import {
+  closestToolNames,
+  MCP_INTERNAL_ERROR_HINT,
+  structuredErrorResult,
+} from "@/api/mcp/tool-utils";
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
 
@@ -125,6 +130,40 @@ const accessDeniedResponse = ({
   });
 };
 
+/** Hint (seconds) for a client to back off before retrying a transient fault. */
+const MCP_RETRY_AFTER_SECONDS = 2;
+
+/**
+ * A server-side fault (token-verification infrastructure outage, a bug in
+ * session resolution, or a transport failure) is not a bad token: it must not
+ * carry `WWW-Authenticate` (which would trigger a re-consent loop) and must not
+ * leak internals. A generic, retryable 5xx tells the client to back off and
+ * retry; the real cause is captured for observability by the caller.
+ */
+const retryableServerErrorResponse = () => {
+  const headers = createMcpCorsHeaders();
+  headers.set("Retry-After", String(MCP_RETRY_AFTER_SECONDS));
+
+  return new Response("Service temporarily unavailable", {
+    headers,
+    status: 503,
+  });
+};
+
+/**
+ * Generic, retryable tool-error envelope for an unexpected failure while
+ * handling a `tools/call` (e.g. a gateway load fault surfaced before dispatch).
+ * Details never reach the caller; they are captured at the failure site.
+ */
+const retryableToolErrorResult = (): CallToolResult =>
+  structuredErrorResult({
+    code: "internal_error",
+    message:
+      "The request could not be completed due to a temporary server error",
+    retryable: true,
+    hint: MCP_INTERNAL_ERROR_HINT,
+  });
+
 export const createMcpHttpRequestHandler = ({
   authenticateMcpRequest,
   captureError,
@@ -182,7 +221,21 @@ export const createMcpHttpRequestHandler = ({
         return missingScopeResult(hintedScope);
       }
 
-      const definition = await getMcpToolDefinition(toolName, context, mode);
+      // Resolving a dynamic-gateway tool reads the backing store. A load fault
+      // (`McpGatewayLoadError`) must not collapse into `unknown_tool`: answer a
+      // transient outage with a retryable `internal_error` so the caller retries
+      // instead of treating the tool as gone. The underlying failure is captured
+      // at the load site, so it is not re-captured here.
+      let definition: McpToolDefinition | undefined;
+      try {
+        definition = await getMcpToolDefinition(toolName, context, mode);
+      } catch (error) {
+        if (error instanceof McpGatewayLoadError) {
+          return retryableToolErrorResult();
+        }
+        captureError(error, { phase: "tools/call", mode, source: "mcp" });
+        return retryableToolErrorResult();
+      }
       if (!definition) {
         // Suggest the closest names the caller can actually see (scope-filtered
         // list), so a typo resolves without leaking tools they lack access to.
@@ -270,19 +323,27 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
-      if (!(error instanceof McpAuthenticationError)) {
-        captureError(error, {
-          phase: "transport",
+      // Only a genuine token rejection gets a 401 + `WWW-Authenticate`. Anything
+      // else (a token-verification infrastructure outage surfaced as
+      // `McpTokenVerificationError`, a bug in session resolution, or a transport
+      // fault) is a server-side problem, not a bad token: capture it and return
+      // a retryable 5xx so the client backs off instead of dropping into a
+      // re-consent loop.
+      if (error instanceof McpAuthenticationError) {
+        return accessDeniedResponse({
+          message: "Invalid or expired token",
           mode,
-          source: "mcp",
+          status: 401,
         });
       }
 
-      return accessDeniedResponse({
-        message: "Invalid or expired token",
+      captureError(error, {
+        phase: "transport",
         mode,
-        status: 401,
+        source: "mcp",
       });
+
+      return retryableServerErrorResponse();
     } finally {
       if (transport) {
         await transport.close().catch(() => null);

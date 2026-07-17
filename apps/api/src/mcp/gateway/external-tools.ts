@@ -1,3 +1,4 @@
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
@@ -14,6 +15,7 @@ import {
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { McpGatewayLoadError } from "@/api/mcp/errors";
 import { consumeMcpGatewayRateLimit } from "@/api/mcp/gateway/rate-limit";
 import {
   MCP_INTERNAL_ERROR_HINT,
@@ -35,6 +37,23 @@ export type ResolvedExternalMcpTool = {
   connectorSlug: string;
   connection: LoadedMcpConnection;
 };
+
+/**
+ * Map a dynamic-gateway load fault to a retryable `internal_error` envelope, or
+ * `null` when the error is not a load fault (the caller rethrows). Shared by the
+ * external and skill dispatch paths so a transient backing-store outage answers
+ * a `tools/call` with a retryable error instead of a non-retryable
+ * `unknown_tool`. The underlying failure was captured at the load site.
+ */
+export const gatewayLoadErrorResult = (error: unknown): CallToolResult | null =>
+  error instanceof McpGatewayLoadError
+    ? structuredErrorResult({
+        code: "internal_error",
+        message: "MCP gateway tools are temporarily unavailable",
+        retryable: true,
+        hint: MCP_INTERNAL_ERROR_HINT,
+      })
+    : null;
 
 export const listGatewayExternalMcpTools = async ({
   context,
@@ -103,7 +122,18 @@ export const callGatewayExternalMcpTool = async ({
   context: McpRequestContext;
   toolName: string;
 }) => {
-  const resolved = await resolveGatewayExternalMcpTool({ context, toolName });
+  let resolved: ResolvedExternalMcpTool | null;
+  try {
+    resolved = await resolveGatewayExternalMcpTool({ context, toolName });
+  } catch (error) {
+    // A load fault means we cannot tell whether the tool exists: answer with a
+    // retryable error, never a definitive `unknown_tool`.
+    const loadError = gatewayLoadErrorResult(error);
+    if (loadError) {
+      return loadError;
+    }
+    throw error;
+  }
   if (!resolved) {
     return structuredErrorResult({
       code: "unknown_tool",
@@ -304,7 +334,14 @@ const loadCachedGatewayToolRows = async ({
 
   if (Result.isError(rows)) {
     captureError(rows.error, { source: "mcp-gateway-external-list" });
-    return [];
+    // Propagate the load fault as a distinct state: returning `[]` here would
+    // make a transient DB outage indistinguishable from "no connectors", so a
+    // `tools/call` would answer `unknown_tool` and `tools/list` would silently
+    // shrink. Callers map this to a retryable error / a loud list failure.
+    throw new McpGatewayLoadError({
+      message: "Failed to load MCP gateway connectors",
+      cause: rows.error,
+    });
   }
 
   return rows.value;

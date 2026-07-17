@@ -2,10 +2,15 @@ import { describe, expect, test } from "bun:test";
 
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import {
+  classifyMcpTokenVerificationError,
   extractMcpSession,
   getMcpAccessTokenVerificationOptions,
 } from "@/api/mcp/auth";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
+import {
+  McpAuthenticationError,
+  McpTokenVerificationError,
+} from "@/api/mcp/errors";
 
 describe("extractMcpSession", () => {
   test("uses explicit auth endpoints for MCP access token verification", () => {
@@ -58,5 +63,54 @@ describe("extractMcpSession", () => {
         sub: "user_123",
       }),
     ).toThrow("Token missing org_id claim");
+  });
+});
+
+describe("classifyMcpTokenVerificationError", () => {
+  test("maps an UNAUTHORIZED verifier error to a token rejection", () => {
+    // Shape of a better-call APIError as re-thrown by the resource client for a
+    // genuinely invalid/expired token.
+    const apiError = Object.assign(new Error("token expired"), {
+      name: "APIError",
+      status: "UNAUTHORIZED",
+      statusCode: 401,
+    });
+
+    const classified = classifyMcpTokenVerificationError(apiError);
+
+    expect(classified).toBeInstanceOf(McpAuthenticationError);
+    expect(classified.cause).toBe(apiError);
+  });
+
+  test("keeps a claim-extraction rejection as an authentication error", () => {
+    const claimError = new McpAuthenticationError({
+      message: "Token missing org_id claim",
+    });
+
+    expect(classifyMcpTokenVerificationError(claimError)).toBe(claimError);
+  });
+
+  test("maps a JWKS fetch outage to a retryable verification error", () => {
+    // `verifyAccessToken` re-throws a JWKS fetch/network failure as a plain
+    // Error (no UNAUTHORIZED status), so it must not present as a bad token.
+    const jwksError = new Error("Jwks failed: fetch failed");
+
+    const classified = classifyMcpTokenVerificationError(jwksError);
+
+    expect(classified).toBeInstanceOf(McpTokenVerificationError);
+    expect(classified).not.toBeInstanceOf(McpAuthenticationError);
+    expect(classified.cause).toBe(jwksError);
+  });
+
+  test("maps a non-UNAUTHORIZED APIError to a retryable verification error", () => {
+    const internalError = Object.assign(new Error("introspection failed"), {
+      name: "APIError",
+      status: "INTERNAL_SERVER_ERROR",
+      statusCode: 500,
+    });
+
+    expect(classifyMcpTokenVerificationError(internalError)).toBeInstanceOf(
+      McpTokenVerificationError,
+    );
   });
 });

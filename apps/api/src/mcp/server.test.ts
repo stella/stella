@@ -13,7 +13,9 @@ import {
 } from "@/api/mcp/constants";
 import {
   McpAuthenticationError,
+  McpGatewayLoadError,
   McpOrganizationAccessError,
+  McpTokenVerificationError,
 } from "@/api/mcp/errors";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import type { ToolScope } from "@/api/mcp/tool-types";
@@ -164,7 +166,7 @@ describe("handleMcpHttpRequest", () => {
     expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
-  test("captures unexpected transport errors while returning a generic 401", async () => {
+  test("captures unexpected transport errors as a retryable 5xx, not a 401", async () => {
     const error = new Error("database connection refused");
     authenticateMcpRequestMock.mockResolvedValue({
       organizationId: "org_1",
@@ -182,13 +184,79 @@ describe("handleMcpHttpRequest", () => {
       }),
     );
 
-    expect(response.status).toBe(401);
-    expect(await response.text()).toBe("Invalid or expired token");
+    // A server-side bug must not present to the client as a bad token (which
+    // would trigger a pointless re-consent loop): no 401, no WWW-Authenticate.
+    expect(response.status).toBe(503);
+    expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    expect(response.headers.get("Retry-After")).toBe("2");
     expect(captureErrorMock).toHaveBeenCalledWith(error, {
       mode: "default",
       phase: "transport",
       source: "mcp",
     });
+  });
+
+  test("captures a token-verification infrastructure outage as a retryable 5xx, not a 401", async () => {
+    const error = new McpTokenVerificationError({
+      message: "Token verification is temporarily unavailable",
+      cause: new Error("Jwks failed: fetch failed"),
+    });
+    authenticateMcpRequestMock.mockRejectedValue(error);
+
+    const response = await handleMcpHttpRequest(
+      new Request("http://localhost/mcp", {
+        headers: {
+          authorization: "Bearer token",
+        },
+        method: "POST",
+      }),
+    );
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("WWW-Authenticate")).toBeNull();
+    expect(captureErrorMock).toHaveBeenCalledWith(error, {
+      mode: "default",
+      phase: "transport",
+      source: "mcp",
+    });
+  });
+
+  test("answers a gateway load fault during tools/call with a retryable internal_error, not unknown_tool", async () => {
+    const context = { type: "mcp-context" };
+    authenticateMcpRequestMock.mockResolvedValue({
+      organizationId: "org_1",
+      scopes: ["stella:read", "stella:skills"],
+      userId: "user_1",
+    });
+    resolveMcpSessionContextMock.mockResolvedValue(context);
+    getMcpToolScopeHintMock.mockReturnValue(undefined);
+    // The dynamic-gateway definition load fails (backing store outage). This
+    // must not collapse into a definitive unknown_tool.
+    getMcpToolDefinitionMock.mockRejectedValue(
+      new McpGatewayLoadError({ message: "Failed to load agent skills" }),
+    );
+
+    const response = await handleMcpHttpRequest(
+      createMcpRequest({
+        id: 1,
+        jsonrpc: "2.0",
+        method: "tools/call",
+        params: { arguments: {}, name: "skill__research" },
+      }),
+    );
+    const body = await readTestJson<McpJsonResponse<CallToolResult>>(response);
+
+    expect(response.status).toBe(200);
+    expect(handleMcpToolCallMock).not.toHaveBeenCalled();
+    const item = body.result.content.at(0);
+    const parsed = item?.type === "text" ? JSON.parse(item.text) : undefined;
+    expect(parsed.error.code).toBe("internal_error");
+    expect(parsed.error.retryable).toBe(true);
+    expect(parsed.error.code).not.toBe("unknown_tool");
+    expect(body.result.isError).toBe(true);
+    // The load site already captured the DB failure; the transport must not
+    // re-capture the mapped gateway error.
+    expect(captureErrorMock).not.toHaveBeenCalled();
   });
 
   test("passes granted scopes to tool listing", async () => {
