@@ -102,7 +102,7 @@ export const GITHUB_REPO_PATTERN =
   /^(?<owner>[A-Za-z0-9][A-Za-z0-9-]{0,38})\/(?<name>[A-Za-z0-9._-]{1,100})$/u;
 /** Full 40-character lowercase hex commit SHA; abbreviated refs rejected. */
 export const GITHUB_REV_PATTERN = /^[0-9a-f]{40}$/u;
-/** Relative path segments; traversal (`..`) rejected by an extra check. */
+/** Relative path segments; dot segments rejected by an extra check. */
 const GITHUB_DIRECTORY_PATTERN = /^[\w.-]+(?:\/[\w.-]+)*$/u;
 
 const githubRepo = v.pipe(
@@ -133,8 +133,9 @@ const githubDirectory = v.pipe(
     "directory must be a relative path within the repo",
   ),
   v.check(
-    (value) => !value.split("/").includes(".."),
-    "directory must not contain '..' segments",
+    (value) =>
+      value.split("/").every((segment) => segment !== "." && segment !== ".."),
+    "directory must not contain '.' or '..' segments",
   ),
 );
 

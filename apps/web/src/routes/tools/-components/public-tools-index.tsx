@@ -102,7 +102,7 @@ export function PublicToolsIndex({
         </div>
         <Button
           className="shrink-0"
-          render={<Link to="/tools/contribute" />}
+          render={<Link from="/tools/" to="/tools/contribute" />}
           size="sm"
           variant="outline"
         >

@@ -29,6 +29,7 @@ export const ToolCatalogueCard = ({
   return (
     <Link
       className="border-border hover:bg-muted/40 flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-start transition-colors"
+      from="/tools/"
       params={{ slug: entry.slug }}
       to="/tools/$slug"
     >

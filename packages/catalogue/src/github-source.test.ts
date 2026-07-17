@@ -109,6 +109,21 @@ describe("skill source schema", () => {
     ).toBe(false);
   });
 
+  it("rejects dot directory segments that GitHub URL handling normalizes", () => {
+    expect(
+      v.safeParse(catalogueEntrySchema, {
+        ...validGithubSkill,
+        directory: ".",
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(catalogueEntrySchema, {
+        ...validGithubSkill,
+        directory: "skills/./german-law",
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires a license on both variants", () => {
     const { license: _gh, ...githubNoLicense } = validGithubSkill;
     expect(v.safeParse(catalogueEntrySchema, githubNoLicense).success).toBe(
