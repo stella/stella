@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { resolveUiLocale } from "@stll/locales";
@@ -35,6 +35,7 @@ type ReportExportNotificationResult =
   | { status: "suppressed" }
   | { status: "delivery_failed" }
   | { status: "claim_failed" }
+  | { status: "finalize_failed" }
   | { status: "skipped" };
 
 const defaultDelivery: ReportExportNotificationDelivery = {
@@ -47,9 +48,12 @@ const defaultDelivery: ReportExportNotificationDelivery = {
  *
  * The claim transitions `pending` to `sending` before the external email call.
  * A crash can therefore omit a notification, but neither a BullMQ redelivery
- * nor two workers racing the same row can send it twice. The message contract
- * contains only terminal status, locale, recipient, and a tenant-scoped export
- * recovery URL; report content and artifact metadata never enter this boundary.
+ * nor two workers racing the same row can send it twice. Finalization failure
+ * leaves the claim in `sending` and returns `finalize_failed`, preserving that
+ * at-most-once boundary without reporting a terminal outcome. The message
+ * contract contains only terminal status, locale, recipient, and a tenant-scoped
+ * export recovery URL; report content and artifact metadata never enter this
+ * boundary.
  */
 export const notifyReportExportStatus = async ({
   delivery = defaultDelivery,
@@ -106,22 +110,20 @@ export const notifyReportExportStatus = async ({
       operation: "configuration",
       workspaceId,
     });
-    await setNotificationStatus({
+    return finalizeNotificationStatus({
       exportId,
       scopedDb,
       status: "delivery_failed",
       workspaceId,
     });
-    return { status: "delivery_failed" };
   }
   if (!configuredResult.value) {
-    await setNotificationStatus({
+    return finalizeNotificationStatus({
       exportId,
       scopedDb,
       status: "suppressed",
       workspaceId,
     });
-    return { status: "suppressed" };
   }
 
   const recipientResult = await Result.tryPromise(
@@ -139,24 +141,22 @@ export const notifyReportExportStatus = async ({
       operation: "recipient",
       workspaceId,
     });
-    await setNotificationStatus({
+    return finalizeNotificationStatus({
       exportId,
       scopedDb,
       status: "delivery_failed",
       workspaceId,
     });
-    return { status: "delivery_failed" };
   }
 
   const recipient = recipientResult.value;
   if (recipient === undefined || !recipient.emailVerified) {
-    await setNotificationStatus({
+    return finalizeNotificationStatus({
       exportId,
       scopedDb,
       status: "suppressed",
       workspaceId,
     });
-    return { status: "suppressed" };
   }
 
   const status = claim.status === "completed" ? "completed" : "failed";
@@ -175,22 +175,20 @@ export const notifyReportExportStatus = async ({
       operation: "send",
       workspaceId,
     });
-    await setNotificationStatus({
+    return finalizeNotificationStatus({
       exportId,
       scopedDb,
       status: "delivery_failed",
       workspaceId,
     });
-    return { status: "delivery_failed" };
   }
 
-  await setNotificationStatus({
+  return finalizeNotificationStatus({
     exportId,
     scopedDb,
     status: "sent",
     workspaceId,
   });
-  return { status: "sent" };
 };
 
 type ReportExportRecoveryUrlOptions = {
@@ -207,24 +205,34 @@ const reportExportRecoveryUrl = ({
     env.FRONTEND_URL,
   ).toString();
 
-type SetNotificationStatusOptions = {
+type FinalNotificationStatus = "delivery_failed" | "sent" | "suppressed";
+
+type FinalizeNotificationStatusOptions = {
   exportId: SafeId<"reportExport">;
   scopedDb: ScopedDb;
-  status: "delivery_failed" | "sent" | "suppressed";
+  status: FinalNotificationStatus;
   workspaceId: SafeId<"workspace">;
 };
 
-const setNotificationStatus = async ({
+type NotificationFinalizationResult = {
+  status: FinalNotificationStatus | "finalize_failed";
+};
+
+class NotificationFinalizationError extends TaggedError(
+  "NotificationFinalizationError",
+)<{ affectedRows: number; message: string }>() {}
+
+const finalizeNotificationStatus = async ({
   exportId,
   scopedDb,
   status,
   workspaceId,
-}: SetNotificationStatusOptions): Promise<void> => {
+}: FinalizeNotificationStatusOptions): Promise<NotificationFinalizationResult> => {
   const result = await Result.tryPromise(
     async () =>
       await scopedDb(async (tx) => {
         // audit: skip — delivery bookkeeping on an already-audited export row.
-        await tx
+        return await tx
           .update(reportExports)
           .set({ notificationStatus: status })
           .where(
@@ -233,7 +241,8 @@ const setNotificationStatus = async ({
               eq(reportExports.workspaceId, workspaceId),
               eq(reportExports.notificationStatus, "sending"),
             ),
-          );
+          )
+          .returning({ id: reportExports.id });
       }),
   );
   if (Result.isError(result)) {
@@ -242,7 +251,26 @@ const setNotificationStatus = async ({
       operation: "finalize",
       workspaceId,
     });
+    return { status: "finalize_failed" };
   }
+
+  if (result.value.length !== 1) {
+    captureNotificationError(
+      new NotificationFinalizationError({
+        affectedRows: result.value.length,
+        message:
+          "Report export notification finalization must affect exactly one row",
+      }),
+      {
+        exportId,
+        operation: "finalize",
+        workspaceId,
+      },
+    );
+    return { status: "finalize_failed" };
+  }
+
+  return { status };
 };
 
 type NotificationErrorContext = {

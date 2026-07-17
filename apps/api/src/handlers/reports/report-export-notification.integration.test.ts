@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { user } from "@/api/db/auth-schema";
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
 import type {
@@ -26,6 +27,7 @@ const SENSITIVE_MARKERS = [
   "secret prompt text",
   "untrusted-client-name.docx",
 ] as const;
+const FINALIZATION_SCOPED_DB_CALL = 3;
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -121,6 +123,83 @@ describe("report export status notifications", () => {
       },
     ]);
     expectPrivacySafe(recording.deliveries);
+  });
+
+  test("reports finalization failure without retrying after an update error", async () => {
+    const requester = await createTestUser();
+    const exportId = await createTestExport({
+      notificationStatus: "pending",
+      requestedBy: requester.id,
+      status: "completed",
+    });
+    const recording = createRecordingDelivery();
+    const scopedDb = failScopedDbCall(
+      scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
+      FINALIZATION_SCOPED_DB_CALL,
+    );
+
+    const result = await notifyReportExportStatus({
+      delivery: recording.delivery,
+      exportId,
+      scopedDb,
+      userId: requester.id,
+      workspaceId: ids.wsA1,
+    });
+    const redelivery = await notifyReportExportStatus({
+      delivery: recording.delivery,
+      exportId,
+      scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
+      userId: requester.id,
+      workspaceId: ids.wsA1,
+    });
+
+    expect(result).toEqual({ status: "finalize_failed" });
+    expect(redelivery).toEqual({ status: "skipped" });
+    expect(recording.deliveries).toHaveLength(1);
+    expect(await readNotificationState(exportId)).toEqual({
+      notificationAttemptedAt: expect.any(Date),
+      notificationStatus: "sending",
+    });
+  });
+
+  test("reports finalization failure when no sending row is updated", async () => {
+    const requester = await createTestUser();
+    const exportId = await createTestExport({
+      notificationStatus: "pending",
+      requestedBy: requester.id,
+      status: "completed",
+    });
+    const recording = createRecordingDelivery({
+      onSend: async () => {
+        await testDb
+          .update(reportExports)
+          .set({ notificationStatus: "delivery_failed" })
+          .where(eq(reportExports.id, exportId));
+      },
+    });
+
+    const result = await notifyReportExportStatus({
+      delivery: recording.delivery,
+      exportId,
+      scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
+      userId: requester.id,
+      workspaceId: ids.wsA1,
+    });
+    const redelivery = await notifyReportExportStatus({
+      delivery: recording.delivery,
+      exportId,
+      scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
+      userId: requester.id,
+      workspaceId: ids.wsA1,
+    });
+
+    expect(result).toEqual({ status: "finalize_failed" });
+    expect(redelivery).toEqual({ status: "skipped" });
+    expect(recording.deliveries).toHaveLength(1);
+    expect(await readNotificationState(exportId)).toEqual({
+      notificationAttemptedAt: expect.any(Date),
+      notificationStatus: "delivery_failed",
+    });
   });
 
   test("wrong requester and workspace cannot claim another export", async () => {
@@ -350,10 +429,12 @@ const scopedDbFor = ({
   asTestRaw<ScopedDb>(createScopedDb(testDb, [workspaceId], ids.orgA, userId));
 
 type CreateRecordingDeliveryOptions = {
+  onSend?: (delivery: ReportExportNotificationEmail) => Promise<void>;
   sendError?: Error;
 };
 
 const createRecordingDelivery = ({
+  onSend,
   sendError,
 }: CreateRecordingDeliveryOptions = {}) => {
   const deliveries: ReportExportNotificationEmail[] = [];
@@ -363,11 +444,23 @@ const createRecordingDelivery = ({
       isConfigured: () => true,
       send: async (delivery: ReportExportNotificationEmail) => {
         deliveries.push(delivery);
+        await onSend?.(delivery);
         if (sendError) {
           throw sendError;
         }
       },
     },
+  };
+};
+
+const failScopedDbCall = (scopedDb: ScopedDb, callToFail: number): ScopedDb => {
+  let callCount = 0;
+  return async <T>(operation: (tx: Transaction) => Promise<T>) => {
+    callCount += 1;
+    if (callCount === callToFail) {
+      throw new Error("simulated finalization update failure");
+    }
+    return await scopedDb(operation);
   };
 };
 

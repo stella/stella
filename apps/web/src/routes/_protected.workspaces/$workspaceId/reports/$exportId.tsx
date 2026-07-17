@@ -15,59 +15,6 @@ import { toAPIError } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
-const POLL_INTERVAL_MS = 2000;
-
-type ReportExportRecoveryKey = {
-  exportId: string;
-  workspaceId: string;
-};
-
-const reportExportRecoveryKeys = {
-  all: (workspaceId: string) =>
-    ["report-export-recovery", workspaceId] as const,
-  detail: ({ exportId, workspaceId }: ReportExportRecoveryKey) =>
-    [...reportExportRecoveryKeys.all(workspaceId), exportId] as const,
-};
-
-const reportExportRecoveryOptions = ({
-  exportId,
-  workspaceId,
-}: ReportExportRecoveryKey) =>
-  queryOptions({
-    queryKey: reportExportRecoveryKeys.detail({ exportId, workspaceId }),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .reports({ exportId: toSafeId<"reportExport">(exportId) })
-        .get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      if (status === "completed" || status === "failed") {
-        return false;
-      }
-      return POLL_INTERVAL_MS;
-    },
-    staleTime: 0,
-  });
-
-export const Route = createFileRoute(
-  "/_protected/workspaces/$workspaceId/reports/$exportId",
-)({
-  component: ReportExportRecoveryPage,
-  loader: async ({ context, params }) => {
-    await ensureRouteQueryData(
-      context.queryClient,
-      reportExportRecoveryOptions(params),
-    );
-  },
-  pendingComponent: ReportExportRecoverySkeleton,
-});
-
 function ReportExportRecoveryPage() {
   const t = useTranslations();
   const analytics = useAnalytics();
@@ -157,6 +104,7 @@ function ReportExportRecoveryPage() {
             <Button
               render={
                 <Link
+                  from="/workspaces/$workspaceId/reports/$exportId"
                   params={{ entityId: data.resultEntityId, workspaceId }}
                   to="/workspaces/$workspaceId/entities/$entityId"
                 />
@@ -179,19 +127,74 @@ function ReportExportRecoveryPage() {
   );
 }
 
-const ReportExportRecoverySkeleton = () => (
-  <main className="flex h-full flex-col">
-    <header className="border-b px-4 py-3">
-      <Skeleton className="h-5 w-28" />
-    </header>
-    <div className="flex-1 p-6">
-      <section className="mx-auto flex max-w-lg flex-col gap-3 rounded-lg border p-5">
-        <Skeleton className="h-5 w-32" />
-        <Skeleton className="h-9 w-full" />
-      </section>
-    </div>
-  </main>
-);
+function ReportExportRecoverySkeleton() {
+  return (
+    <main className="flex h-full flex-col">
+      <header className="border-b px-4 py-3">
+        <Skeleton className="h-5 w-28" />
+      </header>
+      <div className="flex-1 p-6">
+        <section className="mx-auto flex max-w-lg flex-col gap-3 rounded-lg border p-5">
+          <Skeleton className="h-5 w-32" />
+          <Skeleton className="h-9 w-full" />
+        </section>
+      </div>
+    </main>
+  );
+}
+
+const POLL_INTERVAL_MS = 2000;
+
+type ReportExportRecoveryKey = {
+  exportId: string;
+  workspaceId: string;
+};
+
+const reportExportRecoveryKeys = {
+  all: (workspaceId: string) =>
+    ["report-export-recovery", workspaceId] as const,
+  detail: ({ exportId, workspaceId }: ReportExportRecoveryKey) =>
+    [...reportExportRecoveryKeys.all(workspaceId), exportId] as const,
+};
+
+const reportExportRecoveryOptions = ({
+  exportId,
+  workspaceId,
+}: ReportExportRecoveryKey) =>
+  queryOptions({
+    queryKey: reportExportRecoveryKeys.detail({ exportId, workspaceId }),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .reports({ exportId: toSafeId<"reportExport">(exportId) })
+        .get({ fetch: { signal } });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      return response.data;
+    },
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (status === "completed" || status === "failed") {
+        return false;
+      }
+      return POLL_INTERVAL_MS;
+    },
+    staleTime: 0,
+  });
+
+export const Route = createFileRoute(
+  "/_protected/workspaces/$workspaceId/reports/$exportId",
+)({
+  component: ReportExportRecoveryPage,
+  loader: async ({ context, params }) => {
+    await ensureRouteQueryData(
+      context.queryClient,
+      reportExportRecoveryOptions(params),
+    );
+  },
+  pendingComponent: ReportExportRecoverySkeleton,
+});
 
 const triggerUrlDownload = (url: string) => {
   const link = document.createElement("a");

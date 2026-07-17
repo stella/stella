@@ -207,7 +207,10 @@ export const initReportExportWorker = () => {
       ),
     );
     const finalized = results.filter(
-      ({ status }) => status !== "skipped" && status !== "claim_failed",
+      ({ status }) =>
+        status !== "skipped" &&
+        status !== "claim_failed" &&
+        status !== "finalize_failed",
     ).length;
     const reconciled = finalized + suppressed;
     if (reconciled > 0) {
