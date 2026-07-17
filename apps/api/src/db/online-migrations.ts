@@ -18,9 +18,9 @@ const READ_INDEX_STATE_SQL = `
     AND table_relation.relname = 'report_exports'
 `;
 const DROP_INVALID_INDEX_SQL =
-  'DROP INDEX CONCURRENTLY IF EXISTS "report_exports_workspace_requester_created_idx"';
+  'DROP INDEX CONCURRENTLY IF EXISTS public."report_exports_workspace_requester_created_idx"';
 const CREATE_INDEX_SQL =
-  'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON "report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")';
+  'CREATE INDEX CONCURRENTLY public."report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")';
 
 type OnlineMigrationConnection = {
   execute: (query: string, params?: readonly unknown[]) => Promise<void>;

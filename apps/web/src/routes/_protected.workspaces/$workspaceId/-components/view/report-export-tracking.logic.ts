@@ -30,6 +30,12 @@ export const retainNewestTrackedExports = (
   return exports;
 };
 
+export const evictedTrackedExportIds = (
+  previousExports: Record<string, TrackedReportExport>,
+  nextExports: Record<string, TrackedReportExport>,
+): string[] =>
+  Object.keys(previousExports).filter((exportId) => !(exportId in nextExports));
+
 export const nextTrackedAt = (
   trackedExports: Record<string, TrackedReportExport>,
   now: number,

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  evictedTrackedExportIds,
   nextTrackedAt,
   retainNewestTrackedExports,
   trackedExportsForRequester,
@@ -62,5 +63,26 @@ describe("report export tracking bounds", () => {
     expect(
       trackedExportsForRequester(retained, "user-1", "workspace-1"),
     ).toEqual([trackedExport(1)]);
+  });
+
+  test("identifies exports dropped by retention so their toasts can be settled", () => {
+    const before: Record<string, TrackedReportExport> = {};
+    for (const reportExport of Array.from({ length: 101 }, (_, index) =>
+      trackedExport(index),
+    )) {
+      before[reportExport.exportId] = reportExport;
+    }
+    const after = retainNewestTrackedExports(Object.values(before));
+
+    expect(evictedTrackedExportIds(before, after)).toEqual(["export-0"]);
+  });
+
+  test("reports no evictions when nothing was dropped", () => {
+    const before: Record<string, TrackedReportExport> = {
+      "export-1": trackedExport(1),
+    };
+    const after = retainNewestTrackedExports(Object.values(before));
+
+    expect(evictedTrackedExportIds(before, after)).toEqual([]);
   });
 });

@@ -1,7 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { stellaToast } from "@stll/ui/components/toast";
+
 import {
+  evictedTrackedExportIds,
   nextTrackedAt,
   retainNewestTrackedExports,
 } from "./report-export-tracking.logic";
@@ -50,12 +53,15 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
       track: (reportExport) => {
         set((state) => {
           const trackedAt = nextTrackedAt(state.exports, Date.now());
-          return {
-            exports: retainNewestTrackedExports([
-              ...Object.values(state.exports),
-              { ...reportExport, trackedAt },
-            ]),
-          };
+          const exports = retainNewestTrackedExports([
+            ...Object.values(state.exports),
+            { ...reportExport, trackedAt },
+          ]);
+          const toastIds = dismissEvictedToasts(
+            state.toastIds,
+            evictedTrackedExportIds(state.exports, exports),
+          );
+          return { exports, toastIds };
         });
       },
       toastIds: {},
@@ -71,6 +77,26 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
     },
   ),
 );
+
+/** Evicting a tracked export (the 100-slot cap) drops its state before the
+ * tracker ever observes it settle, so its loading toast would otherwise
+ * never resolve. Dismiss and forget those toasts here instead. */
+const dismissEvictedToasts = (
+  toastIds: Record<string, string>,
+  exportIds: string[],
+): Record<string, string> => {
+  let remainingToastIds = toastIds;
+  for (const exportId of exportIds) {
+    const toastId = remainingToastIds[exportId];
+    if (toastId === undefined) {
+      continue;
+    }
+    stellaToast.dismiss(toastId);
+    const { [exportId]: _removed, ...rest } = remainingToastIds;
+    remainingToastIds = rest;
+  }
+  return remainingToastIds;
+};
 
 export const registerReportExportToast = (
   exportId: string,
