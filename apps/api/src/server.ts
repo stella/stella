@@ -23,6 +23,7 @@ import {
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { devPublicRoute, devRoute } from "@/api/handlers/dev/routes";
 import { documentTypesRoute } from "@/api/handlers/document-types/routes";
+import { docxSuggestionsRoute } from "@/api/handlers/docx-suggestions/routes";
 import { desktopEditSessionsRoute } from "@/api/handlers/entities/desktop-edit-sessions-route";
 import { entitiesRoute } from "@/api/handlers/entities/routes";
 import { isUploadRateLimitedPath } from "@/api/handlers/entities/upload-rate-limit";
@@ -451,6 +452,7 @@ const api = new Elysia()
       .use(desktopEditSessionsRoute)
       .use(uploadsRoute)
       .use(entitiesRoute)
+      .use(docxSuggestionsRoute)
       .use(fieldsRoute)
       .use(templatesRoute)
       .use(styleSetsRoute)

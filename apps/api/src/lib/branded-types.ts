@@ -36,6 +36,7 @@ export type SafeIdType =
   | "usageEvent"
   | "desktopEditHandoff"
   | "desktopEditSession"
+  | "docxSuggestion"
   | "document"
   | "documentCounter"
   | "documentType"
