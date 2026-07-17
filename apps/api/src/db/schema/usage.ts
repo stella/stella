@@ -300,6 +300,7 @@ export const usageEvents = p.pgTable(
       .notNull(),
     isByok: p.boolean("is_byok").notNull().default(false),
     traceId: p.text("trace_id"),
+    idempotencyKey: p.text("idempotency_key"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -309,6 +310,10 @@ export const usageEvents = p.pgTable(
     p
       .index("usage_events_org_user_period_idx")
       .on(table.organizationId, table.userId, table.periodStart),
+    p
+      .uniqueIndex("usage_events_org_idempotency_key_uidx")
+      .on(table.organizationId, table.idempotencyKey)
+      .where(sql`idempotency_key IS NOT NULL`),
     // BYOK rows land with units_consumed = 0: the work is attributed
     // to the org's configured provider account. Platform-backed rows
     // are floored at 1 in app code.

@@ -170,8 +170,13 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         }),
       }),
       insert: () => ({
-        values: async (values: unknown) => {
+        values: (values: unknown) => {
           insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
         },
       }),
     };
@@ -206,6 +211,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     expect(insertedRows[0]).toMatchObject({
       actionType: "chat",
       isByok: false,
+      idempotencyKey: "trace_usage",
       modelRole: "chat",
       organizationId: orgId,
       periodEnd,
@@ -238,8 +244,13 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         }),
       }),
       insert: () => ({
-        values: async (values: unknown) => {
+        values: (values: unknown) => {
           insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
         },
       }),
     };
@@ -275,6 +286,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     expect(insertedRows).toHaveLength(1);
     expect(insertedRows[0]).toMatchObject({
+      idempotencyKey: "trace_fallback_usage",
       serviceTier: "standard",
       traceId: "trace_fallback_usage",
     });

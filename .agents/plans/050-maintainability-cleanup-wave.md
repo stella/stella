@@ -5,7 +5,7 @@ Date: 2026-07-17
 ## Goal
 
 Reduce change risk in the chat, Template Studio, and template-filling hotspots
-without changing product behaviour. Land the work as six independently
+without changing intended product behaviour. Land the work as eight independently
 reviewable pull requests, preserving vertical-slice ownership and adding a
 safety net before each structural extraction.
 
@@ -14,6 +14,9 @@ safety net before each structural extraction.
 - **Safety nets precede extraction:** Characterization and browser tests land
   before moving high-churn orchestration so failures distinguish behavioural
   regressions from mechanical movement.
+- **Correctness fixes stay separate from extraction:** Characterization exposed
+  disconnect rollback and usage-idempotency gaps. Each fix lands in its own PR
+  before send-message moves, so refactor review remains mechanical.
 - **Keep ownership inside the existing slice:** Chat helpers stay in the chat
   slice, Template Studio interactions stay in the knowledge route slice, and
   reusable template-filling logic becomes a templates-domain service. This is
@@ -35,14 +38,16 @@ safety net before each structural extraction.
 
 - PR 1: characterize chat send-message failure, rollback, tenant-scope,
   persistence, and usage invariants.
-- PR 2: decompose send-message orchestration within the chat slice.
-- PR 3: add browser coverage for Template Studio edit, directive insertion,
+- PR 2: prevent disconnected sends from leaving newly created empty threads.
+- PR 3: enforce idempotent usage-event persistence for repeated AI callbacks.
+- PR 4: decompose send-message orchestration within the chat slice.
+- PR 5: add browser coverage for Template Studio edit, directive insertion,
   save, and reload.
-- PR 4: extract Template Studio slash-menu and selection-gesture subsystems
+- PR 6: extract Template Studio slash-menu and selection-gesture subsystems
   within the knowledge slice.
-- PR 5: move the highest-leverage template-filling helpers out of endpoint
+- PR 7: move the highest-leverage template-filling helpers out of endpoint
   modules and into templates-domain services.
-- PR 6: add an optional privacy-safe production log exporter with correlation
+- PR 8: add an optional privacy-safe production log exporter with correlation
   identifiers and fail-closed attribute filtering.
 
 **Out of scope:**
@@ -63,6 +68,9 @@ safety net before each structural extraction.
 - `apps/api/src/handlers/chat/*.test.ts` — add invariants around authorization,
   workspace scope, rollback, idempotent persistence, aborted streams, and
   exactly-once usage accounting at the highest practical layer.
+- `apps/api/src/lib/usage/` and `apps/api/src/db/schema/usage.ts` — make
+  metered AI callbacks idempotent using an additive nullable key and a
+  tenant-scoped partial unique index.
 - `apps/web/e2e/specs/` — add a focused Template Studio editor journey using the
   existing Playwright stack.
 - `apps/web/src/routes/_protected.knowledge/-components/` — give slash-menu and
@@ -76,7 +84,9 @@ safety net before each structural extraction.
 - `scripts/ratchet-baseline.json` — lower affected metrics only after the
   implementation reduces them; never reseed upward.
 
-**DB schema changes:** none planned.
+**DB schema changes:** PR 3 adds a nullable usage-event idempotency key and a
+partial unique index scoped by organization. Historical rows and old API tasks
+remain compatible because null keys are intentionally unrestricted.
 
 ## Test Cases
 

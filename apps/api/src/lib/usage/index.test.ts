@@ -383,6 +383,49 @@ describe("usage ledger — idempotency", () => {
       expect(balance).toBe(300);
     });
   });
+
+  test("duplicate usage idempotency keys do not double-consume units", async () => {
+    await withRolledBackTx(async (tx) => {
+      const fx = await setupFixture(tx);
+      await allocateUsage({
+        tx,
+        organizationId: fx.organizationId,
+        units: 1000,
+        reason: "periodic",
+        sourceType: "hosted_entitlement",
+        sourceRef: "evt_usage_idempotency",
+        period: { start: fx.periodStart, end: fx.periodEnd },
+      });
+
+      const input = {
+        tx,
+        organizationId: fx.organizationId,
+        workspaceId: null,
+        userId: fx.userId,
+        actionType: "chat",
+        modelRole: "chat",
+        unitsConsumed: 100,
+        serviceTier: "standard",
+        isByok: false,
+        idempotencyKey: "trace_usage_idempotency",
+        traceId: "trace_usage_idempotency",
+        period: { start: fx.periodStart, end: fx.periodEnd },
+      } as const;
+
+      const first = await recordUsageEvent(input);
+      const second = await recordUsageEvent(input);
+
+      expect(first.status).toBe("recorded");
+      expect(second.status).toBe("duplicate");
+
+      const balance = await getRemainingUsageUnits({
+        tx,
+        organizationId: fx.organizationId,
+        asOf: midPeriod,
+      });
+      expect(balance).toBe(900);
+    });
+  });
 });
 
 describe("usage ledger — enum coverage", () => {

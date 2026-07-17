@@ -234,6 +234,7 @@ const recordTanStackConsumption = async ({
         organizationId: metering.organizationId,
         rawUsageMicroUnits,
         serviceTier: effectiveServiceTier,
+        idempotencyKey: config.traceId,
         traceId: config.traceId,
         userId: metering.userId,
         workspaceId: metering.workspaceId,
