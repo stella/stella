@@ -78,13 +78,24 @@ describe("RedisRateLimitContext", () => {
   });
 
   test("bounds a stalled command and cancels its timer", async () => {
+    let clientClosed = false;
+    let lateMutationApplied = false;
+    let settleCommand: (() => void) | undefined;
     let timerCancelled = false;
     const context = new RedisRateLimitContext({
       commandTimeoutMs: 500,
       createRedis: () => ({
+        close: () => {
+          clientClosed = true;
+        },
         send: async () =>
-          await new Promise<never>(() => {
-            // Intentionally unresolved to exercise the command timeout.
+          await new Promise<[number, number]>((resolve) => {
+            settleCommand = () => {
+              if (!clientClosed) {
+                lateMutationApplied = true;
+              }
+              resolve([1, WINDOW_MS]);
+            };
           }),
       }),
       failurePolicy: "fail_open_local",
@@ -101,7 +112,39 @@ describe("RedisRateLimitContext", () => {
     const counter = await context.increment("api:client", WINDOW_MS, 1000);
 
     expect(counter.count).toBe(1);
+    expect(clientClosed).toBe(true);
     expect(timerCancelled).toBe(true);
+    settleCommand?.();
+    await Promise.resolve();
+    expect(lateMutationApplied).toBe(false);
+    context.kill();
+  });
+
+  test("does not refund Redis after the matching increment fell back locally", async () => {
+    let decrementCalled = false;
+    const context = new RedisRateLimitContext({
+      createRedis: () => ({
+        send: async (_command, args) => {
+          const script = requiredArg(args, 0);
+          if (script.includes('redis.call("INCR"')) {
+            throw new TypeError("Redis unavailable");
+          }
+          if (script.includes('redis.call("DECR"')) {
+            decrementCalled = true;
+            return 0;
+          }
+          throw new TypeError("Unexpected Redis script");
+        },
+      }),
+      failurePolicy: "fail_open_local",
+      onRedisError: () => undefined,
+    });
+    context.init(RATE_LIMIT_OPTIONS);
+
+    expect((await context.increment("api:client")).count).toBe(1);
+    await context.decrement("api:client");
+
+    expect(decrementCalled).toBe(false);
     context.kill();
   });
 

@@ -76,6 +76,7 @@ export class RedisRateLimitContext implements Context {
   private readonly scheduleTimeout: ScheduleTimeout;
   private durationMs = 60_000;
   private redis: RedisRateLimitClient | null = null;
+  private redisRefundsSuppressedUntil = 0;
 
   constructor({
     commandTimeoutMs = REDIS_COMMAND_TIMEOUT_MS,
@@ -133,6 +134,12 @@ export class RedisRateLimitContext implements Context {
     });
     if (Result.isError(redisResult)) {
       this.onRedisError(redisResult.error, "increment");
+      // Context.decrement has no increment token. Suppress shared refunds after any
+      // fallback rather than risk refunding another replica's successful request.
+      this.redisRefundsSuppressedUntil = Math.max(
+        this.redisRefundsSuppressedUntil,
+        Date.now() + effectiveDuration,
+      );
       if (this.failurePolicy === "fail_open_local") {
         return fallbackCounter;
       }
@@ -147,6 +154,9 @@ export class RedisRateLimitContext implements Context {
 
   async decrement(key: string): Promise<void> {
     this.fallback.decrement(key);
+    if (this.redisRefundsSuppressedUntil > Date.now()) {
+      return;
+    }
     const result = await Result.tryPromise(
       async () =>
         await this.sendCommand("EVAL", [
@@ -164,6 +174,7 @@ export class RedisRateLimitContext implements Context {
     this.fallback.reset(key);
     // Never scan/delete the shared namespace; TTL expiry owns global cleanup.
     if (key === undefined) {
+      this.redisRefundsSuppressedUntil = 0;
       return;
     }
     const result = await Result.tryPromise(
@@ -176,17 +187,31 @@ export class RedisRateLimitContext implements Context {
 
   kill(): void {
     this.fallback.kill();
+    this.redisRefundsSuppressedUntil = 0;
     this.redis?.close?.();
     this.redis = null;
   }
 
   private async sendCommand(command: string, args: string[]): Promise<unknown> {
     this.redis ??= this.createRedis();
-    return await withCommandTimeout({
-      command: this.redis.send(command, args),
-      commandTimeoutMs: this.commandTimeoutMs,
-      scheduleTimeout: this.scheduleTimeout,
+    const redis = this.redis;
+    const result = await Result.tryPromise(async () => {
+      return await withCommandTimeout({
+        command: redis.send(command, args),
+        commandTimeoutMs: this.commandTimeoutMs,
+        scheduleTimeout: this.scheduleTimeout,
+      });
     });
+    if (Result.isError(result)) {
+      if (TimeoutError.is(result.error)) {
+        redis.close?.();
+        if (this.redis === redis) {
+          this.redis = null;
+        }
+      }
+      throw result.error;
+    }
+    return result.value;
   }
 }
 
