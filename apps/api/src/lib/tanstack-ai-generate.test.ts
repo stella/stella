@@ -250,6 +250,40 @@ describe("TanStack AI structured output generation", () => {
     expect(options).not.toHaveProperty("prompt_cache_retention");
   });
 
+  test("maps OpenRouter controls to the Chat Completions request shape", () => {
+    // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+    // The adapter is irrelevant for this pure option-merge regression test.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "google/gemini-3.5-flash",
+      modelOptions: {},
+      provider: "openrouter",
+    } as ResolvedTanStackTextModel;
+
+    const options = mergeGenerationOptions({
+      caching: {
+        enabled: true,
+        scopeKey: "organization:contract-probe",
+        ttl: "5m",
+      },
+      maxOutputTokens: 1000,
+      model,
+      serviceTier: "flex",
+      temperature: 0,
+    });
+
+    expect(options).toEqual({
+      maxCompletionTokens: 1000,
+      serviceTier: "flex",
+      temperature: 0,
+    });
+    expect(options).not.toHaveProperty("maxOutputTokens");
+    expect(options).not.toHaveProperty("promptCacheKey");
+    expect(options).not.toHaveProperty("sessionId");
+  });
+
   test("forwards deferred service tiers to Gemini requests", () => {
     // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
     // The adapter is irrelevant for this pure option-merge test.

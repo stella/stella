@@ -7,7 +7,6 @@ import type {
   SystemPrompt,
 } from "@tanstack/ai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
-import type { OpenRouterResponsesTextProviderOptions } from "@tanstack/ai-openrouter";
 import * as v from "valibot";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -678,9 +677,10 @@ export const mergeGenerationOptions = ({
     case "openrouter":
       return {
         ...model.modelOptions,
-        ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
+        ...(maxOutputTokens === undefined
+          ? {}
+          : { maxCompletionTokens: maxOutputTokens }),
         ...(temperature === undefined ? {} : { temperature }),
-        ...openRouterCacheOptions(caching),
         ...openRouterServiceTierOptions(serviceTier),
       };
     default: {
@@ -712,15 +712,6 @@ const openAICacheOptions = (
   };
 };
 
-const openRouterCacheOptions = (
-  caching: CachingDecision,
-): Partial<Pick<OpenRouterResponsesTextProviderOptions, "promptCacheKey">> => {
-  if (!caching.enabled || caching.scopeKey === null) {
-    return {};
-  }
-  return { promptCacheKey: hashCacheScopeKey(caching.scopeKey) };
-};
-
 const openAIServiceTierOptions = (
   serviceTier: AIRequestServiceTier,
 ): Pick<OpenAITextProviderOptions, "service_tier"> => ({
@@ -729,7 +720,7 @@ const openAIServiceTierOptions = (
 
 const openRouterServiceTierOptions = (
   serviceTier: AIRequestServiceTier,
-): Pick<OpenRouterResponsesTextProviderOptions, "serviceTier"> => ({
+): Pick<TanStackModelOptions<"openrouter">, "serviceTier"> => ({
   serviceTier: isDeferredServiceTier(serviceTier) ? "flex" : "default",
 });
 

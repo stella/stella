@@ -322,7 +322,7 @@ describe("TanStack text model resolution", () => {
       provider: "openrouter",
       modelId: "google/gemini-3.5-flash",
     });
-    expect(model.adapter.name).toBe("openrouter-responses");
+    expect(model.adapter.name).toBe("openrouter");
     expect(model.adapter.model).toBe("google/gemini-3.5-flash");
   });
 
