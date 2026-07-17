@@ -1,0 +1,273 @@
+diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
+index 13611c9775f408011abc8c710144f74d3cf1e577..5256243a56e0fab4380ec2c7cf02674241a4654f 100644
+--- a/dist/esm/adapters/text.js
++++ b/dist/esm/adapters/text.js
+@@ -1,15 +1,16 @@
+ import { BaseTextAdapter } from "@tanstack/ai/adapters";
+-import { makeMistralStructuredOutputCompatible, transformNullsToUndefined } from "../utils/schema-converter.js";
++import { undoNullWidening } from "@tanstack/ai-utils";
+ import { convertToolsToProviderFormat } from "../tools/tool-converter.js";
+ import { createMistralClient, generateId, getMistralApiKeyFromEnv } from "../utils/client.js";
++import { createToolInputNormalizer, makeMistralStructuredOutputCompatibleWithMap } from "../utils/schema-converter.js";
+ const asChunk = (chunk) => (
+   // eslint-disable-next-line no-restricted-syntax -- Record<string, unknown> doesn't structurally overlap the StreamChunk discriminated union; events are built with literal `type` fields the union accepts at runtime
+   chunk
+ );
+-function parseToolCallInput(toolCall) {
++function parseToolCallInput(toolCall, normalizeToolInput) {
+   if (!toolCall.arguments) return {};
+   try {
+-    return transformNullsToUndefined(JSON.parse(toolCall.arguments));
++    return normalizeToolInput(toolCall.name, JSON.parse(toolCall.arguments));
+   } catch (cause) {
+     const preview = toolCall.arguments.slice(0, 200);
+     const ellipsis = toolCall.arguments.length > 200 ? "..." : "";
+@@ -74,7 +75,7 @@ class MistralTextAdapter extends BaseTextAdapter {
+   async structuredOutput(options) {
+     const { chatOptions, outputSchema } = options;
+     const { stream: _stream, ...nonStreamParams } = this.mapTextOptionsToMistral(chatOptions);
+-    const jsonSchema = makeMistralStructuredOutputCompatible(
++    const { schema: jsonSchema, nullWideningMap } = makeMistralStructuredOutputCompatibleWithMap(
+       outputSchema,
+       outputSchema.required || []
+     );
+@@ -100,7 +101,7 @@ class MistralTextAdapter extends BaseTextAdapter {
+       );
+     }
+     return {
+-      data: transformNullsToUndefined(parsed),
++      data: undoNullWidening(parsed, nullWideningMap),
+       rawText: textContent
+     };
+   }
+@@ -115,6 +116,7 @@ class MistralTextAdapter extends BaseTextAdapter {
+     let hasEmittedToolCall = false;
+     let hasEmittedRunFinished = false;
+     let lastChunkModel = options.model;
++    const normalizeToolInput = createToolInputNormalizer(options.tools);
+     let reasoningMessageId = null;
+     let hasClosedReasoning = false;
+     const toolCallsInProgress = /* @__PURE__ */ new Map();
+@@ -262,7 +264,10 @@ class MistralTextAdapter extends BaseTextAdapter {
+               if (!toolCall.started || !toolCall.id || !toolCall.name || toolCall.ended) {
+                 continue;
+               }
+-              const parsedInput = parseToolCallInput(toolCall);
++              const parsedInput = parseToolCallInput(
++                toolCall,
++                normalizeToolInput
++              );
+               toolCall.ended = true;
+               hasEmittedToolCall = true;
+               yield asChunk({
+@@ -345,7 +350,7 @@ class MistralTextAdapter extends BaseTextAdapter {
+               toolName: toolCall.name,
+               model: lastChunkModel,
+               timestamp,
+-              input: parseToolCallInput(toolCall)
++              input: parseToolCallInput(toolCall, normalizeToolInput)
+             });
+           }
+         }
+@@ -399,7 +404,10 @@ class MistralTextAdapter extends BaseTextAdapter {
+           toolCall.ended = true;
+           let partialInput = {};
+           try {
+-            partialInput = toolCall.arguments ? transformNullsToUndefined(JSON.parse(toolCall.arguments)) : {};
++            partialInput = toolCall.arguments ? normalizeToolInput(
++              toolCall.name,
++              JSON.parse(toolCall.arguments)
++            ) : {};
+           } catch {
+             partialInput = {};
+           }
+diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converter.js
+index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa5f40afe9 100644
+--- a/dist/esm/utils/schema-converter.js
++++ b/dist/esm/utils/schema-converter.js
+@@ -1,73 +1,78 @@
+-function transformNullsToUndefined(obj) {
+-  if (obj === null) {
+-    return void 0;
+-  }
+-  if (Array.isArray(obj)) {
+-    return obj.map((item) => transformNullsToUndefined(item));
+-  }
+-  if (typeof obj === "object" && Object.getPrototypeOf(obj) === Object.prototype) {
+-    const result = {};
+-    for (const [key, value] of Object.entries(obj)) {
+-      result[key] = transformNullsToUndefined(value);
+-    }
+-    return result;
++import { undoNullWidening } from "@tanstack/ai-utils";
++function makeMistralStructuredOutputCompatible(schema, originalRequired = []) {
++  return makeMistralStructuredOutputCompatibleWithMap(schema, originalRequired).schema;
++}
++function makeMistralStructuredOutputCompatibleWithMap(schema, originalRequired = []) {
++  return coerceMistralStrictSchema(schema, originalRequired);
++}
++function pruneMap(map) {
++  return Object.keys(map).length > 0 ? map : void 0;
++}
++function acceptsNull(schema) {
++  if ("const" in schema && schema.const !== null) return false;
++  if (Array.isArray(schema.enum) && !schema.enum.includes(null)) return false;
++  if (typeof schema.type === "string" && schema.type !== "null") return false;
++  if (Array.isArray(schema.type) && !schema.type.includes("null")) return false;
++  if (Array.isArray(schema.anyOf) && !schema.anyOf.some((variant) => acceptsNull(variant))) {
++    return false;
+   }
+-  return obj;
++  return true;
+ }
+-function makeMistralStructuredOutputCompatible(schema, originalRequired = []) {
++function coerceMistralStrictSchema(schema, originalRequired) {
+   const result = { ...schema };
++  const nullWideningMap = {};
+   if (result.type === "object") {
+     if (!result.properties) {
+       result.properties = {};
+     }
+     const properties = { ...result.properties };
+     const allPropertyNames = Object.keys(properties);
++    const propertyMaps = {};
+     for (const propName of allPropertyNames) {
+-      const prop = properties[propName];
++      let prop = properties[propName];
+       const wasOptional = !originalRequired.includes(propName);
++      let childMap;
++      let widenedHere = false;
+       if (prop.type === "object" && prop.properties) {
+-        const converted = makeMistralStructuredOutputCompatible(
+-          prop,
+-          prop.required || []
+-        );
+-        if (wasOptional) {
+-          properties[propName] = {
+-            ...converted,
+-            type: Array.isArray(converted.type) ? converted.type.includes("null") ? converted.type : [...converted.type, "null"] : [converted.type, "null"]
+-          };
+-        } else {
+-          properties[propName] = converted;
+-        }
++        const converted = coerceMistralStrictSchema(prop, prop.required || []);
++        prop = converted.schema;
++        childMap = converted.nullWideningMap;
+       } else if (prop.type === "array" && prop.items) {
+-        const converted = {
++        const convertedItems = coerceMistralStrictSchema(
++          prop.items,
++          prop.items.required || []
++        );
++        prop = {
+           ...prop,
+-          items: makeMistralStructuredOutputCompatible(
+-            prop.items,
+-            prop.items.required || []
+-          )
++          items: convertedItems.schema
+         };
+-        if (wasOptional) {
+-          properties[propName] = {
+-            ...converted,
+-            type: Array.isArray(converted.type) ? converted.type.includes("null") ? converted.type : [...converted.type, "null"] : [converted.type, "null"]
+-          };
+-        } else {
+-          properties[propName] = converted;
++        if (convertedItems.nullWideningMap) {
++          childMap = { items: convertedItems.nullWideningMap };
++        }
++      }
++      if (wasOptional) {
++        const originallyAcceptedNull = acceptsNull(prop);
++        if ("const" in prop && prop.const !== null) {
++          const { const: constValue, ...withoutConst } = prop;
++          prop = { ...withoutConst, enum: [constValue, null] };
++        } else if (Array.isArray(prop.enum) && !prop.enum.includes(null)) {
++          prop = { ...prop, enum: [...prop.enum, null] };
+         }
+-      } else if (wasOptional) {
+         if (prop.type && !Array.isArray(prop.type)) {
+-          properties[propName] = {
+-            ...prop,
+-            type: [prop.type, "null"]
+-          };
++          prop = { ...prop, type: [prop.type, "null"] };
+         } else if (Array.isArray(prop.type) && !prop.type.includes("null")) {
+-          properties[propName] = {
+-            ...prop,
+-            type: [...prop.type, "null"]
+-          };
++          prop = { ...prop, type: [...prop.type, "null"] };
+         } else if (!prop.type) {
+-          properties[propName] = { anyOf: [prop, { type: "null" }] };
++          prop = { anyOf: [prop, { type: "null" }] };
+         }
++        widenedHere = !originallyAcceptedNull;
++      }
++      properties[propName] = prop;
++      if (childMap || widenedHere) {
++        propertyMaps[propName] = {
++          ...childMap ?? {},
++          ...widenedHere ? { widened: true } : {}
++        };
+       }
+     }
+     result.properties = properties;
+@@ -77,17 +82,53 @@ function makeMistralStructuredOutputCompatible(schema, originalRequired = []) {
+       delete result.required;
+     }
+     result.additionalProperties = false;
++    if (Object.keys(propertyMaps).length > 0) {
++      nullWideningMap.properties = propertyMaps;
++    }
+   }
+   if (result.type === "array" && result.items) {
+-    result.items = makeMistralStructuredOutputCompatible(
++    const convertedItems = coerceMistralStrictSchema(
+       result.items,
+       result.items.required || []
+     );
++    result.items = convertedItems.schema;
++    if (convertedItems.nullWideningMap) {
++      nullWideningMap.items = convertedItems.nullWideningMap;
++    }
++  }
++  return {
++    schema: result,
++    nullWideningMap: pruneMap(nullWideningMap)
++  };
++}
++function createToolInputNormalizer(tools) {
++  const maps = /* @__PURE__ */ new Map();
++  const seenNames = /* @__PURE__ */ new Set();
++  const ambiguousNames = /* @__PURE__ */ new Set();
++  for (const tool of tools ?? []) {
++    if (ambiguousNames.has(tool.name)) continue;
++    if (seenNames.has(tool.name)) {
++      maps.delete(tool.name);
++      ambiguousNames.add(tool.name);
++      continue;
++    }
++    seenNames.add(tool.name);
++    const inputSchema = tool.inputSchema ?? {
++      type: "object",
++      properties: {},
++      required: []
++    };
++    const { nullWideningMap } = makeMistralStructuredOutputCompatibleWithMap(
++      inputSchema,
++      inputSchema.required || []
++    );
++    if (nullWideningMap) maps.set(tool.name, nullWideningMap);
+   }
+-  return result;
++  return (toolName, input) => undoNullWidening(input, maps.get(toolName));
+ }
+ export {
++  createToolInputNormalizer,
+   makeMistralStructuredOutputCompatible,
+-  transformNullsToUndefined
++  makeMistralStructuredOutputCompatibleWithMap
+ };
+ //# sourceMappingURL=schema-converter.js.map

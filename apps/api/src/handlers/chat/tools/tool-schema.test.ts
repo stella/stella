@@ -1089,6 +1089,102 @@ describe("chat tool schemas", () => {
     });
   });
 
+  test("the installed Mistral adapter restores omitted optional tool inputs", async () => {
+    const adapter = createMistralText("mistral-large-latest", "test-key");
+    const argumentsJson =
+      '{"question":"Which one?","mode":null,"nullableNote":null}';
+    let request: unknown;
+    Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
+      request = payload;
+      return (async function* () {
+        yield {
+          id: "response-1",
+          model: "mistral-large-latest",
+          choices: [
+            {
+              index: 0,
+              delta: {
+                tool_calls: [
+                  {
+                    index: 0,
+                    id: "call-1",
+                    type: "function",
+                    function: {
+                      name: "ask_user",
+                      arguments: argumentsJson,
+                    },
+                  },
+                ],
+              },
+              finish_reason: null,
+            },
+          ],
+        };
+        yield {
+          id: "response-1",
+          model: "mistral-large-latest",
+          choices: [
+            {
+              index: 0,
+              delta: {},
+              finish_reason: "tool_calls",
+            },
+          ],
+          usage: {
+            prompt_tokens: 1,
+            completion_tokens: 1,
+            total_tokens: 2,
+          },
+        };
+      })();
+    });
+    const chunks: StreamChunk[] = [];
+    const tool = {
+      name: "ask_user",
+      description: "Ask a question.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          question: { type: "string" },
+          mode: { type: "string", enum: ["must-not-be-sent"] },
+          nullableNote: { type: ["string", "null"] },
+        },
+        required: ["question"],
+      },
+    } satisfies Tool;
+
+    for await (const chunk of adapter.chatStream({
+      ...commonProviderOptions([tool]),
+      model: adapter.model,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(request).toMatchObject({
+      tools: [
+        {
+          function: {
+            parameters: {
+              properties: {
+                mode: {
+                  type: ["string", "null"],
+                  enum: ["must-not-be-sent", null],
+                },
+              },
+              required: ["question", "mode", "nullableNote"],
+            },
+          },
+        },
+      ],
+    });
+    expect(
+      chunks.find((chunk) => chunk.type === EventType.TOOL_CALL_END),
+    ).toHaveProperty("input", {
+      question: "Which one?",
+      nullableNote: null,
+    });
+  });
+
   test("Anthropic keeps an ordinary web_search function distinct from its native web-search tool", () => {
     const ordinaryWebSearch: Tool = {
       name: "web_search",
