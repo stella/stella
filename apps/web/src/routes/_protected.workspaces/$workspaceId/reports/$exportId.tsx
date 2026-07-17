@@ -116,6 +116,16 @@ function ReportExportRecoveryPage() {
     triggerUrlDownload(downloadUrl);
   };
 
+  const handleDownloadClick = () => {
+    void handleDownload().catch((error: unknown) => {
+      analytics.captureError(error);
+      stellaToast.add({
+        type: "error",
+        title: t("common.unexpectedError"),
+      });
+    });
+  };
+
   return (
     <main className="flex h-full flex-col">
       <header className="border-b px-4 py-3">
@@ -138,10 +148,7 @@ function ReportExportRecoveryPage() {
           )}
 
           {data.status === "completed" && data.downloadUrl && (
-            <Button
-              disabled={isDownloading}
-              onClick={() => void handleDownload()}
-            >
+            <Button disabled={isDownloading} onClick={handleDownloadClick}>
               {isDownloading ? t("common.preparing") : t("common.download")}
             </Button>
           )}
