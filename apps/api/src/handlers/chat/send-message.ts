@@ -762,6 +762,25 @@ const sendMessage = createSafeRootHandler(
       }
       const chatContext = chatContextResult.value;
 
+      if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: uploadResult.uploadedFiles,
+            userId: user.id,
+          }),
+        );
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
       // Keep the thread's data scope aligned with the messages being
       // stored. Normal sends append newly observed workspace IDs
       // before persisting. Replay truncation recomputes the exact

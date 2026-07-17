@@ -334,4 +334,48 @@ describe("send message disconnect handling", () => {
     expect(insertValues).toHaveBeenCalledTimes(1);
     expect(deleteReturning).toHaveBeenCalledTimes(1);
   });
+
+  test("rolls back when the client disconnects during context preparation", async () => {
+    const abortController = new AbortController();
+    let organizationSettingsReads = 0;
+    const findOrganizationSettings = mock(async () => {
+      organizationSettingsReads += 1;
+      if (organizationSettingsReads === 2) {
+        abortController.abort();
+      }
+      return null;
+    });
+    const insertValues = mock(async () => undefined);
+    const deleteReturning = mock(async () => [{ id: threadId }]);
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          delete: () => ({
+            where: () => ({ returning: deleteReturning }),
+          }),
+          insert: () => ({ values: insertValues }),
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: findOrganizationSettings },
+          },
+          select: selectChatMessages,
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(findOrganizationSettings).toHaveBeenCalledTimes(2);
+    expect(insertValues).toHaveBeenCalledTimes(1);
+    expect(deleteReturning).toHaveBeenCalledTimes(1);
+  });
 });
