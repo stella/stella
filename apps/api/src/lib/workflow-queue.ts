@@ -29,6 +29,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLocks } from "@/api/lib/cell-lock";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   connectionErrorFields,
   errorSystemFields,
@@ -1058,9 +1059,11 @@ const processWorkflowJob = async (job: WorkflowEntityJob): Promise<void> => {
   );
   const timeoutHandle = setTimeout(() => {
     controller.abort(
-      new Error(
-        `workflow.job_timeout: entity ${job.data.entityId} exceeded ${jobTimeoutMs}ms`,
-      ),
+      new TimeoutError({
+        label: "workflow.job",
+        message: `workflow.job_timeout: entity ${job.data.entityId} exceeded ${jobTimeoutMs}ms`,
+        timeoutMs: jobTimeoutMs,
+      }),
     );
   }, jobTimeoutMs);
   try {
@@ -1069,6 +1072,15 @@ const processWorkflowJob = async (job: WorkflowEntityJob): Promise<void> => {
   } finally {
     clearTimeout(timeoutHandle);
   }
+};
+
+const pendingFailedJobFinalizations = new Set<Promise<void>>();
+
+const trackFailedJobFinalization = (work: Promise<void>): void => {
+  const tracked = work.finally(() => {
+    pendingFailedJobFinalizations.delete(tracked);
+  });
+  pendingFailedJobFinalizations.add(tracked);
 };
 
 const handleWorkflowJobFailed = (
@@ -1098,36 +1110,38 @@ const handleWorkflowJobFailed = (
     organizationId: data.organizationId,
     workspaceId: data.workspaceId,
   });
-  void (async () => {
-    const isCurrentRequest = await isCurrentWorkflowRequest({
-      requestId: data.requestId,
-      workspaceId: branded.workspaceId,
-    });
-    if (!isCurrentRequest) {
-      return;
-    }
+  trackFailedJobFinalization(
+    (async () => {
+      const isCurrentRequest = await isCurrentWorkflowRequest({
+        requestId: data.requestId,
+        workspaceId: branded.workspaceId,
+      });
+      if (!isCurrentRequest) {
+        return;
+      }
 
-    await markPendingPlannedFieldsErrored(data).catch(
-      (pendingFieldsError: unknown) => {
-        captureError(pendingFieldsError, {
-          workspaceId: data.workspaceId,
-          entityId: data.entityId,
-        });
-      },
-    );
-    await onEntityCompleted(
-      branded.workspaceId,
-      branded.organizationId,
-      brandPersistedUserId(data.userId),
-      data.requestId,
-      data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
-    );
-  })().catch((completionError: unknown) => {
-    captureError(completionError, {
-      workspaceId: data.workspaceId,
-      entityId: data.entityId,
-    });
-  });
+      await markPendingPlannedFieldsErrored(data).catch(
+        (pendingFieldsError: unknown) => {
+          captureError(pendingFieldsError, {
+            workspaceId: data.workspaceId,
+            entityId: data.entityId,
+          });
+        },
+      );
+      await onEntityCompleted(
+        branded.workspaceId,
+        branded.organizationId,
+        brandPersistedUserId(data.userId),
+        data.requestId,
+        data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
+      );
+    })().catch((completionError: unknown) => {
+      captureError(completionError, {
+        workspaceId: data.workspaceId,
+        entityId: data.entityId,
+      });
+    }),
+  );
 };
 
 const createWorkflowWorker = ({
@@ -1193,7 +1207,15 @@ export const initWorkflowWorkers = () => {
   return {
     close: async (): Promise<void> => {
       clearInterval(reconcileTimer);
-      await Promise.all(workers.map(async (worker) => await worker.close()));
+      const closeResults = await Promise.allSettled(
+        workers.map(async (worker) => await worker.close()),
+      );
+      for (const result of closeResults) {
+        if (result.status === "rejected") {
+          captureError(result.reason);
+        }
+      }
+      await Promise.allSettled([...pendingFailedJobFinalizations]);
     },
   };
 };
