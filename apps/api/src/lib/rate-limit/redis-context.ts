@@ -8,6 +8,11 @@ import {
   InMemoryRateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
+import {
+  defaultScheduleTimeout,
+  type ScheduleTimeout,
+  withCommandTimeout,
+} from "@/api/lib/rate-limit/redis-command-timeout";
 import { createRedisClient } from "@/api/lib/redis-client";
 
 const REDIS_KEY_PREFIX = "api:ratelimit:v2:";
@@ -64,7 +69,6 @@ type RedisRateLimitClient = {
   send: (command: string, args: string[]) => Promise<unknown>;
 };
 
-type ScheduleTimeout = (callback: () => void, delayMs: number) => () => void;
 type RedisRateLimitOperation = "decrement" | "increment" | "reset";
 
 type RedisRateLimitContextOptions = {
@@ -313,6 +317,7 @@ export class RedisRateLimitContext implements Context {
         await withCommandTimeout({
           command: redis.send(command, args),
           commandTimeoutMs: this.commandTimeoutMs,
+          label: "api-rate-limit-redis-command",
           scheduleTimeout: this.scheduleTimeout,
         }),
       catch: (error: unknown) => error,
@@ -415,37 +420,4 @@ const parseIncrementReply = (
     nextReset,
     start: nextReset.getTime() - durationMs,
   };
-};
-
-const defaultScheduleTimeout: ScheduleTimeout = (callback, delayMs) => {
-  const timeoutId = setTimeout(callback, delayMs);
-  return () => clearTimeout(timeoutId);
-};
-
-type WithCommandTimeoutOptions<T> = {
-  command: Promise<T>;
-  commandTimeoutMs: number;
-  scheduleTimeout: ScheduleTimeout;
-};
-
-const withCommandTimeout = async <T>({
-  command,
-  commandTimeoutMs,
-  scheduleTimeout,
-}: WithCommandTimeoutOptions<T>): Promise<T> => {
-  let cancelTimeout: () => void = () => undefined;
-  const timeout = new Promise<never>((_resolve, reject) => {
-    cancelTimeout = scheduleTimeout(
-      () =>
-        reject(
-          new TimeoutError({
-            label: "api-rate-limit-redis-command",
-            message: "Redis rate-limit command timed out",
-            timeoutMs: commandTimeoutMs,
-          }),
-        ),
-      commandTimeoutMs,
-    );
-  });
-  return await Promise.race([command, timeout]).finally(cancelTimeout);
 };

@@ -3,7 +3,10 @@ import { t } from "elysia";
 
 import type { SafeDbError } from "@/api/db/safe-db";
 import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
-import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
+import {
+  assertChatThreadScopeMatches,
+  resolveChatScope,
+} from "@/api/handlers/chat/chat-scope";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
@@ -173,11 +176,17 @@ const getMessages = createSafeRootHandler(
         // Reject requests whose scope contradicts the persisted thread.
         // A workspace-scoped thread asked for as global (or vice versa)
         // is a client bug — fail loud instead of silently 404'ing or
-        // creating a duplicate.
-        const persistedWorkspaceId = thread.workspaceId ?? null;
-        const requestedWorkspaceId =
-          scope.scope === "workspace" ? scope.workspaceId : null;
-        if (persistedWorkspaceId !== requestedWorkspaceId) {
+        // creating a duplicate. The shared assertion owns the check; this
+        // read short-circuits with a discriminated kind so the mismatch
+        // 400 is emitted after the transaction closes.
+        if (
+          Result.isError(
+            assertChatThreadScopeMatches({
+              persistedWorkspaceId: thread.workspaceId ?? null,
+              scope,
+            }),
+          )
+        ) {
           return { kind: "scope-mismatch" as const };
         }
 
