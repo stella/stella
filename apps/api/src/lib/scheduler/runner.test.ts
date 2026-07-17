@@ -1,0 +1,259 @@
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { desc, eq } from "drizzle-orm";
+
+import type { SchedulerSchedule } from "@/api/db/schema";
+import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+import {
+  acquireDueJobs,
+  finishRunSuccess,
+  runSchedulerOnce,
+  type SchedulerDb,
+} from "./runner";
+import type { SchedulerTask, SchedulerTaskRegistry } from "./types";
+
+// leaseMs has a hard floor of three poll intervals (3 * 60_000). The runtime
+// ceiling is independent, so a tiny ceiling times a job out long before the
+// first heartbeat (min interval 60_000ms) could fire.
+const LEASE_MS = 3 * 60_000;
+const PAST = new Date("2020-01-01T00:00:00.000Z");
+const INTERVAL_SCHEDULE = {
+  type: "interval",
+  everyMs: 60_000,
+} as const satisfies SchedulerSchedule;
+
+let testDb: TestDatabase;
+// The runner is written against the postgres-role `rootDb`; the PGlite handle
+// is structurally identical for these queries (same pattern as the usage-ledger
+// and entity-cap-lock DB tests).
+let db: SchedulerDb;
+
+beforeAll(async () => {
+  testDb = await getTestDb();
+  db = asTestRaw<SchedulerDb>(testDb);
+});
+
+afterAll(async () => {
+  await releaseTestDb();
+});
+
+beforeEach(async () => {
+  await testDb.delete(schedulerJobRuns);
+  await testDb.delete(schedulerJobs);
+});
+
+type SeedJobOptions = {
+  id?: string;
+  task?: string;
+  nextRunAt?: Date;
+  enabled?: boolean;
+  lockedBy?: string | null;
+  lockedUntil?: Date | null;
+};
+
+const seedJob = async ({
+  enabled = true,
+  id = "test.job",
+  lockedBy = null,
+  lockedUntil = null,
+  nextRunAt = PAST,
+  task = "test.noop",
+}: SeedJobOptions = {}): Promise<string> => {
+  await testDb.insert(schedulerJobs).values({
+    description: "test job",
+    enabled,
+    id,
+    lockedBy,
+    lockedUntil,
+    nextRunAt,
+    schedule: INTERVAL_SCHEDULE,
+    task,
+  });
+  return id;
+};
+
+const readJob = async (id: string) => {
+  const [job] = await testDb
+    .select()
+    .from(schedulerJobs)
+    .where(eq(schedulerJobs.id, id));
+  if (!job) {
+    throw new Error(`Expected scheduler job ${id} to exist`);
+  }
+  return job;
+};
+
+const readLatestRun = async (jobId: string) => {
+  const [run] = await testDb
+    .select()
+    .from(schedulerJobRuns)
+    .where(eq(schedulerJobRuns.jobId, jobId))
+    .orderBy(desc(schedulerJobRuns.startedAt))
+    .limit(1);
+  if (!run) {
+    throw new Error(`Expected a run row for scheduler job ${jobId}`);
+  }
+  return run;
+};
+
+const registryOf = (task: string, fn: SchedulerTask): SchedulerTaskRegistry =>
+  new Map([[task, fn]]);
+
+const noopRegistry = registryOf("test.noop", () => {});
+
+describe("acquireDueJobs claim exclusivity", () => {
+  test("two interleaved passes never claim the same job", async () => {
+    await seedJob();
+
+    const first = await acquireDueJobs({
+      db,
+      leaseMs: LEASE_MS,
+      limit: 10,
+      runnerId: "runner-a",
+    });
+    const second = await acquireDueJobs({
+      db,
+      leaseMs: LEASE_MS,
+      limit: 10,
+      runnerId: "runner-b",
+    });
+
+    expect(first.map((job) => job.id)).toEqual(["test.job"]);
+    expect(second).toEqual([]);
+
+    const job = await readJob("test.job");
+    expect(job.lockedBy).toBe("runner-a");
+  });
+});
+
+describe("lease expiry", () => {
+  test("a job whose lease has expired is reclaimable by another runner", async () => {
+    await seedJob({ lockedBy: "dead-runner", lockedUntil: PAST });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry: noopRegistry,
+      runnerId: "fresh-runner",
+    });
+
+    expect(result).toMatchObject({ acquired: 1, succeeded: 1, failed: 0 });
+
+    const job = await readJob("test.job");
+    expect(job.lockedBy).toBeNull();
+    expect(job.lastSuccessAt).not.toBeNull();
+  });
+
+  test("a job with a live lease is not reclaimed", async () => {
+    const future = new Date(Date.now() + LEASE_MS);
+    await seedJob({ lockedBy: "live-runner", lockedUntil: future });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry: noopRegistry,
+      runnerId: "fresh-runner",
+    });
+
+    expect(result.acquired).toBe(0);
+  });
+});
+
+describe("failure accounting", () => {
+  test("a throwing task is recorded as failed and rescheduled, not wedged", async () => {
+    await seedJob({ task: "test.throws" });
+    const registry = registryOf("test.throws", () => {
+      throw new Error("boom");
+    });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    expect(result).toMatchObject({ acquired: 1, failed: 1, succeeded: 0 });
+
+    const job = await readJob("test.job");
+    expect(job.lockedBy).toBeNull();
+    expect(job.lastError).not.toBeNull();
+    expect(job.lastFailureAt).not.toBeNull();
+    // Rescheduled forward off the interval, so the runner is not wedged.
+    expect(job.nextRunAt.getTime()).toBeGreaterThan(PAST.getTime());
+
+    const run = await readLatestRun("test.job");
+    expect(run.status).toBe("failed");
+  });
+});
+
+describe("per-job runtime ceiling", () => {
+  test("a task exceeding the ceiling is timed out, the runner continues, and a late zombie completion does not overwrite the timeout", async () => {
+    await seedJob({ id: "hanging.job", task: "test.hangs" });
+    await seedJob({ id: "healthy.job", task: "test.hangs" });
+
+    // A task that never resolves within the ceiling; resolved manually later to
+    // simulate the zombie finally completing.
+    let releaseHangingTask = () => {};
+    const hangingTask = new Promise<void>((resolve) => {
+      releaseHangingTask = resolve;
+    });
+    const registry = registryOf("test.hangs", ({ job }) => {
+      if (job.id === "hanging.job") {
+        return hangingTask;
+      }
+      return undefined;
+    });
+
+    const result = await runSchedulerOnce({
+      db,
+      leaseMs: LEASE_MS,
+      maxRuntimeMs: 25,
+      registry,
+      runnerId: "runner-a",
+    });
+
+    // One job timed out (counted as failed), the other still ran to success:
+    // the hung job did not starve the rest of the pass.
+    expect(result).toMatchObject({ acquired: 2, failed: 1, succeeded: 1 });
+
+    const timedOutJob = await readJob("hanging.job");
+    expect(timedOutJob.lockedBy).toBeNull();
+    expect(timedOutJob.lastError).toBe("SchedulerJobTimeoutError");
+    expect(timedOutJob.lastSuccessAt).toBeNull();
+    expect(timedOutJob.nextRunAt.getTime()).toBeGreaterThan(PAST.getTime());
+
+    const timedOutRun = await readLatestRun("hanging.job");
+    expect(timedOutRun.status).toBe("failed");
+    expect(timedOutRun.error).toBe("SchedulerJobTimeoutError");
+
+    // The zombie task finishes late and attempts to record success. The
+    // lease-token (lockedBy) and run-generation (status) guards must reject it.
+    releaseHangingTask();
+    await finishRunSuccess({
+      db,
+      job: timedOutJob,
+      runId: timedOutRun.id,
+      runnerId: "runner-a",
+      startedAt: timedOutRun.startedAt,
+    });
+
+    const jobAfterZombie = await readJob("hanging.job");
+    expect(jobAfterZombie.lastSuccessAt).toBeNull();
+    expect(jobAfterZombie.lastError).toBe("SchedulerJobTimeoutError");
+
+    const runAfterZombie = await readLatestRun("hanging.job");
+    expect(runAfterZombie.status).toBe("failed");
+    expect(runAfterZombie.error).toBe("SchedulerJobTimeoutError");
+  });
+});

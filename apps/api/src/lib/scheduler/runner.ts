@@ -5,7 +5,10 @@ import { rootDb } from "@/api/db/root";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
-import { ConfigurationError } from "@/api/lib/errors/tagged-errors";
+import {
+  ConfigurationError,
+  SchedulerJobTimeoutError,
+} from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createSchedulerTaskRegistry } from "@/api/lib/scheduler/registry";
@@ -20,10 +23,26 @@ const DEFAULT_LEASE_MS = 30 * 60_000;
 const DEFAULT_JOB_LIMIT = 10;
 const MIN_LEASE_MS = 3 * DEFAULT_POLL_INTERVAL_MS;
 
+// Hard upper bound on how long a single task may run. The lease heartbeat
+// renews `lockedUntil` indefinitely, so without this ceiling a task that never
+// resolves would block the sequential runner AND keep the lease fresh forever,
+// defeating the self-heal the lease exists for. Set to one lease period: a job
+// that has not finished within a full lease is treated as hung. A JS promise
+// cannot be cancelled, so the ceiling stops the heartbeat and releases the job
+// rather than truly aborting the task.
+const DEFAULT_MAX_RUNTIME_MS = DEFAULT_LEASE_MS;
+
+// The scheduler owns the postgres-role `rootDb`; tests inject a structurally
+// equivalent database handle. Threaded explicitly so the claim, lease, and
+// completion paths are exercisable against a real (PGlite) database.
+export type SchedulerDb = typeof rootDb;
+
 type RunSchedulerOnceOptions = {
+  db?: SchedulerDb;
   runnerId?: string;
   limit?: number;
   leaseMs?: number;
+  maxRuntimeMs?: number;
   registry?: SchedulerTaskRegistry;
   signal?: AbortSignal;
 };
@@ -46,13 +65,19 @@ type SchedulerLoop = {
 };
 
 export const runSchedulerOnce = async ({
+  db = rootDb,
   leaseMs = DEFAULT_LEASE_MS,
   limit = DEFAULT_JOB_LIMIT,
+  maxRuntimeMs = DEFAULT_MAX_RUNTIME_MS,
   registry = createSchedulerTaskRegistry(),
   runnerId = defaultRunnerId(),
   signal,
 }: RunSchedulerOnceOptions = {}): Promise<RunSchedulerOnceResult> => {
-  const jobs = await acquireDueJobs({ leaseMs, limit, runnerId });
+  if (!Number.isInteger(maxRuntimeMs) || maxRuntimeMs < 1) {
+    return panic("Scheduler job runtime ceiling must be a positive integer");
+  }
+
+  const jobs = await acquireDueJobs({ db, leaseMs, limit, runnerId });
   const result: RunSchedulerOnceResult = {
     acquired: jobs.length,
     failed: 0,
@@ -65,6 +90,7 @@ export const runSchedulerOnce = async ({
 
   const unstartedJobIds = new Set(jobs.map((job) => job.id));
   const unstartedHeartbeat = startUnstartedJobsHeartbeat({
+    db,
     jobIds: unstartedJobIds,
     leaseMs,
     runnerId,
@@ -77,6 +103,7 @@ export const runSchedulerOnce = async ({
         const unstartedJobs = jobs.slice(index);
         // oxlint-disable-next-line no-await-in-loop -- runs once before the break on abort; jobs are drained sequentially
         await releaseUnstartedJobs({
+          db,
           jobs: unstartedJobs,
           runnerId,
         });
@@ -86,6 +113,7 @@ export const runSchedulerOnce = async ({
 
       // oxlint-disable-next-line no-await-in-loop -- jobs run sequentially; lease renewal must precede this job's run
       const leasedJob = await renewJobLeaseBeforeStart({
+        db,
         job,
         leaseMs,
         runnerId,
@@ -98,8 +126,10 @@ export const runSchedulerOnce = async ({
 
       // oxlint-disable-next-line no-await-in-loop -- scheduler runs leased jobs one at a time, in order, honouring the abort signal
       const status = await runJob({
+        db,
         job: leasedJob,
         leaseMs,
+        maxRuntimeMs,
         registry,
         runnerId,
         signal,
@@ -208,12 +238,14 @@ export const startSchedulerLoop = ({
 };
 
 type AcquireDueJobsOptions = {
+  db: SchedulerDb;
   runnerId: string;
   limit: number;
   leaseMs: number;
 };
 
-const acquireDueJobs = async ({
+export const acquireDueJobs = async ({
+  db,
   leaseMs,
   limit,
   runnerId,
@@ -228,7 +260,7 @@ const acquireDueJobs = async ({
 
   const now = new Date();
   const leaseExpiresAt = new Date(now.getTime() + leaseMs);
-  const candidates = await rootDb
+  const candidates = await db
     .select()
     .from(schedulerJobs)
     .where(dueJobPredicate(now))
@@ -237,8 +269,8 @@ const acquireDueJobs = async ({
   const acquired: SchedulerJob[] = [];
 
   for (const candidate of candidates) {
-    // oxlint-disable-next-line no-await-in-loop -- sequential conditional locking preserves due-order acquisition
-    const [job] = await rootDb
+    // oxlint-disable-next-line no-db-await-in-loop/no-db-await-in-loop, no-await-in-loop -- sequential conditional locking preserves due-order acquisition
+    const [job] = await db
       .update(schedulerJobs)
       .set({
         lockedAt: now,
@@ -257,11 +289,13 @@ const acquireDueJobs = async ({
 };
 
 type ReleaseUnstartedJobsOptions = {
+  db: SchedulerDb;
   jobs: SchedulerJob[];
   runnerId: string;
 };
 
 const releaseUnstartedJobs = async ({
+  db,
   jobs,
   runnerId,
 }: ReleaseUnstartedJobsOptions): Promise<void> => {
@@ -269,7 +303,7 @@ const releaseUnstartedJobs = async ({
     return;
   }
 
-  await rootDb
+  await db
     .update(schedulerJobs)
     .set({
       lockedAt: null,
@@ -288,18 +322,20 @@ const releaseUnstartedJobs = async ({
 };
 
 type RenewJobLeaseBeforeStartOptions = {
+  db: SchedulerDb;
   job: SchedulerJob;
   leaseMs: number;
   runnerId: string;
 };
 
 const renewJobLeaseBeforeStart = async ({
+  db,
   job,
   leaseMs,
   runnerId,
 }: RenewJobLeaseBeforeStartOptions): Promise<SchedulerJob | null> => {
   const now = new Date();
-  const [leasedJob] = await rootDb
+  const [leasedJob] = await db
     .update(schedulerJobs)
     .set({
       lockedAt: now,
@@ -315,6 +351,7 @@ const renewJobLeaseBeforeStart = async ({
 };
 
 type StartUnstartedJobsHeartbeatOptions = {
+  db: SchedulerDb;
   jobIds: Set<string>;
   leaseMs: number;
   runnerId: string;
@@ -322,6 +359,7 @@ type StartUnstartedJobsHeartbeatOptions = {
 };
 
 const startUnstartedJobsHeartbeat = ({
+  db,
   jobIds,
   leaseMs,
   runnerId,
@@ -337,7 +375,7 @@ const startUnstartedJobsHeartbeat = ({
       return;
     }
 
-    await rootDb
+    await db
       .update(schedulerJobs)
       .set({
         lockedUntil: new Date(Date.now() + leaseMs),
@@ -378,6 +416,7 @@ type LeaseHeartbeat = {
 };
 
 type StartLeaseHeartbeatOptions = {
+  db: SchedulerDb;
   jobId: string;
   leaseMs: number;
   runnerId: string;
@@ -385,6 +424,7 @@ type StartLeaseHeartbeatOptions = {
 };
 
 const startLeaseHeartbeat = ({
+  db,
   jobId,
   leaseMs,
   runnerId,
@@ -400,7 +440,7 @@ const startLeaseHeartbeat = ({
       return;
     }
 
-    await rootDb
+    await db
       .update(schedulerJobs)
       .set({
         lockedUntil: new Date(Date.now() + leaseMs),
@@ -428,8 +468,10 @@ const startLeaseHeartbeat = ({
 };
 
 type RunJobOptions = {
+  db: SchedulerDb;
   job: SchedulerJob;
   leaseMs: number;
+  maxRuntimeMs: number;
   runnerId: string;
   registry: SchedulerTaskRegistry;
   signal: AbortSignal | undefined;
@@ -438,24 +480,28 @@ type RunJobOptions = {
 type RunJobStatus = "failed" | "skipped" | "success";
 
 const runJob = async ({
+  db,
   job,
   leaseMs,
+  maxRuntimeMs,
   registry,
   runnerId,
   signal,
 }: RunJobOptions): Promise<RunJobStatus> => {
   const startedAt = new Date();
-  const runId = await createRun({ job, runnerId, startedAt });
+  const runId = await createRun({ db, job, runnerId, startedAt });
   const controller = new AbortController();
   const abortListener = () => controller.abort();
   signal?.addEventListener("abort", abortListener, { once: true });
   const heartbeat = startLeaseHeartbeat({
+    db,
     jobId: job.id,
     leaseMs,
     runnerId,
     signal: controller.signal,
   });
   const task = registry.get(job.task);
+  let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
 
   try {
     if (!task) {
@@ -464,19 +510,61 @@ const runJob = async ({
       });
     }
 
-    await task({
-      job,
-      logger,
-      payload: job.payload,
-      runId,
-      signal: controller.signal,
+    // Bound the task's runtime. A JS promise cannot be cancelled, so on timeout
+    // the losing task promise keeps running as a "zombie". We never chain a
+    // completion write onto it, and the guarded completion writes below reject
+    // a late write anyway, so a zombie can never overwrite the timed-out state.
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timeoutTimer = setTimeout(() => {
+        reject(
+          new SchedulerJobTimeoutError({
+            jobId: job.id,
+            message: `Scheduler job ${job.id} exceeded its ${maxRuntimeMs}ms runtime ceiling`,
+            timeoutMs: maxRuntimeMs,
+          }),
+        );
+      }, maxRuntimeMs);
     });
-    await finishRunSuccess({ job, runId, runnerId, startedAt });
+
+    await Promise.race([
+      Promise.resolve(
+        task({
+          job,
+          logger,
+          payload: job.payload,
+          runId,
+          signal: controller.signal,
+        }),
+      ),
+      timeout,
+    ]);
+    await finishRunSuccess({ db, job, runId, runnerId, startedAt });
     return "success";
   } catch (error: unknown) {
     if (controller.signal.aborted) {
-      await finishRunSkipped({ job, runId, runnerId, startedAt });
+      await finishRunSkipped({ db, job, runId, runnerId, startedAt });
       return "skipped";
+    }
+
+    if (error instanceof SchedulerJobTimeoutError) {
+      // Stop heartbeating first so the released lease cannot be re-extended,
+      // then release the job and mark the run timed out. Another runner can
+      // now reclaim it once the (already-released) lease is past.
+      heartbeat.stop();
+      captureError(error, {
+        schedulerJobId: job.id,
+        schedulerRunId: runId,
+        schedulerTask: job.task,
+      });
+      logger.error("scheduler.job_timed_out", {
+        "scheduler.job_id": job.id,
+        "scheduler.run_id": runId,
+        "scheduler.runner_id": runnerId,
+        "scheduler.task": job.task,
+        "scheduler.timeout_ms": maxRuntimeMs,
+      });
+      await finishRunFailure({ db, error, job, runId, runnerId, startedAt });
+      return "failed";
     }
 
     captureError(error, {
@@ -491,26 +579,31 @@ const runJob = async ({
       "scheduler.task": job.task,
       "error.type": errorTag(error),
     });
-    await finishRunFailure({ error, job, runId, runnerId, startedAt });
+    await finishRunFailure({ db, error, job, runId, runnerId, startedAt });
     return "failed";
   } finally {
+    if (timeoutTimer) {
+      clearTimeout(timeoutTimer);
+    }
     signal?.removeEventListener("abort", abortListener);
     heartbeat.stop();
   }
 };
 
 type CreateRunOptions = {
+  db: SchedulerDb;
   job: SchedulerJob;
   runnerId: string;
   startedAt: Date;
 };
 
 const createRun = async ({
+  db,
   job,
   runnerId,
   startedAt,
 }: CreateRunOptions): Promise<SafeId<"schedulerJobRun">> => {
-  const [run] = await rootDb
+  const [run] = await db
     .insert(schedulerJobRuns)
     .values({
       jobId: job.id,
@@ -529,13 +622,19 @@ const createRun = async ({
 };
 
 type FinishRunOptions = {
+  db: SchedulerDb;
   job: SchedulerJob;
   runId: SafeId<"schedulerJobRun">;
   runnerId: string;
   startedAt: Date;
 };
 
-const finishRunSuccess = async ({
+// A run terminates exactly once. Guarding the run-row write on
+// `status = "running"` (a generation check) plus the job-row write on
+// `lockedBy = runnerId` (a lease-token check) means a late zombie completion
+// can never overwrite a timed-out or reclaimed job with a stale success.
+export const finishRunSuccess = async ({
+  db,
   job,
   runId,
   runnerId,
@@ -543,16 +642,21 @@ const finishRunSuccess = async ({
 }: FinishRunOptions): Promise<void> => {
   const finishedAt = new Date();
 
-  await rootDb
+  await db
     .update(schedulerJobRuns)
     .set({
       durationMs: durationMs(startedAt, finishedAt),
       finishedAt,
       status: "success",
     })
-    .where(eq(schedulerJobRuns.id, runId));
+    .where(
+      and(
+        eq(schedulerJobRuns.id, runId),
+        eq(schedulerJobRuns.status, "running"),
+      ),
+    );
 
-  await rootDb
+  await db
     .update(schedulerJobs)
     .set({
       lastError: null,
@@ -569,6 +673,7 @@ const finishRunSuccess = async ({
 };
 
 const finishRunSkipped = async ({
+  db,
   job,
   runId,
   runnerId,
@@ -576,7 +681,7 @@ const finishRunSkipped = async ({
 }: FinishRunOptions): Promise<void> => {
   const finishedAt = new Date();
 
-  await rootDb
+  await db
     .update(schedulerJobRuns)
     .set({
       durationMs: durationMs(startedAt, finishedAt),
@@ -584,9 +689,14 @@ const finishRunSkipped = async ({
       finishedAt,
       status: "skipped",
     })
-    .where(eq(schedulerJobRuns.id, runId));
+    .where(
+      and(
+        eq(schedulerJobRuns.id, runId),
+        eq(schedulerJobRuns.status, "running"),
+      ),
+    );
 
-  await rootDb
+  await db
     .update(schedulerJobs)
     .set({
       lockedAt: null,
@@ -603,6 +713,7 @@ type FinishRunFailureOptions = FinishRunOptions & {
 };
 
 const finishRunFailure = async ({
+  db,
   error,
   job,
   runId,
@@ -612,7 +723,7 @@ const finishRunFailure = async ({
   const finishedAt = new Date();
   const sanitizedError = errorTag(error);
 
-  await rootDb
+  await db
     .update(schedulerJobRuns)
     .set({
       durationMs: durationMs(startedAt, finishedAt),
@@ -620,9 +731,14 @@ const finishRunFailure = async ({
       finishedAt,
       status: "failed",
     })
-    .where(eq(schedulerJobRuns.id, runId));
+    .where(
+      and(
+        eq(schedulerJobRuns.id, runId),
+        eq(schedulerJobRuns.status, "running"),
+      ),
+    );
 
-  await rootDb
+  await db
     .update(schedulerJobs)
     .set({
       lastError: sanitizedError,
