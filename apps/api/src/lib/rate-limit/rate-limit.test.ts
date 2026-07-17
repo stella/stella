@@ -120,17 +120,22 @@ describe("RedisRateLimitContext", () => {
     context.kill();
   });
 
-  test("does not refund Redis after the matching increment fell back locally", async () => {
-    let decrementCalled = false;
+  test("suppresses fallback refunds without affecting healthy keys", async () => {
+    const decrementedKeys: string[] = [];
+    let failNextIncrement = true;
     const context = new RedisRateLimitContext({
       createRedis: () => ({
         send: async (_command, args) => {
           const script = requiredArg(args, 0);
           if (script.includes('redis.call("INCR"')) {
-            throw new TypeError("Redis unavailable");
+            if (failNextIncrement) {
+              failNextIncrement = false;
+              throw new TypeError("Redis unavailable");
+            }
+            return [1, WINDOW_MS];
           }
           if (script.includes('redis.call("DECR"')) {
-            decrementCalled = true;
+            decrementedKeys.push(requiredArg(args, 2));
             return 0;
           }
           throw new TypeError("Unexpected Redis script");
@@ -141,10 +146,12 @@ describe("RedisRateLimitContext", () => {
     });
     context.init(RATE_LIMIT_OPTIONS);
 
-    expect((await context.increment("api:client")).count).toBe(1);
-    await context.decrement("api:client");
+    expect((await context.increment("api:failed")).count).toBe(1);
+    await context.decrement("api:failed");
+    expect((await context.increment("api:healthy")).count).toBe(1);
+    await context.decrement("api:healthy");
 
-    expect(decrementCalled).toBe(false);
+    expect(decrementedKeys).toEqual(["api:ratelimit:v1:api:healthy"]);
     context.kill();
   });
 

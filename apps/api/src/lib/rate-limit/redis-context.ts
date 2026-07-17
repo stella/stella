@@ -9,6 +9,7 @@ import { createRedisClient } from "@/api/lib/redis-client";
 
 const REDIS_KEY_PREFIX = "api:ratelimit:v1:";
 const REDIS_COMMAND_TIMEOUT_MS = 500;
+const REFUND_PROVENANCE_CLEANUP_INTERVAL_MS = 60_000;
 const FAIL_CLOSED_COUNT = Number.MAX_SAFE_INTEGER;
 
 const INCREMENT_SCRIPT = `
@@ -76,7 +77,8 @@ export class RedisRateLimitContext implements Context {
   private readonly scheduleTimeout: ScheduleTimeout;
   private durationMs = 60_000;
   private redis: RedisRateLimitClient | null = null;
-  private redisRefundsSuppressedUntil = 0;
+  private readonly redisRefundSuppressedUntilByKey = new Map<string, number>();
+  private readonly refundProvenanceCleanupTimer: ReturnType<typeof setInterval>;
 
   constructor({
     commandTimeoutMs = REDIS_COMMAND_TIMEOUT_MS,
@@ -102,6 +104,11 @@ export class RedisRateLimitContext implements Context {
         });
       });
     this.scheduleTimeout = scheduleTimeout;
+    this.refundProvenanceCleanupTimer = setInterval(
+      () => this.evictExpiredRefundSuppressions(),
+      REFUND_PROVENANCE_CLEANUP_INTERVAL_MS,
+    );
+    this.refundProvenanceCleanupTimer.unref();
   }
 
   init(options: Omit<Options, "context">): void {
@@ -134,11 +141,15 @@ export class RedisRateLimitContext implements Context {
     });
     if (Result.isError(redisResult)) {
       this.onRedisError(redisResult.error, "increment");
-      // Context.decrement has no increment token. Suppress shared refunds after any
-      // fallback rather than risk refunding another replica's successful request.
-      this.redisRefundsSuppressedUntil = Math.max(
-        this.redisRefundsSuppressedUntil,
-        Date.now() + effectiveDuration,
+      // Context.decrement has no increment token. Suppress this key's shared refunds
+      // for the window rather than risk refunding another replica's request.
+      const suppressedUntil = Date.now() + effectiveDuration;
+      this.redisRefundSuppressedUntilByKey.set(
+        key,
+        Math.max(
+          this.redisRefundSuppressedUntilByKey.get(key) ?? 0,
+          suppressedUntil,
+        ),
       );
       if (this.failurePolicy === "fail_open_local") {
         return fallbackCounter;
@@ -154,8 +165,13 @@ export class RedisRateLimitContext implements Context {
 
   async decrement(key: string): Promise<void> {
     this.fallback.decrement(key);
-    if (this.redisRefundsSuppressedUntil > Date.now()) {
-      return;
+    const redisRefundSuppressedUntil =
+      this.redisRefundSuppressedUntilByKey.get(key);
+    if (redisRefundSuppressedUntil !== undefined) {
+      if (redisRefundSuppressedUntil > Date.now()) {
+        return;
+      }
+      this.redisRefundSuppressedUntilByKey.delete(key);
     }
     const result = await Result.tryPromise(
       async () =>
@@ -174,9 +190,10 @@ export class RedisRateLimitContext implements Context {
     this.fallback.reset(key);
     // Never scan/delete the shared namespace; TTL expiry owns global cleanup.
     if (key === undefined) {
-      this.redisRefundsSuppressedUntil = 0;
+      this.redisRefundSuppressedUntilByKey.clear();
       return;
     }
+    this.redisRefundSuppressedUntilByKey.delete(key);
     const result = await Result.tryPromise(
       async () => await this.sendCommand("DEL", [redisRateLimitKey(key)]),
     );
@@ -187,9 +204,19 @@ export class RedisRateLimitContext implements Context {
 
   kill(): void {
     this.fallback.kill();
-    this.redisRefundsSuppressedUntil = 0;
+    clearInterval(this.refundProvenanceCleanupTimer);
+    this.redisRefundSuppressedUntilByKey.clear();
     this.redis?.close?.();
     this.redis = null;
+  }
+
+  private evictExpiredRefundSuppressions(): void {
+    const now = Date.now();
+    for (const [key, suppressedUntil] of this.redisRefundSuppressedUntilByKey) {
+      if (suppressedUntil <= now) {
+        this.redisRefundSuppressedUntilByKey.delete(key);
+      }
+    }
   }
 
   private async sendCommand(command: string, args: string[]): Promise<unknown> {
