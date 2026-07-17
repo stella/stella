@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notExists, sql } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -221,6 +221,17 @@ const sendMessage = createSafeRootHandler(
     session,
     user,
   }) {
+    const isClientConnectionAborted = () => request.signal.aborted;
+
+    if (isClientConnectionAborted()) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
     yield* requireTanStackAIAvailableForRole({
       orgConfig: orgAIConfig,
       role: "chat",
@@ -349,12 +360,30 @@ const sendMessage = createSafeRootHandler(
     // generator via `.return()`, which unwinds this `finally` like a normal
     // early `return` would.
     try {
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
       // Resolve the org's web-search providers once (BYOK key first,
       // platform env key as fallback) and reuse for both the validation
       // and streaming tool sets.
       const webSearchProviders = await loadWebSearchProvidersForOrg(
         session.activeOrganizationId,
       );
+
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
 
       // Only load external MCP tools for validation when the incoming
       // message actually carries a part that needs them — an ordinary
@@ -366,6 +395,15 @@ const sendMessage = createSafeRootHandler(
           body.message,
           externalMcpToolsLoader,
         );
+
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
 
       // Tool input schemas don't depend on `accessibleWorkspaceIds`
       // (scope is checked at execute time, not in the schema), so we
@@ -439,6 +477,29 @@ const sendMessage = createSafeRootHandler(
         }),
       );
 
+      // Existing-thread pin changes are durable side effects, so stop before
+      // applying them when any earlier validation or thread read observed a
+      // client disconnect. Created threads still need their rollback token
+      // cleaned up on this exit path.
+      if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: [],
+            userId: user.id,
+          }),
+        );
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
       // The thread's persisted chat-model override wins over the org/instance
       // default, but the dev-only body override still wins over everything
       // (matches `assertDevModelOverride` above). Re-validated here (not just
@@ -503,9 +564,17 @@ const sendMessage = createSafeRootHandler(
         workspaceId: workspaceId ?? undefined,
       });
 
-      const isClientConnectionAborted = () => request.signal.aborted;
-
       if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: [],
+            userId: user.id,
+          }),
+        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -669,6 +738,25 @@ const sendMessage = createSafeRootHandler(
         return yield* Result.err(messagesForContextResult.error);
       }
 
+      if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: uploadResult.uploadedFiles,
+            userId: user.id,
+          }),
+        );
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
       const chatContextResult = await prepareChatContext({
         activeDecision: body.activeDecision,
         activeExternal: body.activeExternal,
@@ -724,6 +812,25 @@ const sendMessage = createSafeRootHandler(
       }
       const chatContext = chatContextResult.value;
 
+      if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: uploadResult.uploadedFiles,
+            userId: user.id,
+          }),
+        );
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
       // Keep the thread's data scope aligned with the messages being
       // stored. Normal sends append newly observed workspace IDs
       // before persisting. Replay truncation recomputes the exact
@@ -774,6 +881,19 @@ const sendMessage = createSafeRootHandler(
                 },
         }),
       );
+
+      // The incoming message is durable now, so a disconnect must not run the
+      // pre-persistence rollback (which would delete files referenced by that
+      // message). It should still stop before connector discovery and any
+      // metered provider work.
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before stream started",
+          }),
+        );
+      }
 
       // The streaming pass always needs the external MCP tool set (for the
       // tool map, the connector system hint, and the `externalMcpToolSource`
@@ -1474,9 +1594,24 @@ type LoadThreadResult =
   | {
       type: "created";
       data: ThreadRecord;
+      rollbackToken: string;
     };
 
-const loadThread = async ({
+type LoadThreadError = HandlerError<400 | 404 | 409> | SafeDbError;
+
+const MAX_THREAD_CLAIM_ATTEMPTS = 3;
+
+const loadThread = async (
+  props: LoadThreadProps,
+): Promise<Result<LoadThreadResult, LoadThreadError>> =>
+  await loadThreadAttempt({ ...props, claimAttempt: 0 });
+
+type LoadThreadAttemptProps = LoadThreadProps & {
+  claimAttempt: number;
+};
+
+const loadThreadAttempt = async ({
+  claimAttempt,
   initialContextMatterIds,
   isAnonymized,
   organizationId,
@@ -1486,8 +1621,8 @@ const loadThread = async ({
   title,
   userId,
   workspaceId,
-}: LoadThreadProps): Promise<
-  Result<LoadThreadResult, HandlerError<400 | 404> | SafeDbError>
+}: LoadThreadAttemptProps): Promise<
+  Result<LoadThreadResult, LoadThreadError>
 > =>
   await Result.gen(async function* () {
     // Look the thread up by id+user only. Filtering by workspaceId
@@ -1503,6 +1638,7 @@ const loadThread = async ({
       dataWorkspaceIds: SafeId<"workspace">[];
       webSearchEnabled: boolean;
       chatModel: string | null;
+      rollbackToken: string | null;
     };
 
     const lookup = async () =>
@@ -1520,6 +1656,7 @@ const loadThread = async ({
             dataWorkspaceIds: true,
             webSearchEnabled: true,
             chatModel: true,
+            rollbackToken: true,
           },
         }),
       );
@@ -1556,11 +1693,77 @@ const loadThread = async ({
       });
     };
 
+    // A created row remains rollback-owned only while its token is unchanged.
+    // Every adopter CAS-clears that token before using the row.
+    // If rollback deletes first, the failed CAS retries and creates/claims the
+    // replacement; if adoption wins, the creator's guarded delete is a no-op.
+    const claimExisting = async (
+      existing: ExistingThreadRow,
+    ): Promise<Result<boolean, SafeDbError>> => {
+      const rollbackToken = existing.rollbackToken;
+      if (rollbackToken === null) {
+        return Result.ok(true);
+      }
+
+      const claimResult = await safeDb(async (tx) => {
+        // audit: skip — clears an ephemeral rollback-ownership token; the
+        // thread's user-facing state is unchanged
+        const claimQuery = tx
+          .update(chatThreads)
+          .set({
+            rollbackToken: null,
+            updatedAt: sql`${chatThreads.updatedAt}`,
+          })
+          .where(
+            and(
+              eq(chatThreads.id, threadId),
+              eq(chatThreads.rollbackToken, rollbackToken),
+            ),
+          )
+          .returning({ id: chatThreads.id });
+        return await claimQuery;
+      });
+      if (Result.isError(claimResult)) {
+        return Result.err(claimResult.error);
+      }
+      return Result.ok(claimResult.value.length > 0);
+    };
+
+    const retryAfterClaimRace = async (): Promise<
+      Result<LoadThreadResult, LoadThreadError>
+    > => {
+      if (claimAttempt >= MAX_THREAD_CLAIM_ATTEMPTS) {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Chat thread changed concurrently; retry request",
+          }),
+        );
+      }
+      return await loadThreadAttempt({
+        claimAttempt: claimAttempt + 1,
+        initialContextMatterIds,
+        isAnonymized,
+        organizationId,
+        recordAuditEvent,
+        safeDb,
+        threadId,
+        title,
+        userId,
+        workspaceId,
+      });
+    };
+
     const thread = yield* Result.await(lookup());
     if (thread) {
       const existingResult = buildExisting(thread);
       if (Result.isError(existingResult)) {
         return Result.err(existingResult.error);
+      }
+      const claimed = yield* Result.await(claimExisting(thread));
+      if (!claimed) {
+        const retried = yield* Result.await(retryAfterClaimRace());
+        return Result.ok(retried);
       }
       const windowedMessages = yield* Result.await(
         loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
@@ -1600,6 +1803,7 @@ const loadThread = async ({
     const initialDataWorkspaceIds: SafeId<"workspace">[] = workspaceId
       ? [workspaceId]
       : [];
+    const rollbackToken = Bun.randomUUIDv7();
 
     const insertResult = await safeDb(async (tx) => {
       await tx.insert(chatThreads).values({
@@ -1609,6 +1813,7 @@ const loadThread = async ({
         userId,
         workspaceId,
         contextMatterIds: initialContextMatterIds,
+        rollbackToken,
         // Workspace-scoped chats embed at minimum their own
         // workspace's content. Global chats start with no
         // embedded workspace data; subsequent messages widen
@@ -1652,6 +1857,11 @@ const loadThread = async ({
         if (Result.isError(recoveredResult)) {
           return Result.err(recoveredResult.error);
         }
+        const claimed = yield* Result.await(claimExisting(recovered));
+        if (!claimed) {
+          const retried = yield* Result.await(retryAfterClaimRace());
+          return Result.ok(retried);
+        }
         const recoveredMessages = yield* Result.await(
           loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
         );
@@ -1668,6 +1878,7 @@ const loadThread = async ({
 
     return Result.ok<LoadThreadResult>({
       type: "created",
+      rollbackToken,
       data: {
         id: threadId,
         workspaceId,
@@ -1771,7 +1982,25 @@ const rollbackUnpersistedChatSideEffects = async ({
   }
 
   const threadRollbackResult = await safeDb(async (tx) => {
-    await tx.delete(chatThreads).where(eq(chatThreads.id, threadId));
+    const deletedThreads = await tx
+      .delete(chatThreads)
+      .where(
+        and(
+          eq(chatThreads.id, threadId),
+          eq(chatThreads.rollbackToken, threadState.rollbackToken),
+          notExists(
+            tx
+              .select({ id: chatMessages.id })
+              .from(chatMessages)
+              .where(eq(chatMessages.threadId, chatThreads.id)),
+          ),
+        ),
+      )
+      .returning({ id: chatThreads.id });
+
+    if (deletedThreads.length === 0) {
+      return;
+    }
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.DELETE,

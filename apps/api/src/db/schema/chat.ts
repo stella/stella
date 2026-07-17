@@ -50,6 +50,12 @@ export const chatThreads = p.pgTable(
       .notNull()
       .default("user"),
     /**
+     * A successful mutation adopts a newly created thread, preventing the
+     * creating request's disconnect compensation from deleting changed state.
+     * Explicit token writes (creation and compare-and-set claim) take priority.
+     */
+    rollbackToken: p.text("rollback_token").$onUpdate(() => sql`null`),
+    /**
      * Matters the chat draws context from. Empty array (the
      * default) means "no specific matters pinned" — the AI
      * discovers matters lazily via the readonly stella API.
