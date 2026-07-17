@@ -30,6 +30,15 @@ describe("AI provider canary error summaries", () => {
     expect(errorSummary(error, signal)).toBe(
       "provider stream error before tool call",
     );
+    expect(
+      errorSummary(
+        new CanaryProviderRunError(
+          { code: "opaque-v1-example-token-123" },
+          "before-tool-call",
+        ),
+        signal,
+      ),
+    ).toBe("provider stream error before tool call");
   });
 
   test("prefers a numeric provider status without exposing the event", () => {

@@ -143,7 +143,7 @@
   "patchedDependencies": {
     "@tanstack/openai-base@0.9.7": "patches/@tanstack%2Fopenai-base@0.9.7.patch",
     "@tanstack/ai-anthropic@0.16.1": "patches/@tanstack%2Fai-anthropic@0.16.1.patch",
-    "@tanstack/ai-openrouter@0.15.8": "patches/@tanstack%2Fai-openrouter@0.15.8.patch",
-    "@tanstack/ai-mistral@0.2.1": "patches/@tanstack%2Fai-mistral@0.2.1.patch"
+    "@tanstack/ai-mistral@0.2.1": "patches/@tanstack%2Fai-mistral@0.2.1.patch",
+    "@tanstack/ai-openrouter@0.15.8": "patches/@tanstack%2Fai-openrouter@0.15.8.patch"
   }
 }

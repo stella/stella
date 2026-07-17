@@ -56,7 +56,14 @@ const SAFE_CANARY_ERROR_MESSAGES = new Set([
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
-const SAFE_PROVIDER_CODE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$/u;
+const SAFE_SINGLE_PROVIDER_CODES = new Set([
+  "aborted",
+  "error",
+  "incomplete",
+  "refusal",
+  "timeout",
+]);
+const SAFE_COMPOUND_PROVIDER_CODE = /^[a-z]{2,20}(?:[_.-][a-z]{2,20}){1,4}$/u;
 
 type CanaryRunStage =
   | "before-tool-call"
@@ -68,7 +75,12 @@ const providerCode = (error: unknown, depth = 0): string | null => {
     return null;
   }
   const code = error["code"];
-  if (typeof code === "string" && SAFE_PROVIDER_CODE.test(code)) {
+  if (
+    typeof code === "string" &&
+    code.length <= 64 &&
+    (SAFE_SINGLE_PROVIDER_CODES.has(code) ||
+      SAFE_COMPOUND_PROVIDER_CODE.test(code))
+  ) {
     return code;
   }
 
