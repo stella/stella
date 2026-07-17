@@ -558,7 +558,7 @@ export const useTemplateStudioSelectionGesture = ({
       host?.removeEventListener("scroll", dismiss, { capture: true });
       host?.removeEventListener("contextmenu", dismiss, { capture: true });
     };
-  }, [gestureShown, hideGesture]);
+  }, [gestureShown, hideGesture, overlayHostRef]);
 
   useExternalSyncEffect(
     () => () => {

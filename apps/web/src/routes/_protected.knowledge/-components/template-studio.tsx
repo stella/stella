@@ -22,7 +22,6 @@ import {
 } from "@stll/folio-react";
 import "@stll/folio-react/editor.css";
 import { isClauseSlotName, isFieldPath } from "@stll/template-conditions";
-import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";

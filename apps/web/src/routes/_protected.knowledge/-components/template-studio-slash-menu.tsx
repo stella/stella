@@ -347,60 +347,63 @@ export const useTemplateStudioSlashMenu = ({
     };
   }, [slash, slashView, studioFields, slashClauses]);
 
-  const positionSlashMenu = useCallback((from: number) => {
-    const host = overlayHostRef.current;
-    if (!host) {
-      return;
-    }
-    let attempts = 0;
-    const read = () => {
-      const liveView = editorViewRef.current;
-      const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
-      if (
-        liveView === null ||
-        live === null ||
-        !live.active ||
-        live.from !== from
-      ) {
+  const positionSlashMenu = useCallback(
+    (from: number) => {
+      const host = overlayHostRef.current;
+      if (!host) {
         return;
       }
-      const rect = getFolioCaretViewportRect(liveView);
-      if (!rect) {
-        attempts += 1;
-        if (attempts < 10) {
-          // eslint-disable-next-line react/react-compiler -- recursive local function is not a reactive dependency
-          requestAnimationFrame(read);
+      let attempts = 0;
+      const read = () => {
+        const liveView = editorViewRef.current;
+        const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
+        if (
+          liveView === null ||
+          live === null ||
+          !live.active ||
+          live.from !== from
+        ) {
+          return;
         }
-        return;
-      }
-      const hostRect = host.getBoundingClientRect();
-      const caretLeft = rect.left - hostRect.left;
-      const caretTop = rect.top - hostRect.top;
-      const caretBottom = rect.bottom - hostRect.top;
-      const fitsAbove =
-        caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
-      const placement = fitsAbove ? "above" : "below";
-      const renderedWidth =
-        window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
-          ? SLASH_MENU_WIDTH_PX
-          : SLASH_MENU_LIST_WIDTH_PX;
-      const left = Math.max(
-        0,
-        Math.min(caretLeft, host.clientWidth - renderedWidth),
-      );
-      setSlashState((previous) =>
-        previous === null
-          ? previous
-          : {
-              ...previous,
-              left,
-              top: placement === "below" ? caretBottom : caretTop,
-              placement,
-            },
-      );
-    };
-    requestAnimationFrame(read);
-  }, [editorViewRef, overlayHostRef]);
+        const rect = getFolioCaretViewportRect(liveView);
+        if (!rect) {
+          attempts += 1;
+          if (attempts < 10) {
+            // eslint-disable-next-line react/react-compiler -- recursive local function is not a reactive dependency
+            requestAnimationFrame(read);
+          }
+          return;
+        }
+        const hostRect = host.getBoundingClientRect();
+        const caretLeft = rect.left - hostRect.left;
+        const caretTop = rect.top - hostRect.top;
+        const caretBottom = rect.bottom - hostRect.top;
+        const fitsAbove =
+          caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
+        const placement = fitsAbove ? "above" : "below";
+        const renderedWidth =
+          window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
+            ? SLASH_MENU_WIDTH_PX
+            : SLASH_MENU_LIST_WIDTH_PX;
+        const left = Math.max(
+          0,
+          Math.min(caretLeft, host.clientWidth - renderedWidth),
+        );
+        setSlashState((previous) =>
+          previous === null
+            ? previous
+            : {
+                ...previous,
+                left,
+                top: placement === "below" ? caretBottom : caretTop,
+                placement,
+              },
+        );
+      };
+      requestAnimationFrame(read);
+    },
+    [editorViewRef, overlayHostRef],
+  );
 
   const onSlashMenuChange = (state: TemplateSlashMenuState) => {
     if (!state.active) {
@@ -693,7 +696,7 @@ export const useTemplateStudioSlashMenu = ({
       host?.removeEventListener("touchmove", dismiss, { capture: true });
       host?.removeEventListener("contextmenu", dismiss, { capture: true });
     };
-  }, [slashShown, dismissSlash]);
+  }, [slashShown, dismissSlash, overlayHostRef]);
 
   return {
     onSlashMenuChange,
