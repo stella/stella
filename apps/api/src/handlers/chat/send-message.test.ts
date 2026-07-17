@@ -60,6 +60,12 @@ const orgAIConfig = {
   },
 } satisfies OrgAIConfig;
 
+const selectChatMessages = () => ({
+  from: () => ({
+    where: () => ({ orderBy: async () => [] }),
+  }),
+});
+
 const createContext = ({
   contextMatterIds,
   request = new Request("http://localhost/v1/chat/send"),
@@ -187,6 +193,7 @@ describe("send message disconnect handling", () => {
             chatThreads: { findFirst: async () => null },
             organizationSettings: { findFirst: async () => null },
           },
+          select: selectChatMessages,
         },
       }),
     );
@@ -221,6 +228,7 @@ describe("send message disconnect handling", () => {
             chatThreads: { findFirst: async () => null },
             organizationSettings: { findFirst: async () => null },
           },
+          select: selectChatMessages,
         },
       }),
     );
@@ -244,12 +252,6 @@ describe("send message disconnect handling", () => {
         };
       },
     );
-    const selectMessages = () => ({
-      from: () => ({
-        where: () => ({ orderBy: async () => [] }),
-      }),
-    });
-
     const result = await sendMessage.handler(
       createContext({
         contextMatterIds: [],
@@ -273,7 +275,7 @@ describe("send message disconnect handling", () => {
             },
             organizationSettings: { findFirst: async () => null },
           },
-          select: selectMessages,
+          select: selectChatMessages,
           update: () => ({ set: setClaimValues }),
         },
       }),
@@ -319,6 +321,7 @@ describe("send message disconnect handling", () => {
             chatThreads: { findFirst: async () => null },
             organizationSettings: { findFirst: async () => null },
           },
+          select: selectChatMessages,
         },
       }),
     );
