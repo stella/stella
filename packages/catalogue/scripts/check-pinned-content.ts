@@ -32,6 +32,8 @@ import {
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { isGithubSkillEntry, loadCatalogue } from "../src/loader";
+import { catalogueLicensesMatch } from "../src/schema";
+import type { CatalogueLicense } from "../src/schema";
 
 /** Expected per-entry failure while fetching upstream content. */
 class PinnedContentError extends TaggedError("PinnedContentError")<{
@@ -55,6 +57,7 @@ const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
 
 type GithubTarget = {
   directory: string;
+  license: CatalogueLicense;
   repo: string;
   rev: string;
   slug: string;
@@ -323,6 +326,28 @@ export const checkFrontmatterLimits = (
   return errors;
 };
 
+type PinnedLicenseMismatchInput = {
+  catalogueLicense: CatalogueLicense;
+  slug: string;
+  upstreamLicense: string | null | undefined;
+};
+
+export const pinnedLicenseMismatchError = ({
+  catalogueLicense,
+  slug,
+  upstreamLicense,
+}: PinnedLicenseMismatchInput): string | null => {
+  if (
+    catalogueLicensesMatch({
+      catalogueLicense,
+      upstreamLicense,
+    })
+  ) {
+    return null;
+  }
+  return `${slug}: frontmatter license does not match the reviewed catalogue manifest`;
+};
+
 type ResourceContentLimitInput = {
   content: string;
   path: string;
@@ -451,6 +476,14 @@ const checkSkillFile = async (
     errors.push(
       `${target.slug}: SKILL.md body is ${parsed.body.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.bodyMaxChars} install limit`,
     );
+  }
+  const licenseError = pinnedLicenseMismatchError({
+    catalogueLicense: target.license,
+    slug: target.slug,
+    upstreamLicense: parsed.metadata.license,
+  });
+  if (licenseError) {
+    errors.push(licenseError);
   }
   errors.push(...checkFrontmatterLimits(target.slug, parsed.metadata));
   return { byteLength: file.byteLength, errors };
@@ -595,6 +628,7 @@ const collectGithubTargets = (): GithubTarget[] =>
     .filter(isGithubSkillEntry)
     .map((entry) => ({
       directory: entry.directory ?? "",
+      license: entry.license,
       repo: entry.repo,
       rev: entry.rev,
       slug: entry.slug,

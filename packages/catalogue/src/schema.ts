@@ -36,6 +36,21 @@ export const CATALOGUE_LICENSES = [
 ] as const;
 export type CatalogueLicense = (typeof CATALOGUE_LICENSES)[number];
 
+/**
+ * Compare untrusted upstream SPDX identifiers with the reviewed canonical
+ * catalogue spelling. Upstream frontmatter is allowed to vary only in ASCII
+ * case and surrounding whitespace; persisted values still come from the
+ * catalogue manifest.
+ */
+export const catalogueLicensesMatch = ({
+  catalogueLicense,
+  upstreamLicense,
+}: {
+  catalogueLicense: CatalogueLicense;
+  upstreamLicense: string | null | undefined;
+}): boolean =>
+  upstreamLicense?.trim().toLowerCase() === catalogueLicense.toLowerCase();
+
 export const MCP_AUTH_TYPES = ["none", "bearer", "oauth"] as const;
 export type McpAuthType = (typeof MCP_AUTH_TYPES)[number];
 
