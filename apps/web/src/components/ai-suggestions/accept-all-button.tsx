@@ -65,11 +65,17 @@ export const AcceptAllButton = ({
   pendingItems,
   onAcceptAll,
   className,
-  size = "sm",
-  variant = "default",
+  size,
+  variant,
   children,
 }: AcceptAllButtonProps) => {
   const t = useTranslations();
+  // Defaults live here, not as destructuring defaults: an `AssignmentPattern`
+  // in the object parameter pattern trips the React Compiler's HIR lowering
+  // (`BuildHIR::lowerAssignment` Todo) and bails the whole component out of
+  // optimization. `?? default` is behaviorally identical for an absent prop.
+  const buttonSize = size ?? "sm";
+  const buttonVariant = variant ?? "default";
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const runAccept = () => {
@@ -100,8 +106,8 @@ export const AcceptAllButton = ({
         className={className}
         disabled={pendingItems.length === 0}
         onClick={handleClick}
-        size={size}
-        variant={variant}
+        size={buttonSize}
+        variant={buttonVariant}
       >
         <CheckIcon className="me-1 size-3.5" />
         {children}
