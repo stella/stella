@@ -1096,7 +1096,7 @@ describe("chat tool schemas", () => {
   test("the installed Mistral adapter restores omitted optional tool inputs", async () => {
     const adapter = createMistralText("mistral-large-latest", "test-key");
     const argumentsJson =
-      '{"question":"Which one?","mode":null,"nullableNote":null,"acceptAnything":null,"rejectAnything":null}';
+      '{"question":"Which one?","mode":null,"nullableNote":null,"emptyEnumMarker":null,"acceptAnything":null,"rejectAnything":null}';
     let request: unknown;
     Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
       request = payload;
@@ -1163,6 +1163,10 @@ describe("chat tool schemas", () => {
     // JSONSchema type currently models only object schemas.
     Reflect.set(inputSchema.properties, "acceptAnything", true);
     Reflect.set(inputSchema.properties, "rejectAnything", false);
+    Reflect.set(inputSchema.properties, "emptyEnumMarker", {
+      type: "string",
+      enum: [],
+    });
     const tool = {
       name: "ask_user",
       description: "Ask a question.",
@@ -1186,6 +1190,10 @@ describe("chat tool schemas", () => {
                   type: ["string", "null"],
                   enum: ["must-not-be-sent", null],
                 },
+                emptyEnumMarker: {
+                  type: ["string", "null"],
+                  enum: [null],
+                },
                 acceptAnything: {
                   anyOf: [true, { type: "null" }],
                 },
@@ -1197,6 +1205,7 @@ describe("chat tool schemas", () => {
                 "question",
                 "mode",
                 "nullableNote",
+                "emptyEnumMarker",
                 "acceptAnything",
                 "rejectAnything",
               ],

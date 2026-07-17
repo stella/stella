@@ -206,6 +206,45 @@ export const toolRoundTripInputSchema = v.strictObject({
   value: v.literal(TOOL_ROUND_TRIP_VALUE),
 });
 
+// Mistral rejects `pattern` in strict tool schemas. Its adapter widens every
+// optional enum with null, so an empty enum becomes `[null]` on the wire: one
+// deterministic omission marker and no non-null value for the model to choose.
+const MISTRAL_TOOL_ROUND_TRIP_JSON_SCHEMA = {
+  type: "object",
+  properties: {
+    count: { type: "number", enum: [TOOL_ROUND_TRIP_COUNT] },
+    optionalNote: { type: "string", enum: [] },
+    value: { type: "string", enum: [TOOL_ROUND_TRIP_VALUE] },
+  },
+  required: ["count", "value"],
+  additionalProperties: false,
+} as const;
+
+const toolRoundTripStandardSchema = toTanStackToolSchema(
+  toolRoundTripInputSchema,
+);
+
+const MISTRAL_TOOL_ROUND_TRIP_INPUT_SCHEMA = {
+  ...toolRoundTripStandardSchema,
+  "~standard": {
+    ...toolRoundTripStandardSchema["~standard"],
+    jsonSchema: {
+      ...toolRoundTripStandardSchema["~standard"].jsonSchema,
+      input: () => MISTRAL_TOOL_ROUND_TRIP_JSON_SCHEMA,
+    },
+  },
+} as const;
+
+export const toolRoundTripInputSchemaForProvider = (
+  provider: CanaryProvider,
+) => {
+  if (provider === "mistral") {
+    return MISTRAL_TOOL_ROUND_TRIP_INPUT_SCHEMA;
+  }
+
+  return toolRoundTripStandardSchema;
+};
+
 const toolRoundTripOutputSchema = v.strictObject({
   confirmation: v.literal(TOOL_ROUND_TRIP_RESULT),
 });
@@ -377,7 +416,7 @@ const runToolCallRoundTripProbe = async ({
     name: TOOL_ROUND_TRIP_NAME,
     description:
       "Call exactly once with the value and count requested by the user.",
-    inputSchema: toTanStackToolSchema(toolRoundTripInputSchema),
+    inputSchema: toolRoundTripInputSchemaForProvider(context.provider),
     outputSchema: toTanStackToolSchema(toolRoundTripOutputSchema),
   }).server((input) => {
     observedInputs.push(input);

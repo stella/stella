@@ -7,6 +7,7 @@ import {
   CanaryProviderRunError,
   errorSummary,
   toolRoundTripInputSchema,
+  toolRoundTripInputSchemaForProvider,
   toolRoundTripPromptForProvider,
 } from "./ai-provider-canary";
 
@@ -55,6 +56,16 @@ describe("AI provider canary tool contract", () => {
     expect(toolRoundTripPromptForProvider("openrouter")).toContain(
       "Do not include optionalNote.",
     );
+    expect(
+      toolRoundTripInputSchemaForProvider("mistral")[
+        "~standard"
+      ].jsonSchema.input({ target: "draft-07" }),
+    ).toMatchObject({
+      properties: {
+        optionalNote: { type: "string", enum: [] },
+      },
+      required: ["count", "value"],
+    });
   });
 });
 
