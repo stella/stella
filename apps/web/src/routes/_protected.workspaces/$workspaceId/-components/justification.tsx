@@ -167,7 +167,11 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
             });
             window.dispatchEvent(
               new CustomEvent<FolioScrollEventDetail>(FOLIO_SCROLL_EVENT, {
-                detail: { blockId: citation.blockId, text: citation.text },
+                detail: {
+                  blockId: citation.blockId,
+                  fieldId: citation.fileFieldId,
+                  text: citation.text,
+                },
               }),
             );
           }}
