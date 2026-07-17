@@ -1,10 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   TEXT_CSV_MIME_TYPE,
   TEXT_MARKDOWN_MIME_TYPE,
@@ -220,8 +220,7 @@ describe("chat attachment hydration", () => {
     const databaseError = new DatabaseError({
       message: "user file insert failed",
     });
-    const safeDb: SafeDb = async <T>() =>
-      Result.err<T, SafeDbError>(databaseError);
+    const safeDb: SafeDb = async <T>() => Result.err(databaseError);
     const recordAuditEvent = mock(async () => undefined);
 
     const result = await uploadUserFile({
@@ -239,7 +238,7 @@ describe("chat attachment hydration", () => {
 
     expect(Result.isError(result)).toBe(true);
     if (Result.isOk(result)) {
-      throw new Error("Expected the database save to fail");
+      panic("Expected the database save to fail");
     }
     expect(result.error).toBe(databaseError);
     expect(writeMock).toHaveBeenCalledTimes(1);
