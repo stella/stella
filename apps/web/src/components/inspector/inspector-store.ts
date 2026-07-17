@@ -305,7 +305,11 @@ type State = {
    * from the editor lifecycle (the editor may not be mounted yet
    * if the user just opened the file via the citation).
    */
-  pendingBlockScroll: { tabId: string; blockId: string } | null;
+  pendingBlockScroll: {
+    tabId: string;
+    blockId: string;
+    text?: string | undefined;
+  } | null;
   /**
    * One-shot edit-mode request for a DOCX tab. Set by callers that
    * open a DOCX file and want the user to land directly in the
@@ -525,8 +529,14 @@ type Actions = {
   /** Flip the minimized state (right-side button toggle). */
   toggleMinimized: () => void;
   /** Queue a folio scroll for the active DOCX editor of `tabId`.
-   *  Cleared after the editor consumes it. */
-  requestBlockScroll: (tabId: string, blockId: string) => void;
+   *  When `text` is present the editor attempts an exact-passage
+   *  highlight; otherwise it scrolls to the block. Cleared after the
+   *  editor consumes it. */
+  requestBlockScroll: (request: {
+    tabId: string;
+    blockId: string;
+    text?: string;
+  }) => void;
   clearPendingBlockScroll: () => void;
   acquireAnonymizationActive: () => void;
   releaseAnonymizationActive: () => void;
@@ -1781,9 +1791,9 @@ export const useInspectorStore = create<State & Actions>()(
         state.minimized = !state.minimized;
       }),
 
-    requestBlockScroll: (tabId, blockId) =>
+    requestBlockScroll: ({ tabId, blockId, text }) =>
       set((state) => {
-        state.pendingBlockScroll = { tabId, blockId };
+        state.pendingBlockScroll = { tabId, blockId, text };
       }),
 
     clearPendingBlockScroll: () =>

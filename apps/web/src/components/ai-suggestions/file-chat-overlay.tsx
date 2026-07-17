@@ -157,6 +157,15 @@ const getOperationComment = (
     case "deleteBlock":
     case "insertSignatureTable":
       return operation.comment ? { text: operation.comment.text } : undefined;
+    // Table ops carry no `comment` field in the 0.12 union; never read
+    // `.comment` on them.
+    case "insertTableRow":
+    case "deleteTableRow":
+    case "insertTableColumn":
+    case "deleteTableColumn":
+    case "mergeTableCells":
+    case "splitTableCell":
+      return undefined;
     case "commentOnBlock":
     case "commentOnRange":
       return { text: operation.comment.text };
@@ -399,6 +408,64 @@ const toFolioOperation = ({
         next.quote = operation.quote;
       }
       return next;
+    }
+    // Table ops apply natively in folio; stella only threads the anchor
+    // (`blockId`) and the op-specific fields through. Each is its own
+    // member of the folio union (unlike insertAfter/insertBefore, which
+    // share one), so they cannot be collapsed into a shared arm: an
+    // object literal with a multi-literal `type` is not assignable to any
+    // single member.
+    case "insertTableRow": {
+      const next: FolioAIEditOperation = {
+        blockId: operation.blockId,
+        id,
+        type: operation.type,
+      };
+      if (operation.position !== undefined) {
+        next.position = operation.position;
+      }
+      if (operation.cellTexts !== undefined) {
+        next.cellTexts = operation.cellTexts;
+      }
+      return next;
+    }
+    case "insertTableColumn": {
+      const next: FolioAIEditOperation = {
+        blockId: operation.blockId,
+        id,
+        type: operation.type,
+      };
+      if (operation.position !== undefined) {
+        next.position = operation.position;
+      }
+      if (operation.cellTexts !== undefined) {
+        next.cellTexts = operation.cellTexts;
+      }
+      return next;
+    }
+    case "deleteTableRow":
+      return { blockId: operation.blockId, id, type: operation.type };
+    case "deleteTableColumn":
+      return { blockId: operation.blockId, id, type: operation.type };
+    case "splitTableCell":
+      return { blockId: operation.blockId, id, type: operation.type };
+    case "mergeTableCells": {
+      // The op carries either an opposite-corner anchor (`endBlockId`)
+      // or a downward span (`rowCount`); the union enforces exactly one.
+      if (operation.endBlockId !== undefined) {
+        return {
+          blockId: operation.blockId,
+          endBlockId: operation.endBlockId,
+          id,
+          type: operation.type,
+        };
+      }
+      return {
+        blockId: operation.blockId,
+        id,
+        rowCount: operation.rowCount,
+        type: operation.type,
+      };
     }
     case "replaceRange":
     case "commentOnRange":

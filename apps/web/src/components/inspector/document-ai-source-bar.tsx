@@ -268,7 +268,11 @@ export const DocumentAiSourceBar = ({
       return;
     }
     scrolledForDocxJustificationRef.current = justificationId;
-    requestBlockScroll(activeTab.id, firstDocxCitation.blockId);
+    requestBlockScroll({
+      tabId: activeTab.id,
+      blockId: firstDocxCitation.blockId,
+      text: firstDocxCitation.text,
+    });
   }, [
     activeTab.id,
     citations,
@@ -328,7 +332,11 @@ export const DocumentAiSourceBar = ({
   })();
   const handleCitationClick = (citation: Citation) => {
     if (citation.kind === "docx-folio") {
-      requestBlockScroll(activeTab.id, citation.blockId);
+      requestBlockScroll({
+        tabId: activeTab.id,
+        blockId: citation.blockId,
+        text: citation.text,
+      });
       return;
     }
 

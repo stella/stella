@@ -17,10 +17,36 @@ type UseDocxBlockScrollProps = {
   fieldId: string;
 };
 
+type DocxScrollTarget = { blockId: string; text?: string | undefined };
+
 type ScheduleDocxBlockScrollProps = {
   blockId: string;
+  text?: string | undefined;
   onSuccess?: (() => void) | undefined;
-  scrollToBlock: (blockId: string) => boolean | undefined;
+  attemptScroll: (target: DocxScrollTarget) => boolean | undefined;
+};
+
+/**
+ * Land the user on a citation target. With passage `text`, ask folio
+ * for a persistent exact-passage highlight and treat both `"passage"`
+ * (text matched) and `"block"` (text drifted, degraded to a block
+ * flash) as success; only `"none"` (block didn't resolve) is a miss
+ * worth retrying. Without `text`, fall back to a plain scroll. Returns
+ * `undefined` while the editor ref is still unmounted so the caller
+ * keeps retrying.
+ */
+const attemptDocxScroll = (
+  editorRef: RefObject<DocxEditorRef | null>,
+  { blockId, text }: DocxScrollTarget,
+): boolean | undefined => {
+  const editor = editorRef.current;
+  if (!editor) {
+    return undefined;
+  }
+  if (typeof text === "string" && text.length > 0) {
+    return editor.highlightPassage({ blockId, text }) !== "none";
+  }
+  return editor.scrollToBlock(blockId);
 };
 
 const debugDocxBlockScroll = (
@@ -59,8 +85,9 @@ export const useDocxBlockScroll = ({
 
     return scheduleDocxBlockScroll({
       blockId: pendingBlockScroll.blockId,
+      text: pendingBlockScroll.text,
       onSuccess: clearPendingBlockScroll,
-      scrollToBlock: (blockId) => editorRef.current?.scrollToBlock(blockId),
+      attemptScroll: (target) => attemptDocxScroll(editorRef, target),
     });
   }, [clearPendingBlockScroll, editorRef, fieldId, pendingBlockScroll]);
 
@@ -81,6 +108,26 @@ export const useDocxBlockScroll = ({
       if (typeof blockId !== "string" || blockId.length === 0) {
         return;
       }
+      // Targeted events name the editor they address; ignore events
+      // for other fields so a positional `seq-NNNN` id cannot resolve
+      // (and highlight) in an unrelated mounted editor. Events without
+      // a fieldId are legacy broadcasts from dispatchers that cannot
+      // know the owner.
+      const rawFieldId: unknown =
+        "fieldId" in detail ? detail.fieldId : undefined;
+      const targeted = typeof rawFieldId === "string" && rawFieldId.length > 0;
+      if (targeted && rawFieldId !== fieldId) {
+        return;
+      }
+      // Optional passage text: a non-string / empty value is absent,
+      // not an error — the target simply falls back to scroll-only.
+      // Broadcasts stay scroll-only regardless: a passage highlight
+      // must never paint in an editor the dispatcher didn't name.
+      const rawText: unknown = "text" in detail ? detail.text : undefined;
+      const text =
+        targeted && typeof rawText === "string" && rawText.length > 0
+          ? rawText
+          : undefined;
 
       debugDocxBlockScroll("hook:event", {
         blockId,
@@ -90,7 +137,8 @@ export const useDocxBlockScroll = ({
       cancelScroll?.();
       cancelScroll = scheduleDocxBlockScroll({
         blockId,
-        scrollToBlock: (id) => editorRef.current?.scrollToBlock(id),
+        text,
+        attemptScroll: (target) => attemptDocxScroll(editorRef, target),
       });
     };
 
@@ -104,8 +152,9 @@ export const useDocxBlockScroll = ({
 
 const scheduleDocxBlockScroll = ({
   blockId,
+  text,
   onSuccess,
-  scrollToBlock,
+  attemptScroll,
 }: ScheduleDocxBlockScrollProps) => {
   let cancelled = false;
   let attempts = 0;
@@ -133,7 +182,7 @@ const scheduleDocxBlockScroll = ({
         return;
       }
 
-      const ok = scrollToBlock(blockId);
+      const ok = attemptScroll({ blockId, text });
       if (ok === true) {
         settleScroll();
         return;
@@ -149,7 +198,7 @@ const scheduleDocxBlockScroll = ({
       return;
     }
 
-    const ok = scrollToBlock(blockId);
+    const ok = attemptScroll({ blockId, text });
     debugDocxBlockScroll("hook:try", {
       attempts,
       blockId,

@@ -33,6 +33,12 @@ export const isNoopReviewOperation = (
     case "insertAfterBlock":
     case "insertBeforeBlock":
     case "insertSignatureTable":
+    case "insertTableRow":
+    case "deleteTableRow":
+    case "insertTableColumn":
+    case "deleteTableColumn":
+    case "mergeTableCells":
+    case "splitTableCell":
       return false;
     default:
       operation satisfies never;

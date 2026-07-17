@@ -5,6 +5,10 @@ import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
 import type { Citation } from "@/lib/citations";
+import {
+  FOLIO_SCROLL_EVENT,
+  type FolioScrollEventDetail,
+} from "@/lib/folio-scroll-event";
 import { useOptionalPDFStore } from "@/lib/pdf/pdf-context";
 import { getPDFPageIdByNumber } from "@/lib/pdf/utils";
 import { renderJustificationContent } from "@/lib/render-justification-content";
@@ -156,10 +160,18 @@ const DocxQuote = ({ citation }: DocxQuoteProps) => {
             // store; the full-view DocxBrowserEditor listens for the
             // window event (see docx-browser-editor.tsx). Fire both so
             // both surfaces respond.
-            requestBlockScroll(citation.fileFieldId, citation.blockId);
+            requestBlockScroll({
+              tabId: citation.fileFieldId,
+              blockId: citation.blockId,
+              text: citation.text,
+            });
             window.dispatchEvent(
-              new CustomEvent<{ blockId: string }>("folio:scroll-to-block", {
-                detail: { blockId: citation.blockId },
+              new CustomEvent<FolioScrollEventDetail>(FOLIO_SCROLL_EVENT, {
+                detail: {
+                  blockId: citation.blockId,
+                  fieldId: citation.fileFieldId,
+                  text: citation.text,
+                },
               }),
             );
           }}
