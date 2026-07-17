@@ -4,7 +4,37 @@
  * testable against plain objects.
  */
 
+import type { PracticeArea } from "@stll/catalogue";
+
+import type { TranslationKey } from "@/i18n/types";
 import { getCollator } from "@/lib/collation";
+
+export const PRACTICE_AREA_LABEL_KEY = {
+  "banking-finance": "publicTools.practiceAreas.bankingFinance",
+  "capital-markets": "publicTools.practiceAreas.capitalMarkets",
+  commercial: "publicTools.practiceAreas.commercial",
+  competition: "publicTools.practiceAreas.competition",
+  corporate: "publicTools.practiceAreas.corporate",
+  criminal: "publicTools.practiceAreas.criminal",
+  "data-protection": "publicTools.practiceAreas.dataProtection",
+  "dispute-resolution": "publicTools.practiceAreas.disputeResolution",
+  employment: "publicTools.practiceAreas.employment",
+  energy: "publicTools.practiceAreas.energy",
+  environmental: "publicTools.practiceAreas.environmental",
+  family: "publicTools.practiceAreas.family",
+  immigration: "publicTools.practiceAreas.immigration",
+  insolvency: "publicTools.practiceAreas.insolvency",
+  "intellectual-property": "publicTools.practiceAreas.intellectualProperty",
+  litigation: "publicTools.practiceAreas.litigation",
+  "mergers-acquisitions": "publicTools.practiceAreas.mergersAcquisitions",
+  "private-client": "publicTools.practiceAreas.privateClient",
+  "public-administrative": "publicTools.practiceAreas.publicAdministrative",
+  "real-estate": "publicTools.practiceAreas.realEstate",
+  regulatory: "publicTools.practiceAreas.regulatory",
+  tax: "publicTools.practiceAreas.tax",
+  technology: "publicTools.practiceAreas.technology",
+  "white-collar-crime": "publicTools.practiceAreas.whiteCollarCrime",
+} as const satisfies Record<PracticeArea, TranslationKey>;
 
 export const TOOLS_KIND_FILTERS = [
   "all",
@@ -18,7 +48,7 @@ export type ToolFilterEntry = {
   kind: "skill" | "mcp" | "native-tool";
   slug: string;
   displayName: string;
-  tags: readonly string[];
+  tags: readonly PracticeArea[];
   jurisdictions: readonly string[];
 };
 
@@ -117,8 +147,8 @@ export const invertRecommendedMap = (
 
 export const collectPracticeAreas = (
   entries: readonly ToolFilterEntry[],
-): readonly string[] => {
-  const set = new Set<string>();
+): readonly PracticeArea[] => {
+  const set = new Set<PracticeArea>();
   for (const entry of entries) {
     for (const tag of entry.tags) {
       set.add(tag);
@@ -161,12 +191,3 @@ export const catalogueStats = (
   }
   return { toolCount: entries.length, contributorCount: authors.size };
 };
-
-/** Present a kebab-case practice-area slug as a human label. */
-export const prettifyPracticeArea = (tag: string): string =>
-  tag
-    .split("-")
-    .map((part) =>
-      part.length > 0 ? part[0]?.toUpperCase() + part.slice(1) : part,
-    )
-    .join(" ");

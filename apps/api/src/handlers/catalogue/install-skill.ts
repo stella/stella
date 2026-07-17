@@ -2,9 +2,13 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
+import { env } from "@/api/env";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { installSkill } from "@/api/lib/skills/install";
+import {
+  installSkill,
+  preflightSkillInstall,
+} from "@/api/lib/skills/install";
 
 import { resolveCatalogueSkillPackage } from "./catalogue-skill-package";
 
@@ -42,7 +46,22 @@ const installBundledSkill = createSafeRootHandler(
     session,
     user,
   }) {
-    const resolvedResult = await resolveCatalogueSkillPackage(body.slug);
+    const scope = body.scope ?? "team";
+    const preflightResult = await preflightSkillInstall({
+      memberRole,
+      safeDb,
+      scope,
+      session,
+      slug: body.slug,
+      user,
+    });
+    if (Result.isError(preflightResult)) {
+      return yield* Result.err(preflightResult.error);
+    }
+
+    const resolvedResult = await resolveCatalogueSkillPackage(body.slug, {
+      ...(env.GITHUB_TOKEN ? { githubToken: env.GITHUB_TOKEN } : {}),
+    });
     if (Result.isError(resolvedResult)) {
       return yield* Result.err(resolvedResult.error);
     }
@@ -57,7 +76,7 @@ const installBundledSkill = createSafeRootHandler(
       parsed: resolvedResult.value.package,
       recordAuditEvent,
       safeDb,
-      scope: body.scope ?? "team",
+      scope,
       session,
       // Store the catalogue slug, never the upstream frontmatter name: a
       // github skill whose SKILL.md `name` differs from the catalogue slug

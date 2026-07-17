@@ -13,7 +13,8 @@ export type HandlerErrorStatusCode =
   | 422
   | 429
   | 500
-  | 502;
+  | 502
+  | 503;
 
 export type HandlerErrorCode = string;
 

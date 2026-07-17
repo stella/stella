@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { Link } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
@@ -10,7 +11,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { loadPublicToolsIndexData } from "@/lib/public-tools-data";
 import {
   filterToolEntries,
-  prettifyPracticeArea,
+  PRACTICE_AREA_LABEL_KEY,
   sortToolEntries,
   TOOLS_KIND_FILTERS,
   type ToolsKindFilter,
@@ -130,7 +131,7 @@ export function PublicToolsIndex({
           onToggle={(value) => setSelectedTags((prev) => toggle(prev, value))}
           options={practiceAreas.map((tag) => ({
             value: tag,
-            label: prettifyPracticeArea(tag),
+            label: t(PRACTICE_AREA_LABEL_KEY[tag]),
           }))}
           selected={selectedTags}
         />
@@ -142,7 +143,10 @@ export function PublicToolsIndex({
           onToggle={(value) =>
             setSelectedJurisdictions((prev) => toggle(prev, value))
           }
-          options={jurisdictions.map((code) => ({ value: code, label: code }))}
+          options={jurisdictions.map((code) => ({
+            value: code,
+            label: <bdi>{code}</bdi>,
+          }))}
           selected={selectedJurisdictions}
         />
       )}
@@ -175,7 +179,7 @@ export function PublicToolsIndex({
 
 type FacetOption = {
   value: string;
-  label: string;
+  label: ReactNode;
 };
 
 function FacetChips({

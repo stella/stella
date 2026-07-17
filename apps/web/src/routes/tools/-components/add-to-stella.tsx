@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from "react";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PlusIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -17,9 +17,17 @@ import {
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  catalogueKeys,
+  catalogueOptions,
+} from "@/components/catalogue/catalogue-queries";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import type { TranslationKey } from "@/i18n/types";
+import { authClient, type Role } from "@/lib/auth";
 import { installCatalogueEntry } from "@/lib/catalogue-install";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { roleOptions } from "@/routes/-queries";
+import { resolveAddToStellaState } from "@/routes/tools/-components/add-to-stella.logic";
 
 const SignInDialog = lazy(async () => {
   const module = await import("@/components/auth/sign-in-dialog");
@@ -52,12 +60,50 @@ export function AddToStella({
   const authStatus = useClientAuthStatus();
   const queryClient = useQueryClient();
   const [authRedirectTo, setAuthRedirectTo] = useState<string | null>(null);
+  const organizationId = authStatus.isAuthenticated
+    ? authStatus.user.activeOrganizationId
+    : "";
+  const roleQuery = useQuery({
+    ...roleOptions,
+    enabled: authStatus.isAuthenticated,
+  });
+  const catalogueQuery = useQuery({
+    ...catalogueOptions(organizationId),
+    enabled: authStatus.isAuthenticated,
+  });
+  const canInstall = resolveInstallPermission({
+    authenticated: authStatus.isAuthenticated,
+    isError: roleQuery.isError,
+    role: roleQuery.data,
+  });
+  const organizationEntries = catalogueQuery.isError
+    ? []
+    : catalogueQuery.data?.entries;
+  const state = resolveAddToStellaState({
+    authStatus: authStatus.status,
+    canInstall,
+    entry,
+    organizationEntries,
+  });
+  let buttonLabelKey: TranslationKey = "publicTools.addToStella";
+  if (state.type === "forbidden") {
+    buttonLabelKey = "errors.api.forbidden";
+  } else if (state.type === "installed") {
+    buttonLabelKey = "catalogue.installedShort";
+  } else if (state.type === "unavailable") {
+    buttonLabelKey = "catalogue.unavailable";
+  }
 
   const mutation = useMutation({
     mutationFn: async () => await installCatalogueEntry(entry),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["mcp"] });
-      void queryClient.invalidateQueries({ queryKey: ["skills"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: catalogueKeys.all(organizationId),
+        }),
+        queryClient.invalidateQueries({ queryKey: ["mcp"] }),
+        queryClient.invalidateQueries({ queryKey: ["skills"] }),
+      ]);
       stellaToast.add({
         title: t("catalogue.installed", { name: displayName }),
         type: "success",
@@ -80,11 +126,11 @@ export function AddToStella({
   };
 
   const handleClick = () => {
-    if (authStatus.isAuthenticated) {
+    if (state.type === "install") {
       runInstall();
       return;
     }
-    if (authStatus.status === "checking") {
+    if (state.type !== "sign-in") {
       return;
     }
     setAuthRedirectTo(`/tools/${entry.slug}?install=1`);
@@ -100,18 +146,21 @@ export function AddToStella({
   return (
     <>
       <Button
-        disabled={authStatus.status === "checking" || mutation.isPending}
+        disabled={
+          mutation.isPending ||
+          (state.type !== "install" && state.type !== "sign-in")
+        }
         onClick={handleClick}
         type="button"
       >
         <PlusIcon className="size-4" />
-        {t("publicTools.addToStella")}
+        {t(buttonLabelKey)}
       </Button>
 
       {/* Renders only once the session resolves to authenticated with a
           pending intent. It never installs on its own: it asks first, and
           both confirm and cancel strip the `install` param from the URL. */}
-      {authStatus.isAuthenticated && installIntent && (
+      {state.type === "install" && installIntent && (
         <InstallConfirmDialog
           entry={entry}
           isPending={mutation.isPending}
@@ -137,6 +186,32 @@ export function AddToStella({
     </>
   );
 }
+
+type ResolveInstallPermissionOptions = {
+  authenticated: boolean;
+  isError: boolean;
+  role: Role | undefined;
+};
+
+const resolveInstallPermission = ({
+  authenticated,
+  isError,
+  role,
+}: ResolveInstallPermissionOptions): boolean | undefined => {
+  if (!authenticated) {
+    return undefined;
+  }
+  if (isError) {
+    return false;
+  }
+  if (role === undefined) {
+    return undefined;
+  }
+  return authClient.organization.checkRolePermission({
+    role,
+    permissions: { organizationSettings: ["update"] },
+  });
+};
 
 type InstallConfirmDialogProps = {
   entry: LoadedCatalogueEntry;

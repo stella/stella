@@ -5,7 +5,9 @@ import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
 import {
   archiveSizeLimitError,
   checkFrontmatterLimits,
+  registerResourcePath,
   resourceContentLimitError,
+  resourcePathLimitError,
 } from "../scripts/check-pinned-content";
 
 describe("pinned skill install-limit preflight", () => {
@@ -48,5 +50,31 @@ describe("pinned skill install-limit preflight", () => {
     });
 
     expect(error).toContain("skill package exceeds");
+  });
+
+  test("rejects resource paths longer than the persistence boundary", () => {
+    const path = `references/${"a".repeat(SKILL_PACKAGE_LIMITS.resourcePathMaxChars)}.md`;
+
+    expect(resourcePathLimitError({ path, slug: "long-path" })).toContain(
+      `${path.length} chars`,
+    );
+  });
+
+  test("reports paths that collide after normalization", () => {
+    const seenPaths = new Set<string>();
+    expect(
+      registerResourcePath({
+        path: "references/same.md",
+        seenPaths,
+        slug: "duplicate-path",
+      }),
+    ).toBeNull();
+    expect(
+      registerResourcePath({
+        path: "references/same.md",
+        seenPaths,
+        slug: "duplicate-path",
+      }),
+    ).toContain("duplicate normalized resource path references/same.md");
   });
 });

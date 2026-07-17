@@ -73,7 +73,7 @@ export const ToolCatalogueCard = ({
                   className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-xs"
                   key={code}
                 >
-                  {code}
+                  <bdi>{code}</bdi>
                 </span>
               ))}
             </div>

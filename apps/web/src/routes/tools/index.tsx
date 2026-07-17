@@ -1,9 +1,10 @@
 import { lazy, Suspense } from "react";
 
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import * as v from "valibot";
 
 import { getTranslator } from "@/i18n/i18n-store";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
 import {
@@ -26,6 +27,9 @@ const searchSchema = v.object({
 
 export const Route = createFileRoute("/tools/")({
   validateSearch: searchSchema,
+  search: {
+    middlewares: [stripSearchParams({ kind: "all" })],
+  },
   head: () => {
     const t = getTranslator();
     return createPublicToolsHead({
@@ -43,7 +47,9 @@ function PublicToolsIndexRoute() {
   const navigate = Route.useNavigate();
 
   const onKindChange = (nextKind: ToolsKindFilter) => {
-    void navigate({ search: { kind: nextKind } });
+    navigate({ search: { kind: nextKind } }).catch((error: unknown) => {
+      getAnalytics().captureError(error);
+    });
   };
 
   return (

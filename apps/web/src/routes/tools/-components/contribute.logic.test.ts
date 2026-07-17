@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   buildSkillManifest,
+  createLatestCommitLookupGuard,
   deriveSlug,
   evaluateManifest,
   firstCommitShaFromResponse,
@@ -96,6 +97,28 @@ describe("githubCommitsApiUrl", () => {
     expect(githubCommitsApiUrl("jane/gdpr-helper")).toBe(
       "https://api.github.com/repos/jane/gdpr-helper/commits?per_page=1",
     );
+  });
+});
+
+describe("latest commit lookup guard", () => {
+  test("a newer request aborts and invalidates the previous generation", () => {
+    const guard = createLatestCommitLookupGuard();
+    const first = guard.begin();
+    const second = guard.begin();
+
+    expect(first.signal.aborted).toBe(true);
+    expect(first.isCurrent()).toBe(false);
+    expect(second.isCurrent()).toBe(true);
+  });
+
+  test("explicit invalidation prevents an in-flight result from landing", () => {
+    const guard = createLatestCommitLookupGuard();
+    const request = guard.begin();
+
+    guard.invalidate();
+
+    expect(request.signal.aborted).toBe(true);
+    expect(request.isCurrent()).toBe(false);
   });
 });
 
