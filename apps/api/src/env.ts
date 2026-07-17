@@ -74,6 +74,8 @@ const envApi = createEnv({
     AI_MODEL_REASONING: v.optional(v.string()),
     AI_MODEL_PDF: v.optional(v.string()),
     GOOGLE_GENERATIVE_AI_API_KEY: v.optional(v.string()),
+    /** Optional GitHub API token used only for curated catalogue traversal. */
+    GITHUB_TOKEN: v.optional(v.string()),
     OPENROUTER_API_KEY: v.optional(v.string()),
     OPENAI_API_KEY: v.optional(v.string()),
     AZURE_API_KEY: v.optional(v.string()),

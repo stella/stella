@@ -1,6 +1,11 @@
 import { lazy, Suspense } from "react";
 
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import {
+  ClientOnly,
+  createFileRoute,
+  Link,
+  notFound,
+} from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -19,6 +24,7 @@ import {
 } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { pageTitleLiteral } from "@/lib/page-title";
 import {
   createPublicToolsCanonicalUrl,
@@ -26,7 +32,7 @@ import {
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { prettifyPracticeArea } from "@/lib/tools-catalogue";
+import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 import {
   buildMcpConfigSnippet,
   githubSkillTreeUrl,
@@ -61,7 +67,7 @@ export const Route = createFileRoute("/tools/$slug")({
     const { loadPublicToolDetail } = await import("@/lib/public-tools-data");
     const detail = await loadPublicToolDetail(params.slug);
     if (!detail) {
-      throw redirect({ to: "/tools", replace: true });
+      throw notFound();
     }
     return detail;
   },
@@ -89,6 +95,7 @@ export const Route = createFileRoute("/tools/$slug")({
       type: "article",
     });
   },
+  notFoundComponent: PublicToolNotFound,
   component: PublicToolDetail,
 });
 
@@ -138,7 +145,7 @@ function PublicToolDetail() {
               className="bg-muted text-muted-foreground inline-flex items-center rounded-md px-1.5 py-0.5 text-xs"
               key={code}
             >
-              {code}
+              <bdi>{code}</bdi>
             </span>
           ))}
         </div>
@@ -150,23 +157,29 @@ function PublicToolDetail() {
                 className="border-border text-muted-foreground inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs"
                 key={tag}
               >
-                {prettifyPracticeArea(tag)}
+                <bdi>{t(PRACTICE_AREA_LABEL_KEY[tag])}</bdi>
               </span>
             ))}
           </div>
         )}
 
         <div className="flex flex-wrap items-center gap-2">
-          <Suspense fallback={<InstallButtonPlaceholder />}>
-            <AddToStella
-              displayName={displayName}
-              entry={entry}
-              installIntent={installIntent}
-              onClearInstallIntent={() =>
-                void navigate({ replace: true, search: {} })
-              }
-            />
-          </Suspense>
+          <ClientOnly fallback={<InstallButtonPlaceholder />}>
+            <Suspense fallback={<InstallButtonPlaceholder />}>
+              <AddToStella
+                displayName={displayName}
+                entry={entry}
+                installIntent={installIntent}
+                onClearInstallIntent={() => {
+                  navigate({ replace: true, search: {} }).catch(
+                    (error: unknown) => {
+                      getAnalytics().captureError(error);
+                    },
+                  );
+                }}
+              />
+            </Suspense>
+          </ClientOnly>
           <DownloadAffordance entry={entry} />
           {homepage && (
             <a
@@ -184,6 +197,21 @@ function PublicToolDetail() {
           <ToolContent entry={entry} markdown={markdown} />
         </div>
       </div>
+    </main>
+  );
+}
+
+function PublicToolNotFound() {
+  const t = useTranslations();
+
+  return (
+    <main className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <p className="text-muted-foreground text-sm">
+        {t("publicTools.notFound")}
+      </p>
+      <Button render={<Link from="/tools/$slug" to="/tools" />}>
+        {t("common.back")}
+      </Button>
     </main>
   );
 }
@@ -308,7 +336,7 @@ function McpConfig({ entry }: { entry: LoadedEntryByKind<"mcp"> }) {
         {t("publicTools.mcpConfigHint")}
       </p>
       <pre className="bg-muted/40 border-border overflow-x-auto rounded-md border p-3 font-mono text-xs">
-        {snippet}
+        <bdi>{snippet}</bdi>
       </pre>
       <div className="flex flex-wrap gap-3">
         {entry.documentationUrl && (

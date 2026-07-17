@@ -8,6 +8,10 @@ import * as v from "valibot";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  catalogueKeys,
+  catalogueOptions,
+} from "@/components/catalogue/catalogue-queries";
 import { registerInspectorView } from "@/components/inspector/view-registry";
 import type {
   InspectorRailIconProps,
@@ -22,10 +26,6 @@ import { roleOptions } from "@/routes/-queries";
 import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { ToolDetailPayload } from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
-import {
-  catalogueKeys,
-  catalogueOptions,
-} from "@/routes/_protected.knowledge/-queries/catalogue";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
 const LazyToolDetailView = lazy(async () => {

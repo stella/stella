@@ -30,6 +30,38 @@ Follow the process.`);
     expect(parsed.body).toBe("Follow the process.");
   });
 
+  test("reads a license declared inside the metadata mapping", () => {
+    const parsed = parseSkillFile(`---
+name: nested-license
+description: Uses the Agent Skills nested license convention.
+metadata:
+  license: CC-BY-4.0
+---
+
+Follow the process.`);
+
+    expect(parsed.metadata.license).toBe("CC-BY-4.0");
+  });
+
+  test("rejects required frontmatter fields containing only whitespace", () => {
+    expect(() =>
+      parseSkillFile(`---
+name: "   "
+description: Valid description.
+---
+
+Body.`),
+    ).toThrow();
+    expect(() =>
+      parseSkillFile(`---
+name: valid-name
+description: "   "
+---
+
+Body.`),
+    ).toThrow();
+  });
+
   test("parses skill files with CRLF line endings", () => {
     const parsed = parseSkillFile(
       [

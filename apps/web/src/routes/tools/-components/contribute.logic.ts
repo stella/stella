@@ -95,6 +95,47 @@ export const normalizeGithubRepo = (input: string): string | null => {
 export const githubCommitsApiUrl = (repo: string): string =>
   `https://api.github.com/repos/${repo}/commits?per_page=1`;
 
+type LatestCommitLookup = {
+  signal: AbortSignal;
+  isCurrent: () => boolean;
+};
+
+export type LatestCommitLookupGuard = {
+  begin: () => LatestCommitLookup;
+  invalidate: () => void;
+};
+
+/**
+ * Owns the single live latest-commit request for the contribute form.
+ * Starting a new lookup or changing its repo/source invalidates the old
+ * generation, so a slower stale response can never overwrite the current
+ * form. The caller also invalidates on unmount.
+ */
+export const createLatestCommitLookupGuard = (): LatestCommitLookupGuard => {
+  let generation = 0;
+  let controller: AbortController | null = null;
+
+  const invalidate = () => {
+    generation += 1;
+    controller?.abort();
+    controller = null;
+  };
+
+  return {
+    begin: () => {
+      invalidate();
+      controller = new AbortController();
+      const requestGeneration = generation;
+      const signal = controller.signal;
+      return {
+        signal,
+        isCurrent: () => generation === requestGeneration && !signal.aborted,
+      };
+    },
+    invalidate,
+  };
+};
+
 const commitsResponseSchema = v.array(v.object({ sha: v.string() }));
 
 /**

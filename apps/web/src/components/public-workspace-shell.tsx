@@ -39,6 +39,7 @@ import { StellaWordmark } from "@/components/stella-wordmark";
 import Tooltip from "@/components/tooltip";
 import { getWorkspacePrimaryNavItems } from "@/components/workspace-primary-nav";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import {
   SIDE_RAIL_CONTAINER_CLASS,
@@ -250,7 +251,9 @@ function PublicSidebar({
                     disabled={authStatus.status === "checking"}
                     onClick={() => {
                       if (authStatus.isAuthenticated) {
-                        void navigate({ to: item.to });
+                        navigate({ to: item.to }).catch((error: unknown) => {
+                          getAnalytics().captureError(error);
+                        });
                         return;
                       }
                       requestPrivateFeature(item.to);

@@ -84,6 +84,7 @@ export const LIMITS = {
   agentSkillGithubDirectoriesMax: SKILL_PACKAGE_LIMITS.githubDirectoriesMax,
   agentSkillResourcesPerSkill: SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
   agentSkillResourceMaxChars: SKILL_PACKAGE_LIMITS.resourceMaxChars,
+  agentSkillResourcePathMaxChars: SKILL_PACKAGE_LIMITS.resourcePathMaxChars,
   mcpGatewayConnectorsMax: 20,
   /** Max connector rows returned by the connector catalogue listing
    *  (`GET /mcp/connectors` and the custom-MCP slice of `/catalogue`). */

@@ -430,7 +430,7 @@ describe("public law sitemap", () => {
     });
 
     expect(robots).toContain("Disallow: /law/");
-    expect(robots).toContain("Disallow: /tools/");
+    expect(robots).toContain("Disallow: /tools");
     expect(robots).toContain("Disallow: /workspaces");
     expect(robots).toContain("Disallow: /knowledge");
     expect(robots).toContain("Disallow: /chat");
@@ -486,8 +486,8 @@ describe("public law sitemap", () => {
       seoIndexable: true,
     });
 
-    expect(robots).toContain("Allow: /tools/");
-    expect(robots).not.toContain("Disallow: /tools/");
+    expect(robots).toContain("Allow: /tools");
+    expect(robots).not.toContain("Disallow: /tools");
   });
 
   test("dark-launched law sitemaps do not publish law URLs", () => {

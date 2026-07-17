@@ -8,6 +8,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   fetchGithubCatalogueSkillPackage,
   fetchSkillPackageFromUrl,
+  githubSkillFetchHeaders,
   isZipSkillSource,
   parseUploadedSkillPackage,
   redactSkillSourceUrlForStorage,
@@ -287,6 +288,27 @@ const skillFile = (content: string) => ({
 });
 
 describe("github catalogue skill fetch", () => {
+  test("scopes the deployment token to curated GitHub API requests", () => {
+    expect(
+      githubSkillFetchHeaders({
+        access: { source: "catalogue", githubToken: "secret-token" },
+        hostname: "api.github.com",
+      })["Authorization"],
+    ).toBe("Bearer secret-token");
+    expect(
+      githubSkillFetchHeaders({
+        access: { source: "catalogue", githubToken: "secret-token" },
+        hostname: "raw.githubusercontent.com",
+      })["Authorization"],
+    ).toBeUndefined();
+    expect(
+      githubSkillFetchHeaders({
+        access: { source: "user" },
+        hostname: "api.github.com",
+      })["Authorization"],
+    ).toBeUndefined();
+  });
+
   test("mirrors the whole pinned directory (SKILL.md plus resources)", async () => {
     // Captured via an object rather than closure-assigned `let`s: the
     // typechecker keeps a mutated object property at its declared type,
@@ -332,7 +354,7 @@ Draft in German.`;
     expect(result.value.sourceUrl).toBe(PINNED_SOURCE_URL);
   });
 
-  test("surfaces an upstream fetch failure as an error", async () => {
+  test("maps invalid upstream catalogue content to a bad gateway error", async () => {
     const result = await fetchGithubCatalogueSkillPackage({
       target: PINNED_TARGET,
       sourceUrl: PINNED_SOURCE_URL,
@@ -348,7 +370,88 @@ Draft in German.`;
     if (Result.isOk(result)) {
       throw new Error("expected a non-200 response to fail");
     }
-    expect(result.error.message).toBe("Skill source returned HTTP 404");
+    expect(result.error.status).toBe(502);
+    expect(result.error.message).toBe("Catalogue skill package is invalid");
+  });
+
+  test("preserves temporary upstream availability failures", async () => {
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => {
+        throw new HandlerError({
+          status: 503,
+          message: "GitHub is temporarily unavailable",
+        });
+      },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected an upstream availability error");
+    }
+    expect(result.error.status).toBe(503);
+  });
+
+  test("rejects resource paths longer than the database boundary", async () => {
+    const skillSource = `---
+name: long-path
+description: Resource path is too long.
+license: MIT
+---
+
+Body.`;
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => [
+        skillFile(skillSource),
+        {
+          content: "Reference",
+          path: `references/${"a".repeat(LIMITS.agentSkillResourcePathMaxChars)}.md`,
+          sizeBytes: 9,
+        },
+      ],
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected an overlong resource path to fail");
+    }
+    expect(result.error.status).toBe(502);
+  });
+
+  test("rejects resource paths that collide after normalization", async () => {
+    const skillSource = `---
+name: duplicate-path
+description: Resource paths collide after normalization.
+license: MIT
+---
+
+Body.`;
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => [
+        skillFile(skillSource),
+        {
+          content: "First",
+          path: "references/section/../same.md",
+          sizeBytes: 5,
+        },
+        {
+          content: "Second",
+          path: "references/same.md",
+          sizeBytes: 6,
+        },
+      ],
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected normalized duplicate paths to fail");
+    }
+    expect(result.error.status).toBe(502);
   });
 
   test("rejects a SKILL.md whose instructions exceed the size cap", async () => {
@@ -370,6 +473,7 @@ ${"x".repeat(LIMITS.agentSkillBodyMaxChars + 1)}`),
     if (Result.isOk(result)) {
       throw new Error("expected an oversized skill body to fail");
     }
-    expect(result.error.message).toBe("Skill instructions are too large");
+    expect(result.error.status).toBe(502);
+    expect(result.error.message).toBe("Catalogue skill package is invalid");
   });
 });

@@ -87,6 +87,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
@@ -423,7 +424,9 @@ export function AppSidebar(props: AppSidebarProps) {
     },
     tools: {
       action: () => {
-        void navigate({ to: "/tools" });
+        navigate({ to: "/tools" }).catch((error: unknown) => {
+          getAnalytics().captureError(error);
+        });
       },
       contextMenu: {},
     },

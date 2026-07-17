@@ -340,6 +340,54 @@ export const resourceContentLimitError = ({
   return `${slug}: resource ${path} is ${content.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.resourceMaxChars} install limit`;
 };
 
+type ResourcePathLimitInput = {
+  path: string;
+  slug: string;
+};
+
+export const resourcePathLimitError = ({
+  path,
+  slug,
+}: ResourcePathLimitInput): string | null => {
+  if (path.length <= SKILL_PACKAGE_LIMITS.resourcePathMaxChars) {
+    return null;
+  }
+  return `${slug}: resource path ${path} is ${path.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.resourcePathMaxChars} install limit`;
+};
+
+type DuplicateResourcePathInput = {
+  path: string;
+  slug: string;
+};
+
+const duplicateResourcePathError = ({
+  path,
+  slug,
+}: DuplicateResourcePathInput): string =>
+  `${slug}: duplicate normalized resource path ${path}`;
+
+type RegisterResourcePathInput = {
+  path: string;
+  seenPaths: Set<string>;
+  slug: string;
+};
+
+export const registerResourcePath = ({
+  path,
+  seenPaths,
+  slug,
+}: RegisterResourcePathInput): string | null => {
+  const pathLimitError = resourcePathLimitError({ path, slug });
+  if (pathLimitError) {
+    return pathLimitError;
+  }
+  if (seenPaths.has(path)) {
+    return duplicateResourcePathError({ path, slug });
+  }
+  seenPaths.add(path);
+  return null;
+};
+
 type ArchiveSizeLimitInput = {
   resourceBytes: number;
   skillFileBytes: number;
@@ -423,6 +471,7 @@ const checkResources = async (
   const queued = new Set(pending);
   let resourceCount = 0;
   let resourceBytes = 0;
+  const resourcePaths = new Set<string>();
 
   const processItems = async (
     items: readonly GithubContentItem[],
@@ -462,6 +511,16 @@ const checkResources = async (
       normalized === SKILL_FILE_NAME ||
       !isAllowedResourcePath(normalized)
     ) {
+      return processItems(items, index + 1);
+    }
+
+    const pathError = registerResourcePath({
+      path: normalized,
+      seenPaths: resourcePaths,
+      slug: target.slug,
+    });
+    if (pathError) {
+      errors.push(pathError);
       return processItems(items, index + 1);
     }
 

@@ -26,12 +26,15 @@ import {
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { pageTitle } from "@/lib/page-title";
 import { createPublicToolsHead } from "@/lib/public-tools-seo";
-import { prettifyPracticeArea } from "@/lib/tools-catalogue";
+import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 import {
+  createLatestCommitLookupGuard,
   deriveSlug,
   evaluateManifest,
   firstCommitShaFromResponse,
@@ -176,6 +179,9 @@ function AddSkillForm() {
   const [slugTouched, setSlugTouched] = useState(false);
   const [jurisdictionInput, setJurisdictionInput] = useState("");
   const [commitStatus, setCommitStatus] = useState<CommitStatus>("idle");
+  const [latestCommitLookupGuard] = useState(createLatestCommitLookupGuard);
+
+  useMountEffect(() => () => latestCommitLookupGuard.invalidate());
 
   const { json, valid } = evaluateManifest(form);
 
@@ -194,6 +200,18 @@ function AddSkillForm() {
         ? prev.tags.filter((value) => value !== tag)
         : [...prev.tags, tag],
     }));
+  };
+
+  const setSource = (source: ContributeFormState["source"]) => {
+    latestCommitLookupGuard.invalidate();
+    setCommitStatus("idle");
+    setForm((prev) => ({ ...prev, source }));
+  };
+
+  const setRepo = (repo: string) => {
+    latestCommitLookupGuard.invalidate();
+    setCommitStatus("idle");
+    setForm((prev) => ({ ...prev, repo }));
   };
 
   const addJurisdiction = () => {
@@ -218,18 +236,24 @@ function AddSkillForm() {
   const resolveLatestCommit = async () => {
     const repo = normalizeGithubRepo(form.repo);
     if (!repo) {
+      latestCommitLookupGuard.invalidate();
       setCommitStatus("error");
       return;
     }
+    const lookup = latestCommitLookupGuard.begin();
     setCommitStatus("loading");
     const result = await Result.tryPromise(async () => {
       const response = await fetchWithTimeout(githubCommitsApiUrl(repo), {
         headers: { Accept: "application/vnd.github+json" },
+        signal: lookup.signal,
         timeoutMs: COMMIT_FETCH_TIMEOUT_MS,
       });
       const payload: unknown = response.ok ? await response.json() : null;
       return { ok: response.ok, payload };
     });
+    if (!lookup.isCurrent()) {
+      return;
+    }
     if (Result.isError(result) || !result.value.ok) {
       setCommitStatus("error");
       return;
@@ -270,6 +294,7 @@ function AddSkillForm() {
       >
         <Input
           className="font-mono"
+          dir="ltr"
           id="skill-slug"
           onChange={(event) => {
             setSlugTouched(true);
@@ -313,6 +338,7 @@ function AddSkillForm() {
           label={t("publicTools.contribute.form.authorUrlLabel")}
         >
           <Input
+            dir="ltr"
             id="skill-author-url"
             onChange={(event) =>
               setForm((prev) => ({
@@ -411,6 +437,7 @@ function AddSkillForm() {
         <div className="flex gap-2">
           <Input
             className="font-mono uppercase"
+            dir="ltr"
             id="skill-jurisdictions"
             maxLength={2}
             onChange={(event) =>
@@ -463,7 +490,7 @@ function AddSkillForm() {
               key={tag}
               onClick={() => toggleTag(tag)}
             >
-              {prettifyPracticeArea(tag)}
+              {t(PRACTICE_AREA_LABEL_KEY[tag])}
             </ToggleChip>
           ))}
         </div>
@@ -474,12 +501,12 @@ function AddSkillForm() {
           <SourceChip
             active={form.source === "github"}
             label={t("publicTools.contribute.form.sourceGithub")}
-            onSelect={() => setForm((prev) => ({ ...prev, source: "github" }))}
+            onSelect={() => setSource("github")}
           />
           <SourceChip
             active={form.source === "in-tree"}
             label={t("publicTools.contribute.form.sourceInTree")}
-            onSelect={() => setForm((prev) => ({ ...prev, source: "in-tree" }))}
+            onSelect={() => setSource("in-tree")}
           />
         </div>
         <p className="text-muted-foreground text-xs">
@@ -493,7 +520,12 @@ function AddSkillForm() {
         <GithubSourceFields
           commitStatus={commitStatus}
           form={form}
-          onResolveLatestCommit={() => void resolveLatestCommit()}
+          onRepoChange={setRepo}
+          onResolveLatestCommit={() => {
+            resolveLatestCommit().catch((error: unknown) => {
+              getAnalytics().captureError(error);
+            });
+          }}
           setForm={setForm}
         />
       )}
@@ -511,8 +543,11 @@ function AddSkillForm() {
           </h3>
           <CopyButton text={json} />
         </div>
-        <pre className="bg-muted/40 border-border overflow-x-auto rounded-md border p-3 font-mono text-xs">
-          {json}
+        <pre
+          className="bg-muted/40 border-border overflow-x-auto rounded-md border p-3 font-mono text-xs"
+          dir="ltr"
+        >
+          <bdi>{json}</bdi>
         </pre>
       </div>
 
@@ -551,11 +586,13 @@ function AddSkillForm() {
 function GithubSourceFields({
   commitStatus,
   form,
+  onRepoChange,
   onResolveLatestCommit,
   setForm,
 }: {
   commitStatus: CommitStatus;
   form: ContributeFormState;
+  onRepoChange: (repo: string) => void;
   onResolveLatestCommit: () => void;
   setForm: Dispatch<SetStateAction<ContributeFormState>>;
 }) {
@@ -568,10 +605,9 @@ function GithubSourceFields({
       >
         <Input
           className="font-mono"
+          dir="ltr"
           id="skill-repo"
-          onChange={(event) =>
-            setForm((prev) => ({ ...prev, repo: event.currentTarget.value }))
-          }
+          onChange={(event) => onRepoChange(event.currentTarget.value)}
           placeholder={t("publicTools.contribute.form.repoPlaceholder")}
           value={form.repo}
         />
@@ -583,6 +619,7 @@ function GithubSourceFields({
       >
         <Input
           className="font-mono"
+          dir="ltr"
           id="skill-directory"
           onChange={(event) =>
             setForm((prev) => ({
@@ -602,6 +639,7 @@ function GithubSourceFields({
         <div className="flex gap-2">
           <Input
             className="font-mono"
+            dir="ltr"
             id="skill-rev"
             onChange={(event) =>
               setForm((prev) => ({ ...prev, rev: event.currentTarget.value }))

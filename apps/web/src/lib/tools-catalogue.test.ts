@@ -7,7 +7,6 @@ import {
   filterToolEntries,
   invertRecommendedMap,
   isToolsKindFilter,
-  prettifyPracticeArea,
   sortToolEntries,
   type ToolFilterEntry,
 } from "@/lib/tools-catalogue";
@@ -129,14 +128,5 @@ describe("catalogueStats", () => {
         {},
       ]),
     ).toEqual({ toolCount: 5, contributorCount: 2 });
-  });
-});
-
-describe("prettifyPracticeArea", () => {
-  test("title-cases kebab-case slugs", () => {
-    expect(prettifyPracticeArea("mergers-acquisitions")).toBe(
-      "Mergers Acquisitions",
-    );
-    expect(prettifyPracticeArea("tax")).toBe("Tax");
   });
 });

@@ -28,6 +28,7 @@ const GITHUB_FETCH_HEADERS = {
   Accept: "application/vnd.github+json, text/plain, application/zip",
   "User-Agent": "Stella skill importer",
 };
+const USER_GITHUB_FETCH_ACCESS = { source: "user" } as const;
 
 export type ParsedSkillResource = {
   content: string;
@@ -64,6 +65,30 @@ export type GithubSkillPath = {
   rootPath: string;
 };
 
+export type GithubSkillFetchAccess =
+  | { source: "catalogue"; githubToken?: string }
+  | { source: "user" };
+
+/**
+ * Build GitHub request headers without consulting ambient environment state.
+ * Only curated catalogue requests to api.github.com may carry the deployment
+ * token; user-supplied URL imports and raw-content downloads stay anonymous.
+ */
+export const githubSkillFetchHeaders = ({
+  access,
+  hostname,
+}: {
+  access: GithubSkillFetchAccess;
+  hostname: string;
+}): Record<string, string> => ({
+  ...GITHUB_FETCH_HEADERS,
+  ...(access.source === "catalogue" &&
+  access.githubToken &&
+  hostname === "api.github.com"
+    ? { Authorization: `Bearer ${access.githubToken}` }
+    : {}),
+});
+
 /**
  * Directory traversal shape used by the catalogue github fetch.
  * Defaults to `fetchGithubSkillFiles`; tests inject a fake so the
@@ -71,10 +96,12 @@ export type GithubSkillPath = {
  */
 export type FetchGithubSkillFiles = (
   target: GithubSkillPath,
+  access?: GithubSkillFetchAccess,
 ) => Promise<SkillFile[]>;
 
 type FetchGithubCatalogueSkillPackageOptions = {
   fetchFiles?: FetchGithubSkillFiles;
+  githubToken?: string;
   sourceUrl: string;
   target: GithubSkillPath;
 };
@@ -138,7 +165,7 @@ export const fetchSkillPackageFromUrl = async (
       }
 
       const url = new URL(rawUrl);
-      const response = await fetchSafeBytes(url);
+      const response = await fetchSafeBytes({ url });
       const contentType = response.headers.get("content-type") ?? "";
       const parsed = isZipSkillSource({
         buffer: response.body,
@@ -169,19 +196,23 @@ export const fetchGithubCatalogueSkillPackage = async ({
   target,
   sourceUrl,
   fetchFiles = fetchGithubSkillFiles,
+  githubToken,
 }: FetchGithubCatalogueSkillPackageOptions): Promise<
   Result<ParsedSkillPackage, HandlerError>
 > =>
   await Result.tryPromise({
     try: async () => {
-      const files = await fetchFiles(target);
+      const files = await fetchFiles(target, {
+        source: "catalogue",
+        ...(githubToken ? { githubToken } : {}),
+      });
       const parsed = parseSkillFiles(files);
       return {
         ...parsed,
         sourceUrl: redactSkillSourceUrlForStorage(sourceUrl),
       };
     },
-    catch: toHandlerError,
+    catch: toCatalogueHandlerError,
   });
 
 const parseMarkdownSkillPackage = (source: string): ParsedSkillPackage =>
@@ -317,6 +348,7 @@ const collectResources = ({
   rootPrefix: string;
 }): ParsedSkillResource[] => {
   const resources: ParsedSkillResource[] = [];
+  const resourcePaths = new Set<string>();
 
   for (const file of files) {
     if (!file.path.startsWith(rootPrefix)) {
@@ -332,6 +364,15 @@ const collectResources = ({
     if (!isAllowedResourcePath(normalizedPath)) {
       continue;
     }
+
+    assertSkillResourcePath(normalizedPath);
+    if (resourcePaths.has(normalizedPath)) {
+      throw new HandlerError({
+        status: 400,
+        message: `Skill contains a duplicate resource path: ${normalizedPath}`,
+      });
+    }
+    resourcePaths.add(normalizedPath);
 
     if (file.content.length > LIMITS.agentSkillResourceMaxChars) {
       throw new HandlerError({
@@ -465,12 +506,14 @@ const fetchGithubSkillPackage = async (
 
 const fetchGithubSkillFiles = async (
   target: GithubSkillPath,
+  access: GithubSkillFetchAccess = USER_GITHUB_FETCH_ACCESS,
 ): Promise<SkillFile[]> => {
   const files: SkillFile[] = [];
   const pendingDirectories = [target.rootPath];
   const queuedDirectories = new Set(pendingDirectories);
   let totalFileBytes = 0;
   let resourceCount = 0;
+  const resourcePaths = new Set<string>();
 
   while (pendingDirectories.length > 0) {
     const directory = pendingDirectories.shift();
@@ -479,7 +522,11 @@ const fetchGithubSkillFiles = async (
     }
 
     // oxlint-disable-next-line no-await-in-loop -- breadth-first GitHub traversal: each directory's contents enqueue the next
-    const contents = await fetchGithubContents({ target, path: directory });
+    const contents = await fetchGithubContents({
+      access,
+      target,
+      path: directory,
+    });
     for (const item of contents) {
       const relativePath = relativeGithubSkillPath({
         path: item.path,
@@ -515,6 +562,14 @@ const fetchGithubSkillFiles = async (
       }
 
       if (normalizedPath !== SKILL_FILE_NAME) {
+        assertSkillResourcePath(normalizedPath);
+        if (resourcePaths.has(normalizedPath)) {
+          throw new HandlerError({
+            status: 400,
+            message: `Skill contains a duplicate resource path: ${normalizedPath}`,
+          });
+        }
+        resourcePaths.add(normalizedPath);
         resourceCount += 1;
         assertGithubResourceCount(resourceCount);
       }
@@ -528,15 +583,16 @@ const fetchGithubSkillFiles = async (
       }
 
       // oxlint-disable-next-line no-await-in-loop -- sequential by design: cumulative-byte limit must abort before fetching further files; also throttles requests to the GitHub raw content API
-      const raw = await fetchSafeBytes(
-        githubRawUrl({
+      const raw = await fetchSafeBytes({
+        access,
+        maxBytes: GITHUB_SKILL_FILE_MAX_BYTES,
+        url: githubRawUrl({
           owner: target.owner,
           path: item.path,
           ref: target.ref,
           repo: target.repo,
         }),
-        GITHUB_SKILL_FILE_MAX_BYTES,
-      );
+      });
       totalFileBytes += raw.body.byteLength;
       assertGithubTotalFileBytes(totalFileBytes);
 
@@ -552,20 +608,23 @@ const fetchGithubSkillFiles = async (
 };
 
 const fetchGithubContents = async ({
+  access,
   path,
   target,
 }: {
+  access: GithubSkillFetchAccess;
   path: string;
   target: GithubSkillPath;
 }): Promise<GithubContentItem[]> => {
-  const response = await fetchSafeBytes(
-    githubContentsUrl({
+  const response = await fetchSafeBytes({
+    access,
+    url: githubContentsUrl({
       owner: target.owner,
       path,
       ref: target.ref,
       repo: target.repo,
     }),
-  );
+  });
   return parseGithubContentsResponse(JSON.parse(decodeUtf8(response.body)));
 };
 
@@ -775,26 +834,36 @@ const hashSkillPackage = ({
   return hasher.digest("hex");
 };
 
-const fetchSafeBytes = async (
-  url: URL,
+type FetchSafeBytesOptions = {
+  access?: GithubSkillFetchAccess;
+  maxBytes?: number;
+  url: URL;
+};
+
+const fetchSafeBytes = async ({
+  access = USER_GITHUB_FETCH_ACCESS,
   maxBytes = FILE_SIZE_LIMIT_BYTES.skillPack,
-) => {
+  url,
+}: FetchSafeBytesOptions) => {
   const response = await safeOutboundFetchBytes({
-    headers: GITHUB_FETCH_HEADERS,
+    headers: githubSkillFetchHeaders({ access, hostname: url.hostname }),
     maxBytes,
     timeoutMs: GITHUB_API_TIMEOUT_MS,
     url,
   });
   if (Result.isError(response)) {
     throw new HandlerError({
-      status: 400,
+      status: access.source === "catalogue" ? 503 : 400,
       message: response.error.message,
       cause: response.error,
     });
   }
   if (!response.value.ok) {
     throw new HandlerError({
-      status: 400,
+      status:
+        access.source === "catalogue"
+          ? catalogueUpstreamStatus(response.value.status)
+          : 400,
       message: `Skill source returned HTTP ${response.value.status}`,
     });
   }
@@ -817,7 +886,10 @@ const githubRefKindExists = async ({
   repo: string;
 }): Promise<boolean> => {
   const response = await safeOutboundFetchBytes({
-    headers: GITHUB_FETCH_HEADERS,
+    headers: githubSkillFetchHeaders({
+      access: USER_GITHUB_FETCH_ACCESS,
+      hostname: "api.github.com",
+    }),
     maxBytes: FILE_SIZE_LIMIT_BYTES.skillPack,
     timeoutMs: GITHUB_API_TIMEOUT_MS,
     url: githubRefUrl({ kind, owner, ref, repo }),
@@ -1034,3 +1106,32 @@ const toHandlerError = (cause: unknown): HandlerError =>
         message: "Skill pack could not be imported",
         cause,
       });
+
+const toCatalogueHandlerError = (cause: unknown): HandlerError => {
+  if (
+    HandlerError.is(cause) &&
+    (cause.status === 502 || cause.status === 503)
+  ) {
+    return cause;
+  }
+
+  return new HandlerError({
+    status: 502,
+    message: "Catalogue skill package is invalid",
+    cause,
+  });
+};
+
+const catalogueUpstreamStatus = (status: number): 502 | 503 =>
+  status === 429 || status >= 500 ? 503 : 502;
+
+const assertSkillResourcePath = (path: string) => {
+  if (path.length <= LIMITS.agentSkillResourcePathMaxChars) {
+    return;
+  }
+
+  throw new HandlerError({
+    status: 400,
+    message: `Skill resource path is too long: ${path}`,
+  });
+};

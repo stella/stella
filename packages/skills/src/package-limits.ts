@@ -11,6 +11,7 @@ export const SKILL_PACKAGE_LIMITS = {
   metadataKeyMaxChars: 64,
   metadataValueMaxChars: 512,
   resourceMaxChars: 100_000,
+  resourcePathMaxChars: 512,
   resourcesPerSkillMax: 50,
   versionMaxChars: 64,
 } as const;

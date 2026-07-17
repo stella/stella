@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { getAnalytics } from "@/lib/analytics/provider";
 import { copyToClipboard } from "@/lib/copy-to-clipboard";
 
 // Client-only: reads `navigator.clipboard`. Lazy-loaded by the detail
@@ -34,7 +35,11 @@ export function CopyButton({
   return (
     <Button
       className={className}
-      onClick={() => void copy()}
+      onClick={() => {
+        copy().catch((error: unknown) => {
+          getAnalytics().captureError(error);
+        });
+      }}
       size="xs"
       type="button"
       variant="outline"

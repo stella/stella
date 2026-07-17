@@ -139,7 +139,12 @@ export const parseSkillFile = (
   }
 
   const frontmatter = parseSimpleFrontmatter(normalizedSource.slice(4, end));
-  if (!frontmatter.name || !frontmatter.description) {
+  if (
+    !frontmatter.name ||
+    frontmatter.name.trim().length === 0 ||
+    !frontmatter.description ||
+    frontmatter.description.trim().length === 0
+  ) {
     panic("Skill file frontmatter must include name and description");
   }
 
@@ -147,7 +152,7 @@ export const parseSkillFile = (
     metadata: {
       compatibility: frontmatter.compatibility ?? null,
       description: frontmatter.description,
-      license: frontmatter.license ?? null,
+      license: frontmatter.license ?? frontmatter.metadata?.["license"] ?? null,
       metadata: frontmatter.metadata ?? {},
       name: frontmatter.name,
       version: frontmatter.version ?? frontmatter.metadata?.["version"] ?? null,

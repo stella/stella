@@ -16,11 +16,11 @@ import {
 } from "@stll/ui/components/sheet";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { catalogueKeys } from "@/components/catalogue/catalogue-queries";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
-import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 type CreatedConnector = {
   slug: string;

@@ -186,9 +186,21 @@ describe("public tools security invariants", () => {
     expect(source).toContain(
       'import("@/routes/tools/-components/add-to-stella")',
     );
+    expect(source).toContain("<ClientOnly");
     expect(source).not.toContain(
       'from "@/routes/tools/-components/add-to-stella"',
     );
+  });
+
+  test("unknown tool slugs use the route-specific not-found boundary", () => {
+    const source = readFileSync(
+      nodePath.resolve(repoRoot, "apps/web/src/routes/tools/$slug.tsx"),
+      "utf-8",
+    );
+
+    expect(source).toContain("throw notFound()");
+    expect(source).toContain("notFoundComponent: PublicToolNotFound");
+    expect(source).toContain('from="/tools/$slug"');
   });
 
   test("the install path lives only in the lazy client component", async () => {

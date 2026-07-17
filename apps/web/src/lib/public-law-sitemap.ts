@@ -362,8 +362,8 @@ Disallow: /
   ).toString();
   const lawRule = publicLawCrawlAllowed ? "Allow: /law/" : "Disallow: /law/";
   const toolsRule = publicToolsCrawlAllowed
-    ? "Allow: /tools/"
-    : "Disallow: /tools/";
+    ? "Allow: /tools"
+    : "Disallow: /tools";
 
   return `User-agent: *
 ${lawRule}

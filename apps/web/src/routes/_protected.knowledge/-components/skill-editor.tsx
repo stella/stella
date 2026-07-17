@@ -35,6 +35,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
+import { catalogueKeys } from "@/components/catalogue/catalogue-queries";
 import { FileDropZone } from "@/components/file-drop-zone";
 import { FileTree } from "@/components/file-tree/file-tree";
 import type { FileTreeNode } from "@/components/file-tree/file-tree";
@@ -56,7 +57,6 @@ import {
   knowledgeKeys,
   skillDetailOptions,
 } from "@/routes/_protected.knowledge/-queries";
-import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
 
