@@ -50,6 +50,14 @@ import { internalToolErrorMessage, toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 import {
+  createInitialSendQueueState,
+  describeQueuedMessage,
+  reduceSendQueue,
+  type QueuedChatEntry,
+  type SendQueueEvent,
+  type SendQueueState,
+} from "@/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic";
+import {
   fetchOlderMessages,
   isChatMessageStartError,
   sendThreadChatMessage,
@@ -99,50 +107,11 @@ export type ResendLatestMessageOptions = {
 const EMPTY_MCP_CONNECTOR_IDENTITIES: readonly McpConnectorApprovalIdentity[] =
   [];
 
-/**
- * A user message composed while a response was still streaming.
- * `useChatSession` holds these in a queue and dispatches them —
- * oldest first — once the turn finishes. `text` is the raw editor
- * HTML (rendered like any sent user message); `fileCount` lets the
- * pending bubble show an attachment hint without the view ever
- * touching the file payloads.
- */
-export type QueuedChatMessage = {
-  id: string;
-  text: string;
-  fileCount: number;
-};
-
-type QueuedChatEntry = QueuedChatMessage & {
-  /** Fully-built payload handed to TanStack ChatClient on dispatch. */
-  message: ChatUserMessageInput;
-  options?: ChatSendMessageOptions;
-};
-
-/**
- * Pull a display preview out of an outgoing chat payload. The SDK
- * accepts either raw text or multimodal content; queued bubbles only
- * need a text preview and attachment count.
- */
-const describeQueuedMessage = (
-  message: ChatUserMessageInput,
-): Pick<QueuedChatMessage, "fileCount" | "text"> => {
-  if (typeof message.content === "string") {
-    return { text: message.content, fileCount: 0 };
-  }
-
-  const textParts: string[] = [];
-  for (const part of message.content) {
-    if (part.type === "text") {
-      textParts.push(part.content);
-    }
-  }
-
-  return {
-    text: textParts.join("\n\n"),
-    fileCount: message.content.filter((part) => part.type !== "text").length,
-  };
-};
+// `QueuedChatMessage` is the view-facing shape of a queued entry; the
+// canonical definition (plus `QueuedChatEntry` and the send-queue
+// reducer) lives in the sibling `.logic.ts` file. Re-exported here so
+// existing consumers keep importing it from this hook.
+export type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session-send-queue.logic";
 
 type AskUserToolCallPart = Extract<
   ChatPart,
@@ -308,18 +277,35 @@ export const useChatSession = ({
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the
-  // latest committed values. The refs are updated in effects or
+  // latest committed values. The ref is updated in effects or
   // queue-event helpers (not during render) so a concurrent re-render
-  // that bails out can't strand them ahead of committed state.
-  const isGeneratingRef = useRef(false);
-  const queueRef = useRef<QueuedChatEntry[]>([]);
-  const wasGeneratingRef = useRef(false);
-  const conversationIdRef = useRef(conversationId);
-  const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
+  // that bails out can't strand it ahead of committed state.
+  //
+  // The four pieces of queue bookkeeping (generating flag, queue
+  // contents, "was generating last check" edge marker, and the
+  // conversation the queue belongs to) all live in one
+  // `SendQueueState`, and every write goes through `reduceSendQueue` via
+  // `applySendQueueEvent` below — see use-chat-session-send-queue.logic.ts.
+  // No call site writes a single field by hand anymore, so an exit path
+  // can no longer update one without the others.
+  const sendQueueRef = useRef<SendQueueState>(
+    createInitialSendQueueState(conversationId),
+  );
+  const [queuedMessages, setQueuedMessages] = useState<
+    readonly QueuedChatEntry[]
+  >([]);
 
-  const replaceQueuedMessages = useCallback((next: QueuedChatEntry[]) => {
-    queueRef.current = next;
-    setQueuedMessages(next);
+  const applySendQueueEvent = useCallback((event: SendQueueEvent) => {
+    const { state: nextState, dispatchedEntry } = reduceSendQueue(
+      sendQueueRef.current,
+      event,
+    );
+    const queueChanged = nextState.queue !== sendQueueRef.current.queue;
+    sendQueueRef.current = nextState;
+    if (queueChanged) {
+      setQueuedMessages(nextState.queue);
+    }
+    return dispatchedEntry;
   }, []);
 
   const withSendModeSnapshot = useCallback(
@@ -341,53 +327,41 @@ export const useChatSession = ({
 
   const enqueueMessage = useCallback(
     (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
-      const queuedMessage = {
+      const entry: QueuedChatEntry = {
         id: uuidv7(),
         message,
         ...describeQueuedMessage(message),
         ...(options === undefined ? {} : { options }),
       };
-      replaceQueuedMessages([...queueRef.current, queuedMessage]);
+      applySendQueueEvent({ type: "message-enqueued", entry });
     },
-    [replaceQueuedMessages],
+    [applySendQueueEvent],
   );
-
-  const takeOldestQueuedMessage = useCallback(() => {
-    const next = queueRef.current.at(0);
-    if (!next) {
-      return null;
-    }
-    replaceQueuedMessages(queueRef.current.slice(1));
-    return next;
-  }, [replaceQueuedMessages]);
 
   const dispatchQueuedMessage = useCallback(
     async (entry: QueuedChatEntry) => {
-      isGeneratingRef.current = true;
       try {
         await sendChatMessage(entry.message, entry.options);
       } catch (sendError) {
-        isGeneratingRef.current = false;
-        if (isChatMessageStartError(sendError)) {
-          replaceQueuedMessages([entry, ...queueRef.current]);
-        }
+        applySendQueueEvent({
+          type: "dispatch-failed",
+          entry,
+          requeue: isChatMessageStartError(sendError),
+        });
         throw sendError;
       }
     },
-    [replaceQueuedMessages, sendChatMessage],
+    [applySendQueueEvent, sendChatMessage],
   );
 
   const sendMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
-      if (conversationIdRef.current !== conversationId) {
-        conversationIdRef.current = conversationId;
-        isGeneratingRef.current = false;
-        wasGeneratingRef.current = false;
-        replaceQueuedMessages([]);
+      if (sendQueueRef.current.conversationId !== conversationId) {
+        applySendQueueEvent({ type: "conversation-switched", conversationId });
       }
 
       const requestOptions = withSendModeSnapshot(options);
-      if (isGeneratingRef.current) {
+      if (sendQueueRef.current.isGenerating) {
         enqueueMessage(message, requestOptions);
         return;
       }
@@ -395,11 +369,13 @@ export const useChatSession = ({
       // When the queue is gated after an errored turn, a manual send
       // should resume the queue without reordering the transcript:
       // append the new prompt, then dispatch the oldest waiting one.
-      if (queueRef.current.length > 0) {
+      if (sendQueueRef.current.queue.length > 0) {
         enqueueMessage(message, requestOptions);
-        const next = takeOldestQueuedMessage();
-        if (next) {
-          await dispatchQueuedMessage(next);
+        const dispatched = applySendQueueEvent({
+          type: "oldest-dispatch-started",
+        });
+        if (dispatched) {
+          await dispatchQueuedMessage(dispatched);
         }
         return;
       }
@@ -407,23 +383,20 @@ export const useChatSession = ({
       await sendChatMessage(message, requestOptions);
     },
     [
+      applySendQueueEvent,
       conversationId,
       dispatchQueuedMessage,
       enqueueMessage,
-      replaceQueuedMessages,
       sendChatMessage,
-      takeOldestQueuedMessage,
       withSendModeSnapshot,
     ],
   );
 
   const removeQueuedMessage = useCallback(
     (id: string) => {
-      replaceQueuedMessages(
-        queueRef.current.filter((entry) => entry.id !== id),
-      );
+      applySendQueueEvent({ type: "queued-message-removed", id });
     },
-    [replaceQueuedMessages],
+    [applySendQueueEvent],
   );
 
   const resendLatestMessage = useCallback(
@@ -760,11 +733,8 @@ export const useChatSession = ({
       sessionGenerating ||
       hasRunningToolCall);
   useExternalSyncEffect(() => {
-    isGeneratingRef.current = isGenerating;
-  }, [isGenerating]);
-  useExternalSyncEffect(() => {
-    queueRef.current = queuedMessages;
-  }, [queuedMessages]);
+    applySendQueueEvent({ type: "generation-status-synced", isGenerating });
+  }, [applySendQueueEvent, isGenerating]);
 
   // Notify `onError` exactly once per new error instance. TanStack keeps
   // the same Error reference alive across renders until the turn is
@@ -786,11 +756,8 @@ export const useChatSession = ({
   }, [error, notifyError]);
 
   useExternalSyncEffect(() => {
-    conversationIdRef.current = conversationId;
-    isGeneratingRef.current = false;
-    replaceQueuedMessages([]);
-    wasGeneratingRef.current = false;
-  }, [conversationId, replaceQueuedMessages]);
+    applySendQueueEvent({ type: "conversation-switched", conversationId });
+  }, [applySendQueueEvent, conversationId]);
 
   // Drain the queue one message per turn. When the response
   // finishes (`isGenerating` falls back to false) the oldest queued
@@ -800,31 +767,35 @@ export const useChatSession = ({
   // queue if the turn ended in error: firing every queued message
   // into a failing provider just burns quota and spams the user
   // with repeats of the same error. The next manual send (or a
-  // successful `regenerate`) lifts the gate.
+  // successful `regenerate`) lifts the gate. `reduceSendQueue` owns the
+  // finished-turn edge detection and the error gate (see
+  // `turn-boundary-checked` in use-chat-session-send-queue.logic.ts);
+  // this effect only forwards the runtime's latest status and, if a
+  // dispatch was returned, sends it.
   useExternalSyncEffect(() => {
-    const finishedTurn = wasGeneratingRef.current && !isGenerating;
-    wasGeneratingRef.current = isGenerating;
-    if (!finishedTurn || status === "error") {
+    const dispatched = applySendQueueEvent({
+      type: "turn-boundary-checked",
+      isGenerating,
+      status,
+    });
+    if (!dispatched) {
       return;
     }
-    const next = queuedMessages.at(0);
-    if (!next) {
-      return;
-    }
-    replaceQueuedMessages(queuedMessages.slice(1));
-    isGeneratingRef.current = true;
     // Preserve the request options the message was queued with —
     // notably `body.sendMode` (anonymized / raw) snapshotted by
     // withSendModeSnapshot at queue time. The manual drain path
     // already passes them; the automatic drain must too, otherwise
     // toggling the mode between queueing and draining sends the
     // queued turn with the wrong mode.
-    void dispatchQueuedMessage(next).catch(ignoreQueuedDispatchError);
+    void dispatchQueuedMessage(dispatched).catch(ignoreQueuedDispatchError);
   }, [
+    applySendQueueEvent,
     dispatchQueuedMessage,
     isGenerating,
+    // Not read in the body — `sendQueueRef` is always current — but kept
+    // as a dependency so this effect still re-runs on every queue change,
+    // matching the original effect's re-run cadence 1:1.
     queuedMessages,
-    replaceQueuedMessages,
     status,
   ]);
 
