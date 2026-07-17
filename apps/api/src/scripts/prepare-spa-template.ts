@@ -63,7 +63,7 @@ const run = async () => {
   // a proper XML-aware replacement.
   // Simple full-text replacements
   for (const [search, replacement] of SIMPLE_REPLACEMENTS) {
-    xml = xml.replaceAll(search, replacement);
+    xml = xml.replaceAll(search, () => replacement);
   }
 
   // Sequential: replace each occurrence with a different tag

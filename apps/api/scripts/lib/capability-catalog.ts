@@ -783,7 +783,7 @@ const importToCapabilityId = ({
   }
   const file = `${importPath.replace(
     HANDLER_IMPORT_ALIAS_PREFIX,
-    HANDLER_ALIAS_TO_SRC_PREFIX,
+    () => HANDLER_ALIAS_TO_SRC_PREFIX,
   )}.ts`;
   return deriveCapabilityId({ file, exportName });
 };

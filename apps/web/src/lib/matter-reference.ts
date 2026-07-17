@@ -60,8 +60,8 @@ export const previewReference = ({
   const paddedSeq = "1".padStart(padding, "0");
 
   return pattern
-    .replaceAll("{YYYY}", yyyy)
-    .replaceAll("{YY}", yy)
-    .replaceAll("{MM}", mm)
-    .replaceAll("{SEQ}", paddedSeq);
+    .replaceAll("{YYYY}", () => yyyy)
+    .replaceAll("{YY}", () => yy)
+    .replaceAll("{MM}", () => mm)
+    .replaceAll("{SEQ}", () => paddedSeq);
 };

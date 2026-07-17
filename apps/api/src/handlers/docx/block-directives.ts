@@ -1281,8 +1281,8 @@ export const rewriteIterationTokensInText = (
   count: number,
 ): string =>
   text
-    .replace(indexPattern(), String(index + 1))
-    .replace(countPattern(), String(count));
+    .replace(indexPattern(), () => String(index + 1))
+    .replace(countPattern(), () => String(count));
 
 // ── Loop-scoped clause numbering ─────────────────────────
 

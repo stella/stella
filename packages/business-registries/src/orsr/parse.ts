@@ -231,9 +231,11 @@ const parseCourtFile = (
 };
 
 const buildRegistryUrl = (file: OrsrCourtFile): string =>
-  SLOVAK_REGISTRY_URL.replaceAll("{section}", encodeURIComponent(file.section))
-    .replaceAll("{insertNumber}", encodeURIComponent(file.insertNumber))
-    .replaceAll("{court}", encodeURIComponent(file.court));
+  SLOVAK_REGISTRY_URL.replaceAll("{section}", () =>
+    encodeURIComponent(file.section),
+  )
+    .replaceAll("{insertNumber}", () => encodeURIComponent(file.insertNumber))
+    .replaceAll("{court}", () => encodeURIComponent(file.court));
 
 const normalizeName = (raw: string | null | undefined): string | null => {
   if (!raw) {

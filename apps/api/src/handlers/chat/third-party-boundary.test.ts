@@ -37,7 +37,7 @@ const anonymizeTextFieldsMock = mock(
       let next = field;
       for (const [placeholder, original] of swaps) {
         if (next.includes(original)) {
-          next = next.replaceAll(original, placeholder);
+          next = next.replaceAll(original, () => placeholder);
           if (!seen.has(placeholder)) {
             redactionMap.set(placeholder, original);
             seen.add(placeholder);
@@ -596,7 +596,7 @@ describe("chat third-party anonymization boundary", () => {
         for (const original of ["Alice", "Bob"]) {
           if (next.includes(original)) {
             const placeholder = `[PERSON_${nextIndex}]`;
-            next = next.replaceAll(original, placeholder);
+            next = next.replaceAll(original, () => placeholder);
             redactionMap.set(placeholder, original);
             nextIndex += 1;
           }
@@ -656,7 +656,7 @@ describe("chat third-party anonymization boundary", () => {
         for (const original of ["Bob", "Alice"]) {
           if (next.includes(original)) {
             const placeholder = `[PERSON_${nextIndex}]`;
-            next = next.replaceAll(original, placeholder);
+            next = next.replaceAll(original, () => placeholder);
             redactionMap.set(placeholder, original);
             nextIndex += 1;
           }

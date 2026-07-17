@@ -87,14 +87,14 @@ const createDocxWithUnsafeManifestSlot = async (): Promise<Buffer> => {
     `customXml/_rels/item${UNSAFE_MANIFEST_INDEX}.xml.rels`,
     relsXml.replaceAll(
       "itemProps1.xml",
-      `itemProps${UNSAFE_MANIFEST_INDEX}.xml`,
+      () => `itemProps${UNSAFE_MANIFEST_INDEX}.xml`,
     ),
   );
   zip.file(
     "[Content_Types].xml",
     contentTypesXml.replaceAll(
       "itemProps1.xml",
-      `itemProps${UNSAFE_MANIFEST_INDEX}.xml`,
+      () => `itemProps${UNSAFE_MANIFEST_INDEX}.xml`,
     ),
   );
 

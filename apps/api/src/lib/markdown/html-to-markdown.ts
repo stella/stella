@@ -165,7 +165,7 @@ const renderList = (el: Element, ordered: boolean): string => {
       const marker = ordered ? `${index + 1}. ` : "- ";
       const indent = " ".repeat(marker.length);
       const content = renderListItem(li);
-      return marker + content.replace(/\n/g, `\n${indent}`);
+      return marker + content.replace(/\n/g, () => `\n${indent}`);
     })
     .join("\n");
 };

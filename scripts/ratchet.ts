@@ -240,10 +240,11 @@ const countAsCasts = (content: string): number => {
       continue;
     }
     const scanned = code
-      .replace(AS_UNKNOWN_AS, AS_UNKNOWN_PLACEHOLDER)
+      .replace(AS_UNKNOWN_AS, () => AS_UNKNOWN_PLACEHOLDER)
       .replace(
         MAPPED_TYPE_KEY_REMAP,
-        `$<mappedPrefix>${MAPPED_TYPE_REMAP_PLACEHOLDER}`,
+        (_match, mappedPrefix: string) =>
+          `${mappedPrefix}${MAPPED_TYPE_REMAP_PLACEHOLDER}`,
       );
     total += (scanned.match(AS_CAST) ?? []).length;
   }
