@@ -64,7 +64,10 @@ const emptyOrderedRows = () => Object.assign([], { limit: async () => [] });
 
 const selectChatMessages = () => ({
   from: () => ({
-    where: () => ({ orderBy: emptyOrderedRows }),
+    where: () => ({
+      limit: async () => [],
+      orderBy: emptyOrderedRows,
+    }),
   }),
 });
 
