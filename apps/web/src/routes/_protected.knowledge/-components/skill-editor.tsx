@@ -58,13 +58,17 @@ import {
 } from "@/routes/_protected.knowledge/-queries";
 import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 
+import {
+  FILENAME_PATTERN,
+  reserveKnowledgePath,
+} from "./skill-resource-path.logic";
+
 const SKILL_BODY_FILE_NAME = "SKILL.md";
 
 // Mirrors apps/api/src/handlers/skills/resources/resource-path.ts.
 // Keep the two in sync.
 const RESOURCE_PATH_PATTERN =
   /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)*$/u;
-const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/u;
 
 // Default name for a freshly created (still empty) folder. A path segment,
 // not user-facing copy: resource paths only allow lowercase ASCII, so a
@@ -552,7 +556,10 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     patchMetadata.mutate({ command: next });
   };
 
-  const handleUpload = async (file: File) => {
+  // Upload one file, reserving its `knowledge/<name>` path against the shared
+  // `takenPaths` set. The set carries reservations between files in the same
+  // drop, so identically named files get distinct paths instead of colliding.
+  const handleUpload = async (file: File, takenPaths: Set<string>) => {
     const binary = isBinaryUpload(file);
     const maxBytes = binary ? UPLOAD_MAX_BYTES_BINARY : UPLOAD_MAX_BYTES_TEXT;
     if (file.size > maxBytes) {
@@ -563,38 +570,34 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       });
       return;
     }
-    // For binary uploads we replace the extension with `.md` because the
-    // stored resource holds the extracted text, not the original bytes.
-    const baseName = binary
-      ? `${file.name.replace(/\.(?:docx|pdf)$/iu, "")}.md`
-      : file.name;
-    const sanitizedName = baseName
-      .toLowerCase()
-      .replaceAll(/[^a-z0-9._-]/gu, "-");
-    if (!FILENAME_PATTERN.test(sanitizedName)) {
+    // Drop new uploads into knowledge/ by default. The user can rename
+    // afterward if they want a different folder.
+    const reserved = reserveKnowledgePath(file.name, binary, takenPaths);
+    if (reserved.type === "invalid") {
       stellaToast.add({
         title: tSkills("invalidPath"),
         type: "error",
       });
       return;
     }
-    // Drop new uploads into knowledge/ by default. The user can rename
-    // afterward if they want a different folder.
-    const extMatch = /(?<ext>\.[^.]+)?$/u.exec(sanitizedName);
-    const ext = extMatch?.groups?.["ext"] ?? "";
-    const stem = ext ? sanitizedName.slice(0, -ext.length) : sanitizedName;
-    let path = `knowledge/${sanitizedName}`;
-    let suffix = 1;
-    while (existingPaths.has(path)) {
-      suffix += 1;
-      path = `knowledge/${stem}-${suffix}${ext}`;
-    }
+    const { path } = reserved;
     if (binary) {
       uploadResource.mutate({ path, file });
       return;
     }
     const content = await file.text();
     createResource.mutate({ path, content });
+  };
+
+  // Reserve every dropped/selected file's path up front against one set seeded
+  // from the current resources. `reserveKnowledgePath` runs synchronously
+  // before each upload's first await, so path assignment stays ordered and two
+  // same-named files in one batch never resolve to the same path.
+  const handleUploadFiles = (files: readonly File[]) => {
+    const takenPaths = new Set(existingPaths);
+    for (const file of files) {
+      void handleUpload(file, takenPaths);
+    }
   };
 
   const onCreateFile = (path: string, content: string) => {
@@ -767,9 +770,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
         className="p-3"
         label={t("workspaces.dropToUploadFiles")}
         onDrop={(files) => {
-          for (const file of files) {
-            void handleUpload(file);
-          }
+          handleUploadFiles(files);
         }}
       >
         <div className="mb-2 flex items-center gap-1 px-1">
@@ -847,9 +848,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               onCreateFile={onCreateFile}
               onCreateFolder={() => createPendingFolder(null)}
               onUploadFiles={(files) => {
-                for (const file of files) {
-                  void handleUpload(file);
-                }
+                handleUploadFiles(files);
               }}
             />
           </div>
