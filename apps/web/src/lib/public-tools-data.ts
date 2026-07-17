@@ -1,27 +1,17 @@
-import {
-  loadCatalogue,
-  loadRecommended,
-  type LoadedCatalogueEntry,
-} from "@stll/catalogue";
+import { loadCatalogue, type LoadedCatalogueEntry } from "@stll/catalogue";
 
 import {
-  catalogueStats,
   collectJurisdictions,
   collectPracticeAreas,
-  invertRecommendedMap,
 } from "@/lib/tools-catalogue";
 
 export const loadPublicToolsIndexData = () => {
   const entries = loadCatalogue();
-  const recommendedBySlug = invertRecommendedMap(loadRecommended());
 
   return {
     entries,
-    recommendedSlugs: [...recommendedBySlug.keys()],
-    recommendedInBySlug: Object.fromEntries(recommendedBySlug),
     practiceAreas: collectPracticeAreas(entries),
     jurisdictions: collectJurisdictions(entries),
-    stats: catalogueStats(entries),
   };
 };
 

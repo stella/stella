@@ -1,5 +1,3 @@
-import { lazy, Suspense } from "react";
-
 import { createFileRoute, stripSearchParams } from "@tanstack/react-router";
 import * as v from "valibot";
 
@@ -11,11 +9,7 @@ import {
   TOOLS_KIND_FILTERS,
   type ToolsKindFilter,
 } from "@/lib/tools-catalogue";
-
-const PublicToolsIndex = lazy(async () => ({
-  default: (await import("@/routes/tools/-components/public-tools-index"))
-    .PublicToolsIndex,
-}));
+import { PublicToolsIndex } from "@/routes/tools/-components/public-tools-index";
 
 // Public SEO page: a bad `?kind=` value (e.g. `?kind=skills`) must degrade
 // to the default "all" filter, not throw into the router's default error
@@ -52,9 +46,5 @@ function PublicToolsIndexRoute() {
     });
   };
 
-  return (
-    <Suspense fallback={null}>
-      <PublicToolsIndex kind={kind} onKindChange={onKindChange} />
-    </Suspense>
-  );
+  return <PublicToolsIndex kind={kind} onKindChange={onKindChange} />;
 }

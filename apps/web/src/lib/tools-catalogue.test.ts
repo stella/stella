@@ -1,11 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
 import {
-  catalogueStats,
   collectJurisdictions,
   collectPracticeAreas,
   filterToolEntries,
-  invertRecommendedMap,
   isToolsKindFilter,
   sortToolEntries,
   type ToolFilterEntry,
@@ -85,25 +83,13 @@ describe("filterToolEntries", () => {
 });
 
 describe("sortToolEntries", () => {
-  test("recommended slugs sort first, then alphabetical by name", () => {
-    const sorted = sortToolEntries(entries, ["ares-mcp"]);
+  test("sorts entries alphabetically by name", () => {
+    const sorted = sortToolEntries(entries);
     expect(sorted.map((item) => item.slug)).toEqual([
       "ares-mcp",
       "gdpr-skill",
       "web-search",
     ]);
-  });
-});
-
-describe("invertRecommendedMap", () => {
-  test("inverts jurisdiction->slugs into slug->sorted jurisdictions", () => {
-    const inverted = invertRecommendedMap({
-      CZ: ["ares", "infosoud"],
-      EU: ["ares"],
-    });
-    expect(inverted.get("ares")).toEqual(["CZ", "EU"]);
-    expect(inverted.get("infosoud")).toEqual(["CZ"]);
-    expect(inverted.has("missing")).toBe(false);
   });
 });
 
@@ -114,19 +100,5 @@ describe("facet collectors", () => {
       "data-protection",
     ]);
     expect(collectJurisdictions(entries)).toEqual(["CZ", "EU"]);
-  });
-});
-
-describe("catalogueStats", () => {
-  test("counts entries and distinct non-blank authors", () => {
-    expect(
-      catalogueStats([
-        { author: "Anthropic" },
-        { author: "Anthropic" },
-        { author: "Jane Doe" },
-        { author: "  " },
-        {},
-      ]),
-    ).toEqual({ toolCount: 5, contributorCount: 2 });
   });
 });
