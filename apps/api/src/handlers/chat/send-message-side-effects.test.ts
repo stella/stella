@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
-import type { SQL } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
@@ -25,6 +25,12 @@ const workspaceId = toSafeId<"workspace">(
 );
 const rollbackToken = "rollback-token";
 const pgDialect = new PgDialect();
+
+const selectNoChatMessages = () => ({
+  from: () => ({
+    where: () => sql`select 1 where false`,
+  }),
+});
 
 const threadData: ChatThreadState["data"] = {
   chatModel: null,
@@ -51,6 +57,7 @@ describe("send-message side-effect rollback", () => {
       delete: () => ({
         where,
       }),
+      select: selectNoChatMessages,
     });
 
     const result = await rollbackUnpersistedChatSideEffects({
@@ -82,6 +89,7 @@ describe("send-message side-effect rollback", () => {
       delete: () => ({
         where,
       }),
+      select: selectNoChatMessages,
     });
 
     const result = await rollbackUnpersistedChatSideEffects({
