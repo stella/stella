@@ -8,7 +8,7 @@ COMMIT;
 --> statement-breakpoint
 SET lock_timeout = '1s';
 --> statement-breakpoint
-SET statement_timeout = '5s';
+SET statement_timeout = '0';
 --> statement-breakpoint
 DROP INDEX CONCURRENTLY IF EXISTS "report_exports_workspace_requester_created_idx";
 --> statement-breakpoint
