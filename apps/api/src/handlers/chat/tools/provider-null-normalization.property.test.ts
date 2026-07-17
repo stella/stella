@@ -110,8 +110,14 @@ const providerOptions = {
   tools: [tool],
 };
 
-const findToolInput = (chunks: StreamChunk[]): unknown =>
-  chunks.find((chunk) => chunk.type === EventType.TOOL_CALL_END)?.input;
+const findToolInput = (chunks: StreamChunk[]): unknown => {
+  for (const chunk of chunks) {
+    if (chunk.type === EventType.TOOL_CALL_END) {
+      return chunk.input;
+    }
+  }
+  return undefined;
+};
 
 const streamOpenAiToolInput = async (input: unknown): Promise<unknown> => {
   const adapter = createOpenaiChat("gpt-5.2", "test-key");
