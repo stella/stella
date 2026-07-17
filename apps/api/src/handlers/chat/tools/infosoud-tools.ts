@@ -2,7 +2,7 @@ import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { createInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
+import { getInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
 import { mapInfoSoudResult } from "@/api/handlers/workspaces/infosoud-result";
 
 export const createInfosoudTools = () => ({
@@ -27,7 +27,7 @@ export const createInfosoudTools = () => ({
       }),
     ),
   }).server(async ({ courtCode, spisZn }) => {
-    const client = createInfoSoudClient();
+    const client = getInfoSoudClient();
     const lookupResult = await client.searchCaseWithHearings({
       courtCode,
       spisZn,

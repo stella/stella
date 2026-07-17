@@ -3,7 +3,6 @@ import { Result } from "better-result";
 import {
   buildCourtMapFromEntries,
   InfoSoudAPIError,
-  InfoSoudClient,
   InfoSoudParseError,
   InfoSoudRequestError,
 } from "@stll/infosoud";
@@ -13,7 +12,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { compareByLocale } from "@/api/lib/collation";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-const createInfoSoudClient = () => new InfoSoudClient({ cache: false });
+import { getInfoSoudClient } from "./infosoud-common";
 
 const toInfoSoudCourtsError = (error: unknown): HandlerError => {
   if (error instanceof InfoSoudAPIError) {
@@ -57,7 +56,7 @@ const infosoudCourts = createSafeHandler(config, async function* ({ request }) {
   const result = yield* Result.await(
     Result.tryPromise({
       try: async () => {
-        const client = createInfoSoudClient();
+        const client = getInfoSoudClient();
         const [courts, districtCourts] = await Promise.all([
           client.getCourts({ signal }),
           client.getDistrictCourts({ signal }),

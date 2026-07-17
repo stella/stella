@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { InfoSoudClient } from "./client.js";
-import { InfoSoudAPIError, InfoSoudParseError } from "./errors.js";
+import {
+  InfoSoudAPIError,
+  InfoSoudParseError,
+  InfoSoudPragueCourtResolutionError,
+} from "./errors.js";
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), {
@@ -534,6 +538,69 @@ describe("InfoSoudClient", () => {
     await client.searchCase({ courtCode: "OSSCEDC", spisZn: "1 T 64/2024" });
 
     expect(requestCount).toBe(2);
+  });
+
+  test("serializes concurrent requests on one instance with the politeness gap", async () => {
+    const delayMs = 40;
+    const fetchStartedAt: number[] = [];
+
+    const client = new InfoSoudClient({
+      // Disable caching so both lookups reach the network and are paced by the
+      // throttle rather than deduplicated.
+      cache: false,
+      delayMs,
+      fetch: async () => {
+        fetchStartedAt.push(Date.now());
+        return jsonResponse(createCaseSearchResponse());
+      },
+    });
+
+    // Fire two lookups concurrently on the same instance. Without a serializing
+    // throttle both would pass the pacing check together and hit the upstream
+    // registry simultaneously.
+    await Promise.all([
+      client.searchCase({ courtCode: "OSSCEDC", spisZn: "1 T 64/2024" }),
+      client.searchCase({ courtCode: "OSSCEDC", spisZn: "2 T 65/2024" }),
+    ]);
+
+    expect(fetchStartedAt).toHaveLength(2);
+    const [firstStart, secondStart] = fetchStartedAt;
+    // setTimeout never fires early, so the gap is a firm lower bound; allow a
+    // small slack for timer-resolution rounding.
+    expect(secondStart - firstStart).toBeGreaterThanOrEqual(delayMs - 5);
+  });
+
+  test("raises a typed Prague resolution error when no district matches", async () => {
+    const client = new InfoSoudClient({
+      delayMs: 0,
+      fetch: async () =>
+        jsonResponse(
+          {
+            error: "Bad Request",
+            message: "not found",
+            path: "/infosoud/api/v1/rizeni/vyhledej",
+            status: 400,
+            timestamp: "2026-04-05T00:00:00.000+00:00",
+          },
+          400,
+        ),
+    });
+
+    expect.assertions(2);
+
+    try {
+      await client.searchCase({ courtCode: "OSPHA", spisZn: "1 T 64/2024" });
+    } catch (error) {
+      expect(error).toBeInstanceOf(InfoSoudPragueCourtResolutionError);
+      if (error instanceof InfoSoudPragueCourtResolutionError) {
+        expect(error.spisZn).toMatchObject({
+          bcVec: 64,
+          cisloSenatu: 1,
+          druhVeci: "T",
+          rocnik: 2024,
+        });
+      }
+    }
   });
 
   test("hydrates matching case events with parsed event detail helpers", async () => {
