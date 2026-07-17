@@ -3,6 +3,7 @@ import { and, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
+import { assertIdentifierLiteral } from "@/api/db/json-utils";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
@@ -36,9 +37,13 @@ const TASK_STATUS_VALUES = [
 // GROUP BY, and a bound value would get different placeholder numbers per
 // render, making Postgres reject the grouped query. These are fixed code
 // constants, never user input, so inlining is byte-identical and safe.
-const TASK_STATUS_SQL_VALUES = TASK_STATUS_VALUES.map((statusValue) =>
-  sql.raw(`'${statusValue}'`),
-);
+// `assertIdentifierLiteral` enforces that "fixed code constant" contract at
+// runtime, not just by convention.
+const TASK_STATUS_SQL_VALUES = TASK_STATUS_VALUES.map((statusValue) => {
+  assertIdentifierLiteral(statusValue);
+
+  return sql.raw(`'${statusValue}'`);
+});
 
 const readGroupCountsBodySchema = t.Object({
   groupByPropertyId: t.Union([
