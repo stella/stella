@@ -82,17 +82,17 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
   );
 };
 
-const DISTINCT_BUILT_IN_ICONS = new Set([
+const DISTINCT_BUILT_IN_ICONS = [
   "anonymize",
   "create-docx",
   "web-search",
-]);
+] as const;
 
 function PublicToolIcon({ entry }: { entry: LoadedCatalogueEntry }) {
   const hasCatalogueIcon =
     entry.icon !== null ||
     entry.iconUrl !== undefined ||
-    DISTINCT_BUILT_IN_ICONS.has(entry.slug);
+    DISTINCT_BUILT_IN_ICONS.some((slug) => slug === entry.slug);
 
   if (hasCatalogueIcon) {
     return (
