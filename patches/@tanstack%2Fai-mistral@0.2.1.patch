@@ -271,3 +271,17 @@ index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa
 +  makeMistralStructuredOutputCompatibleWithMap
  };
  //# sourceMappingURL=schema-converter.js.map
+diff --git a/package.json b/package.json
+index d8b724f09ffd2b4a43f8f2280a4240fbf0df318f..982fb44e91ebd69a22db54b02b58041605d101fc 100644
+--- a/package.json
++++ b/package.json
+@@ -42,7 +42,8 @@
+     "@tanstack/ai": "^0.40.0"
+   },
+   "dependencies": {
+-    "@mistralai/mistralai": "2.2.0"
++    "@mistralai/mistralai": "2.2.0",
++    "@tanstack/ai-utils": "0.3.1"
+   },
+   "scripts": {
+     "build": "vite build",

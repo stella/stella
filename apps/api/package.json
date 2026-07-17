@@ -80,7 +80,6 @@
     "@tanstack/ai-mistral": "catalog:",
     "@tanstack/ai-openai": "catalog:",
     "@tanstack/ai-openrouter": "catalog:",
-    "@tanstack/ai-utils": "catalog:",
     "@valibot/to-json-schema": "^1.7.1",
     "better-auth": "catalog:",
     "better-result": "catalog:",
