@@ -976,6 +976,7 @@ export const StudioInsertRow = () => {
   // recompute it each time the menu opens rather than reactively.
   const [caretInLoop, setCaretInLoop] = useState(false);
   const preserveEditorFocusRef = useRef(false);
+  const linkClauseDialogLaunchRef = useRef(false);
   // Clause linking lives inline here (the standalone clauses tab was removed):
   // link a clause, then drop its slot at the caret from the same menu.
   const [linkClauseOpen, setLinkClauseOpen] = useState(false);
@@ -1032,6 +1033,11 @@ export const StudioInsertRow = () => {
         <MenuPopup
           align="end"
           finalFocus={() => {
+            if (linkClauseDialogLaunchRef.current) {
+              linkClauseDialogLaunchRef.current = false;
+              preserveEditorFocusRef.current = false;
+              return false;
+            }
             if (!preserveEditorFocusRef.current) {
               return true;
             }
@@ -1134,7 +1140,12 @@ export const StudioInsertRow = () => {
               {sessionTemplateId !== null && (
                 <>
                   <MenuSeparator />
-                  <MenuItem onClick={() => setLinkClauseOpen(true)}>
+                  <MenuItem
+                    onClick={() => {
+                      linkClauseDialogLaunchRef.current = true;
+                      setLinkClauseOpen(true);
+                    }}
+                  >
                     <PlusIcon />
                     {t("clauses.linkClause")}
                   </MenuItem>
