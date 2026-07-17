@@ -625,16 +625,16 @@ const selfHostingDocsUrl =
 
   <script is:inline>
     (function () {
-      var header = document.getElementById("site-header");
-      if (!header) return;
-      var heroCta = document.getElementById("hero-cta");
-      var ticking = false;
+      const header = document.querySelector("#site-header");
+      if (!header) {return;}
+      const heroCta = document.querySelector("#hero-cta");
+      let ticking = false;
       function update() {
         ticking = false;
         header.classList.toggle("is-scrolled", window.scrollY > 8);
         // Reveal the header CTA only once the hero's own CTA has scrolled up
         // behind the fixed bar, so the two "Start free" buttons never overlap.
-        var revealCta = heroCta
+        const revealCta = heroCta
           ? heroCta.getBoundingClientRect().bottom <= header.offsetHeight
           : window.scrollY > 8;
         header.classList.toggle("show-cta", revealCta);
@@ -642,7 +642,7 @@ const selfHostingDocsUrl =
       // Coalesce scroll/resize into one layout read per frame (avoids
       // forced synchronous layout from getBoundingClientRect on every tick).
       function onScroll() {
-        if (ticking) return;
+        if (ticking) {return;}
         ticking = true;
         requestAnimationFrame(update);
       }
@@ -664,33 +664,33 @@ const selfHostingDocsUrl =
       // Unified master breath shared by all three tiles. Same cycle length
       // and same 3-phase rhythm (reveal → hold → fade) so they don't drift
       // in and out of phase side-by-side.
-      var CYCLE      = 9000;
-      var REVEAL_END = 0.60;  // build-up done at 60%
-      var HOLD_END   = 0.85;  // start fading at 85%
+      const CYCLE      = 9000;
+      const REVEAL_END = 0.6;  // build-up done at 60%
+      const HOLD_END   = 0.85;  // start fading at 85%
 
       function playReview(svg) {
-        var travelPx = 140;
+        const travelPx = 140;
 
-        var scan = svg.querySelector(".scan");
+        const scan = svg.querySelector(".scan");
         if (scan) {
           scan.animate(
             [
               { transform: "translateY(0px)",                opacity: 0, offset: 0 },
               { transform: "translateY(0px)",                opacity: 1, offset: 0.015 },
-              { transform: "translateY(" + travelPx + "px)", opacity: 1, offset: REVEAL_END },
-              { transform: "translateY(" + travelPx + "px)", opacity: 0, offset: REVEAL_END + 0.04 },
-              { transform: "translateY(" + travelPx + "px)", opacity: 0, offset: 1 },
+              { transform: `translateY(${  travelPx  }px)`, opacity: 1, offset: REVEAL_END },
+              { transform: `translateY(${  travelPx  }px)`, opacity: 0, offset: REVEAL_END + 0.04 },
+              { transform: `translateY(${  travelPx  }px)`, opacity: 0, offset: 1 },
             ],
             { duration: CYCLE, iterations: Infinity, easing: "linear" }
           );
         }
 
-        var lines = svg.querySelectorAll(".line");
-        var count = lines.length;
-        lines.forEach((line, i) => {
-          var activate = (count > 1 ? i / (count - 1) : 0) * REVEAL_END;
-          var before   = Math.max(0,    activate - 0.012);
-          var after    = Math.min(0.99, activate + 0.012);
+        const lines = svg.querySelectorAll(".line");
+        const count = lines.length;
+        for (const [i, line] of lines.entries()) {
+          const activateAt = (count > 1 ? i / (count - 1) : 0) * REVEAL_END;
+          const before   = Math.max(0,    activateAt - 0.012);
+          const after    = Math.min(0.99, activateAt + 0.012);
           line.animate(
             [
               { strokeOpacity: 0.32, offset: 0 },
@@ -701,63 +701,63 @@ const selfHostingDocsUrl =
             ],
             { duration: CYCLE, iterations: Infinity, easing: "linear" }
           );
-        });
+        }
       }
 
       function playDraft(svg) {
-        var words = Array.prototype.slice.call(svg.querySelectorAll(".word"));
-        if (!words.length) return;
-        var total = words.length;
+        const words = Array.prototype.slice.call(svg.querySelectorAll(".word"));
+        if (!words.length) {return;}
+        const total = words.length;
         // Number of trailing words that participate in the delete/rewrite
         // cycle. The rest stay visible the whole loop.
-        var editCount = Math.min(7, Math.max(3, Math.round(total * 0.32)));
+        const editCount = Math.min(7, Math.max(3, Math.round(total * 0.32)));
 
         // Loop phases (offsets in 0-1). At t=0 and t=1 all words are
         // visible so the cycle seams invisibly.
-        var HOLD_FULL_END = 0.16;  // settled paragraph
-        var DELETE_END    = 0.34;  // backspace pass through last N words
-        var HOLD_PART_END = 0.46;  // brief "thinking" pause
+        const HOLD_FULL_END = 0.16;  // settled paragraph
+        const DELETE_END    = 0.34;  // backspace pass through last N words
+        const HOLD_PART_END = 0.46;  // brief "thinking" pause
         // 0.46 → 1.0: slow rewrite of the deleted tail (~600ms per word)
 
         // Clear any leftover animations from a prior IO activation and
         // reset inline styles.
-        words.forEach((el) => {
-          el.getAnimations().forEach((a) => { a.cancel(); });
+        for (const el of words) {
+          for (const a of el.getAnimations()) { a.cancel(); }
           el.style.opacity = "0.9";
           el.style.stroke = "";
           el.style.filter = "";
-        });
+        }
 
-        var GLOW = "drop-shadow(0 0 5px rgba(84, 156, 209, 0.55))";
+        const GLOW = "drop-shadow(0 0 5px rgba(84, 156, 209, 0.55))";
 
         function frame(now) {
-          var t = (now % CYCLE) / CYCLE;
-          var visible;
+          const t = (now % CYCLE) / CYCLE;
+          let visible;
           if (t < HOLD_FULL_END) {
             visible = total;
           } else if (t < DELETE_END) {
-            var p = (t - HOLD_FULL_END) / (DELETE_END - HOLD_FULL_END);
+            const p = (t - HOLD_FULL_END) / (DELETE_END - HOLD_FULL_END);
             visible = total - p * editCount;
           } else if (t < HOLD_PART_END) {
             visible = total - editCount;
           } else {
-            var p2 = (t - HOLD_PART_END) / (1 - HOLD_PART_END);
+            const p2 = (t - HOLD_PART_END) / (1 - HOLD_PART_END);
             visible = (total - editCount) + p2 * editCount;
           }
-          var intPart = Math.floor(visible);
-          var fracPart = visible - intPart;
+          const intPart = Math.floor(visible);
+          const fracPart = visible - intPart;
           // The cursor word is the one currently being written or erased
           // (partial opacity, mid-edit). When fracPart is 0 or 1 we're in
           // a steady state — no cursor.
-          var activeIdx = (fracPart > 0.01 && fracPart < 0.99 && intPart < total)
+          const activeIdx = (fracPart > 0.01 && fracPart < 0.99 && intPart < total)
             ? intPart
             : -1;
-          for (var i = 0; i < total; i++) {
-            var op;
-            if (i < intPart)      op = 0.9;
-            else if (i === intPart) op = fracPart * 0.9;
-            else                  op = 0;
-            var el = words[i];
+          for (let i = 0; i < total; i++) {
+            let op;
+            if (i < intPart)      {op = 0.9;}
+            else if (i === intPart) {op = fracPart * 0.9;}
+            else                  {op = 0;}
+            const el = words[i];
             el.style.opacity = op.toFixed(3);
             if (i === activeIdx) {
               el.style.stroke = "#549CD1";
@@ -773,20 +773,20 @@ const selfHostingDocsUrl =
       }
 
       function playResearch(svg) {
-        var rays  = svg.querySelectorAll(".ray");
-        var count = rays.length;
+        const rays  = svg.querySelectorAll(".ray");
+        const count = rays.length;
         // The blue is the loading cursor — only the currently-activating
         // ray is blue. Once the cursor passes a ray it settles to white-
         // bright (loaded) and stays that way through hold. Dim returns at
         // the fade.
-        rays.forEach((el, i) => {
-          var activate = (count > 1 ? i / (count - 1) : 0) * REVEAL_END;
-          var before   = Math.max(0,     activate - 0.012);
-          var blueIn   = Math.max(0.001, activate);
-          var blueOut  = Math.min(0.97,  activate + 0.04);   // hold blue ~360ms
-          var whiteAt  = Math.min(0.985, activate + 0.06);   // settle to white ~180ms later
-          var GLOW_ON  = "drop-shadow(0 0 7px rgba(84, 156, 209, 0.65))";
-          var GLOW_OFF = "drop-shadow(0 0 0px rgba(84, 156, 209, 0))";
+        for (const [i, el] of rays.entries()) {
+          const activateAt = (count > 1 ? i / (count - 1) : 0) * REVEAL_END;
+          const before   = Math.max(0,     activateAt - 0.012);
+          const blueIn   = Math.max(0.001, activateAt);
+          const blueOut  = Math.min(0.97,  activateAt + 0.04);   // hold blue ~360ms
+          const whiteAt  = Math.min(0.985, activateAt + 0.06);   // settle to white ~180ms later
+          const GLOW_ON  = "drop-shadow(0 0 7px rgba(84, 156, 209, 0.65))";
+          const GLOW_OFF = "drop-shadow(0 0 0px rgba(84, 156, 209, 0))";
           el.animate(
             [
               { stroke: "currentcolor", strokeOpacity: 0.25, filter: GLOW_OFF, offset: 0 },
@@ -799,30 +799,30 @@ const selfHostingDocsUrl =
             ],
             { duration: CYCLE, iterations: Infinity, easing: "linear" }
           );
-        });
+        }
       }
 
       function activate(tile) {
-        tile.querySelectorAll(".review-line").forEach(playReview);
-        tile.querySelectorAll(".draft-line").forEach(playDraft);
-        tile.querySelectorAll(".research-burst").forEach(playResearch);
+        for (const el of tile.querySelectorAll(".review-line")) { playReview(el); }
+        for (const el of tile.querySelectorAll(".draft-line")) { playDraft(el); }
+        for (const el of tile.querySelectorAll(".research-burst")) { playResearch(el); }
       }
 
       function setup() {
-        var tiles = document.querySelectorAll(".showcase-tile");
-        if (!tiles.length) return;
+        const tiles = document.querySelectorAll(".showcase-tile");
+        if (!tiles.length) {return;}
         if (typeof IntersectionObserver === "undefined") {
-          tiles.forEach(activate);
+          for (const tile of tiles) { activate(tile); }
           return;
         }
-        var io = new IntersectionObserver((entries) => {
-          entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
+        const io = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) {continue;}
             activate(entry.target);
             io.unobserve(entry.target);
-          });
+          }
         }, { rootMargin: "0px 0px -10% 0px", threshold: 0.1 });
-        tiles.forEach((t) => { io.observe(t); });
+        for (const t of tiles) { io.observe(t); }
       }
 
       if (document.readyState === "loading") {
@@ -834,13 +834,14 @@ const selfHostingDocsUrl =
   </script>
 
   <script>
-    async function initGradient(containerId: string, svgUrl: string) {
-      const el = document.getElementById(containerId);
-      if (!el) return;
+    const initGradient = async (containerId: string, svgUrl: string) => {
+      const el = document.querySelector(`#${containerId}`);
+      if (!el) {return;}
       const container: HTMLElement = el;
 
       const resp = await fetch(svgUrl);
       const svg = await resp.text();
+      // safe-html: first-party build-time gradient SVG fetched from the site's own /images/gradients asset, never user content
       container.innerHTML = svg;
 
       const svgEl = container.querySelector("svg");
@@ -852,23 +853,23 @@ const selfHostingDocsUrl =
       // Select the last <g> — in dark mode the SVG has two groups
       // (glow layer + sharp layer); we animate only the sharp layer.
       const groups = container.querySelectorAll<SVGGElement>("svg g");
-      const group = groups[groups.length - 1] ?? null;
+      const group = groups.at(-1) ?? null;
       const rects = group
         ? [...group.querySelectorAll<SVGRectElement>("rect")]
         : [];
       const n = rects.length;
-      if (n === 0) return;
+      if (n === 0) {return;}
 
       const bases = rects.map((r) => {
-        const gradId = r.getAttribute("fill")?.match(/#(\w+)/)?.[1];
-        if (!gradId) return 0.5;
+        const gradId = r.getAttribute("fill")?.match(/#(\w+)/u)?.[1];
+        if (!gradId) {return 0.5;}
         const grad = container.querySelector(`#${gradId}`);
-        if (!grad) return 0.5;
+        if (!grad) {return 0.5;}
         let max = 0;
         for (const stop of grad.querySelectorAll("stop")) {
           max = Math.max(
             max,
-            parseFloat(stop.getAttribute("stop-opacity") ?? "0"),
+            Number.parseFloat(stop.getAttribute("stop-opacity") ?? "0"),
           );
         }
         return max;
@@ -877,7 +878,7 @@ const selfHostingDocsUrl =
       const startTime = performance.now();
 
       function loop() {
-        if (!container.isConnected) return;
+        if (!container.isConnected) {return;}
         // Skip animation when this layer is hidden (opacity 0)
         if (getComputedStyle(container).opacity === "0") {
           requestAnimationFrame(loop);
@@ -927,7 +928,7 @@ const selfHostingDocsUrl =
       }
 
       requestAnimationFrame(loop);
-    }
+    };
 
     initGradient("gradient-light", "/images/gradients/hero-light.svg");
     initGradient("gradient-dark", "/images/gradients/hero-dark.svg");

@@ -49,6 +49,10 @@ dist
 # Copied at dev server start by vite.config.ts (copyPdfjsWorker)
 apps/web/public/pdf.worker.min.mjs
 
+# Machine-local symlink into a folio checkout's visual-test fixtures
+# (see the loader comment in apps/playground/src/App.tsx)
+apps/playground/public/fixtures
+
 # Bun binary lockfile (text-based bun.lock is committed instead)
 bun.lockb
 

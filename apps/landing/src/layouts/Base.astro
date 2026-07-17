@@ -75,14 +75,14 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <!-- Theme: follow system preference, allow manual override -->
     <script is:inline>
       (function() {
-        var t = localStorage.getItem("theme");
-        var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const t = localStorage.getItem("theme");
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
         if (t === "dark" || (!t && prefersDark)) {
           document.documentElement.classList.add("dark");
         }
         // When no manual override, follow system changes in real time
         window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-          if (localStorage.getItem("theme")) return;
+          if (localStorage.getItem("theme")) {return;}
           document.documentElement.classList.toggle("dark", e.matches);
         });
       })();
@@ -216,20 +216,20 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     */}
     <script is:inline>
       (function () {
-        var targets = document.querySelectorAll("[data-reveal]");
-        if (!targets.length) return;
+        const targets = document.querySelectorAll("[data-reveal]");
+        if (!targets.length) {return;}
         if (typeof IntersectionObserver === "undefined") {
-          targets.forEach((el) => { el.setAttribute("data-in-view", ""); });
+          for (const el of targets) { el.dataset.inView = ""; }
           return;
         }
-        var io = new IntersectionObserver((entries) => {
-          entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
-            entry.target.setAttribute("data-in-view", "");
+        const io = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            if (!entry.isIntersecting) {continue;}
+            entry.target.dataset.inView = "";
             io.unobserve(entry.target);
-          });
+          }
         }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
-        targets.forEach((el) => { io.observe(el); });
+        for (const el of targets) { io.observe(el); }
       })();
     </script>
   </body>

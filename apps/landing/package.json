@@ -10,9 +10,10 @@
     "preview": "bun --bun astro preview",
     "render:og-card": "node ./scripts/render-og-card.mjs",
     "typecheck": "bun --bun astro check",
-    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src/components/react apps/landing/src/content.config.ts apps/landing/src/data apps/landing/src/lib",
-    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src/components/react apps/landing/src/content.config.ts apps/landing/src/data apps/landing/src/lib",
-    "format": "oxfmt ."
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/landing/astro.config.mjs apps/landing/postcss.config.mjs apps/landing/scripts apps/landing/src",
+    "format": "oxfmt .",
+    "test": "bun test --pass-with-no-tests"
   },
   "dependencies": {
     "@astrojs/react": "^6.0.1",
