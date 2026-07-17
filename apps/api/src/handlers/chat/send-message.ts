@@ -688,6 +688,25 @@ const sendMessage = createSafeRootHandler(
         return yield* Result.err(messagesForContextResult.error);
       }
 
+      if (isClientConnectionAborted()) {
+        yield* Result.await(
+          rollbackUnpersistedChatSideEffects({
+            recordAuditEvent,
+            safeDb,
+            threadId: body.threadId,
+            threadState: thread,
+            uploadedFiles: uploadResult.uploadedFiles,
+            userId: user.id,
+          }),
+        );
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
       const chatContextResult = await prepareChatContext({
         activeDecision: body.activeDecision,
         activeExternal: body.activeExternal,

@@ -17,6 +17,17 @@ void mock.module("@/api/lib/web-search/load-org-keys", () => ({
   }),
 }));
 
+let analyticsCreationHook: (() => void) | undefined;
+void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
+  createTanStackAIAnalyticsCallbacks: () => {
+    analyticsCreationHook?.();
+    return {
+      captureError: () => undefined,
+      middleware: [],
+    };
+  },
+}));
+
 const sendMessage = (await import("./send-message")).default;
 
 type SendMessageCtx = Parameters<typeof sendMessage.handler>[0];
@@ -280,5 +291,44 @@ describe("send message disconnect handling", () => {
     expect(new PgDialect().sqlToQuery(claimUpdate.updatedAt).sql).toContain(
       '"chat_threads"."updated_at"',
     );
+  });
+
+  test("rolls back when the client disconnects during context compaction", async () => {
+    const abortController = new AbortController();
+    analyticsCreationHook = () => {
+      analyticsCreationHook = undefined;
+      abortController.abort();
+    };
+    const insertValues = mock(async () => undefined);
+    const deleteReturning = mock(async () => [{ id: threadId }]);
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          delete: () => ({
+            where: () => ({ returning: deleteReturning }),
+          }),
+          insert: () => ({ values: insertValues }),
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: { findFirst: async () => null },
+            organizationSettings: { findFirst: async () => null },
+          },
+        },
+      }),
+    );
+    analyticsCreationHook = undefined;
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(insertValues).toHaveBeenCalledTimes(1);
+    expect(deleteReturning).toHaveBeenCalledTimes(1);
   });
 });
