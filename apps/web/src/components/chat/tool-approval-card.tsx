@@ -219,6 +219,30 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
         return t("docxSignatureTableSummary", {
           blockId: operation.blockId,
         });
+      case "insertTableRow":
+        return t("docxInsertTableRowSummary", {
+          blockId: operation.blockId,
+        });
+      case "deleteTableRow":
+        return t("docxDeleteTableRowSummary", {
+          blockId: operation.blockId,
+        });
+      case "insertTableColumn":
+        return t("docxInsertTableColumnSummary", {
+          blockId: operation.blockId,
+        });
+      case "deleteTableColumn":
+        return t("docxDeleteTableColumnSummary", {
+          blockId: operation.blockId,
+        });
+      case "mergeTableCells":
+        return t("docxMergeTableCellsSummary", {
+          blockId: operation.blockId,
+        });
+      case "splitTableCell":
+        return t("docxSplitTableCellSummary", {
+          blockId: operation.blockId,
+        });
       default:
         operation satisfies never;
         return panic("Unsupported DOCX edit operation");

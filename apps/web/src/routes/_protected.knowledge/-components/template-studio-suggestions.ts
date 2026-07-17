@@ -203,7 +203,8 @@ export const buildOperationSpecs = ({
   for (const [offset, operation] of operations.entries()) {
     const id = operationSpecId(operation, startIndex + offset);
     const blockText = blockTextById.get(operationAnchorBlockId(operation));
-    const commentText = operation.comment?.text;
+    const commentText =
+      "comment" in operation ? operation.comment?.text : undefined;
     switch (operation.type) {
       case "replaceInBlock": {
         if (operation.find === operation.replace) {
@@ -259,16 +260,22 @@ export const buildOperationSpecs = ({
         break;
       }
       // The Studio renders suggestions as text replacements over the
-      // live document; structural inserts, comments, and range-addressed
-      // edits (the Studio surface registers no `find_text` tool, so the
-      // model has no valid handles here) have no such representation.
-      // The prompt steers the model away from them; skip defensively
-      // when it emits one anyway.
+      // live document; structural inserts, comments, table operations,
+      // and range-addressed edits (the Studio surface registers no
+      // `find_text` tool, so the model has no valid handles here) have no
+      // such representation. The prompt steers the model away from them;
+      // skip defensively when it emits one anyway.
       case "insertAfterBlock":
       case "insertBeforeBlock":
       case "commentOnBlock":
       case "commentOnRange":
       case "insertSignatureTable":
+      case "insertTableRow":
+      case "deleteTableRow":
+      case "insertTableColumn":
+      case "deleteTableColumn":
+      case "mergeTableCells":
+      case "splitTableCell":
       case "replaceRange": {
         skipped.push({ id, reason: "unsupportedBlock" });
         break;

@@ -60,6 +60,18 @@ export const summarizeOperation = (operation: FolioAIEditOperation): string => {
       const names = operation.parties.map((p) => p.name).join(", ");
       return `Insert signature table for ${names}`;
     }
+    case "insertTableRow":
+      return "Insert table row";
+    case "deleteTableRow":
+      return "Delete table row";
+    case "insertTableColumn":
+      return "Insert table column";
+    case "deleteTableColumn":
+      return "Delete table column";
+    case "mergeTableCells":
+      return "Merge table cells";
+    case "splitTableCell":
+      return "Split table cell";
     case "replaceRange":
       return `Replace selected text with “${operation.replace}”`;
     case "commentOnRange":
@@ -82,8 +94,11 @@ export const folioOperationBlockId = (
     ? operation.range.blockId
     : operation.blockId;
 
+// `in` narrowing instead of excluding comment-less variants by
+// discriminator: the 0.12 operation union grew table ops without
+// `comment`, and enumerating every comment-less type is brittle.
 export const folioOperationComment = (operation: FolioAIEditOperation) =>
-  operation.type === "formatRange" ? undefined : operation.comment;
+  "comment" in operation ? operation.comment : undefined;
 
 /**
  * Build a redline preview for one operation against the snapshot
@@ -234,6 +249,25 @@ export const buildPreview = (
           ...(p.title !== undefined && { title: p.title }),
         })),
         position: operation.position ?? "after",
+        ...(block.previewRuns !== undefined && {
+          anchorRuns: block.previewRuns,
+          anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
+        }),
+      };
+    // Folio applies table ops natively; stella only anchors and labels
+    // them, so there is no find/replace text diff to render. Show a
+    // neutral anchor excerpt of the targeted block (same shape as an
+    // unquoted commentOnBlock preview). The card's summary line carries
+    // the specific action ("Insert table row", ...).
+    case "insertTableRow":
+    case "deleteTableRow":
+    case "insertTableColumn":
+    case "deleteTableColumn":
+    case "mergeTableCells":
+    case "splitTableCell":
+      return {
+        type: "commentOnBlock",
+        anchor: blockText.slice(0, PREVIEW_ANCHOR_CHARS),
         ...(block.previewRuns !== undefined && {
           anchorRuns: block.previewRuns,
           anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),

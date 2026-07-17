@@ -305,7 +305,11 @@ type State = {
    * from the editor lifecycle (the editor may not be mounted yet
    * if the user just opened the file via the citation).
    */
-  pendingBlockScroll: { tabId: string; blockId: string; text?: string } | null;
+  pendingBlockScroll: {
+    tabId: string;
+    blockId: string;
+    text?: string | undefined;
+  } | null;
   /**
    * One-shot edit-mode request for a DOCX tab. Set by callers that
    * open a DOCX file and want the user to land directly in the
