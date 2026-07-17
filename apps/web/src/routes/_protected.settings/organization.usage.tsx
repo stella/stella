@@ -13,7 +13,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { usageEntitlementOptions } from "@/routes/_protected.settings/-queries/usage";
@@ -182,10 +182,7 @@ function ManageUsageButton() {
   const mutation = useMutation({
     mutationFn: async () => {
       const response = await api.usage.hosted.management.post();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onMutate: () => setPending(true),
     onSuccess: ({ url }) => {

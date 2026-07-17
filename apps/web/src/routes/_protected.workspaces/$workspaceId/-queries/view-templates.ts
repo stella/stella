@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type {
@@ -47,10 +47,6 @@ export const viewTemplatesOptions = ({
         workspaceId: toSafeId<"workspace">(context.workspaceId),
       }).get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });

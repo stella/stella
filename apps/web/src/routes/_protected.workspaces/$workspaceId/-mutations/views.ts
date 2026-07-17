@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
@@ -29,10 +29,7 @@ export const useCreateView = (workspaceId: string) => {
       const response = await api
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .put({ ...body, id: toSafeId<"workspaceView">(body.id) });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async (_data, variables) => {
       const invalidations = [
@@ -82,10 +79,7 @@ export const useUpdateView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .post(body);
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onMutate: async ({ viewId, ...body }) => {
       await queryClient.cancelQueries({ queryKey: localizedKey });
@@ -141,10 +135,7 @@ export const useConvertView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .convert.post({ targetType });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -172,10 +163,7 @@ export const useReorderViews = (workspaceId: string) => {
         .reorder.post({
           viewIds: viewIds.map((viewId) => toSafeId<"workspaceView">(viewId)),
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({
@@ -202,10 +190,7 @@ export const useDeleteView = (workspaceId: string) => {
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .view({ viewId: toSafeId<"workspaceView">(viewId) })
         .delete();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({

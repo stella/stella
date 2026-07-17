@@ -1,7 +1,7 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { nullableStringCursorSeed } from "@/lib/infinite-query";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
@@ -72,11 +72,7 @@ export const decisionFacetsOptions = () =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const data = response.data;
+      const data = unwrapEden(response);
       assertPublicLawApiData(data, "listPublicCaseLawFacets");
 
       return data;
@@ -122,10 +118,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
           { fetch: { signal } },
         );
 
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-        const data = response.data;
+        const data = unwrapEden(response);
         assertPublicLawApiData(data, "searchPublicCaseLawDecisions");
 
         return {
@@ -179,11 +172,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const data = response.data;
+      const data = unwrapEden(response);
       assertPublicLawApiData(data, "listPublicCaseLawDecisions");
 
       const facets: SearchFacets = null;
@@ -203,11 +192,7 @@ export const decisionOptions = (decisionId: string) =>
         .decisions({ decisionId: toSafeId<"caseLawDecision">(decisionId) })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const data = response.data;
+      const data = unwrapEden(response);
       assertPublicLawApiData(data, "readPublicCaseLawDecision");
 
       return data;
@@ -226,11 +211,7 @@ export const decisionBySlugOptions = ({ language, slug }: DecisionBySlugKey) =>
         fetch: { signal },
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      const data = response.data;
+      const data = unwrapEden(response);
       assertPublicLawApiData(data, "readPublicCaseLawDecisionBySlug");
 
       return data;

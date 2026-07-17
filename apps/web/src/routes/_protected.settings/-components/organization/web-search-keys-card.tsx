@@ -11,7 +11,7 @@
 
 import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -19,16 +19,14 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
 
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { unwrapEden } from "@/lib/errors/api";
 import {
   webSearchConfigOptions,
   webSearchKeysKeys,
 } from "@/lib/web-search/queries";
+import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 type WebSearchKeyKind = "search" | "fetch";
 
@@ -71,60 +69,34 @@ type WebSearchKeyFieldProps = {
 
 const WebSearchKeyField = ({ kind, state }: WebSearchKeyFieldProps) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
 
   const [apiKey, setApiKey] = useState("");
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["organization-settings"][
-        "web-search-key"
-      ].post({ kind, apiKey });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+  const saveMutation = useSettingsMutation({
+    mutationFn: async () =>
+      unwrapEden(
+        await api["organization-settings"]["web-search-key"].post({
+          kind,
+          apiKey,
+        }),
+      ),
+    invalidate: webSearchKeysKeys.all,
+    successToast: { title: t("success.organizationUpdated") },
+    errorToast: {
+      title: t("errors.actionFailed"),
+      description: t("errors.actionFailed"),
     },
-    onSuccess: async () => {
-      setApiKey("");
-      await queryClient.invalidateQueries({ queryKey: webSearchKeysKeys.all });
-      stellaToast.add({
-        title: t("success.organizationUpdated"),
-        type: "success",
-      });
-    },
-    onError: (error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
-    },
+    onSuccess: () => setApiKey(""),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["organization-settings"][
-        "web-search-key"
-      ].delete({ kind });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: webSearchKeysKeys.all });
-      stellaToast.add({
-        title: t("success.organizationUpdated"),
-        type: "success",
-      });
-    },
-    onError: (error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-    },
+  const deleteMutation = useSettingsMutation({
+    mutationFn: async () =>
+      unwrapEden(
+        await api["organization-settings"]["web-search-key"].delete({ kind }),
+      ),
+    invalidate: webSearchKeysKeys.all,
+    successToast: { title: t("success.organizationUpdated") },
+    errorToast: { title: t("errors.actionFailed") },
   });
 
   const title =

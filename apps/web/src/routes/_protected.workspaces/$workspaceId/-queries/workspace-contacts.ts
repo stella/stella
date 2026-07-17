@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 
 export const workspaceContactsKeys = {
   all: (workspaceId: string) => ["workspace-contacts", workspaceId],
@@ -15,10 +15,6 @@ export const workspaceContactsOptions = (workspaceId: string) =>
         .workspaces({ workspaceId })
         .contacts.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });

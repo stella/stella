@@ -42,7 +42,7 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   aiAvailabilityOptions,
@@ -326,11 +326,7 @@ export function AIKeyRequiredDialog({
         overrideModels,
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async (data) => {
       setProviders(providerDraftsFromStoredProviders(data.providers));

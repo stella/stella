@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import type { SafeId } from "@/lib/safe-id";
 
 export type AuditLogsPageKey = {
@@ -83,10 +83,7 @@ export const fetchAuditLogs = async (query: AuditLogsPageKey) => {
   const response = await api["audit-logs"].get({
     query: cleanedQuery,
   });
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-  return response.data;
+  return unwrapEden(response);
 };
 
 export const auditLogOptions = ({ key }: AuditLogOptionsInput) =>

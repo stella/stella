@@ -21,7 +21,7 @@ import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/com
 import { UserAvatar } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   PRIORITY_COLORS,
@@ -206,10 +206,7 @@ export const AssigneePicker = ({
           userId: toSafeId<"user">(userId),
           queryKey,
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: invalidate,
   });
@@ -223,10 +220,7 @@ export const AssigneePicker = ({
           userId: toSafeId<"user">(userId),
           queryKey,
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: invalidate,
   });

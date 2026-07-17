@@ -8,7 +8,7 @@ import {
 
 import { api } from "@/lib/api";
 import { normalizeOptionalArray } from "@/lib/arrays";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -342,11 +342,7 @@ export const entityOptions = (workspaceId: string, entityId: string) =>
         .entity({ entityId: toSafeId<"entity">(entityId) })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 

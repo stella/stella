@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
 
 import type { CatalogueEntry } from "./catalogue-types";
@@ -25,10 +25,7 @@ export const useInstallEntry = (organizationId: string) => {
           enabled: true,
           queryKey: ["mcp"],
         });
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-        return response.data;
+        return unwrapEden(response);
       }
 
       if (entry.kind === "mcp") {
@@ -42,20 +39,14 @@ export const useInstallEntry = (organizationId: string) => {
           url: entry.url,
           queryKey: ["mcp"],
         });
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-        return response.data;
+        return unwrapEden(response);
       }
 
       const response = await api.catalogue["install-skill"].post({
         slug: entry.slug,
         queryKey: ["skills"],
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({

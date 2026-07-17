@@ -10,7 +10,7 @@ import { useRouteContext } from "@tanstack/react-router";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
 import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
@@ -62,11 +62,7 @@ export const useCreateBBoxes = ({
           justificationId: toSafeId<"justification">(justification.id),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({

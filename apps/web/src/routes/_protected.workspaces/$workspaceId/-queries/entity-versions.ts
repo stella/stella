@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 
 import { entitiesKeys } from "./entities";
 
@@ -38,11 +38,7 @@ export const entityVersionsOptions = ({
         .entity({ entityId })
         .versions.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 
@@ -88,11 +84,7 @@ export const fieldFileOptions = ({
         .field({ fieldId })
         .file.get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });
 
@@ -110,10 +102,6 @@ export const entityVersionDetailOptions = ({
         .versions({ versionId })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
   });

@@ -44,7 +44,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { compareByLocale } from "@/lib/collation";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { EntityKindIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon";
 import {
@@ -556,11 +556,7 @@ export const ExistingFileOrganizerDialog = ({
               { fetch: { signal } },
             );
 
-          if (response.error) {
-            throw toAPIError(response.error);
-          }
-
-          return response.data;
+          return unwrapEden(response);
         },
       });
 

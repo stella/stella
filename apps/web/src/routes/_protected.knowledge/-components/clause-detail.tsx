@@ -79,6 +79,7 @@ import { ClauseEditor } from "@/routes/_protected.knowledge/-components/clause-e
 import type { ClauseParagraph } from "@/routes/_protected.knowledge/-components/clause-editor-types";
 import { useClauseNavStore } from "@/routes/_protected.knowledge/-components/clause-nav-store";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
+import { useClauseFieldSave } from "@/routes/_protected.knowledge/-components/use-clause-field-save";
 import {
   clauseDetailOptions,
   knowledgeKeys,
@@ -703,32 +704,15 @@ const ClauseInlineTextField = ({
   canEdit: boolean;
   onRefresh: () => void;
 }) => {
-  const t = useTranslations();
   const [draft, setDraft] = useState(value ?? "");
 
-  const commit = useCallback(async () => {
-    const next = draft.trim() || null;
-    if (next === (value ?? null)) {
-      return;
-    }
-
-    const response = await api.clauses({ clauseId }).post({ [field]: next });
-
-    if (response.error) {
-      setDraft(value ?? "");
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.saveFailed"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      return;
-    }
-
-    onRefresh();
-  }, [clauseId, draft, field, value, t, onRefresh]);
+  const commit = useClauseFieldSave({
+    value,
+    persist: async (next) =>
+      await api.clauses({ clauseId }).post({ [field]: next }),
+    onRefresh,
+    onError: () => setDraft(value ?? ""),
+  });
 
   if (!canEdit) {
     if (!value) {
@@ -752,7 +736,7 @@ const ClauseInlineTextField = ({
       <Input
         id={`clause-${field}`}
         onBlur={() => {
-          void commit();
+          void commit(draft);
         }}
         onChange={(e) => setDraft(e.target.value)}
         placeholder={placeholder}
@@ -902,33 +886,12 @@ const ClauseUsageNotesField = ({
   const t = useTranslations();
   const [draft, setDraft] = useState(value ?? "");
 
-  const save = useCallback(
-    async (text: string) => {
-      const next = text.trim() || null;
-      if (next === (value ?? null)) {
-        return;
-      }
-
-      const response = await api
-        .clauses({ clauseId })
-        .post({ usageNotes: next });
-
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
-      onRefresh();
-    },
-    [clauseId, value, t, onRefresh],
-  );
+  const save = useClauseFieldSave({
+    value,
+    persist: async (next) =>
+      await api.clauses({ clauseId }).post({ usageNotes: next }),
+    onRefresh,
+  });
 
   const debouncedSave = useDebouncedCallback((text: string) => {
     void save(text);

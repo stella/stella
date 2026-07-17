@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const connectedAppsKeys = {
@@ -25,10 +25,7 @@ const fetchConnectedApps = async ({
   const response = await api.me["oauth-connections"].get({
     fetch: { signal },
   });
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-  return response.data;
+  return unwrapEden(response);
 };
 
 // No parameters (the list is always the session user's own), so this stays

@@ -14,7 +14,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -46,10 +46,7 @@ export const FillClausesSection = ({
       const response = await api
         .templates({ templateId: toSafeId<"template">(templateId) })
         ["clause-slots"].get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
   });
 

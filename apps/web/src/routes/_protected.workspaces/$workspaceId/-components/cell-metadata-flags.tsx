@@ -29,7 +29,7 @@ import Tooltip from "@/components/tooltip";
 import { UserAvatar } from "@/components/user-avatar";
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -590,11 +590,7 @@ export const useCellMetadataFlags = ({
           ...(locked !== undefined && { locked }),
         });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     scope: { id: `cell-metadata:${workspaceId}:${entityId}:${propertyId}` },
     onSuccess: () => {

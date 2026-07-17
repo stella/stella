@@ -15,7 +15,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   billingCodesKeys,
@@ -61,11 +61,7 @@ export const BillingCodesDialog = ({
         ...body,
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -86,11 +82,7 @@ export const BillingCodesDialog = ({
         id: toSafeId<"billingCode">(id),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -116,11 +108,7 @@ export const BillingCodesDialog = ({
         id: toSafeId<"billingCode">(body.id),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

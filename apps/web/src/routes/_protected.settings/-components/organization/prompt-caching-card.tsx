@@ -1,58 +1,39 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Field, FieldLabel } from "@stll/ui/components/field";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { stellaToast } from "@stll/ui/components/toast";
 
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/routes/_protected.organization/-settings-queries";
+import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 export const PromptCachingCard = () => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: settings } = useQuery(
     organizationSettingsOptions(activeOrganizationId),
   );
 
-  const mutation = useMutation({
+  const mutation = useSettingsMutation({
     // Send only the prompt-caching field so a stale matter-numbering
     // value from `settings` cannot roll back a concurrent admin's
     // matter-numbering change.
-    mutationFn: async (nextEnabled: boolean) => {
-      const response = await api["organization-settings"].post({
-        promptCachingEnabled: nextEnabled,
-      });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: organizationSettingsKeys.all,
-      });
-      stellaToast.add({
-        title: t("success.promptCachingUpdated"),
-        type: "success",
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-    },
+    mutationFn: async (nextEnabled: boolean) =>
+      unwrapEden(
+        await api["organization-settings"].post({
+          promptCachingEnabled: nextEnabled,
+        }),
+      ),
+    invalidate: organizationSettingsKeys.all,
+    successToast: { title: t("success.promptCachingUpdated") },
+    errorToast: { title: t("errors.actionFailed") },
   });
 
   if (!settings) {

@@ -15,25 +15,23 @@ import {
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/element/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { GripVerticalIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
-import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { documentTypesOptions } from "@/routes/_protected.knowledge/-queries";
+import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 const DOCUMENT_TYPE_DRAG_TYPE = "stella/document-type";
 
@@ -51,8 +49,6 @@ const invalidateDocumentTypes = "document-types";
 
 export const DocumentTypesCard = () => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
   const activeOrganizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -63,47 +59,23 @@ export const DocumentTypesCard = () => {
 
   const [newLabel, setNewLabel] = useState("");
 
-  const createMutation = useMutation({
-    mutationFn: async (label: string) => {
-      const response = await api["document-types"].post({ label });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+  const createMutation = useSettingsMutation({
+    mutationFn: async (label: string) =>
+      unwrapEden(await api["document-types"].post({ label })),
+    invalidate: [invalidateDocumentTypes],
+    errorToast: {
+      title: t("errors.actionFailed"),
+      description: t("errors.actionFailed"),
     },
-    onSuccess: async () => {
-      setNewLabel("");
-      await queryClient.invalidateQueries({
-        queryKey: [invalidateDocumentTypes],
-      });
-    },
-    onError: (error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
-    },
+    onSuccess: () => setNewLabel(""),
   });
 
-  const reorderMutation = useMutation({
-    mutationFn: async (orderedIds: SafeId<"documentType">[]) => {
-      const response = await api["document-types"].reorder.post({ orderedIds });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: [invalidateDocumentTypes],
-      });
-    },
-    onError: (error: unknown) => {
-      analytics.captureError(error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-    },
+  const reorderMutation = useSettingsMutation({
+    mutationFn: async (orderedIds: SafeId<"documentType">[]) =>
+      unwrapEden(await api["document-types"].reorder.post({ orderedIds })),
+    invalidate: [invalidateDocumentTypes],
+    invalidateOn: "settled",
+    errorToast: { title: t("errors.actionFailed") },
   });
 
   const handleReorder = (
@@ -179,8 +151,6 @@ type DocumentTypeRowProps = {
 
 const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
 
   const [rowRef, setRowRef] = useState<HTMLElement | null>(null);
   const [gripRef, setGripRef] = useState<HTMLButtonElement | null>(null);
@@ -240,55 +210,31 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
     );
   }, [rowRef, gripRef, type.id, handleReorder]);
 
-  const renameMutation = useMutation({
-    mutationFn: async (label: string) => {
-      const response = await api["document-types"]({
-        documentTypeId: type.id,
-      }).patch({ label });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+  const renameMutation = useSettingsMutation({
+    mutationFn: async (label: string) =>
+      unwrapEden(
+        await api["document-types"]({ documentTypeId: type.id }).patch({
+          label,
+        }),
+      ),
+    invalidate: [invalidateDocumentTypes],
+    errorToast: {
+      title: t("errors.actionFailed"),
+      description: t("errors.actionFailed"),
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: [invalidateDocumentTypes],
-      });
-    },
-    onError: (error: unknown) => {
-      analytics.captureError(error);
-      setDraft(type.label);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
-    },
+    onError: () => setDraft(type.label),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      const response = await api["document-types"]({
-        documentTypeId: type.id,
-      }).delete();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: [invalidateDocumentTypes],
-      });
-    },
-    onError: (error: unknown) => {
-      analytics.captureError(error);
-      // Surfaces the API's "in use by N playbook(s)" guard message.
-      stellaToast.add({
-        title: t("settings.organization.documentTypes.deleteFailed"),
-        description: userErrorFromThrown(error, t("errors.actionFailed")),
-        type: "error",
-      });
+  const deleteMutation = useSettingsMutation({
+    mutationFn: async () =>
+      unwrapEden(
+        await api["document-types"]({ documentTypeId: type.id }).delete(),
+      ),
+    invalidate: [invalidateDocumentTypes],
+    // Surfaces the API's "in use by N playbook(s)" guard message.
+    errorToast: {
+      title: t("settings.organization.documentTypes.deleteFailed"),
+      description: t("errors.actionFailed"),
     },
   });
 

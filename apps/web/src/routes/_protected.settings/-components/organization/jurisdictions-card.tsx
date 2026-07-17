@@ -1,26 +1,23 @@
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/components/frame";
-import { stellaToast } from "@stll/ui/components/toast";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
-import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
   organizationSettingsKeys,
   organizationSettingsOptions,
 } from "@/routes/_protected.organization/-settings-queries";
+import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 export const OrganizationJurisdictionsCard = () => {
   const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const { data: settings } = useQuery(
     organizationSettingsOptions(activeOrganizationId),
@@ -43,28 +40,15 @@ export const OrganizationJurisdictionsCard = () => {
   const selected = immediateSelected ?? optimisticSelected;
   const [, startSelectionTransition] = useTransition();
 
-  const updateMutation = useMutation({
-    mutationFn: async (next: PracticeJurisdiction[]) => {
-      const response = await api["organization-settings"][
-        "practice-jurisdictions"
-      ].post({ practiceJurisdictions: next });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: organizationSettingsKeys.all,
-      });
-    },
-    onError: (error) => {
-      analytics.captureError(error);
-      stellaToast.add({
-        title: t("errors.actionFailed"),
-        type: "error",
-      });
-    },
+  const updateMutation = useSettingsMutation({
+    mutationFn: async (next: PracticeJurisdiction[]) =>
+      unwrapEden(
+        await api["organization-settings"]["practice-jurisdictions"].post({
+          practiceJurisdictions: next,
+        }),
+      ),
+    invalidate: organizationSettingsKeys.all,
+    errorToast: { title: t("errors.actionFailed") },
   });
 
   return (

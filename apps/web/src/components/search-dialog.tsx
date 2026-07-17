@@ -71,7 +71,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   searchFacetOptions,
@@ -435,11 +435,7 @@ export const SearchDialog = ({
         ...(params.limit !== undefined ? { limit: params.limit } : {}),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -453,11 +449,7 @@ export const SearchDialog = ({
         locale: vars.locale,
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);
@@ -485,11 +477,7 @@ export const SearchDialog = ({
         ...(vars.limit !== undefined ? { limit: vars.limit } : {}),
       });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     onError: (error) => {
       analytics.captureError(error);

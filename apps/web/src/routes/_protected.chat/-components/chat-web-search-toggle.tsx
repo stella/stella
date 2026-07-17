@@ -11,7 +11,7 @@ import Tooltip from "@/components/tooltip";
 import { api } from "@/lib/api";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { invalidateChatThread } from "@/routes/_protected.chat/-queries";
@@ -71,10 +71,7 @@ export const ChatWebSearchToggle = ({
                 : {},
           },
         );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onMutate: async (nextEnabled) => {
       const filters = {

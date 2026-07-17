@@ -33,7 +33,7 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
   aiConfigKeys,
@@ -129,10 +129,7 @@ const AIConfigForm = ({ config, organizationId }: AIConfigFormProps) => {
         providers: serializeProviderDrafts(providers),
         overrideModels,
       });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async (data) => {
       const nextProviders = providerDraftsFromStoredProviders(data.providers);

@@ -48,7 +48,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import {
@@ -244,10 +244,7 @@ const InvoiceDetail = ({
           action,
           queryKey: invoicesKeys.all(workspaceId),
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: () => {
       invalidateAll();
@@ -266,10 +263,7 @@ const InvoiceDetail = ({
         .delete({
           queryKey: invoicesKeys.all(workspaceId),
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: async () => {
       invalidateAll();
@@ -293,10 +287,7 @@ const InvoiceDetail = ({
           timeEntryIds: [toSafeId<"timeEntry">(timeEntryId)],
           queryKey: invoicesKeys.all(workspaceId),
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: () => {
       invalidateAll();
@@ -316,10 +307,7 @@ const InvoiceDetail = ({
           expenseIds: [toSafeId<"expense">(expenseId)],
           queryKey: invoicesKeys.all(workspaceId),
         });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: () => {
       invalidateAll();

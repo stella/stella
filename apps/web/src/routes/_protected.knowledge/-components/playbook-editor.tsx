@@ -46,7 +46,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import { resolvePlaybookScrollTop } from "@/routes/_protected.knowledge/-components/playbook-editor.logic";
@@ -550,10 +550,7 @@ const PlaybookEditorForm = ({
       const response = await api
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(id) })
         .approve.post();
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
+      return unwrapEden(response);
     },
     onSuccess: (data) => {
       setStatus("approved");

@@ -28,7 +28,7 @@ import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
 import { STALE_TIME } from "@/lib/consts";
 import { useDevStore } from "@/lib/dev-store";
-import { APIError, toAPIError } from "@/lib/errors/api";
+import { APIError, toAPIError, unwrapEden } from "@/lib/errors/api";
 import { fetchWithTimeout } from "@/lib/fetch";
 import { stringCursorSeed } from "@/lib/infinite-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
@@ -501,11 +501,7 @@ const fetchGroupedChatThreads = async ({
     },
   });
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
+  return unwrapEden(response);
 };
 
 type FileChatThreadFetchResult = {
@@ -1833,11 +1829,7 @@ export const chatThreadSuggestedPromptsOptions = ({
 const fetchChatModelOptions = async () => {
   const response = await api.chat["model-options"].get();
 
-  if (response.error) {
-    throw toAPIError(response.error);
-  }
-
-  return response.data;
+  return unwrapEden(response);
 };
 
 // The composer (+) menu's Models submenu fetches this lazily (only once the

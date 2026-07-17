@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
@@ -33,11 +33,7 @@ export const viewsOptions = (workspaceId: string) =>
         .views({ workspaceId: toSafeId<"workspace">(workspaceId) })
         .get({ fetch: { signal } });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-
-      return response.data;
+      return unwrapEden(response);
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
