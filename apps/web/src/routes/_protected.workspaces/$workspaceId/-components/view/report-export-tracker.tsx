@@ -107,7 +107,10 @@ export const ReportExportTracker = ({
       return;
     }
 
-    if (settledExport.mode === "download") {
+    if (
+      settledExport.mode === "download" &&
+      settledDetail.downloadUrl !== null
+    ) {
       const handleDownload = async () => {
         const result = await Result.tryPromise(async () => {
           await downloadReportExport({
