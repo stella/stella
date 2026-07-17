@@ -23,6 +23,7 @@ import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/sse";
 import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { ReportExportTracker } from "@/routes/_protected.workspaces/$workspaceId/-components/view/report-export-tracker";
 import { WorkflowServiceTierPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt";
 import { WorkflowStartConfirmationPromptProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt";
 import { WorkspaceDropZone } from "@/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone";
@@ -271,6 +272,7 @@ function RouteComponent() {
         key={workspaceId}
         previewClearTimers={previewClearTimers}
       />
+      <ReportExportTracker workspaceId={workspaceId} />
       <WorkflowServiceTierPromptProvider>
         {content}
       </WorkflowServiceTierPromptProvider>

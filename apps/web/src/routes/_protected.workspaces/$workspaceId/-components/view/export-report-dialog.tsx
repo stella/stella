@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -27,7 +27,6 @@ import {
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -35,19 +34,23 @@ import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceView } from "@/lib/types";
-import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { reportExportsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/report-exports";
+
+import { ReportExportHistory } from "./report-export-history";
+import {
+  registerReportExportToast,
+  useReportExportTrackingStore,
+} from "./report-export-tracking";
+import type { ReportExportDeliveryMode } from "./report-export-tracking";
 
 /**
  * "Export report…" for a table view. The toolbar button opens a small dialog
  * (report template + delivery choice). On submit the export is enqueued and the
- * dialog closes; a single toast tracks the queued → running → done/failed job,
- * ending with an "Open report" (save-to-matter) or "Download" (download) action.
- *
- * The polling query lives here (not in the dialog) so it keeps running after the
- * dialog closes and stops when the toolbar unmounts (e.g. switching views).
+ * dialog closes. A workspace-level tracker owns progress after enqueue, so it
+ * survives view switches and reloads. Receipt history is loaded only while the
+ * dialog is open.
  */
 
-type DeliveryMode = "workspace" | "download";
 type ReportFormat = "docx" | "pdf";
 
 /** The picker encodes each option as `<prefix><id>` so a single Select can mix
@@ -55,18 +58,8 @@ type ReportFormat = "docx" | "pdf";
 const BUILTIN_PREFIX = "builtin:";
 const STORED_PREFIX = "stored:";
 
-/** Poll cadence for the export job status endpoint. */
-const POLL_INTERVAL_MS = 2000;
-
-type ActiveExport = {
-  exportId: string;
-  mode: DeliveryMode;
-  /** The loading toast opened at submit, updated in place on completion. */
-  toastId: string;
-};
-
 type ExportReportControlProps = {
-  initialMode?: DeliveryMode;
+  initialMode?: ReportExportDeliveryMode;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   view: Pick<WorkspaceView, "id">;
@@ -82,117 +75,18 @@ export const ExportReportControl = ({
 }: ExportReportControlProps) => {
   const initialMode = initialModeProp ?? "workspace";
   const t = useTranslations();
+  const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
-  const [active, setActive] = useState<ActiveExport | null>(null);
-  // Guards the terminal handler from firing twice for one export (the polling
-  // query settles once, but the sync effect may re-run on unrelated deps).
-  const handledRef = useRef<string | null>(null);
 
-  const { data: status } = useQuery({
-    queryKey: ["report-export", workspaceId, active?.exportId],
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .reports({ exportId: toSafeId<"reportExport">(active?.exportId ?? "") })
-        .get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    enabled: active !== null,
-    refetchInterval: (query) => {
-      const state = query.state.data?.status;
-      if (state === "completed" || state === "failed") {
-        return false;
-      }
-      return POLL_INTERVAL_MS;
-    },
-    refetchOnWindowFocus: false,
-    staleTime: 0,
-    gcTime: 0,
-  });
-
-  // Bridge the terminal job state into external systems: the toast manager, the
-  // router, and the entities query cache. This is a genuine external-system
-  // sync, not derived state or an event relay.
-  useExternalSyncEffect(() => {
-    if (!active || !status) {
-      return;
-    }
-    if (status.status !== "completed" && status.status !== "failed") {
-      return;
-    }
-    if (handledRef.current === active.exportId) {
-      return;
-    }
-    handledRef.current = active.exportId;
-
-    if (status.status === "failed") {
-      stellaToast.update(active.toastId, {
-        type: "error",
-        title: t("workspaces.views.reportExport.failed"),
-        description: status.error ?? t("common.unexpectedError"),
-      });
-      setActive(null);
-      return;
-    }
-
-    if (active.mode === "download" && status.downloadUrl) {
-      const url = status.downloadUrl;
-      stellaToast.update(active.toastId, {
-        type: "success",
-        title: t("workspaces.views.reportExport.completed"),
-        action: {
-          label: t("common.download"),
-          onClick: () => triggerUrlDownload(url),
-        },
-      });
-      setActive(null);
-      return;
-    }
-
-    if (active.mode === "workspace" && status.resultEntityId) {
-      const entityId = status.resultEntityId;
-      queryClient
-        .invalidateQueries({ queryKey: entitiesKeys.all(workspaceId) })
-        .catch(() => {
-          /* best-effort refresh; the row appears on the next fetch */
-        });
-      stellaToast.update(active.toastId, {
-        type: "success",
-        title: t("workspaces.views.reportExport.completed"),
-        action: {
-          label: t("workspaces.views.reportExport.openReport"),
-          onClick: () => {
-            navigate({
-              to: "/workspaces/$workspaceId/entities/$entityId",
-              params: { workspaceId, entityId },
-            }).catch(() => {
-              /* best-effort nav; the document is already saved */
-            });
-          },
-        },
-      });
-      setActive(null);
-      return;
-    }
-
-    // Completed without a usable result: surface it rather than a silent
-    // success, so the export never appears to succeed with nothing to open.
-    stellaToast.update(active.toastId, {
-      type: "error",
-      title: t("workspaces.views.reportExport.failed"),
-      description: t("common.unexpectedError"),
-    });
-    setActive(null);
-  }, [active, status, workspaceId, t, queryClient, navigate]);
-
-  const handleStarted = (exportId: string, mode: DeliveryMode) => {
+  const handleStarted = (exportId: string, mode: ReportExportDeliveryMode) => {
     const toastId = stellaToast.loading(t("common.preparing"));
-    handledRef.current = null;
-    setActive({ exportId, mode, toastId });
+    registerReportExportToast(exportId, toastId);
+    useReportExportTrackingStore
+      .getState()
+      .track({ exportId, mode, workspaceId });
+    queryClient
+      .invalidateQueries({ queryKey: reportExportsKeys.all(workspaceId) })
+      .catch((error: unknown) => analytics.captureError(error));
     onOpenChange(false);
   };
 
@@ -210,11 +104,11 @@ export const ExportReportControl = ({
 };
 
 type ExportReportDialogProps = {
-  initialMode: DeliveryMode;
+  initialMode: ReportExportDeliveryMode;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onClose: () => void;
-  onStarted: (exportId: string, mode: DeliveryMode) => void;
+  onStarted: (exportId: string, mode: ReportExportDeliveryMode) => void;
   view: Pick<WorkspaceView, "id">;
   workspaceId: string;
 };
@@ -248,7 +142,7 @@ const DELIVERY_MODES = [
   { mode: "workspace", labelKey: "templates.moveToMatter" },
   { mode: "download", labelKey: "common.download" },
 ] as const satisfies readonly {
-  mode: DeliveryMode;
+  mode: ReportExportDeliveryMode;
   labelKey: TranslationKey;
 }[];
 
@@ -276,7 +170,7 @@ const ExportReportDialogBody = ({
   const analytics = useAnalytics();
   const navigate = useNavigate();
   const [templateValue, setTemplateValue] = useState<string | null>(null);
-  const [mode, setMode] = useState<DeliveryMode>(initialMode);
+  const [mode, setMode] = useState<ReportExportDeliveryMode>(initialMode);
   const [format, setFormat] = useState<ReportFormat>("docx");
   // AI-drafted narrative (executive + per-contract summaries) is on by default;
   // turning it off skips every model call for a fast, deterministic export.
@@ -431,9 +325,12 @@ const ExportReportDialogBody = ({
       title: t("workspaces.views.reportExport.customized"),
     });
     onClose();
-    navigate({ to: "/knowledge/templates" }).catch(() => {
-      /* best-effort nav; the clone is already saved */
-    });
+    const navigation = await Result.tryPromise(
+      async () => await navigate({ to: "/knowledge/templates" }),
+    );
+    if (Result.isError(navigation)) {
+      analytics.captureError(navigation.error);
+    }
   };
 
   return (
@@ -444,7 +341,7 @@ const ExportReportDialogBody = ({
           {t("workspaces.views.reportExport.description")}
         </DialogDescription>
       </DialogHeader>
-      <DialogPanel className="flex flex-col gap-4">
+      <DialogPanel className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto">
         <div className="flex flex-col gap-1.5">
           <span className="text-sm font-medium" id="report-template-label">
             {t("workspaces.views.reportExport.templateLabel")}
@@ -531,6 +428,8 @@ const ExportReportDialogBody = ({
             ))}
           </div>
         </fieldset>
+
+        <ReportExportHistory workspaceId={workspaceId} />
       </DialogPanel>
       <DialogFooter>
         <DialogClose render={<Button variant="outline" />}>
@@ -632,13 +531,4 @@ const TemplateField = ({
       </SelectPopup>
     </Select>
   );
-};
-
-const triggerUrlDownload = (url: string) => {
-  const link = document.createElement("a");
-  link.href = url;
-  link.rel = "noopener";
-  document.body.append(link);
-  link.click();
-  link.remove();
 };

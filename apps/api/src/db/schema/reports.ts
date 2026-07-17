@@ -82,6 +82,9 @@ export const reportExports = p.pgTable(
     p
       .index("report_exports_workspace_created_idx")
       .on(table.workspaceId, table.createdAt, table.id),
+    p
+      .index("report_exports_workspace_requester_created_idx")
+      .on(table.workspaceId, table.requestedBy, table.createdAt, table.id),
     ...wsPolicies(),
   ],
 );

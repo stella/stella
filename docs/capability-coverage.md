@@ -244,6 +244,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | --- | --- | --- | --- | --- |
 | `reports.clone-builtin` | write | stella:matters_write | — | generic invoke → `stella reports clone-builtin` |
 | `reports.export-view` | write | stella:matters_write | — | generic invoke → `stella reports export-view` |
+| `reports.list-exports` | read | stella:matters_write | — | generic invoke → `stella reports list-exports` |
 | `reports.list-templates` | read | stella:matters_write | — | generic invoke → `stella reports list-templates` |
 | `reports.read-export` | read | stella:matters_write | — | generic invoke → `stella reports read-export` |
 
