@@ -58,13 +58,14 @@ export const notifyReportExportStatus = async ({
   userId,
   workspaceId,
 }: NotifyReportExportStatusOptions): Promise<ReportExportNotificationResult> => {
-  // audit: skip — atomic delivery-bookkeeping claim on an already-audited
-  // export row.
   const claimResult = await Result.tryPromise(
     async () =>
       await scopedDb(
-        async (tx) =>
-          await tx
+        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive that require-audit-on-mutation scans inside this arrow
+        async (tx) => {
+          // audit: skip — atomic delivery-bookkeeping claim on an
+          // already-audited export row.
+          return await tx
             .update(reportExports)
             .set({
               notificationAttemptedAt: new Date(),
@@ -82,7 +83,8 @@ export const notifyReportExportStatus = async ({
             .returning({
               lang: reportExports.notificationLang,
               status: reportExports.status,
-            }),
+            });
+        },
       ),
   );
   if (Result.isError(claimResult)) {
