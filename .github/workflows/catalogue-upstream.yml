@@ -31,8 +31,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
-          # Credentials are kept so the job can push the bump branch.
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -57,8 +56,6 @@ jobs:
 
       - name: Apply revision bumps
         if: steps.check.outputs.update_count != '0'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           jq -c '.updates[]' upstream.json | while read -r update; do
             path=$(echo "$update" | jq -r '.manifestPath')
@@ -68,8 +65,14 @@ jobs:
             # replace keeps the diff to just the rev line.
             sed -i "s/${current}/${latest}/" "$path"
           done
-          bun run --filter @stll/catalogue generate
           bun run --filter @stll/catalogue validate
+          bun run --filter @stll/catalogue generate
+
+      - name: Check pinned content
+        if: steps.check.outputs.update_count != '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
           # Fetch and check the newly-pinned upstream content (SKILL.md +
           # resource tree) before opening the PR, so a bump to a rev that
           # would fail the install path (bad frontmatter, oversized body,
@@ -80,7 +83,7 @@ jobs:
       - name: Open or update pull request
         if: steps.check.outputs.update_count != '0'
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           {
             echo "Automated bump of \`rev\` for github-sourced catalogue skills whose pinned upstream advanced on its default branch."
@@ -94,6 +97,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          gh auth setup-git
           git switch -C catalogue/upstream-revs
           git add packages/catalogue
           git commit -m "chore: bump github-sourced catalogue skill revisions"

@@ -9,10 +9,16 @@
  * verifies the file is up to date via `--check`.
  */
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { CATALOGUE_KINDS } from "../src/schema";
+import {
+  getInspectedDirectoryEntries,
+  getInspectedFilePath,
+  inspectCatalogueFilesystem,
+  type InspectedCatalogueFilesystem,
+} from "./catalogue-filesystem";
 
 const packageRoot = path.join(import.meta.dirname, "..");
 const defaultEntriesRoot = path.join(packageRoot, "entries");
@@ -50,20 +56,23 @@ type GeneratedSkillPayload = {
  * so github content is structurally excluded from the install-payload
  * bundle. Exported for tests; the CLI main below drives it.
  */
-export const collectEntries = (entriesRoot: string): GeneratedEntry[] =>
-  CATALOGUE_KINDS.flatMap((kind) => {
+export const collectEntries = (entriesRoot: string): GeneratedEntry[] => {
+  const filesystem = inspectCatalogueFilesystem(entriesRoot);
+  return CATALOGUE_KINDS.flatMap((kind) => {
     const kindDir = path.join(entriesRoot, pluralize(kind));
-    if (!existsSync(kindDir)) {
+    const kindEntries = getInspectedDirectoryEntries(filesystem, kindDir);
+    if (kindEntries === null) {
       return [];
     }
-    return readdirSync(kindDir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
+    return kindEntries
+      .filter((entry) => entry.type === "directory")
       .map((entry) => entry.name)
       .sort((a, b) => a.localeCompare(b))
       .map((slug): GeneratedEntry | null => {
         const folder = path.join(kindDir, slug);
         const manifest = path.join(folder, "manifest.json");
-        if (!existsSync(manifest)) {
+        const inspectedManifest = getInspectedFilePath(filesystem, manifest);
+        if (inspectedManifest === null) {
           return null;
         }
         const importName = toImportName(kind, slug);
@@ -74,11 +83,12 @@ export const collectEntries = (entriesRoot: string): GeneratedEntry[] =>
             source?: "in-tree" | "github";
             entryPath?: string;
             resources?: string[];
-          } = JSON.parse(readFileSync(manifest, "utf-8"));
+          } = JSON.parse(readFileSync(inspectedManifest, "utf-8"));
           // github-sourced skills keep their content upstream; no
           // install payload is bundled for them.
           if (manifestRaw.source !== "github") {
             skillPayload = buildInTreeSkillPayload({
+              filesystem,
               folder,
               kind,
               manifestRaw,
@@ -90,12 +100,13 @@ export const collectEntries = (entriesRoot: string): GeneratedEntry[] =>
         return {
           importName,
           manifestPath: toImportPath(manifest),
-          iconLiteral: iconLiteralFor(folder),
+          iconLiteral: iconLiteralFor(filesystem, folder),
           skillPayload,
         };
       })
       .filter((entry): entry is GeneratedEntry => entry !== null);
   });
+};
 
 const importLines = (entries: readonly GeneratedEntry[]): string[] =>
   entries.map(
@@ -168,6 +179,7 @@ if (import.meta.main) {
 }
 
 type BuildInTreeSkillPayloadArgs = {
+  filesystem: InspectedCatalogueFilesystem;
   folder: string;
   kind: string;
   manifestRaw: { entryPath?: string; resources?: string[] };
@@ -175,6 +187,7 @@ type BuildInTreeSkillPayloadArgs = {
 };
 
 function buildInTreeSkillPayload({
+  filesystem,
   folder,
   kind,
   manifestRaw,
@@ -185,7 +198,8 @@ function buildInTreeSkillPayload({
   const resourceRoot =
     entryDirectory === "." ? folder : path.join(folder, entryDirectory);
   const bodyFile = path.join(folder, entryPath);
-  if (!existsSync(bodyFile)) {
+  const inspectedBodyFile = getInspectedFilePath(filesystem, bodyFile);
+  if (inspectedBodyFile === null) {
     panic(`${kind}/${slug}: entry file not found: ${entryPath}`);
   }
   const resourceFiles: GeneratedResourceFile[] = (
@@ -193,10 +207,14 @@ function buildInTreeSkillPayload({
   ).map((resourcePath) => {
     const normalizedPath = normalizeManifestPath(resourcePath);
     const resourceFile = path.join(resourceRoot, normalizedPath);
-    if (!existsSync(resourceFile)) {
+    const inspectedResourceFile = getInspectedFilePath(
+      filesystem,
+      resourceFile,
+    );
+    if (inspectedResourceFile === null) {
       panic(`${kind}/${slug}: resource file not found: ${normalizedPath}`);
     }
-    const content = readFileSync(resourceFile, "utf-8");
+    const content = readFileSync(inspectedResourceFile, "utf-8");
     return {
       content,
       path: normalizedPath,
@@ -204,7 +222,7 @@ function buildInTreeSkillPayload({
     };
   });
   return {
-    bodyLiteral: JSON.stringify(readFileSync(bodyFile, "utf-8")),
+    bodyLiteral: JSON.stringify(readFileSync(inspectedBodyFile, "utf-8")),
     resourceFilesLiteral: JSON.stringify(resourceFiles),
     slugLiteral: JSON.stringify(slug),
   };
@@ -213,16 +231,21 @@ function buildInTreeSkillPayload({
 // Icons are inlined as inert image data URLs. SVGs are encoded rather
 // than injected as markup so contributor-provided icons cannot execute
 // active content in the app context.
-function iconLiteralFor(folder: string): string {
+function iconLiteralFor(
+  filesystem: InspectedCatalogueFilesystem,
+  folder: string,
+): string {
   const iconPng = path.join(folder, "icon.png");
   const iconSvg = path.join(folder, "icon.svg");
-  if (existsSync(iconPng)) {
-    const base64 = readFileSync(iconPng).toString("base64");
+  const inspectedIconPng = getInspectedFilePath(filesystem, iconPng);
+  if (inspectedIconPng !== null) {
+    const base64 = readFileSync(inspectedIconPng).toString("base64");
     return JSON.stringify(`data:image/png;base64,${base64}`);
   }
-  if (existsSync(iconSvg)) {
+  const inspectedIconSvg = getInspectedFilePath(filesystem, iconSvg);
+  if (inspectedIconSvg !== null) {
     const base64 = Buffer.from(
-      readFileSync(iconSvg, "utf-8"),
+      readFileSync(inspectedIconSvg, "utf-8"),
       "utf-8",
     ).toString("base64");
     return JSON.stringify(`data:image/svg+xml;base64,${base64}`);

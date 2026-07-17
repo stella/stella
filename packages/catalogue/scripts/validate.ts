@@ -11,7 +11,7 @@
  * Runs in CI; failure blocks merge.
  */
 import { panic } from "better-result";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -22,6 +22,12 @@ import {
   type CatalogueEntry,
   type CatalogueKind,
 } from "../src/schema";
+import {
+  getInspectedDirectoryEntries,
+  getInspectedFilePath,
+  inspectCatalogueFilesystem,
+  type InspectedCatalogueFilesystem,
+} from "./catalogue-filesystem";
 
 const MAX_ENTRY_BYTES = 10 * 1024 * 1024;
 
@@ -51,6 +57,7 @@ type ValidationResult = {
 };
 
 type EntryLocation = {
+  filesystem: InspectedCatalogueFilesystem;
   kind: CatalogueKind;
   slug: string;
   folder: string;
@@ -62,6 +69,7 @@ type EntryLocation = {
  * main below drives it against the package's real `entries/` folder.
  */
 export const validateCatalogue = (entriesRoot: string): ValidationResult => {
+  const filesystem = inspectCatalogueFilesystem(entriesRoot);
   const errors: string[] = [];
 
   const seenSlugs = new Map<string, Set<string>>();
@@ -72,25 +80,27 @@ export const validateCatalogue = (entriesRoot: string): ValidationResult => {
 
   for (const kind of CATALOGUE_KINDS) {
     const kindDir = path.join(entriesRoot, pluralize(kind));
-    if (!existsSync(kindDir)) {
+    const kindEntries = getInspectedDirectoryEntries(filesystem, kindDir);
+    if (kindEntries === null) {
       continue;
     }
 
-    for (const dirent of readdirSync(kindDir, { withFileTypes: true })) {
-      if (!dirent.isDirectory()) {
+    for (const entry of kindEntries) {
+      if (entry.type !== "directory") {
         continue;
       }
       const location: EntryLocation = {
-        folder: path.join(kindDir, dirent.name),
+        filesystem,
+        folder: path.join(kindDir, entry.name),
         kind,
-        slug: dirent.name,
+        slug: entry.name,
       };
       validateEntryFolder(location, errors);
       trackSlugUniqueness(location, seenSlugs, seenCatalogueSlugs, errors);
     }
   }
 
-  validateRecommendedFile(entriesRoot, seenSlugs, errors);
+  validateRecommendedFile(filesystem, entriesRoot, seenSlugs, errors);
 
   const entryCount = Array.from(seenSlugs.values()).reduce(
     (sum, set) => sum + set.size,
@@ -123,7 +133,7 @@ const validateEntryFolder = (
   // github skills keep content upstream, so the in-tree size cap does
   // not apply to them.
   if (!isGithubSkill) {
-    const bytes = folderSize(location.folder);
+    const bytes = folderSize(location.filesystem, location.folder);
     if (bytes > MAX_ENTRY_BYTES) {
       errors.push(
         `${location.kind}/${location.slug}: folder is ${formatBytes(bytes)}, exceeds ${formatBytes(MAX_ENTRY_BYTES)} cap`,
@@ -140,10 +150,14 @@ const validateEntryFolder = (
 const validateIconSizes = (location: EntryLocation, errors: string[]): void => {
   for (const iconName of ICON_FILE_NAMES) {
     const iconFile = path.join(location.folder, iconName);
-    if (!existsSync(iconFile)) {
+    const inspectedIconFile = getInspectedFilePath(
+      location.filesystem,
+      iconFile,
+    );
+    if (inspectedIconFile === null) {
       continue;
     }
-    const bytes = statSync(iconFile).size;
+    const bytes = statSync(inspectedIconFile).size;
     if (bytes > MAX_ICON_FILE_BYTES) {
       errors.push(
         `${location.kind}/${location.slug}: ${iconName} is ${formatBytes(bytes)}, exceeds ${formatBytes(MAX_ICON_FILE_BYTES)} icon cap`,
@@ -163,15 +177,19 @@ const readEntryManifest = (
 ): CatalogueEntry | null => {
   const { kind, slug, folder } = location;
   const manifestFile = path.join(folder, "manifest.json");
+  const inspectedManifestFile = getInspectedFilePath(
+    location.filesystem,
+    manifestFile,
+  );
 
-  if (!existsSync(manifestFile)) {
+  if (inspectedManifestFile === null) {
     errors.push(`${kind}/${slug}: missing manifest.json`);
     return null;
   }
 
   let manifest: unknown;
   try {
-    manifest = JSON.parse(readFileSync(manifestFile, "utf-8"));
+    manifest = JSON.parse(readFileSync(inspectedManifestFile, "utf-8"));
   } catch (error) {
     errors.push(
       `${kind}/${slug}/manifest.json: invalid JSON (${error instanceof Error ? error.message : String(error)})`,
@@ -209,7 +227,14 @@ const validateGithubSkillFolder = (
   location: EntryLocation,
   errors: string[],
 ): void => {
-  for (const child of readdirSync(location.folder, { withFileTypes: true })) {
+  const entries = getInspectedDirectoryEntries(
+    location.filesystem,
+    location.folder,
+  );
+  if (entries === null) {
+    panic(`${location.kind}/${location.slug}: entry folder disappeared`);
+  }
+  for (const child of entries) {
     if (isIgnoredOsMetadataFile(child.name)) {
       continue;
     }
@@ -234,7 +259,7 @@ const validateInTreeSkillContent = (
   }
 
   const bodyFile = path.join(folder, entryPath);
-  if (!existsSync(bodyFile)) {
+  if (getInspectedFilePath(location.filesystem, bodyFile) === null) {
     errors.push(`${kind}/${slug}: entryPath file not found`);
   }
 
@@ -250,7 +275,7 @@ const validateInTreeSkillContent = (
       continue;
     }
     const resourceFile = path.join(resourceRoot, normalizedResourcePath);
-    if (!existsSync(resourceFile)) {
+    if (getInspectedFilePath(location.filesystem, resourceFile) === null) {
       errors.push(
         `${kind}/${slug}: resource file not found: ${normalizedResourcePath}`,
       );
@@ -282,18 +307,23 @@ const trackSlugUniqueness = (
 };
 
 const validateRecommendedFile = (
+  filesystem: InspectedCatalogueFilesystem,
   entriesRoot: string,
   seenSlugs: Map<string, Set<string>>,
   errors: string[],
 ): void => {
   const recommendedFile = path.join(entriesRoot, "recommended.json");
-  if (!existsSync(recommendedFile)) {
+  const inspectedRecommendedFile = getInspectedFilePath(
+    filesystem,
+    recommendedFile,
+  );
+  if (inspectedRecommendedFile === null) {
     return;
   }
 
   let recommended: unknown;
   try {
-    recommended = JSON.parse(readFileSync(recommendedFile, "utf-8"));
+    recommended = JSON.parse(readFileSync(inspectedRecommendedFile, "utf-8"));
   } catch (error) {
     errors.push(
       `recommended.json: invalid JSON (${error instanceof Error ? error.message : String(error)})`,
@@ -352,15 +382,26 @@ function pluralize(kind: CatalogueKind): string {
   return `${kind}s`;
 }
 
-function folderSize(folder: string): number {
+function folderSize(
+  filesystem: InspectedCatalogueFilesystem,
+  folder: string,
+): number {
   let total = 0;
-  for (const dirent of readdirSync(folder, { withFileTypes: true })) {
-    const fullPath = path.join(folder, dirent.name);
-    if (dirent.isDirectory()) {
-      total += folderSize(fullPath);
-    } else {
-      total += statSync(fullPath).size;
+  const entries = getInspectedDirectoryEntries(filesystem, folder);
+  if (entries === null) {
+    panic(`Catalogue folder disappeared during validation: ${folder}`);
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(folder, entry.name);
+    if (entry.type === "directory") {
+      total += folderSize(filesystem, fullPath);
+      continue;
     }
+    const inspectedFile = getInspectedFilePath(filesystem, fullPath);
+    if (inspectedFile === null) {
+      panic(`Catalogue file disappeared during validation: ${fullPath}`);
+    }
+    total += statSync(inspectedFile).size;
   }
   return total;
 }
