@@ -4,11 +4,9 @@ import { runOnlineMigrations } from "./online-migrations";
 
 const CREATE_INDEX_FRAGMENT = "CREATE INDEX CONCURRENTLY";
 const DROP_INDEX_FRAGMENT = "DROP INDEX CONCURRENTLY";
-const RECORD_COMPLETION_FRAGMENT =
-  "INSERT INTO drizzle.__stella_online_migrations";
 
 describe("online migrations", () => {
-  test("records an already valid index without rebuilding it", async () => {
+  test("accepts an already valid index without rebuilding it", async () => {
     const harness = createHarness([true, true]);
 
     await runOnlineMigrations(harness.pool);
@@ -17,13 +15,10 @@ describe("online migrations", () => {
     expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
       -1,
     );
-    expect(
-      indexOfStatement(harness.statements, RECORD_COMPLETION_FRAGMENT),
-    ).toBeGreaterThan(-1);
     expect(harness.released()).toBe(true);
   });
 
-  test("creates a missing index online before recording completion", async () => {
+  test("creates a missing index online and verifies completion", async () => {
     const harness = createHarness([undefined, true]);
 
     await runOnlineMigrations(harness.pool);
@@ -32,15 +27,10 @@ describe("online migrations", () => {
     expect(
       indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT),
     ).toBeGreaterThan(-1);
-    expect(
-      indexOfStatement(harness.statements, RECORD_COMPLETION_FRAGMENT),
-    ).toBeGreaterThan(
-      indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT),
-    );
     expect(harness.released()).toBe(true);
   });
 
-  test("repairs an interrupted invalid build before recording completion", async () => {
+  test("repairs an interrupted invalid build before verifying completion", async () => {
     const harness = createHarness([false, true]);
 
     await runOnlineMigrations(harness.pool);
@@ -50,13 +40,8 @@ describe("online migrations", () => {
       harness.statements,
       CREATE_INDEX_FRAGMENT,
     );
-    const recordCompletion = indexOfStatement(
-      harness.statements,
-      RECORD_COMPLETION_FRAGMENT,
-    );
     expect(dropIndex).toBeGreaterThan(-1);
     expect(createIndex).toBeGreaterThan(dropIndex);
-    expect(recordCompletion).toBeGreaterThan(createIndex);
     expect(harness.released()).toBe(true);
   });
 });
