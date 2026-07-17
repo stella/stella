@@ -1,0 +1,311 @@
+/**
+ * ReviewBar — floating bottom-center pill over the DOCX editor that
+ * drives a keyboard-first review loop through the AI's pending
+ * suggestions. Shares the review-store (and {@link useReviewActions})
+ * with the inspector ReviewPanel, so stepping / accepting / rejecting
+ * here and there can never disagree.
+ *
+ * Keyboard (active while the bar is visible and focus is in the editor
+ * or on the bar, never in the chat composer or a form field):
+ *   Alt+Enter      accept the focused suggestion and advance
+ *   Alt+Backspace  reject the focused suggestion and advance
+ *   Alt+ArrowUp    focus the previous pending suggestion
+ *   Alt+ArrowDown  focus the next pending suggestion
+ *
+ * Alt (not Cmd/Ctrl) because folio binds Mod+Enter to a page break and
+ * Mod+Backspace to delete-backward; Alt+Enter / Alt+ArrowUp/Down are
+ * unbound. Alt+Backspace IS bound to delete-backward on macOS, so the
+ * listener runs in the capture phase and claims the event before the
+ * editor can act on it (the same technique folio uses for its own
+ * shortcuts).
+ */
+
+import type { RefObject } from "react";
+
+import { CheckIcon, ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
+
+import type { DocxEditorRef } from "@stll/folio-react";
+import { Button } from "@stll/ui/components/button";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
+import { cn } from "@stll/ui/lib/utils";
+
+import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
+import {
+  getReviewFocusedId,
+  useReviewStore,
+} from "@/components/ai-suggestions/review-store";
+import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
+import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
+import { useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
+
+const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
+
+const isPending = (item: ReviewSuggestion): boolean =>
+  item.status === "pending" || item.status === "applying";
+
+type ReviewBarProps = {
+  entityId: string;
+  docxEditorRef: RefObject<DocxEditorRef | null>;
+  /** Whether the editor currently accepts edit operations. */
+  docxEditable: boolean;
+  requestDocxEditMode?: (() => boolean | Promise<boolean>) | undefined;
+};
+
+export const ReviewBar = ({
+  entityId,
+  docxEditorRef,
+  docxEditable,
+  requestDocxEditMode,
+}: ReviewBarProps) => {
+  const t = useTranslations();
+  // `?? EMPTY_SUGGESTIONS` shares one module-level array for no-session
+  // reads so useSyncExternalStore doesn't loop on a fresh `[]` each call.
+  const suggestions =
+    useReviewStore((state) => state.sessions[entityId]) ?? EMPTY_SUGGESTIONS;
+  const focusedId = useReviewStore((state) =>
+    getReviewFocusedId(state, entityId),
+  );
+  const {
+    applyMode,
+    setApplyMode,
+    acceptOne,
+    rejectOne,
+    acceptMany,
+    navigateTo,
+  } = useReviewActions({
+    entityId,
+    docxEditorRef,
+    docxEditable,
+    requestDocxEditMode,
+  });
+
+  const pendingItems = suggestions.filter(isPending);
+  const total = pendingItems.length;
+  const focusedIndex = pendingItems.findIndex((item) => item.id === focusedId);
+  const activeIndex = Math.max(focusedIndex, 0);
+
+  const focusAt = useLatestCallback((index: number) => {
+    const item = pendingItems.at(index);
+    if (item) {
+      navigateTo(item);
+    }
+  });
+
+  const goPrev = useLatestCallback(() => {
+    focusAt(focusedIndex <= 0 ? 0 : focusedIndex - 1);
+  });
+
+  const goNext = useLatestCallback(() => {
+    focusAt(focusedIndex === -1 ? 0 : Math.min(total - 1, focusedIndex + 1));
+  });
+
+  const acceptAndAdvance = useLatestCallback(async () => {
+    const target = pendingItems.at(activeIndex);
+    if (!target) {
+      return;
+    }
+    // Capture the neighbour BEFORE accepting: after accept the target
+    // leaves the pending queue, so the "next" to park on is the item that
+    // followed it (or the one before, at the end of the list).
+    const next =
+      pendingItems.at(activeIndex + 1) ?? pendingItems.at(activeIndex - 1);
+    await acceptOne(target);
+    if (next && next.id !== target.id) {
+      navigateTo(next);
+    }
+  });
+
+  const rejectAndAdvance = useLatestCallback(() => {
+    const target = pendingItems.at(activeIndex);
+    if (!target) {
+      return;
+    }
+    const next =
+      pendingItems.at(activeIndex + 1) ?? pendingItems.at(activeIndex - 1);
+    rejectOne(target);
+    if (next && next.id !== target.id) {
+      navigateTo(next);
+    }
+  });
+
+  const handleKeyDown = useLatestCallback((event: KeyboardEvent) => {
+    if (
+      total === 0 ||
+      !event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      !shouldHandleReviewShortcut()
+    ) {
+      return;
+    }
+    switch (event.key) {
+      case "Enter":
+        claimShortcut(event);
+        void acceptAndAdvance();
+        return;
+      case "Backspace":
+        claimShortcut(event);
+        rejectAndAdvance();
+        return;
+      case "ArrowUp":
+        claimShortcut(event);
+        goPrev();
+        return;
+      case "ArrowDown":
+        claimShortcut(event);
+        goNext();
+        return;
+      default:
+        return;
+    }
+  });
+
+  // Capture-phase document listener so Alt+Backspace is claimed before
+  // the editor's own delete-backward handler sees it (macOS binds it).
+  // Registered once; `handleKeyDown` reads the latest state on each call.
+  useMountEffect(() => {
+    document.addEventListener("keydown", handleKeyDown, { capture: true });
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, { capture: true });
+    };
+  });
+
+  if (total === 0) {
+    return null;
+  }
+
+  const current = Math.min(activeIndex + 1, total);
+
+  return (
+    <div
+      aria-label={t("docxReview.barLabel")}
+      className={cn(
+        "bg-popover/90 text-popover-foreground border-border pointer-events-auto absolute start-1/2 bottom-28 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border py-1 ps-2 pe-1.5",
+        "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
+        "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_12px_32px_rgb(0_0_0/0.14)]",
+        "animate-in fade-in-0 slide-in-from-bottom-1",
+      )}
+      role="toolbar"
+    >
+      <span className="text-muted-foreground min-w-14 px-1 text-center text-xs font-medium tabular-nums">
+        {t("common.stepProgress", {
+          current: String(current),
+          total: String(total),
+        })}
+      </span>
+      <Button
+        aria-label={t("common.previous")}
+        disabled={current <= 1}
+        onClick={goPrev}
+        size="icon-sm"
+        tooltip={t("common.previous")}
+        variant="ghost"
+      >
+        <ChevronUpIcon className="size-4" />
+      </Button>
+      <Button
+        aria-label={t("common.next")}
+        disabled={current >= total}
+        onClick={goNext}
+        size="icon-sm"
+        tooltip={t("common.next")}
+        variant="ghost"
+      >
+        <ChevronDownIcon className="size-4" />
+      </Button>
+      <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
+      <Button
+        className="h-7 px-2.5 text-xs"
+        onClick={() => {
+          void acceptAndAdvance();
+        }}
+        size="sm"
+        variant="default"
+      >
+        <CheckIcon className="me-1 size-3.5" />
+        {t("common.accept")}
+      </Button>
+      <Button
+        className="h-7 px-2.5 text-xs"
+        onClick={rejectAndAdvance}
+        size="sm"
+        variant="outline"
+      >
+        <XIcon className="me-1 size-3.5" />
+        {t("docxReview.reject")}
+      </Button>
+      <AcceptAllButton
+        className="h-7 px-2.5 text-xs"
+        onAcceptAll={acceptMany}
+        pendingItems={pendingItems}
+        size="sm"
+        variant="ghost"
+      >
+        {t("docxReview.acceptAll")}
+      </AcceptAllButton>
+      <span aria-hidden="true" className="bg-border mx-0.5 h-5 w-px" />
+      <Select
+        onValueChange={(value) => {
+          if (value === "tracked-changes" || value === "direct") {
+            setApplyMode(value);
+          }
+        }}
+        value={applyMode}
+      >
+        <SelectTrigger
+          aria-label={t("docxReview.applyAs")}
+          className="hover:bg-muted h-7 w-auto min-w-0 justify-between gap-1 rounded-full border-0 bg-transparent px-2 text-xs font-medium"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value="tracked-changes">
+            {t("docxReview.applyTracked")}
+          </SelectItem>
+          <SelectItem value="direct">{t("docxReview.applyDirect")}</SelectItem>
+        </SelectPopup>
+      </Select>
+    </div>
+  );
+};
+
+const claimShortcut = (event: KeyboardEvent) => {
+  event.preventDefault();
+  event.stopPropagation();
+  event.stopImmediatePropagation();
+};
+
+/**
+ * Whether a review keyboard shortcut should act on the current focus.
+ * Fires while the document editor has focus (the Word model) or focus
+ * is on the bar itself; never while typing in the chat composer or any
+ * other text input / rich editor.
+ */
+const shouldHandleReviewShortcut = (): boolean => {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement)) {
+    return true;
+  }
+  const tag = el.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+    return false;
+  }
+  // The chat composer is itself a ProseMirror editor; keep its
+  // word-delete / newline behaviour intact.
+  if (el.closest(".folio-ai-bar-editor")) {
+    return false;
+  }
+  const editable = el.closest("[contenteditable='true'],[contenteditable='']");
+  if (editable && !editable.closest(".folio-docx-preview")) {
+    return false;
+  }
+  return true;
+};

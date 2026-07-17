@@ -167,6 +167,14 @@ type ReviewState = {
   /** Per-entity panel visibility (manual dismiss). */
   panelDismissed: Record<string, boolean>;
   /**
+   * Per-entity focused suggestion id — the one the review bar's
+   * prev/next stepper is currently parked on and the panel scrolls
+   * into view / highlights. Shared so the floating bar and the
+   * inspector panel can never disagree about which suggestion is
+   * "current". `null` (or absent) when nothing is focused yet.
+   */
+  focusedId: Record<string, string | null>;
+  /**
    * Per-entity monotonic counter bumped whenever the user clicks
    * the AI-suggestions facet chip. The chat input bar subscribes
    * and plays a one-shot glow so the user sees that the suggestions
@@ -197,6 +205,7 @@ type ReviewActions = {
     status: ReviewSuggestionStatus,
   ) => void;
   setApplyMode: (entityId: string, mode: FolioAIEditApplyMode) => void;
+  setFocusedId: (entityId: string, id: string | null) => void;
   dismissPanel: (entityId: string) => void;
   resetSession: (entityId: string) => void;
   pulseChatInput: (entityId: string) => void;
@@ -263,6 +272,7 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
   sessions: {},
   applyMode: {},
   panelDismissed: {},
+  focusedId: {},
   chatInputPulse: {},
   hideAccepted: false,
 
@@ -370,6 +380,17 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
     }));
   },
 
+  setFocusedId: (entityId, id) => {
+    set((state) => {
+      if ((state.focusedId[entityId] ?? null) === id) {
+        return state;
+      }
+      return {
+        focusedId: { ...state.focusedId, [entityId]: id },
+      };
+    });
+  },
+
   dismissPanel: (entityId) => {
     set((state) => ({
       panelDismissed: { ...state.panelDismissed, [entityId]: true },
@@ -380,13 +401,20 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
     set((state) => {
       const { [entityId]: _, ...restSessions } = state.sessions;
       const { [entityId]: __, ...restDismissed } = state.panelDismissed;
+      const { [entityId]: ___, ...restFocused } = state.focusedId;
       return {
         sessions: restSessions,
         panelDismissed: restDismissed,
+        focusedId: restFocused,
       };
     });
   },
 }));
+
+export const getReviewFocusedId = (
+  state: ReviewState,
+  entityId: string,
+): string | null => state.focusedId[entityId] ?? null;
 
 export const getReviewApplyMode = (
   state: ReviewState,

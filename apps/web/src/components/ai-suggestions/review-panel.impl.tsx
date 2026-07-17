@@ -5,7 +5,7 @@
  * underlying tracked changes are resolved on the editor.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -41,12 +41,14 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { AcceptAllButton } from "@/components/ai-suggestions/accept-all-button";
 import {
   REVIEW_UNSPECIFIED_AREA,
   SEVERITY_ORDER,
   computeInitialsFrom,
   filterReviewSuggestions,
   getReviewApplyMode,
+  getReviewFocusedId,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
 import type {
@@ -54,7 +56,9 @@ import type {
   ReviewSuggestion,
   ReviewSuggestionPreview,
 } from "@/components/ai-suggestions/review-store";
+import { useReviewActions } from "@/components/ai-suggestions/use-review-actions";
 import Tooltip from "@/components/tooltip";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { authClient } from "@/lib/auth";
 import { compareByLocale } from "@/lib/collation";
@@ -66,7 +70,6 @@ import {
 } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
-const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
 
 type GroupAxis = "severity" | "area";
 
@@ -156,12 +159,29 @@ export const ReviewPanelImpl = ({
   const applyMode = useReviewStore((state) =>
     getReviewApplyMode(state, entityId),
   );
-  const updateSuggestion = useReviewStore((state) => state.updateSuggestion);
-  const setStatusBatch = useReviewStore((state) => state.setStatusBatch);
+  const focusedId = useReviewStore((state) =>
+    getReviewFocusedId(state, entityId),
+  );
   const setApplyMode = useReviewStore((state) => state.setApplyMode);
   const dismissPanel = useReviewStore((state) => state.dismissPanel);
   const hideAccepted = useReviewStore((state) => state.hideAccepted);
   const setHideAccepted = useReviewStore((state) => state.setHideAccepted);
+  // Accept / reject / revert / batch / navigate all live in the shared
+  // hook so the floating ReviewBar and this panel resolve a suggestion
+  // identically.
+  const {
+    acceptOne,
+    rejectOne,
+    revertOne,
+    acceptMany,
+    rejectMany,
+    navigateTo,
+  } = useReviewActions({
+    entityId,
+    docxEditorRef,
+    docxEditable,
+    requestDocxEditMode,
+  });
   // Tracked-change author + initials live on the user table
   // (preferredName / wordEditShortcut). The popover next to
   // "Tracked changes" exposes them read-only with a deep link to
@@ -180,7 +200,19 @@ export const ReviewPanelImpl = ({
 
   const [groupAxis, setGroupAxis] = useState<GroupAxis>("severity");
   const [filter, setFilter] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  // When the floating bar (or navigate) moves focus to a suggestion,
+  // scroll its card into view inside the panel list so the panel and the
+  // in-document stepper stay in sync.
+  useExternalSyncEffect(() => {
+    if (focusedId === null) {
+      return;
+    }
+    const card = listRef.current?.querySelector(
+      `[data-suggestion-id="${CSS.escape(focusedId)}"]`,
+    );
+    card?.scrollIntoView({ block: "nearest" });
+  }, [focusedId]);
 
   const filtered = filterReviewSuggestions(suggestions, {
     hideAccepted,
@@ -251,214 +283,7 @@ export const ReviewPanelImpl = ({
     return null;
   }
 
-  const ensureUnlocked = async (): Promise<boolean> => {
-    if (docxEditable) {
-      return true;
-    }
-    if (!requestDocxEditMode) {
-      return false;
-    }
-    return await requestDocxEditMode();
-  };
-
-  /**
-   * Apply a single pending operation. Returns the resulting
-   * status the store should record, plus the revisionIds on
-   * success in tracked-changes mode (a replace produces two ids,
-   * an insert/delete one).
-   */
-  const applyPending = (
-    item: ReviewSuggestion,
-  ): {
-    status: "accepted" | "skipped";
-    revisionIds: readonly number[] | null;
-    undoHandle: ReviewSuggestion["undoHandle"];
-    skipReason?: string;
-  } => {
-    const editor = docxEditorRef.current;
-    const op = item.pendingOperation;
-    if (!editor || !op) {
-      return {
-        status: "skipped",
-        revisionIds: null,
-        undoHandle: null,
-        skipReason: "documentNotEditable",
-      };
-    }
-
-    // Use the snapshot the AI saw when it generated this op, NOT a
-    // fresh one off the live editor. Block ids are sequential and
-    // get renumbered after any insertAfterBlock accept; resolving
-    // a queued op against the recomputed snapshot would map
-    // "b-0042" to a different block than the AI intended. Falling
-    // back to a live snapshot only if the AI op shipped without
-    // one (legacy/test flows).
-    const snapshot = item.snapshot ?? editor.createAIEditSnapshot();
-    if (!snapshot) {
-      return {
-        status: "skipped",
-        revisionIds: null,
-        undoHandle: null,
-        skipReason: "documentNotEditable",
-      };
-    }
-
-    const result = editor.applyDocumentOperations({
-      snapshot,
-      batch: {
-        version: DOCUMENT_OPERATION_CONTRACT_VERSION,
-        mode: applyMode,
-        operations: [op],
-      },
-      // Author the tracked-change marks as the user (their preferred
-      // name from account settings) — they're reviewing and
-      // accepting the AI's suggestion AS THEMSELVES, not as "AI".
-      // Also surface `wordShortcut` as `<w:initials>` once the folio DOCX
-      // writer is plumbed for it (mark schema + serializer).
-      ...(wordAuthor.length > 0 && { author: wordAuthor }),
-    });
-    const applied = result.applied.at(0);
-    if (applied) {
-      return {
-        status: "accepted",
-        revisionIds: applied.revisionIds ?? null,
-        undoHandle: result.undoHandle,
-      };
-    }
-    const skipped = result.skipped.at(0);
-    return {
-      status: "skipped",
-      revisionIds: null,
-      undoHandle: null,
-      skipReason: skipped?.reason ?? "unsupportedBlock",
-    };
-  };
-
-  const handleAccept = async (item: ReviewSuggestion) => {
-    if (item.status !== "pending") {
-      return;
-    }
-    const unlocked = await ensureUnlocked();
-    if (!unlocked) {
-      return;
-    }
-    // Optimistic state — the card shows "Applying…" the instant the
-    // user clicks. Without this the click feels dead because the
-    // editor apply is synchronous and React hasn't painted between
-    // state mutations. Yield to the macrotask queue before the
-    // actual apply so the "applying" status can paint first.
-    updateSuggestion(entityId, item.id, { status: "applying" });
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    const outcome = applyPending(item);
-    // Keep `pendingOperation` even after a successful accept so a
-    // later "Revert" can put the suggestion back into review without
-    // losing the original operation spec. The lifecycle's source of
-    // truth is `status`, not the presence of `pendingOperation`.
-    updateSuggestion(entityId, item.id, {
-      status: outcome.status,
-      revisionIds: outcome.revisionIds,
-      undoHandle: outcome.undoHandle,
-      applyMode: outcome.status === "accepted" ? applyMode : null,
-      ...(outcome.skipReason !== undefined && {
-        skipReason: outcome.skipReason,
-      }),
-    });
-  };
-
-  const handleReject = (item: ReviewSuggestion) => {
-    if (item.status !== "pending") {
-      return;
-    }
-    // Same reason as accept: don't drop pendingOperation, so the
-    // user can revert the rejection and the suggestion goes back
-    // to actionable.
-    updateSuggestion(entityId, item.id, {
-      status: "rejected",
-    });
-  };
-
-  const handleRevert = (item: ReviewSuggestion) => {
-    if (item.status === "pending") {
-      return;
-    }
-    if (item.status === "accepted" && item.undoHandle !== null) {
-      const undoResult = docxEditorRef.current?.undoDocumentOperations(
-        item.undoHandle,
-      );
-      if (undoResult?.status !== "undone") {
-        stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-        return;
-      }
-    }
-    updateSuggestion(entityId, item.id, {
-      status: "pending",
-      revisionIds: null,
-      undoHandle: null,
-      applyMode: null,
-      skipReason: undefined,
-    });
-  };
-
-  const handleNavigate = (item: ReviewSuggestion) => {
-    setSelectedId(item.id);
-    // Pending items don't have revision ids yet (nothing has been
-    // applied), so scroll by the snapshot blockId instead. Once
-    // accepted in tracked-changes mode the revision-ids path takes
-    // over and snaps to the exact insertion/deletion marks.
-    if (item.revisionIds !== null) {
-      docxEditorRef.current?.scrollToAIEditOperation(item.revisionIds);
-      return;
-    }
-    // Pass the snapshot the AI saw when it generated this op, so
-    // scrollToBlock resolves blockId against stable ids instead of
-    // a freshly-recomputed snapshot (which re-numbers blocks after
-    // earlier structural accepts).
-    docxEditorRef.current?.scrollToBlock(
-      item.blockId,
-      item.snapshot ?? undefined,
-    );
-  };
-
-  const handleBatchAccept = async () => {
-    const targets = filtered.filter((item) => item.status === "pending");
-    if (targets.length === 0) {
-      return;
-    }
-    const unlocked = await ensureUnlocked();
-    if (!unlocked) {
-      return;
-    }
-    for (const item of targets) {
-      const outcome = applyPending(item);
-      // Don't drop pendingOperation: handleRevert needs it to flip
-      // a batch-accepted suggestion back to pending and let the
-      // user accept individually again. The lifecycle's source of
-      // truth is `status`, not the presence of `pendingOperation`.
-      updateSuggestion(entityId, item.id, {
-        status: outcome.status,
-        revisionIds: outcome.revisionIds,
-        undoHandle: outcome.undoHandle,
-        applyMode: outcome.status === "accepted" ? applyMode : null,
-        ...(outcome.skipReason !== undefined && {
-          skipReason: outcome.skipReason,
-        }),
-      });
-    }
-  };
-
-  const handleBatchReject = () => {
-    const targets = filtered.filter((item) => item.status === "pending");
-    if (targets.length === 0) {
-      return;
-    }
-    setStatusBatch(
-      entityId,
-      targets.map((item) => item.id),
-      "rejected",
-    );
-  };
+  const pendingFiltered = filtered.filter((item) => item.status === "pending");
 
   return (
     <div className="bg-background flex h-full flex-col">
@@ -567,7 +392,7 @@ export const ReviewPanelImpl = ({
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className="flex-1 overflow-y-auto px-2 py-2" ref={listRef}>
         {hideAccepted &&
           reviewedCount > 0 && (
             // Surface for "I just hid these" — without the count and
@@ -623,12 +448,12 @@ export const ReviewPanelImpl = ({
                     item={item}
                     key={item.id}
                     onAccept={() => {
-                      void handleAccept(item);
+                      void acceptOne(item);
                     }}
-                    onNavigate={() => handleNavigate(item)}
-                    onReject={() => handleReject(item)}
-                    onRevert={() => handleRevert(item)}
-                    selected={selectedId === item.id}
+                    onNavigate={() => navigateTo(item)}
+                    onReject={() => rejectOne(item)}
+                    onRevert={() => revertOne(item)}
+                    selected={focusedId === item.id}
                   />
                 ))}
               </ul>
@@ -638,20 +463,18 @@ export const ReviewPanelImpl = ({
       </div>
       {pendingCount > 0 && (
         <footer className="bg-background/95 supports-[backdrop-filter]:bg-background/80 flex h-12 shrink-0 items-center gap-2 border-t px-3 backdrop-blur">
-          <Button
+          <AcceptAllButton
             className="flex-1"
-            onClick={() => {
-              void handleBatchAccept();
-            }}
+            onAcceptAll={acceptMany}
+            pendingItems={pendingFiltered}
             size="sm"
             variant="default"
           >
-            <CheckIcon className="me-1 size-3.5" />
             {t("docxReview.acceptAll")}
-          </Button>
+          </AcceptAllButton>
           <Button
             className="flex-1"
-            onClick={handleBatchReject}
+            onClick={() => rejectMany(pendingFiltered)}
             size="sm"
             variant="outline"
           >
@@ -1208,6 +1031,7 @@ const SuggestionRow = ({
           (item.status === "rejected" || item.status === "skipped") &&
             "opacity-65",
         )}
+        data-suggestion-id={item.id}
       >
         <button
           aria-label={item.summary}
@@ -1263,6 +1087,7 @@ const SuggestionRow = ({
         item.status === "rejected" && "opacity-60",
         item.status === "skipped" && "opacity-50",
       )}
+      data-suggestion-id={item.id}
     >
       {/* Full-surface hit target: an absolute-positioned button
        *  covers the entire card and routes any blank-area click to

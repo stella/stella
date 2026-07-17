@@ -529,7 +529,6 @@ type Messages = {
       "rejected": "Rejected";
       "stale": "Stale";
     };
-    "suggestionStep": "{current} of {total}";
     "tabToAsk": "→ to ask: \"{prompt}\"";
     "thinking": "Working with context";
     "tool": {
@@ -916,6 +915,7 @@ type Messages = {
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
     "status": "Status";
+    "stepProgress": "{current} of {total}";
     "summarizeChanges": "Summarize changes";
     "timeBilling": "Time & Billing";
     "today": "Today";
@@ -1081,12 +1081,19 @@ type Messages = {
   };
   "docxReview": {
     "acceptAll": "Accept all";
+    "acceptAllConfirmDescription": "This applies {count} suggestions to the document at once.";
+    "acceptAllConfirmTitle": "Accept all suggestions?";
     "applyAs": "as";
     "applyDirect": "Direct";
     "applyTracked": "Tracked changes";
     "areaUnspecified": "Unspecified";
+    "barLabel": "Suggestion review";
     "byArea": "By area";
     "bySeverity": "By severity";
+    "countHigh": "{count} high";
+    "countLow": "{count} low";
+    "countMedium": "{count} medium";
+    "countUnspecified": "{count} unspecified";
     "dismiss": "Hide review panel";
     "empty": "No suggestions match the current filter.";
     "groupBy": "Group by";

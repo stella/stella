@@ -50,6 +50,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { ReviewBar } from "@/components/ai-suggestions/review-bar";
 import "@stll/folio-react/editor.css";
 
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
@@ -1616,6 +1617,17 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
               />
             }
             preserveDocumentWhileLoading
+          />
+          {/* Floating bottom-center review stepper for the AI's pending
+              DOCX suggestions. Rendered inside the FileViewerWithAI
+              positioned container so it shares the chat composer's
+              coordinate space (it clears the composer at `bottom-28`).
+              Returns null unless this entity has pending suggestions. */}
+          <ReviewBar
+            docxEditable={isUnlocked}
+            docxEditorRef={editorRef}
+            entityId={entityId}
+            requestDocxEditMode={requestEditMode}
           />
         </FileViewerWithAI>
       </div>
