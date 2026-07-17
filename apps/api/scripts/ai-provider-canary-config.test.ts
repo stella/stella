@@ -72,9 +72,9 @@ describe("AI provider weekly rotation", () => {
         expect(modelRoles.length).toBeGreaterThan(0);
         for (const role of modelRoles) {
           expect(modelId).not.toBe(DEFAULT_MODELS[provider][role]);
-          expect(
-            isBYOKModelRoleSupported({ modelId, provider, role }),
-          ).toBe(true);
+          expect(isBYOKModelRoleSupported({ modelId, provider, role })).toBe(
+            true,
+          );
         }
       }
     }
