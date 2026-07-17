@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { getTableConfig } from "drizzle-orm/pg-core";
-import type { PgTable } from "drizzle-orm/pg-core";
+import { is } from "drizzle-orm";
+import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
@@ -127,14 +127,10 @@ const gapKey = (table: string, column: string) => `${table}.${column}`;
 const isAutoCoveredByDb = (onDelete: string | undefined): boolean =>
   onDelete === "cascade" || onDelete === "set null";
 
-const isPgTable = (value: unknown): value is PgTable => {
-  try {
-    getTableConfig(value as PgTable);
-    return true;
-  } catch {
-    return false;
-  }
-};
+// `is()` is drizzle-orm's own runtime type guard (checks the entity-kind
+// tag drizzle stamps on table instances), so this narrows `unknown` to
+// `PgTable` without an unsafe type assertion.
+const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
 
 const allSchemaExports: Record<string, unknown> = {
   ...authSchema,
