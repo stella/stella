@@ -220,7 +220,8 @@ describe("chat attachment hydration", () => {
     const databaseError = new DatabaseError({
       message: "user file insert failed",
     });
-    const safeDb: SafeDb = async <T>() => Result.err(databaseError);
+    const safeDb: SafeDb = async <T>(_fn: (tx: Transaction) => Promise<T>) =>
+      Result.err(databaseError);
     const recordAuditEvent = mock(async () => undefined);
 
     const result = await uploadUserFile({
