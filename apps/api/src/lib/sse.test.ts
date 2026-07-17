@@ -175,4 +175,31 @@ describe("startSse / stopSse lifecycle", () => {
 
     expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
   });
+
+  test("a stop+restart during connect does not attach the old subscriber to the new lifecycle", async () => {
+    createdClients.length = 0;
+
+    startSse();
+    stopSse();
+    // The first connection attempt is still in flight (its subscribe()
+    // promise has not settled) when a new lifecycle starts.
+    startSse();
+
+    await flushMicrotasks();
+
+    expect(createdClients).toHaveLength(2);
+    const [oldClient, newClient] = createdClients;
+
+    // The stale connection recognizes it no longer belongs to the active
+    // lifecycle and closes itself instead of attaching to the new one.
+    expect(oldClient?.close).toHaveBeenCalledTimes(1);
+    expect(newClient?.close).not.toHaveBeenCalled();
+
+    // The new lifecycle's subscriber is the one actually attached:
+    // stopping it now closes newClient exactly once.
+    stopSse();
+    expect(newClient?.close).toHaveBeenCalledTimes(1);
+
+    await flushMicrotasks();
+  });
 });

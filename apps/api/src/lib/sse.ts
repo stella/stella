@@ -267,9 +267,20 @@ const sendKeepAlive = () => {
 // lifecycle that only the server's boot/shutdown path drives, mirroring the
 // BullMQ `init*Worker` / `.close()` pairs in server.ts.
 
-let keepAliveTimer: ReturnType<typeof setInterval> | null = null;
-let redisSubscriber: ReturnType<typeof createRedisClient> | null = null;
-let started = false;
+/**
+ * One running instance of the SSE lifecycle: the keep-alive timer, plus the
+ * Redis subscriber once its (async) connection attempt has attached. Object
+ * identity — not a boolean flag — is what `stopSse` and the in-flight
+ * connect callback use to tell "this lifecycle" apart from "whatever
+ * lifecycle is active now," including a stop+restart that happens between
+ * the connect's await points.
+ */
+type SseLifecycle = {
+  keepAliveTimer: ReturnType<typeof setInterval>;
+  subscriber: ReturnType<typeof createRedisClient> | null;
+};
+
+let activeLifecycle: SseLifecycle | null = null;
 
 /**
  * Start the SSE keep-alive heartbeat and the cross-instance Redis
@@ -291,31 +302,39 @@ let started = false;
  * import-time `void initRedis()` had.
  */
 export const startSse = (): void => {
-  if (started) {
+  if (activeLifecycle) {
     return;
   }
-  started = true;
 
-  keepAliveTimer = setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS);
-  keepAliveTimer.unref();
+  const lifecycle: SseLifecycle = {
+    keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
+    subscriber: null,
+  };
+  lifecycle.keepAliveTimer.unref();
+  activeLifecycle = lifecycle;
 
   void (async () => {
-    const subscriber = createRedisClient();
+    // The client is constructed inside the try so a throwing constructor
+    // hits the fail-soft catch below instead of escaping this detached
+    // IIFE as an unhandled rejection.
+    let subscriber: ReturnType<typeof createRedisClient> | undefined;
     try {
+      subscriber = createRedisClient();
       await subscriber.subscribe(REDIS_CHANNEL, (message) => {
         handleMessage(message);
       });
-      if (!started) {
-        // stopSse ran while the connection was still being established;
-        // do not hand a live client to a lifecycle that already stopped.
+      if (activeLifecycle !== lifecycle) {
+        // stopSse (and possibly a subsequent startSse) ran while the
+        // connection was still being established; do not attach a stale
+        // subscriber to a lifecycle that is no longer the active one.
         subscriber.close();
         return;
       }
-      redisSubscriber = subscriber;
+      lifecycle.subscriber = subscriber;
       logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
     } catch (error: unknown) {
       logger.error("sse.redis_connection_failed", connectionErrorFields(error));
-      subscriber.close();
+      subscriber?.close();
     }
   })();
 
@@ -329,22 +348,19 @@ export const startSse = (): void => {
  * call when `startSse` was never called, and safe to call more than once.
  */
 export const stopSse = (): void => {
-  if (!started) {
+  if (!activeLifecycle) {
     return;
   }
-  started = false;
+  const lifecycle = activeLifecycle;
+  activeLifecycle = null;
 
-  if (keepAliveTimer) {
-    clearInterval(keepAliveTimer);
-    keepAliveTimer = null;
-  }
+  clearInterval(lifecycle.keepAliveTimer);
 
-  if (redisSubscriber) {
+  if (lifecycle.subscriber) {
     try {
-      redisSubscriber.close();
+      lifecycle.subscriber.close();
     } catch (error: unknown) {
       logger.warn("sse.redis_close_failed", { "error.type": errorTag(error) });
     }
-    redisSubscriber = null;
   }
 };
