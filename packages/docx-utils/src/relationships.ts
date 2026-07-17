@@ -1,3 +1,15 @@
+/**
+ * Escape a string for safe use inside a double-quoted XML attribute value.
+ * Order matters: `&` must be escaped first so it does not double-escape the
+ * entities produced for the other characters.
+ */
+const escapeXmlAttribute = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+
 /** Find the next available rId in a relationships XML string */
 export const findNextRId = (relsXml: string): string => {
   const matches = relsXml.matchAll(/Id="rId(?<num>\d+)"/gu);
@@ -17,11 +29,12 @@ export const ensureContentType = (
   partName: string,
   contentType: string,
 ): string => {
-  if (contentTypesXml.includes(`PartName="${partName}"`)) {
+  const escapedPartName = escapeXmlAttribute(partName);
+  if (contentTypesXml.includes(`PartName="${escapedPartName}"`)) {
     return contentTypesXml;
   }
-  const override = `<Override PartName="${partName}" ContentType="${contentType}"/>`;
-  return contentTypesXml.replace("</Types>", `${override}\n</Types>`);
+  const override = `<Override PartName="${escapedPartName}" ContentType="${escapeXmlAttribute(contentType)}"/>`;
+  return contentTypesXml.replace("</Types>", () => `${override}\n</Types>`);
 };
 
 /** Ensure a relationship entry exists */
@@ -31,9 +44,10 @@ export const ensureRelationship = (
   type: string,
   target: string,
 ): string => {
-  if (relsXml.includes(`Id="${rId}"`)) {
+  const escapedRId = escapeXmlAttribute(rId);
+  if (relsXml.includes(`Id="${escapedRId}"`)) {
     return relsXml;
   }
-  const rel = `<Relationship Id="${rId}" Type="${type}" Target="${target}"/>`;
-  return relsXml.replace("</Relationships>", `${rel}\n</Relationships>`);
+  const rel = `<Relationship Id="${escapedRId}" Type="${escapeXmlAttribute(type)}" Target="${escapeXmlAttribute(target)}"/>`;
+  return relsXml.replace("</Relationships>", () => `${rel}\n</Relationships>`);
 };

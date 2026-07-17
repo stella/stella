@@ -256,7 +256,11 @@ const upsertProperty = (xml: string, name: string, value: string): string => {
     "u",
   );
   if (re.test(xml)) {
-    return xml.replace(re, `$1${escapeXml(value)}$2`);
+    return xml.replace(
+      re,
+      (_match, open: string, close: string) =>
+        `${open}${escapeXml(value)}${close}`,
+    );
   }
 
   // Find max pid for new property
@@ -275,7 +279,7 @@ const upsertProperty = (xml: string, name: string, value: string): string => {
     "  </property>",
   ].join("\n");
 
-  return xml.replace("</Properties>", `${prop}\n</Properties>`);
+  return xml.replace("</Properties>", () => `${prop}\n</Properties>`);
 };
 
 const ensureContentType = async (archive: DocxArchive): Promise<void> => {
@@ -371,19 +375,16 @@ const replacePlaceholders = async (
 
     let result = xml;
     if (hasId) {
-      result = result.replace(
-        PLACEHOLDER_ID_RE,
-        escapeXml(`${stamp}  stl:${verificationCode}`),
-      );
+      const idText = escapeXml(`${stamp}  stl:${verificationCode}`);
+      result = result.replace(PLACEHOLDER_ID_RE, () => idText);
     }
     if (hasRef) {
-      result = result.replace(PLACEHOLDER_REF_RE, escapeXml(stamp));
+      const refText = escapeXml(stamp);
+      result = result.replace(PLACEHOLDER_REF_RE, () => refText);
     }
     if (hasCode) {
-      result = result.replace(
-        PLACEHOLDER_CODE_RE,
-        escapeXml(`stl:${verificationCode}`),
-      );
+      const codeText = escapeXml(`stl:${verificationCode}`);
+      result = result.replace(PLACEHOLDER_CODE_RE, () => codeText);
     }
 
     archive.zip.file(path, result);
@@ -547,7 +548,7 @@ const updateExistingFooter = async (
     );
     archive.zip.file(
       footerPath,
-      footerXml.replace(CLOSING_FTR_RE, `${stampPara}\n</w:ftr>`),
+      footerXml.replace(CLOSING_FTR_RE, () => `${stampPara}\n</w:ftr>`),
     );
   }
 };
@@ -607,7 +608,10 @@ const createNewFooter = async (
   if (docRels) {
     archive.zip.file(
       docRelsPath,
-      docRels.replace("</Relationships>", `${footerRel}\n</Relationships>`),
+      docRels.replace(
+        "</Relationships>",
+        () => `${footerRel}\n</Relationships>`,
+      ),
     );
   } else {
     archive.zip.file(
@@ -667,11 +671,11 @@ const replaceStampParagraph = (
   );
 
   if (re.test(footerXml)) {
-    return footerXml.replace(re, newPara);
+    return footerXml.replace(re, () => newPara);
   }
 
   // Fallback: append
-  return footerXml.replace(CLOSING_FTR_RE, `${newPara}\n</w:ftr>`);
+  return footerXml.replace(CLOSING_FTR_RE, () => `${newPara}\n</w:ftr>`);
 };
 
 const ensureHyperlinkRel = (rels: string, rId: string, url: string): string => {
@@ -693,7 +697,11 @@ const ensureHyperlinkRel = (rels: string, rId: string, url: string): string => {
     "u",
   );
   if (existingRe.test(rels)) {
-    return rels.replace(existingRe, `$1${escapeXml(url)}$2`);
+    return rels.replace(
+      existingRe,
+      (_match, open: string, close: string) =>
+        `${open}${escapeXml(url)}${close}`,
+    );
   }
 
   // Add new relationship
@@ -702,7 +710,7 @@ const ensureHyperlinkRel = (rels: string, rId: string, url: string): string => {
     ` Type="${HYPERLINK_REL_TYPE}"` +
     ` Target="${escapeXml(url)}"` +
     ' TargetMode="External"/>';
-  return rels.replace("</Relationships>", `${rel}\n</Relationships>`);
+  return rels.replace("</Relationships>", () => `${rel}\n</Relationships>`);
 };
 
 const addFooterReference = (docXml: string, footerRId: string): string => {
@@ -734,7 +742,7 @@ const ensureFooterContentType = async (
     ` ContentType="${FOOTER_CONTENT_TYPE}"/>`;
   archive.zip.file(
     CONTENT_TYPES_PATH,
-    ct.replace("</Types>", `${override}\n</Types>`),
+    ct.replace("</Types>", () => `${override}\n</Types>`),
   );
 };
 

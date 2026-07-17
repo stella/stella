@@ -876,7 +876,8 @@ export const writeManifest = async (
         CONTENT_TYPES_PATH,
         ctXml.replace(
           "</Types>",
-          `<Override PartName="/${propsPath}"` +
+          () =>
+            `<Override PartName="/${propsPath}"` +
             ` ContentType="${CUSTOM_XML_CONTENT_TYPE}"/>` +
             "</Types>",
         ),
