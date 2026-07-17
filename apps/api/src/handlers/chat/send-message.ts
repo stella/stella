@@ -396,6 +396,15 @@ const sendMessage = createSafeRootHandler(
           externalMcpToolsLoader,
         );
 
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before AI work started",
+          }),
+        );
+      }
+
       // Tool input schemas don't depend on `accessibleWorkspaceIds`
       // (scope is checked at execute time, not in the schema), so we
       // can validate the incoming message against the broad set and

@@ -29,8 +29,24 @@ void mock.module("@/api/lib/search/index-chat", () => ({
 
 const externalMcpToolsModule =
   await import("@/api/handlers/chat/tools/external-mcp-tools");
+let externalMcpToolsLoadHook: (() => void) | undefined;
 const loadExternalMcpToolsForUserMock = mock(async () => {
-  throw new Error("Connector discovery must not run after a disconnect");
+  const hook = externalMcpToolsLoadHook;
+  if (hook === undefined) {
+    throw new Error("Connector discovery must not run after a disconnect");
+  }
+  externalMcpToolsLoadHook = undefined;
+  hook();
+  const close = async () => undefined;
+  return {
+    close,
+    connectors: [],
+    source: externalMcpToolsModule.createStellaMcpToolSource({
+      closeClients: close,
+      sourceTools: {},
+    }),
+    tools: {},
+  };
 });
 void mock.module("@/api/handlers/chat/tools/external-mcp-tools", () => ({
   ...externalMcpToolsModule,
@@ -271,6 +287,43 @@ describe("send message disconnect handling", () => {
     });
     expect(loadWebSearchProvidersForOrgMock).toHaveBeenCalledTimes(1);
     expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+  });
+
+  test("stops preflight after disconnecting during connector discovery", async () => {
+    const abortController = new AbortController();
+    externalMcpToolsLoadHook = () => {
+      abortController.abort();
+    };
+    const findChatThread = mock(async () => null);
+    loadExternalMcpToolsForUserMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        message: {
+          id: messageId,
+          role: "assistant",
+          parts: [{ type: "tool-call", name: "mcp__test__lookup" }],
+        },
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          query: {
+            chatThreads: { findFirst: findChatThread },
+            organizationSettings: { findFirst: async () => null },
+          },
+        },
+      }),
+    );
+    externalMcpToolsLoadHook = undefined;
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before AI work started" },
+    });
+    expect(loadExternalMcpToolsForUserMock).toHaveBeenCalledTimes(1);
+    expect(findChatThread).toHaveBeenCalledTimes(1);
   });
 
   test("deletes an exclusively owned thread when the request aborts during creation", async () => {
