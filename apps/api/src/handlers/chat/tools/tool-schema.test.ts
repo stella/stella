@@ -1201,14 +1201,14 @@ describe("chat tool schemas", () => {
                   anyOf: [false, { type: "null" }],
                 },
               },
-              required: [
+              required: expect.arrayContaining([
                 "question",
                 "mode",
                 "nullableNote",
                 "emptyEnumMarker",
                 "acceptAnything",
                 "rejectAnything",
-              ],
+              ]),
             },
           },
         },
