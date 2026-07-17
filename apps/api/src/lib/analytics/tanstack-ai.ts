@@ -196,6 +196,7 @@ const recordTanStackConsumption = async ({
   iteration,
   modelInfo,
   promptTokens,
+  runId,
   serviceTier,
 }: {
   cacheReadTokens: number;
@@ -204,6 +205,7 @@ const recordTanStackConsumption = async ({
   iteration: number;
   modelInfo: ResolvedTanStackTextModelInfo;
   promptTokens: number;
+  runId: string;
   serviceTier: UsageServiceTier;
 }): Promise<void> => {
   const metering = config.usageMetering;
@@ -236,7 +238,7 @@ const recordTanStackConsumption = async ({
         organizationId: metering.organizationId,
         rawUsageMicroUnits,
         serviceTier: effectiveServiceTier,
-        idempotencyKey: `${config.traceId}:${iteration}`,
+        idempotencyKey: `${config.traceId}:${runId}:${iteration}`,
         traceId: config.traceId,
         userId: metering.userId,
         workspaceId: metering.workspaceId,
@@ -395,6 +397,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
           iteration: ctx.iteration,
           modelInfo: resolvedModelInfo,
           promptTokens: usage.promptTokens,
+          runId: ctx.runId,
           serviceTier: usageServiceTierFromModelOptions({
             fallback: metering.serviceTier,
             modelOptions: ctx.modelOptions,
