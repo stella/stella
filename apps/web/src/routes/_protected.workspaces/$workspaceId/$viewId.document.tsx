@@ -71,6 +71,7 @@ import PdfViewer, {
   PDFSuspenseFallback,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer";
 import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
+import { docxSuggestionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/docx-suggestions";
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
   entityVersionsKeys,
@@ -159,6 +160,28 @@ export const Route = createFileRoute(
     // reads fileOptions, so gate the prefetch on the resolved mimeType to
     // avoid downloading a file buffer the component will never use.
     const field = entity.fields.find((f) => f.id === deps.field);
+
+    // The DOCX editor hydrates its review store from persisted AI suggestions
+    // on open (useSyncDocxSuggestions runs a useQuery on this same key). Warm
+    // it here so the request starts during navigation — loader-consistent with
+    // the entity/justifications prefetch above and no extra waterfall level —
+    // instead of firing on the editor's mount. DOCX fields only; other field
+    // types never mount the review surface.
+    const isDocxField =
+      field?.content.type === "file" && field.content.mimeType === DOCX_MIME;
+    if (isDocxField) {
+      void prefetchRouteQuery(
+        context.queryClient,
+        docxSuggestionsOptions({
+          workspaceId: params.workspaceId,
+          entityId: deps.entity,
+        }),
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      );
+    }
+
     const rendersInPdfViewer =
       field?.content.type === "file" && field.content.mimeType !== DOCX_MIME;
     if (rendersInPdfViewer) {

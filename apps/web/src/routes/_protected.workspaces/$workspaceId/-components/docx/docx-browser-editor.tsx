@@ -50,6 +50,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { ReviewBar } from "@/components/ai-suggestions/review-bar";
+import { useReviewStore } from "@/components/ai-suggestions/review-store";
 import "@stll/folio-react/editor.css";
 
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
@@ -75,6 +77,7 @@ import {
   useInspectorStore,
   useIsAnonymizationActive,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
+import { useSyncDocxSuggestions } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions";
 import { anonymizationAllowlistOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/anonymization-terms";
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
@@ -861,6 +864,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
   useDocxBlockScroll({ editorRef, fieldId });
+  // Hydrate persisted AI suggestions into the review store on reload.
+  // Lives here (not on the route) because rebuilding each suggestion's
+  // preview needs this editor's live snapshot; the review panel/bar
+  // then render exactly as they did before the reload.
+  useSyncDocxSuggestions({ workspaceId, entityId, editorRef });
 
   useExternalSyncEffect(() => {
     if (
@@ -1093,6 +1101,22 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   };
 
   const handleFinalize = useCallback(async () => {
+    // Soft, non-blocking reminder: if AI suggestions are still pending
+    // for this entity, note it once before finalizing. Purely
+    // informational — finalize proceeds either way (the suggestions
+    // persist and can be reviewed after).
+    const pendingSuggestionCount =
+      useReviewStore
+        .getState()
+        .sessions[entityId]?.filter((s) => s.status === "pending").length ?? 0;
+    if (pendingSuggestionCount > 0) {
+      stellaToast.info(
+        t("docxReview.finalizePendingNote", {
+          count: pendingSuggestionCount,
+        }),
+      );
+    }
+
     // Save the final version before finalizing
     clearQueuedChangeCheckpoint();
 
@@ -1206,6 +1230,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     cancelActiveSession,
     clearQueuedChangeCheckpoint,
     collaborationSession,
+    entityId,
     fieldId,
     finalizeActiveSession,
     isCollaborativeEditing,
@@ -1616,6 +1641,18 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
               />
             }
             preserveDocumentWhileLoading
+          />
+          {/* Floating bottom-center review stepper for the AI's pending
+              DOCX suggestions. Rendered inside the FileViewerWithAI
+              positioned container so it shares the chat composer's
+              coordinate space (it clears the composer at `bottom-28`).
+              Returns null unless this entity has pending suggestions. */}
+          <ReviewBar
+            docxEditable={isUnlocked}
+            docxEditorRef={editorRef}
+            entityId={entityId}
+            requestDocxEditMode={requestEditMode}
+            workspaceId={workspaceId}
           />
         </FileViewerWithAI>
       </div>

@@ -18,6 +18,7 @@ import type { RefObject } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
@@ -33,17 +34,23 @@ import type {
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
+import { stellaToast } from "@stll/ui/components/toast";
 
+import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import { ChatThreadCard, PromptBar } from "@/components/ai-suggestions/host";
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
 import {
   REVIEW_UNSPECIFIED_AREA,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
-import type {
-  ReviewSuggestion,
-  ReviewSuggestionPreview,
-} from "@/components/ai-suggestions/review-store";
+import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
+import {
+  buildPreview,
+  folioOperationBlockId,
+  folioOperationComment,
+  summarizeOperation,
+} from "@/components/ai-suggestions/review-suggestion-builder";
+import type { SnapshotBlock } from "@/components/ai-suggestions/review-suggestion-builder";
 import { useChatEditor } from "@/components/chat-editor-provider";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
@@ -53,27 +60,33 @@ import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import {
   getActiveDocxEditApprovalPart,
+  isApplyActiveDocxEditsInput,
   isApprovalPart,
   parseCompletedToolCallArguments,
+  selectUnresolvedActiveDocxEditToolCallParts,
   selectUnresolvedFolioAgentDocToolCallParts,
 } from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   ApprovalToolPart,
+  UnresolvedActiveDocxEditToolCallPart,
   UnresolvedFolioAgentDocToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { api } from "@/lib/api";
 import {
   getChatSendMode,
   useChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
+import { toAPIError } from "@/lib/errors/api";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
@@ -120,57 +133,6 @@ const capturePromptSubmitError = (error: unknown): void => {
 };
 
 type ToolInputOperation = ApplyActiveDocxEditsInput["operations"][number];
-
-const summarizeOperation = (
-  operation: FolioAIEditOperation | ToolInputOperation,
-): string => {
-  switch (operation.type) {
-    case "replaceInBlock":
-      return `Replace “${operation.find}” with “${operation.replace}”`;
-    case "replaceBlock":
-      return `Replace block ${operation.blockId}`;
-    case "insertAfterBlock":
-    case "insertBeforeBlock": {
-      const direction =
-        operation.type === "insertAfterBlock" ? "after" : "before";
-      if (operation.pageBreakBefore === true && operation.text.length === 0) {
-        return `Insert page break ${direction} ${operation.blockId}`;
-      }
-      if (operation.styleId !== undefined) {
-        return `Insert ${operation.styleId} ${direction} ${operation.blockId}: ${operation.text}`;
-      }
-      return `Insert ${direction} ${operation.blockId}: ${operation.text}`;
-    }
-    case "deleteBlock":
-      return `Delete block ${operation.blockId}`;
-    case "commentOnBlock":
-      return `Comment on ${operation.blockId}`;
-    case "insertSignatureTable": {
-      const names = operation.parties.map((p) => p.name).join(", ");
-      return `Insert signature table for ${names}`;
-    }
-    case "replaceRange":
-      return `Replace selected text with “${operation.replace}”`;
-    case "commentOnRange":
-      return "Comment on selected text";
-    case "formatRange":
-      return "Format selected text";
-    default:
-      operation satisfies never;
-      return "";
-  }
-};
-
-/** The block a folio operation anchors to; range ops carry it on the handle. */
-const folioOperationBlockId = (operation: FolioAIEditOperation): string =>
-  operation.type === "replaceRange" ||
-  operation.type === "commentOnRange" ||
-  operation.type === "formatRange"
-    ? operation.range.blockId
-    : operation.blockId;
-
-const folioOperationComment = (operation: FolioAIEditOperation) =>
-  operation.type === "formatRange" ? undefined : operation.comment;
 
 type PreparedOperation = {
   folio: FolioAIEditOperation;
@@ -481,14 +443,6 @@ const inputOperationSeverity = (operation: {
 const inputOperationArea = (operation: { area?: string | undefined }): string =>
   operation.area ?? REVIEW_UNSPECIFIED_AREA;
 
-type SnapshotBlock = {
-  id: string;
-  text: string;
-  displayLabel?: string | undefined;
-  styleId?: string;
-  previewRuns?: FolioAIEditSnapshot["blocks"][number]["previewRuns"];
-};
-
 type QueueReviewSuggestionsOptions = {
   entityId: string;
   prepared: readonly PreparedOperation[];
@@ -508,167 +462,6 @@ type QueueReviewSuggestionsOptions = {
    * everything below it).
    */
   snapshot: FolioAIEditSnapshot | null;
-};
-
-const PREVIEW_CONTEXT_CHARS = 60;
-const PREVIEW_ANCHOR_CHARS = 80;
-
-/**
- * Build a redline preview for one operation against the snapshot
- * the AI saw. Returns `null` when the operation references a block
- * we don't have (rare, but defensive — e.g. the snapshot expired
- * mid-stream and the AI got an outdated copy).
- */
-const buildPreview = (
-  operation: FolioAIEditOperation,
-  blocksById: Map<string, SnapshotBlock>,
-): ReviewSuggestionPreview | null => {
-  const block = blocksById.get(folioOperationBlockId(operation));
-  const blockText = block?.text ?? "";
-  switch (operation.type) {
-    // `formatRange` is outside this tool's accepted subset (direct-only
-    // apply mode; the review flow is tracked-changes). Skip defensively
-    // if one ever appears on a stored suggestion.
-    case "formatRange":
-      return null;
-    // Range-addressed edits render with the replaceInBlock preview: the
-    // handle's offsets locate the replaced text inside the snapshot block
-    // the same way a `find` match does.
-    case "replaceRange": {
-      if (block === undefined) {
-        return null;
-      }
-      const start = operation.range.startOffset;
-      const end = Math.min(operation.range.endOffset, blockText.length);
-      if (start >= end) {
-        return null;
-      }
-      const contextStart = Math.max(0, start - PREVIEW_CONTEXT_CHARS);
-      const contextEnd = Math.min(
-        blockText.length,
-        end + PREVIEW_CONTEXT_CHARS,
-      );
-      return {
-        type: "replaceInBlock",
-        contextBefore: blockText.slice(contextStart, start),
-        before: blockText.slice(start, end),
-        after: operation.replace,
-        contextAfter: blockText.slice(end, contextEnd),
-        ...(block.previewRuns !== undefined && {
-          sourceRuns: block.previewRuns,
-          contextStart,
-          matchStart: start,
-          matchEnd: end,
-          contextEnd,
-        }),
-      };
-    }
-    // Anchored like commentOnBlock with a quote: the sliced range text is
-    // the anchor, so no anchorRuns (those render from the block start).
-    case "commentOnRange": {
-      if (block === undefined) {
-        return null;
-      }
-      const start = operation.range.startOffset;
-      const end = Math.min(operation.range.endOffset, blockText.length);
-      const anchor =
-        start < end
-          ? blockText.slice(start, end)
-          : blockText.slice(0, PREVIEW_ANCHOR_CHARS);
-      return { type: "commentOnBlock", anchor };
-    }
-    case "replaceInBlock": {
-      const idx = blockText.indexOf(operation.find);
-      if (idx === -1) {
-        return {
-          type: "replaceInBlock",
-          contextBefore: blockText.slice(0, PREVIEW_CONTEXT_CHARS),
-          before: operation.find,
-          after: operation.replace,
-          contextAfter: "",
-          ...(block?.previewRuns !== undefined && {
-            sourceRuns: block.previewRuns,
-          }),
-        };
-      }
-      const contextStart = Math.max(0, idx - PREVIEW_CONTEXT_CHARS);
-      const matchEnd = idx + operation.find.length;
-      const contextEnd = Math.min(
-        blockText.length,
-        matchEnd + PREVIEW_CONTEXT_CHARS,
-      );
-      return {
-        type: "replaceInBlock",
-        contextBefore: blockText.slice(contextStart, idx),
-        before: operation.find,
-        after: operation.replace,
-        contextAfter: blockText.slice(matchEnd, contextEnd),
-        ...(block?.previewRuns !== undefined && {
-          sourceRuns: block.previewRuns,
-          contextStart,
-          matchStart: idx,
-          matchEnd,
-          contextEnd,
-        }),
-      };
-    }
-    case "replaceBlock":
-      return {
-        type: "replaceBlock",
-        before: blockText,
-        after: operation.text,
-        ...(block?.previewRuns !== undefined && {
-          sourceRuns: block.previewRuns,
-        }),
-      };
-    case "deleteBlock":
-      return {
-        type: "deleteBlock",
-        before: blockText,
-        ...(block?.previewRuns !== undefined && {
-          sourceRuns: block.previewRuns,
-        }),
-      };
-    case "insertBeforeBlock":
-    case "insertAfterBlock":
-      return {
-        type: operation.type,
-        anchor: blockText.slice(0, PREVIEW_ANCHOR_CHARS),
-        after: operation.text,
-        ...(block?.previewRuns !== undefined && {
-          anchorRuns: block.previewRuns,
-          anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
-        }),
-      };
-    case "commentOnBlock":
-      return {
-        type: "commentOnBlock",
-        anchor: operation.quote ?? blockText.slice(0, PREVIEW_ANCHOR_CHARS),
-        ...(operation.quote === undefined &&
-          block?.previewRuns !== undefined && {
-            anchorRuns: block.previewRuns,
-            anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
-          }),
-      };
-    case "insertSignatureTable":
-      return {
-        type: "insertSignatureTable",
-        anchor: blockText.slice(0, PREVIEW_ANCHOR_CHARS),
-        parties: operation.parties.map((p) => ({
-          name: p.name,
-          ...(p.signatory !== undefined && { signatory: p.signatory }),
-          ...(p.title !== undefined && { title: p.title }),
-        })),
-        position: operation.position ?? "after",
-        ...(block?.previewRuns !== undefined && {
-          anchorRuns: block.previewRuns,
-          anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
-        }),
-      };
-    default:
-      operation satisfies never;
-      return null;
-  }
 };
 
 /**
@@ -751,7 +544,165 @@ const queueReviewSuggestions = ({
     inspectorState.setFileFacet(tab.id, "suggestions", { pulse: true });
   }
 
-  return { queuedIds, skipped };
+  // `items` are the suggestions actually appended to the store (client
+  // ids, folio op, comment, severity, area). The caller uses them to
+  // build the background persist-create body; `queuedIds` stays the
+  // model-facing echo.
+  return { queuedIds, skipped, items };
+};
+
+type PersistQueuedSuggestionsOptions = {
+  workspaceId: string;
+  entityId: string;
+  chatThreadId: ChatThreadId | undefined;
+  items: readonly ReviewSuggestion[];
+  /**
+   * Live editor ref. A failed persist-window replay (below) rolls the
+   * local accept/reject BACK to pending to match the still-pending server
+   * row; undoing an already-applied editor op needs this ref.
+   */
+  docxEditorRef: RefObject<DocxEditorRef | null>;
+};
+
+/**
+ * Persist just-queued suggestions server-side, then adopt the returned
+ * server ids so a later accept / reject / revert writes the audit trail.
+ *
+ * Fire-and-forget and non-blocking: the in-memory review flow works
+ * without this. On any failure it swallows (telemetry only) and leaves
+ * the suggestions client-only with `persisted` false, so no resolve/
+ * revert call ever fires for them — the graceful-degradation guarantee.
+ * Client ids are echoed as `ref`; `reconcileServerIds` maps them back.
+ */
+const persistQueuedSuggestions = async ({
+  workspaceId,
+  entityId,
+  chatThreadId,
+  items,
+  docxEditorRef,
+}: PersistQueuedSuggestionsOptions): Promise<void> => {
+  const suggestions = items.flatMap((item) =>
+    item.pendingOperation === null
+      ? []
+      : [
+          {
+            ref: item.id,
+            opPayload: item.pendingOperation,
+            comment: item.comment ?? null,
+            severity: item.severity,
+            area: item.area,
+          },
+        ],
+  );
+  if (suggestions.length === 0) {
+    return;
+  }
+
+  const result = await Result.tryPromise(
+    async () =>
+      await api["docx-suggestions"]({ workspaceId })
+        .entity({ entityId })
+        .put({ suggestions, originThreadId: chatThreadId ?? null }),
+  );
+  if (Result.isError(result)) {
+    getAnalytics().captureError(result.error);
+    return;
+  }
+  const { data, error } = result.value;
+  if (error) {
+    getAnalytics().captureError(toAPIError(error));
+    return;
+  }
+  const refToId = Object.fromEntries(
+    data.items.map(({ ref, id }) => [ref, id]),
+  );
+  useReviewStore.getState().reconcileServerIds(entityId, refToId);
+
+  // Persist-window replay: the user can accept / reject a suggestion in the
+  // gap between queueing it and this create response landing. Those
+  // resolutions ran against a not-yet-`persisted` row, so they never hit
+  // the server. Now that the rows exist (ids just reconciled in), replay any
+  // that are already TERMINAL so the server matches the editor. Fires in
+  // parallel; a single failure surfaces one toast + telemetry.
+  //
+  // A row still `"applying"` at this point (an accept that claimed the card
+  // but hasn't run its zero-delay editor apply yet) is deliberately NOT
+  // replayed here: `acceptOne` owns it end-to-end — after its unlock/paint
+  // await it re-reads the row, follows this same id reconcile, and fires the
+  // resolve itself once the apply lands. Replaying an in-flight `applying` row
+  // would double-resolve it (and we don't yet know its final status /
+  // appliedMode), so only `accepted` / `rejected` rows are eligible.
+  // Widened to string: the create response ids are branded SafeIds, but the
+  // review store keys suggestions by plain string id, so the membership test
+  // below compares against `item.id: string`.
+  const serverIds = new Set<string>(Object.values(refToId));
+  const session = useReviewStore.getState().sessions[entityId];
+  if (session === undefined) {
+    return;
+  }
+  const replayTargets = session.filter(
+    (item): item is ReviewSuggestion & { status: "accepted" | "rejected" } =>
+      serverIds.has(item.id) &&
+      (item.status === "accepted" || item.status === "rejected"),
+  );
+  if (replayTargets.length === 0) {
+    return;
+  }
+  const replayResults = await Promise.all(
+    replayTargets.map(async (item) => ({
+      id: item.id,
+      replayResult: await resolveDocxSuggestionRequest({
+        workspaceId,
+        entityId,
+        suggestionId: item.id,
+        status: item.status,
+        appliedMode: item.applyMode ?? "tracked-changes",
+      }),
+    })),
+  );
+  const failedTargets = replayResults.filter(
+    ({ replayResult }) => replayResult === "failed",
+  );
+  if (failedTargets.length === 0) {
+    return;
+  }
+
+  // A `"failed"` replay left the local accept/reject applied while the
+  // server row stays `pending`: a reload would restore an actionable copy
+  // and let the same op apply twice. Roll each failed target back to
+  // pending to match the still-pending server row. Read the CURRENT store
+  // row (not the pre-replay snapshot) so we undo the op that actually
+  // landed; an accepted row's editor op is reversed via its undoHandle.
+  const currentSession = useReviewStore.getState().sessions[entityId];
+  for (const { id } of failedTargets) {
+    const row = currentSession?.find((candidate) => candidate.id === id);
+    if (row === undefined) {
+      continue;
+    }
+    if (row.status === "accepted") {
+      if (row.undoHandle !== null) {
+        docxEditorRef.current?.undoDocumentOperations(row.undoHandle);
+      }
+      useReviewStore.getState().updateSuggestion(entityId, id, {
+        status: "pending",
+        revisionIds: null,
+        undoHandle: null,
+        applyMode: null,
+      });
+    } else if (row.status === "rejected") {
+      useReviewStore
+        .getState()
+        .updateSuggestion(entityId, id, { status: "pending" });
+    }
+  }
+
+  getAnalytics().captureError(
+    new Error("DOCX suggestion resolution replay failed to persist"),
+  );
+  stellaToast.add({
+    title: getTranslator()("docxReview.persistFailed"),
+    type: "error",
+  });
 };
 
 // No tools are auto-blocked when an active file is present. The
@@ -1148,7 +1099,7 @@ const FileChatOverlayInner = ({
       // empty list when the editor never produced a snapshot —
       // preview + apply both handle that defensively.
       const lastSnapshot = lastSentDocxEditSnapshotRef.current;
-      const { queuedIds, skipped } = queueReviewSuggestions({
+      const { queuedIds, skipped, items } = queueReviewSuggestions({
         entityId: activeFile.entityId,
         prepared,
         snapshotBlocks: lastSnapshot
@@ -1156,6 +1107,24 @@ const FileChatOverlayInner = ({
           : EMPTY_SNAPSHOT_BLOCKS,
         snapshot: lastSnapshot,
       });
+      // Persist the queued batch in the background so the suggestions
+      // survive a reload with an audit trail. Non-blocking: the model
+      // gets its `queued` ids synchronously below, and a persist failure
+      // degrades gracefully to the in-memory-only flow (no server ids =>
+      // `persisted` stays false => resolve/revert never call the server).
+      if (
+        docxEditorRef !== undefined &&
+        workspaceId !== undefined &&
+        items.length > 0
+      ) {
+        void persistQueuedSuggestions({
+          workspaceId,
+          entityId: activeFile.entityId,
+          chatThreadId,
+          items,
+          docxEditorRef,
+        });
+      }
       return {
         version: 1,
         applied: [],
@@ -1635,6 +1604,90 @@ const FileChatOverlayInner = ({
       void runFolioAgentDocToolCall(part);
     }
   }, [messages, runFolioAgentDocToolCall]);
+
+  // Auto-run watcher for the queue-only `apply-active-docx-edits` tool.
+  // It carries no approval gate (it never writes to the document — it
+  // only queues suggestions into the review panel), so nothing else
+  // resolves it; this effect queues the operations via the tool-call
+  // handler and answers the call with the queued ids, exactly what the
+  // old approval branch did on approve. Tracks dispatched `toolCallId`s
+  // in a ref so a re-render can't double-run the same call.
+  const executedActiveDocxEditToolCallIdsRef = useRef<Set<string> | null>(null);
+  executedActiveDocxEditToolCallIdsRef.current ??= new Set<string>();
+  // Output computed on the FIRST attempt per tool-call id. A retry (after an
+  // `addToolResult` failure re-arms the part) must re-send this exact output
+  // rather than recompute: `handleActiveDocxEditToolCall` mints fresh uuids
+  // and re-queues + re-persists the suggestions, so recomputing would spawn
+  // duplicate review cards / server rows for one logical tool call.
+  const activeDocxEditOutputCacheRef = useRef<Map<
+    string,
+    ApplyActiveDocxEditsOutput
+  > | null>(null);
+  activeDocxEditOutputCacheRef.current ??= new Map<
+    string,
+    ApplyActiveDocxEditsOutput
+  >();
+  const runActiveDocxEditToolCall = useLatestCallback(
+    async (part: UnresolvedActiveDocxEditToolCallPart) => {
+      const outputCache = activeDocxEditOutputCacheRef.current;
+      try {
+        // Compute (and queue + persist, inside the handler) only once; reuse
+        // the cached output on any retry.
+        let output = outputCache?.get(part.id);
+        if (output === undefined) {
+          const input = parseCompletedToolCallArguments(part);
+          output = isApplyActiveDocxEditsInput(input)
+            ? handleActiveDocxEditToolCall(input)
+            : { version: 1 as const, applied: [], queued: [], skipped: [] };
+          outputCache?.set(part.id, output);
+        }
+        await addToolResult({
+          output,
+          tool: "apply-active-docx-edits",
+          toolCallId: part.id,
+        });
+      } catch (toolCallError) {
+        // Allow a retry on a later render of the same unresolved part. The
+        // cached output above keeps that retry from re-queuing / re-persisting.
+        executedActiveDocxEditToolCallIdsRef.current?.delete(part.id);
+        getAnalytics().captureError(toolCallError);
+        try {
+          await addToolResult({
+            output: {
+              version: 1 as const,
+              applied: [],
+              queued: [],
+              skipped: [],
+            },
+            tool: "apply-active-docx-edits",
+            toolCallId: part.id,
+          });
+        } catch (reportError) {
+          getAnalytics().captureError(reportError);
+        }
+      }
+    },
+  );
+  useExternalSyncEffect(() => {
+    const message = messages.at(-1);
+    if (!message || message.role !== "assistant") {
+      return;
+    }
+
+    const executedIds = executedActiveDocxEditToolCallIdsRef.current;
+    if (!executedIds) {
+      return;
+    }
+
+    const partsToRun = selectUnresolvedActiveDocxEditToolCallParts(
+      message.parts,
+      executedIds,
+    );
+    for (const part of partsToRun) {
+      executedIds.add(part.id);
+      void runActiveDocxEditToolCall(part);
+    }
+  }, [messages, runActiveDocxEditToolCall]);
 
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;

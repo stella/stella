@@ -52,10 +52,16 @@ import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import { getActiveDocxEditApprovalPart } from "@/components/chat/chat-ui-tools";
+import {
+  getActiveDocxEditApprovalPart,
+  isApplyActiveDocxEditsInput,
+  parseCompletedToolCallArguments,
+  selectUnresolvedActiveDocxEditToolCallParts,
+} from "@/components/chat/chat-ui-tools";
 import type {
   ApprovalToolName,
   PersistedChatMessage,
+  UnresolvedActiveDocxEditToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -1073,6 +1079,85 @@ const TemplateStudioChatInner = ({
 
     await handleApprove(approvalId, toolName);
   };
+
+  // Auto-run watcher for the queue-only `apply-active-docx-edits` tool.
+  // The tool is `needsApproval: false`, so it now arrives as an
+  // `input-complete` client tool call with no approval click to gate it —
+  // `handleApproveForTemplate` only fires for persisted approval parts, so
+  // without this the turn would stall forever waiting on a result. This
+  // effect client-executes each unresolved call once (placing the ops as
+  // in-document suggestions via `handleActiveDocxEditToolCall`) and answers
+  // it with `addToolResult`, mirroring the file overlay's watcher. Tracks
+  // dispatched `toolCallId`s in a ref so a re-render can't double-run one.
+  // The scoped-preset continuation options ride the result the same way the
+  // approval path threaded them, so a "Suggest fields" preset that emits
+  // edits keeps its suggest-template-fields tool allowlist on the follow-up.
+  const executedActiveDocxEditToolCallIdsRef = useRef<Set<string> | null>(null);
+  executedActiveDocxEditToolCallIdsRef.current ??= new Set<string>();
+  const runActiveDocxEditToolCall = useLatestCallback(
+    async (part: UnresolvedActiveDocxEditToolCallPart) => {
+      const latestUserMessageId = getLatestUserMessageId(messages);
+      const scopedContinuationOptions =
+        latestUserMessageId === activeScopedPresetTurnMessageIdRef.current
+          ? { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } }
+          : undefined;
+      try {
+        const input = parseCompletedToolCallArguments(part);
+        const output = isApplyActiveDocxEditsInput(input)
+          ? await handleActiveDocxEditToolCall(input, part.id)
+          : { version: 1 as const, applied: [], queued: [], skipped: [] };
+        await addToolResult(
+          {
+            output,
+            tool: "apply-active-docx-edits",
+            toolCallId: part.id,
+          },
+          scopedContinuationOptions,
+        );
+      } catch (toolCallError) {
+        // Allow a retry on a later render of the same unresolved part.
+        executedActiveDocxEditToolCallIdsRef.current?.delete(part.id);
+        getAnalytics().captureError(toolCallError);
+        try {
+          await addToolResult(
+            {
+              output: {
+                version: 1 as const,
+                applied: [],
+                queued: [],
+                skipped: [],
+              },
+              tool: "apply-active-docx-edits",
+              toolCallId: part.id,
+            },
+            scopedContinuationOptions,
+          );
+        } catch (reportError) {
+          getAnalytics().captureError(reportError);
+        }
+      }
+    },
+  );
+  useExternalSyncEffect(() => {
+    const message = messages.at(-1);
+    if (!message || message.role !== "assistant") {
+      return;
+    }
+
+    const executedIds = executedActiveDocxEditToolCallIdsRef.current;
+    if (!executedIds) {
+      return;
+    }
+
+    const partsToRun = selectUnresolvedActiveDocxEditToolCallParts(
+      message.parts,
+      executedIds,
+    );
+    for (const part of partsToRun) {
+      executedIds.add(part.id);
+      void runActiveDocxEditToolCall(part);
+    }
+  }, [messages, runActiveDocxEditToolCall]);
 
   const canSubmitWithCurrentSnapshot = useLatestCallback(() => {
     const snapshot = editorRef.current?.createAIEditSnapshot() ?? null;

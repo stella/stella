@@ -615,6 +615,59 @@ export const selectUnresolvedFolioAgentDocToolCallParts = (
       isUnresolvedFolioAgentDocToolCallPart(part) && !executedIds.has(part.id),
   );
 
+/**
+ * An `apply-active-docx-edits` tool-call part whose input has fully
+ * streamed in but that has not yet been answered with a result.
+ *
+ * The tool carries no `needsApproval` gate (it only queues suggestions
+ * into the client review panel — it never writes to the document), so
+ * like the folio-agents read tools nothing else resolves it. The file
+ * overlay's auto-run watcher finds these and answers them via
+ * `addToolResult` after queuing the suggestions.
+ */
+export type UnresolvedActiveDocxEditToolCallPart = ChatToolCallPart & {
+  name: "apply-active-docx-edits";
+  state: "input-complete";
+};
+
+export const isUnresolvedActiveDocxEditToolCallPart = (
+  part: unknown,
+): part is UnresolvedActiveDocxEditToolCallPart => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    !("state" in part) ||
+    typeof part.type !== "string" ||
+    typeof part.state !== "string"
+  ) {
+    return false;
+  }
+
+  if (part.type !== "tool-call" || part.state !== "input-complete") {
+    return false;
+  }
+
+  return "name" in part && part.name === "apply-active-docx-edits";
+};
+
+/**
+ * Core decision loop for the file overlay's active-DOCX-edit auto-run
+ * watcher: which `apply-active-docx-edits` parts in the latest assistant
+ * message still need a client-executed (queue-only) result. Pure and
+ * colocated with {@link isUnresolvedActiveDocxEditToolCallPart} so the
+ * effect stays a thin dispatch loop. `executedIds` excludes parts the
+ * watcher has already dispatched itself in a prior render.
+ */
+export const selectUnresolvedActiveDocxEditToolCallParts = (
+  messageParts: readonly ChatPart[],
+  executedIds: ReadonlySet<string>,
+): UnresolvedActiveDocxEditToolCallPart[] =>
+  messageParts.filter(
+    (part): part is UnresolvedActiveDocxEditToolCallPart =>
+      isUnresolvedActiveDocxEditToolCallPart(part) && !executedIds.has(part.id),
+  );
+
 // Terminal state a dead running tool-call part is rewritten to at
 // hydration. "error" is the SDK's own terminal state for a failed tool
 // call: it clears `isRunningToolPart` and renders the card as interrupted

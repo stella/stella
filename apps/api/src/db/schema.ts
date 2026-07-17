@@ -9,6 +9,7 @@ export * from "./schema/clauses";
 export * from "./schema/case-law";
 export * from "./schema/legislation";
 export * from "./schema/chat";
+export * from "./schema/docx-suggestions";
 export * from "./schema/mcp";
 export * from "./schema/files-views";
 export * from "./schema/reports";

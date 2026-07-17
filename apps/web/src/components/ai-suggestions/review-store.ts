@@ -157,6 +157,17 @@ export type ReviewSuggestion = {
   snapshot: FolioAIEditSnapshot | null;
   /** Reason a `skipped` suggestion failed to apply. */
   skipReason?: string | undefined;
+  /**
+   * `true` once a server-side row exists for this suggestion (set by
+   * `reconcileServerIds` after the background create, or by
+   * `hydrateSuggestions` on reload). Gates every persistence call:
+   * accept / reject / revert only hit the server when `persisted` is
+   * `true`. Absent / `false` means the suggestion is in-memory only
+   * (persistence unavailable or the create failed), so it behaves
+   * exactly like the pre-persistence flow — the graceful-degradation
+   * guarantee.
+   */
+  persisted?: boolean | undefined;
 };
 
 type ReviewState = {
@@ -166,6 +177,14 @@ type ReviewState = {
   applyMode: Record<string, FolioAIEditApplyMode>;
   /** Per-entity panel visibility (manual dismiss). */
   panelDismissed: Record<string, boolean>;
+  /**
+   * Per-entity focused suggestion id — the one the review bar's
+   * prev/next stepper is currently parked on and the panel scrolls
+   * into view / highlights. Shared so the floating bar and the
+   * inspector panel can never disagree about which suggestion is
+   * "current". `null` (or absent) when nothing is focused yet.
+   */
+  focusedId: Record<string, string | null>;
   /**
    * Per-entity monotonic counter bumped whenever the user clicks
    * the AI-suggestions facet chip. The chat input bar subscribes
@@ -186,6 +205,24 @@ type ReviewState = {
 
 type ReviewActions = {
   appendSuggestions: (entityId: string, items: ReviewSuggestion[]) => void;
+  /**
+   * Adopt server ids for suggestions the background create just
+   * persisted. For each suggestion whose current (client) `id` is a key
+   * in `refToId`, swap in the mapped server id and mark it `persisted`.
+   * The entity's `focusedId` is remapped too if it pointed at a
+   * reconciled client id. No-op when the entity/session is absent.
+   */
+  reconcileServerIds: (
+    entityId: string,
+    refToId: Record<string, string>,
+  ) => void;
+  /**
+   * Merge server-loaded suggestions into the session on reload. Dedups
+   * by `id` (only ids not already present are added) and never touches
+   * `panelDismissed`, so hydration cannot force the panel back open.
+   * Seeds a fresh session when none exists yet.
+   */
+  hydrateSuggestions: (entityId: string, items: ReviewSuggestion[]) => void;
   updateSuggestion: (
     entityId: string,
     id: string,
@@ -197,6 +234,7 @@ type ReviewActions = {
     status: ReviewSuggestionStatus,
   ) => void;
   setApplyMode: (entityId: string, mode: FolioAIEditApplyMode) => void;
+  setFocusedId: (entityId: string, id: string | null) => void;
   dismissPanel: (entityId: string) => void;
   resetSession: (entityId: string) => void;
   pulseChatInput: (entityId: string) => void;
@@ -263,6 +301,7 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
   sessions: {},
   applyMode: {},
   panelDismissed: {},
+  focusedId: {},
   chatInputPulse: {},
   hideAccepted: false,
 
@@ -305,6 +344,94 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
         panelDismissed: {
           ...state.panelDismissed,
           [entityId]: false,
+        },
+      };
+    });
+  },
+
+  reconcileServerIds: (entityId, refToId) => {
+    set((state) => {
+      const existing = state.sessions[entityId];
+      if (!existing) {
+        return state;
+      }
+      // Server ids a client entry is about to be renamed INTO. A prior
+      // reload may already have hydrated a row under that same server id, so
+      // renaming a client entry to it would leave two entries sharing an id.
+      // The client entry is the one the user is actively interacting with
+      // (live undoHandle / applyMode / status), so it wins: collapse the
+      // pair by dropping the hydrated duplicate and keeping the renamed
+      // client entry.
+      const claimedServerIds = new Set<string>();
+      for (const item of existing) {
+        const serverId = refToId[item.id];
+        if (serverId !== undefined) {
+          claimedServerIds.add(serverId);
+        }
+      }
+      let changed = false;
+      const next: ReviewSuggestion[] = [];
+      for (const item of existing) {
+        const serverId = refToId[item.id];
+        if (serverId !== undefined) {
+          changed = true;
+          next.push({ ...item, id: serverId, persisted: true });
+          continue;
+        }
+        // A hydrated entry whose id equals a server id a client entry is
+        // claiming: drop it so the renamed client entry is the only holder.
+        if (claimedServerIds.has(item.id)) {
+          changed = true;
+          continue;
+        }
+        next.push(item);
+      }
+      if (!changed) {
+        return state;
+      }
+      const nextState: Partial<ReviewState> = {
+        sessions: { ...state.sessions, [entityId]: next },
+      };
+      // Keep the stepper parked on the same suggestion after its id
+      // changes underneath it.
+      const focused = state.focusedId[entityId];
+      const remappedFocus =
+        focused === null || focused === undefined
+          ? undefined
+          : refToId[focused];
+      if (remappedFocus !== undefined) {
+        nextState.focusedId = {
+          ...state.focusedId,
+          [entityId]: remappedFocus,
+        };
+      }
+      return nextState;
+    });
+  },
+
+  hydrateSuggestions: (entityId, items) => {
+    if (items.length === 0) {
+      return;
+    }
+    set((state) => {
+      const existing = state.sessions[entityId];
+      if (!existing) {
+        // Seed a fresh session. Deliberately does NOT set
+        // `panelDismissed` (unlike `appendSuggestions`): hydration on
+        // reload must not force the review panel open.
+        return {
+          sessions: { ...state.sessions, [entityId]: items },
+        };
+      }
+      const existingIds = new Set(existing.map((s) => s.id));
+      const fresh = items.filter((item) => !existingIds.has(item.id));
+      if (fresh.length === 0) {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [entityId]: [...existing, ...fresh],
         },
       };
     });
@@ -370,6 +497,17 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
     }));
   },
 
+  setFocusedId: (entityId, id) => {
+    set((state) => {
+      if ((state.focusedId[entityId] ?? null) === id) {
+        return state;
+      }
+      return {
+        focusedId: { ...state.focusedId, [entityId]: id },
+      };
+    });
+  },
+
   dismissPanel: (entityId) => {
     set((state) => ({
       panelDismissed: { ...state.panelDismissed, [entityId]: true },
@@ -380,13 +518,43 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
     set((state) => {
       const { [entityId]: _, ...restSessions } = state.sessions;
       const { [entityId]: __, ...restDismissed } = state.panelDismissed;
+      const { [entityId]: ___, ...restFocused } = state.focusedId;
       return {
         sessions: restSessions,
         panelDismissed: restDismissed,
+        focusedId: restFocused,
       };
     });
   },
 }));
+
+/**
+ * Resolve the live suggestion for an id captured before an await, even if
+ * `reconcileServerIds` renamed the row's top-level `id` (client ref -> server
+ * id) in the gap. `reconcileServerIds` rewrites only the top-level `id`; the
+ * folio op's `pendingOperation.id` keeps the original client ref, so it is a
+ * stable handle an in-flight accept/reject can follow to the row's current
+ * identity. Returns the row under the captured id when it hasn't been
+ * reconciled yet (fast path), else the row whose op ref still matches.
+ */
+export const findLiveSuggestion = (
+  session: readonly ReviewSuggestion[] | undefined,
+  capturedId: string,
+): ReviewSuggestion | undefined => {
+  if (session === undefined) {
+    return undefined;
+  }
+  const direct = session.find((item) => item.id === capturedId);
+  if (direct !== undefined) {
+    return direct;
+  }
+  return session.find((item) => item.pendingOperation?.id === capturedId);
+};
+
+export const getReviewFocusedId = (
+  state: ReviewState,
+  entityId: string,
+): string | null => state.focusedId[entityId] ?? null;
 
 export const getReviewApplyMode = (
   state: ReviewState,

@@ -499,7 +499,7 @@ export function SuggestionStepper({
         <DirectionalIcon icon={ChevronLeftIcon} />
       </Button>
       <span className="text-muted-foreground min-w-12 text-center text-xs tabular-nums">
-        {t("chat.suggestionStep", {
+        {t("common.stepProgress", {
           current: String(index + 1),
           total: String(total),
         })}

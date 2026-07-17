@@ -482,7 +482,11 @@ export const FileTabPanel = ({
             />
           )}
           {tab.facet === "suggestions" && (
-            <SuggestionsFacet entityId={tab.entityId} fileFieldId={tab.id} />
+            <SuggestionsFacet
+              entityId={tab.entityId}
+              fileFieldId={tab.id}
+              workspaceId={tab.workspaceId}
+            />
           )}
           {playbooksEnabled && tab.facet === "playbook" && (
             <PlaybookFacet
@@ -963,6 +967,7 @@ export const FileTabPanel = ({
             <SuggestionsFacet
               entityId={tab.entityId}
               fileFieldId={tab.id}
+              workspaceId={tab.workspaceId}
               // Quick fix: sidepeek's DOCX editor unmounts when
               // the user switches off Preview, so Accept on a
               // suggestion has no live editor to apply against.

@@ -529,7 +529,6 @@ type Messages = {
       "rejected": "Rejected";
       "stale": "Stale";
     };
-    "suggestionStep": "{current} of {total}";
     "tabToAsk": "→ to ask: \"{prompt}\"";
     "thinking": "Working with context";
     "tool": {
@@ -916,6 +915,7 @@ type Messages = {
     "somethingWentWrong": "Something went wrong";
     "sort": "Sort";
     "status": "Status";
+    "stepProgress": "{current} of {total}";
     "summarizeChanges": "Summarize changes";
     "timeBilling": "Time & Billing";
     "today": "Today";
@@ -1081,19 +1081,28 @@ type Messages = {
   };
   "docxReview": {
     "acceptAll": "Accept all";
+    "acceptAllConfirmDescription": "This applies {count} suggestions to the document at once.";
+    "acceptAllConfirmTitle": "Accept all suggestions?";
     "applyAs": "as";
     "applyDirect": "Direct";
     "applyTracked": "Tracked changes";
     "areaUnspecified": "Unspecified";
+    "barLabel": "Suggestion review";
     "byArea": "By area";
     "bySeverity": "By severity";
+    "countHigh": "{count, plural, one {# high} other {# high}}";
+    "countLow": "{count, plural, one {# low} other {# low}}";
+    "countMedium": "{count, plural, one {# medium} other {# medium}}";
+    "countUnspecified": "{count, plural, one {# unspecified} other {# unspecified}}";
     "dismiss": "Hide review panel";
     "empty": "No suggestions match the current filter.";
+    "finalizePendingNote": "{count, plural, one {# suggestion is still pending review.} other {# suggestions are still pending review.}}";
     "groupBy": "Group by";
     "hiddenCount": "{count} hidden";
     "hideAccepted": "Hide accepted suggestions";
     "identityAria": "Tracked-change identity for {name}";
     "identitySaved": "Identity saved";
+    "persistFailed": "Couldn't save your review change";
     "reject": "Reject";
     "rejectAll": "Reject all";
     "revert": "Revert";
@@ -1103,6 +1112,7 @@ type Messages = {
     "severityMedium": "Medium";
     "severityUnspecified": "Unspecified";
     "skipped": "Could not apply: {reason}";
+    "staleResolution": "This suggestion was already resolved elsewhere.";
     "statusAccepted": "Accepted";
     "statusApplying": "Applying change…";
     "statusRejected": "Rejected";
