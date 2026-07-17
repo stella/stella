@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Prozkoumejte opakovaně použitelné postupy, důvěryhodné veřejné zdroje dat a funkce obsažené ve stelle.",
       "allTitle": "Všechny nástroje",
+      "aresBody": "Vyhledejte českou organizaci podle názvu nebo IČO v oficiálním registru ARES.",
       "contractReviewBody": "Kontrolujte obchodní smlouvy ustanovení po ustanovení podle vyjednávacího manuálu, s přehledně označenými odchylkami a návrhy změn.",
       "editorsPick": "Výběr redakce",
       "exampleReview": "Ukázka kontroly",
-      "featuredTitle": "Dobré místo, kde začít",
+      "featuredTitle": "Začněte pracovním postupem",
       "fromCommunity": "Od komunity",
       "groups": {
         "dataSources": "Datové zdroje a integrace",
@@ -2160,14 +2161,14 @@
         "includedBody": "Základní funkce připravené k použití bez přidání samostatné dovednosti nebo účtu.",
         "skillsBody": "Opakovaně použitelné právní postupy s instrukcemi, které si můžete před přidáním prohlédnout."
       },
-      "heroBody": "Dovednosti jsou opakovaně použitelné právní postupy. Přidejte si postup pro kontrolu smluv, rešerši autorit nebo přípravu dokumentů a pracujte pokaždé stejnou metodou.",
-      "heroTitle": "Přizpůsobte stellu právní práci, kterou právě řešíte",
+      "heroBody": "Vyhledávejte podle úkolu, jurisdikce nebo zdroje. Každý nástroj si můžete před přidáním do pracovního prostoru prohlédnout.",
+      "heroTitle": "Na čem právě pracujete?",
       "howBody": "Dovednost převádí právní metodu do kontrolovatelných instrukcí. Přidejte ji jednou a stejný postup pak použijte pokaždé, když jej potřebujete.",
       "howTitle": "Co je dovednost?",
       "includedBadge": "Součástí",
       "jurisRankBody": "Posuďte autoritu precedentů argentinského Nejvyššího soudu podle citačního vlivu a doktrinálního vývoje.",
       "noResults": "Tomuto hledání zatím neodpovídají žádné nástroje.",
-      "openSkill": "Prozkoumat dovednost",
+      "openSkill": "Zjistit, jak funguje",
       "review": {
         "aligned": "V souladu",
         "governingLaw": "Rozhodné právo",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Zkontrolovat smlouvy",
         "verifyOrganizations": "Prověřit organizaci"
       },
-      "tasksTitle": "Začněte právním úkolem"
+      "tasksTitle": "Nebo vyberte úkol"
     },
     "documentation": "Dokumentace",
     "downloadUpstream": "Stáhnout archiv zdrojového repozitáře",

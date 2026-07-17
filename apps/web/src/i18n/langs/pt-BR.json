@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Explore fluxos reutilizáveis, fontes públicas confiáveis e recursos incluídos no stella.",
       "allTitle": "Todas as ferramentas",
+      "aresBody": "Pesquise uma organização tcheca por nome ou IČO no registro oficial ARES.",
       "contractReviewBody": "Revise contratos comerciais cláusula por cláusula conforme um manual de negociação, com desvios e sugestões de alteração destacados com clareza.",
       "editorsPick": "Escolhas da curadoria",
       "exampleReview": "Exemplo de revisão",
-      "featuredTitle": "Um bom ponto de partida",
+      "featuredTitle": "Comece com um fluxo de trabalho",
       "fromCommunity": "Da comunidade",
       "groups": {
         "dataSources": "Fontes de dados e integrações",
@@ -2160,14 +2161,14 @@
         "includedBody": "Recursos essenciais prontos para uso sem adicionar outra habilidade ou criar uma conta separada.",
         "skillsBody": "Fluxos jurídicos reutilizáveis com instruções que você pode verificar antes de adicionar."
       },
-      "heroBody": "Habilidades são fluxos jurídicos reutilizáveis. Adicione uma para revisar contratos, pesquisar precedentes ou preparar documentos sempre com o mesmo método.",
-      "heroTitle": "Adapte o stella ao trabalho jurídico do momento",
+      "heroBody": "Pesquise por tarefa, jurisdição ou fonte. Você pode examinar cada ferramenta antes de adicioná-la ao espaço de trabalho.",
+      "heroTitle": "Em que você está trabalhando?",
       "howBody": "Uma habilidade transforma um método jurídico em instruções verificáveis. Adicione uma vez e reutilize a mesma abordagem sempre que a tarefa surgir.",
       "howTitle": "O que é uma habilidade?",
       "includedBadge": "Incluído",
       "jurisRankBody": "Avalie a autoridade dos precedentes da Suprema Corte argentina por meio da influência das citações e da evolução doutrinária.",
       "noResults": "Ainda não há ferramentas que correspondam a esta pesquisa.",
-      "openSkill": "Explorar habilidade",
+      "openSkill": "Veja como funciona",
       "review": {
         "aligned": "Alinhada",
         "governingLaw": "Lei aplicável",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Revisar contratos",
         "verifyOrganizations": "Verificar uma organização"
       },
-      "tasksTitle": "Comece por uma tarefa jurídica"
+      "tasksTitle": "Ou escolha uma tarefa"
     },
     "documentation": "Documentação",
     "downloadUpstream": "Baixar o arquivo da origem",

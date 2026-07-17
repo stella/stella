@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Poznaj wielokrotnego użytku procesy, wiarygodne publiczne źródła danych i funkcje dostępne w stelli.",
       "allTitle": "Wszystkie narzędzia",
+      "aresBody": "Wyszukaj czeską organizację według nazwy lub IČO w oficjalnym rejestrze ARES.",
       "contractReviewBody": "Sprawdzaj umowy handlowe klauzula po klauzuli według instrukcji negocjacyjnej, z jasno wskazanymi odstępstwami i propozycjami zmian.",
       "editorsPick": "Wybór redakcji",
       "exampleReview": "Przykład analizy",
-      "featuredTitle": "Dobre miejsce na początek",
+      "featuredTitle": "Zacznij od procesu",
       "fromCommunity": "Od społeczności",
       "groups": {
         "dataSources": "Źródła danych i integracje",
@@ -2160,14 +2161,14 @@
         "includedBody": "Podstawowe funkcje gotowe do użycia bez dodawania osobnej umiejętności lub konta.",
         "skillsBody": "Wielokrotnego użytku procesy prawne z instrukcjami, które można sprawdzić przed dodaniem."
       },
-      "heroBody": "Umiejętności to wielokrotnego użytku procesy prawne. Dodaj jedną, aby analizować umowy, badać precedensy lub przygotowywać dokumenty zawsze tą samą metodą.",
-      "heroTitle": "Dostosuj stellę do bieżącej pracy prawnej",
+      "heroBody": "Wyszukuj według zadania, jurysdykcji lub źródła. Każde narzędzie możesz sprawdzić przed dodaniem go do obszaru roboczego.",
+      "heroTitle": "Nad czym pracujesz?",
       "howBody": "Umiejętność zapisuje metodę prawną jako możliwe do sprawdzenia instrukcje. Dodaj ją raz, a potem korzystaj z tego samego podejścia przy każdym takim zadaniu.",
       "howTitle": "Czym jest umiejętność?",
       "includedBadge": "W zestawie",
       "jurisRankBody": "Oceń autorytet precedensów argentyńskiego Sądu Najwyższego na podstawie wpływu cytowań i rozwoju doktryny.",
       "noResults": "Żadne narzędzia nie pasują jeszcze do tego wyszukiwania.",
-      "openSkill": "Poznaj umiejętność",
+      "openSkill": "Zobacz, jak to działa",
       "review": {
         "aligned": "Zgodna",
         "governingLaw": "Prawo właściwe",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Przeanalizować umowy",
         "verifyOrganizations": "Zweryfikować organizację"
       },
-      "tasksTitle": "Zacznij od zadania prawnego"
+      "tasksTitle": "Lub wybierz zadanie"
     },
     "documentation": "Dokumentacja",
     "downloadUpstream": "Pobierz archiwum źródłowe",

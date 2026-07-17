@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Preskúmajte opakovane použiteľné postupy, dôveryhodné verejné zdroje údajov a funkcie zahrnuté v stelle.",
       "allTitle": "Všetky nástroje",
+      "aresBody": "Vyhľadajte českú organizáciu podľa názvu alebo IČO v oficiálnom registri ARES.",
       "contractReviewBody": "Kontrolujte obchodné zmluvy ustanovenie po ustanovení podľa vyjednávacieho manuálu s jasne označenými odchýlkami a návrhmi zmien.",
       "editorsPick": "Výber redakcie",
       "exampleReview": "Ukážka kontroly",
-      "featuredTitle": "Dobré miesto, kde začať",
+      "featuredTitle": "Začnite pracovným postupom",
       "fromCommunity": "Od komunity",
       "groups": {
         "dataSources": "Zdroje údajov a integrácie",
@@ -2160,14 +2161,14 @@
         "includedBody": "Základné funkcie pripravené na použitie bez pridania samostatnej zručnosti alebo účtu.",
         "skillsBody": "Opakovane použiteľné právne postupy s pokynmi, ktoré si môžete pred pridaním prezrieť."
       },
-      "heroBody": "Zručnosti sú opakovane použiteľné právne postupy. Pridajte si postup na kontrolu zmlúv, rešerš autorít alebo prípravu dokumentov a pracujte vždy rovnakou metódou.",
-      "heroTitle": "Prispôsobte stellu právnej práci, ktorú práve riešite",
+      "heroBody": "Vyhľadávajte podľa úlohy, jurisdikcie alebo zdroja. Každý nástroj si môžete pred pridaním do pracovného priestoru prezrieť.",
+      "heroTitle": "Na čom práve pracujete?",
       "howBody": "Zručnosť prevádza právnu metódu do kontrolovateľných pokynov. Pridajte ju raz a rovnaký postup potom použite vždy, keď ho potrebujete.",
       "howTitle": "Čo je zručnosť?",
       "includedBadge": "Súčasťou",
       "jurisRankBody": "Posúďte autoritu precedensov argentínskeho Najvyššieho súdu podľa citačného vplyvu a doktrinálneho vývoja.",
       "noResults": "Tomuto vyhľadávaniu zatiaľ nezodpovedajú žiadne nástroje.",
-      "openSkill": "Preskúmať zručnosť",
+      "openSkill": "Zistiť, ako funguje",
       "review": {
         "aligned": "V súlade",
         "governingLaw": "Rozhodné právo",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Skontrolovať zmluvy",
         "verifyOrganizations": "Preveriť organizáciu"
       },
-      "tasksTitle": "Začnite právnou úlohou"
+      "tasksTitle": "Alebo vyberte úlohu"
     },
     "documentation": "Dokumentácia",
     "downloadUpstream": "Stiahnuť archív zdrojového repozitára",

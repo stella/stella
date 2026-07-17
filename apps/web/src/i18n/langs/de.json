@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Entdecken Sie wiederverwendbare Arbeitsabläufe, verlässliche öffentliche Datenquellen und in stella enthaltene Funktionen.",
       "allTitle": "Alle Werkzeuge",
+      "aresBody": "Suchen Sie eine tschechische Organisation anhand ihres Namens oder ihrer IČO im amtlichen ARES-Register.",
       "contractReviewBody": "Prüfen Sie Wirtschaftsverträge Klausel für Klausel anhand eines Verhandlungsleitfadens; Abweichungen und Änderungsvorschläge werden klar hervorgehoben.",
       "editorsPick": "Empfehlungen der Redaktion",
       "exampleReview": "Beispielprüfung",
-      "featuredTitle": "Ein guter Ausgangspunkt",
+      "featuredTitle": "Mit einem Arbeitsablauf beginnen",
       "fromCommunity": "Aus der Community",
       "groups": {
         "dataSources": "Datenquellen und Integrationen",
@@ -2160,14 +2161,14 @@
         "includedBody": "Kernfunktionen, die ohne zusätzlichen Skill oder separates Konto sofort einsatzbereit sind.",
         "skillsBody": "Wiederverwendbare juristische Arbeitsabläufe mit Anweisungen, die Sie vor dem Hinzufügen prüfen können."
       },
-      "heroBody": "Skills sind wiederverwendbare juristische Arbeitsabläufe. Fügen Sie einen hinzu, um Verträge zu prüfen, Rechtsquellen zu recherchieren oder Dokumente stets nach derselben Methode vorzubereiten.",
-      "heroTitle": "Passen Sie stella an Ihre aktuelle juristische Arbeit an",
+      "heroBody": "Suchen Sie nach Aufgabe, Rechtsraum oder Quelle. Sie können jedes Tool prüfen, bevor Sie es Ihrem Arbeitsbereich hinzufügen.",
+      "heroTitle": "Woran arbeiten Sie?",
       "howBody": "Ein Skill bildet eine juristische Methode in einsehbaren Anweisungen ab. Einmal hinzugefügt, lässt sich derselbe Ansatz bei jeder passenden Aufgabe wiederverwenden.",
       "howTitle": "Was ist ein Skill?",
       "includedBadge": "Enthalten",
       "jurisRankBody": "Bewerten Sie die Autorität argentinischer Supreme-Court-Präzedenzfälle anhand ihres Zitationseinflusses und ihrer dogmatischen Entwicklung.",
       "noResults": "Noch keine Werkzeuge entsprechen dieser Suche.",
-      "openSkill": "Skill ansehen",
+      "openSkill": "So funktioniert es",
       "review": {
         "aligned": "Konform",
         "governingLaw": "Anwendbares Recht",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Verträge prüfen",
         "verifyOrganizations": "Organisation prüfen"
       },
-      "tasksTitle": "Mit einer juristischen Aufgabe beginnen"
+      "tasksTitle": "Oder Aufgabe auswählen"
     },
     "documentation": "Dokumentation",
     "downloadUpstream": "Upstream-Archiv herunterladen",

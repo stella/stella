@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Explorez des méthodes réutilisables, des sources de données publiques fiables et les fonctions incluses dans stella.",
       "allTitle": "Tous les outils",
+      "aresBody": "Recherchez une organisation tchèque par son nom ou son numéro IČO dans le registre officiel ARES.",
       "contractReviewBody": "Analysez les contrats commerciaux clause par clause selon un guide de négociation, avec les écarts et propositions de rédaction clairement signalés.",
       "editorsPick": "Choix de la rédaction",
       "exampleReview": "Exemple d’analyse",
-      "featuredTitle": "Un bon point de départ",
+      "featuredTitle": "Commencez par un flux de travail",
       "fromCommunity": "Proposé par la communauté",
       "groups": {
         "dataSources": "Sources de données et intégrations",
@@ -2160,14 +2161,14 @@
         "includedBody": "Fonctions essentielles prêtes à l’emploi, sans compétence ni compte supplémentaire.",
         "skillsBody": "Méthodes juridiques réutilisables dont vous pouvez examiner les instructions avant de les ajouter."
       },
-      "heroBody": "Les compétences sont des méthodes juridiques réutilisables. Ajoutez-en une pour analyser des contrats, rechercher des précédents ou préparer des documents selon la même méthode à chaque fois.",
-      "heroTitle": "Adaptez stella au travail juridique du moment",
+      "heroBody": "Recherchez par tâche, ressort ou source. Vous pouvez examiner chaque outil avant de l’ajouter à votre espace de travail.",
+      "heroTitle": "Sur quoi travaillez-vous ?",
       "howBody": "Une compétence formalise une méthode juridique sous forme d’instructions consultables. Ajoutez-la une fois, puis réutilisez la même approche chaque fois que la tâche se présente.",
       "howTitle": "Qu’est-ce qu’une compétence ?",
       "includedBadge": "Inclus",
       "jurisRankBody": "Évaluez l’autorité des précédents de la Cour suprême argentine grâce à leur influence citationnelle et à leur évolution doctrinale.",
       "noResults": "Aucun outil ne correspond encore à cette recherche.",
-      "openSkill": "Découvrir la compétence",
+      "openSkill": "Voir comment cela fonctionne",
       "review": {
         "aligned": "Conforme",
         "governingLaw": "Droit applicable",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Analyser des contrats",
         "verifyOrganizations": "Vérifier une organisation"
       },
-      "tasksTitle": "Commencez par une tâche juridique"
+      "tasksTitle": "Ou choisissez une tâche"
     },
     "documentation": "Documentation",
     "downloadUpstream": "Télécharger l’archive en amont",

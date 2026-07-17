@@ -28,7 +28,7 @@ function PublicToolsTopBar() {
   });
 
   return (
-    <header className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
+    <header className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden px-4 shadow-[0_1px_0_rgb(0_0_0/0.045)]">
       {isMobile && (
         <>
           <SidebarTrigger className="-ms-1" />

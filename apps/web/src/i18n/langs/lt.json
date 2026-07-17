@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Peržiūrėkite pakartotinai naudojamas darbo eigas, patikimus viešus duomenų šaltinius ir į „stella“ įtrauktas galimybes.",
       "allTitle": "Visi įrankiai",
+      "aresBody": "Oficialiame ARES registre ieškokite Čekijos organizacijos pagal pavadinimą arba IČO.",
       "contractReviewBody": "Tikrinkite komercines sutartis punktas po punkto pagal derybų gaires, aiškiai pažymėdami nukrypimus ir siūlomus pakeitimus.",
       "editorsPick": "Redakcijos pasirinkimas",
       "exampleReview": "Tikrinimo pavyzdys",
-      "featuredTitle": "Gera vieta pradėti",
+      "featuredTitle": "Pradėkite nuo darbo eigos",
       "fromCommunity": "Iš bendruomenės",
       "groups": {
         "dataSources": "Duomenų šaltiniai ir integracijos",
@@ -2160,14 +2161,14 @@
         "includedBody": "Pagrindinės galimybės, paruoštos naudoti be atskiro įgūdžio ar paskyros.",
         "skillsBody": "Pakartotinai naudojamos teisinės darbo eigos su instrukcijomis, kurias galite patikrinti prieš pridėdami."
       },
-      "heroBody": "Įgūdžiai yra pakartotinai naudojamos teisinės darbo eigos. Pridėkite įgūdį sutartims tikrinti, precedentams tirti ar dokumentams rengti tuo pačiu metodu kiekvieną kartą.",
-      "heroTitle": "Pritaikykite „stella“ dabartiniam teisiniam darbui",
+      "heroBody": "Ieškokite pagal užduotį, jurisdikciją arba šaltinį. Kiekvieną įrankį galite peržiūrėti prieš įtraukdami į darbo sritį.",
+      "heroTitle": "Su kuo dirbate?",
       "howBody": "Įgūdis teisinį metodą paverčia patikrinamomis instrukcijomis. Pridėkite vieną kartą ir naudokite tą patį būdą kiekvieną kartą, kai užduotis pasikartoja.",
       "howTitle": "Kas yra įgūdis?",
       "includedBadge": "Įtraukta",
       "jurisRankBody": "Įvertinkite Argentinos Aukščiausiojo Teismo precedentų autoritetą pagal citavimo įtaką ir doktrinos raidą.",
       "noResults": "Šios paieškos dar neatitinka jokie įrankiai.",
-      "openSkill": "Peržiūrėti įgūdį",
+      "openSkill": "Kaip tai veikia",
       "review": {
         "aligned": "Atitinka",
         "governingLaw": "Taikytina teisė",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Tikrinti sutartis",
         "verifyOrganizations": "Patikrinti organizaciją"
       },
-      "tasksTitle": "Pradėkite nuo teisinės užduoties"
+      "tasksTitle": "Arba pasirinkite užduotį"
     },
     "documentation": "Dokumentacija",
     "downloadUpstream": "Atsisiųsti pirminės saugyklos archyvą",

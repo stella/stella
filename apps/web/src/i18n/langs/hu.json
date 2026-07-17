@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Fedezze fel az újrahasználható munkafolyamatokat, a megbízható nyilvános adatforrásokat és a stellában elérhető funkciókat.",
       "allTitle": "Minden eszköz",
+      "aresBody": "Keressen cseh szervezetet név vagy IČO alapján a hivatalos ARES nyilvántartásban.",
       "contractReviewBody": "Vizsgálja át a kereskedelmi szerződéseket záradékról záradékra a tárgyalási útmutató alapján, jól látható eltérésekkel és módosítási javaslatokkal.",
       "editorsPick": "Szerkesztői ajánlások",
       "exampleReview": "Példa az ellenőrzésre",
-      "featuredTitle": "Jó kiindulópont",
+      "featuredTitle": "Kezdjen egy munkafolyamattal",
       "fromCommunity": "A közösségtől",
       "groups": {
         "dataSources": "Adatforrások és integrációk",
@@ -2160,14 +2161,14 @@
         "includedBody": "Azonnal használható alapfunkciók külön készség vagy fiók hozzáadása nélkül.",
         "skillsBody": "Újrahasználható jogi munkafolyamatok, amelyek utasításait hozzáadás előtt ellenőrizheti."
       },
-      "heroBody": "A készségek újrahasználható jogi munkafolyamatok. Adjon hozzá egyet szerződések ellenőrzéséhez, precedensek kutatásához vagy dokumentumok következetes elkészítéséhez.",
-      "heroTitle": "Igazítsa a stellát az aktuális jogi feladathoz",
+      "heroBody": "Keressen feladat, joghatóság vagy forrás alapján. Minden eszközt megvizsgálhat, mielőtt hozzáadná a munkaterületéhez.",
+      "heroTitle": "Min dolgozik?",
       "howBody": "A készség egy jogi módszert ellenőrizhető utasításokba foglal. Egyszer kell hozzáadni, utána ugyanaz a megközelítés minden hasonló feladatnál használható.",
       "howTitle": "Mi az a készség?",
       "includedBadge": "Tartalmazza",
       "jurisRankBody": "Értékelje az argentin Legfelsőbb Bíróság precedenseinek súlyát az idézési hatás és a dogmatikai fejlődés alapján.",
       "noResults": "Még nincs a keresésnek megfelelő eszköz.",
-      "openSkill": "Készség megtekintése",
+      "openSkill": "Nézze meg, hogyan működik",
       "review": {
         "aligned": "Megfelelő",
         "governingLaw": "Irányadó jog",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Szerződések ellenőrzése",
         "verifyOrganizations": "Szervezet ellenőrzése"
       },
-      "tasksTitle": "Kezdje egy jogi feladattal"
+      "tasksTitle": "Vagy válasszon feladatot"
     },
     "documentation": "Dokumentáció",
     "downloadUpstream": "Forrásarchívum letöltése",

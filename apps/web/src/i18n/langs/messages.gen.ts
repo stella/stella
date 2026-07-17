@@ -2151,10 +2151,11 @@ type Messages = {
     "discovery": {
       "allBody": "Explore reusable workflows, trusted public data sources, and capabilities included with stella.";
       "allTitle": "All tools";
+      "aresBody": "Look up a Czech organization by name or IČO in the official ARES register.";
       "contractReviewBody": "Review commercial agreements clause by clause against a negotiation playbook, with deviations and suggested redlines surfaced clearly.";
       "editorsPick": "Editor's picks";
       "exampleReview": "Example review";
-      "featuredTitle": "A better place to start";
+      "featuredTitle": "Start with a workflow";
       "fromCommunity": "From the community";
       "groups": {
         "dataSources": "Data sources and integrations";
@@ -2163,14 +2164,14 @@ type Messages = {
         "includedBody": "Core capabilities that are ready to use without adding a separate skill or account.";
         "skillsBody": "Reusable legal workflows with instructions you can inspect before adding them.";
       };
-      "heroBody": "Skills are reusable legal workflows. Add one to review agreements, research authorities, or prepare documents with the same method every time.";
-      "heroTitle": "Make stella fit the legal work in front of you";
+      "heroBody": "Search by task, jurisdiction, or source. You can inspect every tool before adding it to your workspace.";
+      "heroTitle": "What are you working on?";
       "howBody": "A skill packages a legal method as inspectable instructions. Add it once, then reuse the same approach whenever the task comes up.";
       "howTitle": "What is a skill?";
       "includedBadge": "Included";
       "jurisRankBody": "Assess the authority of Argentine Supreme Court precedents through citation influence and doctrinal evolution.";
       "noResults": "No tools match this search yet.";
-      "openSkill": "Explore skill";
+      "openSkill": "See how it works";
       "review": {
         "aligned": "Aligned";
         "governingLaw": "Governing law";
@@ -2187,7 +2188,7 @@ type Messages = {
         "reviewAgreements": "Review agreements";
         "verifyOrganizations": "Verify an organization";
       };
-      "tasksTitle": "Start with a legal task";
+      "tasksTitle": "Or choose a task";
     };
     "documentation": "Documentation";
     "downloadUpstream": "Download upstream archive";

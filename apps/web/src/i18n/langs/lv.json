@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Izpētiet atkārtoti izmantojamas darbplūsmas, uzticamus publiskos datu avotus un stella iekļautās iespējas.",
       "allTitle": "Visi rīki",
+      "aresBody": "Atrodiet Čehijas organizāciju oficiālajā ARES reģistrā pēc nosaukuma vai IČO.",
       "contractReviewBody": "Pārbaudiet komerclīgumus punktu pa punktam pēc sarunu vadlīnijām, skaidri izceļot atkāpes un labojumu priekšlikumus.",
       "editorsPick": "Redakcijas izvēle",
       "exampleReview": "Pārbaudes piemērs",
-      "featuredTitle": "Laba vieta, kur sākt",
+      "featuredTitle": "Sāciet ar darbplūsmu",
       "fromCommunity": "No kopienas",
       "groups": {
         "dataSources": "Datu avoti un integrācijas",
@@ -2160,14 +2161,14 @@
         "includedBody": "Pamatiespējas, kas ir gatavas lietošanai bez atsevišķas prasmes vai konta pievienošanas.",
         "skillsBody": "Atkārtoti izmantojamas juridiskās darbplūsmas ar instrukcijām, ko varat pārbaudīt pirms pievienošanas."
       },
-      "heroBody": "Prasmes ir atkārtoti izmantojamas juridiskās darbplūsmas. Pievienojiet prasmi, lai līgumus pārbaudītu, precedentus pētītu vai dokumentus sagatavotu ar vienu un to pašu metodi.",
-      "heroTitle": "Pielāgojiet stella pašreizējam juridiskajam darbam",
+      "heroBody": "Meklējiet pēc uzdevuma, jurisdikcijas vai avota. Katru rīku varat pārskatīt pirms tā pievienošanas darbvietai.",
+      "heroTitle": "Pie kā jūs strādājat?",
       "howBody": "Prasme pārvērš juridisku metodi pārbaudāmās instrukcijās. Pievienojiet to vienreiz un izmantojiet to pašu pieeju katru reizi, kad rodas šis uzdevums.",
       "howTitle": "Kas ir prasme?",
       "includedBadge": "Iekļauts",
       "jurisRankBody": "Novērtējiet Argentīnas Augstākās tiesas precedentu autoritāti pēc citēšanas ietekmes un doktrīnas attīstības.",
       "noResults": "Šai meklēšanai vēl neatbilst neviens rīks.",
-      "openSkill": "Izpētīt prasmi",
+      "openSkill": "Uzzināt, kā tas darbojas",
       "review": {
         "aligned": "Atbilst",
         "governingLaw": "Piemērojamie tiesību akti",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Pārbaudīt līgumus",
         "verifyOrganizations": "Pārbaudīt organizāciju"
       },
-      "tasksTitle": "Sāciet ar juridisku uzdevumu"
+      "tasksTitle": "Vai izvēlieties uzdevumu"
     },
     "documentation": "Dokumentācija",
     "downloadUpstream": "Lejupielādēt avota arhīvu",

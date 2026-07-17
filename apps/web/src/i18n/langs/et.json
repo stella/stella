@@ -2148,10 +2148,11 @@
     "discovery": {
       "allBody": "Tutvuge korduskasutatavate töövoogude, usaldusväärsete avalike andmeallikate ja stellasse kuuluvate võimalustega.",
       "allTitle": "Kõik tööriistad",
+      "aresBody": "Otsige Tšehhi organisatsiooni nime või IČO järgi ametlikust ARES-i registrist.",
       "contractReviewBody": "Vaadake ärilepingud läbirääkimisjuhendi alusel punkt-punktilt läbi; kõrvalekalded ja muudatusettepanekud tuuakse selgelt esile.",
       "editorsPick": "Toimetaja valik",
       "exampleReview": "Läbivaatuse näide",
-      "featuredTitle": "Hea koht alustamiseks",
+      "featuredTitle": "Alustage töövoost",
       "fromCommunity": "Kogukonnalt",
       "groups": {
         "dataSources": "Andmeallikad ja integratsioonid",
@@ -2160,14 +2161,14 @@
         "includedBody": "Põhivõimalused, mida saab kasutada ilma eraldi oskust või kontot lisamata.",
         "skillsBody": "Korduskasutatavad õigustöö vood, mille juhiseid saate enne lisamist kontrollida."
       },
-      "heroBody": "Oskused on korduskasutatavad õigustöö vood. Lisage oskus, et lepinguid läbi vaadata, pretsedente uurida või dokumente alati sama meetodiga koostada.",
-      "heroTitle": "Kohandage stella käsil oleva õigustööga",
+      "heroBody": "Otsige ülesande, jurisdiktsiooni või allika järgi. Iga tööriista saab enne tööruumi lisamist üle vaadata.",
+      "heroTitle": "Millega te praegu tegelete?",
       "howBody": "Oskus koondab õigusmeetodi kontrollitavateks juhisteks. Lisage see üks kord ja kasutage sama lähenemist iga kord, kui ülesanne tekib.",
       "howTitle": "Mis on oskus?",
       "includedBadge": "Kaasas",
       "jurisRankBody": "Hinnake Argentina ülemkohtu pretsedentide autoriteeti viitamismõju ja doktrinaalse arengu kaudu.",
       "noResults": "Sellele otsingule vastavaid tööriistu veel ei ole.",
-      "openSkill": "Tutvu oskusega",
+      "openSkill": "Vaadake, kuidas see töötab",
       "review": {
         "aligned": "Kooskõlas",
         "governingLaw": "Kohaldatav õigus",
@@ -2184,7 +2185,7 @@
         "reviewAgreements": "Vaata lepinguid läbi",
         "verifyOrganizations": "Kontrolli organisatsiooni"
       },
-      "tasksTitle": "Alustage õigusülesandest"
+      "tasksTitle": "Või valige ülesanne"
     },
     "documentation": "Dokumentatsioon",
     "downloadUpstream": "Laadi lähtehoidla arhiiv alla",
