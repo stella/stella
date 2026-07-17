@@ -28,7 +28,12 @@ import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
-import { buildMessageTurns } from "@/components/chat/chat-thread-messages.logic";
+import {
+  buildMessageTurns,
+  collectAnonRestorations,
+  EMPTY_RESTORATION_PAIRS,
+  getFollowingAssistantRestorations,
+} from "@/components/chat/chat-thread-messages.logic";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -544,56 +549,6 @@ const USER_STREAMDOWN_COMPONENTS = {
 
 const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-
-const collectAnonRestorations = (
-  message: PersistedChatMessage,
-): readonly ChatAnonRestoration[] => {
-  // De-dupe placeholder→original pairs across multiple parts in a
-  // single assistant message so the rehype plugin builds one
-  // pattern per stream.
-  const seen = new Map<string, string>();
-  const restorationPairs = message.metadata?.anonRestorations?.pairs;
-  if (restorationPairs) {
-    for (const pair of restorationPairs) {
-      if (!seen.has(pair.placeholder)) {
-        seen.set(pair.placeholder, pair.original);
-      }
-    }
-  }
-  return [...seen.entries()].map(([placeholder, original]) => ({
-    placeholder,
-    original,
-  }));
-};
-
-const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
-  [],
-);
-
-/**
- * Resolve the restoration pairs that match what *this user
- * message* actually sent. Walks forward to the next assistant
- * message (skipping any intervening user messages — TanStack
- * messages persist in chronological order) and uses its
- * server-emitted metadata pairs, which were produced by
- * the same `PipelineContext` the request body crossed. Returns an
- * empty array while the assistant is still streaming or if the
- * turn was sent raw — both cases render the user message without
- * pills, which matches the audit story (no anonymization → no
- * audit cue).
- */
-const getFollowingAssistantRestorations = (
-  messages: readonly PersistedChatMessage[],
-  userMessageIndex: number,
-): readonly ChatAnonRestoration[] => {
-  for (let i = userMessageIndex + 1; i < messages.length; i += 1) {
-    const candidate = messages[i];
-    if (candidate?.role === "assistant") {
-      return collectAnonRestorations(candidate);
-    }
-  }
-  return EMPTY_RESTORATION_PAIRS;
-};
 
 const getMentionTagAttr = (attrs: string, name: string) => {
   const attrName = escapeRegExp(name);
