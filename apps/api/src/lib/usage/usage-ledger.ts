@@ -205,6 +205,7 @@ type RecordUsageEventInput = {
   isByok: boolean;
   rawUsageMicroUnits?: number | null;
   traceId?: string | null;
+  idempotencyKey?: string | null;
   /**
    * Optional period override. Default: look up the entitlement
    * and use its active period. Passing explicit period is useful
@@ -213,12 +214,15 @@ type RecordUsageEventInput = {
   period?: { start: Date; end: Date };
 };
 
+type RecordUsageEventResult = { status: "recorded" } | { status: "duplicate" };
+
 /**
- * Append a usage event. Does NOT check balance — that's the
- * pre-flight's job. Failures bubble up so callers can decide
- * whether to capture-and-continue or surface to the user. Most
- * callers should wrap in `Result.tryPromise` so an analytics
- * outage cannot crash the AI stream itself.
+ * Append a usage event. A non-null idempotency key makes repeated callbacks a
+ * structural no-op within the organization; null keys remain repeatable. Does
+ * NOT check balance — that's the pre-flight's job. Failures bubble up so callers
+ * can decide whether to capture-and-continue or surface to the user. Most callers
+ * should wrap in `Result.tryPromise` so an analytics outage cannot crash the AI
+ * stream itself.
  */
 export const recordUsageEvent = async ({
   tx,
@@ -232,11 +236,12 @@ export const recordUsageEvent = async ({
   isByok,
   rawUsageMicroUnits = null,
   traceId = null,
+  idempotencyKey = null,
   period,
-}: RecordUsageEventInput): Promise<void> => {
+}: RecordUsageEventInput): Promise<RecordUsageEventResult> => {
   const periodResolved = period ?? (await resolvePeriod(tx, organizationId));
 
-  await tx.insert(usageEvents).values({
+  const values = {
     organizationId,
     workspaceId,
     userId,
@@ -249,7 +254,27 @@ export const recordUsageEvent = async ({
     isByok,
     rawUsageMicroUnits,
     traceId,
-  });
+    idempotencyKey,
+  };
+
+  if (idempotencyKey === null) {
+    await tx.insert(usageEvents).values(values);
+    return { status: "recorded" };
+  }
+
+  const inserted = await tx
+    .insert(usageEvents)
+    .values(values)
+    .onConflictDoNothing({
+      target: [usageEvents.organizationId, usageEvents.idempotencyKey],
+      where: sql`idempotency_key IS NOT NULL`,
+    })
+    .returning({ id: usageEvents.id });
+
+  if (!inserted.at(0)) {
+    return { status: "duplicate" };
+  }
+  return { status: "recorded" };
 };
 
 type AllocateUsageInput = {

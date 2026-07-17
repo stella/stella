@@ -47,18 +47,22 @@ const createOpenAIOrgAIConfig = (): OrgAIConfig => ({
 
 const createMiddlewareContext = ({
   deferred = [],
+  iteration = 0,
   modelOptions,
+  runId = "run_1",
 }: {
   deferred?: Promise<unknown>[];
+  iteration?: number;
   modelOptions?: Record<string, unknown>;
+  runId?: string;
 } = {}): ChatMiddlewareContext => ({
   activity: "chat",
   requestId: "request_1",
   streamId: "stream_1",
-  runId: "run_1",
+  runId,
   threadId: "thread_1",
   phase: "modelStream",
-  iteration: 0,
+  iteration,
   chunkIndex: 0,
   abort: () => undefined,
   context: undefined,
@@ -170,8 +174,13 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         }),
       }),
       insert: () => ({
-        values: async (values: unknown) => {
+        values: (values: unknown) => {
           insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
         },
       }),
     };
@@ -200,12 +209,21 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       createMiddlewareContext({ deferred }),
       usage,
     );
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, iteration: 1 }),
+      usage,
+    );
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({ deferred, runId: "run_2" }),
+      usage,
+    );
     await Promise.all(deferred);
 
-    expect(insertedRows).toHaveLength(1);
+    expect(insertedRows).toHaveLength(3);
     expect(insertedRows[0]).toMatchObject({
       actionType: "chat",
       isByok: false,
+      idempotencyKey: "trace_usage:run_1:0",
       modelRole: "chat",
       organizationId: orgId,
       periodEnd,
@@ -214,6 +232,14 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       traceId: "trace_usage",
       userId,
       workspaceId,
+    });
+    expect(insertedRows[1]).toMatchObject({
+      idempotencyKey: "trace_usage:run_1:1",
+      traceId: "trace_usage",
+    });
+    expect(insertedRows[2]).toMatchObject({
+      idempotencyKey: "trace_usage:run_2:0",
+      traceId: "trace_usage",
     });
   });
 
@@ -238,8 +264,13 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         }),
       }),
       insert: () => ({
-        values: async (values: unknown) => {
+        values: (values: unknown) => {
           insertedRows.push(values);
+          return {
+            onConflictDoNothing: () => ({
+              returning: async () => [{ id: "usage_event_1" }],
+            }),
+          };
         },
       }),
     };
@@ -275,6 +306,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     expect(insertedRows).toHaveLength(1);
     expect(insertedRows[0]).toMatchObject({
+      idempotencyKey: "trace_fallback_usage:run_1:0",
       serviceTier: "standard",
       traceId: "trace_fallback_usage",
     });
