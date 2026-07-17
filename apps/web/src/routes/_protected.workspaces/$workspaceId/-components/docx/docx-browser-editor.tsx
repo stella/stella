@@ -1112,7 +1112,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     if (pendingSuggestionCount > 0) {
       stellaToast.info(
         t("docxReview.finalizePendingNote", {
-          count: String(pendingSuggestionCount),
+          count: pendingSuggestionCount,
         }),
       );
     }

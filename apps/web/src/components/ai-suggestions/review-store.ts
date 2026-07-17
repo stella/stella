@@ -355,16 +355,36 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
       if (!existing) {
         return state;
       }
+      // Server ids a client entry is about to be renamed INTO. A prior
+      // reload may already have hydrated a row under that same server id, so
+      // renaming a client entry to it would leave two entries sharing an id.
+      // The client entry is the one the user is actively interacting with
+      // (live undoHandle / applyMode / status), so it wins: collapse the
+      // pair by dropping the hydrated duplicate and keeping the renamed
+      // client entry.
+      const claimedServerIds = new Set<string>();
+      for (const item of existing) {
+        const serverId = refToId[item.id];
+        if (serverId !== undefined) {
+          claimedServerIds.add(serverId);
+        }
+      }
       let changed = false;
       const next: ReviewSuggestion[] = [];
       for (const item of existing) {
         const serverId = refToId[item.id];
-        if (serverId === undefined) {
-          next.push(item);
+        if (serverId !== undefined) {
+          changed = true;
+          next.push({ ...item, id: serverId, persisted: true });
           continue;
         }
-        changed = true;
-        next.push({ ...item, id: serverId, persisted: true });
+        // A hydrated entry whose id equals a server id a client entry is
+        // claiming: drop it so the renamed client entry is the only holder.
+        if (claimedServerIds.has(item.id)) {
+          changed = true;
+          continue;
+        }
+        next.push(item);
       }
       if (!changed) {
         return state;

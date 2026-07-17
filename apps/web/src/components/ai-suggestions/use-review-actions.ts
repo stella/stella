@@ -11,12 +11,16 @@
 import type { RefObject } from "react";
 
 import { useRouteContext } from "@tanstack/react-router";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIEditApplyMode } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import type { DocxResolveResult } from "@/components/ai-suggestions/docx-suggestion-persistence";
+import {
+  resolveDocxSuggestionRequest,
+  revertDocxSuggestionRequest,
+} from "@/components/ai-suggestions/docx-suggestion-persistence";
 import {
   getReviewApplyMode,
   useReviewStore,
@@ -24,8 +28,6 @@ import {
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { api } from "@/lib/api";
-import { toAPIError } from "@/lib/errors/api";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
@@ -198,86 +200,82 @@ export const useReviewActions = ({
   // --- Persistence (audit trail) -----------------------------------------
   //
   // Only `persisted` suggestions (a server row exists) hit the server.
-  // Every call is fire-and-forget and never rolls back local/editor
-  // state: a failure captures telemetry + shows one toast, but the
-  // in-memory review continues exactly as it did before persistence.
-
-  const resolveOnServer = useLatestCallback(
-    async (
-      item: ReviewSuggestion,
-      status: "accepted" | "rejected",
-      appliedMode: FolioAIEditApplyMode | null,
-    ): Promise<boolean> => {
-      const result = await Result.tryPromise(
-        async () =>
-          await api["docx-suggestions"]({ workspaceId })
-            .entity({ entityId })
-            .suggestion({ suggestionId: item.id })
-            .resolve.patch({ status, appliedMode }),
-      );
-      if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
-        return false;
-      }
-      if (result.value.error) {
-        getAnalytics().captureError(toAPIError(result.value.error));
-        return false;
-      }
-      return true;
-    },
-  );
-
-  const revertOnServer = useLatestCallback(
-    async (item: ReviewSuggestion): Promise<boolean> => {
-      const result = await Result.tryPromise(
-        async () =>
-          await api["docx-suggestions"]({ workspaceId })
-            .entity({ entityId })
-            .suggestion({ suggestionId: item.id })
-            .revert.patch(),
-      );
-      if (Result.isError(result)) {
-        getAnalytics().captureError(result.error);
-        return false;
-      }
-      if (result.value.error) {
-        getAnalytics().captureError(toAPIError(result.value.error));
-        return false;
-      }
-      return true;
-    },
-  );
+  // Unlike the old fire-and-forget flow, a server disagreement now
+  // reconciles local/editor state so the two can never permanently
+  // diverge:
+  //   - "failed" (transport error): roll the local resolution BACK and
+  //     capture telemetry, so the user can retry against a clean state.
+  //   - "stale" (the server row was not in the expected state — already
+  //     resolved elsewhere / a concurrent write won): roll the local
+  //     resolution back too (server is authoritative) but do not treat it
+  //     as an error for telemetry.
+  //   - "synced": nothing to do.
 
   const toastPersistFailed = useLatestCallback(() => {
     stellaToast.add({ title: t("docxReview.persistFailed"), type: "error" });
   });
 
-  type ResolveTarget = {
-    item: ReviewSuggestion;
-    status: "accepted" | "rejected";
-    appliedMode: FolioAIEditApplyMode | null;
+  const toastStaleResolution = useLatestCallback(() => {
+    stellaToast.add({
+      title: t("docxReview.staleResolution"),
+      type: "warning",
+    });
+  });
+
+  const captureResolveFailure = (context: string) => {
+    getAnalytics().captureError(
+      new Error(`DOCX suggestion ${context} failed to persist`),
+    );
   };
 
-  // Resolve a batch server-side, surfacing at most one toast if any
-  // member failed.
-  const persistResolveBatch = useLatestCallback((targets: ResolveTarget[]) => {
-    if (targets.length === 0) {
-      return;
-    }
-    void (async () => {
-      // Independent PATCHes, so resolve them in parallel and surface a
-      // single toast if any failed.
-      const results = await Promise.all(
-        targets.map(
-          async ({ item, status, appliedMode }) =>
-            await resolveOnServer(item, status, appliedMode),
-        ),
-      );
-      if (results.some((ok) => !ok)) {
-        toastPersistFailed();
+  // Undo the editor op (if one landed) and put the suggestion back to
+  // pending. Shared by acceptOne / acceptMany so a persist disagreement
+  // rewinds an accept identically everywhere. Captures telemetry only for
+  // a true transport failure, not for a "stale" server row.
+  const rollbackAcceptedResolution = useLatestCallback(
+    (
+      item: ReviewSuggestion,
+      undoHandle: ReviewSuggestion["undoHandle"],
+      result: Exclude<DocxResolveResult, "synced">,
+    ) => {
+      if (result === "failed") {
+        captureResolveFailure("accept");
       }
-    })();
-  });
+      if (undoHandle !== null) {
+        docxEditorRef.current?.undoDocumentOperations(undoHandle);
+      }
+      updateSuggestion(entityId, item.id, {
+        status: "pending",
+        revisionIds: null,
+        undoHandle: null,
+        applyMode: null,
+      });
+    },
+  );
+
+  // Put a rejected suggestion back to pending after a persist disagreement.
+  const rollbackRejectedResolution = useLatestCallback(
+    (item: ReviewSuggestion, result: Exclude<DocxResolveResult, "synced">) => {
+      if (result === "failed") {
+        captureResolveFailure("reject");
+      }
+      updateSuggestion(entityId, item.id, { status: "pending" });
+    },
+  );
+
+  // Surface at most one toast for a batch of resolve results, preferring
+  // the transport failure over a stale-row reconcile.
+  const surfaceBatchResolveToast = useLatestCallback(
+    (results: readonly DocxResolveResult[]) => {
+      if (results.some((result) => result === "failed")) {
+        toastPersistFailed();
+        return;
+      }
+      if (results.some((result) => result === "stale")) {
+        toastStaleResolution();
+      }
+    },
+  );
 
   const acceptOne = useLatestCallback(async (item: ReviewSuggestion) => {
     if (item.status !== "pending") {
@@ -303,9 +301,24 @@ export const useReviewActions = ({
     // retried. `appliedMode` mirrors what `recordOutcome` stored.
     if (item.persisted === true && outcome.status === "accepted") {
       void (async () => {
-        const ok = await resolveOnServer(item, "accepted", applyMode);
-        if (!ok) {
+        const result = await resolveDocxSuggestionRequest({
+          workspaceId,
+          entityId,
+          suggestionId: item.id,
+          status: "accepted",
+          appliedMode: applyMode,
+        });
+        if (result === "synced") {
+          return;
+        }
+        // The editor applied the change but the server row is not in
+        // "accepted": rewind the editor + local state so the user sees the
+        // suggestion pending again, matching the server.
+        rollbackAcceptedResolution(item, outcome.undoHandle, result);
+        if (result === "failed") {
           toastPersistFailed();
+        } else {
+          toastStaleResolution();
         }
       })();
     }
@@ -320,9 +333,21 @@ export const useReviewActions = ({
     updateSuggestion(entityId, item.id, { status: "rejected" });
     if (item.persisted === true) {
       void (async () => {
-        const ok = await resolveOnServer(item, "rejected", null);
-        if (!ok) {
+        const result = await resolveDocxSuggestionRequest({
+          workspaceId,
+          entityId,
+          suggestionId: item.id,
+          status: "rejected",
+          appliedMode: null,
+        });
+        if (result === "synced") {
+          return;
+        }
+        rollbackRejectedResolution(item, result);
+        if (result === "failed") {
           toastPersistFailed();
+        } else {
+          toastStaleResolution();
         }
       })();
     }
@@ -332,6 +357,15 @@ export const useReviewActions = ({
     if (item.status === "pending") {
       return;
     }
+    // Snapshot the pre-revert resolution so a persist failure can put the
+    // suggestion back exactly where it was (server stays terminal, so the
+    // editor must too).
+    const prev = {
+      status: item.status,
+      revisionIds: item.revisionIds,
+      undoHandle: item.undoHandle,
+      applyMode: item.applyMode,
+    };
     if (item.status === "accepted" && item.undoHandle !== null) {
       const undoResult = docxEditorRef.current?.undoDocumentOperations(
         item.undoHandle,
@@ -348,14 +382,39 @@ export const useReviewActions = ({
       applyMode: null,
       skipReason: undefined,
     });
-    if (item.persisted === true) {
-      void (async () => {
-        const ok = await revertOnServer(item);
-        if (!ok) {
-          toastPersistFailed();
-        }
-      })();
+    if (item.persisted !== true) {
+      return;
     }
+    void (async () => {
+      const result = await revertDocxSuggestionRequest({
+        workspaceId,
+        entityId,
+        suggestionId: item.id,
+      });
+      // "stale" means the server row was still pending — the same state we
+      // just moved the local suggestion to, so nothing to reconcile and no
+      // toast. "synced" is the happy path.
+      if (result === "synced" || result === "stale") {
+        return;
+      }
+      // "failed": the server row is still terminal, but the local revert
+      // already ran. Restore the prior resolution so they agree again.
+      captureResolveFailure("revert");
+      if (prev.status === "accepted") {
+        // Re-apply to regenerate a fresh undoHandle for the restored
+        // tracked change (the old handle was consumed by the undo above).
+        const outcome = applyPending(item);
+        recordOutcome(item, outcome);
+      } else {
+        updateSuggestion(entityId, item.id, {
+          status: prev.status,
+          revisionIds: prev.revisionIds,
+          undoHandle: prev.undoHandle,
+          applyMode: prev.applyMode,
+        });
+      }
+      toastPersistFailed();
+    })();
   });
 
   const acceptMany = useLatestCallback(
@@ -369,16 +428,38 @@ export const useReviewActions = ({
         return;
       }
       // The API has no batch-resolve, so persist per accepted+persisted
-      // item after the local batch apply. One toast at most on failure.
-      const toPersist: ResolveTarget[] = [];
+      // item after the local batch apply. Each item's resolve result drives
+      // its own rollback; a single toast at most covers the whole batch.
+      const toPersist: { item: ReviewSuggestion; outcome: ApplyOutcome }[] = [];
       for (const item of targets) {
         const outcome = applyPending(item);
         recordOutcome(item, outcome);
         if (item.persisted === true && outcome.status === "accepted") {
-          toPersist.push({ item, status: "accepted", appliedMode: applyMode });
+          toPersist.push({ item, outcome });
         }
       }
-      persistResolveBatch(toPersist);
+      if (toPersist.length === 0) {
+        return;
+      }
+      void (async () => {
+        const results = await Promise.all(
+          toPersist.map(async ({ item, outcome }) => {
+            const result = await resolveDocxSuggestionRequest({
+              workspaceId,
+              entityId,
+              suggestionId: item.id,
+              status: "accepted",
+              appliedMode: applyMode,
+            });
+            if (result === "synced") {
+              return result;
+            }
+            rollbackAcceptedResolution(item, outcome.undoHandle, result);
+            return result;
+          }),
+        );
+        surfaceBatchResolveToast(results);
+      })();
     },
   );
 
@@ -392,15 +473,29 @@ export const useReviewActions = ({
       targets.map((item) => item.id),
       "rejected",
     );
-    persistResolveBatch(
-      targets
-        .filter((item) => item.persisted === true)
-        .map((item) => ({
-          item,
-          status: "rejected" as const,
-          appliedMode: null,
-        })),
-    );
+    const toPersist = targets.filter((item) => item.persisted === true);
+    if (toPersist.length === 0) {
+      return;
+    }
+    void (async () => {
+      const results = await Promise.all(
+        toPersist.map(async (item) => {
+          const result = await resolveDocxSuggestionRequest({
+            workspaceId,
+            entityId,
+            suggestionId: item.id,
+            status: "rejected",
+            appliedMode: null,
+          });
+          if (result === "synced") {
+            return result;
+          }
+          rollbackRejectedResolution(item, result);
+          return result;
+        }),
+      );
+      surfaceBatchResolveToast(results);
+    })();
   });
 
   const navigateTo = useLatestCallback((item: ReviewSuggestion) => {

@@ -11,6 +11,7 @@
  */
 
 import type { RefObject } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 
@@ -34,12 +35,55 @@ type UseSyncDocxSuggestionsInput = {
   editorRef: RefObject<DocxEditorRef | null>;
 };
 
+// Editor-readiness poll cadence and bound: the list query can resolve before
+// the editor mounts and populates its blocks, so we retry until a snapshot
+// appears, then give up (~3s) rather than leaving a timer running forever.
+const SNAPSHOT_POLL_INTERVAL_MS = 150;
+const SNAPSHOT_POLL_MAX_ATTEMPTS = 20;
+
 export const useSyncDocxSuggestions = ({
   workspaceId,
   entityId,
   editorRef,
 }: UseSyncDocxSuggestionsInput) => {
   const { data } = useQuery(docxSuggestionsOptions({ workspaceId, entityId }));
+
+  // Bumped once the editor snapshot becomes available, to re-run hydration
+  // against a ready editor (see the poll effect below).
+  const [snapshotReadyTick, setSnapshotReadyTick] = useState(0);
+
+  // Poll for editor readiness. If the query resolves first, the initial
+  // hydration runs with a null snapshot: every op's block lookup misses, so
+  // buildPreview returns null and nothing hydrates. Once
+  // `createAIEditSnapshot()` returns non-null, bump the tick so hydration
+  // re-runs against the ready editor. The store dedups by id, so the re-run
+  // can't duplicate rows.
+  useExternalSyncEffect(() => {
+    if (!data) {
+      return () => undefined;
+    }
+    if ((editorRef.current?.createAIEditSnapshot() ?? null) !== null) {
+      return () => undefined;
+    }
+
+    let attempts = 0;
+    const intervalId = window.setInterval(() => {
+      attempts += 1;
+      if ((editorRef.current?.createAIEditSnapshot() ?? null) !== null) {
+        window.clearInterval(intervalId);
+        setSnapshotReadyTick((tick) => tick + 1);
+        return;
+      }
+      if (attempts >= SNAPSHOT_POLL_MAX_ATTEMPTS) {
+        window.clearInterval(intervalId);
+      }
+    }, SNAPSHOT_POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(intervalId);
+    // `editorRef` is a stable ref object (its identity never changes), so it
+    // adds no re-runs; it satisfies the exhaustive-deps read of
+    // `editorRef.current` inside the poll.
+  }, [data, editorRef]);
 
   useExternalSyncEffect(() => {
     if (!data) {
@@ -48,10 +92,10 @@ export const useSyncDocxSuggestions = ({
 
     // Rebuild each preview against the live editor snapshot (the same
     // source the queue path uses). If the editor isn't ready yet the
-    // snapshot is null and previews degrade to block-less shapes;
-    // buildPreview returns null for the ops that can't render without a
-    // block, and those rows are skipped until a later data change re-runs
-    // this effect with a ready editor.
+    // snapshot is null and buildPreview returns null for every
+    // block-anchored op, so those rows are skipped; the readiness poll
+    // above bumps `snapshotReadyTick` once a snapshot appears, re-running
+    // this effect so the skipped rows hydrate against the ready editor.
     const snapshot = editorRef.current?.createAIEditSnapshot() ?? null;
     const snapshotBlocks = snapshot ? snapshot.blocks : [];
     const blocksById = new Map<string, SnapshotBlock>(
@@ -94,5 +138,5 @@ export const useSyncDocxSuggestions = ({
     });
 
     useReviewStore.getState().hydrateSuggestions(entityId, items);
-  }, [data, editorRef, entityId]);
+  }, [data, editorRef, entityId, snapshotReadyTick]);
 };

@@ -77,9 +77,21 @@ export const AcceptAllButton = ({
   const buttonSize = size ?? "sm";
   const buttonVariant = variant ?? "default";
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Serialise acceptance: block re-invocation (double-click, or the confirm
+  // action firing twice) while an accept-all is still applying, so the same
+  // stale suggestion set can't be applied twice.
+  const [isAccepting, setIsAccepting] = useState(false);
 
+  // `.finally` (not try/finally): a try-without-catch trips the React
+  // Compiler's HIR lowering and bails the component out of optimization.
   const runAccept = () => {
-    void onAcceptAll(pendingItems);
+    if (isAccepting) {
+      return;
+    }
+    setIsAccepting(true);
+    void Promise.resolve(onAcceptAll(pendingItems)).finally(() => {
+      setIsAccepting(false);
+    });
   };
 
   const handleClick = () => {
@@ -97,14 +109,14 @@ export const AcceptAllButton = ({
     if (count === 0) {
       return [];
     }
-    return [t(SEVERITY_COUNT_KEYS[severity], { count: String(count) })];
+    return [t(SEVERITY_COUNT_KEYS[severity], { count })];
   });
 
   return (
     <>
       <Button
         className={className}
-        disabled={pendingItems.length === 0}
+        disabled={pendingItems.length === 0 || isAccepting}
         onClick={handleClick}
         size={buttonSize}
         variant={buttonVariant}
@@ -142,6 +154,7 @@ export const AcceptAllButton = ({
               {t("common.cancel")}
             </Button>
             <Button
+              disabled={isAccepting}
               onClick={() => {
                 setConfirmOpen(false);
                 runAccept();

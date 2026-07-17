@@ -88,28 +88,33 @@ export const folioOperationComment = (operation: FolioAIEditOperation) =>
 /**
  * Build a redline preview for one operation against the snapshot
  * the AI saw. Returns `null` when the operation references a block
- * we don't have (rare, but defensive — e.g. the snapshot expired
- * mid-stream and the AI got an outdated copy).
+ * we don't have: every op here is block-anchored, so a preview built
+ * from an empty block would be misleading and would fail on apply. A
+ * missing block happens when the editor snapshot isn't ready yet, or
+ * when a stored suggestion outlived the block it targeted; the caller
+ * treats a null return as "skip / missingBlock". `formatRange` returns
+ * null regardless (it is outside this tool's accepted subset).
  */
 export const buildPreview = (
   operation: FolioAIEditOperation,
   blocksById: Map<string, SnapshotBlock>,
 ): ReviewSuggestionPreview | null => {
+  // `formatRange` never renders here; skip it before the block lookup so an
+  // out-of-subset op can't be gated on block presence.
+  if (operation.type === "formatRange") {
+    return null;
+  }
+
   const block = blocksById.get(folioOperationBlockId(operation));
-  const blockText = block?.text ?? "";
+  if (block === undefined) {
+    return null;
+  }
+  const blockText = block.text;
   switch (operation.type) {
-    // `formatRange` is outside this tool's accepted subset (direct-only
-    // apply mode; the review flow is tracked-changes). Skip defensively
-    // if one ever appears on a stored suggestion.
-    case "formatRange":
-      return null;
     // Range-addressed edits render with the replaceInBlock preview: the
     // handle's offsets locate the replaced text inside the snapshot block
     // the same way a `find` match does.
     case "replaceRange": {
-      if (block === undefined) {
-        return null;
-      }
       const start = operation.range.startOffset;
       const end = Math.min(operation.range.endOffset, blockText.length);
       if (start >= end) {
@@ -138,9 +143,6 @@ export const buildPreview = (
     // Anchored like commentOnBlock with a quote: the sliced range text is
     // the anchor, so no anchorRuns (those render from the block start).
     case "commentOnRange": {
-      if (block === undefined) {
-        return null;
-      }
       const start = operation.range.startOffset;
       const end = Math.min(operation.range.endOffset, blockText.length);
       const anchor =
@@ -158,7 +160,7 @@ export const buildPreview = (
           before: operation.find,
           after: operation.replace,
           contextAfter: "",
-          ...(block?.previewRuns !== undefined && {
+          ...(block.previewRuns !== undefined && {
             sourceRuns: block.previewRuns,
           }),
         };
@@ -175,7 +177,7 @@ export const buildPreview = (
         before: operation.find,
         after: operation.replace,
         contextAfter: blockText.slice(matchEnd, contextEnd),
-        ...(block?.previewRuns !== undefined && {
+        ...(block.previewRuns !== undefined && {
           sourceRuns: block.previewRuns,
           contextStart,
           matchStart: idx,
@@ -189,7 +191,7 @@ export const buildPreview = (
         type: "replaceBlock",
         before: blockText,
         after: operation.text,
-        ...(block?.previewRuns !== undefined && {
+        ...(block.previewRuns !== undefined && {
           sourceRuns: block.previewRuns,
         }),
       };
@@ -197,7 +199,7 @@ export const buildPreview = (
       return {
         type: "deleteBlock",
         before: blockText,
-        ...(block?.previewRuns !== undefined && {
+        ...(block.previewRuns !== undefined && {
           sourceRuns: block.previewRuns,
         }),
       };
@@ -207,7 +209,7 @@ export const buildPreview = (
         type: operation.type,
         anchor: blockText.slice(0, PREVIEW_ANCHOR_CHARS),
         after: operation.text,
-        ...(block?.previewRuns !== undefined && {
+        ...(block.previewRuns !== undefined && {
           anchorRuns: block.previewRuns,
           anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
         }),
@@ -217,7 +219,7 @@ export const buildPreview = (
         type: "commentOnBlock",
         anchor: operation.quote ?? blockText.slice(0, PREVIEW_ANCHOR_CHARS),
         ...(operation.quote === undefined &&
-          block?.previewRuns !== undefined && {
+          block.previewRuns !== undefined && {
             anchorRuns: block.previewRuns,
             anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
           }),
@@ -232,7 +234,7 @@ export const buildPreview = (
           ...(p.title !== undefined && { title: p.title }),
         })),
         position: operation.position ?? "after",
-        ...(block?.previewRuns !== undefined && {
+        ...(block.previewRuns !== undefined && {
           anchorRuns: block.previewRuns,
           anchorEnd: Math.min(blockText.length, PREVIEW_ANCHOR_CHARS),
         }),

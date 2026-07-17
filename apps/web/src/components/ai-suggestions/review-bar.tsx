@@ -23,6 +23,7 @@
  * it wins over any editor default before the editor can act.
  */
 
+import { useRef } from "react";
 import type { RefObject } from "react";
 
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react";
@@ -130,7 +131,14 @@ export const ReviewBar = ({
     focusAt(focusedIndex === -1 ? 0 : Math.min(total - 1, focusedIndex + 1));
   });
 
+  // Guards against a second acceptance starting while the current one is
+  // still applying (rapid Alt+Enter / double-click), which would otherwise
+  // apply the same stale suggestion twice before the store settles.
+  const acceptBusyRef = useRef(false);
   const acceptAndAdvance = useLatestCallback(async () => {
+    if (acceptBusyRef.current) {
+      return;
+    }
     const target = pendingItems.at(activeIndex);
     if (!target) {
       return;
@@ -140,7 +148,12 @@ export const ReviewBar = ({
     // followed it (or the one before, at the end of the list).
     const next =
       pendingItems.at(activeIndex + 1) ?? pendingItems.at(activeIndex - 1);
-    await acceptOne(target);
+    acceptBusyRef.current = true;
+    // `.finally` (not try/finally): a try-without-catch trips the React
+    // Compiler's HIR lowering and bails the component out of optimization.
+    await acceptOne(target).finally(() => {
+      acceptBusyRef.current = false;
+    });
     if (next && next.id !== target.id) {
       navigateTo(next);
     }
@@ -219,6 +232,7 @@ export const ReviewBar = ({
   return (
     <div
       aria-label={t("docxReview.barLabel")}
+      data-docx-review-bar=""
       className={cn(
         "bg-popover/90 text-popover-foreground border-border pointer-events-auto absolute start-1/2 bottom-28 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border py-1 ps-2 pe-1.5",
         "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
@@ -325,21 +339,18 @@ const claimShortcut = (event: KeyboardEvent) => {
  */
 const shouldHandleReviewShortcut = (): boolean => {
   const el = document.activeElement;
-  if (!(el instanceof HTMLElement)) {
+  // No focused element (or focus on the body): the bar is the only relevant
+  // surface, so claim the shortcut.
+  if (!(el instanceof HTMLElement) || el === document.body) {
     return true;
   }
-  const tag = el.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
-    return false;
-  }
-  // The chat composer is itself a ProseMirror editor; keep its
-  // word-delete / newline behaviour intact.
-  if (el.closest(".folio-ai-bar-editor")) {
-    return false;
-  }
-  const editable = el.closest("[contenteditable='true'],[contenteditable='']");
-  if (editable && !editable.closest(".folio-docx-preview")) {
-    return false;
-  }
-  return true;
+  // Positive scoping (per review): only fire when focus is inside the DOCX
+  // editor — the Word model, where shortcuts must work while typing in the
+  // document — or on the review bar's own controls. Focus anywhere else
+  // (chat composer, sidebar, dialogs, nav, unrelated buttons/links) is left
+  // to that surface.
+  return (
+    el.closest(".folio-docx-preview") !== null ||
+    el.closest("[data-docx-review-bar]") !== null
+  );
 };

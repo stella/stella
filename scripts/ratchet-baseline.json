@@ -36,7 +36,7 @@
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 619,
+    "count": 620,
     "files": {
       "apps/api/src/db/migrate.ts": 2,
       "apps/api/src/db/schema.ts": 1,
@@ -321,6 +321,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-docx-suggestions.ts": 1,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/docx-suggestions.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/view-templates.ts": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx": 1,
@@ -335,7 +336,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 504,
+    "count": 506,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -362,7 +363,7 @@
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 5,
       "apps/web/src/components/ai-suggestions/review-bar.tsx": 2,
       "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
-      "apps/web/src/components/ai-suggestions/use-review-actions.ts": 4,
+      "apps/web/src/components/ai-suggestions/use-review-actions.ts": 5,
       "apps/web/src/components/app-sidebar.tsx": 14,
       "apps/web/src/components/auth/otp-panel.tsx": 1,
       "apps/web/src/components/auth/sign-in-dialog.tsx": 2,
@@ -450,7 +451,7 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 5,
       "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx": 7,
       "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx": 2,
+      "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-fields.tsx": 6,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio-inspector.tsx": 7,
       "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 5,

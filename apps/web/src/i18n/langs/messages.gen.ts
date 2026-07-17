@@ -1090,13 +1090,13 @@ type Messages = {
     "barLabel": "Suggestion review";
     "byArea": "By area";
     "bySeverity": "By severity";
-    "countHigh": "{count} high";
-    "countLow": "{count} low";
-    "countMedium": "{count} medium";
-    "countUnspecified": "{count} unspecified";
+    "countHigh": "{count, plural, one {# high} other {# high}}";
+    "countLow": "{count, plural, one {# low} other {# low}}";
+    "countMedium": "{count, plural, one {# medium} other {# medium}}";
+    "countUnspecified": "{count, plural, one {# unspecified} other {# unspecified}}";
     "dismiss": "Hide review panel";
     "empty": "No suggestions match the current filter.";
-    "finalizePendingNote": "{count} suggestions are still pending review.";
+    "finalizePendingNote": "{count, plural, one {# suggestion is still pending review.} other {# suggestions are still pending review.}}";
     "groupBy": "Group by";
     "hiddenCount": "{count} hidden";
     "hideAccepted": "Hide accepted suggestions";
@@ -1112,6 +1112,7 @@ type Messages = {
     "severityMedium": "Medium";
     "severityUnspecified": "Unspecified";
     "skipped": "Could not apply: {reason}";
+    "staleResolution": "This suggestion was already resolved elsewhere.";
     "statusAccepted": "Accepted";
     "statusApplying": "Applying change…";
     "statusRejected": "Rejected";

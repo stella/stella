@@ -34,7 +34,9 @@ import type {
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
+import { stellaToast } from "@stll/ui/components/toast";
 
+import { resolveDocxSuggestionRequest } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import { ChatThreadCard, PromptBar } from "@/components/ai-suggestions/host";
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
 import {
@@ -74,6 +76,7 @@ import type { DocxComments } from "@/components/docx/app-docx-editor";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getTranslator } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -603,12 +606,51 @@ const persistQueuedSuggestions = async ({
     getAnalytics().captureError(toAPIError(error));
     return;
   }
-  useReviewStore
-    .getState()
-    .reconcileServerIds(
-      entityId,
-      Object.fromEntries(data.items.map(({ ref, id }) => [ref, id])),
+  const refToId = Object.fromEntries(
+    data.items.map(({ ref, id }) => [ref, id]),
+  );
+  useReviewStore.getState().reconcileServerIds(entityId, refToId);
+
+  // Persist-window replay: the user can accept / reject a suggestion in the
+  // gap between queueing it and this create response landing. Those
+  // resolutions ran against a not-yet-`persisted` row, so they never hit
+  // the server. Now that the rows exist (ids just reconciled in), replay any
+  // that are already terminal so the server matches the editor. Fires in
+  // parallel; a single failure surfaces one toast + telemetry.
+  const serverIds = new Set(Object.values(refToId));
+  const session = useReviewStore.getState().sessions[entityId];
+  if (session === undefined) {
+    return;
+  }
+  const replayTargets = session.filter(
+    (item): item is ReviewSuggestion & { status: "accepted" | "rejected" } =>
+      serverIds.has(item.id) &&
+      (item.status === "accepted" || item.status === "rejected"),
+  );
+  if (replayTargets.length === 0) {
+    return;
+  }
+  const replayResults = await Promise.all(
+    replayTargets.map(
+      async (item) =>
+        await resolveDocxSuggestionRequest({
+          workspaceId,
+          entityId,
+          suggestionId: item.id,
+          status: item.status,
+          appliedMode: item.applyMode ?? "tracked-changes",
+        }),
+    ),
+  );
+  if (replayResults.some((replayResult) => replayResult === "failed")) {
+    getAnalytics().captureError(
+      new Error("DOCX suggestion resolution replay failed to persist"),
     );
+    stellaToast.add({
+      title: getTranslator()("docxReview.persistFailed"),
+      type: "error",
+    });
+  }
 };
 
 // No tools are auto-blocked when an active file is present. The
@@ -1515,20 +1557,41 @@ const FileChatOverlayInner = ({
   // in a ref so a re-render can't double-run the same call.
   const executedActiveDocxEditToolCallIdsRef = useRef<Set<string> | null>(null);
   executedActiveDocxEditToolCallIdsRef.current ??= new Set<string>();
+  // Output computed on the FIRST attempt per tool-call id. A retry (after an
+  // `addToolResult` failure re-arms the part) must re-send this exact output
+  // rather than recompute: `handleActiveDocxEditToolCall` mints fresh uuids
+  // and re-queues + re-persists the suggestions, so recomputing would spawn
+  // duplicate review cards / server rows for one logical tool call.
+  const activeDocxEditOutputCacheRef = useRef<Map<
+    string,
+    ApplyActiveDocxEditsOutput
+  > | null>(null);
+  activeDocxEditOutputCacheRef.current ??= new Map<
+    string,
+    ApplyActiveDocxEditsOutput
+  >();
   const runActiveDocxEditToolCall = useLatestCallback(
     async (part: UnresolvedActiveDocxEditToolCallPart) => {
+      const outputCache = activeDocxEditOutputCacheRef.current;
       try {
-        const input = parseCompletedToolCallArguments(part);
-        const output = isApplyActiveDocxEditsInput(input)
-          ? handleActiveDocxEditToolCall(input)
-          : { version: 1 as const, applied: [], queued: [], skipped: [] };
+        // Compute (and queue + persist, inside the handler) only once; reuse
+        // the cached output on any retry.
+        let output = outputCache?.get(part.id);
+        if (output === undefined) {
+          const input = parseCompletedToolCallArguments(part);
+          output = isApplyActiveDocxEditsInput(input)
+            ? handleActiveDocxEditToolCall(input)
+            : { version: 1 as const, applied: [], queued: [], skipped: [] };
+          outputCache?.set(part.id, output);
+        }
         await addToolResult({
           output,
           tool: "apply-active-docx-edits",
           toolCallId: part.id,
         });
       } catch (toolCallError) {
-        // Allow a retry on a later render of the same unresolved part.
+        // Allow a retry on a later render of the same unresolved part. The
+        // cached output above keeps that retry from re-queuing / re-persisting.
         executedActiveDocxEditToolCallIdsRef.current?.delete(part.id);
         getAnalytics().captureError(toolCallError);
         try {
