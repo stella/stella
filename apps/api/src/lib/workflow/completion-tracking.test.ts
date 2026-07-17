@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
-import { parseEntityCompletionReply } from "@/api/lib/workflow/completion-tracking";
+import {
+  COMPLETE_ENTITY_SCRIPT,
+  parseEntityCompletionReply,
+  recordEntityCompletion,
+} from "@/api/lib/workflow/completion-tracking";
 
 describe("parseEntityCompletionReply", () => {
   test("reads a matched increment", () => {
@@ -44,5 +48,152 @@ describe("parseEntityCompletionReply", () => {
     expect(parseEntityCompletionReply([2, 3, 10])).toEqual({
       matched: false,
     });
+  });
+});
+
+// In-memory fake modelling the exact Redis commands COMPLETE_ENTITY_SCRIPT
+// issues. Mirrors the FakeRedisClient pattern used by the rate-limit tests:
+// the real Lua cannot run in-process, so `send("EVAL", …)` dispatches on the
+// production script constant and reproduces its GET / SADD / EXPIRE / SCARD
+// semantics against a Map. This exercises the real `recordEntityCompletion`
+// wiring (arg layout, reply parsing) and the script's documented behaviour.
+type FakeRedisState = {
+  strings: Map<string, string>;
+  sets: Map<string, Set<string>>;
+  ttlSec: Map<string, number>;
+};
+
+const arg = (args: string[], index: number): string => {
+  const value = args.at(index);
+  if (value === undefined) {
+    throw new TypeError(`Missing Redis argument at index ${index}`);
+  }
+  return value;
+};
+
+const createFakeRedis = (state: FakeRedisState) => ({
+  send: async (command: string, args: string[]): Promise<unknown> => {
+    if (command !== "EVAL" || arg(args, 0) !== COMPLETE_ENTITY_SCRIPT) {
+      throw new TypeError(`Unexpected Redis command: ${command}`);
+    }
+    // KEYS[1..4] then ARGV[1..4]; KEYS start at index 2 (after script + numkeys).
+    const requestIdKey = arg(args, 2);
+    const runningKey = arg(args, 3);
+    const completedEntitiesKey = arg(args, 4);
+    const totalKey = arg(args, 5);
+    const activeRequestId = arg(args, 6);
+    const legacyRunningLockValue = arg(args, 7);
+    const entityId = arg(args, 8);
+    const runStateTtlSec = Number(arg(args, 9));
+
+    const currentRequestId = state.strings.get(requestIdKey) ?? null;
+    const runningValue = state.strings.get(runningKey) ?? null;
+    if (currentRequestId !== activeRequestId) {
+      return [0, 0, 0];
+    }
+    if (
+      runningValue !== activeRequestId &&
+      runningValue !== legacyRunningLockValue
+    ) {
+      return [0, 0, 0];
+    }
+
+    const completedSet =
+      state.sets.get(completedEntitiesKey) ?? new Set<string>();
+    completedSet.add(entityId);
+    state.sets.set(completedEntitiesKey, completedSet);
+    state.ttlSec.set(completedEntitiesKey, runStateTtlSec);
+
+    const total = Number(state.strings.get(totalKey) ?? "0") || 0;
+    return [1, completedSet.size, total];
+  },
+});
+
+describe("recordEntityCompletion", () => {
+  const keys = {
+    requestId: "workflow:ws_1:request-id",
+    running: "workflow:ws_1:running",
+    completedEntities: "workflow:ws_1:completed-entities",
+    total: "workflow:ws_1:total",
+  };
+  const activeRequestId = "req_1";
+  const legacyRunningLockValue = "1";
+
+  const seedActiveRun = (total: number): FakeRedisState => ({
+    strings: new Map([
+      [keys.requestId, activeRequestId],
+      [keys.running, activeRequestId],
+      [keys.total, String(total)],
+    ]),
+    sets: new Map(),
+    ttlSec: new Map(),
+  });
+
+  const complete = (state: FakeRedisState, entityId: string) =>
+    recordEntityCompletion({
+      redis: createFakeRedis(state),
+      keys,
+      activeRequestId,
+      legacyRunningLockValue,
+      entityId,
+      runStateTtlSec: 3600,
+    });
+
+  test("counts distinct entities, not repeated completions of the same one", async () => {
+    // The class of bug: an entity job can run its completion path more than
+    // once for the same run (timeout after completion, stalled-job reclaim,
+    // exhausted-retry failure handler). A blind counter would over-count and
+    // let `completed` reach `total` while another entity is still mid-flight.
+    const state = seedActiveRun(2);
+
+    const first = await complete(state, "entity_a");
+    expect(first).toEqual({ matched: true, completed: 1, total: 2 });
+
+    // Same entity again: idempotent, count does not advance and the run must
+    // NOT be treated as finished (completed stays below total).
+    const retry = await complete(state, "entity_a");
+    expect(retry).toEqual({ matched: true, completed: 1, total: 2 });
+
+    // A genuinely distinct entity finally reaches the total.
+    const second = await complete(state, "entity_b");
+    expect(second).toEqual({ matched: true, completed: 2, total: 2 });
+  });
+
+  test("does not finalize early when one entity double-completes", async () => {
+    const state = seedActiveRun(3);
+    // Two completions from entity_a (retry) plus one from entity_b: a counter
+    // would read 3 and finalize; the set reads 2 distinct, so the run stays
+    // open for the still-pending third entity.
+    await complete(state, "entity_a");
+    await complete(state, "entity_a");
+    const latest = await complete(state, "entity_b");
+
+    expect(latest.matched).toBe(true);
+    if (!latest.matched) {
+      throw new Error("expected a matched completion");
+    }
+    expect(latest.completed).toBe(2);
+    expect(latest.completed < latest.total).toBe(true);
+  });
+
+  test("gives the completed-entities set the run-state TTL", async () => {
+    const state = seedActiveRun(1);
+    await complete(state, "entity_a");
+    // Guards the no-TTL-leak fix: the set is created by the script and must
+    // carry the run-state TTL so it self-heals rather than lingering forever.
+    expect(state.ttlSec.get(keys.completedEntities)).toBe(3600);
+  });
+
+  test("does not record a completion for a superseded request", async () => {
+    const state = seedActiveRun(2);
+    // A new run reset the request-id/running lock; the stale job's completion
+    // must be a no-op, leaving the new run's set untouched.
+    state.strings.set(keys.requestId, "req_2");
+    state.strings.set(keys.running, "req_2");
+
+    const result = await complete(state, "entity_a");
+
+    expect(result).toEqual({ matched: false });
+    expect(state.sets.get(keys.completedEntities)).toBeUndefined();
   });
 });
