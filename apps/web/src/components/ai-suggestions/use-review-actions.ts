@@ -8,6 +8,7 @@
  * keep `pendingOperation` for a later revert) and can never drift.
  */
 
+import { useRef } from "react";
 import type { RefObject } from "react";
 
 import { useRouteContext } from "@tanstack/react-router";
@@ -211,6 +212,37 @@ export const useReviewActions = ({
   //     as an error for telemetry.
   //   - "synced": nothing to do.
 
+  // Per-suggestion serialization queue. A suggestion's server mutations
+  // (resolve / revert) must run in submission order: a fast Accept-then-
+  // Revert could otherwise send the revert first — it would hit a still-
+  // `pending` server row, return `"stale"` (treated as a local no-op) while
+  // the resolve lands afterward and flips the server row to `accepted`,
+  // leaving local pending / server accepted so a reload re-arms the
+  // suggestion. Chaining each id's network calls guarantees the revert runs
+  // AFTER the accept's resolve completes (server ends accepted, then the
+  // revert legitimately flips it back to pending — consistent). Optimistic
+  // local state changes stay immediate; only the network calls are ordered.
+  const mutationChainRef = useRef<Map<string, Promise<unknown>>>(new Map());
+  const runSerialized = useLatestCallback(
+    async (
+      id: string,
+      task: () => Promise<DocxResolveResult>,
+    ): Promise<DocxResolveResult> => {
+      const prev = mutationChainRef.current.get(id) ?? Promise.resolve();
+      const next = prev.then(
+        async () => await task(),
+        async () => await task(),
+      );
+      mutationChainRef.current.set(id, next);
+      void next.finally(() => {
+        if (mutationChainRef.current.get(id) === next) {
+          mutationChainRef.current.delete(id);
+        }
+      });
+      return await next;
+    },
+  );
+
   const toastPersistFailed = useLatestCallback(() => {
     stellaToast.add({ title: t("docxReview.persistFailed"), type: "error" });
   });
@@ -301,13 +333,17 @@ export const useReviewActions = ({
     // retried. `appliedMode` mirrors what `recordOutcome` stored.
     if (item.persisted === true && outcome.status === "accepted") {
       void (async () => {
-        const result = await resolveDocxSuggestionRequest({
-          workspaceId,
-          entityId,
-          suggestionId: item.id,
-          status: "accepted",
-          appliedMode: applyMode,
-        });
+        const result = await runSerialized(
+          item.id,
+          async () =>
+            await resolveDocxSuggestionRequest({
+              workspaceId,
+              entityId,
+              suggestionId: item.id,
+              status: "accepted",
+              appliedMode: applyMode,
+            }),
+        );
         if (result === "synced") {
           return;
         }
@@ -333,13 +369,17 @@ export const useReviewActions = ({
     updateSuggestion(entityId, item.id, { status: "rejected" });
     if (item.persisted === true) {
       void (async () => {
-        const result = await resolveDocxSuggestionRequest({
-          workspaceId,
-          entityId,
-          suggestionId: item.id,
-          status: "rejected",
-          appliedMode: null,
-        });
+        const result = await runSerialized(
+          item.id,
+          async () =>
+            await resolveDocxSuggestionRequest({
+              workspaceId,
+              entityId,
+              suggestionId: item.id,
+              status: "rejected",
+              appliedMode: null,
+            }),
+        );
         if (result === "synced") {
           return;
         }
@@ -386,11 +426,15 @@ export const useReviewActions = ({
       return;
     }
     void (async () => {
-      const result = await revertDocxSuggestionRequest({
-        workspaceId,
-        entityId,
-        suggestionId: item.id,
-      });
+      const result = await runSerialized(
+        item.id,
+        async () =>
+          await revertDocxSuggestionRequest({
+            workspaceId,
+            entityId,
+            suggestionId: item.id,
+          }),
+      );
       // "stale" means the server row was still pending — the same state we
       // just moved the local suggestion to, so nothing to reconcile and no
       // toast. "synced" is the happy path.
@@ -444,13 +488,17 @@ export const useReviewActions = ({
       void (async () => {
         const results = await Promise.all(
           toPersist.map(async ({ item, outcome }) => {
-            const result = await resolveDocxSuggestionRequest({
-              workspaceId,
-              entityId,
-              suggestionId: item.id,
-              status: "accepted",
-              appliedMode: applyMode,
-            });
+            const result = await runSerialized(
+              item.id,
+              async () =>
+                await resolveDocxSuggestionRequest({
+                  workspaceId,
+                  entityId,
+                  suggestionId: item.id,
+                  status: "accepted",
+                  appliedMode: applyMode,
+                }),
+            );
             if (result === "synced") {
               return result;
             }
@@ -480,13 +528,17 @@ export const useReviewActions = ({
     void (async () => {
       const results = await Promise.all(
         toPersist.map(async (item) => {
-          const result = await resolveDocxSuggestionRequest({
-            workspaceId,
-            entityId,
-            suggestionId: item.id,
-            status: "rejected",
-            appliedMode: null,
-          });
+          const result = await runSerialized(
+            item.id,
+            async () =>
+              await resolveDocxSuggestionRequest({
+                workspaceId,
+                entityId,
+                suggestionId: item.id,
+                status: "rejected",
+                appliedMode: null,
+              }),
+          );
           if (result === "synced") {
             return result;
           }

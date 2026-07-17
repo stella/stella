@@ -336,7 +336,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 506,
+    "count": 507,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -363,7 +363,7 @@
       "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 5,
       "apps/web/src/components/ai-suggestions/review-bar.tsx": 2,
       "apps/web/src/components/ai-suggestions/review-panel.impl.tsx": 1,
-      "apps/web/src/components/ai-suggestions/use-review-actions.ts": 5,
+      "apps/web/src/components/ai-suggestions/use-review-actions.ts": 6,
       "apps/web/src/components/app-sidebar.tsx": 14,
       "apps/web/src/components/auth/otp-panel.tsx": 1,
       "apps/web/src/components/auth/sign-in-dialog.tsx": 2,

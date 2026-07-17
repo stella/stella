@@ -556,6 +556,12 @@ type PersistQueuedSuggestionsOptions = {
   entityId: string;
   chatThreadId: ChatThreadId | undefined;
   items: readonly ReviewSuggestion[];
+  /**
+   * Live editor ref. A failed persist-window replay (below) rolls the
+   * local accept/reject BACK to pending to match the still-pending server
+   * row; undoing an already-applied editor op needs this ref.
+   */
+  docxEditorRef: RefObject<DocxEditorRef | null>;
 };
 
 /**
@@ -573,6 +579,7 @@ const persistQueuedSuggestions = async ({
   entityId,
   chatThreadId,
   items,
+  docxEditorRef,
 }: PersistQueuedSuggestionsOptions): Promise<void> => {
   const suggestions = items.flatMap((item) =>
     item.pendingOperation === null
@@ -634,26 +641,60 @@ const persistQueuedSuggestions = async ({
     return;
   }
   const replayResults = await Promise.all(
-    replayTargets.map(
-      async (item) =>
-        await resolveDocxSuggestionRequest({
-          workspaceId,
-          entityId,
-          suggestionId: item.id,
-          status: item.status,
-          appliedMode: item.applyMode ?? "tracked-changes",
-        }),
-    ),
+    replayTargets.map(async (item) => ({
+      id: item.id,
+      replayResult: await resolveDocxSuggestionRequest({
+        workspaceId,
+        entityId,
+        suggestionId: item.id,
+        status: item.status,
+        appliedMode: item.applyMode ?? "tracked-changes",
+      }),
+    })),
   );
-  if (replayResults.some((replayResult) => replayResult === "failed")) {
-    getAnalytics().captureError(
-      new Error("DOCX suggestion resolution replay failed to persist"),
-    );
-    stellaToast.add({
-      title: getTranslator()("docxReview.persistFailed"),
-      type: "error",
-    });
+  const failedTargets = replayResults.filter(
+    ({ replayResult }) => replayResult === "failed",
+  );
+  if (failedTargets.length === 0) {
+    return;
   }
+
+  // A `"failed"` replay left the local accept/reject applied while the
+  // server row stays `pending`: a reload would restore an actionable copy
+  // and let the same op apply twice. Roll each failed target back to
+  // pending to match the still-pending server row. Read the CURRENT store
+  // row (not the pre-replay snapshot) so we undo the op that actually
+  // landed; an accepted row's editor op is reversed via its undoHandle.
+  const currentSession = useReviewStore.getState().sessions[entityId];
+  for (const { id } of failedTargets) {
+    const row = currentSession?.find((candidate) => candidate.id === id);
+    if (row === undefined) {
+      continue;
+    }
+    if (row.status === "accepted") {
+      if (row.undoHandle !== null) {
+        docxEditorRef.current?.undoDocumentOperations(row.undoHandle);
+      }
+      useReviewStore.getState().updateSuggestion(entityId, id, {
+        status: "pending",
+        revisionIds: null,
+        undoHandle: null,
+        applyMode: null,
+      });
+    } else if (row.status === "rejected") {
+      useReviewStore
+        .getState()
+        .updateSuggestion(entityId, id, { status: "pending" });
+    }
+  }
+
+  getAnalytics().captureError(
+    new Error("DOCX suggestion resolution replay failed to persist"),
+  );
+  stellaToast.add({
+    title: getTranslator()("docxReview.persistFailed"),
+    type: "error",
+  });
 };
 
 // No tools are auto-blocked when an active file is present. The
@@ -1063,12 +1104,17 @@ const FileChatOverlayInner = ({
       // gets its `queued` ids synchronously below, and a persist failure
       // degrades gracefully to the in-memory-only flow (no server ids =>
       // `persisted` stays false => resolve/revert never call the server).
-      if (hasDocxEditSurface && workspaceId !== undefined && items.length > 0) {
+      if (
+        docxEditorRef !== undefined &&
+        workspaceId !== undefined &&
+        items.length > 0
+      ) {
         void persistQueuedSuggestions({
           workspaceId,
           entityId: activeFile.entityId,
           chatThreadId,
           items,
+          docxEditorRef,
         });
       }
       return {
