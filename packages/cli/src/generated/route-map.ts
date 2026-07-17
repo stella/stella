@@ -46946,6 +46946,76 @@ export const generatedRouteMap: RouteNode = {
             schemaTruncated: false,
           },
         },
+        "list-exports": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["reports", "list-exports"],
+            capabilityId: "reports.list-exports",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+            ],
+            inputOnly: [],
+            paginated: true,
+            paginationPart: "query",
+            itemsKey: "items",
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["workspaceId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+                query: {
+                  type: "object",
+                  properties: {
+                    cursor: {
+                      maxLength: 512,
+                      type: "string",
+                    },
+                    limit: {
+                      minimum: 1,
+                      maximum: 100,
+                      anyOf: [
+                        {
+                          format: "integer",
+                          default: 0,
+                          type: "string",
+                        },
+                        {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
         "list-templates": {
           kind: "capability-leaf",
           spec: {
