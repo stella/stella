@@ -28403,6 +28403,15 @@ export const generatedRouteMap: RouteNode = {
                     part: "body",
                     partPath: "promptCachingEnabled",
                   },
+                  {
+                    kind: "boolean",
+                    repeatable: false,
+                    flag: "--memory-extraction-enabled",
+                    prop: "memoryExtractionEnabled",
+                    required: false,
+                    part: "body",
+                    partPath: "memoryExtractionEnabled",
+                  },
                 ],
                 inputOnly: [
                   "body.documentProcessingMode",
@@ -28452,6 +28461,9 @@ export const generatedRouteMap: RouteNode = {
                           ],
                         },
                         promptCachingEnabled: {
+                          type: "boolean",
+                        },
+                        memoryExtractionEnabled: {
                           type: "boolean",
                         },
                       },

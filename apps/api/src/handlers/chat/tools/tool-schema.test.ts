@@ -41,6 +41,7 @@ import {
   RESOLVE_COMMENT_TOOL_NAME,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import { REMEMBER_TOOL_NAME } from "@/api/handlers/chat/tools/remember-tool";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import { COMPARE_VERSIONS_TOOL_NAME } from "@/api/handlers/chat/tools/version-compare-tools";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
@@ -176,6 +177,7 @@ const buildFullCoverageChatTools = () => {
     safeDb: unusedSafeDb,
     scopedDb: unusedScopedDb,
     threadId,
+    workspaceId: null,
     userId,
     toolWorkspaceIds: resolveToolWorkspaceIds({
       pinnedIds: [],
@@ -195,6 +197,7 @@ const buildFullCoverageChatTools = () => {
     activeSkillContext: editableActiveSkillContext,
     recordAuditEvent: noopAuditRecorder,
     workspaceStatusById: new Map([[workspaceId, "active"]]),
+    resolveMemorySourceWorkspaceIds: () => [],
     skillMetadata: [
       {
         description: editableActiveSkillContext.description,
@@ -571,6 +574,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
@@ -580,6 +584,8 @@ describe("chat tool schemas", () => {
       hasActiveDocxFileClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      recordAuditEvent: noopAuditRecorder,
+      resolveMemorySourceWorkspaceIds: () => [],
     });
 
     expect(tools).toHaveProperty("ask-user");
@@ -591,6 +597,14 @@ describe("chat tool schemas", () => {
     expect(tools).toHaveProperty("execute_typescript");
     expect(tools).toHaveProperty("discover_tools");
     expect(tools).toHaveProperty("create-document");
+    expect(tools).toHaveProperty(REMEMBER_TOOL_NAME);
+    const remember = tools[REMEMBER_TOOL_NAME];
+    expect(remember?.needsApproval).toBe(true);
+    expect(remember ? getChatToolPolicy(remember) : null).toEqual({
+      kind: "mutation",
+      needsApproval: true,
+      requiresAnonymization: false,
+    });
     expect(tools).toHaveProperty("update-entity-fields");
     expect(tools).not.toHaveProperty("search-across-matters");
     expect(tools).not.toHaveProperty("read-content-across-matters");
@@ -614,6 +628,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
@@ -727,6 +742,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
@@ -785,6 +801,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
@@ -810,6 +827,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
@@ -839,6 +857,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
@@ -850,6 +869,7 @@ describe("chat tool schemas", () => {
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: editableActiveSkillContext,
       recordAuditEvent: noopAuditRecorder,
+      resolveMemorySourceWorkspaceIds: () => [],
       skillMetadata: [
         {
           description: editableActiveSkillContext.description,
@@ -893,6 +913,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
@@ -907,6 +928,7 @@ describe("chat tool schemas", () => {
         body: "a".repeat(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS + 1),
       },
       recordAuditEvent: noopAuditRecorder,
+      resolveMemorySourceWorkspaceIds: () => [],
       skillMetadata: [
         {
           description: editableActiveSkillContext.description,
@@ -933,6 +955,7 @@ describe("chat tool schemas", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
@@ -1771,6 +1794,7 @@ describe("chat tool schemas", () => {
       hasActiveDocxEditClient: false,
       hasActiveDocxFileClient: false,
       recordAuditEvent: noopAuditRecorder,
+      workspaceId: null,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -1857,6 +1881,7 @@ describe("chat tool schemas", () => {
       hasActiveDocxFileClient: false,
       recordAuditEvent: noopAuditRecorder,
       activeFile,
+      workspaceId: null,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -2003,6 +2028,7 @@ describe("registry write tool approval policy", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
@@ -2013,6 +2039,7 @@ describe("registry write tool approval policy", () => {
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
+      resolveMemorySourceWorkspaceIds: () => [],
     });
 
   test("every projected write tool needs approval and is classified mutation", () => {
@@ -2041,6 +2068,7 @@ describe("registry write tool approval policy", () => {
       safeDb: unusedSafeDb,
       scopedDb: unusedScopedDb,
       threadId,
+      workspaceId: null,
       userId,
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
@@ -2051,6 +2079,7 @@ describe("registry write tool approval policy", () => {
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       recordAuditEvent: noopAuditRecorder,
+      resolveMemorySourceWorkspaceIds: () => [],
     });
 
     for (const name of projectedWriteNames) {

@@ -173,19 +173,17 @@ const VersionRow = ({
       {canRestore && (
         <AlertDialog onOpenChange={setConfirmOpen} open={confirmOpen}>
           <Button
-            aria-label={t("knowledge.playbooks.versions.restore")}
+            aria-label={t("common.restore")}
             onClick={() => setConfirmOpen(true)}
             size="sm"
             variant="outline"
           >
             <RotateCcwIcon />
-            {t("knowledge.playbooks.versions.restore")}
+            {t("common.restore")}
           </Button>
           <AlertDialogPopup>
             <AlertDialogHeader>
-              <AlertDialogTitle>
-                {t("knowledge.playbooks.versions.restore")}
-              </AlertDialogTitle>
+              <AlertDialogTitle>{t("common.restore")}</AlertDialogTitle>
               <AlertDialogDescription>
                 {t("knowledge.playbooks.versions.confirmRestore")}
               </AlertDialogDescription>
@@ -203,7 +201,7 @@ const VersionRow = ({
                 }}
                 variant="destructive"
               >
-                {t("knowledge.playbooks.versions.restore")}
+                {t("common.restore")}
               </Button>
             </AlertDialogFooter>
           </AlertDialogPopup>

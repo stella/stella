@@ -58,6 +58,10 @@ import {
   type ChatRegistryWriteToolMap,
 } from "@/api/handlers/chat/tools/registry-write-tools";
 import {
+  createRememberTool,
+  REMEMBER_TOOL_NAME,
+} from "@/api/handlers/chat/tools/remember-tool";
+import {
   createSpawnSubagentsTool,
   SPAWN_SUBAGENTS_TOOL_NAME,
   SUBAGENT_DELEGATION_DEPTH_CAP,
@@ -251,6 +255,7 @@ type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
 type VersionCompareTools = ReturnType<typeof createVersionCompareTools>;
 type RegistryWriteTools = ChatRegistryWriteToolMap;
 type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
+type RememberTools = ReturnType<typeof createRememberTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -271,7 +276,8 @@ type BuiltInChatTools = OrgTools &
   TemplateAuthoringTools &
   VersionCompareTools &
   RegistryWriteTools &
-  SubagentTools;
+  SubagentTools &
+  RememberTools;
 
 export type ChatTools = BuiltInChatTools;
 
@@ -309,6 +315,13 @@ type GetChatToolsProps = {
    */
   requestWorkspaceId: SafeId<"workspace"> | null;
   threadId: SafeId<"chatThread">;
+  /**
+   * The matter this chat is bound to, when any. `null` for global
+   * chats. Distinct from `toolWorkspaceIds` (the read-authorized
+   * matter set): this is the single matter that scopes workspace
+   * memory writes via the `remember` tool.
+   */
+  workspaceId: SafeId<"workspace"> | null;
   excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   userId: SafeId<"user">;
   // Use `resolveToolWorkspaceIds` to construct this — that helper is
@@ -391,6 +404,14 @@ type GetChatToolsProps = {
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
   /**
+   * Execution-time matter provenance for durable memories created during this
+   * turn. The resolver must include the initial prompt/thread scope and refs
+   * registered by tools or subagents before the memory write.
+   */
+  resolveMemorySourceWorkspaceIds?:
+    | (() => readonly SafeId<"workspace">[])
+    | undefined;
+  /**
    * Status of every accessible (non-deleting) workspace, keyed by id. Threaded
    * into the projected write tools' MCP context so their `ensureActiveWorkspace`
    * gate keeps archived matters read-only, matching MCP/REST writes.
@@ -444,6 +465,36 @@ const createActiveDocxEditTools = () => ({
 
 const createCreateDocumentTools = () => ({
   [CREATE_DOCUMENT_TOOL_NAME]: createCreateDocumentTool(),
+});
+
+type CreateRememberToolsProps = {
+  canManageWorkspaceMemory: boolean;
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  resolveSourceDataWorkspaceIds: () => readonly SafeId<"workspace">[];
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const createRememberTools = ({
+  canManageWorkspaceMemory,
+  organizationId,
+  recordAuditEvent,
+  safeDb,
+  resolveSourceDataWorkspaceIds,
+  userId,
+  workspaceId,
+}: CreateRememberToolsProps) => ({
+  [REMEMBER_TOOL_NAME]: createRememberTool({
+    canManageWorkspaceMemory,
+    organizationId,
+    recordAuditEvent,
+    safeDb,
+    resolveSourceDataWorkspaceIds,
+    userId,
+    workspaceId,
+  }),
 });
 
 const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
@@ -503,6 +554,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   [READ_DOCUMENT_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
+  [REMEMBER_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.mutation,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
@@ -570,6 +622,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     orgAIConfig,
     requestWorkspaceId,
     threadId,
+    workspaceId,
     excludedChatHistoryMessageIds,
     userId,
     toolWorkspaceIds,
@@ -586,12 +639,12 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     skillMetadata,
     activeSkillContext,
     recordAuditEvent,
+    resolveMemorySourceWorkspaceIds,
     workspaceStatusById,
     editApplyMode = DEFAULT_CHAT_EDIT_APPLY_MODE,
     docxEditRepresentation = DEFAULT_DOCX_EDIT_REPRESENTATION,
     includeAllDocxEditToolsForValidation = false,
   } = props;
-
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
@@ -695,6 +748,28 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     safeDb,
     threadId,
   });
+  // Memory writes audit like the REST memories handlers, so the tool
+  // needs a recorder and explicit provenance; callers without either
+  // (schema-only construction) get no remember tool rather than an
+  // unaudited or cross-matter write path.
+  const rememberTools =
+    recordAuditEvent === undefined ||
+    resolveMemorySourceWorkspaceIds === undefined
+      ? {}
+      : createRememberTools({
+          canManageWorkspaceMemory:
+            roles[memberRole].authorize({
+              workspace: ["update"],
+            }).success &&
+            workspaceId !== null &&
+            workspaceStatusById?.get(workspaceId) === "active",
+          organizationId,
+          recordAuditEvent,
+          safeDb,
+          resolveSourceDataWorkspaceIds: resolveMemorySourceWorkspaceIds,
+          userId,
+          workspaceId,
+        });
   const externalChatTools = applyChatToolPolicies({
     defaultPolicyKind: CHAT_TOOL_POLICY_KIND.external,
     tools: externalTools,
@@ -922,6 +997,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...templateTools,
       ...templateAuthoringTools,
       ...historyTools,
+      ...rememberTools,
       ...createDocumentTools,
       ...createWorkspaceDocumentTools,
       ...editWorkspaceDocumentTools,

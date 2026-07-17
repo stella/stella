@@ -14,6 +14,8 @@ import { EXPIRE_DESKTOP_EDIT_SESSIONS_TASK } from "@/api/lib/scheduler/tasks/des
 import { DISPATCH_DOCUMENT_OCR_TASK } from "@/api/lib/scheduler/tasks/document-processing-ocr";
 import { INFO_SOUD_SYNC_TRACKED_CASES_TASK } from "@/api/lib/scheduler/tasks/infosoud";
 import { REPAIR_CHAT_SEARCH_INDEX_TASK } from "@/api/lib/scheduler/tasks/search-chat-index";
+import { MEMORY_CURATOR_TASK } from "@/api/lib/scheduler/tasks/memory-curator";
+import { MEMORY_EXTRACTOR_TASK } from "@/api/lib/scheduler/tasks/memory-extractor";
 import { REPAIR_SEARCH_SEMANTIC_TIMESTAMPS_TASK } from "@/api/lib/scheduler/tasks/search-semantic-timestamps";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
 
@@ -220,6 +222,30 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "recurring",
     schedule: { type: "interval", everyMs: 15 * 60 * 1000 },
     task: BACKFILL_SK_DOCUMENTS_TASK,
+  },
+  {
+    description:
+      "Age AI memories through the active -> stale -> archived lifecycle",
+    id: "memory.curator.nightly",
+    mode: "recurring",
+    schedule: {
+      type: "daily",
+      hour: 2,
+      minute: 0,
+      timeZone: "Europe/Prague",
+    },
+    task: MEMORY_CURATOR_TASK,
+  },
+  {
+    description:
+      "Extract suggested AI memories from new chat-thread compactions",
+    id: "memory.extractor.hourly",
+    mode: "recurring",
+    schedule: {
+      type: "interval",
+      everyMs: 60 * 60 * 1000,
+    },
+    task: MEMORY_EXTRACTOR_TASK,
   },
 ] as const satisfies readonly DeclaredSchedulerJob[];
 

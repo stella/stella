@@ -202,6 +202,10 @@ export const workspaces = p.pgTable(
     p
       .unique("workspaces_org_reference_uidx")
       .on(table.organizationId, table.reference),
+    // Composite tenant key for child tables that carry both workspace and
+    // organization IDs. This makes a cross-tenant pair impossible even on
+    // root/background write paths that bypass RLS.
+    p.unique("workspaces_id_org_unq").on(table.id, table.organizationId),
     p
       .index("workspaces_org_client_id_idx")
       .on(table.organizationId, table.clientId)

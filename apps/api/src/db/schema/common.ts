@@ -14,6 +14,7 @@ import { jsonb, timestamptz } from "@/api/db/columns";
 import {
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  aiMemoryPolicies,
   chatMessageSearchDocumentPolicies,
   chatMessagePolicies,
   chatTurnPolicies,
@@ -394,6 +395,7 @@ export {
 export {
   agentSkillPolicies,
   agentSkillResourcePolicies,
+  aiMemoryPolicies,
   chatMessagePolicies,
   chatTurnPolicies,
   chatMessageSearchDocumentPolicies,

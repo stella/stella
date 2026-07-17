@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import {
+  BrainIcon,
   FlaskConicalIcon,
   GaugeIcon,
   HashIcon,
@@ -20,6 +21,7 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
+import { authClient } from "@/lib/auth";
 import { roleOptions } from "@/lib/auth-queries";
 import { betaFeaturesAvailable } from "@/lib/beta-features";
 import { useKeyboardShortcutsDialogStore } from "@/lib/keyboard-shortcuts-dialog-store";
@@ -37,6 +39,7 @@ type NavTo =
   | "/settings/account/profile"
   | "/settings/account/desktop"
   | "/settings/account/connections"
+  | "/settings/account/memory"
   | "/settings/account/beta"
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
@@ -82,6 +85,14 @@ const ACCOUNT_SECTION = {
       to: "/settings/account/connections",
       labelKey: "settings.connections.title",
       icon: PlugIcon,
+    },
+    {
+      // Personal + firm + matter memory in one panel. Reachable by
+      // every member (RLS scopes what they see); firm-library
+      // creation is gated inside the panel by the firmMemory role.
+      to: "/settings/account/memory",
+      labelKey: "memory.pageTitle",
+      icon: BrainIcon,
     },
     // Beta features: only on hosts where users may flip them (dev,
     // staging); appended conditionally in SettingsLayout.
@@ -140,6 +151,15 @@ function SettingsLayout() {
   const { data: role } = useQuery({ ...roleOptions, throwOnError: true });
   const showOrganization = role !== undefined && managementRoles.includes(role);
   const openShortcuts = useKeyboardShortcutsDialogStore((store) => store.open);
+  const canUseMemory =
+    role !== undefined &&
+    authClient.organization.checkRolePermission({
+      role,
+      permissions: { chat: ["create"] },
+    });
+  const accountItems = ACCOUNT_SECTION.items.filter(
+    (item) => item.to !== "/settings/account/memory" || canUseMemory,
+  );
 
   // No `Section` annotation: it would widen labelKey to the full
   // TranslationKey union, whose ICU-variable members make t() demand a
@@ -147,9 +167,9 @@ function SettingsLayout() {
   const accountSection = betaFeaturesAvailable()
     ? ({
         ...ACCOUNT_SECTION,
-        items: [...ACCOUNT_SECTION.items, BETA_NAV_ITEM],
+        items: [...accountItems, BETA_NAV_ITEM],
       } as const)
-    : ACCOUNT_SECTION;
+    : ({ ...ACCOUNT_SECTION, items: accountItems } as const);
   const sections = showOrganization
     ? [accountSection, ORGANIZATION_SECTION]
     : [accountSection];
