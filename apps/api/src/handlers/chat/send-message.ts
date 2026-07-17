@@ -832,6 +832,19 @@ const sendMessage = createSafeRootHandler(
         }),
       );
 
+      // The incoming message is durable now, so a disconnect must not run the
+      // pre-persistence rollback (which would delete files referenced by that
+      // message). It should still stop before connector discovery and any
+      // metered provider work.
+      if (isClientConnectionAborted()) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Client disconnected before stream started",
+          }),
+        );
+      }
+
       // The streaming pass always needs the external MCP tool set (for the
       // tool map, the connector system hint, and the `externalMcpToolSource`
       // handed to `streamChat` below). This is the point where discovery

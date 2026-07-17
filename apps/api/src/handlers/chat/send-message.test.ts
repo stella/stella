@@ -17,6 +17,21 @@ void mock.module("@/api/lib/web-search/load-org-keys", () => ({
   }),
 }));
 
+const upsertChatThreadSearchDocumentMock = mock(async () => undefined);
+void mock.module("@/api/lib/search/index-chat", () => ({
+  upsertChatThreadSearchDocument: upsertChatThreadSearchDocumentMock,
+}));
+
+const externalMcpToolsModule =
+  await import("@/api/handlers/chat/tools/external-mcp-tools");
+const loadExternalMcpToolsForUserMock = mock(async () => {
+  throw new Error("Connector discovery must not run after a disconnect");
+});
+void mock.module("@/api/handlers/chat/tools/external-mcp-tools", () => ({
+  ...externalMcpToolsModule,
+  loadExternalMcpToolsForUser: loadExternalMcpToolsForUserMock,
+}));
+
 let analyticsCreationHook: (() => void) | undefined;
 void mock.module("@/api/lib/analytics/tanstack-ai", () => ({
   createTanStackAIAnalyticsCallbacks: () => {
@@ -382,5 +397,57 @@ describe("send message disconnect handling", () => {
     expect(findOrganizationSettings).toHaveBeenCalledTimes(2);
     expect(insertValues).toHaveBeenCalledTimes(1);
     expect(deleteReturning).toHaveBeenCalledTimes(1);
+  });
+
+  test("stops before connector discovery when the client disconnects during persistence", async () => {
+    const abortController = new AbortController();
+    const insertValues = mock(async () => undefined);
+    const updateWhere = mock(async () => {
+      abortController.abort();
+    });
+    loadExternalMcpToolsForUserMock.mockClear();
+    upsertChatThreadSearchDocumentMock.mockClear();
+
+    const result = await sendMessage.handler(
+      createContext({
+        contextMatterIds: [],
+        request: new Request("http://localhost/v1/chat/send", {
+          signal: abortController.signal,
+        }),
+        transaction: {
+          insert: () => ({ values: insertValues }),
+          query: {
+            chatMessages: { findFirst: async () => null },
+            chatThreadCompactions: { findFirst: async () => null },
+            chatThreads: {
+              findFirst: async () => ({
+                chatModel: null,
+                contextMatterIds: [],
+                dataWorkspaceIds: [],
+                id: threadId,
+                rollbackToken: null,
+                title: "Existing thread",
+                webSearchEnabled: false,
+                workspaceId: null,
+              }),
+            },
+            organizationSettings: { findFirst: async () => null },
+          },
+          select: selectChatMessages,
+          update: () => ({
+            set: () => ({ where: updateWhere }),
+          }),
+        },
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Client disconnected before stream started" },
+    });
+    expect(insertValues).toHaveBeenCalledTimes(1);
+    expect(updateWhere).toHaveBeenCalledTimes(1);
+    expect(upsertChatThreadSearchDocumentMock).toHaveBeenCalledWith(threadId);
+    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
   });
 });
