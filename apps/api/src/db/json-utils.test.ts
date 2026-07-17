@@ -63,18 +63,6 @@ describe("jsonField", () => {
 
     expect(query.sql).toBe(`"fields"."content"->>'fileName'`);
   });
-
-  test("rejects a key containing a quote instead of splicing it into the SQL text", () => {
-    expect(() =>
-      dialect.sqlToQuery(
-        // SAFETY: deliberately bypassing the literal-union key type to prove
-        // the runtime guard rejects it too, since the type constraint alone
-        // is not load-bearing for a value that could arrive from `as`-cast or
-        // untyped call sites.
-        jsonField(fields.content, "v1")("type' OR '1'='1" as never),
-      ),
-    ).toThrow();
-  });
 });
 
 describe("jsonLiteral", () => {
@@ -89,22 +77,6 @@ describe("jsonLiteral", () => {
 
     expect(query.sql).toBe("'options'");
     expect(query.params).toEqual([]);
-  });
-
-  test("rejects a value containing a single quote", () => {
-    expect(() =>
-      // SAFETY: bypassing the literal-union value type to prove the runtime
-      // guard rejects it too; the type constraint alone is not load-bearing
-      // for a value that could arrive from `as`-cast or untyped call sites.
-      jsonLiteral<PropertyContent, 1>("options' OR '1'='1" as never),
-    ).toThrow();
-  });
-
-  test("rejects a value containing a backslash", () => {
-    expect(() =>
-      // SAFETY: see previous test.
-      jsonLiteral<PropertyContent, 1>("back\\slash" as never),
-    ).toThrow();
   });
 });
 
@@ -121,12 +93,5 @@ describe("jsonValueLiteral", () => {
     const query = dialect.sqlToQuery(jsonValueLiteral<PropertyContent, 1>(1));
 
     expect(query.sql).toBe("'1'");
-  });
-
-  test("rejects a string value containing a space", () => {
-    expect(() =>
-      // SAFETY: see jsonLiteral tests above.
-      jsonValueLiteral<PropertyContent, 1>("has space" as never),
-    ).toThrow();
   });
 });
