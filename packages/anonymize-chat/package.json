@@ -21,7 +21,9 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "fast-check": "catalog:"
   }
 }
