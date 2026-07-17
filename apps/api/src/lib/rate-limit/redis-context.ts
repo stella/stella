@@ -307,7 +307,7 @@ type ParsedRequestScopedKey = {
 
 const parseRequestScopedKey = (key: string): ParsedRequestScopedKey => {
   const separatorIndex = key.lastIndexOf(REQUEST_KEY_SEPARATOR);
-  if (separatorIndex < 0) {
+  if (separatorIndex === -1) {
     return { counterKey: key, requestId: null };
   }
   return {
@@ -320,8 +320,8 @@ const requestScopedGenerator = (scope: string): Generator => {
   const generateCounterKey = scopedGenerator(scope);
   const requestIds = new WeakMap<Request, string>();
 
-  return (request, server) => {
-    const counterKey = generateCounterKey(request, server);
+  return async (request, server, derived) => {
+    const counterKey = await generateCounterKey(request, server, derived);
     let requestId = requestIds.get(request);
     if (requestId === undefined) {
       requestId = Bun.randomUUIDv7();
@@ -357,7 +357,7 @@ const parseIncrementReply = (
   }
   const count = Number(reply.at(0));
   const ttlMs = Number(reply.at(1));
-  const rawWindowId = reply.at(2);
+  const rawWindowId: unknown = reply.at(2);
   if (
     !Number.isFinite(count) ||
     !Number.isFinite(ttlMs) ||
