@@ -1496,13 +1496,14 @@ type LoadThreadResult =
       rollbackToken: string;
     };
 
+type LoadThreadError = HandlerError<400 | 404 | 409> | SafeDbError;
+
 const MAX_THREAD_CLAIM_ATTEMPTS = 3;
 
-const loadThread = async (
+const loadThread = (
   props: LoadThreadProps,
-): Promise<
-  Result<LoadThreadResult, HandlerError<400 | 404 | 409> | SafeDbError>
-> => await loadThreadAttempt({ ...props, claimAttempt: 0 });
+): Promise<Result<LoadThreadResult, LoadThreadError>> =>
+  loadThreadAttempt({ ...props, claimAttempt: 0 });
 
 type LoadThreadAttemptProps = LoadThreadProps & {
   claimAttempt: number;
@@ -1520,7 +1521,7 @@ const loadThreadAttempt = async ({
   userId,
   workspaceId,
 }: LoadThreadAttemptProps): Promise<
-  Result<LoadThreadResult, HandlerError<400 | 404 | 409> | SafeDbError>
+  Result<LoadThreadResult, LoadThreadError>
 > =>
   await Result.gen(async function* () {
     // Look the thread up by id+user only. Filtering by workspaceId
@@ -1539,8 +1540,8 @@ const loadThreadAttempt = async ({
       rollbackToken: string | null;
     };
 
-    const lookup = async () =>
-      await safeDb((tx) =>
+    const lookup = () =>
+      safeDb((tx) =>
         tx.query.chatThreads.findFirst({
           where: {
             id: { eq: threadId },
@@ -1595,29 +1596,37 @@ const loadThreadAttempt = async ({
     // Every adopter CAS-clears that token before using the row.
     // If rollback deletes first, the failed CAS retries and creates/claims the
     // replacement; if adoption wins, the creator's guarded delete is a no-op.
-    const claimExisting = async (existing: ExistingThreadRow) => {
-      if (existing.rollbackToken === null) {
+    const claimExisting = async (
+      existing: ExistingThreadRow,
+    ): Promise<Result<boolean, SafeDbError>> => {
+      const rollbackToken = existing.rollbackToken;
+      if (rollbackToken === null) {
         return Result.ok(true);
       }
-      const claimResult = await safeDb(async (tx) =>
-        await tx
+
+      const claimResult = await safeDb(async (tx) => {
+        // audit: skip — clears an ephemeral rollback-ownership token; the
+        // thread's user-facing state is unchanged
+        return await tx
           .update(chatThreads)
           .set({ rollbackToken: null })
           .where(
             and(
               eq(chatThreads.id, threadId),
-              eq(chatThreads.rollbackToken, existing.rollbackToken),
+              eq(chatThreads.rollbackToken, rollbackToken),
             ),
           )
-          .returning({ id: chatThreads.id }),
-      );
+          .returning({ id: chatThreads.id });
+      });
       if (Result.isError(claimResult)) {
-        return claimResult;
+        return Result.err(claimResult.error);
       }
       return Result.ok(claimResult.value.length > 0);
     };
 
-    const retryAfterClaimRace = async () => {
+    const retryAfterClaimRace = async (): Promise<
+      Result<LoadThreadResult, LoadThreadError>
+    > => {
       if (claimAttempt >= MAX_THREAD_CLAIM_ATTEMPTS) {
         return Result.err(
           new HandlerError({
@@ -1648,7 +1657,8 @@ const loadThreadAttempt = async ({
       }
       const claimed = yield* Result.await(claimExisting(thread));
       if (!claimed) {
-        return yield* Result.await(retryAfterClaimRace());
+        const retried = yield* Result.await(retryAfterClaimRace());
+        return Result.ok(retried);
       }
       const windowedMessages = yield* Result.await(
         loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
@@ -1744,7 +1754,8 @@ const loadThreadAttempt = async ({
         }
         const claimed = yield* Result.await(claimExisting(recovered));
         if (!claimed) {
-          return yield* Result.await(retryAfterClaimRace());
+          const retried = yield* Result.await(retryAfterClaimRace());
+          return Result.ok(retried);
         }
         const recoveredMessages = yield* Result.await(
           loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
