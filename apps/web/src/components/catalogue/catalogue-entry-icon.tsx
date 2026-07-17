@@ -1,9 +1,9 @@
 import { EyeOffIcon, GlobeIcon, type LucideIcon } from "lucide-react";
 
+import { getCatalogueIconImageSrc } from "@/components/catalogue/catalogue-entry-icon.logic";
+import { DocxIcon } from "@/components/document-icon";
 import { McpIcon } from "@/components/mcp-icon";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { getCatalogueIconImageSrc } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon.logic";
-import { DocxIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
 /**
  * Single source of truth for catalogue entry iconography. Resolution

@@ -1,18 +1,16 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
-
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
-import { installSkill } from "@/api/handlers/skills/install";
+import { env } from "@/api/env";
+import {
+  installSkill,
+  preflightSkillInstall,
+} from "@/api/handlers/skills/install";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-import {
-  toParsedBundledSkillPackage,
-  toParsedBundledSkillResources,
-} from "./bundled-skill-resources";
+import { resolveCatalogueSkillPackage } from "./catalogue-skill-package";
 
 const installSkillScopeValues = [
   "team",
@@ -48,47 +46,51 @@ const installBundledSkill = createSafeRootHandler(
     session,
     user,
   }) {
-    const payload = findCatalogueSkillInstallPayload(body.slug);
-    if (!payload) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: `Bundled skill not found in catalogue: ${body.slug}`,
-        }),
-      );
-    }
-
-    const resourcesResult = toParsedBundledSkillResources(
-      payload.resourceFiles,
-    );
-    if (Result.isError(resourcesResult)) {
-      return Result.err(resourcesResult.error);
-    }
-
-    const packageResult = toParsedBundledSkillPackage({
-      expectedSlug: payload.slug,
-      resources: resourcesResult.value,
-      source: payload.body,
+    const scope = body.scope ?? "team";
+    const preflightResult = await preflightSkillInstall({
+      memberRole,
+      safeDb,
+      scope,
+      session,
+      slug: body.slug,
+      user,
     });
-    if (Result.isError(packageResult)) {
-      return Result.err(packageResult.error);
+    if (Result.isError(preflightResult)) {
+      return yield* Result.err(preflightResult.error);
+    }
+
+    const resolvedResult = await resolveCatalogueSkillPackage(body.slug, {
+      ...(env.GITHUB_TOKEN ? { githubToken: env.GITHUB_TOKEN } : {}),
+    });
+    if (Result.isError(resolvedResult)) {
+      return yield* Result.err(resolvedResult.error);
     }
 
     const installResult = await installSkill({
       memberRole,
+      // Both in-tree and github-sourced catalogue skills are curated content
+      // pinned by the catalogue (github skills by commit SHA), so they use the
+      // non-editable `bundled` origin rather than the user-editable `url`
+      // origin; re-installing is how an updated catalogue entry propagates.
       origin: "bundled",
-      parsed: packageResult.value,
+      parsed: resolvedResult.value.package,
       recordAuditEvent,
       safeDb,
-      scope: body.scope ?? "team",
+      scope,
       session,
+      // Store the catalogue slug, never the upstream frontmatter name: a
+      // github skill whose SKILL.md `name` differs from the catalogue slug
+      // must still install under the slug so install-state matching,
+      // re-install detection, and uninstall can find the row. In-tree skills
+      // already guarantee name == slug, so this is a structural no-op there.
+      slug: resolvedResult.value.installSlug,
       user,
     });
     if (installResult.isErr()) {
       return yield* Result.err(installResult.error);
     }
 
-    return Result.ok({ slug: packageResult.value.name });
+    return Result.ok({ slug: resolvedResult.value.installSlug });
   },
 );
 

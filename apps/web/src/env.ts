@@ -59,6 +59,8 @@ export const env = createEnv({
     // Off by default so deployments that should not be crawled can still
     // serve sitemaps for verification while staying non-indexable.
     VITE_SEO_INDEXABLE: featureFlagSchema,
+    VITE_PUBLIC_TOOLS_ENABLED: featureFlagSchema,
+    VITE_PUBLIC_TOOLS_INDEXING_ENABLED: featureFlagSchema,
     VITE_PLAYBOOKS_ENABLED: featureFlagSchema,
     VITE_FEATURE_CONTACTS: featureFlagSchema,
     VITE_FEATURE_CALENDAR: featureFlagSchema,
@@ -86,4 +88,10 @@ export const env = createEnv({
 
 if (env.VITE_PUBLIC_LAW_INDEXING_ENABLED && !env.VITE_PUBLIC_LAW_ENABLED) {
   panic("VITE_PUBLIC_LAW_INDEXING_ENABLED requires VITE_PUBLIC_LAW_ENABLED.");
+}
+
+if (env.VITE_PUBLIC_TOOLS_INDEXING_ENABLED && !env.VITE_PUBLIC_TOOLS_ENABLED) {
+  panic(
+    "VITE_PUBLIC_TOOLS_INDEXING_ENABLED requires VITE_PUBLIC_TOOLS_ENABLED.",
+  );
 }

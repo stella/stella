@@ -139,7 +139,12 @@ export const parseSkillFile = (
   }
 
   const frontmatter = parseSimpleFrontmatter(normalizedSource.slice(4, end));
-  if (!frontmatter.name || !frontmatter.description) {
+  if (
+    !frontmatter.name ||
+    frontmatter.name.trim().length === 0 ||
+    !frontmatter.description ||
+    frontmatter.description.trim().length === 0
+  ) {
     panic("Skill file frontmatter must include name and description");
   }
 
@@ -147,7 +152,7 @@ export const parseSkillFile = (
     metadata: {
       compatibility: frontmatter.compatibility ?? null,
       description: frontmatter.description,
-      license: frontmatter.license ?? null,
+      license: frontmatter.license ?? frontmatter.metadata?.["license"] ?? null,
       metadata: frontmatter.metadata ?? {},
       name: frontmatter.name,
       version: frontmatter.version ?? frontmatter.metadata?.["version"] ?? null,
@@ -158,10 +163,14 @@ export const parseSkillFile = (
 
 const parseSimpleFrontmatter = (source: string): Frontmatter => {
   const frontmatter: Frontmatter = {};
+  const lines = source.split("\n");
   let parsingMetadata = false;
+  let index = 0;
 
-  for (const line of source.split("\n")) {
-    if (line.trim().length === 0) {
+  while (index < lines.length) {
+    const line = lines[index];
+    index += 1;
+    if (line === undefined || line.trim().length === 0) {
       continue;
     }
 
@@ -175,7 +184,7 @@ const parseSimpleFrontmatter = (source: string): Frontmatter => {
     }
 
     parsingMetadata = false;
-    const entry = parseFrontmatterEntry(line);
+    const entry = splitFrontmatterEntry(line);
     if (!entry) {
       continue;
     }
@@ -188,27 +197,133 @@ const parseSimpleFrontmatter = (source: string): Frontmatter => {
       continue;
     }
 
+    const indicator = parseBlockScalarIndicator(entry.rawValue);
+    if (indicator) {
+      const block = readBlockScalar({ indicator, lines, startIndex: index });
+      index = block.nextIndex;
+      setFrontmatterValue({
+        frontmatter,
+        key: entry.key,
+        value: block.value,
+      });
+      continue;
+    }
+
     setFrontmatterValue({
       frontmatter,
       key: entry.key,
-      value: entry.value,
+      value: stripYamlString(entry.rawValue),
     });
   }
 
   return frontmatter;
 };
 
+type BlockScalarIndicator = {
+  chomp: "clip" | "strip";
+  style: "folded" | "literal";
+};
+
+/** A bare block-scalar header (`>`, `>-`, `|`, `|-`, and the `+` keep
+ *  forms), never inline text that merely starts with `>` or `|`. */
+const parseBlockScalarIndicator = (
+  rawValue: string,
+): BlockScalarIndicator | null => {
+  const match = /^(?<style>[|>])(?<chomp>[+-]?)$/u.exec(rawValue.trim());
+  if (!match?.groups) {
+    return null;
+  }
+
+  return {
+    chomp: match.groups["chomp"] === "-" ? "strip" : "clip",
+    style: match.groups["style"] === ">" ? "folded" : "literal",
+  };
+};
+
+/**
+ * Consume a top-level block scalar's indented body. Content lines are
+ * those indented past column 0 (or blank); the first non-blank content
+ * line sets the block indentation that is stripped from each line.
+ * Folded joins lines with single spaces, literal with newlines; `strip`
+ * chomping drops the trailing newline, `clip` keeps a single one.
+ */
+const readBlockScalar = ({
+  indicator,
+  lines,
+  startIndex,
+}: {
+  indicator: BlockScalarIndicator;
+  lines: readonly string[];
+  startIndex: number;
+}): { nextIndex: number; value: string } => {
+  const contentLines: string[] = [];
+  let index = startIndex;
+  let blockIndent: number | null = null;
+
+  while (index < lines.length) {
+    const line = lines[index];
+    if (line === undefined) {
+      break;
+    }
+    if (line.trim().length === 0) {
+      contentLines.push("");
+      index += 1;
+      continue;
+    }
+    const indent = line.length - line.trimStart().length;
+    if (indent === 0) {
+      break;
+    }
+    blockIndent ??= indent;
+    contentLines.push(stripLeadingSpaces(line, blockIndent));
+    index += 1;
+  }
+
+  while (contentLines.at(-1) === "") {
+    contentLines.pop();
+  }
+
+  const joined = contentLines.join(indicator.style === "folded" ? " " : "\n");
+  const value = indicator.chomp === "strip" ? joined : `${joined}\n`;
+  return { nextIndex: index, value };
+};
+
+const stripLeadingSpaces = (line: string, max: number): string => {
+  let removed = 0;
+  while (removed < max && (line[removed] === " " || line[removed] === "\t")) {
+    removed += 1;
+  }
+  return line.slice(removed);
+};
+
 const parseFrontmatterEntry = (
   line: string,
 ): { key: string; value: string } | null => {
+  const entry = splitFrontmatterEntry(line);
+  if (!entry) {
+    return null;
+  }
+
+  return { key: entry.key, value: stripYamlString(entry.rawValue) };
+};
+
+/**
+ * Split `key: value` into the trimmed key and the raw (unstripped)
+ * value. The raw value is kept so a block-scalar header (`>`, `|`, ...)
+ * can be detected before quote-stripping would mangle it.
+ */
+const splitFrontmatterEntry = (
+  line: string,
+): { key: string; rawValue: string } | null => {
   const separatorIndex = line.indexOf(":");
   if (separatorIndex === -1) {
     return null;
   }
 
-  const key = line.slice(0, separatorIndex).trim();
-  const value = stripYamlString(line.slice(separatorIndex + 1));
-  return { key, value };
+  return {
+    key: line.slice(0, separatorIndex).trim(),
+    rawValue: line.slice(separatorIndex + 1),
+  };
 };
 
 const isFrontmatterKey = (key: string): key is keyof Frontmatter =>

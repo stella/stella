@@ -13,12 +13,18 @@
     "./install-payloads": {
       "types": "./src/install-payloads.ts",
       "import": "./src/install-payloads.ts"
+    },
+    "./schema": {
+      "types": "./src/schema.ts",
+      "import": "./src/schema.ts"
     }
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
     "generate": "bun scripts/generate-manifest.ts",
     "validate": "bun scripts/validate.ts",
+    "check-upstream": "bun scripts/check-upstream.ts",
+    "check-pinned": "bun scripts/check-pinned-content.ts",
     "test": "bun scripts/generate-manifest.ts --check && bun scripts/validate.ts && bun test src",
     "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/catalogue",
@@ -30,6 +36,7 @@
     "valibot": "catalog:"
   },
   "devDependencies": {
+    "@stll/skills": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:"
   }

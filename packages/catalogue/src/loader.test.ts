@@ -57,7 +57,14 @@ describe("loadCatalogueSkillInstallPayloads", () => {
     );
 
     for (const entry of skillEntries) {
-      expect(payloadSlugs.has(entry.slug)).toBe(true);
+      if (entry.source === "in-tree") {
+        // In-tree skills bundle their body as a private install payload.
+        expect(payloadSlugs.has(entry.slug)).toBe(true);
+      } else {
+        // github-sourced skills keep content upstream at the pinned rev,
+        // so no install payload is bundled for them.
+        expect(payloadSlugs.has(entry.slug)).toBe(false);
+      }
     }
   });
 });

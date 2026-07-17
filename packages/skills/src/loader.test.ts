@@ -30,6 +30,38 @@ Follow the process.`);
     expect(parsed.body).toBe("Follow the process.");
   });
 
+  test("reads a license declared inside the metadata mapping", () => {
+    const parsed = parseSkillFile(`---
+name: nested-license
+description: Uses the Agent Skills nested license convention.
+metadata:
+  license: CC-BY-4.0
+---
+
+Follow the process.`);
+
+    expect(parsed.metadata.license).toBe("CC-BY-4.0");
+  });
+
+  test("rejects required frontmatter fields containing only whitespace", () => {
+    expect(() =>
+      parseSkillFile(`---
+name: "   "
+description: Valid description.
+---
+
+Body.`),
+    ).toThrow();
+    expect(() =>
+      parseSkillFile(`---
+name: valid-name
+description: "   "
+---
+
+Body.`),
+    ).toThrow();
+  });
+
   test("parses skill files with CRLF line endings", () => {
     const parsed = parseSkillFile(
       [
@@ -47,6 +79,74 @@ Follow the process.`);
       "Skill authored with CRLF delimiters.",
     );
     expect(parsed.body).toBe("Follow the Windows-authored process.");
+  });
+
+  test("parses a folded (>) block scalar description into one spaced line", () => {
+    const parsed = parseSkillFile(`---
+name: folded-skill
+description: >
+  Use this skill when the matter spans several
+  jurisdictions and needs a consolidated view.
+license: MIT
+---
+
+Body.`);
+
+    expect(parsed.metadata.description).toBe(
+      "Use this skill when the matter spans several jurisdictions and needs a consolidated view.\n",
+    );
+    expect(parsed.metadata.license).toBe("MIT");
+    expect(parsed.metadata.name).toBe("folded-skill");
+  });
+
+  test("strips the trailing newline for a folded-strip (>-) block scalar", () => {
+    const parsed = parseSkillFile(`---
+name: folded-strip-skill
+description: >-
+  First fragment
+  second fragment.
+---
+
+Body.`);
+
+    expect(parsed.metadata.description).toBe("First fragment second fragment.");
+  });
+
+  test("parses a literal (|) block scalar description preserving newlines", () => {
+    const parsed = parseSkillFile(`---
+name: literal-skill
+description: |
+  Line one.
+  Line two.
+---
+
+Body.`);
+
+    expect(parsed.metadata.description).toBe("Line one.\nLine two.\n");
+  });
+
+  test("strips the trailing newline for a literal-strip (|-) block scalar", () => {
+    const parsed = parseSkillFile(`---
+name: literal-strip-skill
+description: |-
+  Line one.
+  Line two.
+---
+
+Body.`);
+
+    expect(parsed.metadata.description).toBe("Line one.\nLine two.");
+  });
+
+  test("treats an inline value that merely starts with > as literal text", () => {
+    const parsed = parseSkillFile(`---
+name: inline-skill
+description: >not a block scalar
+---
+
+Body.`);
+
+    expect(parsed.metadata.description).toBe(">not a block scalar");
   });
 
   test("classifies common Agent Skills resource roots", () => {

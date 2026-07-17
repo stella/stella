@@ -36,6 +36,10 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
+  catalogueKeys,
+  catalogueOptions,
+} from "@/components/catalogue/catalogue-queries";
+import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
@@ -58,10 +62,6 @@ import {
   type BlueprintCreatedSkill,
 } from "@/routes/_protected.knowledge/-components/blueprint-gallery-sheet";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
-import {
-  catalogueKeys,
-  catalogueOptions,
-} from "@/routes/_protected.knowledge/-queries/catalogue";
 
 import { AddMcpServerSheet } from "./add-mcp-server-sheet";
 import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";

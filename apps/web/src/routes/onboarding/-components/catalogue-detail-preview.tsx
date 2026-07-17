@@ -14,10 +14,10 @@ import { useTranslations } from "use-intl";
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
 
+import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
 import { sanitizeHref } from "@/lib/sanitize-href";
-import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
 
 /**
  * iOS Privacy-Nutritional-Label-style detail panel. Replaces the stack

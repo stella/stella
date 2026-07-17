@@ -16,12 +16,19 @@ import {
   isPublicLawSitemapEnabled,
 } from "@/lib/public-law-launch";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
+import {
+  assertSitemapXmlWithinProtocolLimits,
+  escapeSitemapXml,
+  SITEMAP_XML_RESPONSE_HEADERS,
+  TOOLS_SITEMAP_PATH,
+} from "@/lib/public-sitemap";
+import {
+  isPublicToolsCrawlAllowed,
+  isPublicToolsSitemapEnabled,
+} from "@/lib/public-tools-launch";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
-const SITEMAP_XML_MAX_BYTES = 50 * 1024 * 1024;
-const SITEMAP_CACHE_CONTROL =
-  "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400";
 
 type FetchLike = (
   input: Request | URL | string,
@@ -89,6 +96,7 @@ type FetchSitemapShardsOptions = {
 type PublicLawSitemapIndexOptions = {
   maxBytes?: number;
   publicLawIndexingEnabled?: boolean;
+  publicToolsIndexingEnabled?: boolean;
 };
 
 type PublicLawIndexingOptions = {
@@ -102,33 +110,8 @@ export type SitemapShardRouteParams = {
   year: string;
 };
 
-export const SITEMAP_XML_RESPONSE_HEADERS = {
-  "Cache-Control": SITEMAP_CACHE_CONTROL,
-  "Content-Type": "application/xml; charset=utf-8",
-} as const;
-
-const xmlEscape = (value: string): string =>
-  value
-    .replace(/&/gu, "&amp;")
-    .replace(/</gu, "&lt;")
-    .replace(/>/gu, "&gt;")
-    .replace(/"/gu, "&quot;")
-    .replace(/'/gu, "&apos;");
-
-export const assertPublicLawSitemapXmlWithinProtocolLimits = (
-  xml: string,
-  maxBytes = SITEMAP_XML_MAX_BYTES,
-): void => {
-  const byteLength = new TextEncoder().encode(xml).byteLength;
-  if (byteLength <= maxBytes) {
-    return;
-  }
-
-  throw new ClientOperationError({
-    action: "serializePublicCaseLawSitemap",
-    message: `Public case-law sitemap exceeded ${maxBytes} bytes.`,
-  });
-};
+export { SITEMAP_XML_RESPONSE_HEADERS };
+export { assertSitemapXmlWithinProtocolLimits as assertPublicLawSitemapXmlWithinProtocolLimits };
 
 const createCaseLawDecisionSitemapUrl = (
   decision: SitemapDecisionUrlInput,
@@ -235,19 +218,22 @@ export const createPublicLawSitemapIndexXml = (
   shards: readonly SitemapShard[],
   options: number | PublicLawSitemapIndexOptions = {},
 ): string => {
-  const { maxBytes, publicLawIndexingEnabled } =
+  const { maxBytes, publicLawIndexingEnabled, publicToolsIndexingEnabled } =
     typeof options === "number"
       ? {
           maxBytes: options,
           publicLawIndexingEnabled: isPublicLawSitemapEnabled(),
+          publicToolsIndexingEnabled: isPublicToolsSitemapEnabled(),
         }
       : {
-          maxBytes: options.maxBytes ?? SITEMAP_XML_MAX_BYTES,
+          maxBytes: options.maxBytes,
           publicLawIndexingEnabled:
             options.publicLawIndexingEnabled ?? isPublicLawSitemapEnabled(),
+          publicToolsIndexingEnabled:
+            options.publicToolsIndexingEnabled ?? isPublicToolsSitemapEnabled(),
         };
 
-  const sitemapEntries = publicLawIndexingEnabled
+  const lawEntries = publicLawIndexingEnabled
     ? [
         {
           loc: createPublicLawCanonicalUrl(LAW_SITEMAP_PATH),
@@ -260,11 +246,20 @@ export const createPublicLawSitemapIndexXml = (
       ]
     : [];
 
-  const entries = sitemapEntries
+  const toolsEntries = publicToolsIndexingEnabled
+    ? [
+        {
+          loc: createPublicLawCanonicalUrl(TOOLS_SITEMAP_PATH),
+          lastmod: null,
+        },
+      ]
+    : [];
+
+  const entries = [...lawEntries, ...toolsEntries]
     .map(
       ({ lastmod, loc }) => `  <sitemap>
-    <loc>${xmlEscape(loc)}</loc>${
-      lastmod ? `\n    <lastmod>${xmlEscape(lastmod)}</lastmod>` : ""
+    <loc>${escapeSitemapXml(loc)}</loc>${
+      lastmod ? `\n    <lastmod>${escapeSitemapXml(lastmod)}</lastmod>` : ""
     }
   </sitemap>`,
     )
@@ -276,7 +271,7 @@ ${entries}
 </sitemapindex>
 `;
 
-  assertPublicLawSitemapXmlWithinProtocolLimits(xml, maxBytes);
+  assertSitemapXmlWithinProtocolLimits(xml, maxBytes);
 
   return xml;
 };
@@ -296,7 +291,7 @@ export const createPublicLawStaticSitemapXml = ({
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>${xmlEscape(loc)}</loc>
+    <loc>${escapeSitemapXml(loc)}</loc>
   </url>
 </urlset>
 `;
@@ -316,14 +311,14 @@ export const createPublicCaseLawSitemapXml = (
   const serializedEntries = entries
     .map(
       ({ alternateLinks, lastmod, loc }) => `  <url>
-    <loc>${xmlEscape(loc)}</loc>${
-      lastmod ? `\n    <lastmod>${xmlEscape(lastmod)}</lastmod>` : ""
+    <loc>${escapeSitemapXml(loc)}</loc>${
+      lastmod ? `\n    <lastmod>${escapeSitemapXml(lastmod)}</lastmod>` : ""
     }${alternateLinks
       .map(
         (alternate) =>
-          `\n    <xhtml:link rel="alternate" hreflang="${xmlEscape(
+          `\n    <xhtml:link rel="alternate" hreflang="${escapeSitemapXml(
             alternate.hreflang,
-          )}" href="${xmlEscape(alternate.href)}" />`,
+          )}" href="${escapeSitemapXml(alternate.href)}" />`,
       )
       .join("")}
   </url>`,
@@ -336,18 +331,20 @@ ${serializedEntries}
 </urlset>
 `;
 
-  assertPublicLawSitemapXmlWithinProtocolLimits(xml);
+  assertSitemapXmlWithinProtocolLimits(xml);
 
   return xml;
 };
 
 type RobotsTxtOptions = {
   publicLawCrawlAllowed?: boolean;
+  publicToolsCrawlAllowed?: boolean;
   seoIndexable?: boolean;
 };
 
 export const createRobotsTxt = ({
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
+  publicToolsCrawlAllowed = isPublicToolsCrawlAllowed(),
   seoIndexable = env.VITE_SEO_INDEXABLE,
 }: RobotsTxtOptions = {}): string => {
   // Non-indexable deployments serve a full crawl block: no path rules and no
@@ -364,9 +361,13 @@ Disallow: /
     env.VITE_PUBLIC_APP_URL,
   ).toString();
   const lawRule = publicLawCrawlAllowed ? "Allow: /law/" : "Disallow: /law/";
+  const toolsRule = publicToolsCrawlAllowed
+    ? "Allow: /tools"
+    : "Disallow: /tools";
 
   return `User-agent: *
 ${lawRule}
+${toolsRule}
 Disallow: /auth
 Disallow: /onboarding
 Disallow: /consent

@@ -13,12 +13,12 @@ import {
 } from "@stll/ui/components/preview-card";
 import { cn } from "@stll/ui/lib/utils";
 
+import { DocumentIcon } from "@/components/document-icon";
 import Tooltip from "@/components/tooltip";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { DAY_IN_MS } from "@/lib/time";
-import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";
 import { TeamAvatars } from "@/routes/_protected.workspaces/-components/team-avatars";

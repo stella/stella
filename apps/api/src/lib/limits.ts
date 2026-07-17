@@ -1,3 +1,5 @@
+import { SKILL_PACKAGE_LIMITS } from "@stll/skills/package-limits";
+
 export const LIMITS = {
   workspacesCount: 1000,
   propertiesCount: 20,
@@ -68,19 +70,21 @@ export const LIMITS = {
    *  within agentSkillsChatMetadataMax (100 + 100 <= 200). Mirrors
    *  mcpCustomConnectorsPerOrgMax kept under its read cap. */
   agentSkillsTeamPerOrganization: 100,
-  agentSkillDescriptionMaxChars: 1000,
-  agentSkillCompatibilityMaxChars: 1000,
-  agentSkillLicenseMaxChars: 256,
-  agentSkillMetadataEntriesMax: 32,
-  agentSkillMetadataKeyMaxChars: 64,
-  agentSkillMetadataValueMaxChars: 512,
-  agentSkillVersionMaxChars: 64,
-  agentSkillBodyMaxChars: 80_000,
-  agentSkillArchiveFilesMax: 100,
-  agentSkillArchiveUncompressedMaxBytes: 6 * 1024 * 1024,
-  agentSkillGithubDirectoriesMax: 100,
-  agentSkillResourcesPerSkill: 50,
-  agentSkillResourceMaxChars: 100_000,
+  agentSkillDescriptionMaxChars: SKILL_PACKAGE_LIMITS.descriptionMaxChars,
+  agentSkillCompatibilityMaxChars: SKILL_PACKAGE_LIMITS.compatibilityMaxChars,
+  agentSkillLicenseMaxChars: SKILL_PACKAGE_LIMITS.licenseMaxChars,
+  agentSkillMetadataEntriesMax: SKILL_PACKAGE_LIMITS.metadataEntriesMax,
+  agentSkillMetadataKeyMaxChars: SKILL_PACKAGE_LIMITS.metadataKeyMaxChars,
+  agentSkillMetadataValueMaxChars: SKILL_PACKAGE_LIMITS.metadataValueMaxChars,
+  agentSkillVersionMaxChars: SKILL_PACKAGE_LIMITS.versionMaxChars,
+  agentSkillBodyMaxChars: SKILL_PACKAGE_LIMITS.bodyMaxChars,
+  agentSkillArchiveFilesMax: SKILL_PACKAGE_LIMITS.archiveFilesMax,
+  agentSkillArchiveUncompressedMaxBytes:
+    SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes,
+  agentSkillGithubDirectoriesMax: SKILL_PACKAGE_LIMITS.githubDirectoriesMax,
+  agentSkillResourcesPerSkill: SKILL_PACKAGE_LIMITS.resourcesPerSkillMax,
+  agentSkillResourceMaxChars: SKILL_PACKAGE_LIMITS.resourceMaxChars,
+  agentSkillResourcePathMaxChars: SKILL_PACKAGE_LIMITS.resourcePathMaxChars,
   mcpGatewayConnectorsMax: 20,
   /** Max connector rows returned by the connector catalogue listing
    *  (`GET /mcp/connectors` and the custom-MCP slice of `/catalogue`). */

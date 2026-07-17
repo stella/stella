@@ -2,15 +2,19 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
+  fetchGithubCatalogueSkillPackage,
   fetchSkillPackageFromUrl,
+  githubSkillFetchHeaders,
   isZipSkillSource,
   parseUploadedSkillPackage,
   redactSkillSourceUrlForStorage,
   resolveGithubRefAndPath,
 } from "./skill-package";
+import type { GithubSkillPath } from "./skill-package";
 
 describe("agent skill package imports", () => {
   test("parses a single SKILL.md upload", async () => {
@@ -263,5 +267,213 @@ Instructions.`,
       ref: "release/2026",
       rootPath: "skills/review",
     });
+  });
+});
+
+const PINNED_TARGET: GithubSkillPath = {
+  owner: "acme",
+  ref: "a".repeat(40),
+  repo: "legal-skills",
+  rootPath: "skills/german-law",
+};
+const PINNED_SOURCE_URL =
+  "https://raw.githubusercontent.com/acme/legal-skills/" +
+  `${"a".repeat(40)}/skills/german-law/`;
+const encodedSize = (value: string): number =>
+  new TextEncoder().encode(value).byteLength;
+const skillFile = (content: string) => ({
+  content,
+  path: "SKILL.md",
+  sizeBytes: encodedSize(content),
+});
+
+describe("github catalogue skill fetch", () => {
+  test("scopes the deployment token to curated GitHub API requests", () => {
+    expect(
+      githubSkillFetchHeaders({
+        access: { source: "catalogue", githubToken: "secret-token" },
+        hostname: "api.github.com",
+      })["Authorization"],
+    ).toBe("Bearer secret-token");
+    expect(
+      githubSkillFetchHeaders({
+        access: { source: "catalogue", githubToken: "secret-token" },
+        hostname: "raw.githubusercontent.com",
+      })["Authorization"],
+    ).toBeUndefined();
+    expect(
+      githubSkillFetchHeaders({
+        access: { source: "user" },
+        hostname: "api.github.com",
+      })["Authorization"],
+    ).toBeUndefined();
+  });
+
+  test("mirrors the whole pinned directory (SKILL.md plus resources)", async () => {
+    // Captured via an object rather than closure-assigned `let`s: the
+    // typechecker keeps a mutated object property at its declared type,
+    // whereas a `let` reassigned only inside the fetch callback is flow-typed
+    // back to its `null` initializer at the assertion below.
+    const captured: { target: GithubSkillPath | null } = { target: null };
+    const skillSource = `---
+name: german-law
+description: Community skill for German legal drafting.
+license: MIT
+---
+
+Draft in German.`;
+    const scriptSource = "print('draft')\n";
+
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async (target) => {
+        captured.target = target;
+        return [
+          skillFile(skillSource),
+          {
+            content: scriptSource,
+            path: "scripts/draft.py",
+            sizeBytes: encodedSize(scriptSource),
+          },
+        ];
+      },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(captured.target).toEqual(PINNED_TARGET);
+    expect(result.value.name).toBe("german-law");
+    expect(result.value.license).toBe("MIT");
+    // Resource files travel with the install, unlike the SKILL.md-only v1.
+    expect(result.value.resources.map((resource) => resource.path)).toEqual([
+      "scripts/draft.py",
+    ]);
+    expect(result.value.sourceUrl).toBe(PINNED_SOURCE_URL);
+  });
+
+  test("maps invalid upstream catalogue content to a bad gateway error", async () => {
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => {
+        throw new HandlerError({
+          status: 400,
+          message: "Skill source returned HTTP 404",
+        });
+      },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected a non-200 response to fail");
+    }
+    expect(result.error.status).toBe(502);
+    expect(result.error.message).toBe("Catalogue skill package is invalid");
+  });
+
+  test("preserves temporary upstream availability failures", async () => {
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => {
+        throw new HandlerError({
+          status: 503,
+          message: "GitHub is temporarily unavailable",
+        });
+      },
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected an upstream availability error");
+    }
+    expect(result.error.status).toBe(503);
+  });
+
+  test("rejects resource paths longer than the database boundary", async () => {
+    const skillSource = `---
+name: long-path
+description: Resource path is too long.
+license: MIT
+---
+
+Body.`;
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => [
+        skillFile(skillSource),
+        {
+          content: "Reference",
+          path: `references/${"a".repeat(LIMITS.agentSkillResourcePathMaxChars)}.md`,
+          sizeBytes: 9,
+        },
+      ],
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected an overlong resource path to fail");
+    }
+    expect(result.error.status).toBe(502);
+  });
+
+  test("rejects resource paths that collide after normalization", async () => {
+    const skillSource = `---
+name: duplicate-path
+description: Resource paths collide after normalization.
+license: MIT
+---
+
+Body.`;
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => [
+        skillFile(skillSource),
+        {
+          content: "First",
+          path: "references/section/../same.md",
+          sizeBytes: 5,
+        },
+        {
+          content: "Second",
+          path: "references/same.md",
+          sizeBytes: 6,
+        },
+      ],
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected normalized duplicate paths to fail");
+    }
+    expect(result.error.status).toBe(502);
+  });
+
+  test("rejects a SKILL.md whose instructions exceed the size cap", async () => {
+    const result = await fetchGithubCatalogueSkillPackage({
+      target: PINNED_TARGET,
+      sourceUrl: PINNED_SOURCE_URL,
+      fetchFiles: async () => [
+        skillFile(`---
+name: german-law
+description: Community skill for German legal drafting.
+license: MIT
+---
+
+${"x".repeat(LIMITS.agentSkillBodyMaxChars + 1)}`),
+      ],
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected an oversized skill body to fail");
+    }
+    expect(result.error.status).toBe(502);
+    expect(result.error.message).toBe("Catalogue skill package is invalid");
   });
 });
