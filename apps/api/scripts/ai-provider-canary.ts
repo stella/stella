@@ -27,6 +27,8 @@ import {
   CANARY_TIERS,
   CANARY_PROVIDERS,
   modelRoleMaxOutputTokens,
+  NEVER_MATCH_PATTERN,
+  NULL_WIDENING_CANARY_PROVIDERS,
   weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
 import type {
@@ -51,19 +53,11 @@ const TOOL_ROUND_TRIP_NAME = "canary_round_trip";
 const TOOL_ROUND_TRIP_VALUE = "stella-canary";
 const TOOL_ROUND_TRIP_COUNT = 7;
 const TOOL_ROUND_TRIP_RESULT = "stella-tool-round-trip-ok";
-// JSON Schema patterns have no regex flag channel. OpenAI strict Structured
-// Outputs supports `pattern`; `a^` cannot match any string.
-// eslint-disable-next-line require-unicode-regexp
-const NEVER_MATCH_PATTERN = /a^/;
 const TOOL_ROUND_TRIP_PROMPT_PREFIX =
   `Call ${TOOL_ROUND_TRIP_NAME} exactly once with value "${TOOL_ROUND_TRIP_VALUE}" ` +
   `and count ${TOOL_ROUND_TRIP_COUNT}.`;
 const TOOL_ROUND_TRIP_PROMPT_SUFFIX =
   "Then reply with only the confirmation value returned by the tool.";
-const NULL_WIDENING_CANARY_PROVIDERS = new Set<CanaryProvider>([
-  "mistral",
-  "openai",
-]);
 
 export const toolRoundTripPromptForProvider = (
   provider: CanaryProvider,
@@ -523,8 +517,9 @@ const runWeeklyToolShapeProbe = async ({
   signal,
 }: RunWeeklyToolShapeProbeOptions): Promise<void> => {
   const observedInputs: unknown[] = [];
-  const { expectedInput, prompt, tool } = createWeeklyToolShapeDefinition(
+  const { expectedInputs, prompt, tool } = createWeeklyToolShapeDefinition(
     context.rotation.toolShape,
+    context.provider,
     observedInputs,
   );
   const output = await runToolProbe({
@@ -541,7 +536,12 @@ const runWeeklyToolShapeProbe = async ({
       "Provider did not execute the weekly canary tool exactly once.",
     );
   }
-  if (!isDeepStrictEqual(observedInputs.at(0), expectedInput)) {
+  const observedInput = observedInputs.at(0);
+  if (
+    !expectedInputs.some((expectedInput) =>
+      isDeepStrictEqual(observedInput, expectedInput),
+    )
+  ) {
     throw new TypeError(
       "Provider returned unexpected weekly canary tool arguments.",
     );

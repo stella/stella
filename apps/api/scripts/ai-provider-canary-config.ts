@@ -27,6 +27,24 @@ export const CANARY_PROVIDERS = defineCanaryProviders([
 export type CanaryProvider = (typeof CANARY_PROVIDERS)[number];
 export type CanaryProviderSelection = "all" | CanaryProvider;
 
+// Providers whose strict/structured tool-calling mode forces every optional
+// property to be present, widening it to accept a synthetic `null` in place
+// of true omission. Both the flat round-trip probe and the weekly tool-shape
+// probes ask these providers for that null explicitly (deterministically)
+// instead of leaving them to guess omission vs. hallucination (#1194/#1196).
+export const NULL_WIDENING_CANARY_PROVIDERS = new Set<CanaryProvider>([
+  "mistral",
+  "openai",
+]);
+
+// JSON Schema patterns have no regex flag channel. OpenAI strict Structured
+// Outputs supports `pattern`; `a^` cannot match any string. Used to make the
+// "omit or send this impossible value" duality deterministic: no real string
+// can validly satisfy the optional field, only omission (or, for
+// null-widening providers, the synthetic null their strict mode forces).
+// eslint-disable-next-line require-unicode-regexp
+export const NEVER_MATCH_PATTERN = /a^/;
+
 export const CANARY_TIERS = ["daily", "weekly"] as const;
 export type CanaryTier = (typeof CANARY_TIERS)[number];
 
