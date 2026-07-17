@@ -337,7 +337,7 @@
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 507,
+    "count": 509,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/chat/send-message.ts": 2,
@@ -458,7 +458,7 @@
       "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 5,
       "apps/web/src/routes/_protected.knowledge/-components/template-versions-tab.tsx": 2,
       "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx": 1,
-      "apps/web/src/routes/_protected.knowledge/templates.tsx": 2,
+      "apps/web/src/routes/_protected.knowledge/templates.tsx": 3,
       "apps/web/src/routes/_protected.knowledge/tools.tsx": 1,
       "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx": 1,
       "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx": 1,
@@ -492,6 +492,7 @@
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx": 4,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx": 3,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/members-section.tsx": 3,
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog.tsx": 1,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx": 6,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/parties-section.tsx": 7,
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/pdf-viewer.tsx": 1,

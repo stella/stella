@@ -54979,7 +54979,9 @@ export const generatedRouteMap: RouteNode = {
             access: "read",
             flags: [],
             inputOnly: ["query.categoryId"],
-            paginated: false,
+            paginated: true,
+            paginationPart: "query",
+            itemsKey: "items",
             destructive: false,
             scope: "templates",
             inputSchema: {
@@ -55001,6 +55003,26 @@ export const generatedRouteMap: RouteNode = {
                         {
                           const: "uncategorized",
                           type: "string",
+                        },
+                      ],
+                    },
+                    cursor: {
+                      maxLength: 512,
+                      type: "string",
+                    },
+                    limit: {
+                      minimum: 1,
+                      maximum: 100,
+                      anyOf: [
+                        {
+                          format: "integer",
+                          default: 0,
+                          type: "string",
+                        },
+                        {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
                         },
                       ],
                     },

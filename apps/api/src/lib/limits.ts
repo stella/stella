@@ -52,7 +52,10 @@ export const LIMITS = {
    *  inherently bounded (a few dozen contract categories), so the list
    *  endpoint returns a plain ordered array rather than a paginated page. */
   documentTypesCount: 100,
+  /** Per-org cap on stored templates, enforced on create. */
   templatesCount: 50,
+  templatesPageSizeDefault: 50,
+  templatesPageSizeMax: 100,
   styleSetsCount: 100,
   styleSetsPageSizeDefault: 50,
   styleSetsPageSizeMax: 100,

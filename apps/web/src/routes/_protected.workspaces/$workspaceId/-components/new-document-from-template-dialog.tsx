@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { ArrowLeftIcon, LayoutTemplateIcon, SearchIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -17,6 +17,7 @@ import {
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
 import { useTemplateFillSchema } from "@/routes/_protected.knowledge/-components/use-template-fill-schema";
 import { templatesOptions } from "@/routes/_protected.knowledge/-queries";
@@ -116,11 +117,25 @@ const TemplatePickList = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data, isLoading, isError } = useQuery(
-    templatesOptions(activeOrganizationId),
-  );
+  const {
+    data,
+    isLoading,
+    isError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery(templatesOptions(activeOrganizationId));
 
-  const templates = data && "templates" in data ? data.templates : [];
+  // The picker filters client-side, so it needs the full template set: keep
+  // fetching pages until the list is complete rather than a manual load-more.
+  useExternalSyncEffect(() => {
+    if (!hasNextPage || isFetchingNextPage) {
+      return;
+    }
+    void fetchNextPage();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
+
+  const templates = data ? data.pages.flatMap((page) => page.items) : [];
   const query = search.trim().toLowerCase();
   const visibleTemplates =
     query === ""

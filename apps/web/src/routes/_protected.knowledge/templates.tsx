@@ -1,6 +1,10 @@
 import { useCallback, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -104,15 +108,19 @@ function RouteComponent() {
     data: templatesData,
     isLoading: templatesLoading,
     isError: templatesError,
-  } = useQuery(templatesOptions(activeOrganizationId, selectedCategoryId));
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery(
+    templatesOptions(activeOrganizationId, selectedCategoryId),
+  );
   const { data: categoriesData } = useQuery(
     templateCategoriesOptions(activeOrganizationId),
   );
 
-  const templates =
-    templatesData && "templates" in templatesData
-      ? templatesData.templates
-      : [];
+  const templates = templatesData
+    ? templatesData.pages.flatMap((page) => page.items)
+    : [];
   const categories =
     categoriesData && "categories" in categoriesData
       ? categoriesData.categories
@@ -299,12 +307,17 @@ function RouteComponent() {
     <>
       <TemplateList
         categories={categories}
+        hasNextPage={hasNextPage}
+        isFetchingNextPage={isFetchingNextPage}
         onCategoriesChanged={invalidateCategories}
         onCategorySelect={handleCategorySelect}
         onCreateBlank={() => setStylePickerOpen(true)}
         onDeleted={invalidateTemplates}
         onDiscovered={(file) => {
           void openUploadedTemplate(file);
+        }}
+        onLoadMore={() => {
+          void fetchNextPage();
         }}
         onSelect={(template) => setView({ kind: "detail", template })}
         selectedCategoryId={selectedCategoryId}

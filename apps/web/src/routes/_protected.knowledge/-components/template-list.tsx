@@ -120,10 +120,13 @@ type TemplateListProps = {
   templates: TemplateItem[];
   categories: TemplateCategoryItem[];
   selectedCategoryId: string | null;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
   onCategorySelect: (id: string | null) => void;
   onCategoriesChanged: () => void;
   onCreateBlank: () => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
+  onLoadMore: () => void;
   onSelect: (template: TemplateItem) => void;
   onDeleted: () => void;
 };
@@ -139,10 +142,13 @@ export const TemplateList = ({
   templates,
   categories,
   selectedCategoryId,
+  hasNextPage,
+  isFetchingNextPage,
   onCategorySelect,
   onCategoriesChanged,
   onCreateBlank,
   onDiscovered,
+  onLoadMore,
   onSelect,
   onDeleted,
 }: TemplateListProps) => {
@@ -396,6 +402,20 @@ export const TemplateList = ({
               />
             ))}
           </ul>
+
+          {hasNextPage && (
+            <div className="border-t p-1">
+              <Button
+                className="text-muted-foreground w-full"
+                disabled={isFetchingNextPage}
+                onClick={onLoadMore}
+                size="sm"
+                variant="ghost"
+              >
+                {t("common.loadMore")}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 

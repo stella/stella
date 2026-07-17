@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -9,7 +9,15 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+  isUuidPaginationCursorPart,
+} from "@/api/lib/pagination";
+import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 
 const UNCATEGORIZED = "uncategorized" as const;
 
@@ -17,25 +25,65 @@ const listTemplatesQuerySchema = t.Object({
   categoryId: t.Optional(
     t.Union([tSafeId("templateCategory"), t.Literal(UNCATEGORIZED)]),
   ),
+  cursor: t.Optional(t.String({ maxLength: 512 })),
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: LIMITS.templatesPageSizeMax }),
+  ),
 });
+
+// The cursor is the boundary template id alone; the query resolves its
+// (createdAt, id) tuple in-DB so it never round-trips a timestamp through a
+// millisecond-precision JS Date.
+export const decodeTemplateListCursor = (
+  cursor: string,
+): SafeId<"template"> | null => {
+  const parts = decodePaginationCursor(cursor);
+  const id = parts?.at(0);
+  return isUuidPaginationCursorPart(id) ? brandPersistedTemplateId(id) : null;
+};
+
+export const encodeTemplateListCursor = (id: SafeId<"template">): string =>
+  encodePaginationCursor([id]);
 
 type ListTemplatesProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
-  query: { categoryId?: SafeId<"templateCategory"> | typeof UNCATEGORIZED };
+  query: {
+    categoryId?: SafeId<"templateCategory"> | typeof UNCATEGORIZED;
+    cursor?: string;
+    limit?: number;
+  };
 };
 
-const listTemplatesHandler = async function* ({
+export const listTemplatesHandler = async function* ({
   safeDb,
   organizationId,
   query,
 }: ListTemplatesProps) {
+  const limit = query.limit ?? LIMITS.templatesPageSizeDefault;
   const conditions = [eq(templates.organizationId, organizationId)];
 
   if (query.categoryId === UNCATEGORIZED) {
     conditions.push(isNull(templates.categoryId));
   } else if (query.categoryId) {
     conditions.push(eq(templates.categoryId, query.categoryId));
+  }
+
+  if (query.cursor) {
+    const boundaryId = decodeTemplateListCursor(query.cursor);
+    if (boundaryId === null) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Invalid cursor" }),
+      );
+    }
+    // Resolve the full-precision (createdAt, id) boundary in-DB by id so the
+    // cursor never round-trips createdAt through a millisecond JS Date. The
+    // boundary lookup is org-scoped (defense in depth beyond RLS) so a
+    // cursor carrying a foreign template id cannot shift this org's page
+    // boundary. Mirrors the list_templates MCP tool's keyset condition.
+    conditions.push(
+      sql`(${templates.createdAt}, ${templates.id}) < (select b.created_at, b.id from templates b where b.id = ${boundaryId} and b.organization_id = ${organizationId})`,
+    );
   }
 
   const result = yield* Result.await(
@@ -72,13 +120,21 @@ const listTemplatesHandler = async function* ({
         )
         .leftJoin(user, eq(user.id, member.userId))
         .where(and(...conditions))
-        .orderBy(desc(templates.createdAt))
-        .limit(LIMITS.templatesCount),
+        .orderBy(desc(templates.createdAt), desc(templates.id))
+        .limit(limit + 1),
     ),
   );
 
+  const page = createCursorPage({
+    rows: result,
+    limit,
+    cursorForItem: (item) => encodeTemplateListCursor(item.id),
+  });
+
   return Result.ok({
-    templates: result,
+    ...page,
+    // Per-org create cap (LIMITS.templatesCount), surfaced so the UI can
+    // warn before hitting it; unrelated to this page's `limit`.
     templatesCountLimit: LIMITS.templatesCount,
   });
 };
