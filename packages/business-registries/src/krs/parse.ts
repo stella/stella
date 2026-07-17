@@ -47,8 +47,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const hasRecordFields = (value: unknown): value is Record<string, unknown> =>
   isRecord(value) && Object.keys(value).length > 0;
 
-const isOpenBankruptcyProceeding = (entry: unknown): boolean =>
-  !isRecord(entry) ||
+// A bankruptcy entry is OPEN when it carries no populated
+// `opisZakonczeniaProcesuUpadlosci` (bankruptcy-close description).
+// Callers must pre-filter to well-formed records via `isRecord`: a
+// non-record element is structural garbage, and treating it as an open
+// proceeding would flip a solvent company to `bankruptcy` on a single
+// malformed array element.
+const isOpenBankruptcyProceeding = (entry: Record<string, unknown>): boolean =>
   !hasRecordFields(entry["opisZakonczeniaProcesuUpadlosci"]);
 
 const isOpenCombinedProceeding = (
@@ -85,7 +90,13 @@ export const parseStatus = (
   if (hasEntries(dzial6?.wykreslenia)) {
     return { type: "dissolved" };
   }
-  if (dzial6?.postepowanieUpadlosciowe?.some(isOpenBankruptcyProceeding)) {
+  // Skip structurally malformed entries (null / non-record elements)
+  // before deciding whether any bankruptcy proceeding is still open, so
+  // a single garbage element cannot report a solvent company as bankrupt.
+  const bankruptcyProceedings = (dzial6?.postepowanieUpadlosciowe ?? []).filter(
+    isRecord,
+  );
+  if (bankruptcyProceedings.some(isOpenBankruptcyProceeding)) {
     return { type: "bankruptcy" };
   }
   const proceedings = (

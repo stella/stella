@@ -284,6 +284,44 @@ describe("parseStatus", () => {
     ).toEqual({ type: "bankruptcy" });
   });
 
+  test("ignores malformed bankruptcy entries rather than flagging bankruptcy", () => {
+    // Null / non-record elements in `postepowanieUpadlosciowe` are
+    // structural garbage and must NOT be read as open proceedings.
+    expect(
+      parseStatus(
+        { postepowanieUpadlosciowe: [null, "not-a-record", 42] },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "active" });
+  });
+
+  test("a well-formed open proceeding still flags despite malformed siblings", () => {
+    // Malformed neighbours are skipped, but a genuine open bankruptcy
+    // entry alongside them still surfaces as `bankruptcy`.
+    expect(
+      parseStatus(
+        { postepowanieUpadlosciowe: [null, { data: "01.01.2026" }] },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "bankruptcy" });
+  });
+
+  test("a malformed entry beside a closed proceeding stays `active`", () => {
+    // The only well-formed entry is a closed proceeding; the malformed
+    // sibling must not tip the result to bankruptcy.
+    expect(
+      parseStatus(
+        {
+          postepowanieUpadlosciowe: [
+            null,
+            { opisZakonczeniaProcesuUpadlosci: { data: "01.02.2024" } },
+          ],
+        },
+        "ACME SP. Z O.O.",
+      ),
+    ).toEqual({ type: "active" });
+  });
+
   test("maps `wykreslenia` to `dissolved` even when other arrays are present", () => {
     expect(
       parseStatus(
