@@ -11,6 +11,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import readBillingCodes from "@/api/handlers/billing-codes/read";
 import readContactById from "@/api/handlers/contacts/read-by-id";
+import listDocxSuggestions from "@/api/handlers/docx-suggestions/read";
 import readEntityById from "@/api/handlers/entities/read-by-id";
 import readVersionById from "@/api/handlers/entities/read-version-by-id";
 import readVersions from "@/api/handlers/entities/read-versions";
@@ -166,6 +167,22 @@ const isolationCases: IsolationCase[] = [
       }),
     expectDenied: expectStatus(404),
     expectPositive: expectStatus(400),
+  },
+  {
+    name: "docx suggestions list",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(listDocxSuggestions, workspaceA, {
+        params: { workspaceId: testIds.wsA1, entityId: testIds.entityB1 },
+        query: { limit: 100 },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(listDocxSuggestions, workspaceB, {
+        params: { workspaceId: testIds.wsB1, entityId: testIds.entityB1 },
+        query: { limit: 100 },
+      }),
+    expectDenied: expectEmptyPage,
+    expectPositive: (result, { ids: testIds }) =>
+      expectPageContainsId(result, testIds.docxSuggestionB1),
   },
   {
     name: "invoice read by id",

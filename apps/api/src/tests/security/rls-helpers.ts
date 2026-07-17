@@ -18,6 +18,7 @@ import {
   contactRelationships,
   contacts,
   documentCounters,
+  docxSuggestions,
   entities,
   entityVersions,
   expenses,
@@ -93,6 +94,8 @@ export const createTestIds = () => ({
   fieldB1: id<"field">(),
   docCounterA1: id<"documentCounter">(),
   docCounterB1: id<"documentCounter">(),
+  docxSuggestionA1: id<"docxSuggestion">(),
+  docxSuggestionB1: id<"docxSuggestion">(),
   wsContactA1: id<"workspaceContact">(),
   wsContactB1: id<"workspaceContact">(),
   propDepA1: id<"propertyDependency">(),
@@ -416,6 +419,29 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
     .update(entities)
     .set({ currentVersionId: ids.entityVersionB1 })
     .where(eq(entities.id, ids.entityB1));
+
+  // Persisted DOCX review suggestions (opPayload stored opaquely). One per
+  // tenant so the cross-tenant read matrix can assert workspace isolation.
+  await db.insert(docxSuggestions).values([
+    {
+      id: ids.docxSuggestionA1,
+      workspaceId: ids.wsA1,
+      entityId: ids.entityA1,
+      opPayload: {},
+      severity: "medium" as const,
+      area: "body",
+      status: "pending" as const,
+    },
+    {
+      id: ids.docxSuggestionB1,
+      workspaceId: ids.wsB1,
+      entityId: ids.entityB1,
+      opPayload: {},
+      severity: "medium" as const,
+      area: "body",
+      status: "pending" as const,
+    },
+  ]);
 
   const propContent = {
     version: 1 as const,
