@@ -21,6 +21,18 @@ type FailedUpload = {
   error: Error;
 };
 
+/**
+ * A file waiting in the pending queue, tagged with the retry
+ * attempt it should run as. Carrying the attempt on the queue
+ * entry lets `pump()` stay the single place that admits work
+ * against the concurrency cap: retries re-enter through the
+ * pending queue rather than calling `processFile` directly.
+ */
+type QueuedUpload = {
+  file: File;
+  attempt: number;
+};
+
 type ProgressEvent = {
   completed: number;
   failed: number;
@@ -58,7 +70,7 @@ const sleep = async (ms: number) =>
  */
 export class UploadQueue<T> {
   private state: UploadState = "idle";
-  private pending: File[] = [];
+  private pending: QueuedUpload[] = [];
   private readonly inflight = new Map<File, AbortController>();
   private completed: T[] = [];
   private failed: FailedUpload[] = [];
@@ -128,7 +140,7 @@ export class UploadQueue<T> {
       return;
     }
 
-    this.pending = [...files];
+    this.pending = files.map((file) => ({ file, attempt: 0 }));
     this.inflight.clear();
     this.completed = [];
     this.failed = [];
@@ -196,10 +208,9 @@ export class UploadQueue<T> {
     if (this.state !== "done" && this.state !== "cancelled") {
       return;
     }
-    const filesToRetry = this.failed.map((f) => f.file);
+    this.pending = this.failed.map(({ file }) => ({ file, attempt: 0 }));
+    this.total = this.pending.length;
     this.failed = [];
-    this.pending = filesToRetry;
-    this.total = filesToRetry.length;
     this.completed = [];
 
     this.setState("running");
@@ -232,9 +243,9 @@ export class UploadQueue<T> {
     }
 
     while (this.inflight.size < this.concurrency && this.pending.length > 0) {
-      const file = this.pending.shift();
-      if (file) {
-        this.processFile(file).catch(() => {
+      const next = this.pending.shift();
+      if (next) {
+        this.processFile(next.file, next.attempt).catch(() => {
           // Errors are handled inside processFile
         });
       }
@@ -271,7 +282,7 @@ export class UploadQueue<T> {
 
       if (status === HTTP_TOO_MANY_REQUESTS) {
         // Put the file back at the front of the queue
-        this.pending.unshift(file);
+        this.pending.unshift({ file, attempt: 0 });
         this.handleRateLimit(error);
         return;
       }
@@ -292,20 +303,19 @@ export class UploadQueue<T> {
         await sleep(delay);
         this.retrying--;
 
-        // State may have changed during sleep (cancel,
-        // pause). Only continue if still running.
-        if (this.getState() !== "running") {
-          // If cancelled, don't push back to pending
-          // (already cleared by cancel()).
-          if (this.getState() !== "cancelled") {
-            this.pending.unshift(file);
-          }
+        // Cancelled during backoff: cancel() already cleared
+        // the pending queue and emitted done; drop the retry.
+        if (this.getState() === "cancelled") {
           return;
         }
 
-        this.processFile(file, attempt + 1).catch(() => {
-          // Errors are handled inside processFile
-        });
+        // Re-admit the retry through the pending queue so pump()
+        // remains the single gate that checks it against the
+        // concurrency cap. If the queue is paused or rate-limited,
+        // the entry waits in pending until the next pump() (on
+        // resume) admits it; its attempt count is preserved.
+        this.pending.unshift({ file, attempt: attempt + 1 });
+        this.pump();
         return;
       }
 

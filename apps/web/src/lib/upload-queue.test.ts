@@ -624,17 +624,14 @@ describe("interleaving table (deterministic scheduling coverage)", () => {
   }
 });
 
-describe("KNOWN BUG: retry re-injection oversubscribes the concurrency cap", () => {
+describe("retry re-injection respects the concurrency cap", () => {
   // The retry path frees the file's slot (deletes it from `inflight`) and
-  // then calls pump() to fill that slot with the next pending file *before*
-  // awaiting the backoff. When the backoff elapses, processFile() re-inserts
-  // the retried file directly into `inflight` without re-checking the cap, so
-  // the in-flight count transiently exceeds `concurrency`.
-  //
-  // This test documents the CURRENT (buggy) behaviour so a future fix has a
-  // regression anchor; the assertion below flips once the cap is respected.
-  // See report: no product-code fix is made in this tests-only change.
-  test("in-flight count reaches cap + 1 when a retry resumes into a full pipe", async () => {
+  // then calls pump() to fill that slot with the next pending file while the
+  // backoff runs. When the backoff elapses, the retry re-enters through the
+  // pending queue, so pump() is the single gate that admits it against the
+  // cap: a retry resuming into a full pipe waits its turn rather than
+  // pushing the in-flight count over `concurrency`.
+  test("a retry resuming into a full pipe does not exceed the cap", async () => {
     jest.useFakeTimers();
     try {
       const uploader = new ScriptedUploader();
@@ -651,21 +648,27 @@ describe("KNOWN BUG: retry re-injection oversubscribes the concurrency cap", () 
       expect(uploader.liveNamesList()).toEqual(["filler"]);
       expect(uploader.active).toBe(1);
 
-      // "filler" is still hanging when the backoff elapses and "retry" resumes.
+      // "filler" is still hanging when the backoff elapses. The retry cannot
+      // barge into the occupied slot; it stays parked until a slot frees.
       jest.advanceTimersByTime(1000);
       await flush();
 
-      // BUG: two uploads are now concurrent under a cap of 1.
-      expect(uploader.active).toBe(2);
-      expect(uploader.maxActive).toBe(cap + 1);
-      // The two live uploads are different files, so this is a cap breach,
-      // not the same file uploaded twice at once.
+      expect(uploader.active).toBe(1);
+      expect(uploader.maxActive).toBe(cap);
+      expect(uploader.liveNamesList()).toEqual(["filler"]);
       expect(uploader.sawConcurrentDoubleUpload).toBe(false);
 
+      // Once "filler" completes, the parked retry is admitted (exactly once).
       uploader.resolveFile("filler");
+      await flush();
+      expect(uploader.liveNamesList()).toEqual(["retry"]);
+      expect(uploader.active).toBe(1);
+      expect(uploader.callCount("retry")).toBe(2);
+
       uploader.resolveFile("retry");
       await flush();
       expect(queue.getState()).toBe("done");
+      expect(uploader.maxActive).toBe(cap);
     } finally {
       jest.useRealTimers();
     }
