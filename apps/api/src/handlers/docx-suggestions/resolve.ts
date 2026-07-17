@@ -1,15 +1,11 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
-import { t } from "elysia";
 
 import { docxSuggestions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
-import {
-  tDocxSuggestionApplyMode,
-  tDocxSuggestionResolvableStatus,
-} from "./schemas";
+import { tResolveDocxSuggestionBody } from "./schemas";
 
 /**
  * Resolve a pending suggestion to accepted or rejected, recording who
@@ -28,15 +24,12 @@ const resolveDocxSuggestion = createSafeHandler(
       entityId: tSafeId("entity"),
       suggestionId: tSafeId("docxSuggestion"),
     }),
-    body: t.Object({
-      status: tDocxSuggestionResolvableStatus,
-      appliedMode: t.Optional(t.Union([tDocxSuggestionApplyMode, t.Null()])),
-    }),
+    body: tResolveDocxSuggestionBody,
   },
   async function* ({ workspaceId, params, body, user, safeDb }) {
-    // Apply-mode is only meaningful for an accept; a reject clears it.
-    const appliedMode =
-      body.status === "accepted" ? (body.appliedMode ?? null) : null;
+    // Apply-mode is carried only on an acceptance (required there by the
+    // discriminated body); a rejection stores none.
+    const appliedMode = body.status === "accepted" ? body.appliedMode : null;
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {

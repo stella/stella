@@ -20,10 +20,20 @@ export const tDocxSuggestionApplyMode = t.Union([
   t.Literal("direct"),
 ]);
 
-/** A resolution outcome — the two terminal states `resolve` can set. */
-export const tDocxSuggestionResolvableStatus = t.Union([
-  t.Literal("accepted"),
-  t.Literal("rejected"),
+/**
+ * Resolution input as a discriminated union on `status`: an acceptance
+ * requires the `appliedMode` it was applied in; a rejection carries none.
+ * This makes an accepted row with a null mode (or a rejection that smuggles
+ * a mode) structurally impossible.
+ */
+export const tResolveDocxSuggestionBody = t.Union([
+  t.Object({
+    status: t.Literal("accepted"),
+    appliedMode: tDocxSuggestionApplyMode,
+  }),
+  t.Object({
+    status: t.Literal("rejected"),
+  }),
 ]);
 
 /**
