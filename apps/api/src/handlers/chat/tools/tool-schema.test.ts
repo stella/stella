@@ -1155,7 +1155,9 @@ describe("chat tool schemas", () => {
     );
     const inputSchema = convertSchemaToJsonSchema(projectedInputSchema);
     if (!inputSchema?.properties) {
-      throw new TypeError("Expected projected Mistral input schema properties.");
+      throw new TypeError(
+        "Expected projected Mistral input schema properties.",
+      );
     }
     // Boolean schemas are valid JSON Schema even though TanStack's public
     // JSONSchema type currently models only object schemas.
