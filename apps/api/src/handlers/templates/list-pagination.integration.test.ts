@@ -114,7 +114,7 @@ const seedTemplatesSharingOneTimestamp = async (
   createdAt: string,
 ): Promise<SeededTemplate[]> =>
   await Promise.all(
-    Array.from({ length: count }, (_, index) =>
+    Array.from({ length: count }, async (_, index) =>
       seedTemplate({
         organizationId: ids.orgA,
         userId: ids.userA1,
