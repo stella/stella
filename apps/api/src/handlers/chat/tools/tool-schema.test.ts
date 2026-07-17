@@ -124,6 +124,33 @@ const consumeProviderStream = async (
   }
 };
 
+const collectInstalledOpenRouterChunks = async (
+  ...events: unknown[]
+): Promise<StreamChunk[]> => {
+  const adapter = createOpenRouterResponsesText("openai/gpt-5.2", "test-key");
+  Reflect.set(adapter, "orClient", {
+    beta: {
+      responses: {
+        send: () =>
+          (async function* () {
+            yield* events;
+          })(),
+      },
+    },
+  });
+  const chunks: StreamChunk[] = [];
+
+  for await (const chunk of adapter.chatStream({
+    logger: resolveDebugOption(false),
+    messages: [{ role: "user", content: "Answer carefully." }],
+    model: adapter.model,
+  })) {
+    chunks.push(chunk);
+  }
+
+  return chunks;
+};
+
 const requireRecord = (
   value: unknown,
   description: string,
@@ -1344,6 +1371,102 @@ describe("chat tool schemas", () => {
     expect(contentIndex).toBeGreaterThan(startIndex);
     expect(endIndex).toBeGreaterThan(contentIndex);
     expect(finishedIndex).toBeGreaterThan(endIndex);
+  });
+
+  test("the installed OpenRouter adapter recovers output_text.done text", async () => {
+    const chunks = await collectInstalledOpenRouterChunks(
+      {
+        type: "response.created",
+        sequenceNumber: 0,
+        response: { model: "openai/gpt-5.2", output: [] },
+      },
+      {
+        type: "response.output_text.done",
+        sequenceNumber: 1,
+        outputIndex: 0,
+        contentIndex: 0,
+        itemId: "message-1",
+        logprobs: [],
+        text: "Recovered done-event answer",
+      },
+      {
+        type: "response.completed",
+        sequenceNumber: 2,
+        response: {
+          model: "openai/gpt-5.2",
+          output: [],
+          usage: {
+            inputTokens: 5,
+            outputTokens: 3,
+            totalTokens: 8,
+          },
+        },
+      },
+    );
+
+    expect(
+      chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT),
+    ).toEqual([
+      expect.objectContaining({
+        delta: "Recovered done-event answer",
+        content: "Recovered done-event answer",
+      }),
+    ]);
+  });
+
+  test("the installed OpenRouter adapter recovers completed outputText", async () => {
+    const chunks = await collectInstalledOpenRouterChunks({
+      type: "response.completed",
+      sequenceNumber: 1,
+      response: {
+        model: "openai/gpt-5.2",
+        output: [],
+        outputText: "Recovered outputText answer",
+        usage: {
+          inputTokens: 5,
+          outputTokens: 3,
+          totalTokens: 8,
+        },
+      },
+    });
+
+    expect(
+      chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT),
+    ).toEqual([
+      expect.objectContaining({
+        delta: "Recovered outputText answer",
+        content: "Recovered outputText answer",
+      }),
+    ]);
+  });
+
+  test("the installed OpenRouter adapter normalizes raw completed output_text", async () => {
+    const chunks = await collectInstalledOpenRouterChunks({
+      isUnknown: true,
+      raw: {
+        type: "response.completed",
+        sequence_number: 1,
+        response: {
+          model: "openai/gpt-5.2",
+          output: [],
+          output_text: "Recovered raw output_text answer",
+          usage: {
+            input_tokens: 5,
+            output_tokens: 3,
+            total_tokens: 8,
+          },
+        },
+      },
+    });
+
+    expect(
+      chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT),
+    ).toEqual([
+      expect.objectContaining({
+        delta: "Recovered raw output_text answer",
+        content: "Recovered raw output_text answer",
+      }),
+    ]);
   });
 
   test("Anthropic keeps an ordinary web_search function distinct from its native web-search tool", () => {

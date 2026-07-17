@@ -1,9 +1,37 @@
 diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
-index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e83530b79b97d 100644
+index 0eb06fdef60286749e5e607b940613f754af090b..d706e40bd296593573280e6497879b4baf07b2ff 100644
 --- a/dist/esm/adapters/responses-text.js
 +++ b/dist/esm/adapters/responses-text.js
-@@ -754,6 +754,9 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -695,6 +695,28 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+             };
            }
+         }
++        if (chunk.type === "response.output_text.done" && chunk.text && accumulatedContent.length === 0) {
++          if (!hasEmittedTextMessageStart) {
++            hasEmittedTextMessageStart = true;
++            yield {
++              type: EventType.TEXT_MESSAGE_START,
++              messageId: aguiState.messageId,
++              model: model || options.model,
++              timestamp: Date.now(),
++              role: "assistant"
++            };
++          }
++          accumulatedContent = chunk.text;
++          hasStreamedContentDeltas = true;
++          yield {
++            type: EventType.TEXT_MESSAGE_CONTENT,
++            messageId: aguiState.messageId,
++            model: model || options.model,
++            timestamp: Date.now(),
++            delta: chunk.text,
++            content: accumulatedContent
++          };
++        }
+         if (chunk.type === "response.reasoning_text.delta" && chunk.delta) {
+           const reasoningDelta = Array.isArray(chunk.delta) ? chunk.delta.join("") : typeof chunk.delta === "string" ? chunk.delta : "";
+           if (reasoningDelta) {
+@@ -755,6 +777,9 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
          }
          if (chunk.type === "response.content_part.added" && chunk.part) {
            const contentPart = chunk.part;
@@ -12,7 +40,8 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
 +          }
            if (contentPart.type === "output_text" && !hasEmittedTextMessageStart) {
              hasEmittedTextMessageStart = true;
-@@ -831,24 +834,28 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+             yield {
+@@ -831,24 +856,28 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
              let metadata = toolCallMetadata.get(item.id);
              if (!metadata) {
                metadata = {
@@ -45,7 +74,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
                };
                metadata.started = true;
              }
-@@ -870,7 +877,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -870,7 +899,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
            }
            yield {
              type: EventType.TOOL_CALL_ARGS,
@@ -54,7 +83,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
              model: model || options.model,
              timestamp: Date.now(),
              delta: typeof chunk.delta === "string" ? chunk.delta : ""
-@@ -920,7 +927,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -920,7 +949,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
            }
            yield {
              type: EventType.TOOL_CALL_END,
@@ -63,7 +92,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
              toolCallName: name,
              toolName: name,
              model: model || options.model,
-@@ -932,25 +939,29 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -932,25 +961,29 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
            const item = chunk.item;
            if (item?.type === "function_call" && item.id) {
              const metadata = toolCallMetadata.get(item.id) ?? {
@@ -97,7 +126,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
                };
                metadata.started = true;
              }
-@@ -981,7 +992,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -981,7 +1014,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
                }
                yield {
                  type: EventType.TOOL_CALL_END,
@@ -106,10 +135,14 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
                  toolCallName: name,
                  toolName: name,
                  model: model || options.model,
-@@ -999,25 +1010,54 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
-+          const completedText = outputItems.flatMap(
+@@ -996,28 +1029,58 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+         if (chunk.type === "response.completed") {
+           const responseObj = chunk.response ?? {};
+           const outputItems = Array.isArray(responseObj.output) ? responseObj.output : [];
++          const outputItemText = outputItems.flatMap(
 +            (item) => item.type === "message" && Array.isArray(item.content) ? item.content : []
 +          ).filter((part) => part.type === "output_text").map((part) => part.text).join("");
++          const completedText = typeof responseObj.outputText === "string" && responseObj.outputText.length > 0 ? responseObj.outputText : outputItemText;
 +          if (accumulatedContent.length === 0 && completedText.length > 0) {
 +            if (!hasEmittedTextMessageStart) {
 +              hasEmittedTextMessageStart = true;
@@ -165,7 +198,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
                };
                metadata.started = true;
              }
-@@ -1048,7 +1088,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -1048,7 +1111,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
                }
                yield {
                  type: EventType.TOOL_CALL_END,
@@ -174,7 +207,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
                  toolCallName: name,
                  toolName: name,
                  model: model || options.model,
-@@ -1215,10 +1255,11 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -1215,10 +1278,11 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
          if (message.toolCalls && message.toolCalls.length > 0) {
            for (const toolCall of message.toolCalls) {
              const argumentsString = typeof toolCall.function.arguments === "string" ? toolCall.function.arguments : JSON.stringify(toolCall.function.arguments);
@@ -187,3 +220,11 @@ index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e8353
                name: toolCall.function.name,
                arguments: argumentsString
              });
+@@ -1355,6 +1419,7 @@ function camelCaseResponseShape(src) {
+   const out = { ...src };
+   if ("incomplete_details" in src)
+     out.incompleteDetails = src.incomplete_details;
++  if ("output_text" in src) out.outputText = src.output_text;
+   if (src.usage && typeof src.usage === "object") {
+     const u = src.usage;
+     out.usage = {
