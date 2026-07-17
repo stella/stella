@@ -40,24 +40,22 @@ const readItemSources = createSafeHandler(
     const cursorParts = query.cursor
       ? decodePaginationCursor(query.cursor)
       : null;
-    const cursor = cursorParts?.at(0);
-    if (query.cursor && !isUuidPaginationCursorPart(cursor)) {
+    const rawCursor = cursorParts?.at(0);
+    if (query.cursor && !isUuidPaginationCursorPart(rawCursor)) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
     }
+    const cursor = isUuidPaginationCursorPart(rawCursor)
+      ? brandPersistedLegalListItemSourceId(rawCursor)
+      : null;
     const conditions = [
       eq(legalListItemSources.workspaceId, workspaceId),
       eq(legalListItemSources.listId, params.listId),
       eq(legalListItemSources.itemEntityId, params.itemEntityId),
     ];
-    if (cursor && isUuidPaginationCursorPart(cursor)) {
-      conditions.push(
-        gt(
-          legalListItemSources.id,
-          brandPersistedLegalListItemSourceId(cursor),
-        ),
-      );
+    if (cursor !== null) {
+      conditions.push(gt(legalListItemSources.id, cursor));
     }
 
     const result = yield* Result.await(
