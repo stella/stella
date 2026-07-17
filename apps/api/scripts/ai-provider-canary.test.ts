@@ -1,6 +1,62 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
-import { CanaryProviderRunError, errorSummary } from "./ai-provider-canary";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+
+import {
+  CanaryProviderRunError,
+  errorSummary,
+  toolRoundTripInputSchema,
+  toolRoundTripPromptForProvider,
+} from "./ai-provider-canary";
+
+describe("AI provider canary tool contract", () => {
+  test("keeps the omission marker outside the application schema", () => {
+    const requiredInput = {
+      count: 7,
+      value: "stella-canary",
+    };
+
+    expect(v.safeParse(toolRoundTripInputSchema, requiredInput).success).toBe(
+      true,
+    );
+    expect(
+      v.safeParse(toolRoundTripInputSchema, {
+        ...requiredInput,
+        optionalNote: "any string",
+      }).success,
+    ).toBe(false);
+    expect(
+      v.safeParse(toolRoundTripInputSchema, {
+        ...requiredInput,
+        optionalNote: null,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      toTanStackToolSchema(toolRoundTripInputSchema)[
+        "~standard"
+      ].jsonSchema.input({ target: "draft-07" }),
+    ).toMatchObject({
+      properties: {
+        optionalNote: { pattern: "a^", type: "string" },
+      },
+      required: ["count", "value"],
+    });
+  });
+
+  test("requests the provider representation used by each adapter", () => {
+    expect(toolRoundTripPromptForProvider("openai")).toContain(
+      "Set optionalNote to null.",
+    );
+    expect(toolRoundTripPromptForProvider("mistral")).toContain(
+      "Set optionalNote to null.",
+    );
+    expect(toolRoundTripPromptForProvider("openrouter")).toContain(
+      "Do not include optionalNote.",
+    );
+  });
+});
 
 describe("AI provider canary error summaries", () => {
   test("reports only bounded provider codes and the failed tool stage", () => {
