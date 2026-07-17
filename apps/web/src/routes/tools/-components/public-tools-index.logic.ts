@@ -82,10 +82,9 @@ export const filterPublicToolEntries = <T extends PublicToolBrowseEntry>(
   entries: readonly T[],
   { query, task, ...facets }: PublicToolBrowseFilters,
 ): readonly T[] => {
-  const taskSlugs = task === null ? null : new Set(TASK_SLUGS[task]);
   return filterToolEntries(entries, facets).filter(
     (entry) =>
-      (taskSlugs === null || taskSlugs.has(entry.slug)) &&
+      (task === null || TASK_SLUGS[task].some((slug) => slug === entry.slug)) &&
       matchesSearchQuery(entry, query),
   );
 };
