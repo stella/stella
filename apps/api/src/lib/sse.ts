@@ -50,6 +50,23 @@ export const subscribe = (
 ): ReadableStream => {
   const stream = new ReadableStream({
     start(controller) {
+      // The request signal can already be aborted here: the async auth
+      // macro that runs before subscribe() awaits, and the client can
+      // disconnect in that window. An already-aborted signal never fires
+      // a fresh "abort" event, so registering the connection would leak
+      // it for the process lifetime (nothing reads the orphaned stream,
+      // so enqueue never throws and the self-heal delete paths never
+      // run). Treat it as an immediately-closed connection: close the
+      // controller and never register.
+      if (signal.aborted) {
+        try {
+          controller.close();
+        } catch {
+          // Already closed.
+        }
+        return;
+      }
+
       const conn: SSEConnection = { controller, organizationId };
 
       let set = connections.get(workspaceId);
@@ -171,13 +188,30 @@ export const broadcast = (
   workspaceId: SafeId<"workspace">,
   event: SSEEvent,
 ): void => {
+  // When this instance has no attached subscriber it never receives its
+  // own published message back through the Redis loopback, so deliver
+  // locally inline. This must not depend on the publisher's health: the
+  // publisher is a separate lazy connection that can be healthy while the
+  // subscriber never attached, in which case a successful publish would
+  // otherwise reach no local client. When a subscriber IS attached, the
+  // loopback (handleMessage → broadcastLocal) delivers locally, so
+  // delivering inline as well would double-deliver — hence the guard on
+  // the attach state evaluated here, at broadcast time.
+  const deliveredLocally = !hasAttachedSubscriber();
+  if (deliveredLocally) {
+    broadcastLocal(workspaceId, event);
+  }
+
   publishWorkspaceEvent(workspaceId, event).catch((error: unknown) => {
     logger.warn("sse.redis_publish_failed", {
       "error.type": errorTag(error),
     });
     // Fallback: deliver locally when Redis is unavailable so
-    // single-instance deployments still get SSE invalidation.
-    broadcastLocal(workspaceId, event);
+    // single-instance deployments still get SSE invalidation. Skip it
+    // when we already delivered inline above to avoid double delivery.
+    if (!deliveredLocally) {
+      broadcastLocal(workspaceId, event);
+    }
   });
 };
 
@@ -185,11 +219,18 @@ export const broadcastToOrganization = (
   organizationId: SafeId<"organization">,
   event: SSEEvent,
 ): void => {
+  const deliveredLocally = !hasAttachedSubscriber();
+  if (deliveredLocally) {
+    broadcastLocalToOrganization(organizationId, event);
+  }
+
   publishOrganizationEvent(organizationId, event).catch((error: unknown) => {
     logger.warn("sse.redis_publish_failed", {
       "error.type": errorTag(error),
     });
-    broadcastLocalToOrganization(organizationId, event);
+    if (!deliveredLocally) {
+      broadcastLocalToOrganization(organizationId, event);
+    }
   });
 };
 
@@ -283,6 +324,24 @@ type SseLifecycle = {
 let activeLifecycle: SseLifecycle | null = null;
 
 /**
+ * Whether this instance currently has a Redis subscriber attached. Used
+ * by `broadcast`/`broadcastToOrganization` to decide whether they must
+ * deliver locally inline: without an attached subscriber, a published
+ * event never loops back to this instance, so local clients would be
+ * missed even when the (independent) publisher connection is healthy.
+ */
+const hasAttachedSubscriber = (): boolean =>
+  Boolean(activeLifecycle?.subscriber);
+
+/**
+ * Bounded backoff for retrying the subscriber attach. A transient Redis
+ * blip at boot must not leave this instance permanently deaf (publisher
+ * healthy, subscriber never attached); retry a handful of times with a
+ * short capped backoff before logging a persistent failure.
+ */
+const SUBSCRIBER_ATTACH_RETRY_DELAYS_MS = [200, 500, 1000, 2000, 5000];
+
+/**
  * Start the SSE keep-alive heartbeat and the cross-instance Redis
  * subscriber. Idempotent: a second call while already started is a no-op.
  *
@@ -314,27 +373,51 @@ export const startSse = (): void => {
   activeLifecycle = lifecycle;
 
   void (async () => {
-    // The client is constructed inside the try so a throwing constructor
-    // hits the fail-soft catch below instead of escaping this detached
-    // IIFE as an unhandled rejection.
-    let subscriber: ReturnType<typeof createRedisClient> | undefined;
-    try {
-      subscriber = createRedisClient();
-      await subscriber.subscribe(REDIS_CHANNEL, (message) => {
-        handleMessage(message);
-      });
+    for (let attempt = 0; ; attempt += 1) {
       if (activeLifecycle !== lifecycle) {
-        // stopSse (and possibly a subsequent startSse) ran while the
-        // connection was still being established; do not attach a stale
-        // subscriber to a lifecycle that is no longer the active one.
-        subscriber.close();
+        // stopSse (and possibly a subsequent startSse) ran while we were
+        // waiting between retries; abandon this attach loop.
         return;
       }
-      lifecycle.subscriber = subscriber;
-      logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
-    } catch (error: unknown) {
-      logger.error("sse.redis_connection_failed", connectionErrorFields(error));
-      subscriber?.close();
+
+      // The client is constructed inside the try so a throwing constructor
+      // hits the fail-soft catch below instead of escaping this detached
+      // IIFE as an unhandled rejection.
+      let subscriber: ReturnType<typeof createRedisClient> | undefined;
+      try {
+        subscriber = createRedisClient();
+        // oxlint-disable-next-line no-await-in-loop -- each attach attempt must observe success/failure before deciding to retry
+        await subscriber.subscribe(REDIS_CHANNEL, (message) => {
+          handleMessage(message);
+        });
+        if (activeLifecycle !== lifecycle) {
+          // stopSse (and possibly a subsequent startSse) ran while the
+          // connection was still being established; do not attach a stale
+          // subscriber to a lifecycle that is no longer the active one.
+          subscriber.close();
+          return;
+        }
+        lifecycle.subscriber = subscriber;
+        logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
+        return;
+      } catch (error: unknown) {
+        subscriber?.close();
+        const delayMs = SUBSCRIBER_ATTACH_RETRY_DELAYS_MS[attempt];
+        if (delayMs === undefined || activeLifecycle !== lifecycle) {
+          // Retries exhausted (or the lifecycle was torn down): surface a
+          // persistent failure. Local delivery still works because
+          // `broadcast`/`broadcastToOrganization` deliver inline while no
+          // subscriber is attached.
+          logger.error(
+            "sse.redis_connection_failed",
+            connectionErrorFields(error),
+          );
+          return;
+        }
+        logger.warn("sse.redis_subscribe_retry", connectionErrorFields(error));
+        // oxlint-disable-next-line no-await-in-loop -- sequential backoff between retries, not parallel work
+        await Bun.sleep(delayMs);
+      }
     }
   })();
 

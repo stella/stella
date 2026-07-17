@@ -10,10 +10,18 @@ type FakeRedisClient = {
 
 const createdClients: FakeRedisClient[] = [];
 let subscribeBehavior: "reject" | "resolve" = "resolve";
+// Number of subscribe() attempts to fail before succeeding, independent of
+// subscribeBehavior. Lets a test model a transient boot blip (fail once,
+// then the retry attaches) without permanently rejecting.
+let subscribeFailuresRemaining = 0;
 
 const makeFakeRedisClient = (): FakeRedisClient => {
   const client: FakeRedisClient = {
     subscribe: mock(async () => {
+      if (subscribeFailuresRemaining > 0) {
+        subscribeFailuresRemaining -= 1;
+        throw new Error("redis unavailable");
+      }
       if (subscribeBehavior === "reject") {
         throw new Error("redis unavailable");
       }
@@ -201,5 +209,83 @@ describe("startSse / stopSse lifecycle", () => {
     expect(newClient?.close).toHaveBeenCalledTimes(1);
 
     await flushMicrotasks();
+  });
+});
+
+describe("subscribe: already-aborted signal", () => {
+  test("an already-aborted signal registers no connection and closes the stream", async () => {
+    const controller = new AbortController();
+    // The signal aborts before subscribe runs, mirroring a client that
+    // disconnects during the async auth macro. With the leak, the stream
+    // would stay open and registered forever; the fix closes it up front.
+    controller.abort();
+
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    const first = await reader.read();
+    expect(first.done).toBe(true);
+
+    // A subsequent broadcast must not resurrect or feed the dead stream:
+    // nothing was registered, so there is nothing to enqueue into.
+    broadcast(workspaceId, { type: "after-abort", data: null });
+    await flushMicrotasks();
+
+    const second = await reader.read();
+    expect(second.done).toBe(true);
+  });
+});
+
+describe("broadcast: local delivery without an attached subscriber", () => {
+  test("broadcast delivers locally when no Redis subscriber is attached", async () => {
+    // No startSse: this instance has no attached subscriber, so a
+    // published event never loops back. Local clients must still get it.
+    stopSse();
+    await flushMicrotasks();
+
+    const controller = new AbortController();
+    const stream = subscribe(workspaceId, organizationId, controller.signal);
+    const reader = stream.getReader();
+
+    broadcast(workspaceId, { type: "local-only", data: { n: 1 } });
+
+    const { value } = await reader.read();
+    const text = new TextDecoder().decode(value);
+    expect(text).toContain("local-only");
+
+    controller.abort();
+    await flushMicrotasks();
+  });
+});
+
+describe("startSse: subscriber attach retry", () => {
+  test("a transient attach failure is retried and the subscriber attaches", async () => {
+    createdClients.length = 0;
+    // First attach attempt fails; the bounded backoff retry must attach.
+    subscribeFailuresRemaining = 1;
+
+    startSse();
+    await flushMicrotasks();
+
+    // The first attempt created a client, failed, and closed it.
+    expect(createdClients).toHaveLength(1);
+    expect(createdClients[0]?.close).toHaveBeenCalledTimes(1);
+
+    // Wait past the first backoff delay (200ms) so the retry can run.
+    await Bun.sleep(300);
+    await flushMicrotasks();
+
+    // A second client was created for the retry and stayed attached.
+    expect(createdClients).toHaveLength(2);
+    const attached = createdClients[1];
+    expect(attached?.subscribe).toHaveBeenCalledTimes(1);
+    expect(attached?.close).not.toHaveBeenCalled();
+
+    // Stopping now closes the attached retry client exactly once.
+    stopSse();
+    expect(attached?.close).toHaveBeenCalledTimes(1);
+
+    await flushMicrotasks();
+    subscribeFailuresRemaining = 0;
   });
 });
