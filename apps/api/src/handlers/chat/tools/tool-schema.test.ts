@@ -1214,6 +1214,48 @@ describe("chat tool schemas", () => {
     });
   });
 
+  test("the installed Mistral adapter preserves composed schemas under non-strict fallback", async () => {
+    const adapter = createMistralText("mistral-large-latest", "test-key");
+    let request: unknown;
+    Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
+      request = payload;
+      return emptyProviderStream();
+    });
+    const inputSchema = {
+      type: "object",
+      properties: {
+        value: {
+          oneOf: [{ type: "string" }, { type: "number" }],
+        },
+      },
+      required: [],
+    };
+
+    await consumeProviderStream(
+      adapter.chatStream({
+        ...commonProviderOptions([
+          {
+            name: "store_value",
+            description: "Store a value.",
+            inputSchema,
+          },
+        ]),
+        model: adapter.model,
+      }),
+    );
+
+    expect(request).toMatchObject({
+      tools: [
+        {
+          function: {
+            parameters: inputSchema,
+            strict: false,
+          },
+        },
+      ],
+    });
+  });
+
   test("Anthropic keeps an ordinary web_search function distinct from its native web-search tool", () => {
     const ordinaryWebSearch: Tool = {
       name: "web_search",
