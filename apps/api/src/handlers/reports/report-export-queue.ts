@@ -15,7 +15,7 @@
 
 import { Result } from "better-result";
 import { Queue, Worker } from "bullmq";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
@@ -29,6 +29,7 @@ import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buff
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { buildReportData } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
+import { notifyReportExportStatus } from "@/api/handlers/reports/report-export-notification";
 import {
   fillStoredTemplateDocx,
   fillTemplateDocx,
@@ -44,6 +45,7 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
+import { listPendingReportExportNotifications } from "@/api/lib/report-export-notification-recovery";
 import { recoverStuckReportExports } from "@/api/lib/report-export-recovery";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
@@ -65,6 +67,7 @@ const WORKER_CONCURRENCY = 2;
 const JOB_ATTEMPTS = 1;
 const ERROR_MESSAGE_MAX_CHARS = 1000;
 const DOCX_TO_PDF_ERROR = "Failed to convert the report to PDF.";
+const NOTIFICATION_RECONCILE_INTERVAL_MS = 60_000;
 
 /** Delivery format chosen at export time. Carried on the job (not the export
  *  row): the worker needs it to convert + name the artifact, and the status
@@ -193,11 +196,64 @@ export const initReportExportWorker = () => {
     logger.error("report_export.worker_error", connectionErrorFields(error));
   });
 
+  let closing = false;
+  let activeNotificationReconcile: Promise<void> | null = null;
+  const runNotificationReconcile = async (): Promise<void> => {
+    const { actors, suppressed } = await listPendingReportExportNotifications();
+    const results = await Promise.all(
+      actors.map(
+        async (actorKey) =>
+          await notifyReportExportStatus(brandActor(actorKey)),
+      ),
+    );
+    const finalized = results.filter(
+      ({ status }) =>
+        status !== "skipped" &&
+        status !== "claim_failed" &&
+        status !== "finalize_failed",
+    ).length;
+    const reconciled = finalized + suppressed;
+    if (reconciled > 0) {
+      logger.info("report_export.notifications_reconciled", {
+        count: String(reconciled),
+      });
+    }
+  };
+  const scheduleNotificationReconcile = (): void => {
+    if (closing || activeNotificationReconcile !== null) {
+      return;
+    }
+    activeNotificationReconcile = runNotificationReconcile()
+      .catch((error: unknown) => {
+        captureError(error, {
+          operation: "report_export.notification.reconcile",
+        });
+      })
+      .finally(() => {
+        activeNotificationReconcile = null;
+      });
+  };
+  scheduleNotificationReconcile();
+  const notificationReconcileTimer = setInterval(
+    scheduleNotificationReconcile,
+    NOTIFICATION_RECONCILE_INTERVAL_MS,
+  );
+  notificationReconcileTimer.unref();
+
   logger.info("report_export.worker_started", {
     concurrency: String(WORKER_CONCURRENCY),
   });
 
-  return worker;
+  return {
+    close: async () => {
+      closing = true;
+      clearInterval(notificationReconcileTimer);
+      if (activeNotificationReconcile !== null) {
+        await activeNotificationReconcile;
+      }
+      await worker.close();
+    },
+  };
 };
 
 type ExportActor = {
@@ -209,7 +265,12 @@ type ExportActor = {
   exportId: SafeId<"reportExport">;
 };
 
-const brandActor = (data: ReportExportJobData): ExportActor => {
+type ReportExportActorKey = Pick<
+  ReportExportJobData,
+  "exportId" | "organizationId" | "userId" | "workspaceId"
+>;
+
+const brandActor = (data: ReportExportActorKey): ExportActor => {
   const branded = brandValidatedWorkflowActorKey({
     organizationId: data.organizationId,
     workspaceId: data.workspaceId,
@@ -251,7 +312,11 @@ const processReportExportJob = async (
 
   // Only a freshly queued row runs; a re-delivered job (or one already terminal)
   // is a no-op so the export never double-runs its AI/document creation.
-  if (!row || row.status !== "queued") {
+  if (!row) {
+    return;
+  }
+  if (row.status !== "queued") {
+    await notifyReportExportStatus(actor);
     return;
   }
 
@@ -270,7 +335,9 @@ const processReportExportJob = async (
 
   if (Result.isError(outcome)) {
     await markExportFailed(data, toExportErrorMessage(outcome.error));
+    return;
   }
+  await notifyReportExportStatus(actor);
 };
 
 type ExportRow = {
@@ -654,6 +721,7 @@ const markExportFailedRow = async (
         and(
           eq(reportExports.id, actor.exportId),
           eq(reportExports.workspaceId, actor.workspaceId),
+          inArray(reportExports.status, ["queued", "running"]),
         ),
       );
   });
@@ -667,4 +735,5 @@ const markExportFailed = async (
 ): Promise<void> => {
   const actor = brandActor(data);
   await markExportFailedRow(actor, message);
+  await notifyReportExportStatus(actor);
 };

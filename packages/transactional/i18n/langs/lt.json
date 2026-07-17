@@ -29,5 +29,17 @@
     "preview": "Naudokite šį kodą savo tapatybei patvirtinti",
     "signIn": "Naudokite šį kodą prisijungimui prie savo stella paskyros.",
     "subject": "Jūsų stella patvirtinimo kodas"
+  },
+  "reportExportStatus": {
+    "action": "Atidaryti stella",
+    "completedBody": "Jūsų ataskaitos eksportas paruoštas. Atidarykite stella, kad jį peržiūrėtumėte arba atsisiųstumėte.",
+    "completedHeading": "Ataskaitos eksportas paruoštas",
+    "completedPreview": "Jūsų ataskaitos eksportas paruoštas",
+    "completedSubject": "Jūsų ataskaitos eksportas paruoštas",
+    "failedBody": "Jūsų ataskaitos eksporto nepavyko užbaigti. Atidarykite stella ir bandykite dar kartą.",
+    "failedHeading": "Ataskaitos eksportas nepavyko",
+    "failedPreview": "Jūsų ataskaitos eksporto nepavyko užbaigti",
+    "failedSubject": "Jūsų ataskaitos eksporto nepavyko užbaigti",
+    "privacy": "Šiame el. laiške nėra ataskaitos turinio ar failų pavadinimų."
   }
 }

@@ -29,5 +29,17 @@
     "preview": "Use este código para verificar su identidad",
     "signIn": "Utilice este código para iniciar sesión en su cuenta de stella.",
     "subject": "Su código de verificación de stella"
+  },
+  "reportExportStatus": {
+    "action": "Abrir stella",
+    "completedBody": "La exportación de su informe está lista. Abra stella para verla o descargarla.",
+    "completedHeading": "Exportación del informe lista",
+    "completedPreview": "La exportación de su informe está lista",
+    "completedSubject": "La exportación de su informe está lista",
+    "failedBody": "No se pudo completar la exportación de su informe. Abra stella para intentarlo de nuevo.",
+    "failedHeading": "Error al exportar el informe",
+    "failedPreview": "No se pudo completar la exportación de su informe",
+    "failedSubject": "No se pudo completar la exportación de su informe",
+    "privacy": "Este correo no contiene contenido del informe ni nombres de archivos."
   }
 }

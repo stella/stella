@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 import {
   jsonb,
   p,
@@ -28,6 +30,20 @@ export type ReportExportStatus = (typeof REPORT_EXPORT_STATUSES)[number];
  *  presigned URL. Both always write the bytes to S3. */
 export const REPORT_EXPORT_MODES = ["workspace", "download"] as const;
 export type ReportExportMode = (typeof REPORT_EXPORT_MODES)[number];
+
+/** At-most-once delivery state for the export's privacy-safe status email.
+ *  `sending` is claimed atomically before the external call, so a crash may
+ *  omit an email but can never duplicate one. Historical rows default to
+ *  `suppressed` and are not backfilled into an outbound-email flood. */
+export const REPORT_EXPORT_NOTIFICATION_STATUSES = [
+  "suppressed",
+  "pending",
+  "sending",
+  "sent",
+  "delivery_failed",
+] as const;
+export type ReportExportNotificationStatus =
+  (typeof REPORT_EXPORT_NOTIFICATION_STATUSES)[number];
 
 /** Which template the export fills: a deployment built-in resolved by key, or
  *  a stored org template (filled at its current version). No UUIDs reach the
@@ -71,6 +87,17 @@ export const reportExports = p.pgTable(
       { onDelete: "set null" },
     ),
     resultS3Key: p.varchar("result_s3_key", { length: 512 }),
+    notificationStatus: p
+      .text("notification_status", {
+        enum: REPORT_EXPORT_NOTIFICATION_STATUSES,
+      })
+      .notNull()
+      .default("suppressed"),
+    notificationLang: p
+      .varchar("notification_lang", { length: 10 })
+      .notNull()
+      .default("en"),
+    notificationAttemptedAt: p.timestamp("notification_attempted_at"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")
@@ -85,6 +112,12 @@ export const reportExports = p.pgTable(
     p
       .index("report_exports_workspace_requester_created_idx")
       .on(table.workspaceId, table.requestedBy, table.createdAt, table.id),
+    p
+      .index("report_exports_pending_notification_idx")
+      .on(table.createdAt, table.id)
+      .where(
+        sql`${table.notificationStatus} = 'pending' AND ${table.status} IN ('completed', 'failed')`,
+      ),
     ...wsPolicies(),
   ],
 );

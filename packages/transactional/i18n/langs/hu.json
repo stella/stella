@@ -29,5 +29,17 @@
     "preview": "Használja ezt a kódot személyazonossága igazolásához",
     "signIn": "Használja ezt a kódot a stella fiókjába való bejelentkezéshez.",
     "subject": "Az Ön stella ellenőrző kódja"
+  },
+  "reportExportStatus": {
+    "action": "stella megnyitása",
+    "completedBody": "A jelentés exportálása elkészült. Nyissa meg a stellát a megtekintéshez vagy letöltéshez.",
+    "completedHeading": "A jelentésexport elkészült",
+    "completedPreview": "A jelentés exportálása elkészült",
+    "completedSubject": "A jelentés exportálása elkészült",
+    "failedBody": "A jelentés exportálását nem sikerült befejezni. Nyissa meg a stellát, és próbálja újra.",
+    "failedHeading": "A jelentésexport sikertelen",
+    "failedPreview": "A jelentés exportálását nem sikerült befejezni",
+    "failedSubject": "A jelentés exportálását nem sikerült befejezni",
+    "privacy": "Ez az e-mail nem tartalmaz jelentéstartalmat vagy fájlneveket."
   }
 }

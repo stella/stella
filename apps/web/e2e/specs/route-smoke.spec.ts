@@ -157,6 +157,7 @@ const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
 const INTENTIONALLY_NOT_SMOKED = new Set([
   "/knowledge/tools/$skillId",
   "/workspaces/$workspaceId/invoices/$invoiceId",
+  "/workspaces/$workspaceId/reports/$exportId",
 ]);
 
 test("authenticated routes render without browser errors", async ({
