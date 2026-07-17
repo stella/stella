@@ -617,7 +617,10 @@ const persistQueuedSuggestions = async ({
   // the server. Now that the rows exist (ids just reconciled in), replay any
   // that are already terminal so the server matches the editor. Fires in
   // parallel; a single failure surfaces one toast + telemetry.
-  const serverIds = new Set(Object.values(refToId));
+  // Widened to string: the create response ids are branded SafeIds, but the
+  // review store keys suggestions by plain string id, so the membership test
+  // below compares against `item.id: string`.
+  const serverIds = new Set<string>(Object.values(refToId));
   const session = useReviewStore.getState().sessions[entityId];
   if (session === undefined) {
     return;
