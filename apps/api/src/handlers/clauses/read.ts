@@ -5,41 +5,20 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isUuid, tSafeId } from "@/api/lib/custom-schema";
-import {
-  parsePgTimestampCursorValue,
-  pgTimestampCursorBoundary,
-  pgTimestampCursorValue,
-} from "@/api/lib/db-pagination";
-import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";
+import { tSafeId } from "@/api/lib/custom-schema";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 
 // ── Cursor helpers ───────────────────────────────────
 
-const CURSOR_SEP = "|";
-
-const clauseCreatedAtCursor = pgTimestampCursorValue(clauses.createdAt);
-
-const encodeCursor = (date: string, id: string): string =>
-  `${date}${CURSOR_SEP}${id}`;
-
-const decodeCursor = (
-  cursor: string,
-): { date: ParsedPgTimestampCursor; id: string } | null => {
-  const idx = cursor.indexOf(CURSOR_SEP);
-  if (idx === -1) {
-    return null;
-  }
-  const date = parsePgTimestampCursorValue(cursor.slice(0, idx));
-  const id = cursor.slice(idx + 1);
-  if (date === null || !isUuid(id)) {
-    return null;
-  }
-  return { date, id };
-};
+const clauseCursor = createTimestampIdCursorCodec({
+  column: clauses.createdAt,
+  brandId: brandPersistedClauseId,
+});
 
 // ── List ────────────────────────────────────────────
 
@@ -112,7 +91,7 @@ export const listClausesHandler = async function* ({
   // Cursor pagination only applies to date-ordered
   // browsing; search results ignore the cursor.
   if (query.cursor && !isSearching) {
-    const parsed = decodeCursor(query.cursor);
+    const parsed = clauseCursor.decode(query.cursor);
     if (parsed === null) {
       return Result.err(
         new HandlerError({ status: 400, message: "Invalid cursor" }),
@@ -120,12 +99,10 @@ export const listClausesHandler = async function* ({
     }
     // Compound cursor: (createdAt < cursorDate) OR
     // (createdAt = cursorDate AND id < cursorId)
+    const boundary = clauseCursor.boundary(parsed);
     const cursorCondition = or(
-      lt(clauses.createdAt, pgTimestampCursorBoundary(parsed.date)),
-      and(
-        eq(clauses.createdAt, pgTimestampCursorBoundary(parsed.date)),
-        sql`${clauses.id} < ${parsed.id}`,
-      ),
+      lt(clauses.createdAt, boundary),
+      and(eq(clauses.createdAt, boundary), lt(clauses.id, parsed.id)),
     );
     if (cursorCondition) {
       conditions.push(cursorCondition);
@@ -140,7 +117,7 @@ export const listClausesHandler = async function* ({
     description: clauses.description,
     currentVersion: clauses.currentVersion,
     createdAt: clauses.createdAt,
-    createdAtCursor: clauseCreatedAtCursor.as("created_at_cursor"),
+    createdAtCursor: clauseCursor.cursorValue.as("created_at_cursor"),
     updatedAt: clauses.updatedAt,
   };
 
@@ -164,7 +141,7 @@ export const listClausesHandler = async function* ({
   const page = createCursorPage({
     rows,
     limit,
-    cursorForItem: (item) => encodeCursor(item.createdAtCursor, item.id),
+    cursorForItem: (item) => clauseCursor.encode(item.createdAtCursor, item.id),
   });
 
   return Result.ok({

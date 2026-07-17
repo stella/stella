@@ -1,9 +1,14 @@
 import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import fc from "fast-check";
 
 import { propertyConfig } from "@stll/property-testing";
 
-import { parsePgTimestampCursorValue } from "@/api/lib/db-pagination";
+import {
+  createTimestampIdCursorCodec,
+  parsePgTimestampCursorValue,
+} from "@/api/lib/db-pagination";
+import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const cursorTimestamp = (date: Date, microseconds: number): string =>
   `${date.toISOString().slice(0, 19)}.${microseconds.toString().padStart(6, "0")}`;
@@ -51,5 +56,75 @@ describe("PostgreSQL timestamp cursor values", () => {
     ]) {
       expect(parsePgTimestampCursorValue(value)).toBeNull();
     }
+  });
+});
+
+describe("createTimestampIdCursorCodec", () => {
+  // `cursorValue`/`boundary` build SQL; encode/decode never touch the column,
+  // so a placeholder column is enough to exercise the wire codec.
+  const codec = createTimestampIdCursorCodec({
+    column: sql`created_at`,
+    brandId: brandPersistedInvoiceId,
+  });
+
+  test("INVARIANT: decode ∘ encode round-trips any (timestamp, id)", () => {
+    fc.assert(
+      fc.property(
+        fc.date({
+          min: new Date("2000-01-01T00:00:00.000Z"),
+          max: new Date("2099-12-31T23:59:59.999Z"),
+          noInvalidDate: true,
+        }),
+        fc.integer({ min: 0, max: 999_999 }),
+        fc.uuid(),
+        (date, microseconds, id) => {
+          const timestamp = cursorTimestamp(date, microseconds);
+          const decoded = codec.decode(codec.encode(timestamp, id));
+          expect(decoded).toEqual({
+            timestamp: { type: "pgTimestampCursor", value: timestamp },
+            id: brandPersistedInvoiceId(id),
+          });
+        },
+      ),
+      propertyConfig({ numRuns: 500 }),
+    );
+  });
+
+  test("garbage or malformed cursors decode to null (→ first page)", () => {
+    fc.assert(
+      fc.property(fc.string(), (raw) => {
+        const decoded = codec.decode(raw);
+        expect(decoded === null || typeof decoded.id === "string").toBe(true);
+      }),
+      propertyConfig({ numRuns: 500 }),
+    );
+    // A well-formed cursor whose id is not a UUID is rejected.
+    expect(
+      codec.decode(codec.encode("2026-07-10T08:15:30.123456", "nope")),
+    ).toBeNull();
+    // Wrong arity (single-part payload) is rejected.
+    expect(
+      codec.decode(
+        Buffer.from(JSON.stringify(["only-one"])).toString("base64url"),
+      ),
+    ).toBeNull();
+  });
+
+  test("accepts the legacy pipe-delimited `timestamp|uuid` form", () => {
+    const timestamp = "2026-07-10T08:15:30.123456";
+    const id = "6f5b2c1a-1111-4222-8333-444455556666";
+    expect(codec.decode(`${timestamp}${"|"}${id}`)).toEqual({
+      timestamp: { type: "pgTimestampCursor", value: timestamp },
+      id: brandPersistedInvoiceId(id),
+    });
+  });
+
+  test("accepts already-issued millisecond ISO timestamps in the tuple", () => {
+    const timestamp = "2026-07-10T08:15:30.123Z";
+    const id = "6f5b2c1a-1111-4222-8333-444455556666";
+    expect(codec.decode(codec.encode(timestamp, id))).toEqual({
+      timestamp: { type: "pgTimestampCursor", value: timestamp },
+      id: brandPersistedInvoiceId(id),
+    });
   });
 });

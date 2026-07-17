@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, gte, inArray, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, lte, or } from "drizzle-orm";
 import * as v from "valibot";
 
 import { roles } from "@stll/permissions";
@@ -13,13 +13,13 @@ import { updateTimeEntryHandler } from "@/api/handlers/time-entries/update-by-id
 import { readOrgEntitlementHandler } from "@/api/handlers/usage/get-entitlement";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
-  parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
 import {
   brandPersistedEntityId,
@@ -1236,19 +1236,10 @@ const listInvoicesArgsSchema = v.pipe(
   ),
 );
 
-const invoiceCreatedAtCursor = sql<Date>`date_trunc('milliseconds', ${invoices.createdAt})`;
-
-const decodeInvoicePageCursor = (
-  cursor: string,
-): { createdAt: Date; id: SafeId<"invoice"> } | null => {
-  const parts = decodePaginationCursor(cursor);
-  const createdAt = parseDateTimePaginationCursorPart(parts?.at(0));
-  const id = parts?.at(1);
-  if (!createdAt || !isUuidPaginationCursorPart(id)) {
-    return null;
-  }
-  return { createdAt, id: brandPersistedInvoiceId(id) };
-};
+const invoicePageCursor = createTimestampIdCursorCodec({
+  column: invoices.createdAt,
+  brandId: brandPersistedInvoiceId,
+});
 
 const readInvoiceDetail = async ({
   context,
@@ -1401,17 +1392,15 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
     return notFoundResult("Matter not found or not accessible");
   }
 
-  let boundary: { createdAt: Date; id: SafeId<"invoice"> } | null = null;
-  if (input.cursor !== undefined) {
-    boundary = decodeInvoicePageCursor(input.cursor);
-    if (boundary === null) {
-      return structuredErrorResult({
-        code: "validation_error",
-        message: "Invalid cursor",
-        issues: [{ path: "cursor", message: "Invalid cursor" }],
-        hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
-      });
-    }
+  const cursor =
+    input.cursor === undefined ? null : invoicePageCursor.decode(input.cursor);
+  if (input.cursor !== undefined && cursor === null) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "Invalid cursor",
+      issues: [{ path: "cursor", message: "Invalid cursor" }],
+      hint: "Pass the 'cursor' verbatim as returned by a previous call, or omit it for the first page.",
+    });
   }
   const limit = input.limit ?? DEFAULT_LIST_LIMIT;
 
@@ -1426,24 +1415,24 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
         dueDate: invoices.dueDate,
         currency: invoices.currency,
         totalAmount: invoices.totalAmount,
-        createdAtCursor: invoiceCreatedAtCursor.as("created_at_cursor"),
+        createdAtCursor: invoicePageCursor.cursorValue.as("created_at_cursor"),
       })
       .from(invoices)
       .where(
         and(
           eq(invoices.workspaceId, workspaceId),
-          boundary === null
+          cursor === null
             ? undefined
             : or(
-                gt(invoiceCreatedAtCursor, boundary.createdAt),
+                gt(invoices.createdAt, invoicePageCursor.boundary(cursor)),
                 and(
-                  eq(invoiceCreatedAtCursor, boundary.createdAt),
-                  gt(invoices.id, boundary.id),
+                  eq(invoices.createdAt, invoicePageCursor.boundary(cursor)),
+                  gt(invoices.id, cursor.id),
                 ),
               ),
         ),
       )
-      .orderBy(asc(invoiceCreatedAtCursor), asc(invoices.id))
+      .orderBy(asc(invoices.createdAt), asc(invoices.id))
       .limit(limit + 1),
   );
 
@@ -1451,7 +1440,7 @@ const handleListInvoicesTool: McpToolHandler = async ({ args, context }) => {
     rows,
     limit,
     cursorForItem: (item) =>
-      encodePaginationCursor([item.createdAtCursor.toISOString(), item.id]),
+      invoicePageCursor.encode(item.createdAtCursor, item.id),
   });
 
   const invoiceList = page.items.map(
