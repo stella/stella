@@ -7,6 +7,15 @@ export const LIMITS = {
   entitiesWindowSizeDefault: 200,
   entitiesWindowSizeMax: 500,
   workflowEntityBatchSize: 500,
+  /** Per-replica concurrency for the legacy workflow worker. The topology
+   *  expansion preserves today's budget while every tier still routes here. */
+  workflowStandardWorkerConcurrency: 10,
+  /** Per-replica budget for the rollout-prepared flex queue. No producer uses
+   *  this queue until the separate routing PR lands. */
+  workflowFlexWorkerConcurrency: 2,
+  /** Per-queue cap for orphan-reconciliation live-job snapshots. Reaching the
+   *  cap in either queue skips recovery rather than risking a false orphan. */
+  workflowLiveJobScanLimit: 10_000,
   /** Generous cap on versions read for one entity's history panel (newest
    *  first). Versions accumulate one-per-finalize/upload/restore with no
    *  write-side cap; 1000 is far above realistic editing histories. Cursor

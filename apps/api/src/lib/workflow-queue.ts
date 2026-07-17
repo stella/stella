@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { Queue, Worker } from "bullmq";
+import type { Job } from "bullmq";
 import type { RedisClient } from "bun";
 import { sleep } from "bun";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -82,6 +83,15 @@ import {
   selectRunningLockReservation,
 } from "@/api/lib/workflow/orphan-recovery";
 import {
+  combineLiveWorkflowJobSnapshots,
+  workflowQueueClassForServiceTier,
+  WORKFLOW_QUEUE_CLASSES,
+  WORKFLOW_QUEUE_NAMES,
+  WORKFLOW_WORKER_SPECS,
+  type WorkflowQueueClass,
+  type WorkflowWorkerSpec,
+} from "@/api/lib/workflow/queue-topology";
+import {
   computeWorkflowJobTimeoutMs,
   computeWorkflowRunLockTtlSec,
   getWorkflowBatchAITimeoutMs,
@@ -121,12 +131,7 @@ type ExtractionPreviewPayload = {
   status: "streaming" | "clear";
 };
 
-// ── Queue name ─────────────────────────────────────────
-const QUEUE_NAME = "workflow";
-
 // ── Entity processing ──────────────────────────────────
-
-const MAX_CONCURRENT_ENTITIES = 10;
 
 type EntityJobData = {
   workspaceId: string;
@@ -146,9 +151,15 @@ type EntityJobData = {
   forcePropertyIds?: string[];
 };
 
+const WORKFLOW_ENTITY_JOB_NAME = "process-entity" as const;
+type WorkflowEntityJobName = typeof WORKFLOW_ENTITY_JOB_NAME;
+type WorkflowEntityQueue = Queue<EntityJobData, void, WorkflowEntityJobName>;
+type WorkflowEntityWorker = Worker<EntityJobData, void, WorkflowEntityJobName>;
+type WorkflowEntityJob = Job<EntityJobData, void, WorkflowEntityJobName>;
+
 // ── Public API ─────────────────────────────────────────
 
-let queue: Queue<EntityJobData> | null = null;
+const queues = new Map<WorkflowQueueClass, WorkflowEntityQueue>();
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 let redisClient: RedisClient | null = null;
 
@@ -162,24 +173,38 @@ const getRedis = (): RedisClient => {
   return redisClient;
 };
 
-const getQueue = (): Queue<EntityJobData> => {
-  queue ??= new Queue<EntityJobData>(QUEUE_NAME, {
-    connection: getQueueConnection(),
-    defaultJobOptions: {
-      removeOnComplete: 100,
-      removeOnFail: 500,
-      // Retry once with backoff so a single transient failure (network
-      // blip, AI provider 5xx) doesn't leave the cell empty. Stays low
-      // enough that genuine logic errors surface quickly.
-      attempts: WORKFLOW_ENTITY_JOB_ATTEMPTS,
-      backoff: {
-        type: "exponential",
-        delay: WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
+const getQueueForClass = (
+  queueClass: WorkflowQueueClass,
+): WorkflowEntityQueue => {
+  const existing = queues.get(queueClass);
+  if (existing) {
+    return existing;
+  }
+
+  const queue = new Queue<EntityJobData, void, WorkflowEntityJobName>(
+    WORKFLOW_QUEUE_NAMES[queueClass],
+    {
+      connection: getQueueConnection(),
+      defaultJobOptions: {
+        removeOnComplete: 100,
+        removeOnFail: 500,
+        // Retry once with backoff so a single transient failure (network
+        // blip, AI provider 5xx) doesn't leave the cell empty. Stays low
+        // enough that genuine logic errors surface quickly.
+        attempts: WORKFLOW_ENTITY_JOB_ATTEMPTS,
+        backoff: {
+          type: "exponential",
+          delay: WORKFLOW_ENTITY_JOB_BACKOFF_DELAY_MS,
+        },
       },
     },
-  });
+  );
+  queues.set(queueClass, queue);
   return queue;
 };
+
+const getAllWorkflowQueues = (): WorkflowEntityQueue[] =>
+  WORKFLOW_QUEUE_CLASSES.map(getQueueForClass);
 
 const clearWorkflowRunState = async (
   redis: RedisClient,
@@ -287,7 +312,7 @@ type EnqueueEntityJobsArgs = {
   executionPlan: ExecutionLevel[];
   jobIds: readonly string[];
   organizationId: SafeId<"organization">;
-  q: Queue;
+  q: WorkflowEntityQueue;
   requestId: string;
   runLockTtlSec: number;
   userId: SafeId<"user">;
@@ -336,7 +361,7 @@ const enqueueEntityJobs = async ({
     entityIds.map((entityId, index) => {
       const jobId = jobIds.at(index) ?? panic("Missing workflow job ID");
       return {
-        name: "process-entity",
+        name: WORKFLOW_ENTITY_JOB_NAME,
         data: {
           workspaceId,
           organizationId,
@@ -358,7 +383,7 @@ const enqueueEntityJobs = async ({
 };
 
 const removeQueuedWorkflowJobs = async (
-  q: Queue,
+  q: WorkflowEntityQueue,
   jobIds: readonly string[],
 ): Promise<void> => {
   for (const chunk of chunkItems(jobIds, LIMITS.workflowEntityBatchSize)) {
@@ -567,7 +592,10 @@ export const startWorkflow = async ({
     // Broadcast running status
     broadcastWorkflowStatus(workspaceId, true);
 
-    const q = getQueue();
+    // Select once for the whole workflow. The same queue instance owns every
+    // chunk and any partial-enqueue cleanup, so one request cannot straddle
+    // queue classes even during a rolling routing change.
+    const q = getQueueForClass(workflowQueueClassForServiceTier(serviceTier));
     const queuedJobIds: string[] = [];
     try {
       for (const chunk of chunkItems(
@@ -645,14 +673,8 @@ const LIVE_JOB_STATES = [
 // jobs than this, skip the cycle rather than risk treating a busy
 // workspace as orphaned from a truncated scan — a false positive must
 // never clobber a healthy run. A later, quieter cycle reconciles it.
-const LIVE_JOB_SCAN_LIMIT = 10_000;
 const RUNNING_LOCK_SCAN_PATTERN = `${WORKFLOW_KEY_PREFIX}:*:running`;
 const RUNNING_LOCK_SCAN_COUNT = "200";
-
-type LiveWorkspaceSnapshot = {
-  workspaceIds: Set<string>;
-  truncated: boolean;
-};
 
 // `Array.isArray` widens `unknown` to `any[]`; this guard narrows to
 // `unknown[]` instead so the SCAN reply stays type-checked.
@@ -732,23 +754,21 @@ const selectWorkspacesWithPendingCells = async (
   return pendingWorkspaceIds;
 };
 
-const snapshotLiveWorkspaceIds = async (
-  q: Queue<EntityJobData>,
-): Promise<LiveWorkspaceSnapshot> => {
-  const jobs = await q.getJobs(
-    [...LIVE_JOB_STATES],
-    0,
-    LIVE_JOB_SCAN_LIMIT - 1,
+const snapshotLiveWorkspaceIds = async () => {
+  const jobSnapshots = await Promise.all(
+    getAllWorkflowQueues().map(
+      async (queue) =>
+        await queue.getJobs(
+          [...LIVE_JOB_STATES],
+          0,
+          LIMITS.workflowLiveJobScanLimit - 1,
+        ),
+    ),
   );
-  const workspaceIds = new Set<string>();
-  for (const job of jobs) {
-    const workspaceId = job.data.workspaceId;
-    if (workspaceId.length === 0) {
-      continue;
-    }
-    workspaceIds.add(workspaceId);
-  }
-  return { workspaceIds, truncated: jobs.length >= LIVE_JOB_SCAN_LIMIT };
+  return combineLiveWorkflowJobSnapshots({
+    jobSnapshots,
+    scanLimit: LIMITS.workflowLiveJobScanLimit,
+  });
 };
 
 const readWorkflowRequestIds = async (
@@ -948,7 +968,7 @@ type ReconcileOrphanedWorkflowsOptions = {
 /**
  * Reconcile workflows orphaned by a killed worker. Safe to call
  * repeatedly; a no-op when nothing is orphaned. Exported for the boot +
- * interval wiring in `initWorkflowWorker` and for operational scripts.
+ * interval wiring in `initWorkflowWorkers` and for operational scripts.
  */
 export const reconcileOrphanedWorkflows = async ({
   scanPendingCells,
@@ -964,8 +984,7 @@ export const reconcileOrphanedWorkflows = async ({
     return;
   }
 
-  const q = getQueue();
-  const live = await snapshotLiveWorkspaceIds(q);
+  const live = await snapshotLiveWorkspaceIds();
   if (live.truncated) {
     logger.warn("workflow.reconcile_skipped_backlog", {
       candidates: String(candidateWorkspaceIds.length),
@@ -991,7 +1010,7 @@ export const reconcileOrphanedWorkflows = async ({
   // (lock taken, first batch not yet enqueued) is not mistaken for an
   // orphan.
   await sleep(RECONCILE_SETTLE_MS);
-  const confirmed = await snapshotLiveWorkspaceIds(q);
+  const confirmed = await snapshotLiveWorkspaceIds();
   if (confirmed.truncated) {
     return;
   }
@@ -1028,131 +1047,127 @@ export const reconcileOrphanedWorkflows = async ({
 
 // ── Worker ─────────────────────────────────────────────
 
-/**
- * Initialize the BullMQ worker. Call once at API startup.
- */
-export const initWorkflowWorker = () => {
-  // BullMQ Worker uses blocking commands (BRPOPLPUSH) so it
-  // needs a dedicated Redis connection, not the shared one.
-  const workerConnection = createBullMqConnection();
+const processWorkflowJob = async (job: WorkflowEntityJob): Promise<void> => {
+  // Hard process-level timeout. A hung AI provider, a runaway batch, or a
+  // broken external call would otherwise keep the job "active" indefinitely.
+  // The signal reaches the provider, so a retry cannot race abandoned work.
+  const controller = new AbortController();
+  const jobTimeoutMs = computeWorkflowJobTimeoutMs(
+    job.data.executionPlan,
+    job.data.serviceTier ?? "standard",
+  );
+  const timeoutHandle = setTimeout(() => {
+    controller.abort(
+      new Error(
+        `workflow.job_timeout: entity ${job.data.entityId} exceeded ${jobTimeoutMs}ms`,
+      ),
+    );
+  }, jobTimeoutMs);
+  try {
+    await processEntityJob(job.data, controller.signal);
+    controller.signal.throwIfAborted();
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+};
 
-  const worker = new Worker<EntityJobData>(
-    QUEUE_NAME,
-    async (job) => {
-      // Hard process-level timeout. A hung AI provider, a runaway
-      // batch, or a broken external call would otherwise keep the
-      // job "active" indefinitely and block follow-up workflow runs.
-      //
-      // We pipe an AbortSignal through `processEntityJob` so the
-      // timeout actually CANCELS the in-flight work (the TanStack AI
-      // request honours the signal). Without that, a `Promise.race`-style
-      // wrapper would only reject the wrapper while the original
-      // attempt kept running — racing the BullMQ retry and double-
-      // incrementing the workflow completion counter.
-      const controller = new AbortController();
-      // Per-job timeout scales with the execution plan: each
-      // dependency level runs sequentially and inherits the per-batch
-      // AI timeout. A fixed 6-min ceiling would deterministically
-      // abort entities with several slow levels even when each
-      // individual batch stays within budget.
-      const jobTimeoutMs = computeWorkflowJobTimeoutMs(
-        job.data.executionPlan,
-        job.data.serviceTier ?? "standard",
-      );
-      const timeoutHandle = setTimeout(() => {
-        controller.abort(
-          new Error(
-            `workflow.job_timeout: entity ${job.data.entityId} exceeded ${jobTimeoutMs}ms`,
-          ),
-        );
-      }, jobTimeoutMs);
-      try {
-        await processEntityJob(job.data, controller.signal);
-        // If the signal aborted between the last awaited call and
-        // here, surface it so BullMQ marks the attempt failed
-        // rather than counting it as completed.
-        controller.signal.throwIfAborted();
-      } finally {
-        clearTimeout(timeoutHandle);
-      }
-    },
+const handleWorkflowJobFailed = (
+  job: WorkflowEntityJob | undefined,
+  error: Error,
+): void => {
+  if (!job) {
+    return;
+  }
+  const data = job.data;
+  logger.error("workflow.entity_failed", {
+    workspaceId: data.workspaceId,
+    entityId: data.entityId,
+    attemptsMade: String(job.attemptsMade),
+    "error.type": errorTag(error),
+  });
+
+  // With `attempts: 2` enabled on the queue, the failed event fires for
+  // transient first-attempt failures too. Only count the entity once BullMQ
+  // has exhausted retries, or the workflow could finalize mid-retry.
+  const totalAttempts = job.opts.attempts ?? 1;
+  if (job.attemptsMade < totalAttempts) {
+    return;
+  }
+
+  const branded = brandValidatedWorkflowActorKey({
+    organizationId: data.organizationId,
+    workspaceId: data.workspaceId,
+  });
+  void (async () => {
+    const isCurrentRequest = await isCurrentWorkflowRequest({
+      requestId: data.requestId,
+      workspaceId: branded.workspaceId,
+    });
+    if (!isCurrentRequest) {
+      return;
+    }
+
+    await markPendingPlannedFieldsErrored(data).catch(
+      (pendingFieldsError: unknown) => {
+        captureError(pendingFieldsError, {
+          workspaceId: data.workspaceId,
+          entityId: data.entityId,
+        });
+      },
+    );
+    await onEntityCompleted(
+      branded.workspaceId,
+      branded.organizationId,
+      brandPersistedUserId(data.userId),
+      data.requestId,
+      data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
+    );
+  })().catch((completionError: unknown) => {
+    captureError(completionError, {
+      workspaceId: data.workspaceId,
+      entityId: data.entityId,
+    });
+  });
+};
+
+const createWorkflowWorker = ({
+  concurrency,
+  queueClass,
+}: WorkflowWorkerSpec): WorkflowEntityWorker => {
+  const queueName = WORKFLOW_QUEUE_NAMES[queueClass];
+  // Every BullMQ Worker uses blocking commands, so each queue needs its own
+  // dedicated connection rather than the producer's shared connection.
+  const worker = new Worker<EntityJobData, void, WorkflowEntityJobName>(
+    queueName,
+    processWorkflowJob,
     {
-      connection: workerConnection,
-      concurrency: MAX_CONCURRENT_ENTITIES,
-      // Lock-extension lets BullMQ's stalled-job detector evict a
-      // crashed worker's jobs back onto the queue.
+      connection: createBullMqConnection(),
+      concurrency,
       lockDuration: LOCK_DURATION_MS,
       stalledInterval: STALLED_INTERVAL_MS,
       maxStalledCount: MAX_STALLED_COUNT,
     },
   );
 
-  worker.on("failed", (job, error) => {
-    if (!job) {
-      return;
-    }
-    const data = job.data;
-    logger.error("workflow.entity_failed", {
-      workspaceId: data.workspaceId,
-      entityId: data.entityId,
-      attemptsMade: String(job.attemptsMade),
-      "error.type": errorTag(error),
-    });
-
-    // With `attempts: 2` enabled on the queue, the failed event fires
-    // for transient first-attempt failures too. Only count the entity
-    // as completed once BullMQ has exhausted its retries — otherwise
-    // `completed >= total` can flip to true mid-run and finalize the
-    // workflow while jobs are still queued for retry.
-    const totalAttempts = job.opts.attempts ?? 1;
-    const isFinalAttempt = job.attemptsMade >= totalAttempts;
-    if (!isFinalAttempt) {
-      return;
-    }
-
-    const branded = brandValidatedWorkflowActorKey({
-      organizationId: data.organizationId,
-      workspaceId: data.workspaceId,
-    });
-    void (async () => {
-      const isCurrentRequest = await isCurrentWorkflowRequest({
-        requestId: data.requestId,
-        workspaceId: branded.workspaceId,
-      });
-      if (!isCurrentRequest) {
-        return;
-      }
-
-      await markPendingPlannedFieldsErrored(data).catch(
-        (pendingFieldsError: unknown) => {
-          captureError(pendingFieldsError, {
-            workspaceId: data.workspaceId,
-            entityId: data.entityId,
-          });
-        },
-      );
-      await onEntityCompleted(
-        branded.workspaceId,
-        branded.organizationId,
-        brandPersistedUserId(data.userId),
-        data.requestId,
-        data.runLockTtlSec ?? RUNNING_LOCK_TTL_SEC,
-      );
-    })().catch((completionError: unknown) => {
-      captureError(completionError, {
-        workspaceId: data.workspaceId,
-        entityId: data.entityId,
-      });
-    });
-  });
-
+  worker.on("failed", handleWorkflowJobFailed);
   worker.on("error", (error) => {
-    logger.error("workflow.worker_error", connectionErrorFields(error));
+    logger.error("workflow.worker_error", {
+      ...connectionErrorFields(error),
+      queueClass,
+      queueName,
+    });
   });
-
   logger.info("workflow.worker_started", {
-    concurrency: String(MAX_CONCURRENT_ENTITIES),
+    concurrency: String(concurrency),
+    queueClass,
+    queueName,
   });
+  return worker;
+};
+
+/** Initialize every workflow worker. Call once at API startup. */
+export const initWorkflowWorkers = () => {
+  const workers = WORKFLOW_WORKER_SPECS.map(createWorkflowWorker);
 
   // Heal whatever a previously-killed worker left orphaned. Boot runs a
   // thorough pass (also sweeping the DB for pending cells whose lock has
@@ -1175,7 +1190,12 @@ export const initWorkflowWorker = () => {
   // The reconcile cadence must not keep the process alive at shutdown.
   reconcileTimer.unref();
 
-  return worker;
+  return {
+    close: async (): Promise<void> => {
+      clearInterval(reconcileTimer);
+      await Promise.all(workers.map(async (worker) => await worker.close()));
+    },
+  };
 };
 
 // ── Entity processing ──────────────────────────────────
