@@ -1052,6 +1052,7 @@ type OverviewEntity = {
   kind: EntityKind;
   status: string | null;
   priority: string | null;
+  listItemType: string | null;
   dueDate: string | null;
   mimeType: string | null;
   fieldId: string | null;
@@ -1123,6 +1124,7 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
       version: 0,
       status: entity.status,
       priority: entity.priority,
+      listItemType: entity.listItemType,
       dueDate: entity.dueDate,
       agendaKind: "task",
       startAt: null,

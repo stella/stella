@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, createFileRoute } from "@tanstack/react-router";
+import * as v from "valibot";
 
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
@@ -12,6 +13,9 @@ import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspace
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/entities/$entityId",
 )({
+  validateSearch: v.object({
+    pdfPage: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1))),
+  }),
   component: LegacyEntityRedirect,
 });
 
@@ -19,6 +23,7 @@ function LegacyEntityRedirect() {
   const { workspaceId, entityId } = Route.useParams({
     select: (p) => ({ workspaceId: p.workspaceId, entityId: p.entityId }),
   });
+  const pdfPage = Route.useSearch({ select: (search) => search.pdfPage });
   const versionDataQuery = useQuery(
     entityVersionsOptions({ workspaceId, entityId }),
   );
@@ -32,7 +37,7 @@ function LegacyEntityRedirect() {
   }
 
   const currentVersion = versionDataQuery.data.versions.find(
-    (v) => v.id === versionDataQuery.data.currentVersionId,
+    (version) => version.id === versionDataQuery.data.currentVersionId,
   );
   const fieldId = currentVersion?.file?.fieldId;
 
@@ -52,6 +57,7 @@ function LegacyEntityRedirect() {
         entity: entityId,
         field: fieldId,
         panel: "versions" as const,
+        ...(pdfPage && { pdfPage }),
       }}
       to="/workspaces/$workspaceId/$viewId/document"
     />

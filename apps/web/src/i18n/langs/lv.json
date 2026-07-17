@@ -813,6 +813,11 @@
     "import": "Importēt",
     "invite": "Uzaicināt",
     "invoices": "Rēķini",
+    "itemTypeValues": {
+      "event": "Notikums",
+      "fact": "Fakts",
+      "requirement": "Prasība"
+    },
     "kind": "Veids",
     "language": "Valoda",
     "languages": {

@@ -813,6 +813,11 @@
     "import": "Importovať",
     "invite": "Pozvať",
     "invoices": "Faktúry",
+    "itemTypeValues": {
+      "event": "Udalosť",
+      "fact": "Skutočnosť",
+      "requirement": "Požiadavka"
+    },
     "kind": "Druh",
     "language": "Jazyk",
     "languages": {

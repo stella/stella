@@ -1,3 +1,6 @@
+import { conditionIncludesKind } from "@stll/conditions";
+
+import type { EntityKind } from "@/api/db/schema-validators";
 import type { SupportedLang } from "@/api/lib/locale";
 import type { ViewLayout, ViewLayoutType } from "@/api/lib/views-schema";
 
@@ -50,79 +53,104 @@ const emptyLayout = (
   return { version: 1, type, ...base };
 };
 
+const listLayout = (): ViewLayout => ({
+  version: 1,
+  type: "kanban",
+  filters: [
+    {
+      type: "predicate",
+      operand: { type: "kind" },
+      op: "in",
+      value: ["task"],
+    },
+  ],
+  sorts: [],
+  hiddenProperties: [],
+  groupByPropertyId: "_status",
+});
+
+export const viewIncludesListItems = (
+  filters: ViewLayout["filters"],
+): boolean => conditionIncludesKind(filters, "task");
+
+export const excludedEntityKindsForView = (
+  filters: ViewLayout["filters"],
+): EntityKind[] =>
+  viewIncludesListItems(filters) ? ["folder"] : ["folder", "task"];
+
 const VIEW_NAMES = {
-  en: { overview: "Overview", table: "Table", files: "Files", todos: "Todos" },
+  en: { overview: "Overview", table: "Table", files: "Files", lists: "Lists" },
   ar: {
     overview: "نظرة عامة",
     table: "جدول",
     files: "الملفات",
-    todos: "المهام",
+    lists: "القوائم",
   },
   cs: {
     overview: "Přehled",
     table: "Tabulka",
     files: "Soubory",
-    todos: "Úkoly",
+    lists: "Seznamy",
   },
   de: {
     overview: "Übersicht",
     table: "Tabelle",
     files: "Dateien",
-    todos: "Aufgaben",
+    lists: "Listen",
   },
   es: {
     overview: "Resumen",
     table: "Tabla",
     files: "Archivos",
-    todos: "Tareas",
+    lists: "Listas",
   },
   et: {
     overview: "Ülevaade",
     table: "Tabel",
     files: "Failid",
-    todos: "Ülesanded",
+    lists: "Loendid",
   },
   fr: {
     overview: "Aperçu",
     table: "Tableau",
     files: "Fichiers",
-    todos: "Tâches",
+    lists: "Listes",
   },
   hu: {
     overview: "Áttekintés",
     table: "Táblázat",
     files: "Fájlok",
-    todos: "Feladatok",
+    lists: "Listák",
   },
   lt: {
     overview: "Apžvalga",
     table: "Lentelė",
     files: "Failai",
-    todos: "Užduotys",
+    lists: "Sąrašai",
   },
   lv: {
     overview: "Pārskats",
     table: "Tabula",
     files: "Faili",
-    todos: "Uzdevumi",
+    lists: "Saraksti",
   },
   pl: {
     overview: "Przegląd",
     table: "Tabela",
     files: "Pliki",
-    todos: "Zadania",
+    lists: "Listy",
   },
   "pt-BR": {
     overview: "Visão geral",
     table: "Tabela",
     files: "Arquivos",
-    todos: "Tarefas",
+    lists: "Listas",
   },
   sk: {
     overview: "Prehľad",
     table: "Tabuľka",
     files: "Súbory",
-    todos: "Úlohy",
+    lists: "Zoznamy",
   },
 } as const satisfies Record<SupportedLang, Record<string, string>>;
 
@@ -134,7 +162,7 @@ const DEFAULT_VIEW_TEMPLATES: readonly DefaultViewTemplate[] = [
   { nameKey: "overview", layout: emptyLayout("overview"), position: 0 },
   { nameKey: "table", layout: emptyLayout("table"), position: 1 },
   { nameKey: "files", layout: emptyLayout("filesystem"), position: 2 },
-  { nameKey: "todos", layout: emptyLayout("kanban"), position: 3 },
+  { nameKey: "lists", layout: listLayout(), position: 3 },
 ];
 
 type DefaultView = {
@@ -192,8 +220,24 @@ const LAYOUT_TYPE_TO_NAME_KEY: Partial<
   overview: "overview",
   table: "table",
   filesystem: "files",
-  kanban: "todos",
+  kanban: "lists",
 };
+
+const LEGACY_TODO_VIEW_NAMES = [
+  "Todos",
+  "المهام",
+  "Úkoly",
+  "Aufgaben",
+  "Tareas",
+  "Ülesanded",
+  "Tâches",
+  "Feladatok",
+  "Užduotys",
+  "Uzdevumi",
+  "Zadania",
+  "Tarefas",
+  "Úlohy",
+] as const;
 
 // Every localized default name per key, so an un-renamed default view can be
 // recognized regardless of the language it was seeded in.
@@ -205,16 +249,46 @@ const DEFAULT_NAME_SETS: Record<
     overview: new Set<string>(),
     table: new Set<string>(),
     files: new Set<string>(),
-    todos: new Set<string>(),
+    lists: new Set<string>(),
   };
   for (const names of Object.values(VIEW_NAMES)) {
     sets.overview.add(names.overview);
     sets.table.add(names.table);
     sets.files.add(names.files);
-    sets.todos.add(names.todos);
+    sets.lists.add(names.lists);
+  }
+  for (const legacyName of LEGACY_TODO_VIEW_NAMES) {
+    sets.lists.add(legacyName);
   }
   return sets;
 })();
+
+/**
+ * Old default Todos views had no explicit kind filter because status-grouped
+ * kanban implicitly selected tasks. Add the filter in the read model so a
+ * user can convert the renamed Lists view to a table without documents
+ * suddenly appearing or list items disappearing.
+ */
+export const normalizeDefaultViewLayout = ({
+  layout,
+  name,
+}: {
+  layout: ViewLayout;
+  name: string;
+}): ViewLayout => {
+  if (
+    layout.type !== "kanban" ||
+    layout.groupByPropertyId !== "_status" ||
+    !DEFAULT_NAME_SETS.lists.has(name) ||
+    layout.filters.some(
+      (node) => node.type === "predicate" && node.operand.type === "kind",
+    )
+  ) {
+    return layout;
+  }
+
+  return { ...layout, filters: listLayout().filters };
+};
 
 /**
  * Re-localize an auto-created default view's name to `lang`.

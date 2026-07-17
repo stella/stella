@@ -10,6 +10,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { broadcast } from "@/api/lib/sse";
+import { normalizeDefaultViewLayout } from "@/api/lib/views";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
 const VIEW_LAYOUT_TYPES = [
@@ -65,7 +66,10 @@ const convertView = createSafeHandler(
       );
     }
 
-    const existingLayout = parseViewLayout(existing.layout);
+    const existingLayout = normalizeDefaultViewLayout({
+      layout: parseViewLayout(existing.layout),
+      name: existing.name,
+    });
     if (existingLayout.type === targetType) {
       return Result.err(
         new HandlerError({

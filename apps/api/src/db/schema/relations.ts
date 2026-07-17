@@ -68,6 +68,19 @@ import {
   workspaceViews,
 } from "./files-views";
 import {
+  legalListColumns,
+  legalListGenerationCandidates,
+  legalListGenerationCandidateSources,
+  legalListGenerationRuns,
+  legalListGenerationSources,
+  legalListItemComments,
+  legalListItemReviews,
+  legalListItems,
+  legalListItemSources,
+  legalLists,
+  legalListSections,
+} from "./lists";
+import {
   mcpConnectors,
   mcpOAuthClients,
   mcpOAuthState,
@@ -178,6 +191,17 @@ export const relations = defineRelations(
     userFiles,
     workspaceViews,
     workspaceViewTemplates,
+    legalLists,
+    legalListSections,
+    legalListColumns,
+    legalListItems,
+    legalListItemSources,
+    legalListGenerationRuns,
+    legalListGenerationSources,
+    legalListGenerationCandidates,
+    legalListGenerationCandidateSources,
+    legalListItemComments,
+    legalListItemReviews,
   },
   (r) => ({
     contacts: {
@@ -298,6 +322,173 @@ export const relations = defineRelations(
       folioCollabSessions: r.many.folioCollabSessions({
         from: r.workspaces.id,
         to: r.folioCollabSessions.workspaceId,
+      }),
+      legalLists: r.many.legalLists({
+        from: r.workspaces.id,
+        to: r.legalLists.workspaceId,
+      }),
+    },
+    legalLists: {
+      workspace: r.one.workspaces({
+        from: r.legalLists.workspaceId,
+        to: r.workspaces.id,
+      }),
+      sections: r.many.legalListSections({
+        from: r.legalLists.id,
+        to: r.legalListSections.listId,
+      }),
+      columns: r.many.legalListColumns({
+        from: r.legalLists.id,
+        to: r.legalListColumns.listId,
+      }),
+      items: r.many.legalListItems({
+        from: r.legalLists.id,
+        to: r.legalListItems.listId,
+      }),
+      generationRuns: r.many.legalListGenerationRuns({
+        from: r.legalLists.id,
+        to: r.legalListGenerationRuns.listId,
+      }),
+    },
+    legalListSections: {
+      list: r.one.legalLists({
+        from: r.legalListSections.listId,
+        to: r.legalLists.id,
+      }),
+      items: r.many.legalListItems({
+        from: r.legalListSections.id,
+        to: r.legalListItems.sectionId,
+      }),
+    },
+    legalListColumns: {
+      list: r.one.legalLists({
+        from: r.legalListColumns.listId,
+        to: r.legalLists.id,
+      }),
+      property: r.one.properties({
+        from: r.legalListColumns.propertyId,
+        to: r.properties.id,
+      }),
+    },
+    legalListItems: {
+      list: r.one.legalLists({
+        from: r.legalListItems.listId,
+        to: r.legalLists.id,
+      }),
+      section: r.one.legalListSections({
+        from: r.legalListItems.sectionId,
+        to: r.legalListSections.id,
+      }),
+      entity: r.one.entities({
+        from: r.legalListItems.entityId,
+        to: r.entities.id,
+        alias: "legalListItemEntity",
+      }),
+      sources: r.many.legalListItemSources({
+        from: r.legalListItems.entityId,
+        to: r.legalListItemSources.itemEntityId,
+      }),
+      comments: r.many.legalListItemComments({
+        from: r.legalListItems.entityId,
+        to: r.legalListItemComments.itemEntityId,
+      }),
+      reviews: r.many.legalListItemReviews({
+        from: r.legalListItems.entityId,
+        to: r.legalListItemReviews.itemEntityId,
+      }),
+    },
+    legalListItemSources: {
+      item: r.one.legalListItems({
+        from: r.legalListItemSources.itemEntityId,
+        to: r.legalListItems.entityId,
+      }),
+      sourceEntity: r.one.entities({
+        from: r.legalListItemSources.sourceEntityId,
+        to: r.entities.id,
+        alias: "legalListItemSourceEntity",
+      }),
+      sourceEntityVersion: r.one.entityVersions({
+        from: r.legalListItemSources.sourceEntityVersionId,
+        to: r.entityVersions.id,
+        alias: "legalListItemSourceVersion",
+      }),
+    },
+    legalListGenerationRuns: {
+      list: r.one.legalLists({
+        from: r.legalListGenerationRuns.listId,
+        to: r.legalLists.id,
+      }),
+      sources: r.many.legalListGenerationSources({
+        from: r.legalListGenerationRuns.id,
+        to: r.legalListGenerationSources.runId,
+      }),
+      candidates: r.many.legalListGenerationCandidates({
+        from: r.legalListGenerationRuns.id,
+        to: r.legalListGenerationCandidates.runId,
+      }),
+    },
+    legalListGenerationSources: {
+      run: r.one.legalListGenerationRuns({
+        from: r.legalListGenerationSources.runId,
+        to: r.legalListGenerationRuns.id,
+      }),
+      sourceEntity: r.one.entities({
+        from: r.legalListGenerationSources.sourceEntityId,
+        to: r.entities.id,
+        alias: "legalListGenerationSourceEntity",
+      }),
+      sourceEntityVersion: r.one.entityVersions({
+        from: r.legalListGenerationSources.sourceEntityVersionId,
+        to: r.entityVersions.id,
+        alias: "legalListGenerationSourceVersion",
+      }),
+    },
+    legalListGenerationCandidates: {
+      run: r.one.legalListGenerationRuns({
+        from: r.legalListGenerationCandidates.runId,
+        to: r.legalListGenerationRuns.id,
+      }),
+      sources: r.many.legalListGenerationCandidateSources({
+        from: r.legalListGenerationCandidates.id,
+        to: r.legalListGenerationCandidateSources.candidateId,
+      }),
+    },
+    legalListGenerationCandidateSources: {
+      candidate: r.one.legalListGenerationCandidates({
+        from: r.legalListGenerationCandidateSources.candidateId,
+        to: r.legalListGenerationCandidates.id,
+      }),
+      sourceEntity: r.one.entities({
+        from: r.legalListGenerationCandidateSources.sourceEntityId,
+        to: r.entities.id,
+        alias: "legalListCandidateSourceEntity",
+      }),
+      sourceEntityVersion: r.one.entityVersions({
+        from: r.legalListGenerationCandidateSources.sourceEntityVersionId,
+        to: r.entityVersions.id,
+        alias: "legalListCandidateSourceVersion",
+      }),
+    },
+    legalListItemComments: {
+      item: r.one.legalListItems({
+        from: r.legalListItemComments.itemEntityId,
+        to: r.legalListItems.entityId,
+      }),
+      author: r.one.user({
+        from: r.legalListItemComments.authorId,
+        to: r.user.id,
+        alias: "legalListCommentAuthor",
+      }),
+    },
+    legalListItemReviews: {
+      item: r.one.legalListItems({
+        from: r.legalListItemReviews.itemEntityId,
+        to: r.legalListItems.entityId,
+      }),
+      reviewer: r.one.user({
+        from: r.legalListItemReviews.reviewerId,
+        to: r.user.id,
+        alias: "legalListReviewer",
       }),
     },
     workspaceMembers: {

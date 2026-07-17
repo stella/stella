@@ -82,6 +82,23 @@ describe("createTaskHandler validation", () => {
     });
   });
 
+  test("invalid list item type returns 400 before DB call", async () => {
+    const scopedDb = throwingScopedDb();
+
+    const result = await createTaskHandler(
+      createHandlerContext({
+        body: { name: "Test item", listItemType: "unknown" },
+        safeDb: toSafeDbMock(scopedDb),
+        scopedDb,
+      }),
+    );
+
+    expect(result).toEqual({
+      code: 400,
+      response: { message: "Invalid list item type" },
+    });
+  });
+
   test("invalid status checked before invalid priority", async () => {
     const scopedDb = throwingScopedDb();
 
@@ -170,6 +187,25 @@ describe("createTaskHandler validation", () => {
       await createTaskHandler(
         createHandlerContext({
           body: { name: "Test task", priority },
+          safeDb: toSafeDbMock(scopedDb),
+          scopedDb,
+        }),
+      );
+
+      expect(scopedDb).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  test("all supported List item types pass validation", async () => {
+    const itemTypes = ["task", "fact", "issue", "requirement", "event"];
+
+    for (const listItemType of itemTypes) {
+      const scopedDb = resolvingScopedDb();
+
+      // oxlint-disable-next-line no-await-in-loop -- sequential test setup: each iteration asserts on its own mock
+      await createTaskHandler(
+        createHandlerContext({
+          body: { name: "Test item", listItemType },
           safeDb: toSafeDbMock(scopedDb),
           scopedDb,
         }),

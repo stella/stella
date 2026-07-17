@@ -1,5 +1,6 @@
 import {
   ENTITY_KINDS,
+  LIST_ITEM_TYPES,
   TASK_ASSIGNEE_ROLES,
   isNotNull,
   jsonb,
@@ -37,6 +38,7 @@ export const entities = p.pgTable(
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
     kind: p.text("kind", { enum: ENTITY_KINDS }).notNull().default("document"),
+    listItemType: p.text("list_item_type", { enum: LIST_ITEM_TYPES }),
     parentId: safeUuid<"entity">("parent_id").references(
       (): AnyPgColumn => entities.id,
       {
@@ -149,6 +151,10 @@ export const entities = p.pgTable(
       .index("entities_due_date_idx")
       .on(table.workspaceId, table.dueDate)
       .where(isNotNull(table.dueDate)),
+    p.check(
+      "entities_list_item_type_task_only",
+      sql`${table.listItemType} IS NULL OR ${table.kind} = 'task'`,
+    ),
     p
       .index("entities_agenda_kind_idx")
       .on(table.workspaceId, table.agendaKind)

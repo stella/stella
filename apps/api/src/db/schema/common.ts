@@ -297,6 +297,21 @@ export const ENTITY_KINDS = [
   "link",
 ] as const satisfies readonly EntityKind[];
 
+/**
+ * Stable semantic types for task-backed list items. Tasks predate Lists and
+ * remain the storage kind because they already carry assignment, workflow,
+ * audit, linking, and calendar behaviour; this discriminator describes what
+ * the item represents to the matter team.
+ */
+export const LIST_ITEM_TYPES = [
+  "task",
+  "fact",
+  "issue",
+  "requirement",
+  "event",
+] as const;
+export type ListItemType = (typeof LIST_ITEM_TYPES)[number];
+
 export const TASK_ASSIGNEE_ROLES = ["assignee", "reviewer"] as const;
 
 export const TIME_ENTRY_STATUSES = [

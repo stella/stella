@@ -813,6 +813,11 @@
     "import": "Importar",
     "invite": "Convidar",
     "invoices": "Faturas",
+    "itemTypeValues": {
+      "event": "Evento",
+      "fact": "Fato",
+      "requirement": "Requisito"
+    },
     "kind": "Tipo",
     "language": "Idioma",
     "languages": {

@@ -38,6 +38,7 @@ import { hostedUsageWebhookRoute } from "@/api/handlers/hosted-usage-webhook/rou
 import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
+import { listsRoute } from "@/api/handlers/lists/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
@@ -480,6 +481,7 @@ const api = new Elysia()
       .use(usageRoute)
       .use(viewTemplatesRoute)
       .use(viewsRoute)
+      .use(listsRoute)
       .use(tasksRoute)
       .use(myTasksRoute)
       .use(meRoute)

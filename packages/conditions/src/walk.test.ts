@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { ConditionNode } from "./schema";
-import { conditionHasFormula } from "./walk";
+import { conditionHasFormula, conditionIncludesKind } from "./walk";
 
 describe("conditionHasFormula", () => {
   test("false for a tree of literal/path/property operands", () => {
@@ -46,5 +46,27 @@ describe("conditionHasFormula", () => {
       ],
     };
     expect(conditionHasFormula(node)).toBe(true);
+  });
+});
+
+describe("conditionIncludesKind", () => {
+  test("finds a kind inside a nested condition group", () => {
+    const filters: ConditionNode[] = [
+      {
+        type: "group",
+        combinator: "and",
+        children: [
+          {
+            type: "predicate",
+            operand: { type: "kind" },
+            op: "in",
+            value: ["task"],
+          },
+        ],
+      },
+    ];
+
+    expect(conditionIncludesKind(filters, "task")).toBe(true);
+    expect(conditionIncludesKind(filters, "document")).toBe(false);
   });
 });

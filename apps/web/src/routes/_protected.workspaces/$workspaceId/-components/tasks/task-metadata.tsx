@@ -26,6 +26,8 @@ import { toSafeId } from "@/lib/safe-id";
 import {
   PRIORITY_COLORS,
   PRIORITY_ICONS,
+  ITEM_TYPE_TRANSLATION_KEYS,
+  LIST_ITEM_TYPES,
   STATUS_COLORS,
   STATUS_ICONS,
   TASK_PRIORITIES,
@@ -36,7 +38,11 @@ import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/t
 import { workspaceMembersOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace-members";
 import { workspacesKeys } from "@/routes/_protected.workspaces/-queries";
 
-import type { TaskPriority, TaskStatus } from "./task-detail-constants";
+import type {
+  ListItemType,
+  TaskPriority,
+  TaskStatus,
+} from "./task-detail-constants";
 
 // -- Layout helper --
 
@@ -122,6 +128,35 @@ export const PrioritySelect = ({ value, onChange }: PrioritySelectProps) => {
               <PriorityIcon priority={p} />
               {t(`priorityValues.${p}`)}
             </span>
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </Select>
+  );
+};
+
+// -- List item type select --
+
+type ItemTypeSelectProps = {
+  value: ListItemType;
+  onChange: (value: ListItemType | null) => void;
+};
+
+export const ItemTypeSelect = ({ value, onChange }: ItemTypeSelectProps) => {
+  const t = useTranslations();
+
+  return (
+    <Select onValueChange={onChange} value={value}>
+      <SelectTrigger
+        className="h-7 min-h-7 min-w-0 border-none bg-transparent px-1.5 shadow-none"
+        size="sm"
+      >
+        <span className="truncate">{t(ITEM_TYPE_TRANSLATION_KEYS[value])}</span>
+      </SelectTrigger>
+      <SelectPopup>
+        {LIST_ITEM_TYPES.map((itemType) => (
+          <SelectItem key={itemType} value={itemType}>
+            {t(ITEM_TYPE_TRANSLATION_KEYS[itemType])}
           </SelectItem>
         ))}
       </SelectPopup>

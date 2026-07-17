@@ -53,6 +53,7 @@ import { Route as ProtectedSettingsOrganizationRouteRouteImport } from './routes
 import { Route as ProtectedWorkspacesWorkspaceIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/index'
 import { Route as ProtectedSettingsOrganizationIndexRouteImport } from './routes/_protected.settings/organization.index'
 import { Route as ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport } from './routes/_protected.workspaces/$workspaceId/timesheets'
+import { Route as ProtectedWorkspacesWorkspaceIdListsRouteImport } from './routes/_protected.workspaces/$workspaceId/lists'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices'
 import { Route as ProtectedWorkspacesWorkspaceIdExpensesRouteImport } from './routes/_protected.workspaces/$workspaceId/expenses'
 import { Route as ProtectedSettingsOrganizationUsageRouteImport } from './routes/_protected.settings/organization.usage'
@@ -314,6 +315,12 @@ const ProtectedWorkspacesWorkspaceIdTimesheetsRoute =
     path: '/timesheets',
     getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
   } as any)
+const ProtectedWorkspacesWorkspaceIdListsRoute =
+  ProtectedWorkspacesWorkspaceIdListsRouteImport.update({
+    id: '/lists',
+    path: '/lists',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdInvoicesRoute =
   ProtectedWorkspacesWorkspaceIdInvoicesRouteImport.update({
     id: '/invoices',
@@ -528,6 +535,7 @@ export interface FileRoutesByFullPath {
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
+  '/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
@@ -591,6 +599,7 @@ export interface FileRoutesByTo {
   '/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
+  '/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
   '/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationIndexRoute
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
@@ -664,6 +673,7 @@ export interface FileRoutesById {
   '/_protected/settings/organization/usage': typeof ProtectedSettingsOrganizationUsageRoute
   '/_protected/workspaces/$workspaceId/expenses': typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   '/_protected/workspaces/$workspaceId/invoices': typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
+  '/_protected/workspaces/$workspaceId/lists': typeof ProtectedWorkspacesWorkspaceIdListsRoute
   '/_protected/workspaces/$workspaceId/timesheets': typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   '/_protected/settings/organization/': typeof ProtectedSettingsOrganizationIndexRoute
   '/_protected/workspaces/$workspaceId/': typeof ProtectedWorkspacesWorkspaceIdIndexRoute
@@ -737,6 +747,7 @@ export interface FileRouteTypes {
     | '/settings/organization/usage'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
+    | '/workspaces/$workspaceId/lists'
     | '/workspaces/$workspaceId/timesheets'
     | '/settings/organization/'
     | '/workspaces/$workspaceId/'
@@ -800,6 +811,7 @@ export interface FileRouteTypes {
     | '/settings/organization/usage'
     | '/workspaces/$workspaceId/expenses'
     | '/workspaces/$workspaceId/invoices'
+    | '/workspaces/$workspaceId/lists'
     | '/workspaces/$workspaceId/timesheets'
     | '/settings/organization'
     | '/workspaces/$workspaceId'
@@ -872,6 +884,7 @@ export interface FileRouteTypes {
     | '/_protected/settings/organization/usage'
     | '/_protected/workspaces/$workspaceId/expenses'
     | '/_protected/workspaces/$workspaceId/invoices'
+    | '/_protected/workspaces/$workspaceId/lists'
     | '/_protected/workspaces/$workspaceId/timesheets'
     | '/_protected/settings/organization/'
     | '/_protected/workspaces/$workspaceId/'
@@ -1211,6 +1224,13 @@ declare module '@tanstack/react-router' {
       path: '/timesheets'
       fullPath: '/workspaces/$workspaceId/timesheets'
       preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
+    '/_protected/workspaces/$workspaceId/lists': {
+      id: '/_protected/workspaces/$workspaceId/lists'
+      path: '/lists'
+      fullPath: '/workspaces/$workspaceId/lists'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdListsRouteImport
       parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
     }
     '/_protected/workspaces/$workspaceId/invoices': {
@@ -1588,6 +1608,7 @@ interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
   ProtectedWorkspacesWorkspaceIdViewIdRouteRoute: typeof ProtectedWorkspacesWorkspaceIdViewIdRouteRouteWithChildren
   ProtectedWorkspacesWorkspaceIdExpensesRoute: typeof ProtectedWorkspacesWorkspaceIdExpensesRoute
   ProtectedWorkspacesWorkspaceIdInvoicesRoute: typeof ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren
+  ProtectedWorkspacesWorkspaceIdListsRoute: typeof ProtectedWorkspacesWorkspaceIdListsRoute
   ProtectedWorkspacesWorkspaceIdTimesheetsRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   ProtectedWorkspacesWorkspaceIdIndexRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute: typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
@@ -1601,6 +1622,8 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorks
       ProtectedWorkspacesWorkspaceIdExpensesRoute,
     ProtectedWorkspacesWorkspaceIdInvoicesRoute:
       ProtectedWorkspacesWorkspaceIdInvoicesRouteWithChildren,
+    ProtectedWorkspacesWorkspaceIdListsRoute:
+      ProtectedWorkspacesWorkspaceIdListsRoute,
     ProtectedWorkspacesWorkspaceIdTimesheetsRoute:
       ProtectedWorkspacesWorkspaceIdTimesheetsRoute,
     ProtectedWorkspacesWorkspaceIdIndexRoute:
