@@ -5,12 +5,13 @@ import { renderReportExportStatusEmail } from "@/api/lib/email/email";
 describe("report export status email", () => {
   test("renders only generic status copy and an application link", async () => {
     const rendered = await Promise.all(
-      (["completed", "failed"] as const).map((status) =>
-        renderReportExportStatusEmail({
-          appUrl: "https://stella.example/workspaces",
-          lang: "en",
-          status,
-        }),
+      (["completed", "failed"] as const).map(
+        async (status) =>
+          await renderReportExportStatusEmail({
+            appUrl: "https://stella.example/workspaces",
+            lang: "en",
+            status,
+          }),
       ),
     );
 
