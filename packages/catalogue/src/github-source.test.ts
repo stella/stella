@@ -1,5 +1,11 @@
 import { afterAll, describe, expect, it } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
@@ -190,6 +196,42 @@ afterAll(() => {
   for (const root of tempRoots) {
     rmSync(root, { force: true, recursive: true });
   }
+});
+
+describe("catalogue filesystem safety", () => {
+  it("rejects a dangling nested symlink before reading manifests", () => {
+    const root = makeEntriesRoot();
+    writeSkill(root, "in-tree-skill", validInTreeSkill, {
+      "SKILL.md": "# body",
+    });
+    const folder = path.join(root, "skills", "in-tree-skill");
+    const nestedFolder = path.join(folder, "resources");
+    mkdirSync(nestedFolder);
+    symlinkSync("missing-secret", path.join(nestedFolder, "secret.txt"));
+    writeFileSync(path.join(folder, "manifest.json"), "{ invalid json");
+
+    expect(() => validateCatalogue(root)).toThrow(
+      /symbolic links are forbidden/u,
+    );
+    expect(() => collectEntries(root)).toThrow(/symbolic links are forbidden/u);
+  });
+
+  it("rejects a FIFO icon before reading manifests", () => {
+    const root = makeEntriesRoot();
+    writeSkill(root, "german-law", validGithubSkill);
+    const folder = path.join(root, "skills", "german-law");
+    const fifoPath = path.join(folder, "icon.svg");
+    const { exitCode } = Bun.spawnSync(["mkfifo", fifoPath]);
+    expect(exitCode).toBe(0);
+    writeFileSync(path.join(folder, "manifest.json"), "{ invalid json");
+
+    expect(() => validateCatalogue(root)).toThrow(
+      /only directories and regular files are allowed/u,
+    );
+    expect(() => collectEntries(root)).toThrow(
+      /only directories and regular files are allowed/u,
+    );
+  });
 });
 
 describe("validateCatalogue with github entries", () => {
