@@ -22,19 +22,23 @@ type ReportExportTrackingStore = {
 };
 
 const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const MAX_USER_ID_LENGTH = 128;
+
+const withoutKey = <T>(
+  record: Record<string, T>,
+  key: string,
+): Record<string, T> =>
+  Object.fromEntries(
+    Object.entries(record).filter(([entryKey]) => entryKey !== key),
+  );
 
 export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
   persist(
     (set, get) => ({
       exports: {},
       finish: (exportId) => {
-        set((state) => {
-          const exports = { ...state.exports };
-          delete exports[exportId];
-          return { exports };
-        });
+        set((state) => ({ exports: withoutKey(state.exports, exportId) }));
       },
       registerToast: (exportId, toastId) => {
         set((state) => ({
@@ -43,11 +47,7 @@ export const useReportExportTrackingStore = create<ReportExportTrackingStore>()(
       },
       takeToast: (exportId) => {
         const toastId = get().toastIds[exportId];
-        set((state) => {
-          const toastIds = { ...state.toastIds };
-          delete toastIds[exportId];
-          return { toastIds };
-        });
+        set((state) => ({ toastIds: withoutKey(state.toastIds, exportId) }));
         return toastId;
       },
       track: (reportExport) => {

@@ -50,13 +50,7 @@ export const ReportExportTracker = ({
         exportId: reportExport.exportId,
         workspaceId: reportExport.workspaceId,
       }),
-      refetchInterval: (query) => {
-        const status = query.state.data?.status;
-        if (status === "completed" || status === "failed") {
-          return false;
-        }
-        return POLL_INTERVAL_MS;
-      },
+      refetchInterval: POLL_INTERVAL_MS,
       refetchOnWindowFocus: false,
       gcTime: 0,
     })),
@@ -68,12 +62,12 @@ export const ReportExportTracker = ({
       (APIError.is(error) && error.status === 404),
   );
   const settledExport =
-    settledIndex < 0 ? undefined : trackedExports.at(settledIndex);
+    settledIndex === -1 ? undefined : trackedExports.at(settledIndex);
   const settledDetail =
-    settledIndex < 0 ? undefined : results.at(settledIndex)?.data;
+    settledIndex === -1 ? undefined : results.at(settledIndex)?.data;
 
   useExternalSyncEffect(() => {
-    if (settledIndex < 0 || settledExport === undefined) {
+    if (settledIndex === -1 || settledExport === undefined) {
       return;
     }
 
