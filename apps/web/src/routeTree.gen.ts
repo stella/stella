@@ -72,6 +72,7 @@ import { Route as ProtectedWorkspacesWorkspaceIdViewIdRouteRouteImport } from '.
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdIndexRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.index'
 import { Route as SitemapsLawCasesCountryYearChar123monthChar125DotxmlRouteImport } from './routes/sitemaps/law-cases/$country/$year/{$month}[.]xml'
 import { Route as LawCountryCasesCourtSlugRouteImport } from './routes/law/$country/cases/$court/$slug'
+import { Route as ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport } from './routes/_protected.workspaces/$workspaceId/reports/$exportId'
 import { Route as ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport } from './routes/_protected.workspaces/$workspaceId/invoices/$invoiceId'
 import { Route as ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRouteImport } from './routes/_protected.workspaces/$workspaceId/entities/$entityId'
 import { Route as ProtectedWorkspacesWorkspaceIdViewIdDocumentRouteImport } from './routes/_protected.workspaces/$workspaceId/$viewId.document'
@@ -428,6 +429,12 @@ const LawCountryCasesCourtSlugRoute =
     path: '/$country/cases/$court/$slug',
     getParentRoute: () => LawRouteRoute,
   } as any)
+const ProtectedWorkspacesWorkspaceIdReportsExportIdRoute =
+  ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport.update({
+    id: '/reports/$exportId',
+    path: '/reports/$exportId',
+    getParentRoute: () => ProtectedWorkspacesWorkspaceIdRouteRoute,
+  } as any)
 const ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute =
   ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRouteImport.update({
     id: '/$invoiceId',
@@ -536,6 +543,7 @@ export interface FileRoutesByFullPath {
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
+  '/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
@@ -599,6 +607,7 @@ export interface FileRoutesByTo {
   '/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
+  '/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/workspaces/$workspaceId/$viewId': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
@@ -672,6 +681,7 @@ export interface FileRoutesById {
   '/_protected/workspaces/$workspaceId/$viewId/document': typeof ProtectedWorkspacesWorkspaceIdViewIdDocumentRoute
   '/_protected/workspaces/$workspaceId/entities/$entityId': typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
   '/_protected/workspaces/$workspaceId/invoices/$invoiceId': typeof ProtectedWorkspacesWorkspaceIdInvoicesInvoiceIdRoute
+  '/_protected/workspaces/$workspaceId/reports/$exportId': typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
   '/law/$country/cases/$court/$slug': typeof LawCountryCasesCourtSlugRoute
   '/sitemaps/law-cases/$country/$year/{$month}.xml': typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   '/_protected/workspaces/$workspaceId/$viewId/': typeof ProtectedWorkspacesWorkspaceIdViewIdIndexRoute
@@ -745,6 +755,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/$viewId/document'
     | '/workspaces/$workspaceId/entities/$entityId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
+    | '/workspaces/$workspaceId/reports/$exportId'
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/workspaces/$workspaceId/$viewId/'
@@ -808,6 +819,7 @@ export interface FileRouteTypes {
     | '/workspaces/$workspaceId/$viewId/document'
     | '/workspaces/$workspaceId/entities/$entityId'
     | '/workspaces/$workspaceId/invoices/$invoiceId'
+    | '/workspaces/$workspaceId/reports/$exportId'
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/workspaces/$workspaceId/$viewId'
@@ -880,6 +892,7 @@ export interface FileRouteTypes {
     | '/_protected/workspaces/$workspaceId/$viewId/document'
     | '/_protected/workspaces/$workspaceId/entities/$entityId'
     | '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
+    | '/_protected/workspaces/$workspaceId/reports/$exportId'
     | '/law/$country/cases/$court/$slug'
     | '/sitemaps/law-cases/$country/$year/{$month}.xml'
     | '/_protected/workspaces/$workspaceId/$viewId/'
@@ -1346,6 +1359,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LawCountryCasesCourtSlugRouteImport
       parentRoute: typeof LawRouteRoute
     }
+    '/_protected/workspaces/$workspaceId/reports/$exportId': {
+      id: '/_protected/workspaces/$workspaceId/reports/$exportId'
+      path: '/reports/$exportId'
+      fullPath: '/workspaces/$workspaceId/reports/$exportId'
+      preLoaderRoute: typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRouteImport
+      parentRoute: typeof ProtectedWorkspacesWorkspaceIdRouteRoute
+    }
     '/_protected/workspaces/$workspaceId/invoices/$invoiceId': {
       id: '/_protected/workspaces/$workspaceId/invoices/$invoiceId'
       path: '/$invoiceId'
@@ -1591,6 +1611,7 @@ interface ProtectedWorkspacesWorkspaceIdRouteRouteChildren {
   ProtectedWorkspacesWorkspaceIdTimesheetsRoute: typeof ProtectedWorkspacesWorkspaceIdTimesheetsRoute
   ProtectedWorkspacesWorkspaceIdIndexRoute: typeof ProtectedWorkspacesWorkspaceIdIndexRoute
   ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute: typeof ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute
+  ProtectedWorkspacesWorkspaceIdReportsExportIdRoute: typeof ProtectedWorkspacesWorkspaceIdReportsExportIdRoute
 }
 
 const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorkspaceIdRouteRouteChildren =
@@ -1607,6 +1628,8 @@ const ProtectedWorkspacesWorkspaceIdRouteRouteChildren: ProtectedWorkspacesWorks
       ProtectedWorkspacesWorkspaceIdIndexRoute,
     ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute:
       ProtectedWorkspacesWorkspaceIdEntitiesEntityIdRoute,
+    ProtectedWorkspacesWorkspaceIdReportsExportIdRoute:
+      ProtectedWorkspacesWorkspaceIdReportsExportIdRoute,
   }
 
 const ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren =

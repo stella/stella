@@ -81,7 +81,7 @@ describe("report export status notifications", () => {
     ]);
     expect(recording.deliveries).toEqual([
       {
-        appUrl: "http://localhost:3000/workspaces",
+        appUrl: `http://localhost:3000/workspaces/${ids.wsA1}/reports/${exportId}`,
         email: requester.email,
         lang: "cs",
         status: "failed",
@@ -92,6 +92,35 @@ describe("report export status notifications", () => {
     const row = await readNotificationState(exportId);
     expect(row?.notificationStatus).toBe("sent");
     expect(row?.notificationAttemptedAt).toBeInstanceOf(Date);
+  });
+
+  test("links a completed download to its persisted export", async () => {
+    const requester = await createTestUser();
+    const exportId = await createTestExport({
+      notificationStatus: "pending",
+      requestedBy: requester.id,
+      status: "completed",
+    });
+    const recording = createRecordingDelivery();
+
+    const result = await notifyReportExportStatus({
+      delivery: recording.delivery,
+      exportId,
+      scopedDb: scopedDbFor({ userId: requester.id, workspaceId: ids.wsA1 }),
+      userId: requester.id,
+      workspaceId: ids.wsA1,
+    });
+
+    expect(result).toEqual({ status: "sent" });
+    expect(recording.deliveries).toEqual([
+      {
+        appUrl: `http://localhost:3000/workspaces/${ids.wsA1}/reports/${exportId}`,
+        email: requester.email,
+        lang: "cs",
+        status: "completed",
+      },
+    ]);
+    expectPrivacySafe(recording.deliveries);
   });
 
   test("wrong requester and workspace cannot claim another export", async () => {
@@ -234,7 +263,7 @@ describe("report export status notifications", () => {
     expect(redelivery).toEqual({ status: "skipped" });
     expect(recording.deliveries).toEqual([
       {
-        appUrl: "http://localhost:3000/workspaces",
+        appUrl: `http://localhost:3000/workspaces/${ids.wsA1}/reports/${exportId}`,
         email: requester.email,
         lang: "cs",
         status: "completed",

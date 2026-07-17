@@ -48,8 +48,8 @@ const defaultDelivery: ReportExportNotificationDelivery = {
  * The claim transitions `pending` to `sending` before the external email call.
  * A crash can therefore omit a notification, but neither a BullMQ redelivery
  * nor two workers racing the same row can send it twice. The message contract
- * contains only terminal status, locale, recipient, and a generic application
- * URL; report content and artifact metadata never enter this boundary.
+ * contains only terminal status, locale, recipient, and a tenant-scoped export
+ * recovery URL; report content and artifact metadata never enter this boundary.
  */
 export const notifyReportExportStatus = async ({
   delivery = defaultDelivery,
@@ -163,7 +163,7 @@ export const notifyReportExportStatus = async ({
   const deliveryResult = await Result.tryPromise(
     async () =>
       await delivery.send({
-        appUrl: new URL("/workspaces", env.FRONTEND_URL).toString(),
+        appUrl: reportExportRecoveryUrl({ exportId, workspaceId }),
         email: recipient.email,
         lang: resolveUiLocale(claim.lang) ?? "en",
         status,
@@ -192,6 +192,20 @@ export const notifyReportExportStatus = async ({
   });
   return { status: "sent" };
 };
+
+type ReportExportRecoveryUrlOptions = {
+  exportId: SafeId<"reportExport">;
+  workspaceId: SafeId<"workspace">;
+};
+
+const reportExportRecoveryUrl = ({
+  exportId,
+  workspaceId,
+}: ReportExportRecoveryUrlOptions): string =>
+  new URL(
+    `/workspaces/${encodeURIComponent(workspaceId)}/reports/${encodeURIComponent(exportId)}`,
+    env.FRONTEND_URL,
+  ).toString();
 
 type SetNotificationStatusOptions = {
   exportId: SafeId<"reportExport">;
