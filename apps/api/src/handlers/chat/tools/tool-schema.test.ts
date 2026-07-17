@@ -48,7 +48,11 @@ import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import { COMPARE_VERSIONS_TOOL_NAME } from "@/api/handlers/chat/tools/version-compare-tools";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS } from "@/api/lib/provider-safe-json-schema";
+import {
+  PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS,
+  providerSafeJsonSchemaOptionsForTanStackProvider,
+} from "@/api/lib/provider-safe-json-schema";
+import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
@@ -1139,15 +1143,20 @@ describe("chat tool schemas", () => {
       })();
     });
     const chunks: StreamChunk[] = [];
-    const inputSchema = {
-      type: "object",
-      properties: {
-        question: { type: "string" },
-        mode: { type: "string", enum: ["must-not-be-sent"] },
-        nullableNote: { type: ["string", "null"] },
-      },
-      required: ["question"],
-    };
+    const projectedInputSchema = projectSchemaInputJsonSchema(
+      toTanStackToolSchema(
+        v.strictObject({
+          question: v.string(),
+          mode: v.optional(v.literal("must-not-be-sent")),
+          nullableNote: v.nullable(v.string()),
+        }),
+      ),
+      providerSafeJsonSchemaOptionsForTanStackProvider("mistral"),
+    );
+    const inputSchema = convertSchemaToJsonSchema(projectedInputSchema);
+    if (!inputSchema?.properties) {
+      throw new TypeError("Expected projected Mistral input schema properties.");
+    }
     // Boolean schemas are valid JSON Schema even though TanStack's public
     // JSONSchema type currently models only object schemas.
     Reflect.set(inputSchema.properties, "acceptAnything", true);
