@@ -240,7 +240,7 @@ const withCommandTimeout = async <T>({
   commandTimeoutMs,
   scheduleTimeout,
 }: WithCommandTimeoutOptions<T>): Promise<T> => {
-  let cancelTimeout = () => undefined;
+  let cancelTimeout: () => void = () => undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     cancelTimeout = scheduleTimeout(
       () =>
