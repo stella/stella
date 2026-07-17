@@ -154,9 +154,9 @@ describe("send-message thread loading", () => {
       insert: () => ({ values: async () => undefined }),
       query: { chatThreads: { findFirst: async () => null } },
     });
-    const safeDb: SafeDb = async (callback) =>
+    const safeDb: SafeDb = async (operation) =>
       await Result.tryPromise({
-        try: async () => await callback(tx),
+        try: async () => await operation(tx),
         catch: () => auditUniqueError,
       });
     const recordAuditEvent = mock(async () => {
