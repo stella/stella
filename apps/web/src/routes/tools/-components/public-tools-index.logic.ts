@@ -81,13 +81,12 @@ const matchesSearchQuery = (
 export const filterPublicToolEntries = <T extends PublicToolBrowseEntry>(
   entries: readonly T[],
   { query, task, ...facets }: PublicToolBrowseFilters,
-): readonly T[] => {
-  return filterToolEntries(entries, facets).filter(
+): readonly T[] =>
+  filterToolEntries(entries, facets).filter(
     (entry) =>
       (task === null || TASK_SLUGS[task].some((slug) => slug === entry.slug)) &&
       matchesSearchQuery(entry, query),
   );
-};
 
 export const PUBLIC_TOOL_GROUPS = [
   "skills",
