@@ -195,13 +195,14 @@ export class RedisRateLimitContext implements Context {
   private async sendCommand(command: string, args: string[]): Promise<unknown> {
     this.redis ??= this.createRedis();
     const redis = this.redis;
-    const result = await Result.tryPromise(async () => {
-      return await withCommandTimeout({
-        command: redis.send(command, args),
-        commandTimeoutMs: this.commandTimeoutMs,
-        scheduleTimeout: this.scheduleTimeout,
-      });
-    });
+    const result = await Result.tryPromise(
+      async () =>
+        await withCommandTimeout({
+          command: redis.send(command, args),
+          commandTimeoutMs: this.commandTimeoutMs,
+          scheduleTimeout: this.scheduleTimeout,
+        }),
+    );
     if (Result.isError(result)) {
       if (TimeoutError.is(result.error)) {
         redis.close?.();
