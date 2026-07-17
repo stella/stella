@@ -204,7 +204,7 @@ export const buildOperationSpecs = ({
     const id = operationSpecId(operation, startIndex + offset);
     const blockText = blockTextById.get(operationAnchorBlockId(operation));
     const commentText =
-      "comment" in operation ? operation.comment?.text : undefined;
+      "comment" in operation ? operation.comment.text : undefined;
     switch (operation.type) {
       case "replaceInBlock": {
         if (operation.find === operation.replace) {
