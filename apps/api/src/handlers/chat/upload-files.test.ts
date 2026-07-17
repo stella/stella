@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -17,6 +17,7 @@ import {
 import type { PersistableChatMessage } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -36,8 +37,12 @@ void mock.module("@/api/lib/s3", () => ({
   getS3: () => ({ delete: s3DeleteMock, file: fileMock, write: writeMock }),
 }));
 
-const { canHydrateFilePartAsPlainText, hydrateFilePart, uploadMessageFiles } =
-  await import("./upload-files");
+const {
+  canHydrateFilePartAsPlainText,
+  hydrateFilePart,
+  uploadMessageFiles,
+  uploadUserFile,
+} = await import("./upload-files");
 
 describe("chat attachment hydration", () => {
   beforeEach(() => {
@@ -209,5 +214,36 @@ describe("chat attachment hydration", () => {
       testTx,
       expect.arrayContaining([expect.objectContaining({ workspaceId })]),
     );
+  });
+
+  test("deletes the stored object when the database save fails", async () => {
+    const databaseError = new DatabaseError({
+      message: "user file insert failed",
+    });
+    const safeDb: SafeDb = async <T>(_fn: (tx: Transaction) => Promise<T>) =>
+      Result.err(databaseError);
+    const recordAuditEvent = mock(async () => undefined);
+
+    const result = await uploadUserFile({
+      file: {
+        bytes: new TextEncoder().encode("confidential text"),
+        fileName: "notes.txt",
+        mimeType: TEXT_PLAIN_MIME_TYPE,
+      },
+      recordAuditEvent,
+      safeDb,
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
+      userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),
+      workspaceId,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      panic("Expected the database save to fail");
+    }
+    expect(result.error).toBe(databaseError);
+    expect(writeMock).toHaveBeenCalledTimes(1);
+    expect(s3DeleteMock).toHaveBeenCalledTimes(1);
+    expect(recordAuditEvent).not.toHaveBeenCalled();
   });
 });

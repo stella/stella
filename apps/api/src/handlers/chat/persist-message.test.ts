@@ -235,3 +235,34 @@ describe("chat approval persistence", () => {
     expect(finishPlan).toEqual({ type: "none" });
   });
 });
+
+describe("chat user-message persistence", () => {
+  const userMessage = {
+    id: chatMessageId("019aef0c-4df0-7d25-b5ad-cfa5a548fb2f"),
+    role: "user",
+    parts: [{ type: "text", content: "Summarize this matter" }],
+  } satisfies PersistableChatMessage;
+
+  test("does not append a re-sent message already present in the loaded window", () => {
+    const result = planMessagePersistence({
+      message: userMessage,
+      storedMessages: [stored(userMessage)],
+    });
+
+    expect(result.persistencePlan).toEqual({ type: "none" });
+    expect(result.messages).toEqual([userMessage]);
+    expect(result.existingIds).toEqual(new Set([userMessage.id]));
+  });
+
+  test("does not insert an existing message that falls outside the loaded window", () => {
+    const result = planMessagePersistence({
+      message: userMessage,
+      storedMessages: [],
+      incomingMessageExists: true,
+    });
+
+    expect(result.persistencePlan).toEqual({ type: "none" });
+    expect(result.messages).toEqual([]);
+    expect(result.existingIds).toEqual(new Set());
+  });
+});
