@@ -33,6 +33,18 @@ type Messages = {
     "signIn": "Use this code to sign in to your stella account.";
     "subject": "Your stella verification code";
   };
+  "reportExportStatus": {
+    "action": "Open stella";
+    "completedBody": "Your report export is ready. Open stella to view or download it.";
+    "completedHeading": "Report export ready";
+    "completedPreview": "Your report export is ready";
+    "completedSubject": "Your report export is ready";
+    "failedBody": "Your report export could not be completed. Open stella to try again.";
+    "failedHeading": "Report export failed";
+    "failedPreview": "Your report export could not be completed";
+    "failedSubject": "Your report export could not be completed";
+    "privacy": "This email contains no report content or file names.";
+  };
 };
 
 export type { Messages as default };

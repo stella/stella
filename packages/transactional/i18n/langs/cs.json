@@ -29,5 +29,17 @@
     "preview": "Použijte tento kód k ověření vaší identity",
     "signIn": "Použijte tento kód pro přihlášení ke svému účtu stella.",
     "subject": "Váš ověřovací kód stella"
+  },
+  "reportExportStatus": {
+    "action": "Otevřít stella",
+    "completedBody": "Export vašeho reportu je připraven. Otevřete stella a zobrazte nebo stáhněte jej.",
+    "completedHeading": "Export reportu je připraven",
+    "completedPreview": "Export vašeho reportu je připraven",
+    "completedSubject": "Export vašeho reportu je připraven",
+    "failedBody": "Export vašeho reportu se nepodařilo dokončit. Otevřete stella a zkuste to znovu.",
+    "failedHeading": "Export reportu se nezdařil",
+    "failedPreview": "Export vašeho reportu se nepodařilo dokončit",
+    "failedSubject": "Export vašeho reportu se nepodařilo dokončit",
+    "privacy": "Tento e-mail neobsahuje obsah reportu ani názvy souborů."
   }
 }

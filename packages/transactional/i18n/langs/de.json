@@ -29,5 +29,17 @@
     "preview": "Verwenden Sie diesen Code zur Bestätigung Ihrer Identität",
     "signIn": "Verwenden Sie diesen Code, um sich bei Ihrem stella-Konto anzumelden.",
     "subject": "Ihr stella-Bestätigungscode"
+  },
+  "reportExportStatus": {
+    "action": "stella öffnen",
+    "completedBody": "Ihr Berichtsexport ist bereit. Öffnen Sie stella, um ihn anzusehen oder herunterzuladen.",
+    "completedHeading": "Berichtsexport bereit",
+    "completedPreview": "Ihr Berichtsexport ist bereit",
+    "completedSubject": "Ihr Berichtsexport ist bereit",
+    "failedBody": "Ihr Berichtsexport konnte nicht abgeschlossen werden. Öffnen Sie stella, um es erneut zu versuchen.",
+    "failedHeading": "Berichtsexport fehlgeschlagen",
+    "failedPreview": "Ihr Berichtsexport konnte nicht abgeschlossen werden",
+    "failedSubject": "Ihr Berichtsexport konnte nicht abgeschlossen werden",
+    "privacy": "Diese E-Mail enthält keine Berichtsinhalte oder Dateinamen."
   }
 }

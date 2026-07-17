@@ -10,6 +10,9 @@ import { subject as organizationInvitationSubject } from "@stll/transactional/em
 import * as ProductFeedback from "@stll/transactional/emails/product-feedback";
 import type { ProductFeedbackKind } from "@stll/transactional/emails/product-feedback";
 import { subject as productFeedbackSubject } from "@stll/transactional/emails/product-feedback-subject";
+import * as ReportExportStatus from "@stll/transactional/emails/report-export-status";
+import type { ReportExportEmailStatus } from "@stll/transactional/emails/report-export-status";
+import { subject as reportExportStatusSubject } from "@stll/transactional/emails/report-export-status-subject";
 
 import { env } from "@/api/env";
 import type { SupportedLang } from "@/api/lib/locale";
@@ -234,5 +237,53 @@ export const sendFeedbackEmail = async ({
     subject: productFeedbackSubject({ kind, title }),
     html,
     text,
+  });
+};
+
+type RenderReportExportStatusEmailOptions = {
+  appUrl: string;
+  lang: SupportedLang;
+  status: ReportExportEmailStatus;
+};
+
+export const renderReportExportStatusEmail = async ({
+  appUrl,
+  lang,
+  status,
+}: RenderReportExportStatusEmailOptions) => {
+  const node = (
+    <ReportExportStatus.Email appUrl={appUrl} lang={lang} status={status} />
+  );
+  const [html, text] = await Promise.all([
+    render(node),
+    render(node, { plainText: true }),
+  ]);
+  return {
+    html,
+    subject: reportExportStatusSubject(lang, status),
+    text,
+  };
+};
+
+type SendReportExportStatusEmailOptions =
+  RenderReportExportStatusEmailOptions & {
+    email: string;
+  };
+
+export const sendReportExportStatusEmail = async ({
+  appUrl,
+  email,
+  lang,
+  status,
+}: SendReportExportStatusEmailOptions) => {
+  const rendered = await renderReportExportStatusEmail({
+    appUrl,
+    lang,
+    status,
+  });
+  await getTransport().send({
+    from: getTransactionalEmailFrom(),
+    to: email,
+    ...rendered,
   });
 };

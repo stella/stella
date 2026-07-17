@@ -29,5 +29,17 @@
     "preview": "Izmantojiet šo kodu savas identitātes apstiprināšanai",
     "signIn": "Izmantojiet šo kodu, lai pieslēgtos savam stella kontam.",
     "subject": "Jūsu stella verifikācijas kods"
+  },
+  "reportExportStatus": {
+    "action": "Atvērt stella",
+    "completedBody": "Jūsu pārskata eksports ir gatavs. Atveriet stella, lai to skatītu vai lejupielādētu.",
+    "completedHeading": "Pārskata eksports ir gatavs",
+    "completedPreview": "Jūsu pārskata eksports ir gatavs",
+    "completedSubject": "Jūsu pārskata eksports ir gatavs",
+    "failedBody": "Jūsu pārskata eksportu neizdevās pabeigt. Atveriet stella un mēģiniet vēlreiz.",
+    "failedHeading": "Pārskata eksports neizdevās",
+    "failedPreview": "Jūsu pārskata eksportu neizdevās pabeigt",
+    "failedSubject": "Jūsu pārskata eksportu neizdevās pabeigt",
+    "privacy": "Šajā e-pastā nav pārskata satura vai failu nosaukumu."
   }
 }

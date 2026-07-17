@@ -29,5 +29,17 @@
     "preview": "Utilisez ce code pour vérifier votre identité",
     "signIn": "Utilisez ce code pour vous connecter à votre compte stella.",
     "subject": "Votre code de vérification stella"
+  },
+  "reportExportStatus": {
+    "action": "Ouvrir stella",
+    "completedBody": "L’export de votre rapport est prêt. Ouvrez stella pour le consulter ou le télécharger.",
+    "completedHeading": "Export du rapport prêt",
+    "completedPreview": "L’export de votre rapport est prêt",
+    "completedSubject": "L’export de votre rapport est prêt",
+    "failedBody": "L’export de votre rapport n’a pas pu être terminé. Ouvrez stella pour réessayer.",
+    "failedHeading": "Échec de l’export du rapport",
+    "failedPreview": "L’export de votre rapport n’a pas pu être terminé",
+    "failedSubject": "L’export de votre rapport n’a pas pu être terminé",
+    "privacy": "Cet e-mail ne contient aucun contenu du rapport ni nom de fichier."
   }
 }

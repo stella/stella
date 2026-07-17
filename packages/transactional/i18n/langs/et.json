@@ -29,5 +29,17 @@
     "preview": "Kasutage seda koodi oma identiteedi kinnitamiseks",
     "signIn": "Kasutage seda koodi oma stella kontole sisselogimiseks.",
     "subject": "Teie stella kinnituskood"
+  },
+  "reportExportStatus": {
+    "action": "Ava stella",
+    "completedBody": "Teie aruande eksport on valmis. Avage stella, et seda vaadata või alla laadida.",
+    "completedHeading": "Aruande eksport on valmis",
+    "completedPreview": "Teie aruande eksport on valmis",
+    "completedSubject": "Teie aruande eksport on valmis",
+    "failedBody": "Teie aruande eksporti ei saanud lõpule viia. Avage stella ja proovige uuesti.",
+    "failedHeading": "Aruande eksport ebaõnnestus",
+    "failedPreview": "Teie aruande eksporti ei saanud lõpule viia",
+    "failedSubject": "Teie aruande eksporti ei saanud lõpule viia",
+    "privacy": "See e-kiri ei sisalda aruande sisu ega failinimesid."
   }
 }

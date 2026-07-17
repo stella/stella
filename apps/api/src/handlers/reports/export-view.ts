@@ -29,6 +29,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { extractLangFromRequest } from "@/api/lib/locale";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
 const templateRefSchema = t.Union([
@@ -69,6 +70,7 @@ const exportViewReport = createSafeHandler(
     session,
     body,
     recordAuditEvent,
+    request,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -166,6 +168,8 @@ const exportViewReport = createSafeHandler(
             viewId: view.id,
             layout,
             mode: body.mode,
+            notificationLang: extractLangFromRequest(request),
+            notificationStatus: "pending",
             status: "queued",
           })
           .returning({ id: reportExports.id });
@@ -213,7 +217,13 @@ const exportViewReport = createSafeHandler(
           // audit: skip — status bookkeeping on the export row audited at insert.
           await tx
             .update(reportExports)
-            .set({ status: "failed", error: "Failed to enqueue the export." })
+            .set({
+              status: "failed",
+              error: "Failed to enqueue the export.",
+              // The request returns this failure directly; do not send a
+              // redundant background notification for work that never queued.
+              notificationStatus: "suppressed",
+            })
             .where(eq(reportExports.id, exportId));
         }),
       );

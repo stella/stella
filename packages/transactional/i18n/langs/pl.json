@@ -29,5 +29,17 @@
     "preview": "Użyj tego kodu, aby potwierdzić swoją tożsamość",
     "signIn": "Użyj tego kodu, aby zalogować się na swoje konto stella.",
     "subject": "Twój kod weryfikacyjny stella"
+  },
+  "reportExportStatus": {
+    "action": "Otwórz stella",
+    "completedBody": "Eksport raportu jest gotowy. Otwórz stella, aby go wyświetlić lub pobrać.",
+    "completedHeading": "Eksport raportu jest gotowy",
+    "completedPreview": "Eksport raportu jest gotowy",
+    "completedSubject": "Eksport raportu jest gotowy",
+    "failedBody": "Nie udało się ukończyć eksportu raportu. Otwórz stella, aby spróbować ponownie.",
+    "failedHeading": "Eksport raportu nie powiódł się",
+    "failedPreview": "Nie udało się ukończyć eksportu raportu",
+    "failedSubject": "Nie udało się ukończyć eksportu raportu",
+    "privacy": "Ta wiadomość nie zawiera treści raportu ani nazw plików."
   }
 }
