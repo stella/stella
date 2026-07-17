@@ -1,3 +1,9 @@
+import {
+  BYOK_MODEL_OPTIONS,
+  DEFAULT_MODELS,
+  isBYOKModelRoleSupported,
+  MODEL_ROLES,
+} from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 
 import type { TanStackTextProvider } from "@/api/lib/tanstack-ai-models";
@@ -20,6 +26,78 @@ export const CANARY_PROVIDERS = defineCanaryProviders([
 
 export type CanaryProvider = (typeof CANARY_PROVIDERS)[number];
 export type CanaryProviderSelection = "all" | CanaryProvider;
+
+// Providers whose strict/structured tool-calling mode forces every optional
+// property to be present, widening it to accept a synthetic `null` in place
+// of true omission. Both the flat round-trip probe and the weekly tool-shape
+// probes ask these providers for that null explicitly (deterministically)
+// instead of leaving them to guess omission vs. hallucination (#1194/#1196).
+export const NULL_WIDENING_CANARY_PROVIDERS = new Set<CanaryProvider>([
+  "mistral",
+  "openai",
+]);
+
+// JSON Schema patterns have no regex flag channel. OpenAI strict Structured
+// Outputs supports `pattern`; `a^` cannot match any string. Used to make the
+// "omit or send this impossible value" duality deterministic: no real string
+// can validly satisfy the optional field, only omission (or, for
+// null-widening providers, the synthetic null their strict mode forces).
+// eslint-disable-next-line require-unicode-regexp
+export const NEVER_MATCH_PATTERN = /a^/;
+
+export const CANARY_TIERS = ["daily", "weekly"] as const;
+export type CanaryTier = (typeof CANARY_TIERS)[number];
+
+export const WEEKLY_TOOL_SHAPES = [
+  "nested-optional",
+  "array-item-optional",
+  "open-map",
+  "discriminated-union",
+] as const;
+export type WeeklyToolShape = (typeof WEEKLY_TOOL_SHAPES)[number];
+
+export type WeeklyCanaryRotation = {
+  modelId: string;
+  modelRoles: ModelRole[];
+  rotationIndex: number;
+  toolShape: WeeklyToolShape;
+};
+
+type WeeklyCanaryRotationOptions = {
+  provider: CanaryProvider;
+  rotationIndex: number;
+};
+
+export const weeklyCanaryRotation = ({
+  provider,
+  rotationIndex,
+}: WeeklyCanaryRotationOptions): WeeklyCanaryRotation => {
+  if (!Number.isSafeInteger(rotationIndex) || rotationIndex < 0) {
+    throw new TypeError("Weekly canary rotation index must be non-negative.");
+  }
+
+  const models = BYOK_MODEL_OPTIONS[provider];
+  const modelId = models.at(rotationIndex % models.length);
+  const toolShape = WEEKLY_TOOL_SHAPES.at(
+    rotationIndex % WEEKLY_TOOL_SHAPES.length,
+  );
+  if (modelId === undefined || toolShape === undefined) {
+    throw new TypeError("Weekly canary rotation catalog must not be empty.");
+  }
+
+  const modelRoles = MODEL_ROLES.filter(
+    (role) =>
+      DEFAULT_MODELS[provider][role] !== modelId &&
+      isBYOKModelRoleSupported({ modelId, provider, role }),
+  );
+  if (modelRoles.length === 0) {
+    throw new TypeError(
+      `Weekly canary model ${modelId} has no non-default supported role.`,
+    );
+  }
+
+  return { modelId, modelRoles, rotationIndex, toolShape };
+};
 
 const MODEL_ROLE_MAX_OUTPUT_TOKENS = {
   fast: 512,

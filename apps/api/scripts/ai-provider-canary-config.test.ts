@@ -1,11 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
-import { MODEL_ROLES } from "@stll/ai-catalog";
+import {
+  BYOK_MODEL_OPTIONS,
+  DEFAULT_MODELS,
+  isBYOKModelRoleSupported,
+  MODEL_ROLES,
+} from "@stll/ai-catalog";
 
 import {
   CANARY_PROVIDERS,
   missingCanaryProviders,
   modelRoleMaxOutputTokens,
+  WEEKLY_TOOL_SHAPES,
+  weeklyCanaryRotation,
 } from "./ai-provider-canary-config";
 
 describe("AI provider canary role budgets", () => {
@@ -42,5 +49,54 @@ describe("AI provider canary coverage", () => {
         selection: "bedrock",
       }),
     ).toEqual(["bedrock"]);
+  });
+});
+
+describe("AI provider weekly rotation", () => {
+  test("cycles through every curated model with non-default supported roles", () => {
+    for (const provider of CANARY_PROVIDERS) {
+      const models = BYOK_MODEL_OPTIONS[provider];
+      const rotations = models.map((_, rotationIndex) =>
+        weeklyCanaryRotation({ provider, rotationIndex }),
+      );
+
+      expect(rotations.map(({ modelId }) => modelId)).toEqual(models);
+      expect(
+        weeklyCanaryRotation({
+          provider,
+          rotationIndex: models.length,
+        }).modelId,
+      ).toBe(models.at(0));
+
+      for (const { modelId, modelRoles } of rotations) {
+        expect(modelRoles.length).toBeGreaterThan(0);
+        for (const role of modelRoles) {
+          expect(modelId).not.toBe(DEFAULT_MODELS[provider][role]);
+          expect(isBYOKModelRoleSupported({ modelId, provider, role })).toBe(
+            true,
+          );
+        }
+      }
+    }
+  });
+
+  test("rotates executable tool shapes independently of model catalog size", () => {
+    for (const [rotationIndex, toolShape] of WEEKLY_TOOL_SHAPES.entries()) {
+      expect(
+        weeklyCanaryRotation({ provider: "openai", rotationIndex }).toolShape,
+      ).toBe(toolShape);
+    }
+    expect(
+      weeklyCanaryRotation({
+        provider: "openai",
+        rotationIndex: WEEKLY_TOOL_SHAPES.length,
+      }).toolShape,
+    ).toBe(WEEKLY_TOOL_SHAPES.at(0));
+  });
+
+  test("rejects invalid rotation indexes", () => {
+    expect(() =>
+      weeklyCanaryRotation({ provider: "google", rotationIndex: -1 }),
+    ).toThrow("Weekly canary rotation index must be non-negative.");
   });
 });
