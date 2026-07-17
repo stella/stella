@@ -37,6 +37,8 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 type SuggestionsFacetProps = {
   entityId: string;
   fileFieldId: string;
+  /** Workspace the entity lives in; scopes the suggestion persistence calls. */
+  workspaceId: string;
   /**
    * Called once when this facet renders without a registered DOCX
    * editor for the entity. Sidepeek wires this to a navigation
@@ -51,6 +53,7 @@ type SuggestionsFacetProps = {
 export const SuggestionsFacet = ({
   entityId,
   fileFieldId,
+  workspaceId,
   onMissingEditor,
 }: SuggestionsFacetProps) => {
   const registration = useActiveDocxStore(
@@ -111,6 +114,7 @@ export const SuggestionsFacet = ({
       embedded
       entityId={entityId}
       requestDocxEditMode={registration?.requestEditMode}
+      workspaceId={workspaceId}
     />
   );
 };

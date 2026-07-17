@@ -11,6 +11,7 @@
 import type { RefObject } from "react";
 
 import { useRouteContext } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { DocxEditorRef, FolioAIEditApplyMode } from "@stll/folio-react";
@@ -22,6 +23,9 @@ import {
 } from "@/components/ai-suggestions/review-store";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { getAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
+import { toAPIError } from "@/lib/errors/api";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 
 const DOCUMENT_OPERATION_CONTRACT_VERSION = 1 as const;
@@ -35,6 +39,12 @@ type ApplyOutcome = {
 
 export type UseReviewActionsOptions = {
   entityId: string;
+  /**
+   * Workspace the entity lives in. Scopes the persistence calls that
+   * fire (server-side) when a `persisted` suggestion is resolved or
+   * reverted.
+   */
+  workspaceId: string;
   docxEditorRef: RefObject<DocxEditorRef | null>;
   /** Whether the editor currently accepts edit operations. */
   docxEditable: boolean;
@@ -65,6 +75,7 @@ export type ReviewActions = {
 
 export const useReviewActions = ({
   entityId,
+  workspaceId,
   docxEditorRef,
   docxEditable,
   requestDocxEditMode,
@@ -184,6 +195,90 @@ export const useReviewActions = ({
     },
   );
 
+  // --- Persistence (audit trail) -----------------------------------------
+  //
+  // Only `persisted` suggestions (a server row exists) hit the server.
+  // Every call is fire-and-forget and never rolls back local/editor
+  // state: a failure captures telemetry + shows one toast, but the
+  // in-memory review continues exactly as it did before persistence.
+
+  const resolveOnServer = useLatestCallback(
+    async (
+      item: ReviewSuggestion,
+      status: "accepted" | "rejected",
+      appliedMode: FolioAIEditApplyMode | null,
+    ): Promise<boolean> => {
+      const result = await Result.tryPromise(
+        async () =>
+          await api["docx-suggestions"]({ workspaceId })
+            .entity({ entityId })
+            .suggestion({ suggestionId: item.id })
+            .resolve.patch({ status, appliedMode }),
+      );
+      if (Result.isError(result)) {
+        getAnalytics().captureError(result.error);
+        return false;
+      }
+      if (result.value.error) {
+        getAnalytics().captureError(toAPIError(result.value.error));
+        return false;
+      }
+      return true;
+    },
+  );
+
+  const revertOnServer = useLatestCallback(
+    async (item: ReviewSuggestion): Promise<boolean> => {
+      const result = await Result.tryPromise(
+        async () =>
+          await api["docx-suggestions"]({ workspaceId })
+            .entity({ entityId })
+            .suggestion({ suggestionId: item.id })
+            .revert.patch(),
+      );
+      if (Result.isError(result)) {
+        getAnalytics().captureError(result.error);
+        return false;
+      }
+      if (result.value.error) {
+        getAnalytics().captureError(toAPIError(result.value.error));
+        return false;
+      }
+      return true;
+    },
+  );
+
+  const toastPersistFailed = useLatestCallback(() => {
+    stellaToast.add({ title: t("docxReview.persistFailed"), type: "error" });
+  });
+
+  type ResolveTarget = {
+    item: ReviewSuggestion;
+    status: "accepted" | "rejected";
+    appliedMode: FolioAIEditApplyMode | null;
+  };
+
+  // Resolve a batch server-side, surfacing at most one toast if any
+  // member failed.
+  const persistResolveBatch = useLatestCallback((targets: ResolveTarget[]) => {
+    if (targets.length === 0) {
+      return;
+    }
+    void (async () => {
+      // Independent PATCHes, so resolve them in parallel and surface a
+      // single toast if any failed.
+      const results = await Promise.all(
+        targets.map(
+          async ({ item, status, appliedMode }) =>
+            await resolveOnServer(item, status, appliedMode),
+        ),
+      );
+      if (results.some((ok) => !ok)) {
+        toastPersistFailed();
+      }
+    })();
+  });
+
   const acceptOne = useLatestCallback(async (item: ReviewSuggestion) => {
     if (item.status !== "pending") {
       return;
@@ -201,7 +296,19 @@ export const useReviewActions = ({
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
-    recordOutcome(item, applyPending(item));
+    const outcome = applyPending(item);
+    recordOutcome(item, outcome);
+    // Persist the resolution only when the apply actually landed; a
+    // `skipped` op leaves the row pending server-side so it can be
+    // retried. `appliedMode` mirrors what `recordOutcome` stored.
+    if (item.persisted === true && outcome.status === "accepted") {
+      void (async () => {
+        const ok = await resolveOnServer(item, "accepted", applyMode);
+        if (!ok) {
+          toastPersistFailed();
+        }
+      })();
+    }
   });
 
   const rejectOne = useLatestCallback((item: ReviewSuggestion) => {
@@ -211,6 +318,14 @@ export const useReviewActions = ({
     // Same reason as accept: don't drop pendingOperation, so the user can
     // revert the rejection and the suggestion goes back to actionable.
     updateSuggestion(entityId, item.id, { status: "rejected" });
+    if (item.persisted === true) {
+      void (async () => {
+        const ok = await resolveOnServer(item, "rejected", null);
+        if (!ok) {
+          toastPersistFailed();
+        }
+      })();
+    }
   });
 
   const revertOne = useLatestCallback((item: ReviewSuggestion) => {
@@ -233,6 +348,14 @@ export const useReviewActions = ({
       applyMode: null,
       skipReason: undefined,
     });
+    if (item.persisted === true) {
+      void (async () => {
+        const ok = await revertOnServer(item);
+        if (!ok) {
+          toastPersistFailed();
+        }
+      })();
+    }
   });
 
   const acceptMany = useLatestCallback(
@@ -245,9 +368,17 @@ export const useReviewActions = ({
       if (!unlocked) {
         return;
       }
+      // The API has no batch-resolve, so persist per accepted+persisted
+      // item after the local batch apply. One toast at most on failure.
+      const toPersist: ResolveTarget[] = [];
       for (const item of targets) {
-        recordOutcome(item, applyPending(item));
+        const outcome = applyPending(item);
+        recordOutcome(item, outcome);
+        if (item.persisted === true && outcome.status === "accepted") {
+          toPersist.push({ item, status: "accepted", appliedMode: applyMode });
+        }
       }
+      persistResolveBatch(toPersist);
     },
   );
 
@@ -260,6 +391,15 @@ export const useReviewActions = ({
       entityId,
       targets.map((item) => item.id),
       "rejected",
+    );
+    persistResolveBatch(
+      targets
+        .filter((item) => item.persisted === true)
+        .map((item) => ({
+          item,
+          status: "rejected" as const,
+          appliedMode: null,
+        })),
     );
   });
 

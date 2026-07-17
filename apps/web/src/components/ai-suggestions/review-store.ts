@@ -157,6 +157,17 @@ export type ReviewSuggestion = {
   snapshot: FolioAIEditSnapshot | null;
   /** Reason a `skipped` suggestion failed to apply. */
   skipReason?: string | undefined;
+  /**
+   * `true` once a server-side row exists for this suggestion (set by
+   * `reconcileServerIds` after the background create, or by
+   * `hydrateSuggestions` on reload). Gates every persistence call:
+   * accept / reject / revert only hit the server when `persisted` is
+   * `true`. Absent / `false` means the suggestion is in-memory only
+   * (persistence unavailable or the create failed), so it behaves
+   * exactly like the pre-persistence flow — the graceful-degradation
+   * guarantee.
+   */
+  persisted?: boolean | undefined;
 };
 
 type ReviewState = {
@@ -194,6 +205,24 @@ type ReviewState = {
 
 type ReviewActions = {
   appendSuggestions: (entityId: string, items: ReviewSuggestion[]) => void;
+  /**
+   * Adopt server ids for suggestions the background create just
+   * persisted. For each suggestion whose current (client) `id` is a key
+   * in `refToId`, swap in the mapped server id and mark it `persisted`.
+   * The entity's `focusedId` is remapped too if it pointed at a
+   * reconciled client id. No-op when the entity/session is absent.
+   */
+  reconcileServerIds: (
+    entityId: string,
+    refToId: Record<string, string>,
+  ) => void;
+  /**
+   * Merge server-loaded suggestions into the session on reload. Dedups
+   * by `id` (only ids not already present are added) and never touches
+   * `panelDismissed`, so hydration cannot force the panel back open.
+   * Seeds a fresh session when none exists yet.
+   */
+  hydrateSuggestions: (entityId: string, items: ReviewSuggestion[]) => void;
   updateSuggestion: (
     entityId: string,
     id: string,
@@ -315,6 +344,74 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
         panelDismissed: {
           ...state.panelDismissed,
           [entityId]: false,
+        },
+      };
+    });
+  },
+
+  reconcileServerIds: (entityId, refToId) => {
+    set((state) => {
+      const existing = state.sessions[entityId];
+      if (!existing) {
+        return state;
+      }
+      let changed = false;
+      const next: ReviewSuggestion[] = [];
+      for (const item of existing) {
+        const serverId = refToId[item.id];
+        if (serverId === undefined) {
+          next.push(item);
+          continue;
+        }
+        changed = true;
+        next.push({ ...item, id: serverId, persisted: true });
+      }
+      if (!changed) {
+        return state;
+      }
+      const nextState: Partial<ReviewState> = {
+        sessions: { ...state.sessions, [entityId]: next },
+      };
+      // Keep the stepper parked on the same suggestion after its id
+      // changes underneath it.
+      const focused = state.focusedId[entityId];
+      const remappedFocus =
+        focused === null || focused === undefined
+          ? undefined
+          : refToId[focused];
+      if (remappedFocus !== undefined) {
+        nextState.focusedId = {
+          ...state.focusedId,
+          [entityId]: remappedFocus,
+        };
+      }
+      return nextState;
+    });
+  },
+
+  hydrateSuggestions: (entityId, items) => {
+    if (items.length === 0) {
+      return;
+    }
+    set((state) => {
+      const existing = state.sessions[entityId];
+      if (!existing) {
+        // Seed a fresh session. Deliberately does NOT set
+        // `panelDismissed` (unlike `appendSuggestions`): hydration on
+        // reload must not force the review panel open.
+        return {
+          sessions: { ...state.sessions, [entityId]: items },
+        };
+      }
+      const existingIds = new Set(existing.map((s) => s.id));
+      const fresh = items.filter((item) => !existingIds.has(item.id));
+      if (fresh.length === 0) {
+        return state;
+      }
+      return {
+        sessions: {
+          ...state.sessions,
+          [entityId]: [...existing, ...fresh],
         },
       };
     });

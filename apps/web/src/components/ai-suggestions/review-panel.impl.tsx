@@ -75,6 +75,8 @@ type GroupAxis = "severity" | "area";
 
 export type ReviewPanelProps = {
   entityId: string;
+  /** Workspace the entity lives in; scopes the suggestion persistence calls. */
+  workspaceId: string;
   docxEditorRef: RefObject<DocxEditorRef | null>;
   /** Whether the editor currently accepts edit operations. */
   docxEditable: boolean;
@@ -140,6 +142,7 @@ const severityTone = (severity: ReviewSeverityKey): SeverityTone => {
 
 export const ReviewPanelImpl = ({
   entityId,
+  workspaceId,
   docxEditorRef,
   docxEditable,
   requestDocxEditMode,
@@ -178,6 +181,7 @@ export const ReviewPanelImpl = ({
     navigateTo,
   } = useReviewActions({
     entityId,
+    workspaceId,
     docxEditorRef,
     docxEditable,
     requestDocxEditMode,
@@ -1021,6 +1025,11 @@ const SuggestionRow = ({
   const showArea =
     item.area.length > 0 && item.area !== REVIEW_UNSPECIFIED_AREA;
   const isAccepted = item.status === "accepted";
+  // A hydrated, pre-reload accepted item carries no live `undoHandle`
+  // (it didn't survive the reload), so Revert can't undo the document
+  // change — hide the affordance. Reject stays revertible, and pending
+  // hydrated items re-apply via their `pendingOperation`.
+  const canRevert = !(item.status === "accepted" && item.undoHandle === null);
 
   if (isResolved) {
     return (
@@ -1068,13 +1077,15 @@ const SuggestionRow = ({
             </p>
           )}
         </div>
-        <button
-          className="text-muted-foreground hover:text-foreground relative mt-1 rounded px-1 py-0.5 text-[11px] transition-colors hover:underline"
-          onClick={onRevert}
-          type="button"
-        >
-          {t("docxReview.revert")}
-        </button>
+        {canRevert && (
+          <button
+            className="text-muted-foreground hover:text-foreground relative mt-1 rounded px-1 py-0.5 text-[11px] transition-colors hover:underline"
+            onClick={onRevert}
+            type="button"
+          >
+            {t("docxReview.revert")}
+          </button>
+        )}
       </li>
     );
   }
@@ -1207,13 +1218,15 @@ const SuggestionRow = ({
             {item.status === "rejected" && t("docxReview.statusRejected")}
             {item.status === "skipped" && t("docxReview.statusSkipped")}
           </span>
-          <button
-            className="hover:text-foreground rounded px-1.5 py-0.5 transition-colors hover:underline"
-            onClick={onRevert}
-            type="button"
-          >
-            {t("docxReview.revert")}
-          </button>
+          {canRevert && (
+            <button
+              className="hover:text-foreground rounded px-1.5 py-0.5 transition-colors hover:underline"
+              onClick={onRevert}
+              type="button"
+            >
+              {t("docxReview.revert")}
+            </button>
+          )}
         </div>
       )}
     </li>

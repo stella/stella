@@ -1096,11 +1096,13 @@ type Messages = {
     "countUnspecified": "{count} unspecified";
     "dismiss": "Hide review panel";
     "empty": "No suggestions match the current filter.";
+    "finalizePendingNote": "{count} suggestions are still pending review.";
     "groupBy": "Group by";
     "hiddenCount": "{count} hidden";
     "hideAccepted": "Hide accepted suggestions";
     "identityAria": "Tracked-change identity for {name}";
     "identitySaved": "Identity saved";
+    "persistFailed": "Couldn't save your review change";
     "reject": "Reject";
     "rejectAll": "Reject all";
     "revert": "Revert";
