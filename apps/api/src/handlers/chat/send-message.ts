@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq, inArray, notExists } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Static } from "elysia";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -515,16 +515,6 @@ const sendMessage = createSafeRootHandler(
       });
 
       if (isClientConnectionAborted()) {
-        yield* Result.await(
-          rollbackUnpersistedChatSideEffects({
-            recordAuditEvent,
-            safeDb,
-            threadId: body.threadId,
-            threadState: thread,
-            uploadedFiles: [],
-            userId: user.id,
-          }),
-        );
         return Result.err(
           new HandlerError({
             status: 400,
@@ -1785,40 +1775,7 @@ const rollbackUnpersistedChatSideEffects = async ({
     return fileRollbackResult;
   }
 
-  if (threadState.type !== "created") {
-    return Result.ok();
-  }
-
-  const threadRollbackResult = await safeDb(async (tx) => {
-    const deletedThreads = await tx
-      .delete(chatThreads)
-      .where(
-        and(
-          eq(chatThreads.id, threadId),
-          notExists(
-            tx
-              .select({ id: chatMessages.id })
-              .from(chatMessages)
-              .where(eq(chatMessages.threadId, chatThreads.id)),
-          ),
-        ),
-      )
-      .returning({ id: chatThreads.id });
-
-    if (deletedThreads.length === 0) {
-      return;
-    }
-
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.DELETE,
-      resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
-      resourceId: threadId,
-      workspaceId: threadState.data.workspaceId,
-      metadata: { reason: "rollback_unpersisted_chat_side_effects" },
-    });
-  });
-
-  return threadRollbackResult.andThen(() => Result.ok());
+  return Result.ok();
 };
 
 type PrepareChatContextProps = {
