@@ -82,7 +82,10 @@ describe("RedisRateLimitContext", () => {
     const context = new RedisRateLimitContext({
       commandTimeoutMs: 500,
       createRedis: () => ({
-        send: async () => await new Promise<never>(() => undefined),
+        send: async () =>
+          await new Promise<never>(() => {
+            // Intentionally unresolved to exercise the command timeout.
+          }),
       }),
       failurePolicy: "fail_open_local",
       onRedisError: () => undefined,
@@ -164,7 +167,11 @@ const createFakeRedisState = (): FakeRedisState => ({
 });
 
 class FakeRedisClient {
-  constructor(private readonly state: FakeRedisState) {}
+  private readonly state: FakeRedisState;
+
+  constructor(state: FakeRedisState) {
+    this.state = state;
+  }
 
   async send(command: string, args: string[]): Promise<unknown> {
     if (command === "DEL") {

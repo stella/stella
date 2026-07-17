@@ -117,7 +117,7 @@ export class RedisRateLimitContext implements Context {
   ): Promise<RateLimitCounter> {
     const effectiveDuration = duration ?? this.durationMs;
     const now = requestTime ?? Date.now();
-    const fallbackCounter = await this.fallback.increment(
+    const fallbackCounter = this.fallback.increment(
       key,
       effectiveDuration,
       now,
@@ -146,7 +146,7 @@ export class RedisRateLimitContext implements Context {
   }
 
   async decrement(key: string): Promise<void> {
-    await this.fallback.decrement(key);
+    this.fallback.decrement(key);
     const result = await Result.tryPromise(
       async () =>
         await this.sendCommand("EVAL", [
@@ -161,7 +161,7 @@ export class RedisRateLimitContext implements Context {
   }
 
   async reset(key?: string): Promise<void> {
-    await this.fallback.reset(key);
+    this.fallback.reset(key);
     // Never scan/delete the shared namespace; TTL expiry owns global cleanup.
     if (key === undefined) {
       return;
