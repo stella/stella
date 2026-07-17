@@ -2602,6 +2602,7 @@
     "discovery": {
       "allBody": "Explore reusable workflows, trusted public data sources, and capabilities included with stella.",
       "allTitle": "All tools",
+      "aresBody": "Look up a Czech organization by name or IČO in the official ARES register.",
       "contractReviewBody": "Review commercial agreements clause by clause against a negotiation playbook, with deviations and suggested redlines surfaced clearly.",
       "editorsPick": "Editor's picks",
       "exampleReview": "Example review",

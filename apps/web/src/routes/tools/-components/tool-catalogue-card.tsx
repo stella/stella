@@ -9,6 +9,7 @@ import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { BidiText } from "@stll/ui/components/bidi-text";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 
 import { CostBadge, SetupBadge } from "@/components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
@@ -27,7 +28,7 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
 
   return (
     <Link
-      className="bg-muted/30 hover:bg-muted/55 group flex min-h-36 cursor-pointer items-start gap-4 rounded-xl p-4 text-start transition-colors"
+      className="bg-background group hover:bg-muted/25 flex min-h-32 cursor-pointer items-start gap-4 rounded-xl p-4 text-start shadow-[0_1px_2px_rgb(0_0_0/0.035),0_7px_22px_rgb(0_0_0/0.04)] transition-transform duration-150 hover:-translate-y-px"
       from="/tools/"
       params={{ slug: entry.slug }}
       to="/tools/$slug"
@@ -38,7 +39,10 @@ export const ToolCatalogueCard = ({ entry }: ToolCatalogueCardProps) => {
           <BidiText as="span" className="text-sm font-medium">
             {displayName}
           </BidiText>
-          <ArrowRightIcon className="text-muted-foreground ms-auto shrink-0 transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5" />
+          <DirectionalIcon
+            className="text-muted-foreground ms-auto shrink-0 transition-opacity group-hover:opacity-70"
+            icon={ArrowRightIcon}
+          />
         </div>
         {entry.description.length > 0 && (
           <BidiText
@@ -96,7 +100,7 @@ function PublicToolIcon({ entry }: { entry: LoadedCatalogueEntry }) {
 
   if (hasCatalogueIcon) {
     return (
-      <div className="bg-background/80 flex size-10 shrink-0 items-center justify-center rounded-lg">
+      <div className="bg-muted/45 flex size-10 shrink-0 items-center justify-center rounded-lg">
         <CatalogueEntryIcon
           className="text-muted-foreground"
           icon={entry.icon}
@@ -116,7 +120,7 @@ function PublicToolIcon({ entry }: { entry: LoadedCatalogueEntry }) {
   }
 
   return (
-    <div className="bg-background/80 flex size-10 shrink-0 items-center justify-center rounded-lg">
+    <div className="bg-muted/45 flex size-10 shrink-0 items-center justify-center rounded-lg">
       <Icon className="text-muted-foreground size-5" />
     </div>
   );
