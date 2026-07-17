@@ -1092,7 +1092,7 @@ describe("chat tool schemas", () => {
   test("the installed Mistral adapter restores omitted optional tool inputs", async () => {
     const adapter = createMistralText("mistral-large-latest", "test-key");
     const argumentsJson =
-      '{"question":"Which one?","mode":null,"nullableNote":null}';
+      '{"question":"Which one?","mode":null,"nullableNote":null,"acceptAnything":null,"rejectAnything":null}';
     let request: unknown;
     Reflect.set(adapter, "fetchRawMistralStream", (payload: unknown) => {
       request = payload;
@@ -1139,18 +1139,23 @@ describe("chat tool schemas", () => {
       })();
     });
     const chunks: StreamChunk[] = [];
+    const inputSchema = {
+      type: "object",
+      properties: {
+        question: { type: "string" },
+        mode: { type: "string", enum: ["must-not-be-sent"] },
+        nullableNote: { type: ["string", "null"] },
+      },
+      required: ["question"],
+    };
+    // Boolean schemas are valid JSON Schema even though TanStack's public
+    // JSONSchema type currently models only object schemas.
+    Reflect.set(inputSchema.properties, "acceptAnything", true);
+    Reflect.set(inputSchema.properties, "rejectAnything", false);
     const tool = {
       name: "ask_user",
       description: "Ask a question.",
-      inputSchema: {
-        type: "object",
-        properties: {
-          question: { type: "string" },
-          mode: { type: "string", enum: ["must-not-be-sent"] },
-          nullableNote: { type: ["string", "null"] },
-        },
-        required: ["question"],
-      },
+      inputSchema,
     } satisfies Tool;
 
     for await (const chunk of adapter.chatStream({
@@ -1170,8 +1175,20 @@ describe("chat tool schemas", () => {
                   type: ["string", "null"],
                   enum: ["must-not-be-sent", null],
                 },
+                acceptAnything: {
+                  anyOf: [true, { type: "null" }],
+                },
+                rejectAnything: {
+                  anyOf: [false, { type: "null" }],
+                },
               },
-              required: ["question", "mode", "nullableNote"],
+              required: [
+                "question",
+                "mode",
+                "nullableNote",
+                "acceptAnything",
+                "rejectAnything",
+              ],
             },
           },
         },
@@ -1182,6 +1199,7 @@ describe("chat tool schemas", () => {
     ).toHaveProperty("input", {
       question: "Which one?",
       nullableNote: null,
+      acceptAnything: null,
     });
   });
 

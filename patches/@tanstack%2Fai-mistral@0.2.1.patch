@@ -85,7 +85,7 @@ diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converte
 index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa5f40afe9 100644
 --- a/dist/esm/utils/schema-converter.js
 +++ b/dist/esm/utils/schema-converter.js
-@@ -1,73 +1,78 @@
+@@ -1,73 +1,83 @@
 -function transformNullsToUndefined(obj) {
 -  if (obj === null) {
 -    return void 0;
@@ -110,6 +110,8 @@ index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa
 +  return Object.keys(map).length > 0 ? map : void 0;
 +}
 +function acceptsNull(schema) {
++  if (schema === true) return true;
++  if (!schema || typeof schema !== "object") return false;
 +  if ("const" in schema && schema.const !== null) return false;
 +  if (Array.isArray(schema.enum) && !schema.enum.includes(null)) return false;
 +  if (typeof schema.type === "string" && schema.type !== "null") return false;
@@ -122,6 +124,9 @@ index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa
  }
 -function makeMistralStructuredOutputCompatible(schema, originalRequired = []) {
 +function coerceMistralStrictSchema(schema, originalRequired) {
++  if (typeof schema === "boolean") {
++    return { schema };
++  }
    const result = { ...schema };
 +  const nullWideningMap = {};
    if (result.type === "object") {
@@ -137,7 +142,8 @@ index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa
        const wasOptional = !originalRequired.includes(propName);
 +      let childMap;
 +      let widenedHere = false;
-       if (prop.type === "object" && prop.properties) {
+-      if (prop.type === "object" && prop.properties) {
++      if (prop && typeof prop === "object" && prop.type === "object" && prop.properties) {
 -        const converted = makeMistralStructuredOutputCompatible(
 -          prop,
 -          prop.required || []
@@ -153,7 +159,8 @@ index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa
 +        const converted = coerceMistralStrictSchema(prop, prop.required || []);
 +        prop = converted.schema;
 +        childMap = converted.nullWideningMap;
-       } else if (prop.type === "array" && prop.items) {
+-      } else if (prop.type === "array" && prop.items) {
++      } else if (prop && typeof prop === "object" && prop.type === "array" && prop.items) {
 -        const converted = {
 +        const convertedItems = coerceMistralStrictSchema(
 +          prop.items,
@@ -180,26 +187,29 @@ index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa
 +      }
 +      if (wasOptional) {
 +        const originallyAcceptedNull = acceptsNull(prop);
-+        if ("const" in prop && prop.const !== null) {
++        if (prop && typeof prop === "object" && "const" in prop && prop.const !== null) {
 +          const { const: constValue, ...withoutConst } = prop;
 +          prop = { ...withoutConst, enum: [constValue, null] };
-+        } else if (Array.isArray(prop.enum) && !prop.enum.includes(null)) {
++        } else if (prop && typeof prop === "object" && Array.isArray(prop.enum) && !prop.enum.includes(null)) {
 +          prop = { ...prop, enum: [...prop.enum, null] };
          }
 -      } else if (wasOptional) {
-         if (prop.type && !Array.isArray(prop.type)) {
+-        if (prop.type && !Array.isArray(prop.type)) {
++        if (prop && typeof prop === "object" && prop.type && !Array.isArray(prop.type)) {
 -          properties[propName] = {
 -            ...prop,
 -            type: [prop.type, "null"]
 -          };
 +          prop = { ...prop, type: [prop.type, "null"] };
-         } else if (Array.isArray(prop.type) && !prop.type.includes("null")) {
+-        } else if (Array.isArray(prop.type) && !prop.type.includes("null")) {
++        } else if (prop && typeof prop === "object" && Array.isArray(prop.type) && !prop.type.includes("null")) {
 -          properties[propName] = {
 -            ...prop,
 -            type: [...prop.type, "null"]
 -          };
 +          prop = { ...prop, type: [...prop.type, "null"] };
-         } else if (!prop.type) {
+-        } else if (!prop.type) {
++        } else if (!prop || typeof prop !== "object" || !prop.type) {
 -          properties[propName] = { anyOf: [prop, { type: "null" }] };
 +          prop = { anyOf: [prop, { type: "null" }] };
          }
@@ -214,7 +224,7 @@ index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..68b37c50edb6fbfe8eb8a0ea64f6b3aa
        }
      }
      result.properties = properties;
-@@ -77,17 +82,53 @@ function makeMistralStructuredOutputCompatible(schema, originalRequired = []) {
+@@ -77,17 +87,53 @@ function makeMistralStructuredOutputCompatible(schema, originalRequired = []) {
        delete result.required;
      }
      result.additionalProperties = false;

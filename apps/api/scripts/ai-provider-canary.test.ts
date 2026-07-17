@@ -33,7 +33,7 @@ describe("AI provider canary error summaries", () => {
     expect(
       errorSummary(
         new CanaryProviderRunError(
-          { code: "opaque-v1-example-token-123" },
+          { code: "client-matter-name" },
           "before-tool-call",
         ),
         signal,
