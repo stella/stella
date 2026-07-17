@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, lt, or } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { reportExports } from "@/api/db/schema";
@@ -79,7 +79,7 @@ export const readReportExportHistory = async function* ({
               reportExports.createdAt,
               pgTimestampCursorBoundary(cursorResult.value.createdAt),
             ),
-            sql`${reportExports.id} < ${cursorResult.value.id}`,
+            lt(reportExports.id, cursorResult.value.id),
           ),
         );
 
