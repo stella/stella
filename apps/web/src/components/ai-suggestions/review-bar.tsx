@@ -7,17 +7,20 @@
  *
  * Keyboard (active while the bar is visible and focus is in the editor
  * or on the bar, never in the chat composer or a form field):
- *   Alt+Enter      accept the focused suggestion and advance
- *   Alt+Backspace  reject the focused suggestion and advance
- *   Alt+ArrowUp    focus the previous pending suggestion
- *   Alt+ArrowDown  focus the next pending suggestion
+ *   Alt+Enter        accept the focused suggestion and advance
+ *   Alt+Shift+Enter  reject the focused suggestion and advance
+ *   Alt+ArrowUp      focus the previous pending suggestion
+ *   Alt+ArrowDown    focus the next pending suggestion
  *
- * Alt (not Cmd/Ctrl) because folio binds Mod+Enter to a page break and
- * Mod+Backspace to delete-backward; Alt+Enter / Alt+ArrowUp/Down are
- * unbound. Alt+Backspace IS bound to delete-backward on macOS, so the
- * listener runs in the capture phase and claims the event before the
- * editor can act on it (the same technique folio uses for its own
- * shortcuts).
+ * Alt (not Cmd/Ctrl) because folio binds Mod+Enter to a document-level
+ * page break in the capture phase and Mod+Backspace to delete-backward;
+ * Alt+Enter, Alt+Shift+Enter and Alt+ArrowUp/Down are all unbound.
+ * Reject deliberately avoids Alt+Backspace: that IS macOS delete-word
+ * inside the editor, so claiming it would destructively reject a
+ * suggestion when a user only meant to delete a word mid-review.
+ * Alt+Shift+Enter does not collide with folio's hard break (plain
+ * Shift+Enter, no Alt). The listener still runs in the capture phase so
+ * it wins over any editor default before the editor can act.
  */
 
 import type { RefObject } from "react";
@@ -47,6 +50,22 @@ import { useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 
 const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
+
+// Shortcut hints shown in the button tooltips so the bindings are
+// discoverable in the UI, not just the docstring. Rendered with the
+// platform's own modifier glyphs (Option/⌥ on macOS, Alt elsewhere) —
+// these are keyboard tokens, not translatable prose.
+const IS_MAC =
+  typeof navigator !== "undefined" &&
+  /Mac|iP(?:hone|ad|od)/u.test(navigator.platform || navigator.userAgent || "");
+const SHORTCUT_HINTS = IS_MAC
+  ? { accept: "⌥↵", reject: "⌥⇧↵", prev: "⌥↑", next: "⌥↓" }
+  : {
+      accept: "Alt+Enter",
+      reject: "Alt+Shift+Enter",
+      prev: "Alt+↑",
+      next: "Alt+↓",
+    };
 
 const isPending = (item: ReviewSuggestion): boolean =>
   item.status === "pending" || item.status === "applying";
@@ -148,18 +167,27 @@ export const ReviewBar = ({
     }
     switch (event.key) {
       case "Enter":
+        // Alt+Enter accepts, Alt+Shift+Enter rejects. Branch on shift
+        // explicitly so a stray shift can't turn accept into reject or
+        // vice versa.
         claimShortcut(event);
-        void acceptAndAdvance();
-        return;
-      case "Backspace":
-        claimShortcut(event);
-        rejectAndAdvance();
+        if (event.shiftKey) {
+          rejectAndAdvance();
+        } else {
+          void acceptAndAdvance();
+        }
         return;
       case "ArrowUp":
+        if (event.shiftKey) {
+          return;
+        }
         claimShortcut(event);
         goPrev();
         return;
       case "ArrowDown":
+        if (event.shiftKey) {
+          return;
+        }
         claimShortcut(event);
         goNext();
         return;
@@ -168,9 +196,9 @@ export const ReviewBar = ({
     }
   });
 
-  // Capture-phase document listener so Alt+Backspace is claimed before
-  // the editor's own delete-backward handler sees it (macOS binds it).
-  // Registered once; `handleKeyDown` reads the latest state on each call.
+  // Capture-phase document listener so the shortcuts win over any editor
+  // default before the editor can act. Registered once; `handleKeyDown`
+  // reads the latest state on each call.
   useMountEffect(() => {
     document.addEventListener("keydown", handleKeyDown, { capture: true });
     return () => {
@@ -206,7 +234,7 @@ export const ReviewBar = ({
         disabled={current <= 1}
         onClick={goPrev}
         size="icon-sm"
-        tooltip={t("common.previous")}
+        tooltip={`${t("common.previous")} · ${SHORTCUT_HINTS.prev}`}
         variant="ghost"
       >
         <ChevronUpIcon className="size-4" />
@@ -216,7 +244,7 @@ export const ReviewBar = ({
         disabled={current >= total}
         onClick={goNext}
         size="icon-sm"
-        tooltip={t("common.next")}
+        tooltip={`${t("common.next")} · ${SHORTCUT_HINTS.next}`}
         variant="ghost"
       >
         <ChevronDownIcon className="size-4" />
@@ -228,6 +256,7 @@ export const ReviewBar = ({
           void acceptAndAdvance();
         }}
         size="sm"
+        tooltip={`${t("common.accept")} · ${SHORTCUT_HINTS.accept}`}
         variant="default"
       >
         <CheckIcon className="me-1 size-3.5" />
@@ -237,6 +266,7 @@ export const ReviewBar = ({
         className="h-7 px-2.5 text-xs"
         onClick={rejectAndAdvance}
         size="sm"
+        tooltip={`${t("docxReview.reject")} · ${SHORTCUT_HINTS.reject}`}
         variant="outline"
       >
         <XIcon className="me-1 size-3.5" />
