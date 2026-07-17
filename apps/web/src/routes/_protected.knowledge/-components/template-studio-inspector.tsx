@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, TaggedError } from "better-result";
@@ -937,6 +937,8 @@ const effectiveSlotByLink = (
 
 /** Document actions row — rendered in the inspector tab's top area; the page
  *  registers the handlers + UI state in the session store. */
+const MENU_ITEM_PRESS_REASON = "item-press";
+
 export const StudioInsertRow = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
@@ -973,6 +975,7 @@ export const StudioInsertRow = () => {
   // an `{{#each}}` body. `isCaretInLoop` reads the live caret imperatively, so
   // recompute it each time the menu opens rather than reactively.
   const [caretInLoop, setCaretInLoop] = useState(false);
+  const preserveEditorFocusRef = useRef(false);
   // Clause linking lives inline here (the standalone clauses tab was removed):
   // link a clause, then drop its slot at the caret from the same menu.
   const [linkClauseOpen, setLinkClauseOpen] = useState(false);
@@ -1012,7 +1015,9 @@ export const StudioInsertRow = () => {
     >
       <StudioPrimaryInsertButton actions={actions} selected={selected} />
       <Menu
-        onOpenChange={(open) => {
+        onOpenChange={(open, eventDetails) => {
+          preserveEditorFocusRef.current =
+            !open && eventDetails.reason === MENU_ITEM_PRESS_REASON;
           if (open) {
             setCaretInLoop(actions.isCaretInLoop());
           }
@@ -1024,7 +1029,10 @@ export const StudioInsertRow = () => {
         >
           <ChevronDownIcon />
         </MenuTrigger>
-        <MenuPopup align="end">
+        <MenuPopup
+          align="end"
+          finalFocus={() => !preserveEditorFocusRef.current}
+        >
           {fields.length > 0 && (
             <MenuSub>
               <MenuSubTrigger>
