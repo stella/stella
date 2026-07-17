@@ -528,6 +528,29 @@ export const useReviewStore = create<ReviewState & ReviewActions>()((set) => ({
   },
 }));
 
+/**
+ * Resolve the live suggestion for an id captured before an await, even if
+ * `reconcileServerIds` renamed the row's top-level `id` (client ref -> server
+ * id) in the gap. `reconcileServerIds` rewrites only the top-level `id`; the
+ * folio op's `pendingOperation.id` keeps the original client ref, so it is a
+ * stable handle an in-flight accept/reject can follow to the row's current
+ * identity. Returns the row under the captured id when it hasn't been
+ * reconciled yet (fast path), else the row whose op ref still matches.
+ */
+export const findLiveSuggestion = (
+  session: readonly ReviewSuggestion[] | undefined,
+  capturedId: string,
+): ReviewSuggestion | undefined => {
+  if (session === undefined) {
+    return undefined;
+  }
+  const direct = session.find((item) => item.id === capturedId);
+  if (direct !== undefined) {
+    return direct;
+  }
+  return session.find((item) => item.pendingOperation?.id === capturedId);
+};
+
 export const getReviewFocusedId = (
   state: ReviewState,
   entityId: string,

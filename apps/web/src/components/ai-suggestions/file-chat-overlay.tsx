@@ -622,8 +622,16 @@ const persistQueuedSuggestions = async ({
   // gap between queueing it and this create response landing. Those
   // resolutions ran against a not-yet-`persisted` row, so they never hit
   // the server. Now that the rows exist (ids just reconciled in), replay any
-  // that are already terminal so the server matches the editor. Fires in
+  // that are already TERMINAL so the server matches the editor. Fires in
   // parallel; a single failure surfaces one toast + telemetry.
+  //
+  // A row still `"applying"` at this point (an accept that claimed the card
+  // but hasn't run its zero-delay editor apply yet) is deliberately NOT
+  // replayed here: `acceptOne` owns it end-to-end — after its unlock/paint
+  // await it re-reads the row, follows this same id reconcile, and fires the
+  // resolve itself once the apply lands. Replaying an in-flight `applying` row
+  // would double-resolve it (and we don't yet know its final status /
+  // appliedMode), so only `accepted` / `rejected` rows are eligible.
   // Widened to string: the create response ids are branded SafeIds, but the
   // review store keys suggestions by plain string id, so the membership test
   // below compares against `item.id: string`.

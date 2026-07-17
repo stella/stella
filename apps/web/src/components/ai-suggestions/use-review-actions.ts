@@ -22,10 +22,14 @@ import {
   revertDocxSuggestionRequest,
 } from "@/components/ai-suggestions/docx-suggestion-persistence";
 import {
+  findLiveSuggestion,
   getReviewApplyMode,
   useReviewStore,
 } from "@/components/ai-suggestions/review-store";
-import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
+import type {
+  ReviewSuggestion,
+  ReviewSuggestionStatus,
+} from "@/components/ai-suggestions/review-store";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
@@ -125,6 +129,48 @@ export const useReviewActions = ({
       return false;
     }
     return await requestDocxEditMode();
+  });
+
+  // Read the CURRENT store row for an id captured before an await. Follows a
+  // `reconcileServerIds` rename (client ref -> server id) so an in-flight
+  // accept/reject that captured the client ref still finds its row after the
+  // background persist lands in the gap.
+  const readLive = useLatestCallback(
+    (capturedId: string): ReviewSuggestion | undefined =>
+      findLiveSuggestion(
+        useReviewStore.getState().sessions[entityId],
+        capturedId,
+      ),
+  );
+
+  // Atomically claim a still-pending row from the LIVE store, flipping it to
+  // `claimStatus`. Returns the claimed row (the caller now owns it) or null if
+  // it was already non-pending — a concurrent double-click, or an Accept-all
+  // fired from the other surface, already claimed it. The read-check-set runs
+  // synchronously with no await between, so only one caller can win the claim.
+  const claimPending = useLatestCallback(
+    (
+      capturedId: string,
+      claimStatus: ReviewSuggestionStatus,
+    ): ReviewSuggestion | null => {
+      const live = readLive(capturedId);
+      if (live === undefined || live.status !== "pending") {
+        return null;
+      }
+      updateSuggestion(entityId, live.id, { status: claimStatus });
+      return live;
+    },
+  );
+
+  // Release a claim back to pending, following any reconcile rename that
+  // happened while the claim was held (so the release targets the row's
+  // current id, not the captured ref).
+  const releaseClaim = useLatestCallback((capturedId: string) => {
+    const live = readLive(capturedId);
+    if (live === undefined) {
+      return;
+    }
+    updateSuggestion(entityId, live.id, { status: "pending" });
   });
 
   /**
@@ -320,22 +366,16 @@ export const useReviewActions = ({
   const acceptOne = useLatestCallback(async (item: ReviewSuggestion) => {
     // Claim synchronously from the LIVE store, not the render-time snapshot:
     // a rapid double-click fires two acceptOne calls that both captured a
-    // "pending" item, so checking `item.status` lets both through. Reading
-    // the current status and flipping it to "applying" here — before any
-    // await — lets only the first proceed.
-    const current = useReviewStore
-      .getState()
-      .sessions[entityId]?.find((suggestion) => suggestion.id === item.id);
-    if (current === undefined || current.status !== "pending") {
+    // "pending" item, so checking `item.status` lets both through. `claimPending`
+    // reads the current status and flips it to "applying" before any await, so
+    // only the first proceeds.
+    if (claimPending(item.id, "applying") === null) {
       return;
     }
-    // Optimistic "Applying…" claim (the card feels responsive; the editor
-    // apply is synchronous and React hasn't painted between mutations).
-    updateSuggestion(entityId, item.id, { status: "applying" });
     const unlocked = await ensureUnlocked();
     if (!unlocked) {
       // Release the claim so a cancelled unlock leaves the card actionable.
-      updateSuggestion(entityId, item.id, { status: "pending" });
+      releaseClaim(item.id);
       return;
     }
     // Yield to the macrotask queue so the "applying" status can paint before
@@ -343,20 +383,35 @@ export const useReviewActions = ({
     await new Promise<void>((resolve) => {
       setTimeout(resolve, 0);
     });
-    const outcome = applyPending(item);
-    recordOutcome(item, outcome);
+    // Re-read the LIVE row: the background persist can land in the unlock/paint
+    // gap and `reconcileServerIds` renames the row (client ref -> server id) and
+    // flips `persisted` true. Driving `recordOutcome` + the resolve off the
+    // captured `item` would write to the stale client id (a no-op after the
+    // rename), stranding the row "applying" while the server stays pending —
+    // a reload would then re-arm it as actionable. Follow the row to its
+    // current identity and operate on that instead.
+    const live = readLive(item.id);
+    if (live === undefined || live.status !== "applying") {
+      // Our claim was lost (a reconcile collapse dropped the row, or another
+      // handler took it over). Nothing to apply.
+      return;
+    }
+    const outcome = applyPending(live);
+    recordOutcome(live, outcome);
     // Persist the resolution only when the apply actually landed; a
     // `skipped` op leaves the row pending server-side so it can be
-    // retried. `appliedMode` mirrors what `recordOutcome` stored.
-    if (item.persisted === true && outcome.status === "accepted") {
+    // retried. `appliedMode` mirrors what `recordOutcome` stored. `live.persisted`
+    // is read post-reconcile, so an accept that raced the create response still
+    // fires its resolve here rather than relying on the persist-window replay.
+    if (live.persisted === true && outcome.status === "accepted") {
       void (async () => {
         const result = await runSerialized(
-          item.id,
+          live.id,
           async () =>
             await resolveDocxSuggestionRequest({
               workspaceId,
               entityId,
-              suggestionId: item.id,
+              suggestionId: live.id,
               status: "accepted",
               appliedMode: applyMode,
             }),
@@ -367,7 +422,7 @@ export const useReviewActions = ({
         // The editor applied the change but the server row is not in
         // "accepted": rewind the editor + local state so the user sees the
         // suggestion pending again, matching the server.
-        rollbackAcceptedResolution(item, outcome.undoHandle, result);
+        rollbackAcceptedResolution(live, outcome.undoHandle, result);
         if (result === "failed") {
           toastPersistFailed();
         } else {
@@ -378,21 +433,28 @@ export const useReviewActions = ({
   });
 
   const rejectOne = useLatestCallback((item: ReviewSuggestion) => {
-    if (item.status !== "pending") {
+    // Claim from the LIVE store, same as accept: a rapid double-click fires two
+    // rejectOne calls that both captured a "pending" item. Without the claim the
+    // second call enqueues a resolve that comes back "stale" (updated:false) and
+    // `rollbackRejectedResolution` flips the shared card back to pending while
+    // the server row stays rejected — the UI re-arms and diverges from the
+    // durable state. `claimPending` (flip pending -> rejected before scheduling)
+    // lets only the first through.
+    const claimed = claimPending(item.id, "rejected");
+    if (claimed === null) {
       return;
     }
     // Same reason as accept: don't drop pendingOperation, so the user can
     // revert the rejection and the suggestion goes back to actionable.
-    updateSuggestion(entityId, item.id, { status: "rejected" });
-    if (item.persisted === true) {
+    if (claimed.persisted === true) {
       void (async () => {
         const result = await runSerialized(
-          item.id,
+          claimed.id,
           async () =>
             await resolveDocxSuggestionRequest({
               workspaceId,
               entityId,
-              suggestionId: item.id,
+              suggestionId: claimed.id,
               status: "rejected",
               appliedMode: null,
             }),
@@ -400,7 +462,7 @@ export const useReviewActions = ({
         if (result === "synced") {
           return;
         }
-        rollbackRejectedResolution(item, result);
+        rollbackRejectedResolution(claimed, result);
         if (result === "failed") {
           toastPersistFailed();
         } else {
@@ -480,8 +542,13 @@ export const useReviewActions = ({
 
   const acceptMany = useLatestCallback(
     async (items: readonly ReviewSuggestion[]) => {
-      const targets = items.filter((item) => item.status === "pending");
-      if (targets.length === 0) {
+      // Cheap gate off the LIVE store: only prompt to unlock if something is
+      // still pending. The authoritative per-item claim happens in the loop
+      // below, after the unlock await.
+      const anyPending = items.some(
+        (item) => readLive(item.id)?.status === "pending",
+      );
+      if (!anyPending) {
         return;
       }
       const unlocked = await ensureUnlocked();
@@ -492,11 +559,22 @@ export const useReviewActions = ({
       // item after the local batch apply. Each item's resolve result drives
       // its own rollback; a single toast at most covers the whole batch.
       const toPersist: { item: ReviewSuggestion; outcome: ApplyOutcome }[] = [];
-      for (const item of targets) {
-        const outcome = applyPending(item);
-        recordOutcome(item, outcome);
-        if (item.persisted === true && outcome.status === "accepted") {
-          toPersist.push({ item, outcome });
+      for (const item of items) {
+        // Claim each target from the LIVE store as we reach it: the captured
+        // array is stale after the unlock await (a concurrent Accept-all from
+        // the other surface, or a single accept/reject, may have resolved some;
+        // the create response may have reconciled ids). Claiming pending ->
+        // applying atomically here means an operation is applied at most once
+        // even when both surfaces trigger Accept-all before either state update
+        // is observed.
+        const claimed = claimPending(item.id, "applying");
+        if (claimed === null) {
+          continue;
+        }
+        const outcome = applyPending(claimed);
+        recordOutcome(claimed, outcome);
+        if (claimed.persisted === true && outcome.status === "accepted") {
+          toPersist.push({ item: claimed, outcome });
         }
       }
       if (toPersist.length === 0) {
@@ -529,7 +607,18 @@ export const useReviewActions = ({
   );
 
   const rejectMany = useLatestCallback((items: readonly ReviewSuggestion[]) => {
-    const targets = items.filter((item) => item.status === "pending");
+    // Resolve each captured item to its LIVE row (following any reconcile
+    // rename) and keep only those still pending. rejectMany has no await before
+    // the batch set, so this read + `setStatusBatch` runs as one synchronous
+    // block that no other handler can interleave: collecting the still-pending
+    // rows and flipping them is atomic, and a target another handler already
+    // resolved is dropped rather than re-rejected.
+    const targets = items
+      .map((item) => readLive(item.id))
+      .filter(
+        (row): row is ReviewSuggestion =>
+          row !== undefined && row.status === "pending",
+      );
     if (targets.length === 0) {
       return;
     }
