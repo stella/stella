@@ -425,3 +425,129 @@ mod tests {
     assert!(!json.contains("session_id"));
   }
 }
+
+/// Golden-fixture contract shared with the TypeScript bridge types.
+///
+/// The JSON files under `apps/desktop/fixtures/rpc/` are the single
+/// source of truth for every message that crosses the web <-> desktop
+/// bridge. `src/shared/rpc.golden.test.ts` validates the same files
+/// against the TypeScript `rpc.ts` types; this module validates the Rust
+/// serde types. A field renamed, retyped, or dropped on either side
+/// without updating the fixtures fails one of the two suites, so
+/// TS/Rust message-shape drift cannot land silently.
+///
+/// The fixtures are embedded with `include_str!` (path relative to this
+/// source file), the same mechanism `i18n.rs` uses for bundled language
+/// packs, so `cargo test` needs no runtime file access.
+#[cfg(test)]
+mod fixture_tests {
+  use super::*;
+
+  const APP_SNAPSHOT: &str = include_str!("../../fixtures/rpc/app-snapshot.json");
+  const SESSION_SYNCING: &str =
+    include_str!("../../fixtures/rpc/session-snapshot-syncing.json");
+  const SESSION_ERROR: &str =
+    include_str!("../../fixtures/rpc/session-snapshot-error.json");
+  const OPEN_DOCX_REQUEST: &str =
+    include_str!("../../fixtures/rpc/open-docx-request.json");
+  const OPEN_DOCX_RESPONSE: &str =
+    include_str!("../../fixtures/rpc/open-docx-response.json");
+  const LINKED_ACCOUNT: &str = include_str!("../../fixtures/rpc/linked-account.json");
+  const DESKTOP_UPDATE: &str = include_str!("../../fixtures/rpc/desktop-update.json");
+  const TRUSTED_SELF_HOST: &str =
+    include_str!("../../fixtures/rpc/trusted-self-host-connection.json");
+  const NOTIFICATION_PREFERENCES: &str =
+    include_str!("../../fixtures/rpc/notification-preferences.json");
+
+  /// Deserialize a fixture into `T`, re-serialize it, and assert the
+  /// value round-trips unchanged. Because none of these structs use
+  /// `skip_serializing_if`, a missing, renamed, or ignored-unknown field
+  /// makes the re-serialized value diverge from the fixture, so this is a
+  /// bidirectional drift guard for symmetric types.
+  fn assert_roundtrip<T>(fixture: &str)
+  where
+    T: serde::de::DeserializeOwned + serde::Serialize,
+  {
+    let original: serde_json::Value =
+      serde_json::from_str(fixture).expect("fixture is valid JSON");
+    let typed: T = serde_json::from_str(fixture).expect("fixture deserializes into T");
+    let reserialized = serde_json::to_value(&typed).expect("T serializes");
+    assert_eq!(
+      reserialized, original,
+      "serde round-trip diverged from the golden fixture",
+    );
+  }
+
+  #[test]
+  fn app_snapshot_fixture_roundtrips() {
+    assert_roundtrip::<AppSnapshot>(APP_SNAPSHOT);
+  }
+
+  #[test]
+  fn session_snapshot_fixtures_roundtrip() {
+    assert_roundtrip::<SessionSnapshot>(SESSION_SYNCING);
+    assert_roundtrip::<SessionSnapshot>(SESSION_ERROR);
+
+    // Status strings map onto the enum variants exactly.
+    let syncing: SessionSnapshot = serde_json::from_str(SESSION_SYNCING).unwrap();
+    assert_eq!(syncing.status, SessionStatus::Syncing);
+    let errored: SessionSnapshot = serde_json::from_str(SESSION_ERROR).unwrap();
+    assert_eq!(errored.status, SessionStatus::Error);
+    assert_eq!(
+      errored.last_error.as_deref(),
+      Some("Checkpoint upload failed: connection reset")
+    );
+  }
+
+  #[test]
+  fn open_docx_response_fixture_roundtrips() {
+    assert_roundtrip::<OpenDocxResponse>(OPEN_DOCX_RESPONSE);
+  }
+
+  #[test]
+  fn linked_account_fixture_roundtrips() {
+    assert_roundtrip::<LinkedAccountSnapshot>(LINKED_ACCOUNT);
+    let account: LinkedAccountSnapshot = serde_json::from_str(LINKED_ACCOUNT).unwrap();
+    assert_eq!(account.name, None);
+  }
+
+  #[test]
+  fn desktop_update_fixture_roundtrips() {
+    assert_roundtrip::<DesktopUpdateSnapshot>(DESKTOP_UPDATE);
+  }
+
+  #[test]
+  fn trusted_self_host_fixture_roundtrips() {
+    assert_roundtrip::<TrustedSelfHostConnection>(TRUSTED_SELF_HOST);
+  }
+
+  #[test]
+  fn notification_preferences_fixture_roundtrips() {
+    assert_roundtrip::<DesktopNotificationPreferences>(NOTIFICATION_PREFERENCES);
+  }
+
+  /// `OpenDocxRequest` is intentionally deserialize-only here: the Rust
+  /// struct carries a `#[serde(default)] handoff_id` that the TypeScript
+  /// `OpenDocxRequest` type (and the HTTP bridge payload the web sends)
+  /// omit. Since the field has no `skip_serializing_if`, re-serializing
+  /// injects `"handoffId": null`, which the shared fixture deliberately
+  /// does not contain, so a strict round-trip would not hold. We assert
+  /// the fixture deserializes and the required fields decode correctly;
+  /// the asymmetry is documented rather than papered over.
+  #[test]
+  fn open_docx_request_fixture_deserializes() {
+    let request: OpenDocxRequest =
+      serde_json::from_str(OPEN_DOCX_REQUEST).expect("fixture deserializes");
+    assert_eq!(request.api_base_url, "https://api.example.com");
+    assert_eq!(request.entity_id, "11111111-1111-4111-8111-111111111111");
+    assert_eq!(request.handoff_id, None);
+    assert_eq!(
+      request.remote_session.session_id,
+      "e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"
+    );
+    assert!(is_safe_session_id(&request.remote_session.session_id));
+    assert_eq!(request.remote_session.file_name, "motion.docx");
+    let linked = request.linked_account.expect("linked account present");
+    assert_eq!(linked.email, "counsel@example.com");
+  }
+}

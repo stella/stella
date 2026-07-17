@@ -1,0 +1,52 @@
+{
+  "bridgePort": 45901,
+  "bridgeVersion": 7,
+  "capabilities": ["self-host.connect"],
+  "linkedAccount": {
+    "email": "counsel@example.com",
+    "name": "Jane Counsel",
+    "verifiedAt": "2026-07-01T09:30:00Z"
+  },
+  "notificationPreferences": {
+    "documentReady": true,
+    "revisionCreated": true,
+    "syncIssues": false
+  },
+  "runningSince": "2026-07-18T08:00:00Z",
+  "sessions": [
+    {
+      "baseVersionNumber": 3,
+      "entityId": "8f3b2c1a-9d4e-4f6a-8b2c-1a9d4e4f6a8b",
+      "fileName": "merger-agreement.docx",
+      "filePath": "/Users/jane/Stella/merger-agreement.docx",
+      "id": "b2d4f6a8-1c3e-4a5b-9c7d-2e4f6a8b0c1d",
+      "lastError": null,
+      "lastCheckpointAt": "2026-07-18T10:15:00Z",
+      "pendingFinalize": false,
+      "propertyId": "22222222-2222-4222-8222-222222222222",
+      "status": "ready",
+      "takeoverDetected": false,
+      "workspaceId": "33333333-3333-4333-8333-333333333333"
+    }
+  ],
+  "trustedSelfHostConnections": [
+    {
+      "apiBaseUrl": "https://api.selfhost.example",
+      "trustedAt": "2026-07-10T12:00:00Z",
+      "webOrigin": "https://app.selfhost.example"
+    }
+  ],
+  "update": {
+    "baseUrl": "https://downloads.example.com/desktop",
+    "channel": "stable",
+    "currentHash": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+    "currentVersion": "1.4.2",
+    "lastCheckedAt": "2026-07-18T09:00:00Z",
+    "latestHash": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "latestVersion": "1.4.3",
+    "status": "available",
+    "statusMessage": "An update is available.",
+    "updateAvailable": true,
+    "updateReady": false
+  }
+}
