@@ -1,7 +1,8 @@
+import { DAY_IN_MS } from "@stll/time";
+
 import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
 import { getRelativeTimeFormatter } from "@/lib/relative-time";
-import { DAY_IN_MS } from "@/lib/time";
 import type {
   WorkspaceEntity,
   WorkspaceField,

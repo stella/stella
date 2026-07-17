@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { FileIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { DAY_IN_MS } from "@stll/time";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   PreviewCard,
@@ -17,7 +18,6 @@ import Tooltip from "@/components/tooltip";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import { DAY_IN_MS } from "@/lib/time";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 import { MatterContextMenu } from "@/routes/_protected.workspaces/-components/matter-context-menu";

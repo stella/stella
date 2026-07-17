@@ -709,7 +709,7 @@ export default defineConfig({
       // Date/timezone footguns: date-only `new Date("...")` (UTC-midnight
       // shift), `Date.parse` (engine-dependent), and raw day-length ms
       // arithmetic (DST-unsafe). Use parseIsoDateLocal/addDays from
-      // lib/dates.ts and DAY_IN_MS from lib/time.ts.
+      // lib/dates.ts and DAY_IN_MS from `@stll/time`.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
         "apps/web/src/**/*.{ts,tsx}",
@@ -722,16 +722,14 @@ export default defineConfig({
     {
       // Tests construct fixture instants from literals deterministically and
       // deliberately demonstrate the footguns (e.g. the dates.test.ts DST
-      // assertions), so the date-parsing rule stays out of them. The two
-      // time.ts modules are the one allowlisted home of the day-length
-      // literal that the rule points everything else at.
+      // assertions), so the date-parsing rule stays out of them. The day-length
+      // literal's one home now lives in the `@stll/time` package, which this
+      // rule (scoped to apps/{api,web}/src) does not cover.
       files: [
         "apps/api/src/**/*.{test,spec}.{ts,tsx}",
         "apps/web/src/**/*.{test,spec}.{ts,tsx}",
         "apps/api/src/**/__tests__/**",
         "apps/api/src/tests/**",
-        "apps/api/src/lib/time.ts",
-        "apps/web/src/lib/time.ts",
       ],
       rules: {
         "no-raw-date-parsing/no-raw-date-parsing": "off",

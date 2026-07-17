@@ -13,6 +13,7 @@
       "@stll/business-registries/*": [
         "../../packages/business-registries/src/*/index.ts"
       ],
+      "@stll/chat-limits": ["../../packages/chat-limits/src/index.ts"],
       "@stll/conditions": ["../../packages/conditions/src/index.ts"],
       "@stll/country-codes": ["../../packages/country-codes/src/index.ts"],
       "@stll/docx-utils": ["../../packages/docx-utils/src/index.ts"],
@@ -24,6 +25,7 @@
       "@stll/template-conditions": [
         "../../packages/template-conditions/src/index.ts"
       ],
+      "@stll/time": ["../../packages/time/src/index.ts"],
       "@stll/ui/*": ["../../packages/ui/src/*"]
     }
   },

@@ -1,10 +1,11 @@
 import { panic } from "better-result";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import type {
   SchedulerDailySchedule,
   SchedulerSchedule,
 } from "@/api/db/schema";
-import { DAY_IN_MS } from "@/api/lib/time";
 
 const MINUTE_MS = 60 * 1000;
 

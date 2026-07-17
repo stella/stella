@@ -23,6 +23,8 @@ import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
+
 import {
   buildChatSlashItems,
   commandShortcutRowsFromSkillPages,
@@ -71,7 +73,7 @@ import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-qu
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
 const CHAT_FILES_PER_MESSAGE = 5;
-const CHAT_MAX_FILE_BYTES = 10 * 1024 * 1024;
+const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
 
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";

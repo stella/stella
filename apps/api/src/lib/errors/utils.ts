@@ -2,6 +2,8 @@ import { isTaggedError } from "better-result";
 import { appendFile, mkdir, stat, truncate } from "node:fs/promises";
 import path from "node:path";
 
+import { createDevErrorLogger } from "@stll/errors";
+
 import { envBase } from "@/api/env-base";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -363,17 +365,16 @@ export const errorFingerprint = (error: unknown): ErrorFingerprint => {
  * non-PII for *local* logging — the analytics pipeline still gets
  * just the structural tag.
  */
-export const logDevError = (
-  error: unknown,
-  context?: Record<string, unknown>,
-) => {
-  if (!envBase.isDev) {
-    return;
-  }
-  // eslint-disable-next-line no-console -- dev-only interactive terminal sink
-  console.error(error);
-  void appendDevErrorJsonl({ error, context });
-};
+// The JSONL file sink is injected lazily (inside the arrow, not passed
+// by reference) so it is resolved at call time, after `appendDevErrorJsonl`
+// below has initialized — a direct reference here would hit its TDZ during
+// module evaluation.
+export const logDevError = createDevErrorLogger({
+  isDev: envBase.isDev,
+  sink: ({ error, context }) => {
+    void appendDevErrorJsonl({ error, context });
+  },
+});
 
 // ── JSONL sink for dev errors ──────────────────────────
 

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { count, desc, gte, sql } from "drizzle-orm";
 
+import { DAY_IN_MS } from "@stll/time";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawDecisions,
@@ -10,7 +12,6 @@ import {
 } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import { DAY_IN_MS } from "@/api/lib/time";
 
 type SourceStatus = {
   adapterKey: string;

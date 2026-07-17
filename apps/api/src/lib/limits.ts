@@ -1,3 +1,8 @@
+import {
+  CHAT_CONTEXT_FILE_MAX_BYTES,
+  CHAT_CONTEXT_FILE_MAX_MEGABYTES,
+} from "@stll/chat-limits";
+
 export const LIMITS = {
   workspacesCount: 1000,
   propertiesCount: 20,
@@ -285,8 +290,6 @@ export const LIMITS = {
   newDeviceLoginSessionScanLimit: 10,
 } as const;
 
-const CHAT_CONTEXT_FILE_MAX_MEGABYTES = 10;
-
 /**
  * File upload size limits.
  * Values use Elysia's human-readable format (e.g. "50m" = 50 MB).
@@ -312,7 +315,7 @@ export const FILE_SIZE_LIMIT_BYTES = {
   /** Agent skill packs (`SKILL.md` or a ZIP folder). */
   skillPack: 2 * 1024 * 1024,
   /** Chat context file attachments. */
-  chatContextFile: CHAT_CONTEXT_FILE_MAX_MEGABYTES * 1024 * 1024,
+  chatContextFile: CHAT_CONTEXT_FILE_MAX_BYTES,
 } as const;
 
 /**

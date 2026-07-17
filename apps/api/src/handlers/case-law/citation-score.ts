@@ -10,11 +10,12 @@
  * dominating search results.
  */
 
+import { DAY_IN_MS } from "@stll/time";
+
 import type {
   CourtWeightEntry,
   CourtWeightMap,
 } from "@/api/handlers/case-law/court-weights";
-import { DAY_IN_MS } from "@/api/lib/time";
 
 /** Average (Julian) year, used for citation-age decay. A duration. */
 const MS_PER_YEAR = 365.25 * DAY_IN_MS;

@@ -1,6 +1,7 @@
 import { and, eq } from "drizzle-orm";
 
 import { roles } from "@stll/permissions";
+import { DAY_IN_MS } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -16,7 +17,6 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
-import { DAY_IN_MS } from "@/api/lib/time";
 
 type AuthorizedDesktopEditSession = {
   fileName: string;
