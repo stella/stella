@@ -542,6 +542,7 @@
     },
     "stopResponse": "Zastavit",
     "stopped": "Zastaveno",
+    "suggestedFollowupsLabel": "Navrhované navazující dotazy",
     "suggestionSeverity": {
       "style": "Styl",
       "substantive": "Věcné",

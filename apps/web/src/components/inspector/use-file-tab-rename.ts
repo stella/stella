@@ -1,9 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from "react";
 
-import { useTranslations } from "use-intl";
-
-import { stellaToast } from "@stll/ui/components/toast";
-
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type {
   FileTab,
@@ -16,7 +12,6 @@ type UseFileTabRenameOptions = {
 };
 
 export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
-  const t = useTranslations();
   const [editingTabId, setEditingTabId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState("");
   const renameEntity = useRenameEntity();
@@ -68,12 +63,10 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
     renameEntity.mutate(
       { workspaceId: tab.workspaceId, entityId: tab.entityId, name: newName },
       {
+        // Roll back the optimistic label; the shared rename hook
+        // surfaces the failure toast.
         onError: () => {
           useInspectorStore.getState().updateLabel(tab.id, previousLabel);
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
         },
       },
     );

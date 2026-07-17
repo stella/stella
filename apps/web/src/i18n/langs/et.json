@@ -542,6 +542,7 @@
     },
     "stopResponse": "Peata",
     "stopped": "Peatatud",
+    "suggestedFollowupsLabel": "Soovitatud jätkuküsimused",
     "suggestionSeverity": {
       "style": "Stiil",
       "substantive": "Sisuline",

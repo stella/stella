@@ -30,7 +30,8 @@ import {
   HTTP_TOO_MANY_REQUESTS,
   isTwoFactorRedirect,
 } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors/auth";
+import { APIError } from "@/lib/errors/api";
+import { AuthClientError, toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 
@@ -52,6 +53,24 @@ type OTPPanelProps = {
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRED_MESSAGE = "OTP expired";
+
+type VerifyOtpError = {
+  status?: number | undefined;
+  message?: string | undefined;
+};
+
+const verifyErrorTitle = (
+  error: VerifyOtpError,
+  t: ReturnType<typeof useTranslations>,
+): string => {
+  if (error.status === HTTP_TOO_MANY_REQUESTS) {
+    return t("auth.rateLimitExceeded");
+  }
+  if (error.message === OTP_EXPIRED_MESSAGE) {
+    return t("auth.oneTimeCodeExpired");
+  }
+  return error.message ?? t("errors.actionFailed");
+};
 
 export function OTPPanel({
   className,
@@ -132,15 +151,10 @@ export function OTPPanel({
 
       if (signInError) {
         setOtp("");
-        if (signInError.status !== HTTP_TOO_MANY_REQUESTS) {
-          stellaToast.add({
-            title:
-              signInError.message === OTP_EXPIRED_MESSAGE
-                ? t("auth.oneTimeCodeExpired")
-                : (signInError.message ?? t("errors.actionFailed")),
-            type: "error",
-          });
-        }
+        stellaToast.add({
+          title: verifyErrorTitle(signInError, t),
+          type: "error",
+        });
         throw toAuthClientError(signInError);
       }
 
@@ -174,6 +188,16 @@ export function OTPPanel({
     },
     onError: (error) => {
       analytics.captureError(error);
+      // Structured sign-in errors already surfaced a toast in the
+      // mutationFn; only unexpected throws (network failures, session
+      // invalidation) reach here without one, so toast those too.
+      if (AuthClientError.is(error) || APIError.is(error)) {
+        return;
+      }
+      stellaToast.add({
+        title: userErrorFromThrown(error, t("errors.actionFailed")),
+        type: "error",
+      });
     },
   });
 

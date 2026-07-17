@@ -6,6 +6,7 @@ import type {
 import { useMentionProviders } from "@/components/chat-mention-providers";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
 
@@ -32,6 +33,7 @@ const searchCaseLawMentions = async (
   });
 
   if (response.error) {
+    getAnalytics().captureError(response.error);
     return [];
   }
   const data = response.data;
