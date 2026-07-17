@@ -15,8 +15,7 @@ import { rateLimit } from "elysia-rate-limit";
 
 import { receiveHostedUsageWebhook } from "@/api/handlers/hosted-usage-webhook/receive";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { scopedGenerator } from "@/api/lib/rate-limit/rate-limit";
-import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 export const hostedUsageWebhookRoute = new Elysia({
   prefix: "/usage/hosted",
@@ -26,9 +25,9 @@ export const hostedUsageWebhookRoute = new Elysia({
       scoping: "scoped",
       duration: API_RATE_LIMITS.hostedUsageWebhook.duration,
       max: API_RATE_LIMITS.hostedUsageWebhook.max,
-      generator: scopedGenerator("hosted-usage-webhook"),
-      context: new RedisRateLimitContext({
+      ...createRedisRateLimit({
         failurePolicy: "fail_open_local",
+        scope: "hosted-usage-webhook",
       }),
     }),
   )

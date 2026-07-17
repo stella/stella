@@ -8,8 +8,7 @@ import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
 import { sessionAuthMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { scopedGenerator } from "@/api/lib/rate-limit/rate-limit";
-import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 const isDeleteAccountOtpSendPath = (pathname: string): boolean =>
   pathname === "/v1/me/delete/send-otp";
@@ -29,9 +28,9 @@ export const meRoute = new Elysia({ prefix: "/me" })
           scoping: "scoped",
           duration: API_RATE_LIMITS.deleteAccountOtp.duration,
           max: API_RATE_LIMITS.deleteAccountOtp.max,
-          generator: scopedGenerator("delete-account-otp"),
-          context: new RedisRateLimitContext({
+          ...createRedisRateLimit({
             failurePolicy: "fail_open_local",
+            scope: "delete-account-otp",
           }),
           skip: (req) => !isDeleteAccountOtpSendPath(new URL(req.url).pathname),
         }),

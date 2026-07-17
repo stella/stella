@@ -96,8 +96,7 @@ import {
   initRequestContext,
   REQUEST_ID_HEADER,
 } from "@/api/lib/observability/request-context";
-import { scopedGenerator } from "@/api/lib/rate-limit/rate-limit";
-import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
   isCorpusS3Stale,
   isS3Stale,
@@ -396,9 +395,9 @@ const api = new Elysia()
           scoping: "scoped",
           duration: API_RATE_LIMITS.api.duration,
           max: API_RATE_LIMITS.api.max,
-          generator: scopedGenerator("api"),
-          context: new RedisRateLimitContext({
+          ...createRedisRateLimit({
             failurePolicy: "fail_open_local",
+            scope: "api",
           }),
           skip: (req) => {
             // The e2e route walk fires hundreds of /v1 requests per minute
@@ -439,9 +438,9 @@ const api = new Elysia()
               scoping: "scoped",
               duration: API_RATE_LIMITS.folioCollab.duration,
               max: API_RATE_LIMITS.folioCollab.max,
-              generator: scopedGenerator("folio-collab"),
-              context: new RedisRateLimitContext({
+              ...createRedisRateLimit({
                 failurePolicy: "fail_open_local",
+                scope: "folio-collab",
               }),
               // Same e2e escape hatch as the shared `api` bucket above: the
               // route walk opens the document editor repeatedly and would

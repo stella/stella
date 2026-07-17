@@ -53,8 +53,7 @@ import versionSummarize from "@/api/handlers/entities/version-summarize";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
-import { scopedGenerator } from "@/api/lib/rate-limit/rate-limit";
-import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 export const entitiesRoute = new Elysia({
   prefix: "/entities/:workspaceId",
@@ -67,9 +66,9 @@ export const entitiesRoute = new Elysia({
       scoping: "scoped",
       duration: API_RATE_LIMITS.upload.duration,
       max: API_RATE_LIMITS.upload.max,
-      generator: scopedGenerator("upload"),
-      context: new RedisRateLimitContext({
+      ...createRedisRateLimit({
         failurePolicy: "fail_open_local",
+        scope: "upload",
       }),
       skip: (req) => !isUploadRateLimitedPath(new URL(req.url).pathname),
     }),
@@ -79,9 +78,9 @@ export const entitiesRoute = new Elysia({
       scoping: "scoped",
       duration: API_RATE_LIMITS.translate.duration,
       max: API_RATE_LIMITS.translate.max,
-      generator: scopedGenerator("translate"),
-      context: new RedisRateLimitContext({
+      ...createRedisRateLimit({
         failurePolicy: "fail_open_local",
+        scope: "translate",
       }),
       skip: (req) => !isTranslateRateLimitedPath(new URL(req.url).pathname),
     }),

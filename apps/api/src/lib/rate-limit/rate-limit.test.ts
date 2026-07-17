@@ -3,7 +3,11 @@ import Elysia from "elysia";
 import type { Options } from "elysia-rate-limit";
 import { rateLimit } from "elysia-rate-limit";
 
-import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import {
+  createRedisRateLimit,
+  createRedisRateLimitRequestKey,
+  RedisRateLimitContext,
+} from "@/api/lib/rate-limit/redis-context";
 
 const WINDOW_MS = 1000;
 const RATE_LIMIT_OPTIONS = {
@@ -18,16 +22,41 @@ const RATE_LIMIT_OPTIONS = {
 } as const satisfies Omit<Options, "context">;
 
 describe("RedisRateLimitContext", () => {
+  test("keeps one refund identity per request while sharing the counter key", async () => {
+    const { context, generator } = createRedisRateLimit({
+      failurePolicy: "fail_open_local",
+      scope: "api",
+    });
+    const firstRequest = Object.assign(new Request("http://localhost/one"), {
+      cookie: {},
+    });
+    const secondRequest = Object.assign(new Request("http://localhost/two"), {
+      cookie: {},
+    });
+
+    const firstKey = await generator(firstRequest, null, {});
+    const repeatedKey = await generator(firstRequest, null, {});
+    const secondKey = await generator(secondRequest, null, {});
+
+    expect(firstKey).toBe(repeatedKey);
+    expect(secondKey).not.toBe(firstKey);
+    expect(firstKey.startsWith("api")).toBe(true);
+    expect(secondKey.startsWith("api")).toBe(true);
+    await context.kill();
+  });
+
   test("shares counters, window expiry, and refunds across replicas", async () => {
     const redisState = createFakeRedisState();
     const first = createContext(redisState);
     const second = createContext(redisState);
+    const firstTranslateRequest = requestKey("translate:client");
 
     expect(
-      (await first.increment("translate:client", WINDOW_MS, 1000)).count,
+      (await first.increment(firstTranslateRequest, WINDOW_MS, 1000)).count,
     ).toBe(1);
     expect(
-      (await second.increment("translate:client", WINDOW_MS, 1000)).count,
+      (await second.increment(requestKey("translate:client"), WINDOW_MS, 1000))
+        .count,
     ).toBe(2);
     expect(
       (await second.increment("upload:client", WINDOW_MS, 1000)).count,
@@ -40,14 +69,16 @@ describe("RedisRateLimitContext", () => {
       (await first.increment("upload:client", WINDOW_MS, 1000)).count,
     ).toBe(1);
 
-    await first.decrement("translate:client");
+    await first.decrement(firstTranslateRequest);
     expect(
-      (await second.increment("translate:client", WINDOW_MS, 1000)).count,
+      (await second.increment(requestKey("translate:client"), WINDOW_MS, 1000))
+        .count,
     ).toBe(2);
 
     redisState.now = 2001;
     expect(
-      (await first.increment("translate:client", WINDOW_MS, 2001)).count,
+      (await first.increment(requestKey("translate:client"), WINDOW_MS, 2001))
+        .count,
     ).toBe(1);
 
     first.kill();
@@ -89,12 +120,12 @@ describe("RedisRateLimitContext", () => {
           clientClosed = true;
         },
         send: async () =>
-          await new Promise<[number, number]>((resolve) => {
+          await new Promise<[number, number, string]>((resolve) => {
             settleCommand = () => {
               if (!clientClosed) {
                 lateMutationApplied = true;
               }
-              resolve([1, WINDOW_MS]);
+              resolve([1, WINDOW_MS, "window-timeout"]);
             };
           }),
       }),
@@ -127,14 +158,14 @@ describe("RedisRateLimitContext", () => {
       createRedis: () => ({
         send: async (_command, args) => {
           const script = requiredArg(args, 0);
-          if (script.includes('redis.call("INCR"')) {
+          if (script.includes('redis.call("HSET"')) {
             if (failNextIncrement) {
               failNextIncrement = false;
               throw new TypeError("Redis unavailable");
             }
-            return [1, WINDOW_MS];
+            return [1, WINDOW_MS, "window-healthy"];
           }
-          if (script.includes('redis.call("DECR"')) {
+          if (script.includes("~= ARGV[1]")) {
             decrementedKeys.push(requiredArg(args, 2));
             return 0;
           }
@@ -146,12 +177,37 @@ describe("RedisRateLimitContext", () => {
     });
     context.init(RATE_LIMIT_OPTIONS);
 
-    expect((await context.increment("api:failed")).count).toBe(1);
-    await context.decrement("api:failed");
-    expect((await context.increment("api:healthy")).count).toBe(1);
-    await context.decrement("api:healthy");
+    const failedRequest = requestKey("api:failed");
+    const healthyRequest = requestKey("api:healthy");
+    expect((await context.increment(failedRequest)).count).toBe(1);
+    await context.decrement(failedRequest);
+    expect((await context.increment(healthyRequest)).count).toBe(1);
+    await context.decrement(healthyRequest);
 
-    expect(decrementedKeys).toEqual(["api:ratelimit:v1:api:healthy"]);
+    expect(decrementedKeys).toEqual(["api:ratelimit:v2:api:healthy"]);
+    context.kill();
+  });
+
+  test("does not refund a newer Redis window", async () => {
+    const redisState = createFakeRedisState();
+    const context = createContext(redisState);
+    const expiredRequest = requestKey("api:client");
+
+    expect(
+      (await context.increment(expiredRequest, WINDOW_MS, 1000)).count,
+    ).toBe(1);
+    redisState.now = 2001;
+    expect(
+      (await context.increment(requestKey("api:client"), WINDOW_MS, 2001))
+        .count,
+    ).toBe(1);
+
+    await context.decrement(expiredRequest);
+
+    expect(
+      (await context.increment(requestKey("api:client"), WINDOW_MS, 2001))
+        .count,
+    ).toBe(2);
     context.kill();
   });
 
@@ -204,6 +260,7 @@ describe("RedisRateLimitContext", () => {
 type FakeRedisEntry = {
   count: number;
   expiresAt: number;
+  windowId: string;
 };
 
 type FakeRedisState = {
@@ -233,31 +290,48 @@ class FakeRedisClient {
 
     const script = requiredArg(args, 0);
     const key = requiredArg(args, 2);
-    if (script.includes('redis.call("INCR"')) {
-      return this.increment(key, Number(requiredArg(args, 3)));
+    if (script.includes('redis.call("HSET"')) {
+      return this.increment(
+        key,
+        Number(requiredArg(args, 3)),
+        requiredArg(args, 4),
+      );
     }
-    if (script.includes('redis.call("DECR"')) {
-      return this.decrement(key);
+    if (script.includes("~= ARGV[1]")) {
+      return this.decrement(key, requiredArg(args, 3));
     }
     throw new TypeError("Unexpected Redis script");
   }
 
-  private increment(key: string, durationMs: number): [number, number] {
+  private increment(
+    key: string,
+    durationMs: number,
+    candidateWindowId: string,
+  ): [number, number, string] {
     const current = this.state.entries.get(key);
     if (current === undefined || current.expiresAt <= this.state.now) {
       this.state.entries.set(key, {
         count: 1,
         expiresAt: this.state.now + durationMs,
+        windowId: candidateWindowId,
       });
-      return [1, durationMs];
+      return [1, durationMs, candidateWindowId];
     }
     current.count += 1;
-    return [current.count, current.expiresAt - this.state.now];
+    return [
+      current.count,
+      current.expiresAt - this.state.now,
+      current.windowId,
+    ];
   }
 
-  private decrement(key: string): number {
+  private decrement(key: string, expectedWindowId: string): number {
     const current = this.state.entries.get(key);
-    if (current === undefined || current.count <= 0) {
+    if (
+      current === undefined ||
+      current.count <= 0 ||
+      current.windowId !== expectedWindowId
+    ) {
       return 0;
     }
     current.count -= 1;
@@ -271,6 +345,15 @@ const requiredArg = (args: string[], index: number): string => {
     throw new TypeError(`Missing Redis argument at index ${index}`);
   }
   return value;
+};
+
+let requestSequence = 0;
+const requestKey = (counterKey: string): string => {
+  requestSequence += 1;
+  return createRedisRateLimitRequestKey({
+    counterKey,
+    requestId: `request-${requestSequence}`,
+  });
 };
 
 const createContext = (redisState: FakeRedisState): RedisRateLimitContext => {
