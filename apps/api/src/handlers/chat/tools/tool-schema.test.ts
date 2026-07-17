@@ -1266,10 +1266,7 @@ describe("chat tool schemas", () => {
   });
 
   test("the installed OpenRouter adapter recovers completed response text", async () => {
-    const adapter = createOpenRouterResponsesText(
-      "openai/gpt-5.2",
-      "test-key",
-    );
+    const adapter = createOpenRouterResponsesText("openai/gpt-5.2", "test-key");
     Reflect.set(adapter, "orClient", {
       beta: {
         responses: {
