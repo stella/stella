@@ -1,8 +1,18 @@
 diff --git a/dist/esm/adapters/responses-text.js b/dist/esm/adapters/responses-text.js
-index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0da69bf80 100644
+index 0eb06fdef60286749e5e607b940613f754af090b..b289cc7370cdf8dabe76356b6d2e83530b79b97d 100644
 --- a/dist/esm/adapters/responses-text.js
 +++ b/dist/esm/adapters/responses-text.js
-@@ -831,24 +831,28 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -754,6 +754,9 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+           }
+         }
+         if (chunk.type === "response.content_part.added" && chunk.part) {
+           const contentPart = chunk.part;
++          if ((contentPart.type === "output_text" || contentPart.type === "reasoning_text") && !contentPart.text) {
++            continue;
++          }
+           if (contentPart.type === "output_text" && !hasEmittedTextMessageStart) {
+             hasEmittedTextMessageStart = true;
+@@ -831,24 +834,28 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
              let metadata = toolCallMetadata.get(item.id);
              if (!metadata) {
                metadata = {
@@ -35,7 +45,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0
                };
                metadata.started = true;
              }
-@@ -870,7 +874,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -870,7 +877,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
            }
            yield {
              type: EventType.TOOL_CALL_ARGS,
@@ -44,7 +54,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0
              model: model || options.model,
              timestamp: Date.now(),
              delta: typeof chunk.delta === "string" ? chunk.delta : ""
-@@ -920,7 +924,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -920,7 +927,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
            }
            yield {
              type: EventType.TOOL_CALL_END,
@@ -53,7 +63,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0
              toolCallName: name,
              toolName: name,
              model: model || options.model,
-@@ -932,25 +936,29 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -932,25 +939,29 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
            const item = chunk.item;
            if (item?.type === "function_call" && item.id) {
              const metadata = toolCallMetadata.get(item.id) ?? {
@@ -87,7 +97,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0
                };
                metadata.started = true;
              }
-@@ -981,7 +989,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -981,7 +992,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
                }
                yield {
                  type: EventType.TOOL_CALL_END,
@@ -96,7 +106,32 @@ index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0
                  toolCallName: name,
                  toolName: name,
                  model: model || options.model,
-@@ -999,25 +1007,29 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -999,25 +1010,54 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
++          const completedText = outputItems.flatMap(
++            (item) => item.type === "message" && Array.isArray(item.content) ? item.content : []
++          ).filter((part) => part.type === "output_text").map((part) => part.text).join("");
++          if (accumulatedContent.length === 0 && completedText.length > 0) {
++            if (!hasEmittedTextMessageStart) {
++              hasEmittedTextMessageStart = true;
++              yield {
++                type: EventType.TEXT_MESSAGE_START,
++                messageId: aguiState.messageId,
++                model: model || options.model,
++                timestamp: Date.now(),
++                role: "assistant"
++              };
++            }
++            accumulatedContent = completedText;
++            hasStreamedContentDeltas = true;
++            yield {
++              type: EventType.TEXT_MESSAGE_CONTENT,
++              messageId: aguiState.messageId,
++              model: model || options.model,
++              timestamp: Date.now(),
++              delta: completedText,
++              content: accumulatedContent
++            };
++          }
            for (const item of outputItems) {
              if (item.type !== "function_call" || !item.id) continue;
              const metadata = toolCallMetadata.get(item.id) ?? {
@@ -130,7 +165,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0
                };
                metadata.started = true;
              }
-@@ -1048,7 +1060,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -1048,7 +1088,7 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
                }
                yield {
                  type: EventType.TOOL_CALL_END,
@@ -139,7 +174,7 @@ index 0eb06fdef60286749e5e607b940613f754af090b..c463387ae602ebab998ddd9b71229bb0
                  toolCallName: name,
                  toolName: name,
                  model: model || options.model,
-@@ -1215,10 +1227,11 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
+@@ -1215,10 +1255,11 @@ class OpenRouterResponsesTextAdapter extends BaseTextAdapter {
          if (message.toolCalls && message.toolCalls.length > 0) {
            for (const toolCall of message.toolCalls) {
              const argumentsString = typeof toolCall.function.arguments === "string" ? toolCall.function.arguments : JSON.stringify(toolCall.function.arguments);

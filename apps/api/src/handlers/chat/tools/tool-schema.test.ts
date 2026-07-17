@@ -1265,6 +1265,90 @@ describe("chat tool schemas", () => {
     });
   });
 
+  test("the installed OpenRouter adapter recovers completed response text", async () => {
+    const adapter = createOpenRouterResponsesText(
+      "openai/gpt-5.2",
+      "test-key",
+    );
+    Reflect.set(adapter, "orClient", {
+      beta: {
+        responses: {
+          send: () =>
+            (async function* () {
+              yield {
+                type: "response.created",
+                sequenceNumber: 0,
+                response: { model: adapter.model, output: [] },
+              };
+              yield {
+                type: "response.content_part.added",
+                sequenceNumber: 1,
+                outputIndex: 0,
+                contentIndex: 0,
+                itemId: "message-1",
+                part: { type: "output_text", text: "" },
+              };
+              yield {
+                type: "response.completed",
+                sequenceNumber: 2,
+                response: {
+                  model: adapter.model,
+                  output: [
+                    {
+                      id: "message-1",
+                      type: "message",
+                      role: "assistant",
+                      status: "completed",
+                      content: [
+                        {
+                          type: "output_text",
+                          text: "Recovered final answer",
+                          annotations: [],
+                        },
+                      ],
+                    },
+                  ],
+                  usage: {
+                    inputTokens: 5,
+                    outputTokens: 3,
+                    totalTokens: 8,
+                  },
+                },
+              };
+            })(),
+        },
+      },
+    });
+    const chunks: StreamChunk[] = [];
+
+    for await (const chunk of adapter.chatStream({
+      logger: resolveDebugOption(false),
+      messages: [{ role: "user", content: "Answer carefully." }],
+      model: adapter.model,
+    })) {
+      chunks.push(chunk);
+    }
+
+    expect(
+      chunks.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_CONTENT),
+    ).toEqual([
+      expect.objectContaining({
+        delta: "Recovered final answer",
+        content: "Recovered final answer",
+      }),
+    ]);
+    const eventTypes = chunks.map((chunk) => chunk.type);
+    const startIndex = eventTypes.indexOf(EventType.TEXT_MESSAGE_START);
+    const contentIndex = eventTypes.indexOf(EventType.TEXT_MESSAGE_CONTENT);
+    const endIndex = eventTypes.indexOf(EventType.TEXT_MESSAGE_END);
+    const finishedIndex = eventTypes.indexOf(EventType.RUN_FINISHED);
+
+    expect(startIndex).toBeGreaterThanOrEqual(0);
+    expect(contentIndex).toBeGreaterThan(startIndex);
+    expect(endIndex).toBeGreaterThan(contentIndex);
+    expect(finishedIndex).toBeGreaterThan(endIndex);
+  });
+
   test("Anthropic keeps an ordinary web_search function distinct from its native web-search tool", () => {
     const ordinaryWebSearch: Tool = {
       name: "web_search",
