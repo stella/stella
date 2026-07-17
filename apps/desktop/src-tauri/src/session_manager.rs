@@ -18,8 +18,8 @@ use tokio::task::JoinHandle;
 use crate::config;
 pub use crate::config::normalize_api_base_url;
 use crate::diagnostics::{
-  DiagnosticSession, DiagnosticStoreLoadIssue, DiagnosticUpdate, DiagnosticsInput,
-  render_diagnostics,
+  DiagnosticNotificationPreferences, DiagnosticSession, DiagnosticStoreLoadIssue,
+  DiagnosticUpdate, DiagnosticsInput, render_diagnostics,
 };
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
 use crate::types::*;
@@ -2084,7 +2084,11 @@ impl SessionManager {
         StoreLoadIssue::InvalidStore => DiagnosticStoreLoadIssue::InvalidStore,
         StoreLoadIssue::UnreadableStore => DiagnosticStoreLoadIssue::UnreadableStore,
       }),
-      notification_preferences: &self.notification_preferences,
+      notification_preferences: DiagnosticNotificationPreferences {
+        document_ready: self.notification_preferences.document_ready,
+        revision_created: self.notification_preferences.revision_created,
+        sync_issues: self.notification_preferences.sync_issues,
+      },
       update: DiagnosticUpdate {
         configured: self.update.base_url.is_some(),
         channel_configured: self.update.channel.is_some(),
@@ -2757,6 +2761,14 @@ mod tests {
     assert!(parsed["update"].get("statusMessage").is_none());
     assert_eq!(parsed["linkedAccountPresent"], true);
     assert_eq!(parsed["storeLoadIssue"], "invalidStore");
+    assert_eq!(
+      parsed["notificationPreferences"],
+      serde_json::json!({
+        "documentReady": true,
+        "revisionCreated": true,
+        "syncIssues": true,
+      })
+    );
     assert_eq!(parsed["update"]["configured"], true);
     assert_eq!(parsed["update"]["channelConfigured"], true);
     assert_eq!(parsed["update"]["latestVersion"], "9.9.9");

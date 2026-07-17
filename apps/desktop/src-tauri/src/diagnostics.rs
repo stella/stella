@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::types::{DesktopNotificationPreferences, SessionStatus};
+use crate::types::SessionStatus;
 
 pub(crate) struct DiagnosticsInput<'a> {
   pub generated_at: String,
@@ -8,7 +8,7 @@ pub(crate) struct DiagnosticsInput<'a> {
   pub running_since: &'a str,
   pub linked_account_present: bool,
   pub store_load_issue: Option<DiagnosticStoreLoadIssue>,
-  pub notification_preferences: &'a DesktopNotificationPreferences,
+  pub notification_preferences: DiagnosticNotificationPreferences,
   pub update: DiagnosticUpdate<'a>,
   pub sessions: Vec<DiagnosticSession>,
   pub cleanup_paths_queued: usize,
@@ -33,6 +33,14 @@ pub(crate) struct DiagnosticUpdate<'a> {
   pub update_ready: bool,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct DiagnosticNotificationPreferences {
+  pub document_ready: bool,
+  pub revision_created: bool,
+  pub sync_issues: bool,
+}
+
 pub(crate) struct DiagnosticSession {
   pub status: SessionStatus,
   pub has_last_checkpoint: bool,
@@ -49,7 +57,7 @@ struct DiagnosticsExport<'a> {
   app: DiagnosticApp<'a>,
   linked_account_present: bool,
   store_load_issue: Option<DiagnosticStoreLoadIssue>,
-  notification_preferences: &'a DesktopNotificationPreferences,
+  notification_preferences: DiagnosticNotificationPreferences,
   update: DiagnosticUpdate<'a>,
   sessions: DiagnosticSessionSummary,
   cleanup_paths_queued: usize,
