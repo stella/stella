@@ -57,7 +57,7 @@ const EMPTY_SUGGESTIONS: readonly ReviewSuggestion[] = [];
 // these are keyboard tokens, not translatable prose.
 const IS_MAC =
   typeof navigator !== "undefined" &&
-  /Mac|iP(?:hone|ad|od)/u.test(navigator.platform || navigator.userAgent || "");
+  /Mac|iP(?:hone|ad|od)/u.test(navigator.userAgent);
 const SHORTCUT_HINTS = IS_MAC
   ? { accept: "⌥↵", reject: "⌥⇧↵", prev: "⌥↑", next: "⌥↓" }
   : {

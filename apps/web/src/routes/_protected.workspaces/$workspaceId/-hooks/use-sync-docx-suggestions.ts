@@ -62,6 +62,7 @@ export const useSyncDocxSuggestions = ({
       // persisted from a client-prepared folio operation by the create
       // handler, so it round-trips back as a FolioAIEditOperation. Narrow
       // it here at the hydration boundary.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion -- see the SAFETY note above; the op was persisted from a client-prepared FolioAIEditOperation and passes back opaquely through the jsonb column
       const op = row.opPayload as FolioAIEditOperation;
       const preview = buildPreview(op, blocksById);
       if (preview === null) {

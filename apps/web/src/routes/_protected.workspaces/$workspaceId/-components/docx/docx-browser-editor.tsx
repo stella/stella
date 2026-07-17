@@ -1111,7 +1111,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         .sessions[entityId]?.filter((s) => s.status === "pending").length ?? 0;
     if (pendingSuggestionCount > 0) {
       stellaToast.info(
-        t("docxReview.finalizePendingNote", { count: pendingSuggestionCount }),
+        t("docxReview.finalizePendingNote", {
+          count: String(pendingSuggestionCount),
+        }),
       );
     }
 
