@@ -1,3 +1,5 @@
+import { stripDiacriticsForSlug } from "@stll/text-normalize";
+
 const PUBLIC_LEGAL_MATERIAL_TYPES = {
   guidelines: "guidelines",
   regulations: "regulations",
@@ -169,11 +171,11 @@ const isLanguageAlternate = (
 const normalizePublicLegalMaterialPathSegment = (
   value: string,
 ): string | null => {
+  // Byte-identical to the API-side slug normalization: same NFKD strip,
+  // same op order, so persisted public law-material slugs still resolve.
   const normalized = trimHyphens(
-    value
-      .normalize("NFKD")
+    stripDiacriticsForSlug(value)
       .toLowerCase()
-      .replace(/\p{Diacritic}/gu, "")
       .replace(/[^a-z0-9]+/gu, "-"),
   );
 

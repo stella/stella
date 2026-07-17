@@ -1,3 +1,5 @@
+import { stripDiacriticsForSlug } from "@stll/text-normalize";
+
 const UUID_REGEX =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u;
 const COMPACT_UUID_REGEX = /^[A-Za-z0-9_-]{22}$/u;
@@ -144,11 +146,11 @@ const trimSlugHyphens = (value: string): string => {
 };
 
 const slugifyCaseLawPathSegment = (value: string): string => {
+  // Must reproduce the API's persisted case-law slugs byte-for-byte
+  // (apps/api/.../decisions/slug.ts): same NFKD strip, same op order.
   const slug = trimSlugHyphens(
-    value
-      .normalize("NFKD")
+    stripDiacriticsForSlug(value)
       .toLowerCase()
-      .replace(/\p{Diacritic}/gu, "")
       .replace(/[^a-z0-9]+/gu, "-"),
   );
 

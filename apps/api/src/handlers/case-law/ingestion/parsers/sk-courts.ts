@@ -38,6 +38,8 @@
 
 import { PDF } from "@libpdf/core";
 
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import type {
   Block,
   DocumentAst,
@@ -365,7 +367,7 @@ function isStructuralStart(line: PdfLine): boolean {
   if (STARTS_NEW_PARAGRAPH_RE.test(line.text)) {
     return true;
   }
-  const norm = normalizeSpaced(line.text.toLowerCase().trim());
+  const norm = collapseSpacedLetters(line.text.toLowerCase().trim());
   if (
     HOLDING_MARKERS.some((m) => norm.endsWith(m)) ||
     REASONING_MARKERS.some((m) => norm === m) ||
@@ -480,20 +482,6 @@ const DECISION_TITLES = new Set([
   "uznesenie bez odôvodnenia",
 ]);
 
-/**
- * Collapse spaced-out letters for marker detection.
- * Same logic as pipeline.ts collapseSpacedLetters;
- * duplicated here to avoid circular imports.
- * Canonical location: pipeline.ts SPACED_WORD regex.
- */
-const SPACED_WORD_RE =
-  /(?<=\s|^)(?:\p{L} (?:\p{L} )*\p{L})(?: ?[,:;.!?])?(?=\s|$)/gu;
-
-const normalizeSpaced = (text: string): string =>
-  text
-    .replace(SPACED_WORD_RE, (match) => match.replace(/ /gu, ""))
-    .replace(/ {2,}/gu, " ");
-
 const HOLDING_MARKERS = ["rozhodol:", "rozhodol :", "rozhodla:", "rozhodlo:"];
 
 const REASONING_MARKERS = ["odôvodnenie:", "odôvodnenie :"];
@@ -501,17 +489,17 @@ const REASONING_MARKERS = ["odôvodnenie:", "odôvodnenie :"];
 const INSTRUCTION_MARKERS = ["poučenie:", "poučenie :"];
 
 const isHoldingMarker = (text: string): boolean => {
-  const norm = normalizeSpaced(text.toLowerCase().trim());
+  const norm = collapseSpacedLetters(text.toLowerCase().trim());
   return HOLDING_MARKERS.some((m) => norm.endsWith(m));
 };
 
 const isReasoningMarker = (text: string): boolean => {
-  const norm = normalizeSpaced(text.toLowerCase().trim());
+  const norm = collapseSpacedLetters(text.toLowerCase().trim());
   return REASONING_MARKERS.some((m) => norm === m);
 };
 
 const isInstructionMarker = (text: string): boolean => {
-  const norm = normalizeSpaced(text.toLowerCase().trim());
+  const norm = collapseSpacedLetters(text.toLowerCase().trim());
   // startsWith: SK ÚS PDFs put "Poučenie:" inline with
   // text on the same line, not as a standalone heading.
   return INSTRUCTION_MARKERS.some((m) => norm === m || norm.startsWith(m));
@@ -638,7 +626,7 @@ const classifyLines = (lines: readonly PdfLine[]): Block[] => {
 
     if (bold && isInstructionMarker(text)) {
       section = "instruction";
-      const norm = normalizeSpaced(text.toLowerCase().trim());
+      const norm = collapseSpacedLetters(text.toLowerCase().trim());
       const isStandalone = INSTRUCTION_MARKERS.some((m) => norm === m);
       if (isStandalone) {
         blocks.push({

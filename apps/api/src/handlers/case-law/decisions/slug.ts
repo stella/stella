@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { type SQL, and, eq, like, or, sql } from "drizzle-orm";
 
+import { stripDiacriticsForSlug } from "@stll/text-normalize";
+
 import { caseLawDecisions } from "@/api/db/schema";
 import { escapeLike } from "@/api/lib/escape-like";
 
@@ -34,11 +36,12 @@ const fitSlug = (baseSlug: string, suffix?: number): string => {
 };
 
 export const createCaseLawDecisionSlug = (caseNumber: string): string => {
+  // NFKD strip is single-homed in stripDiacriticsForSlug; case folding and
+  // the [a-z0-9] filter stay here and run in the same order as before, so
+  // existing persisted slugs are reproduced byte-for-byte.
   const slug = trimSlugHyphens(
-    caseNumber
-      .normalize("NFKD")
+    stripDiacriticsForSlug(caseNumber)
       .toLowerCase()
-      .replace(/\p{Diacritic}/gu, "")
       .replace(/[^a-z0-9]+/gu, "-"),
   );
 
