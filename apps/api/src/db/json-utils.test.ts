@@ -79,11 +79,15 @@ describe("jsonField", () => {
 
 describe("jsonLiteral", () => {
   test("builds a quoted literal for an identifier-like value", () => {
+    // "options" is a real key of the single-select/multi-select branch of
+    // PropertyContent (see propertyContentSchema); jsonLiteral's generic
+    // narrows its argument to keyof the versioned union, not to a value
+    // literal, so the accepted value here must be a schema key.
     const query = dialect.sqlToQuery(
-      jsonLiteral<PropertyContent, 1>("single-select"),
+      jsonLiteral<PropertyContent, 1>("options"),
     );
 
-    expect(query.sql).toBe("'single-select'");
+    expect(query.sql).toBe("'options'");
     expect(query.params).toEqual([]);
   });
 
@@ -92,7 +96,7 @@ describe("jsonLiteral", () => {
       // SAFETY: bypassing the literal-union value type to prove the runtime
       // guard rejects it too; the type constraint alone is not load-bearing
       // for a value that could arrive from `as`-cast or untyped call sites.
-      jsonLiteral<PropertyContent, 1>("single-select' OR '1'='1" as never),
+      jsonLiteral<PropertyContent, 1>("options' OR '1'='1" as never),
     ).toThrow();
   });
 
