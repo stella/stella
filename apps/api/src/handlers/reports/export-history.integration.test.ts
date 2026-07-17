@@ -74,7 +74,10 @@ beforeAll(async () => {
     // oxlint-disable-next-line no-await-in-loop -- deterministic timestamp ties exercise the id cursor boundary
     await seedExport({
       exportId,
+      mode: index === 0 ? "download" : "workspace",
       requestedBy: ids.userA1,
+      resultS3Key:
+        index === 0 ? `exports/${ids.orgA}/${ids.wsA1}/${exportId}.docx` : null,
       timestamp,
       workspaceId: ids.wsA1,
     });
@@ -159,16 +162,46 @@ describe("report export history", () => {
       expect(result.error).toMatchObject({ status: 400 });
     }
   });
+
+  test("exposes download availability without returning the storage key", async () => {
+    const result = await Result.gen(() =>
+      readReportExportHistory({
+        cursor: undefined,
+        limit: 100,
+        requestedBy: ids.userA1,
+        safeDb,
+        workspaceId: ids.wsA1,
+      }),
+    );
+
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    const downloadableExport = result.value.items.find(
+      ({ id }) => id === requesterExports.at(0)?.id,
+    );
+    expect(downloadableExport?.downloadAvailable).toBe(true);
+    expect(downloadableExport).not.toHaveProperty("resultS3Key");
+    expect(
+      result.value.items
+        .filter(({ mode }) => mode === "workspace")
+        .every(({ downloadAvailable }) => !downloadAvailable),
+    ).toBe(true);
+  });
 });
 
 const seedExport = async ({
   exportId,
+  mode = "workspace",
   requestedBy,
+  resultS3Key = null,
   timestamp,
   workspaceId,
 }: {
   exportId: SafeId<"reportExport">;
+  mode?: "download" | "workspace";
   requestedBy: SafeId<"user">;
+  resultS3Key?: string | null;
   timestamp: string;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
@@ -181,6 +214,7 @@ const seedExport = async ({
       layout,
       status,
       mode,
+      result_s3_key,
       created_at,
       updated_at
     ) values (
@@ -190,7 +224,8 @@ const seedExport = async ({
       ${JSON.stringify({ type: "builtin", key: "dd-report" })}::jsonb,
       ${JSON.stringify(tableLayout)}::jsonb,
       'completed',
-      'workspace',
+      ${mode},
+      ${resultS3Key},
       ${timestamp}::timestamp,
       ${timestamp}::timestamp
     )

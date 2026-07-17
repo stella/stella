@@ -189,6 +189,7 @@ type ReportExportHistoryActionProps = {
   onDownload: (exportId: string) => void;
   onOpen: (entityId: string) => void;
   reportExport: {
+    downloadAvailable: boolean;
     id: string;
     mode: ReportExportDeliveryMode;
     resultEntityId: string | null;
@@ -207,7 +208,7 @@ const ReportExportHistoryAction = ({
     return null;
   }
 
-  if (reportExport.mode === "download") {
+  if (reportExport.mode === "download" && reportExport.downloadAvailable) {
     return (
       <Button
         disabled={activeActionId === reportExport.id}

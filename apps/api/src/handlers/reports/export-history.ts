@@ -25,6 +25,7 @@ type ReportExportHistoryItem = Pick<
   "id" | "mode" | "resultEntityId" | "status"
 > & {
   createdAt: string;
+  downloadAvailable: boolean;
 };
 
 type ReportExportHistoryPage = Page<ReportExportHistoryItem>;
@@ -101,6 +102,7 @@ export const readReportExportHistory = async function* ({
         status: reportExports.status,
         mode: reportExports.mode,
         resultEntityId: reportExports.resultEntityId,
+        resultS3Key: reportExports.resultS3Key,
         createdAt: reportExports.createdAt,
         createdAtCursor: reportExportCreatedAtCursor.as("created_at_cursor"),
       })
@@ -126,12 +128,14 @@ export const readReportExportHistory = async function* ({
   return Result.ok({
     ...page,
     items: page.items.map(
-      ({ id, status, mode, resultEntityId, createdAt }) => ({
+      ({ id, status, mode, resultEntityId, resultS3Key, createdAt }) => ({
         id,
         status,
         mode,
         resultEntityId,
         createdAt: createdAt.toISOString(),
+        downloadAvailable:
+          status === "completed" && mode === "download" && resultS3Key !== null,
       }),
     ),
   });
