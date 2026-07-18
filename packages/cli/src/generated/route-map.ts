@@ -25001,6 +25001,1114 @@ export const generatedRouteMap: RouteNode = {
         },
       },
     },
+    flows: {
+      kind: "route",
+      children: {
+        create: {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "create"],
+            capabilityId: "flows.create",
+            access: "write",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--name",
+                prop: "name",
+                required: true,
+                part: "body",
+                partPath: "name",
+              },
+              {
+                kind: "boolean",
+                repeatable: false,
+                flag: "--enabled",
+                prop: "enabled",
+                required: true,
+                part: "body",
+                partPath: "enabled",
+              },
+            ],
+            inputOnly: ["body.description", "body.steps", "body.trigger"],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                body: {
+                  type: "object",
+                  required: [
+                    "name",
+                    "description",
+                    "steps",
+                    "trigger",
+                    "enabled",
+                  ],
+                  properties: {
+                    name: {
+                      minLength: 1,
+                      maxLength: 256,
+                      type: "string",
+                    },
+                    description: {
+                      anyOf: [
+                        {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    steps: {
+                      minItems: 1,
+                      maxItems: 20,
+                      type: "array",
+                      items: {
+                        anyOf: [
+                          {
+                            type: "object",
+                            required: [
+                              "kind",
+                              "name",
+                              "prompt",
+                              "includeDocuments",
+                            ],
+                            properties: {
+                              kind: {
+                                const: "ai",
+                                type: "string",
+                              },
+                              name: {
+                                minLength: 1,
+                                maxLength: 200,
+                                type: "string",
+                              },
+                              prompt: {
+                                minLength: 1,
+                                maxLength: 10000,
+                                type: "string",
+                              },
+                              includeDocuments: {
+                                type: "boolean",
+                              },
+                            },
+                          },
+                          {
+                            type: "object",
+                            required: ["kind", "name", "instructions"],
+                            properties: {
+                              kind: {
+                                const: "review-gate",
+                                type: "string",
+                              },
+                              name: {
+                                minLength: 1,
+                                maxLength: 200,
+                                type: "string",
+                              },
+                              instructions: {
+                                maxLength: 10000,
+                                type: "string",
+                              },
+                            },
+                          },
+                          {
+                            type: "object",
+                            required: ["kind", "name", "documentTitle"],
+                            properties: {
+                              kind: {
+                                const: "create-document",
+                                type: "string",
+                              },
+                              name: {
+                                minLength: 1,
+                                maxLength: 200,
+                                type: "string",
+                              },
+                              documentTitle: {
+                                minLength: 1,
+                                maxLength: 256,
+                                type: "string",
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                    trigger: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["type"],
+                          properties: {
+                            type: {
+                              const: "manual",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "workspaceId", "schedule"],
+                          properties: {
+                            type: {
+                              const: "schedule",
+                              type: "string",
+                            },
+                            workspaceId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            schedule: {
+                              type: "object",
+                              required: ["frequency", "hourUtc"],
+                              properties: {
+                                frequency: {
+                                  default: "daily",
+                                  type: "string",
+                                  enum: ["daily", "weekly", "monthly"],
+                                },
+                                hourUtc: {
+                                  minimum: 0,
+                                  maximum: 23,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 0,
+                                      maximum: 23,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                                dayOfWeek: {
+                                  minimum: 0,
+                                  maximum: 6,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 0,
+                                      maximum: 6,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                                dayOfMonth: {
+                                  minimum: 1,
+                                  maximum: 28,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 1,
+                                      maximum: 28,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "workspaceIds", "fileExtensions"],
+                          properties: {
+                            type: {
+                              const: "file-upload",
+                              type: "string",
+                            },
+                            workspaceIds: {
+                              anyOf: [
+                                {
+                                  type: "array",
+                                  items: {
+                                    minLength: 36,
+                                    maxLength: 36,
+                                    pattern:
+                                      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                    type: "string",
+                                  },
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            fileExtensions: {
+                              anyOf: [
+                                {
+                                  type: "array",
+                                  items: {
+                                    minLength: 1,
+                                    maxLength: 32,
+                                    type: "string",
+                                  },
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    enabled: {
+                      type: "boolean",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "delete-by-id": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "delete-by-id"],
+            capabilityId: "flows.delete-by-id",
+            access: "write",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--flow-id",
+                prop: "flowId",
+                required: true,
+                part: "params",
+                partPath: "flowId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: true,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["flowId"],
+                  properties: {
+                    flowId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "read-by-id": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "read-by-id"],
+            capabilityId: "flows.read-by-id",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--flow-id",
+                prop: "flowId",
+                required: true,
+                part: "params",
+                partPath: "flowId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["flowId"],
+                  properties: {
+                    flowId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "read-list": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "read-list"],
+            capabilityId: "flows.read-list",
+            access: "read",
+            flags: [],
+            inputOnly: [],
+            paginated: true,
+            paginationPart: "query",
+            itemsKey: "items",
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                query: {
+                  type: "object",
+                  properties: {
+                    limit: {
+                      minimum: 1,
+                      maximum: 100,
+                      anyOf: [
+                        {
+                          format: "integer",
+                          default: 0,
+                          type: "string",
+                        },
+                        {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      ],
+                    },
+                    cursor: {
+                      maxLength: 512,
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "run-cancel": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "run-cancel"],
+            capabilityId: "flows.run-cancel",
+            access: "write",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--run-id",
+                prop: "runId",
+                required: true,
+                part: "params",
+                partPath: "runId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["workspaceId", "runId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    runId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "run-detail": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "run-detail"],
+            capabilityId: "flows.run-detail",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--run-id",
+                prop: "runId",
+                required: true,
+                part: "params",
+                partPath: "runId",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["workspaceId", "runId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    runId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "run-list": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "run-list"],
+            capabilityId: "flows.run-list",
+            access: "read",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+            ],
+            inputOnly: ["query.status"],
+            paginated: true,
+            paginationPart: "query",
+            itemsKey: "items",
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                params: {
+                  type: "object",
+                  required: ["workspaceId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+                query: {
+                  type: "object",
+                  properties: {
+                    limit: {
+                      minimum: 1,
+                      maximum: 100,
+                      anyOf: [
+                        {
+                          format: "integer",
+                          default: 0,
+                          type: "string",
+                        },
+                        {
+                          minimum: 1,
+                          maximum: 100,
+                          type: "integer",
+                        },
+                      ],
+                    },
+                    cursor: {
+                      maxLength: 512,
+                      type: "string",
+                    },
+                    status: {
+                      anyOf: [
+                        {
+                          const: "pending",
+                          type: "string",
+                        },
+                        {
+                          const: "running",
+                          type: "string",
+                        },
+                        {
+                          const: "awaiting_review",
+                          type: "string",
+                        },
+                        {
+                          const: "completed",
+                          type: "string",
+                        },
+                        {
+                          const: "failed",
+                          type: "string",
+                        },
+                        {
+                          const: "cancelled",
+                          type: "string",
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "run-review": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "run-review"],
+            capabilityId: "flows.run-review",
+            access: "write",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--run-id",
+                prop: "runId",
+                required: true,
+                part: "params",
+                partPath: "runId",
+              },
+              {
+                kind: "enum",
+                enum: ["approved", "rejected"],
+                repeatable: false,
+                flag: "--decision",
+                prop: "decision",
+                required: true,
+                part: "body",
+                partPath: "decision",
+              },
+            ],
+            inputOnly: ["body.note"],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                body: {
+                  type: "object",
+                  required: ["decision"],
+                  properties: {
+                    decision: {
+                      default: "approved",
+                      type: "string",
+                      enum: ["approved", "rejected"],
+                    },
+                    note: {
+                      anyOf: [
+                        {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                  },
+                },
+                params: {
+                  type: "object",
+                  required: ["workspaceId", "runId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    runId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "run-start": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "run-start"],
+            capabilityId: "flows.run-start",
+            access: "write",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--workspace-id",
+                prop: "workspaceId",
+                required: true,
+                part: "params",
+                partPath: "workspaceId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--definition-id",
+                prop: "definitionId",
+                required: true,
+                part: "body",
+                partPath: "definitionId",
+              },
+              {
+                kind: "string-array",
+                repeatable: true,
+                flag: "--input-entity-ids",
+                prop: "inputEntityIds",
+                required: true,
+                part: "body",
+                partPath: "inputEntityIds",
+              },
+            ],
+            inputOnly: [],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                body: {
+                  type: "object",
+                  required: ["definitionId", "inputEntityIds"],
+                  properties: {
+                    definitionId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                    inputEntityIds: {
+                      maxItems: 50,
+                      type: "array",
+                      items: {
+                        minLength: 36,
+                        maxLength: 36,
+                        pattern:
+                          "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                        type: "string",
+                      },
+                    },
+                  },
+                },
+                params: {
+                  type: "object",
+                  required: ["workspaceId"],
+                  properties: {
+                    workspaceId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+        "update-by-id": {
+          kind: "capability-leaf",
+          spec: {
+            commandPath: ["flows", "update-by-id"],
+            capabilityId: "flows.update-by-id",
+            access: "write",
+            flags: [
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--flow-id",
+                prop: "flowId",
+                required: true,
+                part: "params",
+                partPath: "flowId",
+              },
+              {
+                kind: "string",
+                repeatable: false,
+                flag: "--name",
+                prop: "name",
+                required: true,
+                part: "body",
+                partPath: "name",
+              },
+              {
+                kind: "boolean",
+                repeatable: false,
+                flag: "--enabled",
+                prop: "enabled",
+                required: true,
+                part: "body",
+                partPath: "enabled",
+              },
+            ],
+            inputOnly: ["body.description", "body.steps", "body.trigger"],
+            paginated: false,
+            destructive: false,
+            scope: "matters_write",
+            inputSchema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                body: {
+                  type: "object",
+                  required: [
+                    "name",
+                    "description",
+                    "steps",
+                    "trigger",
+                    "enabled",
+                  ],
+                  properties: {
+                    name: {
+                      minLength: 1,
+                      maxLength: 256,
+                      type: "string",
+                    },
+                    description: {
+                      anyOf: [
+                        {
+                          maxLength: 2000,
+                          type: "string",
+                        },
+                        {
+                          type: "null",
+                        },
+                      ],
+                    },
+                    steps: {
+                      minItems: 1,
+                      maxItems: 20,
+                      type: "array",
+                      items: {
+                        anyOf: [
+                          {
+                            type: "object",
+                            required: [
+                              "kind",
+                              "name",
+                              "prompt",
+                              "includeDocuments",
+                            ],
+                            properties: {
+                              kind: {
+                                const: "ai",
+                                type: "string",
+                              },
+                              name: {
+                                minLength: 1,
+                                maxLength: 200,
+                                type: "string",
+                              },
+                              prompt: {
+                                minLength: 1,
+                                maxLength: 10000,
+                                type: "string",
+                              },
+                              includeDocuments: {
+                                type: "boolean",
+                              },
+                            },
+                          },
+                          {
+                            type: "object",
+                            required: ["kind", "name", "instructions"],
+                            properties: {
+                              kind: {
+                                const: "review-gate",
+                                type: "string",
+                              },
+                              name: {
+                                minLength: 1,
+                                maxLength: 200,
+                                type: "string",
+                              },
+                              instructions: {
+                                maxLength: 10000,
+                                type: "string",
+                              },
+                            },
+                          },
+                          {
+                            type: "object",
+                            required: ["kind", "name", "documentTitle"],
+                            properties: {
+                              kind: {
+                                const: "create-document",
+                                type: "string",
+                              },
+                              name: {
+                                minLength: 1,
+                                maxLength: 200,
+                                type: "string",
+                              },
+                              documentTitle: {
+                                minLength: 1,
+                                maxLength: 256,
+                                type: "string",
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                    trigger: {
+                      anyOf: [
+                        {
+                          type: "object",
+                          required: ["type"],
+                          properties: {
+                            type: {
+                              const: "manual",
+                              type: "string",
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "workspaceId", "schedule"],
+                          properties: {
+                            type: {
+                              const: "schedule",
+                              type: "string",
+                            },
+                            workspaceId: {
+                              minLength: 36,
+                              maxLength: 36,
+                              pattern:
+                                "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                              type: "string",
+                            },
+                            schedule: {
+                              type: "object",
+                              required: ["frequency", "hourUtc"],
+                              properties: {
+                                frequency: {
+                                  default: "daily",
+                                  type: "string",
+                                  enum: ["daily", "weekly", "monthly"],
+                                },
+                                hourUtc: {
+                                  minimum: 0,
+                                  maximum: 23,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 0,
+                                      maximum: 23,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                                dayOfWeek: {
+                                  minimum: 0,
+                                  maximum: 6,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 0,
+                                      maximum: 6,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                                dayOfMonth: {
+                                  minimum: 1,
+                                  maximum: 28,
+                                  anyOf: [
+                                    {
+                                      format: "integer",
+                                      default: 0,
+                                      type: "string",
+                                    },
+                                    {
+                                      minimum: 1,
+                                      maximum: 28,
+                                      type: "integer",
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                        },
+                        {
+                          type: "object",
+                          required: ["type", "workspaceIds", "fileExtensions"],
+                          properties: {
+                            type: {
+                              const: "file-upload",
+                              type: "string",
+                            },
+                            workspaceIds: {
+                              anyOf: [
+                                {
+                                  type: "array",
+                                  items: {
+                                    minLength: 36,
+                                    maxLength: 36,
+                                    pattern:
+                                      "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                                    type: "string",
+                                  },
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                            fileExtensions: {
+                              anyOf: [
+                                {
+                                  type: "array",
+                                  items: {
+                                    minLength: 1,
+                                    maxLength: 32,
+                                    type: "string",
+                                  },
+                                },
+                                {
+                                  type: "null",
+                                },
+                              ],
+                            },
+                          },
+                        },
+                      ],
+                    },
+                    enabled: {
+                      type: "boolean",
+                    },
+                  },
+                },
+                params: {
+                  type: "object",
+                  required: ["flowId"],
+                  properties: {
+                    flowId: {
+                      minLength: 36,
+                      maxLength: 36,
+                      pattern:
+                        "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+                      type: "string",
+                    },
+                  },
+                },
+              },
+            },
+            schemaTruncated: false,
+          },
+        },
+      },
+    },
     invoices: {
       kind: "route",
       children: {

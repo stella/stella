@@ -962,7 +962,8 @@
     "user": "Benutzer",
     "verify": "Bestätigen",
     "version": "Version",
-    "versionLabel": "Version {version}"
+    "versionLabel": "Version {version}",
+    "workflows": "Workflows"
   },
   "consent": {
     "allow": "Zulassen",
@@ -1318,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Workflow erstellen",
+    "created": "Workflow erstellt",
+    "deleteFailed": "Der Workflow konnte nicht gelöscht werden.",
+    "deleteFlow": "Workflow löschen",
+    "deleted": "Workflow gelöscht",
+    "descriptionPlaceholder": "Was dieser Workflow tut",
+    "disableFlow": "Workflow deaktivieren",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Noch keine Workflows",
+    "emptyDescription": "Erstellen Sie einen Workflow, um aus Dokumenten und einem Ziel ein fertiges Ergebnis zu erstellen.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Workflow aktivieren",
+    "enabledDescription": "Deaktivierte Workflows können nicht ausgeführt oder ausgelöst werden.",
+    "enabledLabel": "Aktiviert",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Alle Akten",
+      "anyExtension": "Beliebiger Dateityp",
+      "extensions": "Dateitypen",
+      "extensionsPlaceholder": "Dateityp hinzufügen (z. B. pdf) und Enter drücken"
+    },
+    "loadFailed": "Workflows konnten nicht geladen werden.",
+    "loading": "Workflow wird geladen…",
+    "namePlaceholder": "z. B. NDA-Eingangsprüfung",
+    "nameRequired": "Geben Sie einen Workflow-Namen ein.",
+    "runs": {
+      "activeSublabel": "aktiv",
+      "cancel": "Ausführung abbrechen",
+      "cancelFailed": "Die Ausführung konnte nicht abgebrochen werden.",
+      "cancelled": "Ausführung abgebrochen",
+      "confirmCancel": "Diese Ausführung abbrechen? Abgeschlossene Schritte bleiben erhalten.",
+      "createdDocument": "Erstelltes Dokument",
+      "empty": "Noch keine Ausführungen",
+      "emptyDescription": "Von Ihnen gestartete Ausführungen erscheinen hier.",
+      "history": "Ausführungsverlauf",
+      "inputDocuments": "Eingabedokumente",
+      "launch": "Workflow ausführen",
+      "loadFailed": "Diese Ausführung konnte nicht geladen werden.",
+      "noEnabledFlows": "Keine aktivierten Workflows. Erstellen Sie einen unter Wissen › Workflows.",
+      "openDocument": "Dokument öffnen",
+      "review": {
+        "approve": "Genehmigen",
+        "approved": "Genehmigt",
+        "failed": "Die Prüfung konnte nicht übermittelt werden.",
+        "note": "Notiz (optional)",
+        "notePlaceholder": "Notiz für die Akte hinzufügen",
+        "priorOutput": "Vorheriges Ergebnis",
+        "reject": "Ablehnen",
+        "rejected": "Abgelehnt",
+        "title": "Prüfung erforderlich"
+      },
+      "selectFlow": "Workflow auswählen",
+      "start": "Starten",
+      "startFailed": "Der Workflow konnte nicht gestartet werden.",
+      "started": "Workflow gestartet",
+      "stepProgress": "Schritt {current} von {total}",
+      "tooManyInputDocuments": "Wählen Sie bis zu {max} Dokumente aus, um diesen Workflow auszuführen."
+    },
+    "saveFailed": "Der Workflow konnte nicht gespeichert werden.",
+    "schedule": {
+      "daily": "Täglich",
+      "dayOfMonth": "Tag des Monats",
+      "dayOfWeek": "Wochentag",
+      "frequency": "Häufigkeit",
+      "hour": "Stunde (UTC)",
+      "monthly": "Monatlich",
+      "selectWorkspace": "Akte auswählen",
+      "utcHint": "Geplante Zeiten sind in UTC.",
+      "weekly": "Wöchentlich",
+      "workspaceRequired": "Wählen Sie eine Akte für den Zeitplan aus."
+    },
+    "status": {
+      "awaitingReview": "Warten auf Prüfung",
+      "cancelled": "Abgebrochen",
+      "completed": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "pending": "Ausstehend",
+      "running": "Läuft",
+      "skipped": "Übersprungen"
+    },
+    "stepCount": "{count, plural, one {# Schritt} other {# Schritte}}",
+    "steps": {
+      "add": "Schritt hinzufügen:",
+      "ai": "AI-Schritt",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Dokument erstellen",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Dokumenttitel",
+      "documentTitlePlaceholder": "z. B. Zusammenfassung",
+      "documentTitleRequired": "Geben Sie einen Dokumenttitel ein.",
+      "empty": "Fügen Sie mindestens einen Schritt hinzu.",
+      "includeDocuments": "Eingabedokumente einbeziehen",
+      "instructions": "Anweisungen",
+      "instructionsPlaceholder": "Was der Prüfer kontrollieren soll",
+      "namePlaceholder": "Schrittname",
+      "nameRequired": "Geben Sie für jeden Schritt einen Namen ein.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Anweisungen für den AI-Schritt",
+      "promptRequired": "Geben Sie einen Prompt für den AI-Schritt ein.",
+      "required": "Fügen Sie mindestens einen Schritt hinzu.",
+      "reviewGate": "Prüfschritt",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Schritte"
+    },
+    "trigger": {
+      "fileUpload": "Datei-Upload",
+      "manual": "Manuell",
+      "manualHint": "Führen Sie diesen Workflow bei Bedarf aus einer Akte aus.",
+      "schedule": "Zeitplan",
+      "title": "Auslöser",
+      "typeLabel": "Auslösertyp"
+    },
+    "updated": "Workflow aktualisiert"
   },
   "folio": {
     "acceptChange": "Änderung annehmen",
@@ -1834,6 +1986,9 @@
       "tools": {
         "description": "Verbinden Sie stella mit öffentlichen Registern und anderen Quellen",
         "title": "Tools"
+      },
+      "workflows": {
+        "description": "Automatisieren Sie die Dokumentenarbeit mit wiederverwendbaren, mehrstufigen Workflows."
       }
     },
     "skills": {

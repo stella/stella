@@ -32,6 +32,7 @@ import {
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
 import { scanFile } from "@/api/lib/file-scan/scan";
+import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
@@ -370,6 +371,17 @@ const uploadEntityHandler = async function* ({
     await processExtraction(entityId).catch((error: unknown) =>
       captureError(error, { entityId, mimeType: file.type }),
     );
+
+    // File-upload flow trigger. Fire-and-forget on the USER upload path only;
+    // flow-created documents (create-document step) never reach this call site.
+    maybeStartUploadTriggeredFlows({
+      entityId,
+      workspaceId,
+      organizationId,
+      fileName: fileName.value,
+    }).catch((error: unknown) => {
+      captureError(error, { entityId, workspaceId });
+    });
 
     enqueuePdfDerivativeOrMarkFailed({
       encrypted,

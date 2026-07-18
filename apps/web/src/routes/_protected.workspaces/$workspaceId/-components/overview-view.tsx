@@ -17,6 +17,7 @@ import {
   PlusIcon,
   SquareCheckIcon,
   UploadIcon,
+  WorkflowIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -56,6 +57,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { renderDragPreview } from "@/components/drag-preview";
 import { EmptyScreen } from "@/components/empty-screen";
 import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
+import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -89,6 +91,7 @@ import {
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { flowRunsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
 import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
 import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -173,6 +176,20 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
   // Views — find view IDs by layout type for stat card navigation
   const { data: views } = useQuery(viewsOptions(workspaceId));
+  // The Workflows tab owns the runs fetch; this matter-overview entry point only
+  // reads that cache (`enabled: false`) so the general matter shell never fires
+  // GET /flows/runs for a feature most matters never open. The count reflects
+  // active runs once the Workflows surface has populated the cache, and stays 0
+  // (never a loading variant) until then.
+  const { data: flowRunsData } = useQuery({
+    ...flowRunsOptions({ workspaceId }),
+    enabled: false,
+  });
+  const activeFlowRunCount =
+    flowRunsData && "items" in flowRunsData
+      ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
+          .length
+      : 0;
   const findViewByType = useCallback(
     (type: string) => views?.find((v) => v.layout.type === type),
     [views],
@@ -499,6 +516,20 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             });
           }}
           value={formatHours(totalHoursThisWeek)}
+        />
+        <StatCard
+          icon={<WorkflowIcon className="size-4" />}
+          label={t("common.workflows")}
+          onClick={() => {
+            void navigate({
+              to: "/workspaces/$workspaceId/workflows",
+              params: { workspaceId },
+            });
+          }}
+          sublabel={
+            activeFlowRunCount > 0 ? t("flows.runs.activeSublabel") : undefined
+          }
+          value={getFormatter().number(activeFlowRunCount)}
         />
       </div>
 

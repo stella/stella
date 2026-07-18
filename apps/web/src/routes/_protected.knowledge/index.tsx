@@ -8,6 +8,7 @@ import {
   PackageIcon,
   PaletteIcon,
   TextQuoteIcon,
+  WorkflowIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -27,16 +28,24 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 // on the Tools page. The sidebar entry was removed so the landing
 // doesn't advertise a deleted destination.
 type KnowledgeSection = {
-  key: "templates" | "styles" | "clauses" | "playbooks" | "tools" | "agents";
+  key:
+    | "templates"
+    | "styles"
+    | "clauses"
+    | "playbooks"
+    | "workflows"
+    | "tools"
+    | "agents";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
   to?:
     | "/knowledge/templates"
     | "/knowledge/styles"
     | "/knowledge/clauses"
     | "/knowledge/playbooks"
+    | "/knowledge/workflows"
     | "/knowledge/tools";
-  // "clauses" and "playbooks" reuse the shared common.* labels instead of
-  // feature-scoped duplicates; other sections use their own section title.
+  // "clauses", "playbooks", and "workflows" reuse the shared common.* labels
+  // instead of feature-scoped duplicates; other sections use their own title.
   titleKey: Extract<
     TranslationKey,
     | "knowledge.sections.templates.title"
@@ -45,6 +54,7 @@ type KnowledgeSection = {
     | "knowledge.sections.agents.title"
     | "common.clauses"
     | "common.playbooks"
+    | "common.workflows"
   >;
 };
 
@@ -78,6 +88,12 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
     icon: ClipboardCheckIcon,
     to: "/knowledge/playbooks",
     titleKey: "common.playbooks",
+  },
+  {
+    key: "workflows",
+    icon: WorkflowIcon,
+    to: "/knowledge/workflows",
+    titleKey: "common.workflows",
   },
   { key: "agents", icon: BotIcon, titleKey: "knowledge.sections.agents.title" },
 ];

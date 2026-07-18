@@ -962,7 +962,8 @@
     "user": "User",
     "verify": "Verify",
     "version": "Version",
-    "versionLabel": "Version {version}"
+    "versionLabel": "Version {version}",
+    "workflows": "Workflows"
   },
   "consent": {
     "allow": "Allow",
@@ -1318,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Create workflow",
+    "created": "Workflow created",
+    "deleteFailed": "Couldn't delete the workflow.",
+    "deleteFlow": "Delete workflow",
+    "deleted": "Workflow deleted",
+    "descriptionPlaceholder": "What this workflow does",
+    "disableFlow": "Disable workflow",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "No workflows yet",
+    "emptyDescription": "Create a workflow to turn documents and a goal into a finished deliverable.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Enable workflow",
+    "enabledDescription": "Disabled workflows can't be run or triggered.",
+    "enabledLabel": "Enabled",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "All matters",
+      "anyExtension": "Any file type",
+      "extensions": "File types",
+      "extensionsPlaceholder": "Add a file type (e.g. pdf) and press Enter"
+    },
+    "loadFailed": "Couldn't load workflows.",
+    "loading": "Loading workflow…",
+    "namePlaceholder": "e.g. NDA intake review",
+    "nameRequired": "Enter a workflow name.",
+    "runs": {
+      "activeSublabel": "active",
+      "cancel": "Cancel run",
+      "cancelFailed": "Couldn't cancel the run.",
+      "cancelled": "Run cancelled",
+      "confirmCancel": "Cancel this run? Completed steps are kept.",
+      "createdDocument": "Created document",
+      "empty": "No runs yet",
+      "emptyDescription": "Runs you start will appear here.",
+      "history": "Run history",
+      "inputDocuments": "Input documents",
+      "launch": "Run a workflow",
+      "loadFailed": "Couldn't load this run.",
+      "noEnabledFlows": "No enabled workflows. Create one in Knowledge › Workflows.",
+      "openDocument": "Open document",
+      "review": {
+        "approve": "Approve",
+        "approved": "Approved",
+        "failed": "Couldn't submit the review.",
+        "note": "Note (optional)",
+        "notePlaceholder": "Add a note for the record",
+        "priorOutput": "Previous output",
+        "reject": "Reject",
+        "rejected": "Rejected",
+        "title": "Review required"
+      },
+      "selectFlow": "Choose a workflow",
+      "start": "Start",
+      "startFailed": "Couldn't start the workflow.",
+      "started": "Workflow started",
+      "stepProgress": "Step {current} of {total}",
+      "tooManyInputDocuments": "Select up to {max} documents to run this workflow."
+    },
+    "saveFailed": "Couldn't save the workflow.",
+    "schedule": {
+      "daily": "Daily",
+      "dayOfMonth": "Day of month",
+      "dayOfWeek": "Day of week",
+      "frequency": "Frequency",
+      "hour": "Hour (UTC)",
+      "monthly": "Monthly",
+      "selectWorkspace": "Select a matter",
+      "utcHint": "Scheduled times are in UTC.",
+      "weekly": "Weekly",
+      "workspaceRequired": "Select a matter for the schedule."
+    },
+    "status": {
+      "awaitingReview": "Awaiting review",
+      "cancelled": "Cancelled",
+      "completed": "Completed",
+      "failed": "Failed",
+      "pending": "Pending",
+      "running": "Running",
+      "skipped": "Skipped"
+    },
+    "stepCount": "{count, plural, one {# step} other {# steps}}",
+    "steps": {
+      "add": "Add step:",
+      "ai": "AI step",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Create document",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Document title",
+      "documentTitlePlaceholder": "e.g. Summary memo",
+      "documentTitleRequired": "Enter a document title.",
+      "empty": "Add at least one step.",
+      "includeDocuments": "Include input documents",
+      "instructions": "Instructions",
+      "instructionsPlaceholder": "What the reviewer should check",
+      "namePlaceholder": "e.g. Review the NDA",
+      "nameRequired": "Enter a name for each step.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "e.g. Review the attached NDA against market-standard terms and flag unusual clauses",
+      "promptRequired": "Enter a prompt for the AI step.",
+      "required": "Add at least one step.",
+      "reviewGate": "Review gate",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Steps"
+    },
+    "trigger": {
+      "fileUpload": "File upload",
+      "manual": "Manual",
+      "manualHint": "Run this workflow on demand from a matter.",
+      "schedule": "Schedule",
+      "title": "Trigger",
+      "typeLabel": "Trigger type"
+    },
+    "updated": "Workflow updated"
   },
   "folio": {
     "acceptChange": "Accept Change",
@@ -1834,6 +1986,9 @@
       "tools": {
         "description": "Skills, integrations, and always-available tools the AI can use in chat",
         "title": "Tools"
+      },
+      "workflows": {
+        "description": "Automate document work with reusable, multi-step workflows."
       }
     },
     "skills": {

@@ -155,6 +155,21 @@ here as its CLI form). Projected from the same handler enumeration that builds
 | `fields.update-cell-metadata` | write | stella:matters_write | — | generic invoke → `stella fields update-cell-metadata` |
 | `fields.upsert-by-id` | write | stella:documents_write | — | curated tool `set_field_value` |
 
+## flows
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `flows.create` | write | stella:matters_write | — | generic invoke → `stella flows create` |
+| `flows.delete-by-id` | write, destructive | stella:matters_write | — | generic invoke → `stella flows delete-by-id` |
+| `flows.read-by-id` | read | stella:matters_write | — | generic invoke → `stella flows read-by-id` |
+| `flows.read-list` | read | stella:matters_write | — | generic invoke → `stella flows read-list` |
+| `flows.run-cancel` | write | stella:matters_write | — | generic invoke → `stella flows run-cancel` |
+| `flows.run-detail` | read | stella:matters_write | — | generic invoke → `stella flows run-detail` |
+| `flows.run-list` | read | stella:matters_write | — | generic invoke → `stella flows run-list` |
+| `flows.run-review` | write | stella:matters_write | — | generic invoke → `stella flows run-review` |
+| `flows.run-start` | write | stella:matters_write | — | generic invoke → `stella flows run-start` |
+| `flows.update-by-id` | write | stella:matters_write | — | generic invoke → `stella flows update-by-id` |
+
 ## invoices
 
 | Capability | Access | Scope | Feature | Reachable via |

@@ -962,7 +962,8 @@
     "user": "Naudotojas",
     "verify": "Patvirtinti",
     "version": "Versija",
-    "versionLabel": "{version} versija"
+    "versionLabel": "{version} versija",
+    "workflows": "Darbo eigos"
   },
   "consent": {
     "allow": "Leisti",
@@ -1318,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Sukurti darbo eigą",
+    "created": "Darbo eiga sukurta",
+    "deleteFailed": "Nepavyko ištrinti darbo eigos.",
+    "deleteFlow": "Ištrinti darbo eigą",
+    "deleted": "Darbo eiga ištrinta",
+    "descriptionPlaceholder": "Ką atlieka ši darbo eiga",
+    "disableFlow": "Išjungti darbo eigą",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Darbo eigų dar nėra",
+    "emptyDescription": "Sukurkite darbo eigą, kad iš dokumentų ir tikslo gautumėte baigtą rezultatą.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Įjungti darbo eigą",
+    "enabledDescription": "Išjungtų darbo eigų negalima paleisti ar suaktyvinti.",
+    "enabledLabel": "Įjungta",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Visos bylos",
+      "anyExtension": "Bet koks failo tipas",
+      "extensions": "Failų tipai",
+      "extensionsPlaceholder": "Pridėkite failo tipą (pvz., pdf) ir paspauskite Enter"
+    },
+    "loadFailed": "Nepavyko įkelti darbo eigų.",
+    "loading": "Įkeliama darbo eiga…",
+    "namePlaceholder": "pvz., NDA priėmimo peržiūra",
+    "nameRequired": "Įveskite darbo eigos pavadinimą.",
+    "runs": {
+      "activeSublabel": "aktyvi",
+      "cancel": "Atšaukti vykdymą",
+      "cancelFailed": "Nepavyko atšaukti vykdymo.",
+      "cancelled": "Vykdymas atšauktas",
+      "confirmCancel": "Atšaukti šį vykdymą? Užbaigti žingsniai išsaugomi.",
+      "createdDocument": "Sukurtas dokumentas",
+      "empty": "Vykdymų dar nėra",
+      "emptyDescription": "Jūsų pradėti vykdymai bus rodomi čia.",
+      "history": "Vykdymų istorija",
+      "inputDocuments": "Įvesties dokumentai",
+      "launch": "Paleisti darbo eigą",
+      "loadFailed": "Nepavyko įkelti šio vykdymo.",
+      "noEnabledFlows": "Nėra įjungtų darbo eigų. Sukurkite ją skiltyje Žinios › Darbo eigos.",
+      "openDocument": "Atidaryti dokumentą",
+      "review": {
+        "approve": "Patvirtinti",
+        "approved": "Patvirtinta",
+        "failed": "Nepavyko pateikti peržiūros.",
+        "note": "Pastaba (nebūtina)",
+        "notePlaceholder": "Pridėkite pastabą įrašui",
+        "priorOutput": "Ankstesnis rezultatas",
+        "reject": "Atmesti",
+        "rejected": "Atmesta",
+        "title": "Reikalinga peržiūra"
+      },
+      "selectFlow": "Pasirinkite darbo eigą",
+      "start": "Pradėti",
+      "startFailed": "Nepavyko paleisti darbo eigos.",
+      "started": "Darbo eiga paleista",
+      "stepProgress": "{current} žingsnis iš {total}",
+      "tooManyInputDocuments": "Pasirinkite ne daugiau kaip {max} dokumentų šiai darbo eigai paleisti."
+    },
+    "saveFailed": "Nepavyko išsaugoti darbo eigos.",
+    "schedule": {
+      "daily": "Kasdien",
+      "dayOfMonth": "Mėnesio diena",
+      "dayOfWeek": "Savaitės diena",
+      "frequency": "Dažnumas",
+      "hour": "Valanda (UTC)",
+      "monthly": "Kas mėnesį",
+      "selectWorkspace": "Pasirinkite bylą",
+      "utcHint": "Suplanuoti laikai nurodyti UTC.",
+      "weekly": "Kas savaitę",
+      "workspaceRequired": "Pasirinkite bylą tvarkaraščiui."
+    },
+    "status": {
+      "awaitingReview": "Laukiama peržiūros",
+      "cancelled": "Atšaukta",
+      "completed": "Užbaigta",
+      "failed": "Nepavyko",
+      "pending": "Laukiama",
+      "running": "Vykdoma",
+      "skipped": "Praleista"
+    },
+    "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
+    "steps": {
+      "add": "Pridėti žingsnį:",
+      "ai": "DI žingsnis",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Sukurti dokumentą",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Dokumento pavadinimas",
+      "documentTitlePlaceholder": "pvz., Santraukos memorandumas",
+      "documentTitleRequired": "Įveskite dokumento pavadinimą.",
+      "empty": "Pridėkite bent vieną žingsnį.",
+      "includeDocuments": "Įtraukti įvesties dokumentus",
+      "instructions": "Nurodymai",
+      "instructionsPlaceholder": "Ką turėtų patikrinti peržiūrėtojas",
+      "namePlaceholder": "Žingsnio pavadinimas",
+      "nameRequired": "Įveskite kiekvieno žingsnio pavadinimą.",
+      "prompt": "Užklausa",
+      "promptPlaceholder": "Nurodymai DI žingsniui",
+      "promptRequired": "Įveskite DI žingsnio užklausą.",
+      "required": "Pridėkite bent vieną žingsnį.",
+      "reviewGate": "Peržiūros kontrolė",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Žingsniai"
+    },
+    "trigger": {
+      "fileUpload": "Failo įkėlimas",
+      "manual": "Rankinis",
+      "manualHint": "Paleiskite šią darbo eigą pagal poreikį iš bylos.",
+      "schedule": "Tvarkaraštis",
+      "title": "Aktyviklis",
+      "typeLabel": "Aktyviklio tipas"
+    },
+    "updated": "Darbo eiga atnaujinta"
   },
   "folio": {
     "acceptChange": "Priimti pakeitimą",
@@ -1834,6 +1986,9 @@
       "tools": {
         "description": "Sujunkite stella su viešais registrais ir kitais šaltiniais",
         "title": "Įrankiai"
+      },
+      "workflows": {
+        "description": "Automatizuokite darbą su dokumentais naudodami pakartotinai naudojamas, kelių žingsnių darbo eigas."
       }
     },
     "skills": {

@@ -123,6 +123,7 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/knowledge/styles"),
   staticRoute("/knowledge/templates"),
   staticRoute("/knowledge/tools"),
+  staticRoute("/knowledge/workflows"),
   staticRoute("/settings", {
     expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
   }),
@@ -171,6 +172,10 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     template: "/workspaces/$workspaceId/timesheets",
     path: (world) => `/workspaces/${world.workspace.id}/timesheets`,
     expectation: { kind: "redirectsTo", to: "" },
+  },
+  {
+    template: "/workspaces/$workspaceId/workflows",
+    path: (world) => `/workspaces/${world.workspace.id}/workflows`,
   },
   {
     template: "/workspaces/$workspaceId/$viewId",

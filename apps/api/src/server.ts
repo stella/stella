@@ -36,6 +36,8 @@ import { externalPreviewRoute } from "@/api/handlers/external-preview/routes";
 import { feedbackPublicRoute } from "@/api/handlers/feedback/routes";
 import { fieldsRoute } from "@/api/handlers/fields/routes";
 import { filesRoute } from "@/api/handlers/files/routes";
+import { flowsRoute } from "@/api/handlers/flows/routes";
+import { flowRunsRoute } from "@/api/handlers/flows/run-route";
 import { isFolioCollabRateLimitedPath } from "@/api/handlers/folio-collab/rate-limit";
 import { folioCollabRoute } from "@/api/handlers/folio-collab/routes";
 import { healthRoute } from "@/api/handlers/health/routes";
@@ -92,6 +94,7 @@ import {
   unredactedErrorFields,
 } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
+import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { logger } from "@/api/lib/observability/logger";
@@ -467,6 +470,8 @@ const api = new Elysia()
       .use(playbooksRoute)
       .use(playbookRunsRoute)
       .use(reportsRoute)
+      .use(flowsRoute)
+      .use(flowRunsRoute)
       .use(documentTypesRoute)
       .use(propertiesRoute)
       .use(filesRoute)
@@ -581,6 +586,9 @@ const startServer = async (): Promise<void> => {
   // BullMQ workflow worker for AI extraction.
   const workflowWorkers = initWorkflowWorkers();
 
+  // BullMQ worker for the Workflows (flow run) engine.
+  const flowRunWorker = initFlowRunWorker();
+
   // BullMQ worker for durable account-deletion storage cleanup.
   const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
 
@@ -616,6 +624,7 @@ const startServer = async (): Promise<void> => {
     await Promise.race([
       Promise.allSettled([
         workflowWorkers.close(),
+        flowRunWorker.close(),
         fileDerivativeWorker.close(),
         accountDeletionCleanupWorker.close(),
         styleSetPackageCleanupWorker.close(),

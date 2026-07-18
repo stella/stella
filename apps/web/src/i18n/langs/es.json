@@ -962,7 +962,8 @@
     "user": "Usuario",
     "verify": "Verificar",
     "version": "Versión",
-    "versionLabel": "Versión {version}"
+    "versionLabel": "Versión {version}",
+    "workflows": "Flujos de trabajo"
   },
   "consent": {
     "allow": "Permitir",
@@ -1318,6 +1319,157 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Crear flujo de trabajo",
+    "created": "Flujo de trabajo creado",
+    "deleteFailed": "No se pudo eliminar el flujo de trabajo.",
+    "deleteFlow": "Eliminar flujo de trabajo",
+    "deleted": "Flujo de trabajo eliminado",
+    "descriptionPlaceholder": "Qué hace este flujo de trabajo",
+    "disableFlow": "Desactivar flujo de trabajo",
+    "editor": {
+      "newFlowIntro": "Define the steps once, then run this workflow from any matter. Runs pause at review checkpoints for approval."
+    },
+    "empty": "Aún no hay flujos de trabajo",
+    "emptyDescription": "Crea un flujo de trabajo para convertir documentos y un objetivo en un entregable terminado.",
+    "emptyState": {
+      "blankAction": "Start blank",
+      "description": "Start it from a matter's Workflows tab, on a schedule, or when files are uploaded. It pauses at checkpoints for a person to approve before anything is final, and the result can be saved as a document in the matter.",
+      "examplesTitle": "Start from an example",
+      "title": "A workflow is a saved sequence of AI and review steps your team reruns on matter documents to produce a consistent deliverable."
+    },
+    "enableFlow": "Activar flujo de trabajo",
+    "enabledDescription": "Los flujos de trabajo desactivados no se pueden ejecutar ni activar.",
+    "enabledLabel": "Activado",
+    "examples": {
+      "documentSummary": {
+        "createStepName": "Create the summary",
+        "description": "Summarize the matter's documents for a colleague who has not read them.",
+        "documentTitle": "Document summary",
+        "name": "Document summary for the file",
+        "summaryStepName": "Summarize the documents",
+        "summaryStepPrompt": "Summarize each input document: parties, subject, key dates, obligations, and open points. Write for a colleague who has not read it."
+      },
+      "dueDiligence": {
+        "createStepName": "Create the report",
+        "description": "Surface change-of-control, assignment, and liability risks across a data room.",
+        "documentTitle": "Red-flag report",
+        "name": "Due diligence red flags",
+        "reviewGateInstructions": "Check the red flags before the report is created.",
+        "reviewGateStepName": "Check the red flags",
+        "reviewStepName": "Find red flags",
+        "reviewStepPrompt": "Read the input documents and produce a red-flag report: change-of-control, assignment restrictions, termination rights, exclusivity, and liability caps. Quote the relevant language."
+      },
+      "ndaIntake": {
+        "createStepName": "Create the memo",
+        "description": "Flag unusual clauses in an NDA before your team relies on it.",
+        "documentTitle": "NDA review memo",
+        "name": "NDA intake review",
+        "reviewGateInstructions": "Check the flagged clauses before the memo is created.",
+        "reviewGateStepName": "Check the flagged clauses",
+        "reviewStepName": "Review the NDA",
+        "reviewStepPrompt": "Review the attached NDA against common market standards: term, confidentiality scope, carve-outs, and governing law. Flag unusual clauses with a severity rating and cite the clause."
+      }
+    },
+    "fileUpload": {
+      "allWorkspaces": "Todos los asuntos",
+      "anyExtension": "Cualquier tipo de archivo",
+      "extensions": "Tipos de archivo",
+      "extensionsPlaceholder": "Añade un tipo de archivo (p. ej. pdf) y pulsa Intro"
+    },
+    "loadFailed": "No se pudieron cargar los flujos de trabajo.",
+    "loading": "Cargando flujo de trabajo…",
+    "namePlaceholder": "p. ej. Revisión de recepción de NDA",
+    "nameRequired": "Introduce un nombre para el flujo de trabajo.",
+    "runs": {
+      "activeSublabel": "activo",
+      "cancel": "Cancelar ejecución",
+      "cancelFailed": "No se pudo cancelar la ejecución.",
+      "cancelled": "Ejecución cancelada",
+      "confirmCancel": "¿Cancelar esta ejecución? Los pasos completados se conservan.",
+      "createdDocument": "Documento creado",
+      "empty": "Aún no hay ejecuciones",
+      "emptyDescription": "Las ejecuciones que inicies aparecerán aquí.",
+      "history": "Historial de ejecuciones",
+      "inputDocuments": "Documentos de entrada",
+      "launch": "Ejecutar un flujo de trabajo",
+      "loadFailed": "No se pudo cargar esta ejecución.",
+      "noEnabledFlows": "No hay flujos de trabajo activados. Crea uno en Conocimiento › Flujos de trabajo.",
+      "openDocument": "Abrir documento",
+      "review": {
+        "approve": "Aprobar",
+        "approved": "Aprobado",
+        "failed": "No se pudo enviar la revisión.",
+        "note": "Nota (opcional)",
+        "notePlaceholder": "Añade una nota para el registro",
+        "priorOutput": "Resultado anterior",
+        "reject": "Rechazar",
+        "rejected": "Rechazado",
+        "title": "Revisión requerida"
+      },
+      "selectFlow": "Elige un flujo de trabajo",
+      "start": "Iniciar",
+      "startFailed": "No se pudo iniciar el flujo de trabajo.",
+      "started": "Flujo de trabajo iniciado",
+      "stepProgress": "Paso {current} de {total}",
+      "tooManyInputDocuments": "Selecciona hasta {max} documentos para ejecutar este flujo de trabajo."
+    },
+    "saveFailed": "No se pudo guardar el flujo de trabajo.",
+    "schedule": {
+      "daily": "Diariamente",
+      "dayOfMonth": "Día del mes",
+      "dayOfWeek": "Día de la semana",
+      "frequency": "Frecuencia",
+      "hour": "Hora (UTC)",
+      "monthly": "Mensualmente",
+      "selectWorkspace": "Selecciona un asunto",
+      "utcHint": "Las horas programadas están en UTC.",
+      "weekly": "Semanalmente",
+      "workspaceRequired": "Selecciona un asunto para la programación."
+    },
+    "status": {
+      "awaitingReview": "En espera de revisión",
+      "cancelled": "Cancelado",
+      "completed": "Completado",
+      "failed": "Fallido",
+      "pending": "Pendiente",
+      "running": "En ejecución",
+      "skipped": "Omitido"
+    },
+    "stepCount": "{count, plural, one {# paso} other {# pasos}}",
+    "steps": {
+      "add": "Añadir paso:",
+      "ai": "Paso de IA",
+      "aiHelp": "Writes text from your instructions and can read the selected input documents.",
+      "createDocument": "Crear documento",
+      "createDocumentHelp": "Saves the most recent AI output as a document in the matter where the run started.",
+      "documentTitle": "Título del documento",
+      "documentTitlePlaceholder": "p. ej. Memorando de resumen",
+      "documentTitleRequired": "Introduce un título de documento.",
+      "empty": "Añade al menos un paso.",
+      "includeDocuments": "Incluir documentos de entrada",
+      "instructions": "Instrucciones",
+      "instructionsPlaceholder": "Qué debe comprobar el revisor",
+      "namePlaceholder": "Nombre del paso",
+      "nameRequired": "Introduce un nombre para cada paso.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Instrucciones para el paso de IA",
+      "promptRequired": "Introduce un prompt para el paso de IA.",
+      "required": "Añade al menos un paso.",
+      "reviewGate": "Punto de revisión",
+      "reviewGateHelp": "Pauses the run until a person approves or rejects.",
+      "title": "Pasos"
+    },
+    "trigger": {
+      "fileUpload": "Subida de archivo",
+      "manual": "Manual",
+      "manualHint": "Ejecuta este flujo de trabajo cuando lo necesites desde un asunto.",
+      "schedule": "Programación",
+      "title": "Activador",
+      "typeLabel": "Tipo de activador"
+    },
+    "updated": "Flujo de trabajo actualizado"
   },
   "folio": {
     "acceptChange": "Aceptar cambio",
@@ -1834,6 +1986,9 @@
       "tools": {
         "description": "Conecte stella con registros públicos y otras fuentes",
         "title": "Herramientas"
+      },
+      "workflows": {
+        "description": "Automatiza el trabajo con documentos mediante flujos de trabajo reutilizables de varios pasos."
       }
     },
     "skills": {
