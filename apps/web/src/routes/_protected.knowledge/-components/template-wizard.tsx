@@ -40,7 +40,6 @@ import { cn } from "@stll/ui/lib/utils";
 import Tooltip from "@/components/tooltip";
 import { useLocale } from "@/i18n/formatting-context";
 import { LANG_ENDONYMS } from "@/i18n/i18n-store";
-import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -1792,7 +1791,7 @@ const BindingSourcePicker = ({
           <SelectPopup>
             {sources.map((s) => (
               <SelectItem key={s.kind} value={s.kind}>
-                {t(s.labelKey as TranslationKey)}
+                {t(s.labelKey)}
               </SelectItem>
             ))}
           </SelectPopup>
@@ -1816,7 +1815,7 @@ const BindingSourcePicker = ({
             <SelectPopup>
               {selected.roles.map((r) => (
                 <SelectItem key={r.value} value={r.value}>
-                  {t(r.labelKey as TranslationKey)}
+                  {t(r.labelKey)}
                 </SelectItem>
               ))}
             </SelectPopup>
@@ -1841,7 +1840,7 @@ const BindingSourcePicker = ({
             <SelectPopup>
               {selected.refs.map((r) => (
                 <SelectItem key={r.value} value={r.value}>
-                  {t(r.labelKey as TranslationKey)}
+                  {t(r.labelKey)}
                 </SelectItem>
               ))}
             </SelectPopup>
@@ -1865,7 +1864,7 @@ const BindingSourcePicker = ({
           <SelectPopup>
             {selected.fields.map((f) => (
               <SelectItem key={f.key} value={f.key}>
-                {t(f.labelKey as TranslationKey)}
+                {t(f.labelKey)}
               </SelectItem>
             ))}
           </SelectPopup>

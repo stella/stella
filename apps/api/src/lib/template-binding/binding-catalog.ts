@@ -27,12 +27,12 @@ import {
 
 /** One bindable field within a source. `labelKey` is an i18n key resolved by
  *  the frontend; a future custom field would instead carry a literal `label`. */
-export type CatalogField = { key: string; labelKey: string };
+export type CatalogField = { key: string; labelKey: CatalogLabelKey };
 
 /** A role/ref picker offered alongside the field picker for the party and
  *  attorney sources. */
-type CatalogRole = { value: WorkspaceContactRole; labelKey: string };
-type CatalogRef = { value: AttorneyRef; labelKey: string };
+type CatalogRole = { value: WorkspaceContactRole; labelKey: CatalogLabelKey };
+type CatalogRef = { value: AttorneyRef; labelKey: CatalogLabelKey };
 
 /**
  * One pickable source. Discriminated on `kind` so the per-kind extras are
@@ -41,27 +41,27 @@ type CatalogRef = { value: AttorneyRef; labelKey: string };
  * kind then fails typecheck at every consumer instead of silently defaulting.
  */
 export type CatalogSource =
-  | { kind: "contact"; labelKey: string; fields: CatalogField[] }
+  | { kind: "contact"; labelKey: CatalogLabelKey; fields: CatalogField[] }
   | {
       kind: "party";
-      labelKey: string;
+      labelKey: CatalogLabelKey;
       roles: CatalogRole[];
       fields: CatalogField[];
     }
-  | { kind: "matter"; labelKey: string; fields: CatalogField[] }
+  | { kind: "matter"; labelKey: CatalogLabelKey; fields: CatalogField[] }
   | {
       kind: "attorney";
-      labelKey: string;
+      labelKey: CatalogLabelKey;
       refs: CatalogRef[];
       fields: CatalogField[];
     }
-  | { kind: "firm"; labelKey: string; fields: CatalogField[] };
+  | { kind: "firm"; labelKey: CatalogLabelKey; fields: CatalogField[] };
 
 export type BindingCatalog = { sources: CatalogSource[] };
 
 // Labels reuse the canonical contact/common/party-role keys wherever an
 // equivalent exists; only genuinely new concepts mint `templates.binding.*`.
-const CONTACT_FIELD_LABELS: Record<ContactField, string> = {
+const CONTACT_FIELD_LABELS = {
   displayName: "contacts.fields.displayName",
   firstName: "contacts.fields.firstName",
   lastName: "contacts.fields.lastName",
@@ -78,25 +78,25 @@ const CONTACT_FIELD_LABELS: Record<ContactField, string> = {
   iban: "contacts.fields.bankAccountIban",
   bic: "contacts.fields.bankAccountBic",
   dataBox: "contacts.communication.dataBoxPlaceholder",
-};
+} as const satisfies Record<ContactField, string>;
 
-const MATTER_FIELD_LABELS: Record<MatterField, string> = {
+const MATTER_FIELD_LABELS = {
   name: "common.name",
   reference: "common.reference",
   billingReference: "templates.binding.fieldBillingReference",
   status: "common.status",
-};
+} as const satisfies Record<MatterField, string>;
 
-const USER_FIELD_LABELS: Record<UserField, string> = {
+const USER_FIELD_LABELS = {
   name: "common.name",
   email: "common.email",
-};
+} as const satisfies Record<UserField, string>;
 
-const FIRM_FIELD_LABELS: Record<FirmField, string> = {
+const FIRM_FIELD_LABELS = {
   name: "common.name",
-};
+} as const satisfies Record<FirmField, string>;
 
-const ROLE_LABELS: Record<WorkspaceContactRole, string> = {
+const ROLE_LABELS = {
   opposing_party: "workspaces.parties.partyRoles.opposing_party",
   opposing_counsel: "workspaces.parties.partyRoles.opposing_counsel",
   co_counsel: "workspaces.parties.partyRoles.co_counsel",
@@ -106,13 +106,36 @@ const ROLE_LABELS: Record<WorkspaceContactRole, string> = {
   judge: "workspaces.parties.partyRoles.judge",
   mediator: "workspaces.parties.partyRoles.mediator",
   other: "workspaces.parties.partyRoles.other",
-};
+} as const satisfies Record<WorkspaceContactRole, string>;
 
-const ATTORNEY_REF_LABELS: Record<AttorneyRef, string> = {
+const ATTORNEY_REF_LABELS = {
   responsible: "contacts.attorneys.responsible",
   originating: "contacts.attorneys.originating",
   lead: "templates.binding.attorneyLead",
-};
+} as const satisfies Record<AttorneyRef, string>;
+
+const SOURCE_LABELS = {
+  contact: "workspaces.parties.client",
+  party: "templates.binding.sourceParty",
+  matter: "common.matter",
+  attorney: "templates.binding.sourceAttorney",
+  firm: "templates.binding.sourceFirm",
+} as const satisfies Record<CatalogSource["kind"], string>;
+
+/**
+ * Every i18n key the catalog can emit, as a literal union. Flows to the
+ * frontend through Eden, where `t(labelKey)` then typechecks against the real
+ * message catalog — a stale or values-bearing key fails the web typecheck
+ * instead of needing a runtime cast.
+ */
+export type CatalogLabelKey =
+  | (typeof SOURCE_LABELS)[CatalogSource["kind"]]
+  | (typeof CONTACT_FIELD_LABELS)[ContactField]
+  | (typeof MATTER_FIELD_LABELS)[MatterField]
+  | (typeof USER_FIELD_LABELS)[UserField]
+  | (typeof FIRM_FIELD_LABELS)[FirmField]
+  | (typeof ROLE_LABELS)[WorkspaceContactRole]
+  | (typeof ATTORNEY_REF_LABELS)[AttorneyRef];
 
 const contactFields = (): CatalogField[] =>
   CONTACT_FIELDS.map((key) => ({ key, labelKey: CONTACT_FIELD_LABELS[key] }));
@@ -126,12 +149,12 @@ export const buildBindingCatalog = (): BindingCatalog => ({
   sources: [
     {
       kind: "contact",
-      labelKey: "workspaces.parties.client",
+      labelKey: SOURCE_LABELS.contact,
       fields: contactFields(),
     },
     {
       kind: "party",
-      labelKey: "templates.binding.sourceParty",
+      labelKey: SOURCE_LABELS.party,
       roles: WORKSPACE_CONTACT_ROLES.map((value) => ({
         value,
         labelKey: ROLE_LABELS[value],
@@ -140,7 +163,7 @@ export const buildBindingCatalog = (): BindingCatalog => ({
     },
     {
       kind: "matter",
-      labelKey: "common.matter",
+      labelKey: SOURCE_LABELS.matter,
       fields: MATTER_FIELDS.map((key) => ({
         key,
         labelKey: MATTER_FIELD_LABELS[key],
@@ -148,7 +171,7 @@ export const buildBindingCatalog = (): BindingCatalog => ({
     },
     {
       kind: "attorney",
-      labelKey: "templates.binding.sourceAttorney",
+      labelKey: SOURCE_LABELS.attorney,
       refs: ATTORNEY_REFS.map((value) => ({
         value,
         labelKey: ATTORNEY_REF_LABELS[value],
@@ -160,7 +183,7 @@ export const buildBindingCatalog = (): BindingCatalog => ({
     },
     {
       kind: "firm",
-      labelKey: "templates.binding.sourceFirm",
+      labelKey: SOURCE_LABELS.firm,
       fields: FIRM_FIELDS.map((key) => ({
         key,
         labelKey: FIRM_FIELD_LABELS[key],
