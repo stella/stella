@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -73,16 +74,15 @@ const createContext = ({
   dbError,
   rows = [],
 }: {
-  dbError?: Error;
+  dbError?: DatabaseError;
   rows?: readonly SkillRow[];
 } = {}): McpRequestContext => {
   const tx = { select: () => createSelectBuilder(rows) };
-  const safeDb: McpRequestContext["safeDb"] = async (callback) => {
+  const safeDb: McpRequestContext["safeDb"] = async (run) => {
     if (dbError) {
       return Result.err(dbError);
     }
-    // oxlint-disable-next-line node/callback-return -- result must be wrapped in Result.ok, not returned raw
-    return Result.ok(await callback(asTestRaw<Transaction>(tx)));
+    return Result.ok(await run(asTestRaw<Transaction>(tx)));
   };
 
   return asTestRaw<McpRequestContext>({
@@ -168,7 +168,7 @@ describe("MCP gateway skill tools", () => {
   });
 
   test("returns an empty list and captures the error when the DB read fails", async () => {
-    const dbError = new Error("db unavailable");
+    const dbError = new DatabaseError({ message: "db unavailable" });
     const context = createContext({ dbError });
 
     const tools = await loadVisibleSkillTools({ context });

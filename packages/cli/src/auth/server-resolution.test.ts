@@ -12,7 +12,7 @@ import { writeCliConfig } from "./cli-config.js";
 // per test to control the middle tier deterministically regardless of the
 // ambient shell environment.
 const setEnvServerUrl = (value: string | undefined): void => {
-  mock.module("../env.js", () => ({
+  void mock.module("../env.js", () => ({
     HOME: undefined,
     STELLA_SERVER_URL: value,
     XDG_CACHE_HOME: undefined,
@@ -60,7 +60,7 @@ describe("resolveServerUrl precedence", () => {
     if (Result.isOk(result)) {
       expect(result.value).toBe("https://env.example");
     } else {
-      throw new Error("expected ok");
+      throw new TypeError("expected ok");
     }
   });
 
@@ -71,7 +71,7 @@ describe("resolveServerUrl precedence", () => {
     if (Result.isOk(result)) {
       expect(result.value).toBe("https://config.example");
     } else {
-      throw new Error("expected ok");
+      throw new TypeError("expected ok");
     }
   });
 
@@ -103,7 +103,7 @@ describe("resolveServerUrl normalization", () => {
     if (Result.isOk(result)) {
       expect(result.value).toBe("https://stella.example");
     } else {
-      throw new Error("expected ok");
+      throw new TypeError("expected ok");
     }
   });
 
@@ -117,7 +117,7 @@ describe("resolveServerUrl normalization", () => {
     if (Result.isOk(result)) {
       expect(result.value).toBe("https://stella.example/api");
     } else {
-      throw new Error("expected ok");
+      throw new TypeError("expected ok");
     }
   });
 
@@ -127,7 +127,7 @@ describe("resolveServerUrl normalization", () => {
     if (Result.isOk(result)) {
       expect(result.value).toBe("https://env.example");
     } else {
-      throw new Error("expected ok");
+      throw new TypeError("expected ok");
     }
   });
 });

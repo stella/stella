@@ -1,8 +1,11 @@
 import { Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { registerLoopbackClient } from "./oauth-client-registration.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
+
+const registrationBodySchema = v.record(v.string(), v.unknown());
 
 // Dynamic client registration (RFC 7591). The failure paths are what matter:
 // a server that does not advertise a registration endpoint, a rejected
@@ -10,9 +13,14 @@ import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
 // `ClientRegistrationError` so `login.ts` aborts instead of proceeding with an
 // undefined client id.
 
-const startRegistrationServer = (respond: (body: unknown) => Response) => {
+const startRegistrationServer = (
+  respond: (body: Record<string, unknown>) => Response,
+) => {
   const server = Bun.serve({
-    fetch: async (request) => respond(await request.json().catch(() => ({}))),
+    fetch: async (request) => {
+      const raw: unknown = await request.json().catch(() => ({}));
+      return respond(v.parse(registrationBodySchema, raw));
+    },
     hostname: "127.0.0.1",
     port: 0,
   });
@@ -67,7 +75,7 @@ describe("registerLoopbackClient", () => {
       expect(result.error.message).toContain("403");
       expect(result.error.message).toContain("registration disabled");
     } else {
-      throw new Error("expected an error");
+      throw new TypeError("expected an error");
     }
   });
 
@@ -93,7 +101,7 @@ describe("registerLoopbackClient", () => {
   test("returns the client_id and forwards a public-client body on success", async () => {
     let sent: Record<string, unknown> | undefined;
     const server = startRegistrationServer((body) => {
-      sent = body as Record<string, unknown>;
+      sent = body;
       return new Response(JSON.stringify({ client_id: "dyn-client-9" }), {
         headers: { "Content-Type": "application/json" },
         status: 201,

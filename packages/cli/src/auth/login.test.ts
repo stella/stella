@@ -35,7 +35,7 @@ const realLoopback = await import("./loopback-listener.js");
 const realStartLoopbackListener = realLoopback.startLoopbackListener;
 
 let loopbackMode: "real" | "headless" = "real";
-mock.module("./loopback-listener.js", () => ({
+void mock.module("./loopback-listener.js", () => ({
   ...realLoopback,
   startLoopbackListener: async () =>
     loopbackMode === "headless" ? undefined : await realStartLoopbackListener(),
@@ -46,7 +46,7 @@ mock.module("./loopback-listener.js", () => ({
 // `openCommandFor` intact) and never let this file actually launch a browser.
 const realBrowser = await import("./browser-open.js");
 let onBrowserOpen: (authorizeUrl: string) => void | Promise<void> = () => {};
-mock.module("./browser-open.js", () => ({
+void mock.module("./browser-open.js", () => ({
   ...realBrowser,
   openInBrowser: async (url: string) => {
     await onBrowserOpen(url);
@@ -165,7 +165,11 @@ const makeProcess = (stdinLine?: string) => {
   if (stdinLine !== undefined) {
     stdin.write(stdinLine);
   }
-  return { stdin, stdout } as unknown as NodeJS.Process;
+  const proc = { stdin, stdout };
+  // SAFETY: `login` (via `buildIo`) only reads `stdin`/`stdout` off the process;
+  // the PassThrough streams satisfy that structural slice.
+  // eslint-disable-next-line no-unsafe-type-assertion -- test double for the process slice login reads
+  return proc as unknown as NodeJS.Process;
 };
 
 const baseOptions = (configDir: string, serverFlag: string) => ({

@@ -116,7 +116,7 @@ describe("auth manage (whoami / logout / switch)", () => {
     if (Result.isError(result)) {
       expect(result.error._tag).toBe("CredentialNotFoundError");
     } else {
-      throw new Error("expected an error");
+      throw new TypeError("expected an error");
     }
   });
 
@@ -187,7 +187,7 @@ describe("auth manage (whoami / logout / switch)", () => {
       // A non-JWT (opaque) access token has no locally decodable claims.
       expect(result.value.claims).toBeUndefined();
     } else {
-      throw new Error("expected ok");
+      throw new TypeError("expected ok");
     }
   });
 

@@ -155,14 +155,14 @@ const errorEnvelope = (
   };
 };
 
-const call = (toolName: string, args: Record<string, unknown>) =>
-  handleMcpToolCall({ args, context: createContext(), toolName });
+const call = async (toolName: string, args: Record<string, unknown>) =>
+  await handleMcpToolCall({ args, context: createContext(), toolName });
 
-const invokeValidateOnly = (
+const invokeValidateOnly = async (
   capability: string,
   input: Record<string, unknown>,
 ) =>
-  handleMcpToolCall({
+  await handleMcpToolCall({
     args: { capability, input, validateOnly: true },
     context: createContext(),
     toolName: "invoke_capability",
@@ -185,10 +185,10 @@ describe("null-tolerance premise", () => {
       }
       for (const part of ["body", "params", "query"] as const) {
         const partSchema = schema[part];
-        if (!isRecord(partSchema) || !isRecord(partSchema["properties"])) {
+        if (!isRecord(partSchema) || !isRecord(partSchema.properties)) {
           continue;
         }
-        for (const prop of Object.values(partSchema["properties"])) {
+        for (const prop of Object.values(partSchema.properties)) {
           const json = JSON.stringify(prop);
           if (json.includes('"type":"null"')) {
             nullableFields += 1;

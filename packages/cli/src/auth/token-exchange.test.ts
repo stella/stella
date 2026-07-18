@@ -37,8 +37,8 @@ afterEach(() => {
   active = undefined;
 });
 
-const exchange = (metadata: AuthorizationServerMetadata) =>
-  exchangeAuthorizationCode({
+const exchange = async (metadata: AuthorizationServerMetadata) =>
+  await exchangeAuthorizationCode({
     clientId: "client-1",
     code: "auth-code-1",
     codeVerifier: "verifier-1",
@@ -85,7 +85,7 @@ describe("exchangeAuthorizationCode error paths", () => {
       expect(result.error.oauthError).toBe("invalid_client");
       expect(result.error.message).toBe("invalid_client");
     } else {
-      throw new Error("expected an error");
+      throw new TypeError("expected an error");
     }
   });
 
@@ -101,7 +101,7 @@ describe("exchangeAuthorizationCode error paths", () => {
       expect(result.error.message).toBe("upstream is down");
       expect(result.error.oauthError).toBeUndefined();
     } else {
-      throw new Error("expected an error");
+      throw new TypeError("expected an error");
     }
   });
 
@@ -113,7 +113,7 @@ describe("exchangeAuthorizationCode error paths", () => {
     if (Result.isError(result)) {
       expect(result.error.message).toContain("500");
     } else {
-      throw new Error("expected an error");
+      throw new TypeError("expected an error");
     }
   });
 

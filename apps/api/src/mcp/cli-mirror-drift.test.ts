@@ -29,7 +29,7 @@ const cliFile = (relativePath: string): string => {
     `../../../../packages/cli/${relativePath}`,
     import.meta.url,
   );
-  return readFileSync(url, "utf8");
+  return readFileSync(url, "utf-8");
 };
 
 /** Extract the `"..."` string literals inside the first `marker` array block. */
@@ -39,7 +39,10 @@ const extractStringArray = (text: string, marker: string): string[] => {
     throw new Error(`marker not found: ${marker}`);
   }
   const open = text.indexOf("[", start);
-  const close = text.indexOf("]", open);
+  const close = open === -1 ? -1 : text.indexOf("]", open);
+  if (open === -1 || close === -1) {
+    throw new Error(`no array block after marker: ${marker}`);
+  }
   const block = text.slice(open + 1, close);
   return [...block.matchAll(/"([^"]+)"/gu)].map((match) => match[1] ?? "");
 };
@@ -51,7 +54,10 @@ const extractObjectKeys = (text: string, marker: string): string[] => {
     throw new Error(`marker not found: ${marker}`);
   }
   const open = text.indexOf("{", start);
-  const close = text.indexOf("}", open);
+  const close = open === -1 ? -1 : text.indexOf("}", open);
+  if (open === -1 || close === -1) {
+    throw new Error(`no object block after marker: ${marker}`);
+  }
   const block = text.slice(open + 1, close);
   return [...block.matchAll(/^\s*(\w+):/gmu)].map((match) => match[1] ?? "");
 };
@@ -119,8 +125,16 @@ describe("CLI mirrors of apps/api MCP constants", () => {
         "could not read CLI_VERSION from generated cli-version.ts",
       );
     }
-    const packageVersion = JSON.parse(cliFile("package.json"))
-      .version as string;
+    const packageManifest: unknown = JSON.parse(cliFile("package.json"));
+    if (
+      typeof packageManifest !== "object" ||
+      packageManifest === null ||
+      !("version" in packageManifest) ||
+      typeof packageManifest.version !== "string"
+    ) {
+      throw new Error("could not read version from packages/cli/package.json");
+    }
+    const packageVersion = packageManifest.version;
 
     // Generated version stays in sync with the package manifest it is baked from.
     expect(cliVersion).toBe(packageVersion);
