@@ -1,7 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
 import AskAiBar from "../components/AskAiBar.astro";
-import { aiTagline, aiFaqs, aiCanonicalSources } from "../data/ai-facts";
+import LandingFooter from "../components/LandingFooter.astro";
+import { aiTagline, aiFaqs } from "../data/ai-facts";
 
 const crawlerResources = [
   {
@@ -168,28 +169,7 @@ const faqJsonLd = {
       </section>
     </main>
 
-    {/* ——— Footer ——— */}
-    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
-      <div class="mx-auto max-w-300 text-center">
-        <p class="text-sm" style="color: var(--muted-foreground)">
-          {
-            aiCanonicalSources.map((src, i) => (
-              <>
-                {i > 0 && <span aria-hidden="true"> · </span>}
-                <a href={src.path} class="transition-opacity hover:opacity-70">
-                  {src.label}
-                </a>
-              </>
-            ))
-          }
-        </p>
-      </div>
-      <div
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
-        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
-      >
-      </div>
-    </footer>
+    <LandingFooter />
   </div>
 
   <style>

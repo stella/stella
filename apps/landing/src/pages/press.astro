@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import LandingFooter from "../components/LandingFooter.astro";
 
 const contactEmail = "jan.kubica@stll.app";
 
@@ -355,60 +356,51 @@ const gradients = [
 
     </main>
 
-    {/* ——— Footer ——— */}
-    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
-      <div class="mx-auto max-w-300 text-center">
-        <p class="text-sm" style="color: var(--muted-foreground)">
-          <a href="/imprint" class="transition-opacity hover:opacity-70">stella labs, s.r.o.</a>
-          <span aria-hidden="true"> · </span>
-          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
-          <span aria-hidden="true"> · </span>
-          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
-          <span aria-hidden="true"> · </span>
-          <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
-        </p>
-      </div>
-      <div
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
-        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
-      ></div>
-    </footer>
+    <LandingFooter />
   </div>
 
-  <script is:inline>
-    // Copy boilerplate paragraph
-    for (const btn of document.querySelectorAll(".copy-btn")) {
-      btn.addEventListener("click", async () => {
-        const targetId = btn.dataset.copyTarget;
-        if (!targetId) {return;}
-        const el = document.querySelector(`#${targetId}`);
-        if (!el?.textContent) {return;}
-        await navigator.clipboard.writeText(el.textContent.trim());
-        const label = btn.querySelector(".copy-label");
-        if (!label) {return;}
-        const original = label.textContent;
-        label.textContent = "Copied";
-        setTimeout(() => {
-          label.textContent = original;
-        }, 1500);
+  <script>
+    document.addEventListener("astro:page-load", function () {
+      // Copy boilerplate paragraph
+      document.querySelectorAll<HTMLElement>(".copy-btn").forEach((btn) => {
+        if (btn.dataset.copyBound) return;
+        btn.dataset.copyBound = "true";
+        btn.addEventListener("click", () => {
+          const targetId = btn.getAttribute("data-copy-target");
+          if (!targetId) return;
+          const el = document.getElementById(targetId);
+          if (!el?.textContent) return;
+          navigator.clipboard.writeText(el.textContent.trim()).then(() => {
+            const label = btn.querySelector(".copy-label");
+            if (!label) return;
+            const original = label.textContent;
+            label.textContent = "Copied";
+            setTimeout(() => {
+              label.textContent = original;
+            }, 1500);
+          });
+        });
       });
-    }
 
-    // Copy hex on click
-    for (const btn of document.querySelectorAll(".copy-hex")) {
-      btn.addEventListener("click", async () => {
-        const hex = btn.dataset.hex;
-        if (!hex) {return;}
-        await navigator.clipboard.writeText(hex);
-        const fb = btn.querySelector(".copy-hex-feedback");
-        if (!fb) {return;}
-        fb.classList.remove("opacity-0");
-        fb.classList.add("opacity-100");
-        setTimeout(() => {
-          fb.classList.add("opacity-0");
-          fb.classList.remove("opacity-100");
-        }, 1200);
+      // Copy hex on click
+      document.querySelectorAll<HTMLElement>(".copy-hex").forEach((btn) => {
+        if (btn.dataset.copyBound) return;
+        btn.dataset.copyBound = "true";
+        btn.addEventListener("click", () => {
+          const hex = btn.getAttribute("data-hex");
+          if (!hex) return;
+          navigator.clipboard.writeText(hex).then(() => {
+            const fb = btn.querySelector(".copy-hex-feedback");
+            if (!fb) return;
+            fb.classList.remove("opacity-0");
+            fb.classList.add("opacity-100");
+            setTimeout(() => {
+              fb.classList.add("opacity-0");
+              fb.classList.remove("opacity-100");
+            }, 1200);
+          });
+        });
       });
-    }
+    });
   </script>
 </Base>

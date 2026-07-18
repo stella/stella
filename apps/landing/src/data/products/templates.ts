@@ -11,10 +11,10 @@ export const templates: Product = {
   summary:
     "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. Produce a document into the matter and keep editing it. Repeat work starts from a known-good base instead of a blank page.",
   hero: {
-    type: "video",
-    src: "/media/products/templates/hero.mp4",
-    poster: "/media/products/templates/hero.jpg",
-    alt: "Screen recording of stella filling a template's fields and resolving its conditional clauses into a matter draft.",
+    type: "image",
+    src: "/media/products/templates.png",
+    darkSrc: "/media/products/templates-dark.png",
+    alt: "The seeded template library in stella",
     aspect: "16 / 10",
   },
   quickAnswer: {
@@ -57,8 +57,8 @@ export const templates: Product = {
         "Keep repeat documents consistent",
       ],
       media: {
-        type: "placeholder",
-        note: "Picking a template and filling its fields to assemble a draft",
+        type: "preview",
+        key: "template-editor",
       },
     },
     {
@@ -69,8 +69,8 @@ export const templates: Product = {
         "One template covers several variants",
       ],
       media: {
-        type: "placeholder",
-        note: "A template with fields and a conditional clause resolving as values change",
+        type: "preview",
+        key: "template-editor",
       },
     },
     {
@@ -81,8 +81,8 @@ export const templates: Product = {
         "Keep editing the result alongside the matter's files",
       ],
       media: {
-        type: "placeholder",
-        note: "Template editor open next to the assembled draft in a matter",
+        type: "preview",
+        key: "template-editor",
       },
     },
   ],
@@ -124,6 +124,12 @@ export const templates: Product = {
       href: "/ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
+  ],
+  evidence: [
+    { type: "capability", id: "templates.fill" },
+    { type: "capability", id: "templates.suggest-fields" },
+    { type: "capability", id: "clauses.read-list" },
+    { type: "capability", id: "playbooks.run" },
   ],
   cta: {
     heading: "Assemble your next document in stella.",

@@ -34,6 +34,6 @@ export const pillars: readonly Pillar[] = [
     label: "Workspace",
     blurb:
       "Where the work lives: matters, documents, Word editing, and the desktop and MCP surfaces that connect them.",
-    slugs: ["workspace"],
+    slugs: ["workspace", "editor", "cli-mcp"],
   },
 ] as const;

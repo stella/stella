@@ -10,10 +10,10 @@ export const publicData: Product = {
   summary:
     "Case law and company registries from official public sources, collected and structure-parsed by stella's Legal Atlas stack. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.",
   hero: {
-    type: "video",
-    src: "/media/products/public-data/hero.mp4",
-    poster: "/media/products/public-data/hero.jpg",
-    alt: "Screen recording of stella reading an official decision, following its citations, and pulling a company registry record into a matter.",
+    type: "image",
+    src: "/media/products/public-data.png",
+    darkSrc: "/media/products/public-data-dark.png",
+    alt: "A court decision open in the stella case-law reader",
     aspect: "16 / 10",
   },
   quickAnswer: {
@@ -56,8 +56,8 @@ export const publicData: Product = {
         "Built on the open Legal Atlas ingestion stack",
       ],
       media: {
-        type: "placeholder",
-        note: "Reader: a decision with preserved structure and a jurisdiction switcher",
+        type: "preview",
+        key: "case-law-reader",
       },
     },
     {
@@ -68,8 +68,8 @@ export const publicData: Product = {
         "Coverage expands as more official sources are added",
       ],
       media: {
-        type: "placeholder",
-        note: "Registry lookup: a company record pulled into a matter",
+        type: "preview",
+        key: "registry-lookup",
       },
     },
     {
@@ -80,8 +80,8 @@ export const publicData: Product = {
         "Search across sources, not just within one",
       ],
       media: {
-        type: "placeholder",
-        note: "Agent answer citing a case-law decision and a registry record",
+        type: "preview",
+        key: "agent-answer",
       },
     },
   ],
@@ -122,6 +122,19 @@ export const publicData: Product = {
       title: "AI fact sheet",
       href: "/ai-info",
       body: "stella in machine-readable form for AI search engines.",
+    },
+  ],
+  evidence: [
+    { type: "capability", id: "case-law.analysis.generate" },
+    { type: "capability", id: "legislation.search" },
+    { type: "capability", id: "contacts.business-registries-lookup" },
+    {
+      type: "source",
+      path: "packages/legal-atlas/src/runners/registry.ts",
+      contains: [
+        "export const RUNNER_NAMES",
+        "export const getRunnerDefinitions",
+      ],
     },
   ],
   cta: {

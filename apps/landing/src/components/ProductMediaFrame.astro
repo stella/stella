@@ -2,11 +2,19 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { ProductMedia } from "../data/products/types";
+import { productStoryThumbnails } from "../data/product-story";
 import MediaSkeleton from "./MediaSkeleton.astro";
+import ThemeImage from "./ThemeImage.astro";
 import { ProductPreview } from "./react/previews/ProductPreview";
+import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 
-type Props = { media: ProductMedia };
-const { media } = Astro.props;
+type Props = {
+  media: ProductMedia;
+  compact?: boolean;
+  deferThemeImage?: boolean;
+  thumbnail?: boolean;
+};
+const { media, compact = false, deferThemeImage = false, thumbnail = false } = Astro.props;
 const aspect = media.aspect ?? "16 / 9";
 
 // A video slot upgrades from skeleton to <video> the moment its file lands in
@@ -15,16 +23,21 @@ const aspect = media.aspect ?? "16 / 9";
 const videoOnDisk = (p: string) => existsSync(join(process.cwd(), "public", p));
 const videoReady = media.type === "video" && videoOnDisk(media.src);
 const posterReady = media.type === "video" && media.poster !== undefined && videoOnDisk(media.poster);
+const storyThumbnail = media.type === "story" ? productStoryThumbnails[media.sceneId] : undefined;
 ---
 
 <div
-  class="product-media relative overflow-hidden rounded-[1.45rem] border backdrop-blur-md"
-  style={`aspect-ratio: ${aspect}; border-color: color-mix(in srgb, var(--border) 90%, transparent); background: color-mix(in srgb, var(--card) 78%, transparent); box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent), 0 18px 40px -28px rgba(0, 0, 0, 0.28)`}
+  class:list={[
+    "product-media relative overflow-hidden",
+    compact
+      ? "rounded-xl p-1.5"
+      : "rounded-[2rem] p-[clamp(1rem,3vw,2.5rem)]",
+  ]}
+  style={`aspect-ratio: ${aspect}; background: linear-gradient(135deg, color-mix(in srgb, var(--card) 88%, var(--background)), color-mix(in srgb, var(--muted) 52%, var(--background))); box-shadow: inset 0 1px 0 color-mix(in srgb, white 22%, transparent)`}
 >
-  {/* Glass light catch, matching the homepage showcase tiles. */}
   <div
-    class="pointer-events-none absolute inset-0 z-10"
-    style="background: linear-gradient(180deg, color-mix(in srgb, white 7%, transparent) 0%, transparent 38%)"
+    class="pointer-events-none absolute -top-1/2 left-[8%] z-10 h-full w-[42%] rotate-[18deg] rounded-full blur-3xl"
+    style="background: color-mix(in srgb, white 20%, transparent)"
     aria-hidden="true"
   >
   </div>
@@ -32,19 +45,61 @@ const posterReady = media.type === "video" && media.poster !== undefined && vide
   {
     media.type === "preview" && (
       <div class="absolute inset-0">
-        <ProductPreview previewKey={media.key} />
+        <ProductPreview client:visible previewKey={media.key} />
       </div>
     )
   }
 
   {
-    media.type === "image" && (
-      <img
-        src={media.src}
-        alt={media.alt}
-        class="absolute inset-0 h-full w-full object-cover"
+    media.type === "story" && !thumbnail && !compact && (
+      <div class="absolute inset-0">
+        <CliMcpPreview
+          client:visible
+          sceneId={media.sceneId}
+          showCompanions={media.showCompanions ?? false}
+        />
+      </div>
+    )
+  }
+
+  {
+    media.type === "story" && !thumbnail && compact && (
+      <div class="absolute inset-0">
+        <CliMcpPreview
+          includeStyles={false}
+          sceneId={media.sceneId}
+          showCompanions={media.showCompanions ?? false}
+        />
+      </div>
+    )
+  }
+
+  {
+    media.type === "story" && thumbnail && storyThumbnail && (
+      <ThemeImage
+        lightSrc={storyThumbnail.src}
+        darkSrc={storyThumbnail.darkSrc}
+        alt={storyThumbnail.alt}
+        class="relative z-1 h-full w-full rounded-lg border object-cover object-top"
+        style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 18px 42px -30px rgba(0, 0, 0, 0.5)"
         loading="lazy"
         decoding="async"
+        defer={deferThemeImage ? "manual" : undefined}
+      />
+    )
+  }
+
+  {
+    media.type === "image" && (
+      <ThemeImage
+        lightSrc={media.src}
+        darkSrc={media.darkSrc}
+        alt={media.alt}
+        class={`relative z-1 h-full w-full border object-cover object-top ${compact ? "rounded-lg" : "rounded-[1.1rem]"}`}
+        style="border-color: color-mix(in srgb, var(--border) 70%, transparent); box-shadow: 0 28px 70px -38px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255,255,255,.24)"
+        loading="lazy"
+        decoding="async"
+        defer={deferThemeImage ? "manual" : undefined}
       />
     )
   }

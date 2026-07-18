@@ -1,5 +1,6 @@
 @import "tailwindcss";
 
+@source "../**/*.{astro,html,js,jsx,md,mdx,ts,tsx}";
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -9,6 +10,13 @@
   --font-display: "Cabinet Grotesk", system-ui, sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--card);
@@ -26,6 +34,8 @@
   --color-ring: var(--ring);
   --color-success: var(--success);
   --color-success-foreground: var(--foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
 }
 
 /* Register gradient endpoint so the browser can interpolate it */
@@ -45,6 +55,13 @@
   --radius: 0.625rem;
   --background: #ffffff;
   --foreground: #1c1917;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #6b7280;
+  --sidebar-primary: #1c1917;
+  --sidebar-primary-foreground: #fafaf9;
+  --sidebar-accent: rgba(0, 0, 0, 0.04);
+  --sidebar-accent-foreground: #1c1917;
+  --sidebar-border: rgba(0, 0, 0, 0.08);
   --card: #ffffff;
   --card-foreground: #1c1917;
   --primary: #1c1917;
@@ -58,6 +75,14 @@
   --ring: rgba(0, 0, 0, 0.18);
   --auth-gradient-end: #a8cfe8;
   --success: #3fa674;
+  --warning: #d97706;
+  --warning-foreground: #92400e;
+  --terminal-chrome: #2d2d30;
+  --terminal-background: #101011;
+  --terminal-input: rgba(255, 255, 255, 0.035);
+  --terminal-foreground: #f2f1ee;
+  --terminal-muted: #858b97;
+  --terminal-accent: #79acd0;
   transition:
     --auth-gradient-end 800ms ease,
     --background 800ms ease;
@@ -66,6 +91,13 @@
 .dark {
   --background: #0c0a09;
   --foreground: #f5f5f4;
+  --sidebar: #11100f;
+  --sidebar-foreground: #a8a29e;
+  --sidebar-primary: #f5f5f4;
+  --sidebar-primary-foreground: #1c1917;
+  --sidebar-accent: rgba(255, 255, 255, 0.04);
+  --sidebar-accent-foreground: #f5f5f4;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
   --card: rgba(255, 255, 255, 0.03);
   --card-foreground: #f5f5f4;
   --primary: #f5f5f4;
@@ -79,6 +111,8 @@
   --ring: rgba(255, 255, 255, 0.16);
   --auth-gradient-end: #1a3a5c;
   --success: #3fa674;
+  --warning: #f59e0b;
+  --warning-foreground: #fcd34d;
 }
 
 html.no-transitions {
@@ -88,6 +122,11 @@ html.no-transitions {
 body {
   background-color: var(--background);
   color: var(--foreground);
+}
+
+/* Keep localhost visual review identical to production screenshots. */
+astro-dev-toolbar {
+  display: none !important;
 }
 
 /* Shared easing for entrance and hover motion across the landing. */
@@ -116,4 +155,8 @@ body {
 .js-reveal [data-reveal][data-in-view] {
   opacity: 1;
   transform: translate3d(0, 0, 0);
+}
+
+.reveal-without-motion [data-reveal] {
+  transition: none !important;
 }

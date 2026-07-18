@@ -1,9 +1,6 @@
 import type { Product } from "./types";
 
-// The hero is a video slot: ProductMediaFrame auto-detects the file at
-// /media/products/<slug>/ and shows a skeleton until it lands. Section
-// screenshots are stubbed as placeholders; each note describes the exact
-// seeded state the Playwright capture should produce.
+// The review hero reuses the same deterministic scene as the opening story.
 export const tabularReview: Product = {
   slug: "tabular-review",
   eyebrow: "Tabular Review",
@@ -11,10 +8,8 @@ export const tabularReview: Product = {
   summary:
     "Ask questions across a whole document set and get structured answers back as a matter-scoped table — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
   hero: {
-    type: "video",
-    src: "/media/products/tabular-review/hero.mp4",
-    poster: "/media/products/tabular-review/hero.jpg",
-    alt: "Screen recording of stella turning a document set into a reviewable, cited table.",
+    type: "story",
+    sceneId: "review",
     aspect: "16 / 10",
   },
   quickAnswer: {
@@ -57,8 +52,8 @@ export const tabularReview: Product = {
         "Mix extraction (dates, parties, amounts) with judgement questions",
       ],
       media: {
-        type: "placeholder",
-        note: "Column editor: adding a 'Change of control' question column",
+        type: "preview",
+        key: "review-grid",
       },
     },
     {
@@ -69,8 +64,9 @@ export const tabularReview: Product = {
         "Spot disagreements across documents at a glance",
       ],
       media: {
-        type: "placeholder",
-        note: "Cell expanded: answer with source preview panel open",
+        type: "story",
+        sceneId: "review",
+        aspect: "16 / 10",
       },
     },
     {
@@ -81,8 +77,9 @@ export const tabularReview: Product = {
         "Export the table or keep refining it in place",
       ],
       media: {
-        type: "placeholder",
-        note: "Matter view: review table tab alongside documents and chat",
+        type: "story",
+        sceneId: "workspace",
+        aspect: "16 / 10",
       },
     },
   ],
@@ -124,6 +121,12 @@ export const tabularReview: Product = {
       href: "/ai-info",
       body: "stella in machine-readable form for AI search engines.",
     },
+  ],
+  evidence: [
+    { type: "capability", id: "views.read" },
+    { type: "capability", id: "properties.read" },
+    { type: "capability", id: "fields.upsert-by-id" },
+    { type: "capability", id: "reports.export-view" },
   ],
   cta: {
     heading: "Review your next document set in stella.",

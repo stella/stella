@@ -293,6 +293,9 @@ jobs:
       - name: Policy evidence
         run: bun run policies:check
 
+      - name: Marketing content evidence
+        run: bun run marketing:check
+
       - name: Railway template shape
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         run: bun run check:railway-template
@@ -1040,7 +1043,7 @@ jobs:
           run=false
           for file in "${changed_files[@]}"; do
             case "$file" in
-              apps/web/*|apps/api/*|packages/*|patches/*|docker-compose.yml|bun.lock|package.json|.github/workflows/ci.yml)
+              apps/web/*|apps/api/*|apps/landing/src/data/products/*|apps/landing/public/media/products/*|packages/*|patches/*|docker-compose.yml|bun.lock|package.json|.github/workflows/ci.yml)
                 run=true
                 break
                 ;;
@@ -1190,6 +1193,14 @@ jobs:
       - name: Run Playwright tests
         if: steps.changed.outputs.run == 'true'
         run: bun --filter @stll/web test:e2e
+
+      - name: Seed deterministic marketing content
+        if: steps.changed.outputs.run == 'true'
+        run: bun --filter @stll/api db:seed-dev
+
+      - name: Check landing product screenshots
+        if: steps.changed.outputs.run == 'true'
+        run: bun --filter @stll/web test:e2e:marketing
 
       # Flake guard: the dev server's dependency optimizer must finish during
       # the cold pass. A second pass mid-session prints "optimized dependencies

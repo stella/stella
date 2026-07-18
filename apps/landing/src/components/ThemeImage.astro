@@ -1,0 +1,39 @@
+---
+type Props = {
+  lightSrc: string;
+  darkSrc: string;
+  alt: string;
+  class?: string;
+  style?: string;
+  loading?: "eager" | "lazy";
+  decoding?: "async" | "auto" | "sync";
+  defer?: "manual" | "visible";
+};
+
+const {
+  lightSrc,
+  darkSrc,
+  alt,
+  class: className,
+  style,
+  loading = "lazy",
+  decoding = "async",
+  defer,
+} = Astro.props;
+
+const transparentPixel =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1 1'/%3E";
+---
+
+<img
+  src={transparentPixel}
+  data-theme-image
+  data-theme-image-deferred={defer}
+  data-theme-light-src={lightSrc}
+  data-theme-dark-src={darkSrc}
+  alt={alt}
+  class={className}
+  style={style}
+  loading={loading}
+  decoding={decoding}
+/>

@@ -1,9 +1,6 @@
 import type { Product } from "./types";
 
-// The hero is a video slot: ProductMediaFrame auto-detects the file at
-// /media/products/<slug>/ and shows a skeleton until it lands. Section
-// screenshots are stubbed as placeholders; each note describes the exact
-// seeded state the Playwright capture should produce.
+// The hero reuses the same agent scene as the opening product story.
 export const agent: Product = {
   slug: "agent",
   eyebrow: "AI agent",
@@ -11,10 +8,8 @@ export const agent: Product = {
   summary:
     "Chat with your matters, documents, registries, and connected tools in one place. The agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
   hero: {
-    type: "video",
-    src: "/media/products/agent/hero.mp4",
-    poster: "/media/products/agent/hero.jpg",
-    alt: "Screen recording of stella's AI agent answering across matters and files, asking for approval, and citing its sources.",
+    type: "story",
+    sceneId: "agent",
     aspect: "16 / 10",
   },
   quickAnswer: {
@@ -57,8 +52,9 @@ export const agent: Product = {
         "Hand a tabular review to the agent for follow-up questions",
       ],
       media: {
-        type: "placeholder",
-        note: "Agent thread spanning a document summary and a registry result, both cited",
+        type: "story",
+        sceneId: "agent",
+        aspect: "16 / 10",
       },
     },
     {
@@ -69,8 +65,9 @@ export const agent: Product = {
         "Answers are grounded by citations you can open and verify",
       ],
       media: {
-        type: "placeholder",
-        note: "Approval prompt expanded with a source-preview panel open beside the reply",
+        type: "story",
+        sceneId: "agent",
+        aspect: "16 / 10",
       },
     },
     {
@@ -81,8 +78,10 @@ export const agent: Product = {
         "Add capabilities without changing how the chat works",
       ],
       media: {
-        type: "placeholder",
-        note: "Skills and connectors panel listing a few reusable skills and an MCP-compatible connector",
+        type: "story",
+        sceneId: "cli",
+        showCompanions: true,
+        aspect: "2.03",
       },
     },
   ],
@@ -123,6 +122,16 @@ export const agent: Product = {
       title: "AI fact sheet",
       href: "/ai-info",
       body: "stella in machine-readable form for AI search engines.",
+    },
+  ],
+  evidence: [
+    { type: "capability", id: "chat.get-messages" },
+    { type: "capability", id: "skills.list" },
+    { type: "capability", id: "catalogue.list-catalogue" },
+    {
+      type: "source",
+      path: "apps/api/src/handlers/chat/send-message.ts",
+      contains: ["export default sendMessage"],
     },
   ],
   cta: {

@@ -201,6 +201,7 @@ run_step "AI skill sync" bash .ai/shared/scripts/sync-ai-skills.sh --check .
 run_step "Workspace hygiene" bun run lint:ws
 run_step "Lockfile workspace-version guard" bun scripts/check-lockfile-workspace-versions.ts
 run_step "Policy evidence" bun run policies:check
+run_step "Marketing content evidence" bun run marketing:check
 run_step "Railway template shape" bun run check:railway-template
 run_step "i18n" bun run i18n:check
 run_step "Release changelog guard" bash scripts/check-release-changelog.sh --base "$base_ref"

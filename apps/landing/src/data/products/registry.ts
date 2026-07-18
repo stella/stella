@@ -1,5 +1,7 @@
 import { agent } from "./agent";
 import { anonymization } from "./anonymization";
+import { cliMcp } from "./cli-mcp";
+import { editor } from "./editor";
 import { publicData } from "./public-data";
 import { tabularReview } from "./tabular-review";
 import { templates } from "./templates";
@@ -15,7 +17,9 @@ export const products: readonly Product[] = [
   tabularReview,
   agent,
   templates,
+  editor,
   workspace,
+  cliMcp,
 ];
 
 export const productBySlug = new Map(products.map((p) => [p.slug, p]));

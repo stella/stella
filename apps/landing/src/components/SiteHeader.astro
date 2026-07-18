@@ -3,6 +3,7 @@ import ThemeToggle from "./ThemeToggle.astro";
 import MainNav from "./MainNav.astro";
 import LanguageSwitcher from "./LanguageSwitcher.astro";
 import GitHubIcon from "./GitHubIcon.astro";
+import MobileNav from "./MobileNav.astro";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 
@@ -23,11 +24,11 @@ const githubUrl = "https://github.com/stella/stella";
   style="border-color: var(--border); background: color-mix(in srgb, var(--background) 82%, transparent)"
 >
   <nav
-    class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-4"
+    class="mx-auto flex w-full max-w-300 items-center justify-between px-4 py-4 sm:px-6"
   >
     <div class="flex items-center gap-6">
       <div class="flex items-center gap-3">
-        <a href="/" class="shrink-0">
+        <a href="/" class="inline-flex min-h-11 shrink-0 items-center">
           <img
             src={locale === "ar"
               ? "/images/stella-logo-ar.svg"
@@ -37,17 +38,17 @@ const githubUrl = "https://github.com/stella/stella";
           />
         </a>
         <span
-          class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase"
+          class="border-border text-muted-foreground hidden rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase sm:inline"
         >
           {t("nav.beta")}
         </span>
         <span
-          class="h-4 w-px"
+          class="hidden h-4 w-px sm:inline"
           style="background: var(--border)"
           aria-hidden="true"></span>
         <a
           href={githubUrl}
-          class="inline-flex transition-opacity hover:opacity-70"
+          class="hidden min-h-11 min-w-11 items-center justify-center transition-opacity hover:opacity-70 sm:inline-flex"
           style="color: var(--muted-foreground)"
           target="_blank"
           rel="noopener noreferrer"
@@ -60,16 +61,19 @@ const githubUrl = "https://github.com/stella/stella";
       <MainNav current={current} />
     </div>
 
-    <div class="flex items-center gap-3">
-      <ThemeToggle />
-      <LanguageSwitcher />
+    <div class="flex items-center gap-2 sm:gap-3">
+      <div class="hidden items-center gap-2 sm:flex">
+        <ThemeToggle />
+        <LanguageSwitcher />
+      </div>
       <a
         href={appUrl}
-        class="inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+        class="inline-flex min-h-11 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
         style="background: var(--primary); color: var(--primary-foreground)"
       >
         {t("common.startFree")}
       </a>
+      <MobileNav />
     </div>
   </nav>
 </header>

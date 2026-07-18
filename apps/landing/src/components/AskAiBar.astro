@@ -3,12 +3,23 @@
 // canonical pages and asks the model to cite them inline, so answers are
 // grounded in first-party content. Copy it, or open it prefilled in a model —
 // every supported model (including Gemini) accepts the prompt via `?q=`.
+import { defaultLocale, isLocale } from "../i18n/config";
+import { getTranslations } from "../i18n/utils";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
 ---
 
-<div class="flex flex-col items-center gap-3" data-ask-ai>
+<div
+  class="flex flex-col items-center gap-3"
+  data-ask-ai
+  data-copied-label={t("askAi.copied")}
+  data-copy-label-default={t("askAi.copy")}
+>
   <span
     class="text-xs font-medium tracking-[0.04em]"
-    style="color: var(--muted-foreground)">Ask AI about stella</span
+    style="color: var(--muted-foreground)">{t("askAi.label")}</span
   >
 
   <div class="flex flex-wrap items-center justify-center gap-2">
@@ -23,7 +34,7 @@
         ><rect x="9" y="9" width="13" height="13" rx="2"></rect><path
           d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg
       >
-      <span data-copy-label>Copy prompt</span>
+      <span data-copy-label>{t("askAi.copy")}</span>
     </button>
     <span class="mx-0.5 h-5 w-px" style="background: var(--border)" aria-hidden="true"></span>
     <a class="ask-pill" target="_blank" rel="noopener noreferrer" data-llm="chatgpt"
@@ -78,44 +89,48 @@
 </style>
 
 <script>
-  const root = document.querySelector<HTMLElement>("[data-ask-ai]");
-  if (root) {
-    // Canonical, first-party pages the model should read and cite.
-    const SOURCES = [
-      "https://stll.app/ai-info",
-      "https://stll.app/llms-full.txt",
-      "https://stll.app/",
-      "https://stll.app/security",
-    ].join(", ");
+  document.addEventListener("astro:page-load", () => {
+    const root = document.querySelector<HTMLElement>("[data-ask-ai]");
+    if (root) {
+      // Canonical, first-party pages the model should read and cite.
+      const SOURCES = [
+        "https://stll.app/ai-info",
+        "https://stll.app/llms-full.txt",
+        "https://stll.app/",
+        "https://stll.app/security",
+      ].join(", ");
 
-    const PROMPT = `What is stella? Use these canonical sources: ${SOURCES}. Summarize in 4 sentences: (1) what it is, (2) who it is for, (3) pricing, (4) security. Cite the sources inline.`;
+      const PROMPT = `What is stella? Use these canonical sources: ${SOURCES}. Summarize in 4 sentences: (1) what it is, (2) who it is for, (3) pricing, (4) security. Cite the sources inline.`;
 
-    // Every supported model accepts the prompt via a `?q=` URL param.
-    const LINKS: Record<string, (p: string) => string> = {
-      chatgpt: (p) => `https://chatgpt.com/?q=${p}`,
-      claude: (p) => `https://claude.ai/new?q=${p}`,
-      perplexity: (p) => `https://www.perplexity.ai/search?q=${p}`,
-      gemini: (p) => `https://gemini.google.com/app?q=${p}`,
-      grok: (p) => `https://grok.com/?q=${p}`,
-    };
+      // Every supported model accepts the prompt via a `?q=` URL param.
+      const LINKS: Record<string, (p: string) => string> = {
+        chatgpt: (p) => `https://chatgpt.com/?q=${p}`,
+        claude: (p) => `https://claude.ai/new?q=${p}`,
+        perplexity: (p) => `https://www.perplexity.ai/search?q=${p}`,
+        gemini: (p) => `https://gemini.google.com/app?q=${p}`,
+        grok: (p) => `https://grok.com/?q=${p}`,
+      };
 
-    const encoded = encodeURIComponent(PROMPT);
-    for (const a of root.querySelectorAll<HTMLAnchorElement>("[data-llm]")) {
-      const builder = LINKS[a.dataset.llm ?? ""];
-      if (builder) a.href = builder(encoded);
+      const encoded = encodeURIComponent(PROMPT);
+      for (const a of root.querySelectorAll<HTMLAnchorElement>("[data-llm]")) {
+        const builder = LINKS[a.dataset.llm ?? ""];
+        if (builder) a.href = builder(encoded);
+      }
+
+      const copyBtn = root.querySelector<HTMLButtonElement>("[data-copy]");
+      const copyLabel = root.querySelector<HTMLElement>("[data-copy-label]");
+      copyBtn?.addEventListener("click", async () => {
+        await navigator.clipboard?.writeText(PROMPT);
+        const copiedLabel = root.dataset.copiedLabel;
+        const defaultLabel = root.dataset.copyLabelDefault;
+        if (!(copyLabel && copiedLabel && defaultLabel)) return;
+        copyBtn.classList.add("is-copied");
+        copyLabel.textContent = copiedLabel;
+        setTimeout(() => {
+          copyBtn.classList.remove("is-copied");
+          copyLabel.textContent = defaultLabel;
+        }, 1400);
+      });
     }
-
-    const copyBtn = root.querySelector<HTMLButtonElement>("[data-copy]");
-    const copyLabel = root.querySelector<HTMLElement>("[data-copy-label]");
-    copyBtn?.addEventListener("click", async () => {
-      await navigator.clipboard?.writeText(PROMPT);
-      if (!copyLabel) return;
-      copyBtn.classList.add("is-copied");
-      copyLabel.textContent = "Copied";
-      setTimeout(() => {
-        copyBtn.classList.remove("is-copied");
-        copyLabel.textContent = "Copy prompt";
-      }, 1400);
-    });
-  }
+  });
 </script>

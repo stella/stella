@@ -2,6 +2,7 @@
 import { getCollection, render } from "astro:content";
 import type { CollectionEntry } from "astro:content";
 import Base from "../../layouts/Base.astro";
+import LandingFooter from "../../components/LandingFooter.astro";
 
 export async function getStaticPaths() {
   const posts = await getCollection("blog", ({ data }) =>
@@ -67,31 +68,7 @@ const publishedAtIso = post.data.publishedAt.toISOString();
       </article>
     </main>
 
-    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
-      <div
-        class="mx-auto flex max-w-300 flex-col items-center justify-between gap-4 text-sm sm:flex-row"
-        style="color: var(--muted-foreground)"
-      >
-        <a href="/imprint" class="transition-opacity hover:opacity-70">
-          stella labs, s.r.o.
-        </a>
-        <nav class="flex flex-wrap items-center justify-center gap-4" aria-label="Footer">
-          <a href="/blog" class="transition-opacity hover:opacity-70">Blog</a>
-          <a href="/changelog" class="transition-opacity hover:opacity-70">Changelog</a>
-          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
-          <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
-          <a href="/imprint" class="transition-opacity hover:opacity-70">Imprint</a>
-          <a href="mailto:contact@stll.app" class="transition-opacity hover:opacity-70">
-            Contact
-          </a>
-        </nav>
-      </div>
-      <div
-        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
-        style="background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--auth-gradient-end) 42%, transparent))"
-      >
-      </div>
-    </footer>
+    <LandingFooter />
   </div>
 
   <style>

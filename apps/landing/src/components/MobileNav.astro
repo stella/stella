@@ -1,0 +1,227 @@
+---
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+import {
+  connectLinks,
+  isExternal,
+  productNavEntries,
+  resolveNavLinks,
+  resourceLinks,
+} from "../data/site-nav";
+import { defaultLocale, isLocale } from "../i18n/config";
+import { getTranslations } from "../i18n/utils";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+
+const resources = resolveNavLinks(resourceLinks, t);
+const connect = resolveNavLinks(connectLinks, t);
+---
+
+<details class="mobile-nav relative md:hidden" data-mobile-nav>
+  <summary
+    class="mobile-nav-trigger flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-[0.65rem]"
+    aria-label="Open navigation"
+  >
+    <span class="mobile-nav-icon" aria-hidden="true">
+      <span></span>
+      <span></span>
+    </span>
+  </summary>
+
+  <div
+    class="mobile-nav-panel fixed inset-x-3 top-[4.7rem] max-h-[calc(100dvh-5.5rem)] overflow-y-auto rounded-[1.25rem] p-5"
+  >
+    <section>
+      <h2>{t("nav.product")}</h2>
+      <div class="mt-3 grid grid-cols-2 gap-x-2">
+        {
+          productNavEntries.map((product) => (
+            <a href={product.href} class="mobile-nav-link">
+              {product.eyebrow}
+            </a>
+          ))
+        }
+      </div>
+    </section>
+
+    <div class="mt-5 grid grid-cols-2 gap-5 border-t pt-5" style="border-color: var(--border)">
+      <section>
+        <h2>{t("footer.resources")}</h2>
+        <div class="mt-3">
+          {
+            resources.map((link) => (
+              <a
+                href={link.href}
+                class="mobile-nav-link"
+                target={isExternal(link.href) ? "_blank" : undefined}
+                rel={isExternal(link.href) ? "noopener noreferrer" : undefined}
+              >
+                {link.label}
+              </a>
+            ))
+          }
+        </div>
+      </section>
+      <section>
+        <h2>{t("footer.connect")}</h2>
+        <div class="mt-3">
+          {
+            connect.map((link) => (
+              <a
+                href={link.href}
+                class="mobile-nav-link"
+                target={isExternal(link.href) ? "_blank" : undefined}
+                rel={isExternal(link.href) ? "noopener noreferrer" : undefined}
+              >
+                {link.label}
+              </a>
+            ))
+          }
+        </div>
+      </section>
+    </div>
+
+    <div class="mt-4 flex min-h-11 items-center gap-2 border-t pt-4" style="border-color: var(--border)">
+      <ThemeToggle />
+      <LanguageSwitcher />
+    </div>
+  </div>
+</details>
+
+<style>
+  .mobile-nav summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .mobile-nav-trigger {
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 5%, transparent);
+    transition: background-color 150ms;
+  }
+
+  .mobile-nav-trigger:hover,
+  .mobile-nav-trigger:focus-visible {
+    background: color-mix(in srgb, var(--foreground) 9%, transparent);
+  }
+
+  .mobile-nav-icon {
+    display: flex;
+    width: 1rem;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .mobile-nav-icon span {
+    display: block;
+    height: 1px;
+    width: 100%;
+    background: currentColor;
+    transition: transform 150ms;
+  }
+
+  .mobile-nav[open] .mobile-nav-icon span:first-child {
+    transform: translateY(0.175rem) rotate(45deg);
+  }
+
+  .mobile-nav[open] .mobile-nav-icon span:last-child {
+    transform: translateY(-0.175rem) rotate(-45deg);
+  }
+
+  .mobile-nav-panel {
+    z-index: 60;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--background) 98%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 25%, transparent),
+      0 28px 70px -34px color-mix(in srgb, var(--foreground) 40%, transparent);
+    backdrop-filter: blur(20px);
+    opacity: 0;
+    pointer-events: none;
+    transform: translate3d(0, -0.4rem, 0);
+    transition:
+      opacity 160ms,
+      transform 160ms;
+  }
+
+  .mobile-nav[open] .mobile-nav-panel {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate3d(0, 0, 0);
+  }
+
+  .mobile-nav-panel h2 {
+    color: var(--muted-foreground);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+
+  .mobile-nav-link {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+  }
+
+  .mobile-nav-link:hover,
+  .mobile-nav-link:focus-visible {
+    color: var(--muted-foreground);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-nav-icon span,
+    .mobile-nav-panel {
+      transition: none;
+    }
+  }
+
+  /* Applied to <html> while the menu is open so the page behind the panel
+     cannot scroll. The panel itself keeps its own overflow-y scroll box. */
+  :global(.mobile-nav-scroll-lock) {
+    overflow: hidden;
+  }
+</style>
+
+<script is:inline>
+  if (!window.__mobileNavBound) {
+    window.__mobileNavBound = true;
+    // Lock page scroll while a menu is open. Derived from DOM state on every
+    // toggle, so any close path (outside click, Escape, link navigation)
+    // releases the lock. `toggle` does not bubble, so listen in capture.
+    function syncScrollLock() {
+      var anyOpen = document.querySelector("[data-mobile-nav][open]") !== null;
+      document.documentElement.classList.toggle("mobile-nav-scroll-lock", anyOpen);
+    }
+    document.addEventListener(
+      "toggle",
+      function (event) {
+        if (event.target instanceof Element && event.target.matches("[data-mobile-nav]")) {
+          syncScrollLock();
+        }
+      },
+      true,
+    );
+    // After a client-side navigation the swapped-in menu is closed but no
+    // toggle event fires for the removed one; re-sync so the lock releases.
+    document.addEventListener("astro:page-load", syncScrollLock);
+    document.addEventListener("click", function (event) {
+      document.querySelectorAll("[data-mobile-nav][open]").forEach(function (menu) {
+        if (!menu.contains(event.target)) menu.removeAttribute("open");
+      });
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key !== "Escape") return;
+      document.querySelectorAll("[data-mobile-nav][open]").forEach(function (menu) {
+        menu.removeAttribute("open");
+        var trigger = menu.querySelector(".mobile-nav-trigger");
+        if (trigger instanceof HTMLElement) trigger.focus();
+      });
+    });
+  }
+</script>

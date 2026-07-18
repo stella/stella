@@ -2,16 +2,29 @@
 // renders any Product, so a new page is a data file, not new markup.
 
 import type { ProductPreviewKey } from "../../components/react/previews/keys";
+import type { ProductStorySceneId } from "../product-story";
 
-// Media is a discriminated union. `preview` renders a live, component-assembled
-// mock UI by key (no screenshot to maintain — it re-renders from tokens); the
-// others carry a static image/video or a stubbed placeholder. A `video` may omit
-// `poster`, and ProductMediaFrame falls back to a skeleton until its file exists
-// on disk. `aspect` is a CSS aspect-ratio value.
+// Media is a discriminated union. `story` reuses a deterministic product scene
+// on the homepage and product pages; small menu cards use its theme-aware capture
+// fallback. `preview` remains available for component illustrations elsewhere.
+// A `video` may omit `poster`, and ProductMediaFrame falls back to a skeleton
+// until its file exists on disk. `aspect` is a CSS aspect-ratio value.
 export type ProductMedia =
   | { type: "preview"; key: ProductPreviewKey; aspect?: string }
+  | {
+      type: "story";
+      sceneId: ProductStorySceneId;
+      showCompanions?: boolean;
+      aspect?: string;
+    }
   | { type: "placeholder"; note: string; aspect?: string }
-  | { type: "image"; src: string; alt: string; aspect?: string }
+  | {
+      type: "image";
+      src: string;
+      darkSrc: string;
+      alt: string;
+      aspect?: string;
+    }
   | {
       type: "video";
       src: string;
@@ -32,6 +45,10 @@ export type ProductFaq = { question: string; answer: string };
 
 export type ProductLink = { title: string; href: string; body: string };
 
+export type ProductEvidence =
+  | { type: "capability"; id: string }
+  | { type: "source"; path: string; contains: readonly string[] };
+
 export type Product = {
   slug: string;
   eyebrow: string;
@@ -43,5 +60,6 @@ export type Product = {
   sections: readonly ProductSection[];
   faqs: readonly ProductFaq[];
   adjacent: readonly ProductLink[];
+  evidence: readonly ProductEvidence[];
   cta: { heading: string; href: string; label: string };
 };

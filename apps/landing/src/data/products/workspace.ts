@@ -1,9 +1,7 @@
 import type { Product } from "./types";
 
-// The hero is a video slot: ProductMediaFrame auto-detects the file at
-// /media/products/<slug>/ and shows a skeleton until it lands. Section
-// screenshots are stubbed as placeholders; each note describes the exact
-// seeded state the Playwright capture should produce.
+// The live preview is assembled from shared tokens and product UI components,
+// so it evolves with the application instead of depending on screenshots.
 export const workspace: Product = {
   slug: "workspace",
   eyebrow: "Workspace",
@@ -11,16 +9,14 @@ export const workspace: Product = {
   summary:
     "A web app that brings matters, documents, Word .docx editing, review, research, chat, and knowledge tools together. A desktop app bridges local Office editing, and a stella MCP server exposes your matters, documents, and case law.",
   hero: {
-    type: "video",
-    src: "/media/products/workspace/hero.mp4",
-    poster: "/media/products/workspace/hero.jpg",
-    alt: "Screen recording of stella moving between a matter's documents, review, and chat in one workspace.",
+    type: "story",
+    sceneId: "workspace",
     aspect: "16 / 10",
   },
   quickAnswer: {
     question: "What is the stella workspace?",
     answer:
-      "A web app that holds matters, documents, Word .docx editing, review, research, chat, and knowledge tools in one place. A companion desktop app acts as a local bridge for editing Office documents, and a stella MCP server exposes matters, documents, and case law. An Outlook add-in is coming soon.",
+      "A web app that holds matters, documents, Word .docx editing, review, research, chat, and knowledge tools in one place. A companion desktop app acts as a local bridge for editing Office documents, and a stella MCP server exposes matters, documents, and case law.",
   },
   capabilities: [
     {
@@ -57,8 +53,9 @@ export const workspace: Product = {
         "Move between research, review, and chat without switching apps",
       ],
       media: {
-        type: "placeholder",
-        note: "Matter view with tabs for documents, review, and chat across the top",
+        type: "story",
+        sceneId: "review",
+        aspect: "16 / 10",
       },
     },
     {
@@ -69,8 +66,9 @@ export const workspace: Product = {
         "Keep your existing Office editing where the workspace cannot reach",
       ],
       media: {
-        type: "placeholder",
-        note: "Desktop bridge: a document opened from stella in a local Office editor",
+        type: "story",
+        sceneId: "editor",
+        aspect: "16 / 10",
       },
     },
     {
@@ -78,11 +76,13 @@ export const workspace: Product = {
       bullets: [
         "A stella MCP server exposes matters, documents, and case law",
         "Reach the workspace from MCP-compatible tools and the agent",
-        "An Outlook add-in is coming soon",
+        "Use the same workspace from the web app, desktop bridge, and connected tools",
       ],
       media: {
-        type: "placeholder",
-        note: "MCP server overview listing matters, documents, and case law as available data",
+        type: "story",
+        sceneId: "cli",
+        showCompanions: true,
+        aspect: "2.03",
       },
     },
   ],
@@ -96,10 +96,6 @@ export const workspace: Product = {
       question: "What does the MCP server expose?",
       answer:
         "A stella MCP server gives connected tools and the agent access to your matters, documents, and case law.",
-    },
-    {
-      question: "Is there an Outlook add-in?",
-      answer: "An Outlook add-in is coming soon.",
     },
   ],
   adjacent: [
@@ -122,6 +118,27 @@ export const workspace: Product = {
       title: "AI fact sheet",
       href: "/ai-info",
       body: "stella in machine-readable form for AI search engines.",
+    },
+  ],
+  evidence: [
+    { type: "capability", id: "workspaces.read" },
+    { type: "capability", id: "entities.read" },
+    { type: "capability", id: "entities.upload" },
+    { type: "capability", id: "views.read" },
+    {
+      type: "source",
+      path: "apps/desktop/src/mainview/App.tsx",
+      contains: ["export default function App()"],
+    },
+    {
+      type: "source",
+      path: "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx",
+      contains: ["DocxBrowserEditor", "ReadOnlyDocxDocumentViewer"],
+    },
+    {
+      type: "source",
+      path: "apps/api/src/mcp/server-core.ts",
+      contains: ["export const createMcpHttpRequestHandler"],
     },
   ],
   cta: {

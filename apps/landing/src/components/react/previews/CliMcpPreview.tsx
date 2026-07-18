@@ -1,0 +1,1005 @@
+import {
+  type KeyboardEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import { cn } from "@stll/ui/lib/utils";
+
+import { CLI_DEMO_TOOLS } from "../../../data/cli-demo";
+import {
+  openingProductStory,
+  type ProductStorySceneId,
+  type ProductStoryWindowId,
+  storyTeamsExchange,
+} from "../../../data/product-story";
+import { RecordedStellaScene } from "../product-story/RecordedStellaScene";
+
+export const CliMcpPreview = ({
+  initialScenarioId = "search",
+  includeStyles = true,
+  revealSideWindowsOnScroll = false,
+  sceneId,
+  showCompanions = true,
+}: CliMcpPreviewProps) => {
+  const [activeWindow, setActiveWindow] = useState(getInitialActiveWindow);
+  const [hasManualWindowFocus, setHasManualWindowFocus] = useState(false);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(
+    () => sceneId === undefined,
+  );
+  const [isInViewport, setIsInViewport] = useState(false);
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [storyFrame, setStoryFrame] = useState(0);
+  const [teamsLoopFrame, setTeamsLoopFrame] = useState(0);
+  const [terminalLoopFrame, setTerminalLoopFrame] = useState(0);
+  const drag = useRef<DragState | null>(null);
+  const story = useRef<HTMLDivElement>(null);
+  const initialScenarioIndex = Math.max(
+    SCENARIOS.findIndex((scenario) => scenario.id === initialScenarioId),
+    0,
+  );
+  const activeScenario =
+    SCENARIOS[
+      (initialScenarioIndex + (isAutoPlaying ? terminalLoopFrame : 0)) %
+        SCENARIOS.length
+    ] ?? SCENARIOS[0];
+  const storyStep = storyFrame % STORY_PHASES.length;
+  const storyPhase = STORY_PHASES.at(storyStep) ?? STORY_PHASES[0];
+  const activeSceneId = sceneId ?? storyPhase.sceneId;
+  const focusedWindow = getFocusedWindow({
+    activeWindow,
+    focus: storyPhase.focus,
+    hasManualWindowFocus,
+    isAutoPlaying,
+    showCompanions,
+  });
+
+  useEffect(() => {
+    const element = story.current;
+    if (!element) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => setIsInViewport(entries.at(0)?.isIntersecting ?? false),
+      { threshold: 0.12 },
+    );
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (
+      !isAutoPlaying ||
+      !isInViewport ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setStoryFrame((currentFrame) => currentFrame + 1);
+    }, storyPhase.durationMs);
+
+    return () => window.clearTimeout(timeout);
+  }, [isAutoPlaying, isInViewport, storyPhase.durationMs, storyPhase.id]);
+
+  useEffect(() => {
+    if (
+      !showCompanions ||
+      !isInViewport ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    const durationMs = teamsLoopFrame % 2 === 0 ? 1600 : 5000;
+    const timeout = window.setTimeout(() => {
+      setTeamsLoopFrame((currentFrame) => currentFrame + 1);
+    }, durationMs);
+
+    return () => window.clearTimeout(timeout);
+  }, [isInViewport, showCompanions, teamsLoopFrame]);
+
+  useEffect(() => {
+    if (
+      !showCompanions ||
+      !isInViewport ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    ) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => {
+      setTerminalLoopFrame((currentFrame) => currentFrame + 1);
+    }, TERMINAL_LOOP_DURATION_MS);
+
+    return () => window.clearTimeout(timeout);
+  }, [isInViewport, showCompanions, terminalLoopFrame]);
+
+  const activateWindow = (window: PreviewWindow) => {
+    setActiveWindow(window);
+    setHasManualWindowFocus(true);
+  };
+
+  return (
+    <div
+      ref={story}
+      className={cn(
+        "cli-story bg-background relative h-full w-full overflow-hidden",
+        isAutoPlaying && "cli-story-auto",
+        revealSideWindowsOnScroll && "cli-story-with-scroll-reveal",
+        !showCompanions && "cli-story-scene-only",
+      )}
+      dir="ltr"
+    >
+      {includeStyles && <style>{CLI_STYLES}</style>}
+
+      <div aria-hidden="true" className="cli-story-wash absolute inset-0" />
+      <div
+        aria-hidden="true"
+        className="cli-story-reflection absolute inset-0"
+      />
+
+      {showCompanions && (
+        <div
+          aria-label="Bring Microsoft Teams conversation to front"
+          aria-pressed={focusedWindow === "client"}
+          className="cli-client mac-window bg-card focus-visible:outline-ring absolute start-[3.1%] top-[8.5%] hidden h-[29%] w-[18%] min-w-0 cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_28px_70px_-42px_rgba(15,23,42,.42)] focus-visible:outline-2 focus-visible:outline-offset-2 sm:block"
+          onFocus={() => activateWindow("client")}
+          onKeyDown={(event) =>
+            activateWindowFromKeyboard(event, () => activateWindow("client"))
+          }
+          onPointerDown={() => activateWindow("client")}
+          role="button"
+          style={{
+            borderColor:
+              "color-mix(in srgb, var(--foreground) 11%, transparent)",
+            zIndex: getWindowZIndex(focusedWindow, "client"),
+          }}
+          tabIndex={0}
+        >
+          <TeamsWindow
+            showAnswer={!isAutoPlaying || teamsLoopFrame % 2 === 1}
+          />
+        </div>
+      )}
+
+      <div
+        aria-label="Bring stella workspace to front"
+        aria-pressed={focusedWindow === "workspace"}
+        className="cli-main-window mac-window bg-card focus-visible:outline-ring absolute start-[16%] top-[7%] h-[86%] w-[67%] cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_42px_110px_-54px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2"
+        onFocus={() => activateWindow("workspace")}
+        onKeyDown={(event) =>
+          activateWindowFromKeyboard(event, () => activateWindow("workspace"))
+        }
+        onPointerDown={() => activateWindow("workspace")}
+        role="button"
+        style={{
+          borderColor: "color-mix(in srgb, var(--foreground) 11%, transparent)",
+          zIndex: getWindowZIndex(focusedWindow, "workspace"),
+        }}
+        tabIndex={0}
+      >
+        <WindowChrome label={getSceneChromeLabel(activeSceneId)} prominent />
+        <div className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden">
+          <RecordedStellaScene
+            isActive={isInViewport}
+            sceneId={activeSceneId}
+          />
+        </div>
+      </div>
+
+      {showCompanions && (
+        <div
+          aria-label="Bring stella Editor to front"
+          aria-pressed={focusedWindow === "source"}
+          className="cli-response mac-window bg-card focus-visible:outline-ring absolute end-[0.8%] top-[18%] hidden h-[48%] w-[18.5%] cursor-pointer appearance-none overflow-hidden border p-0 text-start shadow-[0_34px_88px_-48px_rgba(15,23,42,.5)] focus-visible:outline-2 focus-visible:outline-offset-2 sm:block"
+          key={activeScenario.id}
+          onFocus={() => activateWindow("source")}
+          onKeyDown={(event) =>
+            activateWindowFromKeyboard(event, () => activateWindow("source"))
+          }
+          onPointerDown={() => activateWindow("source")}
+          role="button"
+          style={{
+            borderColor:
+              "color-mix(in srgb, var(--foreground) 11%, transparent)",
+            zIndex: getWindowZIndex(focusedWindow, "source"),
+          }}
+          tabIndex={0}
+        >
+          <WindowChrome label="stella Editor" />
+          <div className="bg-background relative h-[calc(100%-var(--mac-titlebar-height))] overflow-hidden">
+            <RecordedStellaScene
+              crop="document"
+              isActive={isInViewport}
+              sceneId="editor"
+            />
+          </div>
+        </div>
+      )}
+
+      {showCompanions && (
+        <div
+          aria-label="Bring stella terminal to front"
+          aria-live="polite"
+          aria-pressed={focusedWindow === "terminal"}
+          className="cli-window mac-window group focus-visible:outline-ring absolute start-[5%] bottom-[4%] flex h-[76%] w-[90%] min-w-0 cursor-pointer appearance-none flex-col overflow-hidden border p-0 text-start shadow-[0_42px_100px_-38px_rgba(0,0,0,.8)] focus-visible:outline-2 focus-visible:outline-offset-2 sm:start-[5.4%] sm:bottom-[13.8%] sm:h-[40.8%] sm:w-[19.1%]"
+          onFocus={() => activateWindow("terminal")}
+          onKeyDown={(event) =>
+            activateWindowFromKeyboard(event, () => activateWindow("terminal"))
+          }
+          onPointerDown={() => activateWindow("terminal")}
+          role="button"
+          style={{
+            background: "var(--terminal-chrome)",
+            borderColor:
+              "color-mix(in srgb, var(--terminal-foreground) 18%, transparent)",
+            color: "var(--terminal-foreground)",
+            transform: `translate3d(${position.x}px, ${position.y}px, 0)`,
+            zIndex: getWindowZIndex(focusedWindow, "terminal"),
+          }}
+          tabIndex={0}
+        >
+          <div
+            className="cli-drag-handle shrink-0 cursor-grab touch-none active:cursor-grabbing"
+            onPointerDown={(event) => {
+              if (!window.matchMedia("(min-width: 640px)").matches) {return;}
+              event.currentTarget.setPointerCapture(event.pointerId);
+              drag.current = {
+                pointerId: event.pointerId,
+                pointerX: event.clientX,
+                pointerY: event.clientY,
+                startX: position.x,
+                startY: position.y,
+              };
+            }}
+            onPointerMove={(event) => {
+              if (drag.current?.pointerId !== event.pointerId) {return;}
+              setPosition({
+                x: clamp(
+                  drag.current.startX + event.clientX - drag.current.pointerX,
+                  -90,
+                  210,
+                ),
+                y: clamp(
+                  drag.current.startY + event.clientY - drag.current.pointerY,
+                  -70,
+                  60,
+                ),
+              });
+            }}
+            onPointerUp={(event) => {
+              if (drag.current?.pointerId !== event.pointerId) {return;}
+              event.currentTarget.releasePointerCapture(event.pointerId);
+              drag.current = null;
+            }}
+          >
+            <WindowChrome label="stella agent" />
+          </div>
+
+          <div
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            key={`${activeScenario.id}-${terminalLoopFrame}`}
+            style={{
+              background: "var(--terminal-background)",
+              fontVariantLigatures: "none",
+            }}
+          >
+            <div className="flex min-h-0 flex-1 flex-col p-[clamp(.25rem,.5vw,.45rem)] font-mono">
+              <div
+                className="flex min-h-[clamp(2.7rem,4.6vw,3.8rem)] min-w-0 items-start gap-1.5 rounded-md px-2 py-1.5 text-[.52rem] leading-relaxed sm:text-[clamp(.5rem,.66vw,.72rem)]"
+                style={{ background: "var(--terminal-input)" }}
+              >
+                <span style={{ color: "var(--terminal-muted)" }}>&gt;</span>
+                <span className="story-step story-step-visible min-w-0 flex-1">
+                  <TypingCommand command={activeScenario.command} />
+                </span>
+              </div>
+
+              <div className="story-step story-step-visible mt-[clamp(.2rem,.4vw,.35rem)] space-y-[clamp(.15rem,.32vw,.28rem)] text-[.42rem] leading-[1.3] sm:text-[clamp(.4rem,.53vw,.56rem)]">
+                <div
+                  className="cli-result flex items-start gap-2.5"
+                  style={{ animationDelay: "1.7s" }}
+                >
+                  <span
+                    className="mt-[.45em] h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ background: getScenarioAccent(activeScenario) }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p style={{ color: "var(--terminal-muted)" }}>
+                      {activeScenario.executionLabel}
+                    </p>
+                    <div className="mt-1 space-y-0.5 ps-1">
+                      {activeScenario.steps.map((step, index) => (
+                        <p
+                          className="flex min-w-0 gap-2"
+                          key={step.label}
+                          style={{ color: "var(--terminal-muted)" }}
+                        >
+                          <span aria-hidden="true">
+                            {index === activeScenario.steps.length - 1
+                              ? "└"
+                              : "├"}
+                          </span>
+                          <span className="min-w-0 truncate">{step.label}</span>
+                          <span className="ms-auto shrink-0 tabular-nums">
+                            {step.meta}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  className="cli-result cli-summary items-start gap-2"
+                  style={{ animationDelay: "2.4s" }}
+                >
+                  <span
+                    className="mt-[.4em] h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ background: getScenarioAccent(activeScenario) }}
+                  />
+                  <p style={{ color: "var(--terminal-muted)" }}>
+                    <span style={{ color: "var(--terminal-foreground)" }}>
+                      {activeScenario.result}
+                    </span>{" "}
+                    {activeScenario.detail}
+                  </p>
+                </div>
+
+                <p
+                  className="cli-result ps-4"
+                  style={{
+                    animationDelay: "2.8s",
+                    color: "var(--terminal-muted)",
+                  }}
+                >
+                  · {activeScenario.usage}
+                </p>
+              </div>
+
+              <div
+                aria-hidden="true"
+                className="cli-idle-prompt mt-auto flex min-h-[clamp(1.6rem,2.4vw,2rem)] items-center rounded-md border px-2 text-[.46rem] sm:text-[clamp(.4rem,.56vw,.56rem)]"
+                style={{
+                  borderColor:
+                    "color-mix(in srgb, var(--terminal-foreground) 14%, transparent)",
+                  color: "var(--terminal-muted)",
+                }}
+              >
+                <span>&gt;</span>
+                <span
+                  className="cli-cursor ms-2 h-[1.05em] w-[.08em]"
+                  style={{ background: "var(--terminal-foreground)" }}
+                />
+              </div>
+            </div>
+
+            <div
+              className="flex min-h-[clamp(1.45rem,2.2vw,1.9rem)] shrink-0 items-center border-t px-[clamp(.4rem,.7vw,.6rem)] font-mono text-[.4rem] sm:text-[clamp(.38rem,.52vw,.54rem)]"
+              style={{
+                borderColor:
+                  "color-mix(in srgb, var(--terminal-foreground) 12%, transparent)",
+                color: "var(--terminal-muted)",
+              }}
+            >
+              <SessionStatus scenario={activeScenario} />
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const TeamsWindow = ({ showAnswer }: { showAnswer: boolean }) => (
+  <>
+    <WindowChrome icon={<TeamsMark />} label="Microsoft Teams" prominent />
+    <div
+      className="border-b px-[clamp(.45rem,.8vw,.65rem)] py-[clamp(.22rem,.45vw,.38rem)]"
+      style={{
+        borderColor: "color-mix(in srgb, var(--foreground) 8%, transparent)",
+      }}
+    >
+      <p className="text-foreground truncate text-[clamp(.4rem,.64vw,.58rem)] font-semibold">
+        {storyTeamsExchange.channel}
+      </p>
+      <p className="text-muted-foreground truncate text-[clamp(.32rem,.5vw,.46rem)]">
+        {storyTeamsExchange.context}
+      </p>
+    </div>
+    <div className="space-y-[clamp(.38rem,.68vw,.56rem)] p-[clamp(.45rem,.8vw,.65rem)] text-[clamp(.34rem,.5vw,.5rem)] leading-snug">
+      <div className="story-step story-step-visible flex gap-2">
+        <span className="bg-muted text-foreground flex h-[clamp(1.1rem,1.9vw,1.55rem)] w-[clamp(1.1rem,1.9vw,1.55rem)] shrink-0 items-center justify-center rounded-full font-semibold">
+          P
+        </span>
+        <div className="min-w-0">
+          <p className="text-foreground font-semibold">
+            {storyTeamsExchange.role}
+          </p>
+          <p className="text-muted-foreground line-clamp-2">
+            {storyTeamsExchange.prompt}
+          </p>
+        </div>
+      </div>
+      <div
+        className={cn(
+          "story-step flex gap-2",
+          showAnswer && "story-step-visible",
+        )}
+      >
+        <span
+          className="flex h-[clamp(1.1rem,1.9vw,1.55rem)] w-[clamp(1.1rem,1.9vw,1.55rem)] shrink-0 items-center justify-center rounded-md font-semibold text-white"
+          style={{ background: AGENT_ACCENT }}
+        >
+          S
+        </span>
+        <div className="min-w-0">
+          <p className="text-foreground font-semibold">
+            stella agent
+            <span className="bg-muted text-muted-foreground ms-1 rounded px-1 text-[.78em] font-medium">
+              APP
+            </span>
+          </p>
+          <p className="text-muted-foreground line-clamp-2">
+            {storyTeamsExchange.response}
+          </p>
+          <div
+            className={cn(
+              "story-step mt-[clamp(.25rem,.5vw,.4rem)] rounded-[clamp(.28rem,.55vw,.45rem)] border p-[clamp(.28rem,.5vw,.42rem)]",
+              showAnswer && "story-step-visible",
+            )}
+            style={{
+              background:
+                "color-mix(in srgb, var(--card) 86%, var(--teams-accent) 14%)",
+              borderColor:
+                "color-mix(in srgb, var(--teams-accent) 24%, var(--border))",
+            }}
+          >
+            <p className="text-foreground font-semibold">
+              2 playbook deviations
+            </p>
+            <p className="text-muted-foreground mt-0.5 line-clamp-2">
+              {storyTeamsExchange.result}
+            </p>
+            <p className="mt-1 font-medium" style={{ color: AGENT_ACCENT }}>
+              Open in stella →
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </>
+);
+
+const TeamsMark = () => (
+  <svg
+    aria-hidden="true"
+    className="h-[clamp(.65rem,1vw,.85rem)] w-[clamp(.65rem,1vw,.85rem)] shrink-0"
+    viewBox="0 0 20 20"
+  >
+    <rect fill="#6264a7" height="14" rx="3" width="14" x="1" y="4" />
+    <circle cx="15.5" cy="5" fill="#7b83eb" r="2.5" />
+    <path d="M5 7h7v2H9.7v6H7.3V9H5z" fill="white" />
+    <path
+      d="M15 8h2.5A1.5 1.5 0 0 1 19 9.5v5A1.5 1.5 0 0 1 17.5 16H15z"
+      fill="#7b83eb"
+    />
+  </svg>
+);
+
+const TypingCommand = ({ command }: { command: string }) => {
+  let characterIndex = 0;
+  return (
+    <span
+      aria-label={command}
+      className="cli-command min-w-0 flex-1 font-semibold whitespace-pre-wrap"
+    >
+      {command.split(/(\s+)/u).map((token, tokenIndex) => {
+        if (/^\s+$/u.test(token)) {
+          return (
+            <span aria-hidden="true" key={`space-${tokenIndex}`}>
+              {token}
+            </span>
+          );
+        }
+        return (
+          <span
+            aria-hidden="true"
+            className="inline-block whitespace-nowrap"
+            key={`${token}-${tokenIndex}`}
+          >
+            {[...token].map((character, index) => {
+              const delay =
+                COMMAND_TYPE_DELAY_MS +
+                characterIndex * COMMAND_CHARACTER_DELAY_MS;
+              characterIndex += 1;
+              return (
+                <span
+                  className="cli-command-character"
+                  key={`${character}-${index}`}
+                  style={{ animationDelay: `${delay}ms` }}
+                >
+                  {character}
+                </span>
+              );
+            })}
+          </span>
+        );
+      })}
+    </span>
+  );
+};
+
+const WindowChrome = ({
+  icon,
+  label,
+  prominent = false,
+}: WindowChromeProps) => (
+  <div className="mac-titlebar relative flex shrink-0 items-center">
+    <MacTrafficLights />
+    <div
+      className={cn(
+        "text-muted-foreground pointer-events-none absolute inset-0 flex min-w-0 items-center justify-center gap-[clamp(.2rem,.35vw,.32rem)] px-[28%] text-[clamp(.38rem,.62vw,.62rem)]",
+        prominent && "text-foreground font-medium",
+      )}
+    >
+      {icon}
+      <span className="min-w-0 truncate">{label}</span>
+    </div>
+  </div>
+);
+
+const MacTrafficLights = () => (
+  <div
+    aria-hidden="true"
+    className="relative z-1 flex items-center gap-[clamp(.28rem,.48vw,.48rem)]"
+  >
+    <span className="mac-traffic-light bg-[var(--mac-close)]">
+      <span className="mac-traffic-glyph">×</span>
+    </span>
+    <span className="mac-traffic-light bg-[var(--mac-minimize)]">
+      <span className="mac-traffic-glyph mac-traffic-minus">−</span>
+    </span>
+    <span className="mac-traffic-light bg-[var(--mac-maximize)]">
+      <span className="mac-traffic-glyph">+</span>
+    </span>
+  </div>
+);
+
+type WindowChromeProps = {
+  icon?: ReactNode;
+  label: string;
+  prominent?: boolean;
+};
+
+type CliMcpPreviewProps = {
+  includeStyles?: boolean;
+  initialScenarioId?: CliScenarioId;
+  revealSideWindowsOnScroll?: boolean;
+  sceneId?: ProductStorySceneId;
+  showCompanions?: boolean;
+};
+
+type CliScenarioId = "search" | "template" | "case-law";
+
+const PREVIEW_WINDOW_Z_INDEX = {
+  client: 1,
+  workspace: 3,
+  source: 2,
+  terminal: 4,
+} as const;
+
+type PreviewWindow = keyof typeof PREVIEW_WINDOW_Z_INDEX;
+
+const STORY_PHASES = openingProductStory;
+
+type DragState = {
+  pointerId: number;
+  pointerX: number;
+  pointerY: number;
+  startX: number;
+  startY: number;
+};
+
+type CliScenario = {
+  id: CliScenarioId;
+  type: "agent" | "cli";
+  command: string;
+  result: string;
+  detail: string;
+  executionLabel: string;
+  usage: string;
+  steps: readonly { label: string; meta: string }[];
+};
+
+const SCENARIOS: readonly CliScenario[] = [
+  {
+    id: "search",
+    type: "agent",
+    command: "Compare change-of-control clauses across this matter",
+    result: "Compared every clause",
+    detail: "and linked 3 cited passages",
+    executionLabel: "Ran 2 MCP tools",
+    usage: "Worked 3s · 3.2K tokens",
+    steps: [
+      { label: CLI_DEMO_TOOLS.searchAcrossMatters, meta: "18 documents" },
+      { label: CLI_DEMO_TOOLS.readDocument, meta: "3 passages" },
+      { label: "Grounded the answer", meta: "3 citations" },
+    ],
+  },
+  {
+    id: "template",
+    type: "agent",
+    command: "Fill missing SAFE fields from this matter",
+    result: "Created Internal SAFE.docx",
+    detail: "with 12 resolved fields",
+    executionLabel: "Ran 3 MCP tools",
+    usage: "Worked 6s · 4.8K tokens",
+    steps: [
+      { label: CLI_DEMO_TOOLS.listTemplates, meta: "SAFE" },
+      { label: "Read matter and registry fields", meta: "12 values" },
+      { label: CLI_DEMO_TOOLS.fillTemplate, meta: "complete" },
+    ],
+  },
+  {
+    id: "case-law",
+    type: "cli",
+    command: 'stella case-law search "MAC clause" --country SK',
+    result: "Found 12 decisions",
+    detail: "from official sources",
+    executionLabel: "Ran 1 CLI command",
+    usage: "Completed in 0.7s · 12 results",
+    steps: [
+      { label: "Queried connected court sources", meta: "0.7s" },
+      { label: "Ranked matching decisions", meta: "12 results" },
+      { label: "Opened the leading decision", meta: "verified" },
+    ],
+  },
+] as const;
+
+const clamp = (value: number, min: number, max: number) =>
+  Math.min(max, Math.max(min, value));
+
+const AGENT_ACCENT = "#d97757";
+const ACTIVE_WINDOW_Z_INDEX = 20;
+const COMMAND_TYPE_DELAY_MS = 350;
+const COMMAND_CHARACTER_DELAY_MS = 24;
+const TERMINAL_LOOP_DURATION_MS = 9000;
+
+const getInitialActiveWindow = (): PreviewWindow => "terminal";
+
+const getWindowZIndex = (activeWindow: PreviewWindow, window: PreviewWindow) =>
+  activeWindow === window
+    ? ACTIVE_WINDOW_Z_INDEX
+    : PREVIEW_WINDOW_Z_INDEX[window];
+
+const getScenarioAccent = (scenario: CliScenario) =>
+  scenario.type === "agent" ? AGENT_ACCENT : "var(--terminal-accent)";
+
+const getSceneChromeLabel = (sceneId: ProductStorySceneId) => {
+  if (sceneId === "workspace") {
+    return "stella · Project Atlas · Files";
+  }
+  if (sceneId === "review") {
+    return "stella · Project Atlas · Table";
+  }
+  if (sceneId === "editor") {
+    return "stella · Northstar SAFE · Editor";
+  }
+  if (sceneId === "agent") {
+    return "stella · Project Atlas · Agent";
+  }
+  return "stella · Agent";
+};
+
+const toPreviewWindow = (window: ProductStoryWindowId): PreviewWindow => {
+  if (window === "teams") {
+    return "client";
+  }
+  if (window === "app") {
+    return "workspace";
+  }
+  if (window === "editor") {
+    return "source";
+  }
+  return "terminal";
+};
+
+type FocusedWindowOptions = {
+  activeWindow: PreviewWindow;
+  focus: ProductStoryWindowId;
+  hasManualWindowFocus: boolean;
+  isAutoPlaying: boolean;
+  showCompanions: boolean;
+};
+
+const getFocusedWindow = ({
+  activeWindow,
+  focus,
+  hasManualWindowFocus,
+  isAutoPlaying,
+  showCompanions,
+}: FocusedWindowOptions): PreviewWindow => {
+  if (!showCompanions) {
+    return "workspace";
+  }
+  if (hasManualWindowFocus) {
+    return activeWindow;
+  }
+  if (isAutoPlaying) {
+    return toPreviewWindow(focus);
+  }
+  return activeWindow;
+};
+
+const activateWindowFromKeyboard = (
+  event: KeyboardEvent,
+  activateWindow: () => void,
+) => {
+  if (event.key !== "Enter" && event.key !== " ") {
+    return;
+  }
+  event.preventDefault();
+  activateWindow();
+};
+
+const SessionStatus = ({ scenario }: { scenario: CliScenario }) => {
+  if (scenario.type === "cli") {
+    return (
+      <span className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+        <span className="text-success font-semibold">▶ stella CLI</span>
+        <span>authenticated</span>
+        <span>·</span>
+        <span>read-only</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex min-w-0 items-center gap-2 overflow-hidden whitespace-nowrap">
+      <span className="font-semibold" style={{ color: AGENT_ACCENT }}>
+        ▶▶ agent
+      </span>
+      <span>·</span>
+      <span>stella MCP</span>
+    </span>
+  );
+};
+
+const CLI_STYLES = `
+  .cli-story {
+    --mac-close: #ff5f57;
+    --mac-maximize: #28c840;
+    --mac-minimize: #febc2e;
+    --mac-titlebar-height: clamp(1.7rem, 2.35vw, 2.15rem);
+    --teams-accent: #6264a7;
+    container-type: inline-size;
+    isolation: isolate;
+  }
+  .mac-window {
+    border-radius: clamp(.62rem, 1vw, .9rem);
+  }
+  .mac-window::after {
+    content: "";
+    position: absolute;
+    z-index: 50;
+    inset: 0;
+    pointer-events: none;
+    border-radius: inherit;
+    background: var(--background);
+    opacity: .1;
+    transition: opacity 320ms var(--ease-out-quint);
+  }
+  .cli-window::after { background: var(--terminal-background); }
+  .mac-window[aria-pressed="true"]::after { opacity: 0; }
+  .story-step {
+    opacity: 0;
+    transform: translate3d(0, 5px, 0);
+    transition:
+      opacity 360ms var(--ease-out-quint),
+      transform 360ms var(--ease-out-quint);
+  }
+  .story-step-visible {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  .mac-titlebar {
+    height: var(--mac-titlebar-height);
+    padding-inline: clamp(.52rem, .78vw, .7rem);
+    border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--card) 98%, white 2%),
+        color-mix(in srgb, var(--card) 94%, var(--muted) 6%)
+      );
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 50%, transparent);
+  }
+  .dark .mac-titlebar {
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--card) 96%, white 4%),
+        color-mix(in srgb, var(--card) 92%, black 8%)
+      );
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 9%, transparent);
+  }
+  .mac-traffic-light {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(.4rem, .52vw, .58rem);
+    height: clamp(.4rem, .52vw, .58rem);
+    flex: none;
+    border-radius: 9999px;
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, black 9%, transparent),
+      0 1px 1px color-mix(in srgb, black 12%, transparent);
+  }
+  .mac-traffic-glyph {
+    color: color-mix(in srgb, black 58%, transparent);
+    font-family: system-ui, sans-serif;
+    font-size: clamp(.32rem, .4vw, .44rem);
+    font-weight: 700;
+    line-height: 1;
+    opacity: 0;
+    transform: translateY(-.02em);
+    transition: opacity 120ms ease;
+  }
+  .mac-traffic-minus { transform: translateY(-.08em); }
+  .mac-window:hover .mac-traffic-glyph { opacity: 1; }
+  .cli-window .mac-titlebar {
+    color: var(--terminal-muted);
+    border-bottom-color:
+      color-mix(in srgb, var(--terminal-foreground) 11%, transparent);
+    background:
+      linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--terminal-chrome) 96%, white 4%),
+        var(--terminal-chrome)
+      );
+    box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+  }
+  .cli-story-wash {
+    background:
+      radial-gradient(ellipse 58% 66% at 18% 76%, color-mix(in srgb, #9ecfff 28%, transparent), transparent 72%),
+      radial-gradient(ellipse 52% 58% at 84% 30%, color-mix(in srgb, #c4dcff 24%, transparent), transparent 74%),
+      linear-gradient(180deg, color-mix(in srgb, var(--background) 96%, #dceeff 4%), color-mix(in srgb, var(--background) 84%, #b9d9ff 16%));
+  }
+  .dark .cli-story-wash {
+    background:
+      radial-gradient(ellipse 58% 66% at 18% 76%, color-mix(in srgb, #24527a 22%, transparent), transparent 72%),
+      radial-gradient(ellipse 52% 58% at 84% 30%, color-mix(in srgb, #1f3f61 18%, transparent), transparent 74%),
+      linear-gradient(180deg, color-mix(in srgb, var(--background) 96%, #142233 4%), color-mix(in srgb, var(--background) 84%, #172a40 16%));
+  }
+  .cli-story-reflection {
+    opacity: .44;
+    background: linear-gradient(112deg, transparent 12%, color-mix(in srgb, white 44%, transparent) 38%, transparent 57%);
+    transform: translate3d(-18%, 0, 0);
+    filter: blur(42px);
+  }
+  .dark .cli-story-reflection { opacity: .1; }
+  .cli-summary { display: none; }
+  @container (min-width: 70rem) {
+    .cli-summary { display: flex; }
+  }
+  @keyframes cli-window-enter {
+    from { opacity: 0; transform: translate3d(0, 18px, 0) scale(.985); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) scale(1); }
+  }
+  @keyframes cli-character-enter {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes cli-result-enter {
+    from { opacity: 0; transform: translate3d(0, 5px, 0); }
+    to { opacity: 1; transform: translate3d(0, 0, 0); }
+  }
+  @keyframes cli-cursor {
+    0%, 45% { opacity: 1; }
+    46%, 100% { opacity: 0; }
+  }
+  @keyframes cli-side-start-reveal {
+    from { opacity: .08; filter: blur(3px); transform: translate3d(78%, 20px, 0) scale(.96); }
+    to { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); }
+  }
+  @keyframes cli-side-end-reveal {
+    from { opacity: .08; filter: blur(3px); transform: translate3d(-76%, 24px, 0) scale(.96); }
+    to { opacity: 1; filter: blur(0); transform: translate3d(0, 0, 0) scale(1); }
+  }
+  @keyframes cli-terminal-scroll-reveal {
+    from { opacity: 0; filter: blur(3px); }
+    to { opacity: 1; filter: blur(0); }
+  }
+  .cli-window { animation: cli-window-enter 800ms var(--ease-out-quint) 120ms backwards; }
+  .cli-client { animation: cli-side-start-reveal 760ms var(--ease-out-quint) 280ms backwards; }
+  .cli-command-character {
+    opacity: 0;
+    animation: cli-character-enter 1ms steps(1, start) forwards;
+  }
+  .cli-result { animation: cli-result-enter 420ms var(--ease-out-quint) both; }
+  .cli-response { animation: cli-side-end-reveal 820ms var(--ease-out-quint) 460ms backwards; }
+  .cli-cursor { animation: cli-cursor 900ms steps(1, end) infinite; }
+  @supports (animation-timeline: scroll()) {
+    .cli-story-with-scroll-reveal .cli-window {
+      animation: cli-terminal-scroll-reveal linear both;
+      animation-duration: auto;
+      animation-timeline: view(block);
+      animation-range: entry 0% entry 40%;
+    }
+    .cli-story-with-scroll-reveal .cli-client {
+      animation: cli-side-start-reveal linear both;
+      animation-duration: auto;
+      animation-timeline: view(block);
+      animation-range: entry 5% entry 52%;
+    }
+    .cli-story-with-scroll-reveal .cli-response {
+      animation: cli-side-end-reveal linear both;
+      animation-duration: auto;
+      animation-timeline: view(block);
+      animation-range: entry 14% entry 62%;
+    }
+  }
+  .nav-mega-pane .cli-window,
+  .nav-mega-pane .cli-command-character,
+  .nav-mega-pane .cli-result,
+  .nav-mega-pane .cli-response,
+  .nav-mega-pane .cli-cursor { animation: none; }
+  .nav-mega-pane .cli-command-character { opacity: 1; }
+  .nav-mega-pane .cli-response { display: none; }
+  .nav-mega-pane .cli-client { display: none; }
+  .nav-mega-pane .cli-main-window {
+    inset: 7% 5% auto auto;
+    width: 82%;
+    height: 86%;
+  }
+  .nav-mega-pane .cli-window {
+    inset: auto auto 4% 4%;
+    width: 48%;
+    height: 72%;
+  }
+  .cli-story-scene-only .cli-client,
+  .cli-story-scene-only .cli-response,
+  .cli-story-scene-only .cli-window {
+    display: none;
+  }
+  .cli-story-scene-only .cli-main-window {
+    inset: 3% auto auto 3%;
+    width: 94%;
+    height: 94%;
+  }
+  @media (max-width: 639px) {
+    .cli-main-window {
+      inset: 4% auto auto 3%;
+      width: 94%;
+      height: 60%;
+    }
+    .cli-window {
+      inset: auto auto 2.5% 5%;
+      width: 90%;
+      height: 33%;
+    }
+    .cli-idle-prompt { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .cli-window,
+    .cli-command-character,
+    .cli-result,
+    .cli-response,
+    .cli-client,
+    .cli-cursor { animation: none; }
+    .cli-command-character { opacity: 1; }
+    .mac-window::after { display: none; }
+    .story-step {
+      opacity: 1;
+      transform: none;
+      transition: none;
+    }
+  }
+`;

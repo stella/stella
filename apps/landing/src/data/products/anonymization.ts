@@ -1,26 +1,24 @@
 import type { Product } from "./types";
 
-// Anonymization is actively in development; this page is a light, high-level
-// scaffold. The hero is a video slot (ProductMediaFrame auto-detects the file
-// at /media/products/<slug>/ and shows a skeleton until it lands), and section
-// screenshots are stubbed as placeholders describing future seeded states.
+// Claims stay anchored to the shared WASM-backed anonymization pipeline and
+// the product surfaces that expose it.
 export const anonymization: Product = {
   slug: "anonymization",
   eyebrow: "Anonymization",
   title: "Prepare material for AI without exposing identifying details.",
   summary:
-    "WASM-backed anonymization tooling for legal AI workflows. It helps prepare material for AI without exposing names, entities, or identifying details, integrated through chat and document review. This is actively being built: more is coming soon.",
+    "WASM-backed anonymization for legal AI workflows. Prepare material without exposing names, entities, or identifying details, directly from chat and document review.",
   hero: {
-    type: "video",
-    src: "/media/products/anonymization/hero.mp4",
-    poster: "/media/products/anonymization/hero.jpg",
-    alt: "Screen recording of stella preparing a document for an AI step by keeping names and identifying details out.",
+    type: "image",
+    src: "/media/products/anonymization.png",
+    darkSrc: "/media/products/anonymization-dark.png",
+    alt: "A redacted legal due diligence extract open in stella",
     aspect: "16 / 10",
   },
   quickAnswer: {
     question: "What is anonymization in stella?",
     answer:
-      "WASM-backed tooling that helps prepare material for AI workflows without exposing names, entities, or identifying details. It is integrated through chat and document review. This feature is actively in development, so more detail is coming soon.",
+      "WASM-backed tooling that prepares material for AI workflows without exposing names, entities, or identifying details. It is integrated directly into chat and document review.",
   },
   capabilities: [
     {
@@ -29,7 +27,7 @@ export const anonymization: Product = {
     },
     {
       title: "Keeps identifying details out",
-      body: "Aims to avoid exposing names, entities, or identifying details to AI.",
+      body: "Removes names, entities, and identifying details before material reaches AI.",
     },
     {
       title: "WASM-backed",
@@ -44,21 +42,21 @@ export const anonymization: Product = {
       body: "Integrated through document review alongside your files.",
     },
     {
-      title: "Coming soon",
-      body: "Actively in development; more capabilities are on the way.",
+      title: "Reviewable output",
+      body: "Shows the redacted document in context before it moves into the next workflow step.",
     },
   ],
   sections: [
     {
       heading: "Prepare material before it reaches AI",
       bullets: [
-        "Helps keep names, entities, and identifying details out of AI steps",
-        "Aimed at legal AI workflows rather than general redaction",
-        "More detail is coming soon as the feature develops",
+        "Keeps names, entities, and identifying details out of AI steps",
+        "Built for legal AI workflows rather than generic document masking",
+        "Leaves a reviewable redacted document before the next step",
       ],
       media: {
-        type: "placeholder",
-        note: "Future seeded screenshot: a document being prepared for an AI step (capture once the feature ships)",
+        type: "preview",
+        key: "anonymization",
       },
     },
     {
@@ -69,8 +67,11 @@ export const anonymization: Product = {
         "Built on WASM-backed anonymization tooling",
       ],
       media: {
-        type: "placeholder",
-        note: "Future seeded screenshot: anonymization surfaced inside chat and review (capture once the feature ships)",
+        type: "image",
+        src: "/media/products/anonymization.png",
+        darkSrc: "/media/products/anonymization-dark.png",
+        alt: "A redacted due diligence extract open in the stella editor",
+        aspect: "16 / 10",
       },
     },
   ],
@@ -78,12 +79,12 @@ export const anonymization: Product = {
     {
       question: "Is anonymization available now?",
       answer:
-        "It is actively in development. The underlying tooling is WASM-backed and is integrated through chat and document review. More detail is coming soon.",
+        "Yes. The WASM-backed anonymization pipeline is available through chat and document review.",
     },
     {
       question: "What does it help with?",
       answer:
-        "Preparing material for AI workflows without exposing names, entities, or identifying details. We will share more specifics as the feature develops.",
+        "Preparing material for AI workflows without exposing names, entities, or identifying details, while keeping the redacted result available for review.",
     },
   ],
   adjacent: [
@@ -108,8 +109,26 @@ export const anonymization: Product = {
       body: "stella in machine-readable form for AI search engines.",
     },
   ],
+  evidence: [
+    {
+      type: "capability",
+      id: "organization-settings.read-anonymization-blacklist",
+    },
+    {
+      type: "capability",
+      id: "workspaces.anonymization-terms.readWorkspaceAnonymizationTerms",
+    },
+    {
+      type: "source",
+      path: "packages/anonymize-chat/src/index.ts",
+      contains: [
+        "export const runChatAnonPipeline",
+        "export const CHAT_SEND_MODE",
+      ],
+    },
+  ],
   cta: {
-    heading: "Follow anonymization as it lands in stella.",
+    heading: "Prepare sensitive material before it reaches AI.",
     href: "https://my.stll.app",
     label: "Start free",
   },

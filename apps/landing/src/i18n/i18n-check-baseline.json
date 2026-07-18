@@ -1,7 +1,52 @@
 {
   "duplicatesCommon": [],
-  "duplicateValues": [],
+  "duplicateValues": [
+    "demo.status",
+    "footer.status"
+  ],
   "identicalToSource": {
+    "demo.documents": [
+      "fr"
+    ],
+    "demo.notes": [
+      "fr"
+    ],
+    "demo.source": [
+      "fr"
+    ],
+    "demo.sources": [
+      "fr"
+    ],
+    "demo.status": [
+      "de",
+      "pl",
+      "pt-BR"
+    ],
+    "footer.agent": [
+      "cs",
+      "sk"
+    ],
+    "footer.documentation": [
+      "fr"
+    ],
+    "footer.editor": [
+      "cs",
+      "de",
+      "es",
+      "pt-BR",
+      "sk"
+    ],
+    "footer.legal": [
+      "es"
+    ],
+    "footer.press": [
+      "et"
+    ],
+    "footer.status": [
+      "de",
+      "pl",
+      "pt-BR"
+    ],
     "nav.beta": [
       "cs",
       "de",

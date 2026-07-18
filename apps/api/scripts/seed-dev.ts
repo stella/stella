@@ -6,8 +6,9 @@
  * entities, files (PDF/DOCX uploaded to S3), fields, workspace
  * parties, and time entries.
  *
- * Deterministic IDs via `seedId()` so re-running is idempotent
- * (uses `onConflictDoNothing()`).
+ * Deterministic IDs via `seedId()` so re-running is idempotent. Seed-owned
+ * document names and content are upserted so fixture changes reach existing
+ * development databases as well as fresh CI databases.
  *
  * Usage:
  *   bun apps/api/scripts/seed-dev.ts
@@ -680,8 +681,10 @@ const workspaceDocNames: Record<string, string[]> = {
   "ws-akvizice-energo": [
     "Smlouva_o_akvizici_akcii.pdf",
     "Due_Diligence_Report.pdf",
-    "Plna_moc_zastupce.docx",
+    "Board_Consent_Northstar.docx",
     "Znalecky_posudek_hodnota.pdf",
+    "Internal_SAFE_Agreement.docx",
+    "Redacted_Due_Diligence_Extract.docx",
   ],
   "ws-stavebni-spor": [
     "Zaloba_o_nahradu_skody.pdf",
@@ -801,26 +804,88 @@ Právní prověrka byla provedena v období 1.–28. února 2025. Celkem bylo p�
 Zpracoval: Advokátní kancelář Novák & Partners
 Datum: 28. února 2025`,
 
-  "Plna_moc_zastupce.docx": `PLNÁ MOC
+  "Board_Consent_Northstar.docx": `NORTHSTAR ROBOTICS, INC.
 
-Já, níže podepsaný Ing. Martin Horák, dat. nar. 15. 5. 1975, bytem Praha 5, Janáčkovo nábřeží 18, jakožto jednatel společnosti InvestCo Capital, a.s., IČO: 28456789,
+UNANIMOUS WRITTEN CONSENT OF THE BOARD OF DIRECTORS
 
-tímto uděluji plnou moc
+The undersigned, constituting all members of the Board of Directors, approve the issuance of a Simple Agreement for Future Equity to Northstar Seed Fund I, L.P. for a purchase amount of EUR 500,000, subject to a post-money valuation cap of EUR 8,000,000.
 
-JUDr. Tomáši Novákovi, advokátu, ev. č. ČAK 12456, se sídlem Praha 2, Anglická 7,
+The officers of the Company are authorized to execute the agreement and take any action reasonably necessary to complete the financing.
 
-aby mě zastupoval ve všech právních úkonech souvisejících s akvizicí 100 % akcií společnosti EnerGo Distribuce, a.s., a to zejména:
-- jednání s prodávajícím a jeho právními zástupci;
-- podání návrhů a žádostí u ÚOHS a ERÚ;
-- podpis veškerých smluvních dokumentů;
-- zastupování před soudy a správními orgány.
+Approved on 15 July 2026.
 
-Tato plná moc je udělena v plném rozsahu a je platná do odvolání.
+Elena Park, Director
+Daniel Ortiz, Director`,
 
-V Praze dne 10. ledna 2025
+  "Internal_SAFE_Agreement.docx": `INTERNAL DRAFT — FOR REVIEW ONLY
 
-Ing. Martin Horák
-jednatel InvestCo Capital, a.s.`,
+SAFE
+(Simple Agreement for Future Equity)
+
+THIS CERTIFIES THAT in exchange for the payment by Northstar Seed Fund I, L.P. (the “Investor”) of EUR 500,000 on or about 15 July 2026, Northstar Robotics, Inc., a Delaware corporation (the “Company”), issues to the Investor the right to certain shares of the Company’s capital stock, subject to the terms below.
+
+1. EVENTS
+
+Equity Financing. If there is an Equity Financing before this instrument terminates, the Company will automatically issue to the Investor the number of shares of Safe Preferred Stock equal to the Purchase Amount divided by the Conversion Price.
+
+Liquidity Event. If there is a Liquidity Event before this instrument terminates, the Investor will be entitled to receive, immediately before or concurrently with the closing, the greater of the Purchase Amount or the amount payable on the number of shares of Common Stock equal to the Purchase Amount divided by the Liquidity Price.
+
+Dissolution Event. If there is a Dissolution Event before this instrument terminates, the Investor will be entitled to receive the Purchase Amount immediately before the consummation of the Dissolution Event.
+
+2. DEFINITIONS
+
+“Company Capitalization” means the total number of issued and outstanding shares of capital stock of the Company, calculated on a fully diluted basis immediately before the Equity Financing.
+
+“Post-Money Valuation Cap” means EUR 8,000,000.
+
+“Discount Rate” means 80%.
+
+3. COMPANY REPRESENTATIONS
+
+The Company is duly incorporated, validly existing, and in good standing under the laws of Delaware. The execution and performance of this instrument have been duly authorized by the Company’s board of directors.
+
+4. INVESTOR REPRESENTATIONS
+
+The Investor has full legal capacity and authority to execute this instrument and is acquiring it for investment purposes, not with a view to distribution.
+
+5. MISCELLANEOUS
+
+This instrument is governed by the laws of the State of Delaware. Any amendment or waiver must be in writing and signed by the Company and either the Investor or holders of a majority of the aggregate purchase amounts of outstanding instruments with the same Post-Money Valuation Cap and Discount Rate.
+
+NORTHSTAR ROBOTICS, INC.
+
+By: Elena Park, Chief Executive Officer
+
+NORTHSTAR SEED FUND I, L.P.
+
+By: Marcus Chen, General Partner`,
+
+  "Redacted_Due_Diligence_Extract.docx": `CONFIDENTIAL — REDACTED REVIEW COPY
+
+PROJECT NORTHSTAR
+LEGAL DUE DILIGENCE EXTRACT
+
+1. PARTIES
+
+Target company: ████████████████████████
+Seller: ████████████████████████████████
+Buyer: Northstar Robotics, Inc.
+
+2. TRANSACTION VALUE
+
+The proposed purchase price is EUR ███████████, subject to the working-capital adjustment described in Schedule 4.
+
+3. KEY FINDINGS
+
+The target is party to a material supply agreement with ███████████████. The agreement contains a change-of-control clause requiring written consent before completion.
+
+An employment dispute involving █████████████ remains pending. External counsel estimates the maximum exposure at EUR ████████.
+
+4. RECOMMENDATION
+
+Obtain change-of-control consent, require a specific indemnity for the pending dispute, and retain EUR █████████ from the purchase price until the claim is resolved.
+
+Prepared for internal review. Personal names, counterparties, account numbers, and commercially sensitive amounts have been redacted.`,
 
   "Znalecky_posudek_hodnota.pdf": `ZNALECKÝ POSUDEK č. 127-15/2025
 O stanovení hodnoty 100 % akcií společnosti EnerGo Distribuce, a.s.
@@ -1802,6 +1867,34 @@ const orgContacts = [
     ],
     color: "emerald",
   },
+  {
+    id: seedId("contact-org-northstar-robotics"),
+    type: "organization" as const,
+    displayName: "Northstar Robotics, Inc.",
+    organizationName: "Northstar Robotics, Inc.",
+    registrationNumber: "7483921",
+    taxId: "US-94-7483921",
+    bankAccounts: [],
+    billingAddress: {
+      line1: "548 Market Street",
+      city: "San Francisco",
+      state: "California",
+      postalCode: "94104",
+      country: "United States",
+    },
+    defaultHourlyRate: 450,
+    currency: "USD",
+    paymentTermDays: 30,
+    emails: [
+      {
+        type: "work" as const,
+        address: "legal@northstar-robotics.example",
+        isPrimary: true,
+      },
+    ],
+    phones: [],
+    color: "violet",
+  },
 ];
 
 // Additional org contacts for overview stress-testing
@@ -2193,10 +2286,10 @@ const personContacts = [
 const seedWorkspaces = [
   {
     id: seedId("ws-akvizice-energo"),
-    name: "Akvizice EnerGo Distribuce",
-    reference: "2024/001",
-    clientId: at(orgContacts, 1).id, // Česká Energie
-    billingReference: "CE-ACQ-2024",
+    name: "Northstar SAFE financing",
+    reference: "2026/014",
+    clientId: at(orgContacts, 4).id, // Northstar Robotics
+    billingReference: "NS-SAFE-2026",
   },
   {
     id: seedId("ws-stavebni-spor"),
@@ -2260,6 +2353,8 @@ const seedWorkspaces = [
     billingReference: "PERF-VIRT-1000",
   },
 ];
+
+const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 
 // ─── Properties (per-workspace) ─────────────────────────
 
@@ -2590,7 +2685,7 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
   }
 
   const docNames = workspaceDocNames[wsLabel] ?? [];
-  return [
+  const standardEntities: EntitySeed[] = [
     {
       entityId: folderId,
       versionId: seedId(`${wsLabel}-folder-1-v`),
@@ -2629,6 +2724,18 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
       name: docNames[3] ?? "Document 4",
     },
   ];
+
+  for (let i = 4; i < docNames.length; i++) {
+    standardEntities.push({
+      entityId: seedId(`${wsLabel}-doc-${i + 1}`),
+      versionId: seedId(`${wsLabel}-doc-${i + 1}-v`),
+      workspaceId: wsId,
+      kind: "document",
+      name: at(docNames, i),
+    });
+  }
+
+  return standardEntities;
 };
 
 // ─── Fields (status, due date, notes for each entity) ───
@@ -4302,6 +4409,87 @@ export async function seed(organizationId?: string, userId?: string) {
     `  Workspaces: ${seedWorkspaces.length} + ${moreWsCount} extra = ${seedWorkspaces.length + moreWsCount}`,
   );
 
+  const marketingAgentWorkspace = at(seedWorkspaces, 8);
+  const marketingAgentThreadId = seedId("marketing-agent-thread");
+  const marketingAgentCreatedAt = new Date("2026-07-16T09:30:00.000Z");
+  await rootDb.insert(chatThreads).values({
+    id: marketingAgentThreadId,
+    organizationId: ORG_ID,
+    userId: USER_ID,
+    workspaceId: marketingAgentWorkspace.id,
+    title: MARKETING_AGENT_THREAD_TITLE,
+    createdAt: marketingAgentCreatedAt,
+    updatedAt: marketingAgentCreatedAt,
+  });
+  await rootDb.insert(chatMessages).values([
+    {
+      id: seedId("marketing-agent-message-user"),
+      threadId: marketingAgentThreadId,
+      workspaceId: marketingAgentWorkspace.id,
+      userId: USER_ID,
+      role: "user",
+      content: {
+        version: 1,
+        data: [
+          {
+            type: "text",
+            text: "Compare the change-of-control clauses across this matter.",
+          },
+        ],
+      },
+      createdAt: marketingAgentCreatedAt,
+    },
+    {
+      id: seedId("marketing-agent-message-assistant"),
+      threadId: marketingAgentThreadId,
+      workspaceId: marketingAgentWorkspace.id,
+      userId: USER_ID,
+      role: "assistant",
+      content: {
+        version: 1,
+        data: [
+          {
+            type: "text",
+            text: "Across the cited agreements, assignment or a material service change requires written notice. The higher-risk agreements also require consent or termination review before signing.",
+          },
+          {
+            type: "data-stella-source-document",
+            data: {
+              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-1`),
+              kind: "document",
+              mimeType:
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              title: at(EXPORT_REVIEW_DOC_NAMES, 0),
+              workspaceId: marketingAgentWorkspace.id,
+            },
+          },
+          {
+            type: "data-stella-source-document",
+            data: {
+              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-5`),
+              kind: "document",
+              mimeType: "application/pdf",
+              title: at(EXPORT_REVIEW_DOC_NAMES, 4),
+              workspaceId: marketingAgentWorkspace.id,
+            },
+          },
+          {
+            type: "data-stella-source-document",
+            data: {
+              entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-9`),
+              kind: "document",
+              mimeType: "application/pdf",
+              title: at(EXPORT_REVIEW_DOC_NAMES, 8),
+              workspaceId: marketingAgentWorkspace.id,
+            },
+          },
+        ],
+      },
+      createdAt: new Date(marketingAgentCreatedAt.getTime() + 2500),
+    },
+  ]);
+  console.log("  Marketing agent story: 1 thread, 2 messages");
+
   // 2c. Workspace members — add all seed users to every workspace
   const allWsIds = [
     ...seedWorkspaces.map((ws) => ws.id),
@@ -4421,7 +4609,13 @@ export async function seed(organizationId?: string, userId?: string) {
         createdBy: pickAuthor(seedUserIds, ei),
         lastEditedBy: pickAuthor(seedUserIds, ei + 1),
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: entities.id,
+        set: {
+          name: e.name,
+          parentId: e.parentId ?? null,
+        },
+      });
 
     // oxlint-disable-next-line no-await-in-loop -- version row depends on the entity inserted just above
     await rootDb
@@ -4501,6 +4695,17 @@ export async function seed(organizationId?: string, userId?: string) {
       // DOCX files are rendered natively via Folio — no PDF twin needed.
       // Non-DOCX convertible types still get a PDF twin from Gotenberg.
       const pdfFileId: UserFileId | null = null;
+      const fileContent = {
+        version: 1,
+        type: "file",
+        id: fileId,
+        fileName,
+        mimeType,
+        sizeBytes: content.length,
+        encrypted: false,
+        sha256Hex,
+        pdfFileId,
+      } as const satisfies FieldContent;
 
       // ── File field ──
       // oxlint-disable-next-line no-await-in-loop -- references the fileId/sha256 produced by the S3 write above
@@ -4511,19 +4716,12 @@ export async function seed(organizationId?: string, userId?: string) {
           workspaceId: toWs(entity.workspaceId),
           propertyId: filePropertyId,
           entityVersionId: entity.versionId,
-          content: {
-            version: 1,
-            type: "file",
-            id: fileId,
-            fileName,
-            mimeType,
-            sizeBytes: content.length,
-            encrypted: false,
-            sha256Hex,
-            pdfFileId,
-          },
+          content: fileContent,
         })
-        .onConflictDoNothing();
+        .onConflictDoUpdate({
+          target: fields.id,
+          set: { content: fileContent },
+        });
       fileCount++;
 
       // ── Extracted content (AI reads this) ──
@@ -4552,7 +4750,14 @@ export async function seed(organizationId?: string, userId?: string) {
             language: null,
             extractedAt: new Date(),
           })
-          .onConflictDoNothing();
+          .onConflictDoUpdate({
+            target: extractedContent.entityId,
+            set: {
+              ciphertext: Buffer.from(docText, "utf-8"),
+              charCount: docText.length,
+              extractedAt: new Date(),
+            },
+          });
         extractedCount++;
       }
     }

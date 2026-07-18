@@ -1,0 +1,17 @@
+{
+  "placeholder": {},
+  "icu": {},
+  "plural": {},
+  "terminology": {
+    "footer.tagline": {
+      "cs": {
+        "source": "Open legal workspace for work that matters.",
+        "target": "Otevřený právní pracovní prostor pro práci, na které záleží."
+      },
+      "fr": {
+        "source": "Open legal workspace for work that matters.",
+        "target": "Un espace de travail juridique ouvert pour le travail qui compte."
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@
 import ProductMediaFrame from "./ProductMediaFrame.astro";
 import { pillars } from "../data/products/pillars";
 import { products, productBySlug } from "../data/products/registry";
+import { connectLinks, isExternal, resolveNavLinks, resourceLinks } from "../data/site-nav";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 
@@ -14,10 +15,23 @@ const { current } = Astro.props;
 const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
+
+const compactMenus = [
+  {
+    label: t("footer.resources"),
+    isCurrent: current === "security" || current === "blog",
+    links: resolveNavLinks(resourceLinks, t),
+  },
+  {
+    label: t("footer.connect"),
+    isCurrent: false,
+    links: resolveNavLinks(connectLinks, t),
+  },
+] as const;
 ---
 
 <div class="hidden items-center gap-1 md:flex">
-  <details class="nav-dropdown group relative" data-nav-dropdown>
+  <details class="nav-dropdown group relative" data-nav-dropdown name="primary-navigation">
     <summary
       class={`nav-link flex cursor-pointer list-none items-center gap-1 ${current === "product" ? "is-current" : ""}`}
     >
@@ -25,11 +39,11 @@ const t = getTranslations(locale);
       <span class="nav-caret text-[0.6rem] transition-transform" aria-hidden="true">▾</span>
     </summary>
     <div
-      class="nav-menu nav-mega absolute start-0 top-full z-50 mt-2 w-[42rem] overflow-hidden rounded-xl border"
+      class="nav-menu nav-mega absolute start-0 top-full z-50 mt-2 w-[min(48rem,calc(100vw-16rem))] overflow-hidden rounded-xl border"
       style="border-color: var(--border); background: linear-gradient(0deg, var(--card), var(--card)), var(--background); box-shadow: 0 24px 48px -20px rgba(0,0,0,0.55)"
     >
       <div class="flex">
-        <ul class="w-2/5 shrink-0 border-e p-2" style="border-color: var(--border)">
+        <ul class="w-52 shrink-0 border-e p-2" style="border-color: var(--border)">
           {
             pillars.map((pillar, pi) => (
               <li class="mb-1">
@@ -58,13 +72,6 @@ const t = getTranslations(locale);
               </li>
             ))
           }
-          <li class="mt-1 border-t pt-1" style="border-color: var(--border)">
-            <a href="/ai-info" class="nav-mega-item">
-              <span class="block text-sm font-medium" style="color: var(--foreground)">
-                {t("nav.aiFactSheet")}
-              </span>
-            </a>
-          </li>
         </ul>
 
         <div class="nav-mega-preview grow p-3">
@@ -75,7 +82,7 @@ const t = getTranslations(locale);
                 class={`nav-mega-pane ${i === 0 ? "is-active" : ""}`}
                 data-pane={p.slug}
               >
-                <ProductMediaFrame media={p.hero} />
+                <ProductMediaFrame media={p.hero} compact deferThemeImage thumbnail />
                 <span class="mt-2 block text-xs font-medium leading-[1.4]" style="color: var(--foreground)">
                   {p.title}
                 </span>
@@ -87,19 +94,38 @@ const t = getTranslations(locale);
     </div>
   </details>
 
-  <a
-    href="/security"
-    class={`nav-link ${current === "security" ? "is-current" : ""}`}>{t("nav.security")}</a
-  >
-  <a
-    href="/changelog"
-    class={`nav-link ${current === "changelog" ? "is-current" : ""}`}>{t("nav.changelog")}</a
-  >
-  <a href="/blog" class={`nav-link ${current === "blog" ? "is-current" : ""}`}>{t("nav.blog")}</a>
+  {compactMenus.map((menu) => (
+    <details class="nav-dropdown group relative" data-nav-dropdown name="primary-navigation">
+      <summary class={`nav-link flex cursor-pointer list-none items-center gap-1 ${menu.isCurrent ? "is-current" : ""}`}>
+        {menu.label}
+        <span class="nav-caret text-[0.6rem] transition-transform" aria-hidden="true">▾</span>
+      </summary>
+      <div
+        class="nav-menu absolute start-0 top-full z-50 mt-2 w-48 rounded-xl border p-2"
+        style="border-color: var(--border); background: linear-gradient(0deg, var(--card), var(--card)), var(--background); box-shadow: 0 24px 48px -20px rgba(0,0,0,0.55)"
+      >
+        <ul>
+          {menu.links.map((link) => (
+            <li>
+              <a
+                href={link.href}
+                class="nav-menu-item"
+                target={isExternal(link.href) ? "_blank" : undefined}
+                rel={isExternal(link.href) ? "noopener noreferrer" : undefined}
+              >
+                {link.label}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
+  ))}
 </div>
 
 <style>
   .nav-link {
+    min-height: 2.75rem;
     border-radius: 0.5rem;
     padding: 0.4rem 0.7rem;
     font-size: 0.875rem;
@@ -148,7 +174,9 @@ const t = getTranslations(locale);
   }
 
   .nav-mega-item {
-    display: block;
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
     border-radius: 0.6rem;
     padding: 0.45rem 0.7rem;
     text-decoration: none;
@@ -156,6 +184,24 @@ const t = getTranslations(locale);
   }
   .nav-mega-item:hover,
   .nav-mega-item.is-hover {
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+
+  .nav-menu-item {
+    display: flex;
+    min-height: 2.75rem;
+    align-items: center;
+    border-radius: 0.6rem;
+    padding: 0.55rem 0.7rem;
+    color: var(--foreground);
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 150ms;
+  }
+
+  .nav-menu-item:hover,
+  .nav-menu-item:focus-visible {
     background: color-mix(in srgb, var(--foreground) 6%, transparent);
   }
 
@@ -177,28 +223,57 @@ const t = getTranslations(locale);
 </style>
 
 <script is:inline>
-  // Mega-menu: hovering a feature on the left swaps the preview on the right.
-  (function () {
-    document.querySelectorAll("[data-nav-dropdown]").forEach(function (dd) {
-      var triggers = dd.querySelectorAll("[data-mega-trigger]");
-      var panes = dd.querySelectorAll(".nav-mega-pane");
-      if (!triggers.length || !panes.length) return;
-      triggers.forEach(function (t) {
-        t.addEventListener("pointerenter", function () {
+  if (!window.__navMenuBound) {
+    window.__navMenuBound = true;
+
+    // Mega-menu: hovering a feature on the left swaps the preview on the right.
+    // The header re-renders per page, so re-bind triggers on every navigation;
+    // guard each element so it is never double-bound.
+    function setupMegaTriggers() {
+      document.querySelectorAll("[data-nav-dropdown]").forEach(function (dd) {
+        var triggers = dd.querySelectorAll("[data-mega-trigger]");
+        var panes = dd.querySelectorAll(".nav-mega-pane");
+        if (!triggers.length || !panes.length) return;
+
+        function loadPaneImages(pane) {
+          pane.dispatchEvent(new CustomEvent("stella:load-theme-images", {
+            bubbles: true,
+          }));
+        }
+
+        function activateTrigger(t) {
           var slug = t.getAttribute("data-slug");
           panes.forEach(function (p) {
-            p.classList.toggle("is-active", p.getAttribute("data-pane") === slug);
+            var isActive = p.getAttribute("data-pane") === slug;
+            p.classList.toggle("is-active", isActive);
+            if (isActive) loadPaneImages(p);
           });
           triggers.forEach(function (x) {
             x.classList.toggle("is-hover", x === t);
           });
+        }
+
+        if (!dd.__megaToggleBound) {
+          dd.__megaToggleBound = true;
+          dd.addEventListener("toggle", function () {
+            if (!dd.open) return;
+            var activePane = dd.querySelector(".nav-mega-pane.is-active");
+            if (activePane) loadPaneImages(activePane);
+          });
+        }
+
+        triggers.forEach(function (t) {
+          if (t.__megaBound) return;
+          t.__megaBound = true;
+          t.addEventListener("pointerenter", function () { activateTrigger(t); });
+          t.addEventListener("focus", function () { activateTrigger(t); });
         });
       });
-    });
-  })();
+    }
+    document.addEventListener("astro:page-load", setupMegaTriggers);
 
-  // Close any open nav dropdown on outside click or Escape.
-  (function () {
+    // Close any open nav dropdown on outside click or Escape. These are
+    // document-level and only need to be added once.
     document.addEventListener("click", function (e) {
       document.querySelectorAll("[data-nav-dropdown][open]").forEach(function (d) {
         if (!d.contains(e.target)) d.removeAttribute("open");
@@ -210,5 +285,5 @@ const t = getTranslations(locale);
         d.removeAttribute("open");
       });
     });
-  })();
+  }
 </script>

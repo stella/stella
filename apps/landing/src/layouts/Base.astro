@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+import { ClientRouter } from "astro:transitions";
 import {
   defaultLocale,
   isLocale,
@@ -17,6 +18,7 @@ type Props = {
   socialImageAlt?: string;
   header?: boolean;
   current?: string;
+  translationScope?: "all-locales" | "source-only";
 };
 
 const {
@@ -26,6 +28,7 @@ const {
   socialImageAlt = description,
   header = true,
   current = undefined,
+  translationScope = "source-only",
 } = Astro.props;
 
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
@@ -35,10 +38,16 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale: Locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const localeConfig = locales[locale];
 const basePath = stripLocale(Astro.url.pathname);
-const alternates = Astro.site ? getAlternates(basePath, Astro.site) : [];
-const ogAlternates = localeCodes
-  .filter((code) => code !== locale)
-  .map((code) => locales[code].og);
+const hasLocalizedAlternates = translationScope === "all-locales";
+const alternates =
+  Astro.site && hasLocalizedAlternates
+    ? getAlternates(basePath, Astro.site)
+    : [];
+const ogAlternates = hasLocalizedAlternates
+  ? localeCodes
+      .filter((code) => code !== locale)
+      .map((code) => locales[code].og)
+  : [];
 ---
 
 {/*
@@ -105,18 +114,41 @@ const ogAlternates = localeCodes
     {/* Theme: follow system preference, allow manual override */}
     <script is:inline>
       (function() {
-        const t = localStorage.getItem("theme");
-        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        var t = localStorage.getItem("theme");
+        var systemTheme = window.matchMedia("(prefers-color-scheme: dark)");
+        var prefersDark = systemTheme.matches;
         if (t === "dark" || (!t && prefersDark)) {
           document.documentElement.classList.add("dark");
         }
         // When no manual override, follow system changes in real time
-        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
-          if (localStorage.getItem("theme")) {return;}
+        if (window.__systemThemeBound) return;
+        window.__systemThemeBound = true;
+        systemTheme.addEventListener("change", function(e) {
+          if (localStorage.getItem("theme")) return;
           document.documentElement.classList.toggle("dark", e.matches);
         });
       })();
     </script>
+
+    {/*
+      Re-apply theme + reveal gate to the incoming document before it is
+      swapped in, so the crossfade never shows a wrong-theme flash.
+    */}
+    <script is:inline>
+      if (!window.__themeSwapBound) {
+        window.__themeSwapBound = true;
+        document.addEventListener("astro:before-swap", function (e) {
+          var t = localStorage.getItem("theme");
+          var prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+          var dark = t === "dark" || (!t && prefersDark);
+          e.newDocument.documentElement.classList.toggle("dark", dark);
+          e.newDocument.documentElement.classList.add("js-reveal");
+        });
+      }
+    </script>
+
+    {/* Client-side routing: crossfade between pages instead of full reloads. */}
+    <ClientRouter />
 
     {/* Structured data */}
     <script is:inline type="application/ld+json" set:html={JSON.stringify({
@@ -247,37 +279,87 @@ const ogAlternates = localeCodes
     */}
     <script is:inline>
       (function () {
-        const targets = document.querySelectorAll("[data-reveal]");
-        if (!targets.length) {return;}
-        const reveal = (el) => { el.dataset.inView = ""; };
-        if (typeof IntersectionObserver === "undefined") {
-          for (const el of targets) { reveal(el); }
-          return;
+        if (window.__revealBound) return;
+        window.__revealBound = true;
+
+        var observer = null;
+        var pendingReveal = null;
+
+        function revealCleanup() {
+          if (pendingReveal !== null) {
+            clearTimeout(pendingReveal);
+            pendingReveal = null;
+          }
+          if (observer) {
+            observer.disconnect();
+            observer = null;
+          }
         }
-        const io = new IntersectionObserver((entries) => {
-          for (const entry of entries) {
-            if (!entry.isIntersecting) {continue;}
-            reveal(entry.target);
-            io.unobserve(entry.target);
+
+        function revealSetup() {
+          revealCleanup();
+          var targets = document.querySelectorAll("[data-reveal]");
+          if (!targets.length) return;
+          var reveal = function (el) { el.setAttribute("data-in-view", ""); };
+          if (typeof IntersectionObserver === "undefined") {
+            targets.forEach(reveal);
+            return;
           }
-        }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
-        // Reveal whatever is already in (or above) the viewport on load so the
-        // hero never depends on the observer firing; defer the rest to the IO
-        // for scroll reveal. Fixes a cold-load race where above-the-fold
-        // [data-reveal] elements stayed at opacity 0. setTimeout (not
-        // requestAnimationFrame) because rAF is fully paused in a backgrounded
-        // tab, which would leave the hero invisible until the tab is focused;
-        // the 0ms task still yields a paint first, so the transition animates.
-        setTimeout(() => {
-          for (const el of targets) {
+          observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+              if (!entry.isIntersecting) return;
+              reveal(entry.target);
+              observer?.unobserve(entry.target);
+            });
+          }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
+          // Reveal whatever is already in (or above) the viewport on load so the
+          // hero never depends on the observer firing; defer the rest to the IO
+          // for scroll reveal. Fixes a cold-load race where above-the-fold
+          // [data-reveal] elements stayed at opacity 0. setTimeout (not
+          // requestAnimationFrame) because rAF is fully paused in a backgrounded
+          // tab, which would leave the hero invisible until the tab is focused;
+          // the 0ms task still yields a paint first, so the transition animates.
+          pendingReveal = setTimeout(function () {
+            pendingReveal = null;
+            targets.forEach(function (el) {
+              if (!el.isConnected) return;
+              if (el.getBoundingClientRect().top < window.innerHeight) {
+                reveal(el);
+              } else {
+                observer?.observe(el);
+              }
+            });
+          }, 0);
+        }
+
+        // Astro's history restoration can paint the swapped document before
+        // the page-load task above runs. Reveal the new viewport synchronously
+        // after the swap so Back/Forward never leaves the hero in its hidden
+        // entrance state; the normal setup still observes everything below it.
+        function revealViewportAfterSwap() {
+          document.documentElement.classList.add("reveal-without-motion");
+          document.querySelectorAll("[data-reveal]").forEach(function (el) {
             if (el.getBoundingClientRect().top < window.innerHeight) {
-              reveal(el);
-            } else {
-              io.observe(el);
+              el.setAttribute("data-in-view", "");
             }
-          }
-        }, 0);
+          });
+          setTimeout(function () {
+            document.documentElement.classList.remove("reveal-without-motion");
+          }, 0);
+        }
+
+        document.addEventListener("astro:page-load", revealSetup);
+        document.addEventListener("astro:after-swap", revealViewportAfterSwap);
+        document.addEventListener("astro:before-swap", revealCleanup);
       })();
+    </script>
+
+    <script>
+      import { initializePageGradients } from "../lib/animated-gradient";
+      import { initializeThemeImages } from "../lib/theme-images";
+
+      document.addEventListener("astro:page-load", initializePageGradients);
+      document.addEventListener("astro:page-load", initializeThemeImages);
     </script>
   </body>
 </html>

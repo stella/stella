@@ -34,7 +34,7 @@ export const controlCapabilities = [
   },
   {
     title: "Anonymize sensitive text",
-    body: "Prepare material for AI workflows without exposing names, entities, or identifying details. Coming soon.",
+    body: "Prepare material for AI workflows without exposing names, entities, or identifying details.",
   },
   {
     title: "Use your AI provider key",

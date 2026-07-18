@@ -1,0 +1,405 @@
+---
+import { CliMcpPreview } from "./react/previews/CliMcpPreview";
+import ThemeImage from "./ThemeImage.astro";
+
+const chapters = [
+  {
+    id: "workspace",
+    eyebrow: "Matter workspace",
+    title: "The matter is the system of record.",
+    body: "Documents, deadlines, structured review, and drafting stay together. Open a matter, see the work in context, and move from a table to the underlying document without rebuilding the trail.",
+    links: [
+      { label: "Explore Workspace", href: "/product/workspace" },
+      { label: "Open Editor", href: "/product/editor" },
+    ],
+  },
+  {
+    id: "agent",
+    eyebrow: "Agent workflows",
+    title: "Ask once. Work across every document.",
+    body: "The agent searches the matter, reads the relevant text, and returns linked evidence. Use it in stella, Microsoft Teams, or through MCP and the CLI; the same permissions and sources follow the request.",
+    links: [
+      { label: "Explore AI agent", href: "/product/agent" },
+    ],
+  },
+  {
+    id: "data",
+    eyebrow: "Legal data",
+    title: "Bring the law and the data with you.",
+    body: "Search official legal sources, bring registry data into the matter, review document sets as structured tables, and anonymize identifying details before sensitive material enters an AI workflow.",
+    links: [
+      { label: "Explore Public data", href: "/product/public-data" },
+      { label: "Explore Anonymization", href: "/product/anonymization" },
+    ],
+  },
+] as const;
+---
+
+<section class="home-product-story px-4 py-20 sm:px-6 lg:py-28" aria-labelledby="product-story-title">
+  <div class="mx-auto max-w-300">
+    <div class="max-w-4xl">
+      <p
+        data-reveal
+        class="text-xs font-medium uppercase tracking-[0.2em]"
+        style="color: var(--muted-foreground)"
+      >
+        One connected workspace
+      </p>
+      <h2
+        data-reveal
+        id="product-story-title"
+        style="--reveal-delay: 80ms"
+        class="mt-3 max-w-4xl text-balance font-display text-4xl font-medium leading-[1.04] sm:text-5xl lg:text-6xl"
+      >
+        One matter. Every part of the work.
+      </h2>
+      <p
+        data-reveal
+        style="--reveal-delay: 160ms; color: var(--muted-foreground)"
+        class="mt-5 max-w-2xl text-pretty text-base leading-7 sm:text-lg sm:leading-8"
+      >
+        A matter moves through the same connected system: from source material,
+        through review and drafting, to a grounded answer or action.
+      </p>
+    </div>
+
+    <div class="mt-16 space-y-24 lg:mt-24 lg:space-y-36">
+      {
+        chapters.map((chapter, index) => (
+          <article
+            class:list={[
+              "product-chapter grid gap-8 lg:grid-cols-12 lg:items-center lg:gap-12",
+              index % 2 === 1 && "product-chapter-reverse",
+            ]}
+            id={`story-${chapter.id}`}
+          >
+            <div
+              data-reveal
+              class:list={[
+                "product-chapter-copy lg:col-span-4",
+                index % 2 === 1 ? "lg:col-start-9" : "lg:col-start-1",
+              ]}
+            >
+              <p
+                class="text-xs font-medium uppercase tracking-[0.2em]"
+                style="color: var(--muted-foreground)"
+              >
+                {chapter.eyebrow}
+              </p>
+              <h3 class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
+                {chapter.title}
+              </h3>
+              <p
+                class="mt-5 text-pretty text-base leading-7"
+                style="color: var(--muted-foreground)"
+              >
+                {chapter.body}
+              </p>
+              <nav class="mt-6 flex flex-wrap gap-x-5 gap-y-1" aria-label={chapter.eyebrow}>
+                {chapter.links.map((link) => (
+                  <a class="story-link group inline-flex min-h-11 items-center gap-2 text-sm font-medium" href={link.href}>
+                    <span>{link.label}</span>
+                    <span
+                      aria-hidden="true"
+                      class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
+                    >
+                      →
+                    </span>
+                  </a>
+                ))}
+              </nav>
+            </div>
+
+            <div
+              data-reveal
+              style={`--reveal-delay: ${120 + index * 30}ms`}
+              class:list={[
+                "product-chapter-visual lg:col-span-8",
+                index % 2 === 1 ? "lg:col-start-1 lg:row-start-1" : "lg:col-start-5",
+              ]}
+            >
+              {chapter.id === "workspace" && (
+                <div class="story-media story-media-workspace">
+                  <CliMcpPreview
+                    client:visible
+                    includeStyles={false}
+                    sceneId="review"
+                    showCompanions={false}
+                  />
+                </div>
+              )}
+              {chapter.id === "agent" && (
+                <div class="story-media story-media-agent">
+                  <CliMcpPreview
+                    client:visible
+                    includeStyles={false}
+                    initialScenarioId="template"
+                    revealSideWindowsOnScroll
+                  />
+                </div>
+              )}
+              {chapter.id === "data" && (
+                <div class="story-media story-media-data">
+                  <div class="story-main-screen">
+                    <ThemeImage
+                      lightSrc="/media/products/story-public-data.png"
+                      darkSrc="/media/products/story-public-data-dark.png"
+                      alt="An official Slovak court decision open in stella"
+                      class="h-full w-full object-cover object-top"
+                      loading="lazy"
+                      decoding="async"
+                      defer="visible"
+                    />
+                  </div>
+                  <div class="story-inset-screen story-anonymization-screen">
+                    <ThemeImage
+                      lightSrc="/media/products/anonymization.png"
+                      darkSrc="/media/products/anonymization-dark.png"
+                      alt="A due diligence extract with identifying details redacted in stella"
+                      class="h-full w-full object-cover object-top"
+                      loading="lazy"
+                      decoding="async"
+                      defer="visible"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>
+
+<section class="px-4 pb-20 sm:px-6 lg:pb-28" aria-labelledby="control-title">
+  <div class="control-rail mx-auto max-w-300 overflow-hidden rounded-[1.65rem]">
+    <div class="grid gap-8 p-7 sm:p-9 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,2.65fr)] lg:items-center lg:p-12">
+      <div data-reveal>
+        <p
+          class="text-xs font-medium uppercase tracking-[0.2em]"
+          style="color: var(--muted-foreground)"
+        >
+          Built for control
+        </p>
+        <h2 id="control-title" class="mt-3 text-balance font-display text-3xl font-medium leading-[1.08] sm:text-4xl">
+          Keep control of the stack.
+        </h2>
+      </div>
+      <ul class="proof-list grid sm:grid-cols-2" data-reveal style="--reveal-delay: 100ms">
+        <li>
+          <strong>Open source</strong>
+          <span>Inspect the code and keep a portable system.</span>
+        </li>
+        <li>
+          <strong>Self-hostable</strong>
+          <span>Run stella on infrastructure you control.</span>
+        </li>
+        <li>
+          <strong>Bring your own models</strong>
+          <span>Use your own provider keys for AI features.</span>
+        </li>
+        <li>
+          <strong>Permission-aware</strong>
+          <span>Requests remain scoped to the user and workspace.</span>
+        </li>
+      </ul>
+    </div>
+    <div class="deployment-band flex flex-col gap-6 px-7 py-6 sm:px-9 lg:flex-row lg:items-center lg:justify-between lg:px-12">
+      <div>
+        <h3 class="font-display text-xl font-medium">Run it with us. Or run it yourself.</h3>
+        <p class="mt-1 text-sm leading-6" style="color: var(--muted-foreground)">
+          Start in the cloud or deploy the same open-source workspace on your infrastructure.
+        </p>
+      </div>
+      <div class="flex shrink-0 flex-wrap items-center gap-3">
+        <a
+          href="https://github.com/stella/stella/blob/main/docs/self-hosting.md"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex min-h-11 items-center rounded-[0.75rem] px-4 text-sm font-medium transition-opacity hover:opacity-75"
+        >
+          Read self-hosting guide
+        </a>
+        <a
+          href="https://my.stll.app"
+          class="inline-flex min-h-11 items-center rounded-[0.75rem] px-5 text-sm font-medium transition-opacity hover:opacity-90"
+          style="background: var(--primary); color: var(--primary-foreground)"
+        >
+          Start free
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .home-product-story {
+    position: relative;
+  }
+
+  .product-chapter-visual,
+  .control-rail {
+    background: color-mix(in srgb, var(--card) 82%, transparent);
+    box-shadow:
+      inset 0 1px 0 color-mix(in srgb, white 28%, transparent),
+      0 36px 90px -58px color-mix(in srgb, var(--foreground) 38%, transparent);
+  }
+
+  .product-chapter-visual {
+    position: relative;
+    overflow: hidden;
+    border-radius: 1.65rem;
+    padding: 0.55rem;
+  }
+
+  .story-media {
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    aspect-ratio: 16 / 10;
+    border-radius: 1.1rem;
+    background: var(--background);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--foreground) 7%, transparent);
+  }
+
+  .story-main-screen {
+    position: absolute;
+    inset: 0;
+  }
+
+  .story-inset-screen {
+    position: absolute;
+    overflow: hidden;
+    border-radius: 0.8rem;
+    background: var(--background);
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--foreground) 10%, transparent),
+      0 24px 64px -34px color-mix(in srgb, var(--foreground) 52%, transparent);
+  }
+
+  .story-editor-screen {
+    inline-size: 44%;
+    block-size: 64%;
+    inset-block-end: 5%;
+    inset-inline-end: 3.5%;
+  }
+
+  .story-anonymization-screen {
+    inline-size: 48%;
+    block-size: 58%;
+    inset-block-end: 5%;
+    inset-inline-start: 3.5%;
+  }
+
+  .story-media-agent {
+    aspect-ratio: 2.03;
+  }
+
+  .product-chapter-visual::before,
+  .control-rail::before {
+    position: absolute;
+    content: "";
+    pointer-events: none;
+    inset: 0;
+    background: linear-gradient(
+      118deg,
+      color-mix(in srgb, white 20%, transparent),
+      transparent 28%,
+      transparent 72%,
+      color-mix(in srgb, var(--auth-gradient-end) 10%, transparent)
+    );
+  }
+
+  .story-link {
+    color: var(--foreground);
+    text-decoration: none;
+  }
+
+  .story-link:hover,
+  .story-link:focus-visible {
+    opacity: 0.68;
+  }
+
+  .control-rail {
+    position: relative;
+  }
+
+  .proof-list li {
+    display: flex;
+    min-height: 6.5rem;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.3rem;
+    border-block-start: 1px solid var(--border);
+    padding-block: 1.25rem;
+  }
+
+  .proof-list li:nth-child(odd) {
+    padding-inline-end: 1.5rem;
+  }
+
+  .proof-list li:nth-child(even) {
+    padding-inline-start: 1.5rem;
+  }
+
+  .proof-list strong {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 500;
+  }
+
+  .proof-list span {
+    color: var(--muted-foreground);
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+
+  .deployment-band {
+    position: relative;
+    border-block-start: 1px solid var(--border);
+    background: color-mix(in srgb, var(--background) 56%, transparent);
+  }
+
+  @media (min-width: 640px) {
+    .proof-list li:nth-child(even) {
+      border-inline-start: 1px solid var(--border);
+    }
+  }
+
+  @media (max-width: 639px) {
+    .story-media {
+      aspect-ratio: 4 / 3;
+    }
+
+    .story-media-agent {
+      aspect-ratio: 4 / 5;
+    }
+
+    .story-editor-screen {
+      display: none;
+    }
+
+    .story-anonymization-screen {
+      inline-size: 72%;
+      block-size: 50%;
+    }
+
+    .story-media-workspace .story-main-screen img {
+      width: 170%;
+      max-width: none;
+      object-position: start top;
+    }
+
+    .story-media-data .story-main-screen img {
+      width: 165%;
+      max-width: none;
+      object-position: center top;
+    }
+
+    .proof-list li:nth-child(odd),
+    .proof-list li:nth-child(even) {
+      padding-inline: 0;
+    }
+  }
+</style>
