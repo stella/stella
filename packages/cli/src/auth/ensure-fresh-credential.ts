@@ -18,7 +18,7 @@ import {
   upsertCredential,
   writeCredentialFile,
 } from "./credential-store.js";
-import type { StoredCredential } from "./credential-store.js";
+import type { CredentialFile, StoredCredential } from "./credential-store.js";
 import { CredentialNotFoundError, NoRefreshTokenError } from "./errors.js";
 import type { CliAuthError } from "./errors.js";
 import type { AuthorizationServerMetadata } from "./oauth-metadata.js";
@@ -54,11 +54,103 @@ export type EnsureFreshCredentialInput = {
 };
 
 /**
+ * The seam shared by every place this module needs to answer "did a
+ * concurrent `stella` process already move this exact (serverUrl, orgId)
+ * credential out from under this refresh attempt, and if so to what":
+ *
+ *  - `unchanged`: the stored entry still matches the generation this
+ *    attempt started from (`input.credential`) — nothing raced in, so the
+ *    caller proceeds with its own outcome (write the token it just
+ *    refreshed, or surface the token-endpoint error it just got).
+ *  - `resolved`: something did move. `CredentialNotFoundError` when the
+ *    entry is gone — a concurrent `auth logout` wins over anything this
+ *    attempt concluded, success or failure, so writing/using this
+ *    attempt's result would resurrect a credential the user signed out of.
+ *    Otherwise the fresher stored credential, refreshed further (from that
+ *    newer generation, reusing the already-discovered `metadata`) if it
+ *    turns out to itself already be due a refresh.
+ */
+type StoredGenerationCheck =
+  | {
+      readonly kind: "unchanged";
+      readonly latestCredentialFile: CredentialFile;
+    }
+  | {
+      readonly kind: "resolved";
+      readonly result: Result<StoredCredential, CliAuthError>;
+    };
+
+const checkForNewerStoredGeneration = async (
+  input: EnsureFreshCredentialInput,
+  now: number,
+): Promise<StoredGenerationCheck> => {
+  // Re-read right before deciding rather than trusting any snapshot the
+  // caller took earlier: both the token exchange and metadata discovery
+  // that precede this check are network round trips, during which another
+  // `stella` process (a concurrent command, or `auth login`/`logout`) may
+  // have written to `credentials.json`. This keeps that window as small as
+  // this process can make it without a lock (full read-modify-write
+  // atomicity — a store-level lock or true compare-and-swap across the
+  // whole critical section — is a separate, tracked follow-up: this is a
+  // compare-and-skip, not a swap).
+  const latestCredentialFile = await readCredentialFile(input.configDir);
+  const stillPresent = findCredentialByOrgId(
+    latestCredentialFile,
+    input.credential.serverUrl,
+    input.credential.orgId,
+  );
+  if (stillPresent === undefined) {
+    return {
+      kind: "resolved",
+      result: Result.err(
+        new CredentialNotFoundError({
+          message: `Not signed in to ${input.credential.serverUrl}. Run \`stella auth login\`.`,
+          org: input.credential.orgId,
+          serverUrl: input.credential.serverUrl,
+        }),
+      ),
+    };
+  }
+
+  const unchangedSinceAttemptStarted =
+    stillPresent.accessToken === input.credential.accessToken &&
+    stillPresent.refreshToken === input.credential.refreshToken &&
+    stillPresent.expiresAt === input.credential.expiresAt &&
+    stillPresent.scope === input.credential.scope &&
+    stillPresent.updatedAt === input.credential.updatedAt;
+  if (unchangedSinceAttemptStarted) {
+    return { kind: "unchanged", latestCredentialFile };
+  }
+
+  if (!credentialNeedsRefresh(stillPresent, now)) {
+    return { kind: "resolved", result: Result.ok(stillPresent) };
+  }
+  // The concurrent writer's own credential is itself already due a refresh
+  // (rare — e.g. it raced in with a short-lived token). Retry from this
+  // newer generation rather than clobbering it, using it as a failure
+  // excuse, or handing back a token that's already stale;
+  // `credentialNeedsRefresh` re-checks first on every call, so this
+  // terminates once nothing further races in.
+  return {
+    kind: "resolved",
+    result: await ensureFreshCredential({
+      ...input,
+      credential: stillPresent,
+      now,
+    }),
+  };
+};
+
+/**
  * Returns a credential guaranteed usable "now" (with `REFRESH_SKEW_MS` of
  * slack), refreshing and persisting it first if it is expired or about to
  * expire. Errors when the credential is expired and either has no refresh
  * token or the refresh call itself fails — both cases mean the caller must
- * fall back to `stella auth login`.
+ * fall back to `stella auth login`. A refresh-call failure is only trusted
+ * once a re-read confirms no concurrent process already landed newer
+ * tokens (see `checkForNewerStoredGeneration`): the OAuth server may have
+ * rotated the refresh token out from under this exact exchange because a
+ * racing `stella` invocation already won it.
  */
 export const ensureFreshCredential = async (
   input: EnsureFreshCredentialInput,
@@ -81,6 +173,10 @@ export const ensureFreshCredential = async (
     resource: getMcpResourceUrl(input.credential.serverUrl),
   });
   if (Result.isError(refreshed)) {
+    const check = await checkForNewerStoredGeneration(input, now);
+    if (check.kind === "resolved") {
+      return check.result;
+    }
     return Result.err(refreshed.error);
   }
 
@@ -94,70 +190,14 @@ export const ensureFreshCredential = async (
     updatedAt: now,
   };
 
-  // Re-read right before the write rather than trusting any snapshot the
-  // caller took earlier: `refreshAccessToken` above is a network round trip,
-  // during which another `stella` process (a concurrent command, or `auth
-  // login`/`logout` for a different server) may have written to
-  // `credentials.json`. Merging into the file as it stands right now — not
-  // as it stood before the exchange — keeps that window as small as this
-  // process can make it without a lock (full read-modify-write atomicity is
-  // a separate, tracked follow-up).
-  const latestCredentialFile = await readCredentialFile(input.configDir);
-
-  // The exchange itself doesn't prove this exact (serverUrl, orgId)
-  // credential is still meant to exist: a concurrent `stella auth logout`
-  // may have removed it while the refresh request was in flight. Writing
-  // the refreshed token back unconditionally would resurrect a credential
-  // the user explicitly signed out of — fail the same way as "never had a
-  // credential" instead of reviving it.
-  const stillPresent = findCredentialByOrgId(
-    latestCredentialFile,
-    input.credential.serverUrl,
-    input.credential.orgId,
-  );
-  if (stillPresent === undefined) {
-    return Result.err(
-      new CredentialNotFoundError({
-        message: `Not signed in to ${input.credential.serverUrl}. Run \`stella auth login\`.`,
-        org: input.credential.orgId,
-        serverUrl: input.credential.serverUrl,
-      }),
-    );
-  }
-
-  // Existing, not just present: a concurrent process (another command's
-  // refresh racing this one, or a fresh `auth login` to the same org) may
-  // have already replaced this exact credential's token-bearing fields
-  // while our exchange was in flight. Writing `updated` — derived from
-  // `input.credential`, the generation this refresh started from — would
-  // then roll that newer generation back to an older one. Only write when
-  // nothing has moved since we read `input.credential`; otherwise the
-  // fresher entry already on disk wins and we hand that back instead of
-  // touching the file. (This is a compare-and-skip, not a true atomic
-  // compare-and-swap — a lock across the read-modify-write is out of scope
-  // here; see the atomic temp+rename write follow-up.)
-  const unchangedSinceRefreshStarted =
-    stillPresent.accessToken === input.credential.accessToken &&
-    stillPresent.refreshToken === input.credential.refreshToken &&
-    stillPresent.expiresAt === input.credential.expiresAt &&
-    stillPresent.scope === input.credential.scope &&
-    stillPresent.updatedAt === input.credential.updatedAt;
-
-  if (!unchangedSinceRefreshStarted) {
-    if (!credentialNeedsRefresh(stillPresent, now)) {
-      return Result.ok(stillPresent);
-    }
-    // The concurrent writer's own credential is itself already due a
-    // refresh (rare — e.g. it raced in with a short-lived token). Retry
-    // from this newer generation rather than either clobbering it or
-    // handing back a token that's already stale; `credentialNeedsRefresh`
-    // re-checks first, so this terminates once nothing further races in.
-    return ensureFreshCredential({ ...input, credential: stillPresent, now });
+  const check = await checkForNewerStoredGeneration(input, now);
+  if (check.kind === "resolved") {
+    return check.result;
   }
 
   await writeCredentialFile(
     input.configDir,
-    upsertCredential(latestCredentialFile, updated),
+    upsertCredential(check.latestCredentialFile, updated),
   );
 
   return Result.ok(updated);

@@ -517,4 +517,72 @@ describe("resolveAccessToken", () => {
       provider.close();
     }
   });
+
+  test("uses the winner's tokens instead of failing when a racing refresh already rotated the shared refresh token", async () => {
+    let tokenRequestCount = 0;
+    const provider = startMockProvider(async (body) => {
+      tokenRequestCount += 1;
+      if (
+        body.get("grant_type") !== "refresh_token" ||
+        body.get("refresh_token") !== "old-refresh-token"
+      ) {
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      }
+      // Simulate a concurrent `stella` process that started from the same
+      // expired credential winning the race: its own refresh already
+      // landed rotated tokens on disk, which invalidates "old-refresh-token"
+      // server-side. Reads the target back off disk rather than closing
+      // over `provider`.
+      const concurrent = await readCredentialFile(configDir);
+      const target = concurrent.credentials.at(0);
+      if (target === undefined) {
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      }
+      await writeCredentialFile(
+        configDir,
+        upsertCredential(concurrent, {
+          ...target,
+          accessToken: "winner-access-token",
+          expiresAt: Date.now() + 60_000,
+          refreshToken: "winner-refresh-token",
+          updatedAt: Date.now(),
+        }),
+      );
+      // This (losing) exchange's refresh token is now invalid server-side —
+      // the OAuth server rotated it away when the winner refreshed first.
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    });
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      // The token-endpoint rejection must not surface as refresh-failed:
+      // a valid, fresher credential is already sitting in the store because
+      // the concurrent process won the race, so this command uses that one.
+      expect(result.status).toBe("ok");
+      if (result.status === "ok") {
+        expect(result.token).toBe("winner-access-token");
+      }
+      expect(tokenRequestCount).toBe(1);
+
+      const persisted = await readCredentialFile(configDir);
+      const stored = persisted.credentials.find(
+        (credential) =>
+          credential.serverUrl === provider.serverUrl &&
+          credential.orgId === "org-1",
+      );
+      expect(stored?.accessToken).toBe("winner-access-token");
+      expect(stored?.refreshToken).toBe("winner-refresh-token");
+    } finally {
+      provider.close();
+    }
+  });
 });
