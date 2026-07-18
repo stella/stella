@@ -184,7 +184,6 @@ export const buildChatAnonPipelineConfig = ({
     enableNameCorpus: true,
     enableDenyList: false,
     enableGazetteer: hasGazetteer,
-    enableNer: false,
     enableConfidenceBoost: false,
     enableCoreference: true,
     enableLegalForms: true,
