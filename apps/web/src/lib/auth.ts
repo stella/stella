@@ -5,6 +5,7 @@ import {
   inferAdditionalFields,
   lastLoginMethodClient,
   organizationClient,
+  twoFactorClient,
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
 import { Result } from "better-result";
@@ -90,6 +91,11 @@ const authClientPlugins = [
     },
   }),
   defineBetterAuthClientPlugin(oauthProviderClient()),
+  // No `onTwoFactorRedirect`/`twoFactorPage`: those globally intercept every
+  // sign-in call, which would lose the in-flight `redirectTo` search param.
+  // The email-OTP sign-in step (otp-panel.tsx) reads `twoFactorRedirect` off
+  // its own response instead and navigates to `/auth/two-factor` explicitly.
+  twoFactorClient(),
 ];
 
 export const authClient = createAuthClient({
@@ -144,6 +150,36 @@ export const revokeAuthSession = async ({
   await authClient.revokeSession({
     token: revealSessionRevocationToken(token),
   });
+
+// The two-factor server plugin rewrites a sign-in endpoint's response body to
+// `{ twoFactorRedirect: true, twoFactorMethods }` when the signed-in user has
+// 2FA enabled. That rewrite happens through a server-side hook shared across
+// every sign-in method, so the sign-in endpoints' own declared response types
+// (e.g. `signIn.emailOtp`) never include it. Narrow structurally instead of
+// casting so this keeps working whether or not a given better-auth version
+// reflects the rewrite in its types.
+export const isTwoFactorRedirect = (data: unknown): boolean => {
+  if (typeof data !== "object" || data === null) {
+    return false;
+  }
+
+  return "twoFactorRedirect" in data && data.twoFactorRedirect === true;
+};
+
+// Structural check for `session.user.twoFactorEnabled`: the twoFactorClient
+// plugin declares `$InferServerPlugin` to merge this field onto the session
+// user type, but this app's authClient is not generically parameterized by
+// the backend's `auth` instance (see `inferAdditionalFields` above, which
+// re-declares custom fields by hand for the same reason), so whether the
+// field actually flows through depends on better-auth's client typing. Narrow
+// structurally so this reads correctly either way.
+export const isTwoFactorEnabledUser = (user: unknown): boolean => {
+  if (typeof user !== "object" || user === null) {
+    return false;
+  }
+
+  return "twoFactorEnabled" in user && user.twoFactorEnabled === true;
+};
 
 export type Role = keyof typeof roles;
 export type AuthErrorCode = keyof typeof authClient.$ERROR_CODES;

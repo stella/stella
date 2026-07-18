@@ -362,4 +362,7 @@ export const API_RATE_LIMITS = {
   hostedUsageWebhook: { duration: 60_000, max: 300 },
   /** Delete account OTP email request limit: 5 requests per minute. */
   deleteAccountOtp: { duration: 60_000, max: 5 },
+  /** Two-factor management (enable/disable/get-totp-uri/regenerate-backup-codes)
+   *  confirmation OTP email request limit: 5 requests per minute. */
+  twoFactorManageOtp: { duration: 60_000, max: 5 },
 } as const;

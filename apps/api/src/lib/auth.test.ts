@@ -1,3 +1,4 @@
+import type { HookEndpointContext } from "better-auth";
 import {
   afterAll,
   beforeAll,
@@ -9,7 +10,13 @@ import {
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import { contacts, workspaceMembers, workspaces } from "@/api/db/schema";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import {
+  isSixDigitOtpBody,
+  isTwoFactorRedirectResponse,
+  resolveMemberAuthorization,
+  TWO_FACTOR_MANAGE_PATHS,
+  withStellaTwoFactorSignInGate,
+} from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -233,5 +240,163 @@ describe("resolveMemberAuthorization", () => {
     );
 
     expect(result).toBeNull();
+  });
+});
+
+// eslint-disable-next-line typescript/no-unsafe-type-assertion -- the matcher under test only reads `ctx.path`; the other HookEndpointContext members (context, headers, ...) are irrelevant here and a full instance is heavy to construct for a pure-function unit test.
+const fakeCtx = (path: string) => ({ path }) as HookEndpointContext;
+
+describe("withStellaTwoFactorSignInGate", () => {
+  test("keeps the after-hook (and its original handler) instead of dropping it", () => {
+    const handler = () => undefined;
+    const plugin = {
+      hooks: {
+        after: [{ matcher: (_ctx: HookEndpointContext) => false, handler }],
+      },
+    };
+
+    const wrapped = withStellaTwoFactorSignInGate(plugin);
+
+    // Guards against a future better-auth upgrade restructuring `hooks`
+    // (e.g. renaming/removing `after`) without this call site noticing.
+    expect(wrapped.hooks.after).toHaveLength(1);
+    expect(wrapped.hooks.after[0]?.handler).toBe(handler);
+  });
+
+  test("matches /sign-in/email-otp even when the original matcher does not", () => {
+    const plugin = {
+      hooks: {
+        after: [
+          {
+            matcher: (_ctx: HookEndpointContext) => false,
+            handler: () => undefined,
+          },
+        ],
+      },
+    };
+
+    const [wrappedHook] = withStellaTwoFactorSignInGate(plugin).hooks.after;
+
+    expect(wrappedHook?.matcher(fakeCtx("/sign-in/email-otp"))).toBe(true);
+  });
+
+  test("matches the social sign-in callback so enrolled users are challenged", () => {
+    const plugin = {
+      hooks: {
+        after: [
+          {
+            matcher: (_ctx: HookEndpointContext) => false,
+            handler: () => undefined,
+          },
+        ],
+      },
+    };
+
+    const [wrappedHook] = withStellaTwoFactorSignInGate(plugin).hooks.after;
+
+    expect(wrappedHook?.matcher(fakeCtx("/callback/google"))).toBe(true);
+    expect(wrappedHook?.matcher(fakeCtx("/callback/microsoft"))).toBe(true);
+  });
+
+  test("still matches whatever the original matcher already matched", () => {
+    const plugin = {
+      hooks: {
+        after: [
+          {
+            matcher: (ctx: HookEndpointContext) =>
+              ctx.path === "/sign-in/email",
+            handler: () => undefined,
+          },
+        ],
+      },
+    };
+
+    const [wrappedHook] = withStellaTwoFactorSignInGate(plugin).hooks.after;
+
+    expect(wrappedHook?.matcher(fakeCtx("/sign-in/email"))).toBe(true);
+  });
+
+  test("does not match an unrelated path", () => {
+    const plugin = {
+      hooks: {
+        after: [
+          {
+            matcher: (ctx: HookEndpointContext) =>
+              ctx.path === "/sign-in/email",
+            handler: () => undefined,
+          },
+        ],
+      },
+    };
+
+    const [wrappedHook] = withStellaTwoFactorSignInGate(plugin).hooks.after;
+
+    expect(wrappedHook?.matcher(fakeCtx("/two-factor/enable"))).toBe(false);
+    // The MCP OAuth provider plugin lives under /oauth2, not /callback.
+    expect(wrappedHook?.matcher(fakeCtx("/oauth2/callback"))).toBe(false);
+  });
+});
+
+describe("isTwoFactorRedirectResponse", () => {
+  test("detects the two-factor plugin's pending-challenge marker", () => {
+    expect(
+      isTwoFactorRedirectResponse({
+        twoFactorRedirect: true,
+        twoFactorMethods: ["totp"],
+      }),
+    ).toBe(true);
+  });
+
+  test("ignores an ordinary sign-in / OAuth-redirect response", () => {
+    expect(isTwoFactorRedirectResponse({ twoFactorRedirect: false })).toBe(
+      false,
+    );
+    expect(isTwoFactorRedirectResponse({ token: "abc" })).toBe(false);
+    expect(isTwoFactorRedirectResponse(null)).toBe(false);
+    expect(isTwoFactorRedirectResponse(undefined)).toBe(false);
+  });
+});
+
+describe("TWO_FACTOR_MANAGE_PATHS", () => {
+  test("matches every two-factor management path that exposes or changes the second factor", () => {
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/enable")).toBe(true);
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/disable")).toBe(true);
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/get-totp-uri")).toBe(true);
+    expect(
+      TWO_FACTOR_MANAGE_PATHS.has("/two-factor/generate-backup-codes"),
+    ).toBe(true);
+  });
+
+  test("does not match an unrelated two-factor path", () => {
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/verify-totp")).toBe(false);
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/two-factor/verify-backup-code")).toBe(
+      false,
+    );
+    expect(TWO_FACTOR_MANAGE_PATHS.has("/sign-in/email-otp")).toBe(false);
+  });
+});
+
+describe("isSixDigitOtpBody", () => {
+  test("accepts a body with a 6-digit string otp", () => {
+    expect(isSixDigitOtpBody({ otp: "123456" })).toBe(true);
+  });
+
+  test("rejects a missing body", () => {
+    expect(isSixDigitOtpBody(undefined)).toBe(false);
+    expect(isSixDigitOtpBody(null)).toBe(false);
+  });
+
+  test("rejects a body without an otp field", () => {
+    expect(isSixDigitOtpBody({})).toBe(false);
+  });
+
+  test("rejects a non-string otp", () => {
+    expect(isSixDigitOtpBody({ otp: 123_456 })).toBe(false);
+  });
+
+  test("rejects an otp that is not exactly 6 digits", () => {
+    expect(isSixDigitOtpBody({ otp: "12345" })).toBe(false);
+    expect(isSixDigitOtpBody({ otp: "1234567" })).toBe(false);
+    expect(isSixDigitOtpBody({ otp: "12a456" })).toBe(false);
   });
 });

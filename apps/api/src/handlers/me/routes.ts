@@ -5,6 +5,7 @@ import disconnectOAuthConnection from "@/api/handlers/me/disconnect-oauth-connec
 import listOAuthConnections from "@/api/handlers/me/list-oauth-connections";
 import deleteAccountPendingTasks from "@/api/handlers/me/pending-tasks";
 import deleteAccountSendOtp from "@/api/handlers/me/send-otp";
+import twoFactorSendManageOtp from "@/api/handlers/me/two-factor-send-manage-otp";
 import deleteAccountVerify from "@/api/handlers/me/verify-delete";
 import { sessionAuthMacro } from "@/api/lib/auth";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
@@ -12,6 +13,9 @@ import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 const isDeleteAccountOtpSendPath = (pathname: string): boolean =>
   pathname === "/v1/me/delete/send-otp";
+
+const isTwoFactorManageOtpSendPath = (pathname: string): boolean =>
+  pathname === "/v1/me/two-factor/send-otp";
 
 export const meRoute = new Elysia({ prefix: "/me" })
   .use(sessionAuthMacro)
@@ -39,4 +43,21 @@ export const meRoute = new Elysia({ prefix: "/me" })
       .post("/verify", deleteAccountVerify.handler, {
         body: deleteAccountVerify.config.body,
       }),
+  )
+  .group("/two-factor", (app) =>
+    app
+      .use(
+        rateLimit({
+          scoping: "scoped",
+          duration: API_RATE_LIMITS.twoFactorManageOtp.duration,
+          max: API_RATE_LIMITS.twoFactorManageOtp.max,
+          ...createRedisRateLimit({
+            failurePolicy: "fail_open_local",
+            scope: "two-factor-manage-otp",
+          }),
+          skip: (req) =>
+            !isTwoFactorManageOtpSendPath(new URL(req.url).pathname),
+        }),
+      )
+      .post("/send-otp", twoFactorSendManageOtp.handler),
   );

@@ -28,7 +28,8 @@
     "ignore": "Jei neprašėte šio kodo, galite nepaisyti šio el. laiško.",
     "preview": "Naudokite šį kodą savo tapatybei patvirtinti",
     "signIn": "Naudokite šį kodą prisijungimui prie savo stella paskyros.",
-    "subject": "Jūsų stella patvirtinimo kodas"
+    "subject": "Jūsų stella patvirtinimo kodas",
+    "twoFactorManage": "Naudokite šį kodą dviejų veiksnių autentifikavimo nustatymų pakeitimams patvirtinti."
   },
   "reportExportStatus": {
     "action": "Atidaryti stella",

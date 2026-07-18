@@ -62,6 +62,7 @@ import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { sessionOptions } from "@/routes/-queries";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
+import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/profile")({
@@ -130,6 +131,19 @@ function ProfilePagePending() {
             </div>
           ))}
         </div>
+      </Frame>
+
+      <Frame>
+        <FrameHeader>
+          <Skeleton className="h-4 w-56" />
+          <Skeleton className="mt-1.5 h-4 w-72 max-w-full" />
+        </FrameHeader>
+        <FramePanel>
+          <div className="flex items-center justify-between gap-4 p-4">
+            <Skeleton className="h-5 w-20 rounded-md" />
+            <Skeleton className="h-8 w-40 rounded-md" />
+          </div>
+        </FramePanel>
       </Frame>
 
       <section className="flex flex-col gap-2">
@@ -480,6 +494,8 @@ function ProfilePageBody() {
       </Frame>
 
       <LocalePreferences />
+
+      <TwoFactorCard />
 
       <section className="flex flex-col gap-2">
         <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">

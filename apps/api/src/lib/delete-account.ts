@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 
-import { member, organization, user, verification } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
   entities,
@@ -15,6 +15,7 @@ import {
 } from "@/api/lib/account-deletion-cleanup-queue";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
 import {
+  ACCOUNT_DELETION_ERROR_CODE,
   assertUserIsNotSoleOrgOwner,
   clearWorkspaceLeadRole,
   collectUserOrganizationAndWorkspaceIds,
@@ -32,16 +33,16 @@ import {
   recordAccountDeletionRequest,
   revokeAuthCredentialsAndInvitations,
   revokeOAuthTokensAndGrants,
-  verifyDeletionOtp,
 } from "@/api/lib/account-deletion-steps";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
-export { ACCOUNT_DELETION_ERROR_CODE } from "@/api/lib/account-deletion-steps";
+export { ACCOUNT_DELETION_ERROR_CODE };
 
 /**
  * Fetches the user email by ID.
@@ -125,47 +126,6 @@ export const checkUserOrganizationOwnership = async (
       new HandlerError({
         status: 500,
         message: "Database query failed",
-        cause: err,
-      }),
-  });
-
-/**
- * Generates and stores a delete account OTP.
- */
-export const createDeleteAccountOtp = async (
-  email: string,
-  otp: string,
-): Promise<Result<void, HandlerError>> =>
-  await Result.tryPromise({
-    try: async () => {
-      const identifier = `delete-account:${email}`;
-
-      await rootDb.transaction(async (tx) => {
-        // Lock the user row by email first to serialize OTP requests for this email
-        await tx
-          .select({ id: user.id })
-          .from(user)
-          .where(eq(user.email, email))
-          .for("update");
-
-        // Now we delete any existing OTP records for this identifier safely
-        await tx
-          .delete(verification)
-          .where(eq(verification.identifier, identifier));
-
-        const id = Bun.randomUUIDv7();
-        await tx.insert(verification).values({
-          id,
-          identifier,
-          value: otp,
-          expiresAt: new Date(Date.now() + 5 * 60 * 1000), // 5 minutes
-        });
-      });
-    },
-    catch: (err) =>
-      new HandlerError({
-        status: 500,
-        message: "Database operation failed",
         cause: err,
       }),
   });
@@ -330,29 +290,38 @@ export const verifyAndDeleteUser = async (
 ): Promise<Result<void, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
-      const identifier = `delete-account:${email}`;
       const deletionRequestId = createSafeId<"accountDeletionRequest">();
       const s3KeysToDelete: string[] = [];
 
+      // Burn the confirmation OTP *before* opening the deletion transaction.
+      // The consume runs on its own root connection and commits independently,
+      // so a wrong/expired code (or any later abort of the destructive work
+      // below) can never restore the row and reopen it to replay/guessing.
+      // The atomic DELETE ... RETURNING also serializes concurrent verifies on
+      // its own, so this no longer needs the user-row lock to gate it. The
+      // purpose-specific error codes keep the frontend's localized
+      // invalid/expired messaging working.
+      const otpResult = await verifyConfirmationOtp({
+        purpose: "delete-account",
+        email,
+        code,
+        errorCode: {
+          invalid: ACCOUNT_DELETION_ERROR_CODE.otpInvalid,
+          expired: ACCOUNT_DELETION_ERROR_CODE.otpExpired,
+        },
+      });
+      if (Result.isError(otpResult)) {
+        throw otpResult.error;
+      }
+
       await rootDb.transaction(async (tx) => {
         await lockUserRowForDeletion(tx, currentUserId);
-
-        const verificationRow = await verifyDeletionOtp({
-          tx,
-          identifier,
-          code,
-        });
 
         // 2. Perform ownership check with SELECT FOR UPDATE locks inside transaction
         await assertUserIsNotSoleOrgOwner(tx, currentUserId);
 
         const { organizationIds, workspaceIds } =
           await collectUserOrganizationAndWorkspaceIds(tx, currentUserId);
-
-        // audit: skip — ephemeral verification code deletion
-        await tx
-          .delete(verification)
-          .where(eq(verification.id, verificationRow.id));
 
         // The user row is retained for historical attribution in collaborative
         // records. Account deletion revokes access and clears private profile

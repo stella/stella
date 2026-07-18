@@ -112,6 +112,7 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "streamdown": "^2.4.0",
+    "uqr": "^0.1.3",
     "use-debounce": "^10.1.1",
     "use-intl": "catalog:",
     "uuid": "^14.0.1",

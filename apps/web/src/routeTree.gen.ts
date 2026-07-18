@@ -22,6 +22,7 @@ import { Route as LawIndexRouteImport } from './routes/law/index'
 import { Route as AuthIndexRouteImport } from './routes/auth/index'
 import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]xml'
 import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
+import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
 import { Route as AuthOtpRouteImport } from './routes/auth/otp'
 import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
 import { Route as AuthErrorRouteImport } from './routes/auth/error'
@@ -144,6 +145,11 @@ const McpOauthCallbackRoute = McpOauthCallbackRouteImport.update({
   id: '/mcp/oauth-callback',
   path: '/mcp/oauth-callback',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthTwoFactorRoute = AuthTwoFactorRouteImport.update({
+  id: '/two-factor',
+  path: '/two-factor',
+  getParentRoute: () => AuthRouteRoute,
 } as any)
 const AuthOtpRoute = AuthOtpRouteImport.update({
   id: '/otp',
@@ -493,6 +499,7 @@ export interface FileRoutesByFullPath {
   '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/auth/two-factor': typeof AuthTwoFactorRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/auth/': typeof AuthIndexRoute
@@ -560,6 +567,7 @@ export interface FileRoutesByTo {
   '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/auth/two-factor': typeof AuthTwoFactorRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/auth': typeof AuthIndexRoute
@@ -631,6 +639,7 @@ export interface FileRoutesById {
   '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
+  '/auth/two-factor': typeof AuthTwoFactorRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
   '/auth/': typeof AuthIndexRoute
@@ -705,6 +714,7 @@ export interface FileRouteTypes {
     | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
+    | '/auth/two-factor'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/auth/'
@@ -772,6 +782,7 @@ export interface FileRouteTypes {
     | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
+    | '/auth/two-factor'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/auth'
@@ -842,6 +853,7 @@ export interface FileRouteTypes {
     | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
+    | '/auth/two-factor'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
     | '/auth/'
@@ -1008,6 +1020,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/mcp/oauth-callback'
       preLoaderRoute: typeof McpOauthCallbackRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/auth/two-factor': {
+      id: '/auth/two-factor'
+      path: '/two-factor'
+      fullPath: '/auth/two-factor'
+      preLoaderRoute: typeof AuthTwoFactorRouteImport
+      parentRoute: typeof AuthRouteRoute
     }
     '/auth/otp': {
       id: '/auth/otp'
@@ -1422,6 +1441,7 @@ interface AuthRouteRouteChildren {
   AuthErrorRoute: typeof AuthErrorRoute
   AuthOrganizationRoute: typeof AuthOrganizationRoute
   AuthOtpRoute: typeof AuthOtpRoute
+  AuthTwoFactorRoute: typeof AuthTwoFactorRoute
   AuthIndexRoute: typeof AuthIndexRoute
   AuthAcceptInvitationInvitationIdRoute: typeof AuthAcceptInvitationInvitationIdRoute
 }
@@ -1430,6 +1450,7 @@ const AuthRouteRouteChildren: AuthRouteRouteChildren = {
   AuthErrorRoute: AuthErrorRoute,
   AuthOrganizationRoute: AuthOrganizationRoute,
   AuthOtpRoute: AuthOtpRoute,
+  AuthTwoFactorRoute: AuthTwoFactorRoute,
   AuthIndexRoute: AuthIndexRoute,
   AuthAcceptInvitationInvitationIdRoute: AuthAcceptInvitationInvitationIdRoute,
 }
