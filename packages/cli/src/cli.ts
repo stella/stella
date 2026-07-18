@@ -122,6 +122,11 @@ const resolvePreamble = async (): Promise<{
     // signed in" message stand in for it.
     process.stderr.write(`${resolved.error.message}\n`);
   }
+  if (resolved.status === "ok" && resolved.persistWarning !== undefined) {
+    // The refresh succeeded but couldn't be saved to disk (read-only config
+    // dir, full disk); the token below is still valid for this command.
+    process.stderr.write(`${resolved.persistWarning}\n`);
+  }
   const token = resolved.status === "ok" ? resolved.token : undefined;
   return { configDir, serverUrl, token };
 };

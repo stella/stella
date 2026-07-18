@@ -13,6 +13,7 @@ import { Result } from "better-result";
 
 import { getMcpResourceUrl } from "./constants.js";
 import {
+  credentialsFilePath,
   findCredentialByOrgId,
   readCredentialFile,
   upsertCredential,
@@ -54,6 +55,19 @@ export type EnsureFreshCredentialInput = {
 };
 
 /**
+ * `ensureFreshCredential`'s success payload: the credential itself, plus an
+ * optional warning when a freshly-refreshed token could not be written to
+ * `credentials.json` (read-only config dir, full disk, etc.). The token in
+ * `credential` is still valid and safe to use for the command in flight
+ * either way — persistence failing doesn't invalidate it, it just means the
+ * next command will have to refresh again instead of finding it on disk.
+ */
+export type EnsureFreshCredentialOutcome = {
+  readonly credential: StoredCredential;
+  readonly persistWarning?: string;
+};
+
+/**
  * The seam shared by every place this module needs to answer "did a
  * concurrent `stella` process already move this exact (serverUrl, orgId)
  * credential out from under this refresh attempt, and if so to what":
@@ -77,7 +91,7 @@ type StoredGenerationCheck =
     }
   | {
       readonly kind: "resolved";
-      readonly result: Result<StoredCredential, CliAuthError>;
+      readonly result: Result<EnsureFreshCredentialOutcome, CliAuthError>;
     };
 
 const checkForNewerStoredGeneration = async (
@@ -123,7 +137,10 @@ const checkForNewerStoredGeneration = async (
   }
 
   if (!credentialNeedsRefresh(stillPresent, now)) {
-    return { kind: "resolved", result: Result.ok(stillPresent) };
+    return {
+      kind: "resolved",
+      result: Result.ok({ credential: stillPresent }),
+    };
   }
   // The concurrent writer's own credential is itself already due a refresh
   // (rare — e.g. it raced in with a short-lived token). Retry from this
@@ -151,13 +168,20 @@ const checkForNewerStoredGeneration = async (
  * tokens (see `checkForNewerStoredGeneration`): the OAuth server may have
  * rotated the refresh token out from under this exact exchange because a
  * racing `stella` invocation already won it.
+ *
+ * Note the `Result` only ever carries an error for states the caller must
+ * act on (no credential, expired-and-unrefreshable, a genuine refresh
+ * failure). A failure to *persist* an otherwise-successful refresh — the
+ * config dir is read-only, the disk is full — is not one of those: the
+ * refreshed token is valid in memory regardless, so it comes back as
+ * `Result.ok` with `persistWarning` set, not as an error.
  */
 export const ensureFreshCredential = async (
   input: EnsureFreshCredentialInput,
-): Promise<Result<StoredCredential, CliAuthError>> => {
+): Promise<Result<EnsureFreshCredentialOutcome, CliAuthError>> => {
   const now = input.now ?? Date.now();
   if (!credentialNeedsRefresh(input.credential, now)) {
-    return Result.ok(input.credential);
+    return Result.ok({ credential: input.credential });
   }
 
   if (!input.credential.refreshToken) {
@@ -195,10 +219,26 @@ export const ensureFreshCredential = async (
     return check.result;
   }
 
-  await writeCredentialFile(
-    input.configDir,
-    upsertCredential(check.latestCredentialFile, updated),
+  // The write itself (mkdir + writeFile + chmod) can throw — a read-only
+  // config dir, a full disk — outside anything the `Result` flow above
+  // accounts for. `resolvePreamble()` (cli.ts) calls this path before
+  // dispatching every command, so an unhandled rejection here would crash
+  // ordinary commands that have nothing to do with credential storage. The
+  // refresh itself already succeeded, so treat a persistence failure as a
+  // warning, not a failure: hand back the (unsaved) fresh credential and
+  // let the caller decide how to surface the warning.
+  const persisted = await Result.tryPromise(() =>
+    writeCredentialFile(
+      input.configDir,
+      upsertCredential(check.latestCredentialFile, updated),
+    ),
   );
+  if (Result.isError(persisted)) {
+    return Result.ok({
+      credential: updated,
+      persistWarning: `Warning: refreshed the stella credential but could not save it to ${credentialsFilePath(input.configDir)} (${persisted.error.message}). This command will use the fresh token; the next command will need to refresh again.`,
+    });
+  }
 
-  return Result.ok(updated);
+  return Result.ok({ credential: updated });
 };

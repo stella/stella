@@ -103,7 +103,8 @@ describe("ensureFreshCredential", () => {
 
       expect(result.status).toBe("ok");
       if (result.status === "ok") {
-        expect(result.value).toEqual(credential);
+        expect(result.value.credential).toEqual(credential);
+        expect(result.value.persistWarning).toBeUndefined();
       }
       expect(provider.getRequestCount()).toBe(0);
     } finally {
@@ -144,9 +145,10 @@ describe("ensureFreshCredential", () => {
 
       expect(result.status).toBe("ok");
       if (result.status === "ok") {
-        expect(result.value.accessToken).toBe("new-access-token");
-        expect(result.value.refreshToken).toBe("new-refresh-token");
-        expect(result.value.expiresAt).toBe(now + 900 * 1000);
+        expect(result.value.credential.accessToken).toBe("new-access-token");
+        expect(result.value.credential.refreshToken).toBe("new-refresh-token");
+        expect(result.value.credential.expiresAt).toBe(now + 900 * 1000);
+        expect(result.value.persistWarning).toBeUndefined();
       }
       expect(provider.getRequestCount()).toBe(1);
 

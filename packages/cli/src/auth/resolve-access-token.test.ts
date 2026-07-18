@@ -1,9 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import {
+  credentialsFilePath,
   readCredentialFile,
   removeCredential,
   upsertCredential,
@@ -581,6 +582,59 @@ describe("resolveAccessToken", () => {
       );
       expect(stored?.accessToken).toBe("winner-access-token");
       expect(stored?.refreshToken).toBe("winner-refresh-token");
+    } finally {
+      provider.close();
+    }
+  });
+
+  test("returns the fresh token with a warning instead of failing when the credential store can't be written", async () => {
+    const provider = startMockProvider((body) =>
+      body.get("grant_type") === "refresh_token" &&
+      body.get("refresh_token") === "old-refresh-token"
+        ? Response.json({
+            access_token: "new-access-token",
+            expires_in: 900,
+            refresh_token: "new-refresh-token",
+            scope: "openid stella:read",
+            token_type: "Bearer",
+          })
+        : Response.json({ error: "invalid_grant" }, { status: 400 }),
+    );
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      // Force the persist step specifically — not the read — to fail: a
+      // read-only `credentials.json` still opens for reading (so
+      // `checkForNewerStoredGeneration`'s re-read still sees the real,
+      // unchanged credential) but rejects the write with EACCES. This is
+      // deterministic and root-safe-enough for this repo's CI runners
+      // (non-root); there's no fs-injection point on this branch to stub
+      // `writeFile` directly (that lands with the atomic temp+rename
+      // hygiene follow-up).
+      await chmod(credentialsFilePath(configDir), 0o400);
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      // The refresh itself succeeded — the in-memory token is valid and
+      // must not be discarded just because it couldn't be saved.
+      expect(result.status).toBe("ok");
+      if (result.status === "ok") {
+        expect(result.token).toBe("new-access-token");
+        expect(result.persistWarning).toBeDefined();
+        expect(result.persistWarning).toContain(credentialsFilePath(configDir));
+      }
+
+      // Disk genuinely wasn't updated — the write really did fail, this
+      // isn't a warning issued despite a silent successful write.
+      const persisted = await readCredentialFile(configDir);
+      expect(persisted.credentials.at(0)?.accessToken).toBe("old-access-token");
     } finally {
       provider.close();
     }

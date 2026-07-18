@@ -34,7 +34,11 @@ export type ResolveAccessTokenOptions = {
 
 /**
  * Outcome of resolving a live access token:
- *  - `ok`: a token usable now (fresh, or freshly refreshed and persisted);
+ *  - `ok`: a token usable now (fresh, or freshly refreshed). `persistWarning`
+ *    is set when a freshly-refreshed token could not be saved to disk (e.g.
+ *    a read-only config dir) — the token is still valid for this command,
+ *    but the caller should tell the user the next command will need to
+ *    refresh again rather than finding it on disk;
  *  - `unauthenticated`: no stored credential for `serverUrl` at all;
  *  - `refresh-failed`: a credential exists but is expired and could not be
  *    refreshed (no refresh token, metadata discovery failure, or the token
@@ -42,7 +46,11 @@ export type ResolveAccessTokenOptions = {
  *    `stella auth login`.
  */
 export type ResolveAccessTokenResult =
-  | { readonly status: "ok"; readonly token: string }
+  | {
+      readonly status: "ok";
+      readonly token: string;
+      readonly persistWarning?: string;
+    }
   | { readonly status: "unauthenticated" }
   | { readonly status: "refresh-failed"; readonly error: CliAuthError };
 
@@ -105,5 +113,12 @@ export const resolveAccessToken = async ({
     }
     return { status: "refresh-failed", error: fresh.error };
   }
-  return { status: "ok", token: fresh.value.accessToken };
+  if (fresh.value.persistWarning !== undefined) {
+    return {
+      status: "ok",
+      token: fresh.value.credential.accessToken,
+      persistWarning: fresh.value.persistWarning,
+    };
+  }
+  return { status: "ok", token: fresh.value.credential.accessToken };
 };
