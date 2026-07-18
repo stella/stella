@@ -37,7 +37,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient, isTwoFactorEnabledUser } from "@/lib/auth";
-import { toAPIError, toAuthClientError } from "@/lib/errors";
+import { toAPIError } from "@/lib/errors/api";
+import { toAuthClientError } from "@/lib/errors/auth";
 import { sessionOptions } from "@/routes/-queries";
 
 const TOTP_LENGTH = 6;
@@ -238,6 +239,13 @@ const EnableTwoFactorDialog = ({
       return data;
     },
     enabled: open,
+    // `enable` rotates the TOTP secret server-side, so an automatic refetch
+    // (e.g. on window focus while the user is copying the code from their
+    // authenticator app) would invalidate the QR they just scanned. Pin the
+    // result for the lifetime of the dialog.
+    staleTime: Number.POSITIVE_INFINITY,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 
   const verifyMutation = useMutation({
