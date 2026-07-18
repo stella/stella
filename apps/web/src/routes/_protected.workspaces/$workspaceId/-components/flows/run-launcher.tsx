@@ -66,7 +66,7 @@ export const RunLauncher = ({
       : [];
 
   const filteredEntities = (entities ?? []).filter((entity) =>
-    entity.name.toLowerCase().includes(entityFilter.toLowerCase()),
+    (entity.name ?? "").toLowerCase().includes(entityFilter.toLowerCase()),
   );
 
   const exceedsInputEntitiesLimit =

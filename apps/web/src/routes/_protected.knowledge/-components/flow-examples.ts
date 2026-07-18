@@ -20,68 +20,68 @@ export type FlowExample = {
   steps: FlowStep[];
 };
 
-type Translate = ReturnType<typeof useTranslations>;
+type Translate = ReturnType<typeof useTranslations<"flows.examples">>;
 
 const ndaIntakeExample = (t: Translate): FlowExample => ({
-  name: t("flows.examples.ndaIntake.name"),
-  description: t("flows.examples.ndaIntake.description"),
+  name: t("ndaIntake.name"),
+  description: t("ndaIntake.description"),
   steps: [
     {
       kind: "ai",
-      name: t("flows.examples.ndaIntake.reviewStepName"),
-      prompt: t("flows.examples.ndaIntake.reviewStepPrompt"),
+      name: t("ndaIntake.reviewStepName"),
+      prompt: t("ndaIntake.reviewStepPrompt"),
       includeDocuments: true,
     },
     {
       kind: "review-gate",
-      name: t("flows.examples.ndaIntake.reviewGateStepName"),
-      instructions: t("flows.examples.ndaIntake.reviewGateInstructions"),
+      name: t("ndaIntake.reviewGateStepName"),
+      instructions: t("ndaIntake.reviewGateInstructions"),
     },
     {
       kind: "create-document",
-      name: t("flows.examples.ndaIntake.createStepName"),
-      documentTitle: t("flows.examples.ndaIntake.documentTitle"),
+      name: t("ndaIntake.createStepName"),
+      documentTitle: t("ndaIntake.documentTitle"),
     },
   ],
 });
 
 const dueDiligenceExample = (t: Translate): FlowExample => ({
-  name: t("flows.examples.dueDiligence.name"),
-  description: t("flows.examples.dueDiligence.description"),
+  name: t("dueDiligence.name"),
+  description: t("dueDiligence.description"),
   steps: [
     {
       kind: "ai",
-      name: t("flows.examples.dueDiligence.reviewStepName"),
-      prompt: t("flows.examples.dueDiligence.reviewStepPrompt"),
+      name: t("dueDiligence.reviewStepName"),
+      prompt: t("dueDiligence.reviewStepPrompt"),
       includeDocuments: true,
     },
     {
       kind: "review-gate",
-      name: t("flows.examples.dueDiligence.reviewGateStepName"),
-      instructions: t("flows.examples.dueDiligence.reviewGateInstructions"),
+      name: t("dueDiligence.reviewGateStepName"),
+      instructions: t("dueDiligence.reviewGateInstructions"),
     },
     {
       kind: "create-document",
-      name: t("flows.examples.dueDiligence.createStepName"),
-      documentTitle: t("flows.examples.dueDiligence.documentTitle"),
+      name: t("dueDiligence.createStepName"),
+      documentTitle: t("dueDiligence.documentTitle"),
     },
   ],
 });
 
 const documentSummaryExample = (t: Translate): FlowExample => ({
-  name: t("flows.examples.documentSummary.name"),
-  description: t("flows.examples.documentSummary.description"),
+  name: t("documentSummary.name"),
+  description: t("documentSummary.description"),
   steps: [
     {
       kind: "ai",
-      name: t("flows.examples.documentSummary.summaryStepName"),
-      prompt: t("flows.examples.documentSummary.summaryStepPrompt"),
+      name: t("documentSummary.summaryStepName"),
+      prompt: t("documentSummary.summaryStepPrompt"),
       includeDocuments: true,
     },
     {
       kind: "create-document",
-      name: t("flows.examples.documentSummary.createStepName"),
-      documentTitle: t("flows.examples.documentSummary.documentTitle"),
+      name: t("documentSummary.createStepName"),
+      documentTitle: t("documentSummary.documentTitle"),
     },
   ],
 });

@@ -73,7 +73,7 @@ const MAX_FLOW_STEPS = 20;
 type FlowEditorProps = {
   organizationId: string;
   flowId: string | null;
-  example?: FlowExampleKey;
+  example?: FlowExampleKey | undefined;
   onBack: () => void;
   onSaved: () => void;
 };
@@ -85,10 +85,13 @@ export const FlowEditor = ({
   onBack,
   onSaved,
 }: FlowEditorProps) => {
-  const t = useTranslations();
+  // Scoped to `flows.examples` so the example builder narrows its key union to
+  // that namespace instead of the full message union (which overflows the
+  // native compiler's union-representation limit — TS2590).
+  const tExamples = useTranslations("flows.examples");
 
   if (flowId === null) {
-    const preset = example ? buildFlowExample(example, t) : null;
+    const preset = example ? buildFlowExample(example, tExamples) : null;
     return (
       <FlowEditorForm
         flowId={null}
