@@ -21,6 +21,7 @@ import {
   oauthRefreshToken,
   organization,
   session,
+  twoFactor,
   user,
 } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -183,11 +184,19 @@ export type RevokeAuthCredentialsParams = {
 export const REVOKE_AUTH_CREDENTIALS_TABLES = [
   account,
   session,
+  twoFactor,
   invitation,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 1. Auth credentials, sessions, and invitations (auth-schema tables).
+ * 1. Auth credentials, sessions, two-factor secrets, and invitations
+ * (auth-schema tables).
+ *
+ * The `two_factor` FK to `user` is `onDelete: "cascade"`, but account
+ * deletion soft-deletes the user row (see `finalizeDeletedUserRecord`) and
+ * never hard-deletes it, so that cascade never fires. The encrypted TOTP
+ * secret and backup codes must therefore be purged explicitly here, the same
+ * way `session` and `account` are.
  */
 export const revokeAuthCredentialsAndInvitations = async ({
   tx,
@@ -197,6 +206,7 @@ export const revokeAuthCredentialsAndInvitations = async ({
   await tx.delete(account).where(eq(account.userId, currentUserId));
   // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth session artifacts.
   await tx.delete(session).where(eq(session.userId, currentUserId));
+  await tx.delete(twoFactor).where(eq(twoFactor.userId, currentUserId));
   // Delete invitations sent by the user, and also invitations sent to the user's email
   await tx.delete(invitation).where(eq(invitation.inviterId, currentUserId));
   await tx.delete(invitation).where(eq(invitation.email, email));
