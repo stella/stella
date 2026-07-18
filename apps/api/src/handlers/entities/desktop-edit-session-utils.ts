@@ -1,7 +1,7 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { entityVersions, fields } from "@/api/db/schema";
+import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -81,6 +81,26 @@ export const readCurrentDocxTarget = async ({
   tx: DatabaseTransaction;
   workspaceId: SafeId<"workspace">;
 }) => {
+  // Lock the owning entity row before reading the current version to open a NEW
+  // session against. delete-version takes the same `entities` FOR UPDATE, so
+  // this serializes a new-session open with a concurrent version tombstone: the
+  // open either runs before the delete (and anchors to the pre-delete current
+  // version, which the delete's session-cancel sweep then withdraws) or after
+  // it (and anchors to the promoted, live current version). Without the lock a
+  // fresh session could anchor to the very version being tombstoned.
+  //
+  // Canonical docx-edit lock order (issue #1139): docx-edit advisory lock ->
+  // desktop_edit_session rows -> entities row. This read is the entity step and
+  // always follows the advisory + session steps in both open handlers, matching
+  // finalize-desktop-edit-session and delete-version.
+  await tx
+    .select({ id: entities.id })
+    .from(entities)
+    .where(
+      and(eq(entities.id, entityId), eq(entities.workspaceId, workspaceId)),
+    )
+    .for("update");
+
   const entity = await tx.query.entities.findFirst({
     where: {
       id: { eq: entityId },
