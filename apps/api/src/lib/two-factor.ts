@@ -22,7 +22,7 @@ export const getUserEmailAndTwoFactorEnabled = async (
         .from(user)
         .where(eq(user.id, currentUserId))
         .limit(1);
-      const row = rows[0];
+      const row = rows.at(0);
       if (!row) {
         throw new HandlerError({
           status: 404,
