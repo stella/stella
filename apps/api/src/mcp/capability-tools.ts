@@ -1083,6 +1083,7 @@ export const mapHandlerResult = ({
 
 const CAPABILITY_TOOL_DEFINITIONS = [
   {
+    annotations: { openWorldHint: false },
     name: "list_capabilities",
     access: "read",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
@@ -1113,6 +1114,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
   },
   {
+    annotations: { openWorldHint: false },
     name: "describe_capability",
     access: "read",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
@@ -1134,6 +1136,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
   },
   {
+    annotations: { idempotentHint: false, openWorldHint: false },
     name: "invoke_capability",
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },

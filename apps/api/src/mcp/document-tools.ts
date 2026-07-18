@@ -431,7 +431,7 @@ const READ_DOCUMENT_TEXT_FIELD_PATHS = [
 
 export const DOCUMENT_TOOL_DEFINITIONS = [
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List the documents and folders in a matter. Use 'flat' mode to " +
       "enumerate every document and folder in the matter, or 'children' mode " +
@@ -476,7 +476,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "Read a document's metadata and field values by entity ID. By default " +
       "returns the current version's name, kind, and field/property values. " +
@@ -560,13 +560,18 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         ),
       },
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_document",
     scope: "stella:documents_write",
   },
   {
-    annotations: { destructiveHint: true },
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       "Delete a document and all its versions, or delete a single version when " +
       "version_id is provided (the current version is promoted to the next " +
@@ -589,7 +594,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:documents_write",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List the property (column) definitions of a matter. Returns each " +
       "property's id, name, value type (text, single-select, multi-select, " +
@@ -656,6 +661,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["entity_id", "property_id", "content"],
     },
+    annotations: { idempotentHint: true, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_field_value",

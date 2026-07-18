@@ -289,7 +289,7 @@ const INVOICE_DETAIL_TEXT_FIELD_PATHS = deriveTextFieldPaths(
 
 export const BILLING_TOOL_DEFINITIONS = [
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List time entries in a matter, or read one entry in detail. Pass " +
       "time_entry_id to get a single entry. Otherwise pass matter_id to list " +
@@ -421,6 +421,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         ),
       },
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     feature: "FEATURE_TIME_BILLING",
@@ -428,7 +429,11 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:billing_write",
   },
   {
-    annotations: { destructiveHint: true },
+    annotations: {
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
     description:
       "Delete a time entry. A draft entry is permanently deleted; an approved " +
       "entry is written off instead (kept for the audit trail, excluded from " +
@@ -449,7 +454,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:billing_write",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "Resolve the effective hourly rate for a user on a given date in a " +
       "matter, using the matter's default rate table (user-specific rate " +
@@ -474,7 +479,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List invoices in a matter, or read one invoice in detail. Pass " +
       "invoice_id to get a single invoice with its line items (time entries " +
@@ -512,7 +517,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   },
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "Read the organization's current usage entitlement: plan, seats, billing " +
       "period, and how many usage units (AI credits) remain this period. " +

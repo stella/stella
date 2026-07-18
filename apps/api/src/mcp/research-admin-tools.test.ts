@@ -241,9 +241,11 @@ describe("manage_organization remove_member confirm gate", () => {
     );
     expect(def).toBeDefined();
     // manage_organization also adds members and updates settings, so it must not
-    // trip the whole-tool central confirm gate: it carries no annotations block
-    // at all. The remove_member gate is action-level inside the handler instead.
-    expect("annotations" in (def ?? {})).toBe(false);
+    // trip the whole-tool central confirm gate: it carries no destructiveHint.
+    // The remove_member gate is action-level inside the handler instead. (It
+    // does carry the behavioural idempotent/open-world hints like every write
+    // tool; only destructiveHint drives the central gate.)
+    expect(def?.annotations?.destructiveHint).not.toBe(true);
   });
 
   test("remove_member without confirm is refused with confirmation_required", async () => {

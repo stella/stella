@@ -360,7 +360,7 @@ const buildTemplateDetailTextFieldSpecs = (
 
 export const TEMPLATE_TOOL_DEFINITIONS = [
   {
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: true, openWorldHint: false },
     description:
       "List the document templates in this organization (NDAs, powers of " +
       "attorney, leases), or describe one template's fillable fields. Omit " +
@@ -419,6 +419,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       },
       required: ["template_id", "values"],
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "fill_template",
@@ -452,6 +453,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
         fields: fieldsOverlayProp,
       },
     },
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "save_template",
