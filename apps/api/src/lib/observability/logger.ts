@@ -10,8 +10,11 @@ const otelLogger = logs.getLogger("stella.api");
 // dropped — provided each substring cannot collide with a benign key. The
 // credential terms are deliberately specific (`api[_-]?key`, not bare
 // `token`, which would also drop `tokenCount`/`inputTokens` usage metrics).
+// `prompt` is likewise narrowed with a negative lookahead so prompt CONTENT
+// keys (`prompt`, `promptText`, `systemPrompt`) are redacted while usage
+// metrics (`promptTokens`, `prompt_tokens`, `promptTokenCount`) survive.
 const SENSITIVE_ATTRIBUTE_KEY_PATTERN =
-  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt|snippet|subject|phone)/iu;
+  /(?:body|content|email|fileName|message|name|title|password|secret|credential|authorization|cookie|bearer|api[_-]?key|prompt(?!_?token)|snippet|subject|phone)/iu;
 
 type LoggerAttributeValue = boolean | number | string;
 

@@ -26,6 +26,24 @@ describe("logger attributes", () => {
     });
   });
 
+  test("redacts prompt content keys but keeps prompt token metrics", () => {
+    expect(
+      sanitizeLogAttributes({
+        prompt: "draft this contract clause",
+        promptText: "system instructions",
+        systemPrompt: "you are a legal assistant",
+        promptTokens: 128,
+        prompt_tokens: 256,
+        promptTokenCount: 512,
+      }),
+    ).toEqual({
+      promptTokens: 128,
+      prompt_tokens: 256,
+      promptTokenCount: 512,
+      "log.attributes_dropped": 3,
+    });
+  });
+
   test("stderr backstop emits only sanitized attributes", () => {
     const chunks: string[] = [];
     process.stderr.write = (chunk: string | Uint8Array): boolean => {
