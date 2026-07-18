@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -43,11 +43,44 @@ export const deleteEntityVersionHandler = async function* ({
 }: DeleteEntityVersionHandlerProps) {
   const params = { entityId, versionId };
 
-  // Verify the version belongs to this entity in this workspace and is not
-  // already tombstoned (re-deleting a tombstoned version is a no-op 404).
-  const version = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entityVersions.findFirst({
+  // All validation (live-version count, current-version promotion) and the
+  // tombstone mutation run in ONE transaction, serialized on the owning entity
+  // row via `FOR UPDATE`. Two concurrent deletes must not each observe more
+  // than one live version and tombstone the last two, nor leave
+  // currentVersionId pointing at a tombstone: locking the entity row first
+  // forces the racing deletes to run one at a time, so the second re-reads the
+  // live count and current version the first already changed.
+  const txOutcome = yield* Result.await(
+    safeDb(async (tx) => {
+      const lockedEntityRows = await tx
+        .select({
+          currentVersionId: entities.currentVersionId,
+          readOnly: entities.readOnly,
+        })
+        .from(entities)
+        .where(
+          and(
+            eq(entities.id, params.entityId),
+            eq(entities.workspaceId, workspaceId),
+          ),
+        )
+        .for("update");
+      const lockedEntity = lockedEntityRows.at(0);
+      // entityVersions FKs to entities, so a versionId can only resolve when its
+      // entity row exists; a missing entity here means the version is
+      // unaddressable, which reads as a 404 rather than a structural panic.
+      if (!lockedEntity) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: "Version not found",
+        };
+      }
+
+      // Verify the version belongs to this entity in this workspace and is not
+      // already tombstoned (re-deleting a tombstoned version is a no-op 404).
+      // Read under the entity lock so the checks below see a stable snapshot.
+      const version = await tx.query.entityVersions.findFirst({
         where: {
           id: { eq: params.versionId },
           entityId: { eq: params.entityId },
@@ -55,24 +88,19 @@ export const deleteEntityVersionHandler = async function* ({
           deletedAt: { isNull: true },
         },
         columns: { id: true, versionNumber: true },
-      }),
-    ),
-  );
+      });
+      if (!version) {
+        return {
+          ok: false as const,
+          status: 404 as const,
+          message: "Version not found",
+        };
+      }
 
-  if (!version) {
-    return Result.err(
-      new HandlerError({ status: 404, message: "Version not found" }),
-    );
-  }
-
-  // Count live (non-tombstoned) versions — can't delete the last one
-  const allVersions = yield* Result.await(
-    safeDb((tx) =>
-      tx
-        .select({
-          id: entityVersions.id,
-          versionNumber: entityVersions.versionNumber,
-        })
+      // Count live (non-tombstoned) versions under the lock — can't delete the
+      // last one.
+      const liveVersions = await tx
+        .select({ id: entityVersions.id })
         .from(entityVersions)
         .where(
           and(
@@ -82,52 +110,33 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         )
         .orderBy(desc(entityVersions.versionNumber))
-        .limit(LIMITS.versionsPerEntity),
-    ),
-  );
+        .limit(LIMITS.versionsPerEntity);
+      if (liveVersions.length <= 1) {
+        return {
+          ok: false as const,
+          status: 400 as const,
+          message: "Cannot delete the only remaining version",
+        };
+      }
 
-  if (allVersions.length <= 1) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: "Cannot delete the only remaining version",
-      }),
-    );
-  }
+      if (lockedEntity.readOnly) {
+        return {
+          ok: false as const,
+          status: 409 as const,
+          message: "Entity is read-only",
+        };
+      }
 
-  // Check if this is the current version before irreversible file cleanup.
-  const entity = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.entities.findFirst({
-        where: {
-          id: { eq: params.entityId },
-          workspaceId: { eq: workspaceId },
-        },
-        columns: { currentVersionId: true, readOnly: true },
-      }),
-    ),
-  );
-  // An entityVersion row was already found for this entityId+workspaceId and
-  // entityVersions FKs to entities, so a missing entity here is a structural
-  // invariant violation, not a writable/non-current entity.
-  if (!entity) {
-    panic("Entity missing for an existing entity version");
-  }
-  if (entity.readOnly) {
-    return Result.err(
-      new HandlerError({ status: 409, message: "Entity is read-only" }),
-    );
-  }
+      const isDeletingCurrent =
+        lockedEntity.currentVersionId === params.versionId;
 
-  const isDeletingCurrent = entity.currentVersionId === params.versionId;
-
-  // Chain-of-custody: a prior version is never hard-deleted, and its S3 objects
-  // are retained under legal hold. Tombstone the row (server clock + actor) so
-  // every read / list / restore / download path excludes it while the bytes and
-  // audit trail survive. The `fields` rows are deliberately kept: they keep the
-  // version's files "referenced" so unrelated cleanup paths cannot GC them.
-  yield* Result.await(
-    safeDb(async (tx) => {
+      // Chain-of-custody: a prior version is never hard-deleted, and its S3
+      // objects are retained under legal hold. Tombstone the row (server clock
+      // + actor) so every read / list / restore / download path excludes it
+      // while the bytes and audit trail survive. The `fields` rows are
+      // deliberately kept: they keep the version's files "referenced" so
+      // unrelated cleanup paths cannot GC them.
+      //
       // If tombstoning the current version, promote the next live version FIRST
       // (FK constraint on entities.currentVersionId is RESTRICT). The live-count
       // guard above guarantees at least one other non-tombstoned version exists.
@@ -229,8 +238,19 @@ export const deleteEntityVersionHandler = async function* ({
         });
       }
       await recordAuditEvent(tx, events);
+
+      return { ok: true as const };
     }),
   );
+
+  if (!txOutcome.ok) {
+    return Result.err(
+      new HandlerError({
+        status: txOutcome.status,
+        message: txOutcome.message,
+      }),
+    );
+  }
 
   broadcast(workspaceId, {
     type: "invalidate-query",

@@ -55,6 +55,35 @@ describe("delete-version chain-of-custody guard", () => {
     expect(source).not.toContain("deleteS3Objects");
   });
 
+  test("validates live count and promotion under a FOR UPDATE entity lock", () => {
+    // Concurrency guard. The live-version count and current-version promotion
+    // must run inside the same transaction as the tombstone, serialized on the
+    // owning entity row via `FOR UPDATE`. Two concurrent deletes that each read
+    // the live count before mutating could otherwise both pass the "not the
+    // last version" check and tombstone the final two live versions, or leave
+    // currentVersionId pointing at a tombstone. Locking the entity row first
+    // forces them one at a time.
+    const source = readFileSync(
+      nodePath.join(import.meta.dir, "delete-version.ts"),
+      "utf-8",
+    );
+
+    // The entity row is the serialization point.
+    expect(source).toContain('.for("update")');
+
+    // Exactly one transaction: no separate pre-transaction read can validate
+    // against a snapshot the mutation then races.
+    expect(source.split("safeDb(").length - 1).toBe(1);
+
+    // The lock and every validation live after the transaction opens.
+    const txStart = source.indexOf("safeDb(async (tx) =>");
+    expect(txStart).toBeGreaterThan(-1);
+    expect(source.indexOf('.for("update")')).toBeGreaterThan(txStart);
+    expect(
+      source.indexOf("Cannot delete the only remaining version"),
+    ).toBeGreaterThan(txStart);
+  });
+
   test("every version read/list/restore/download path filters tombstones", () => {
     // Each file resolves or enumerates entity versions for content access; a
     // tombstoned version must be invisible and unreachable through all of them.
