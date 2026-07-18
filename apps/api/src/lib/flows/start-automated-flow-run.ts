@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { rootDb } from "@/api/db/root";
 import { captureError } from "@/api/lib/analytics/capture";
+import { resolveMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -10,6 +11,7 @@ import { enqueueFlowStep } from "@/api/lib/flows/flow-run-queue";
 import type { FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { logger } from "@/api/lib/observability/logger";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Shared tail for both automated triggers (schedule + file-upload): guarantee
@@ -86,6 +88,36 @@ export const startAutomatedFlowRun = async ({
   }
   if (!definition.enabled) {
     logger.info("flow.automated_run_definition_disabled", logContext);
+    return;
+  }
+
+  // The run will execute as the author against a root-scoped grant for
+  // `workspaceId` (see flow-executor), so nothing downstream re-checks that the
+  // author may act in that matter. A file-upload trigger saved with
+  // `workspaceIds: null` ("all matters") in particular reaches here for uploads
+  // in matters the author never had access to. Gate the start on the author's
+  // live workspace access, using the same membership / admin-bypass rule as the
+  // request-time workspace guard, so an automated run can only touch matters its
+  // actor is authorized for.
+  const authorization = await Result.tryPromise({
+    try: async () =>
+      await resolveMemberAuthorization({
+        organizationId,
+        userId: brandPersistedUserId(createdByUserId),
+        workspaceId,
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isError(authorization)) {
+    captureError(authorization.error, logContext);
+    logger.error("flow.automated_run_start_failed", {
+      ...logContext,
+      "error.type": errorTag(authorization.error),
+    });
+    return;
+  }
+  if (authorization.value === null || authorization.value.workspace === null) {
+    logger.warn("flow.automated_run_actor_unauthorized", logContext);
     return;
   }
 
