@@ -60,7 +60,7 @@
     "eslint": "catalog:",
     "eslint-plugin-drizzle": "catalog:",
     "i18n-unused": "^0.19.0",
-    "knip": "^6.25.0",
+    "knip": "^6.26.0",
     "lefthook": "^2.1.10",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
