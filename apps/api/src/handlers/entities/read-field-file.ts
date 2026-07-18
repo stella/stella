@@ -42,7 +42,9 @@ const readFieldFileHandler = async function* ({
           content: true,
         },
         with: {
-          entityVersion: { columns: { entityId: true } },
+          // Pull the owning version's tombstone flag in the SAME query so a
+          // withdrawn version's field file can never be resolved here.
+          entityVersion: { columns: { entityId: true, deletedAt: true } },
         },
       }),
     ),
@@ -60,6 +62,14 @@ const readFieldFileHandler = async function* ({
   // 404 (not 403) when the field belongs to another entity, so the endpoint
   // never confirms the existence of fields outside this entity.
   if (field.entityVersion.entityId !== entityId) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Field not found" }),
+    );
+  }
+  // A tombstoned version's field is withdrawn: its bytes are retained under
+  // legal hold but must be unreachable, even by a client holding a stale
+  // fieldId from before the version was deleted.
+  if (field.entityVersion.deletedAt !== null) {
     return Result.err(
       new HandlerError({ status: 404, message: "Field not found" }),
     );

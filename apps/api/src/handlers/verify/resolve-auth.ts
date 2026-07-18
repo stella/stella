@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { status } from "elysia";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -32,7 +32,12 @@ export const resolveVerificationCodeAuth = async (
           eq(workspaces.organizationId, organizationId),
         ),
       )
-      .where(eq(entityVersions.verificationCode, code))
+      .where(
+        and(
+          eq(entityVersions.verificationCode, code),
+          isNull(entityVersions.deletedAt),
+        ),
+      )
       .limit(1),
   );
   const row = rows.at(0);

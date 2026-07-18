@@ -1,12 +1,51 @@
 import { describe, expect, test } from "bun:test";
 
+import type { Transaction } from "@/api/db/root";
 import {
   allocateFileObject,
   fileContentWithMintedObject,
 } from "@/api/handlers/files/file-object-ids";
 import { toSafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
-import { buildVersionStamp, cloneFieldsForRevision } from "./version-utils";
+import {
+  buildVersionStamp,
+  cloneFieldsForRevision,
+  nextEntityVersionNumber,
+} from "./version-utils";
+
+describe("nextEntityVersionNumber", () => {
+  // The allocator reads MAX(versionNumber); the mock returns that scalar row.
+  const txReturning = (rows: { max: number | null }[]) =>
+    asTestRaw<Transaction>({
+      select: () => ({
+        from: () => ({
+          where: async () => rows,
+        }),
+      }),
+    });
+
+  const target = {
+    entityId: toSafeId<"entity">("11111111-1111-1111-1111-111111111111"),
+    workspaceId: toSafeId<"workspace">("22222222-2222-2222-2222-222222222222"),
+  };
+
+  test("returns MAX(versionNumber) + 1, counting a tombstoned latest version", async () => {
+    // Tombstoning v5 promotes currentVersionId back to v4, but the tombstoned
+    // v5 row is still the MAX. The allocator must return 6, not (4 + 1) = 5,
+    // which would collide with the withdrawn v5.
+    expect(
+      await nextEntityVersionNumber(txReturning([{ max: 5 }]), target),
+    ).toBe(6);
+  });
+
+  test("returns 1 for an entity with no versions", async () => {
+    expect(
+      await nextEntityVersionNumber(txReturning([{ max: null }]), target),
+    ).toBe(1);
+    expect(await nextEntityVersionNumber(txReturning([]), target)).toBe(1);
+  });
+});
 
 describe("buildVersionStamp", () => {
   test("builds the next stamped reference when the workspace has numbering", () => {

@@ -1,3 +1,7 @@
+import { and, eq, max } from "drizzle-orm";
+
+import type { Transaction } from "@/api/db/root";
+import { entityVersions } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import {
   reuseFileObjectWithinEntity,
@@ -27,6 +31,44 @@ type BuildVersionStampInput = {
   docSequence: number | null;
   versionNumber: number;
   workspaceReference: string | null;
+};
+
+/**
+ * Allocate the next version number for an entity.
+ *
+ * Class guard for "allocator derived from a pointer that can move backwards":
+ * deriving the next number from the current or base version's number plus one
+ * is unsafe because tombstoning the latest version vN promotes
+ * `currentVersionId` back to v(N-1), so the next writer would allocate vN again
+ * and collide with the tombstoned row (there is no unique index on
+ * (entityId, versionNumber), so the collision is a silent duplicate number
+ * rather than an error).
+ *
+ * Derive instead from MAX(versionNumber) over ALL of the entity's versions,
+ * INCLUDING tombstoned ones, computed in the writer's own transaction. Callers
+ * MUST already hold the entity row FOR UPDATE (or an equivalent per-entity
+ * lock) so concurrent writers serialize and cannot race to the same number.
+ */
+export const nextEntityVersionNumber = async (
+  tx: Transaction,
+  {
+    entityId,
+    workspaceId,
+  }: {
+    entityId: SafeId<"entity">;
+    workspaceId: SafeId<"workspace">;
+  },
+): Promise<number> => {
+  const rows = await tx
+    .select({ max: max(entityVersions.versionNumber) })
+    .from(entityVersions)
+    .where(
+      and(
+        eq(entityVersions.entityId, entityId),
+        eq(entityVersions.workspaceId, workspaceId),
+      ),
+    );
+  return (rows.at(0)?.max ?? 0) + 1;
 };
 
 export const buildVersionStamp = ({

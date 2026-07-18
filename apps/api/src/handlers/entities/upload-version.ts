@@ -13,6 +13,7 @@ import { uploadVersionBodySchema } from "@/api/handlers/entities/upload-version-
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
+  nextEntityVersionNumber,
 } from "@/api/handlers/entities/version-utils";
 import {
   allocateFileObject,
@@ -238,7 +239,14 @@ export default createSafeHandler(
           return { status: "missing-file-field" };
         }
 
-        const nextVersionNumber = freshCurrentVersion.versionNumber + 1;
+        // MAX over all versions (incl. tombstoned) under the entity lock, not
+        // currentVersion + 1, which would reuse a tombstoned latest version's
+        // number after currentVersionId promoted backward. See
+        // nextEntityVersionNumber.
+        const nextVersionNumber = await nextEntityVersionNumber(tx, {
+          entityId,
+          workspaceId,
+        });
         const nextVersionStamp = buildVersionStamp({
           docSequence: lockedEntity.docSequence,
           versionNumber: nextVersionNumber,

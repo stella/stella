@@ -68,17 +68,19 @@ describe("follow-up (b): read_document propertyId path", () => {
             workspaceId: WS_UUID,
             kind: "document",
             name: "Doc",
-            currentVersionId: "ver_current",
-          }),
-        },
-        fields: {
-          findMany: async () => [
-            {
-              id: FIELD_UUID,
-              propertyId: PROP_UUID,
-              content: { version: 1, type: "text", value: "hello" },
+            // readEntityByIdHandler reads the current version's fields via the
+            // `currentVersion` relation (folded into one tombstone-safe query).
+            currentVersion: {
+              id: "ver_current",
+              fields: [
+                {
+                  id: FIELD_UUID,
+                  propertyId: PROP_UUID,
+                  content: { version: 1, type: "text", value: "hello" },
+                },
+              ],
             },
-          ],
+          }),
         },
       },
     };

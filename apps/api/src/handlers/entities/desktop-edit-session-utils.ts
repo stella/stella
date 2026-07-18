@@ -1,7 +1,7 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import { fields } from "@/api/db/schema";
+import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -81,6 +81,24 @@ export const readCurrentDocxTarget = async ({
   tx: DatabaseTransaction;
   workspaceId: SafeId<"workspace">;
 }) => {
+  // Read (not lock) the entity's current version to open a NEW session against.
+  // An earlier revision took `entities` FOR UPDATE here to serialize a
+  // new-session open with a concurrent version tombstone, but that held the
+  // entity row lock across the rest of the open transaction — including the S3
+  // presign at the end (a lock held across an external await). The race it
+  // closed is byte-safe without the lock, so it is deliberately dropped:
+  //
+  //   - Resume chokepoint: readVersionDocxTarget (the only path that serves a
+  //     base version's bytes to a resuming session) requires deletedAt IS NULL,
+  //     so a session anchored to a tombstoned version can never re-download it.
+  //   - Finalize divergence check: finalize refuses a base whose version is no
+  //     longer current (currentVersionId !== baseVersionId), which a tombstone
+  //     always makes true (delete-version promotes currentVersionId off the
+  //     withdrawn row first), so a stranded session can never finalize.
+  //
+  // The only residual is a harmless stranded session row that those two guards
+  // neutralize; delete-version's cancel sweep withdraws it whenever it observes
+  // it. See issue #1139 for the lock-hierarchy discussion.
   const entity = await tx.query.entities.findFirst({
     where: {
       id: { eq: entityId },
@@ -138,16 +156,23 @@ export const readVersionDocxTarget = async ({
   tx: DatabaseTransaction;
   workspaceId: SafeId<"workspace">;
 }) => {
+  // Class guard: join to entity_versions and require a live (non-tombstoned)
+  // base version. This is the single chokepoint that serves a base version's
+  // bytes to a resuming desktop edit session, so a tombstoned version can never
+  // be downloaded here regardless of session state — even if a future tombstone
+  // writer forgets to close the sessions that reference it.
   const rows = await tx
     .select({
       content: fields.content,
     })
     .from(fields)
+    .innerJoin(entityVersions, eq(entityVersions.id, fields.entityVersionId))
     .where(
       and(
         eq(fields.entityVersionId, entityVersionId),
         eq(fields.propertyId, propertyId),
         eq(fields.workspaceId, workspaceId),
+        isNull(entityVersions.deletedAt),
       ),
     )
     .limit(1);

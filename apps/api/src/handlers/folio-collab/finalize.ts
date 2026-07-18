@@ -15,6 +15,7 @@ import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer
 import {
   buildVersionStamp,
   cloneFieldsForRevision,
+  nextEntityVersionNumber,
 } from "@/api/handlers/entities/version-utils";
 import {
   allocateFileObject,
@@ -284,7 +285,6 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
     }
 
     const storedBytes = new Uint8Array(checkpointBuffer);
-    const nextVersionNumber = baseVersion.versionNumber + 1;
     const nextVersionId = createSafeId<"entityVersion">();
     const sourceFileId = allocateFileObject();
     const sourceKey = createFileKey({
@@ -401,6 +401,15 @@ const finalizeFolioCollabSession = createSafeTokenHandler<
         const workspace = await tx.query.workspaces.findFirst({
           where: { id: { eq: workspaceId } },
           columns: { reference: true },
+        });
+
+        // MAX over all versions (incl. tombstoned) under the session + entity
+        // locks, not baseVersion + 1: the divergence check confirms the base is
+        // still current, but a higher tombstoned version can still exist, and
+        // base + 1 would reuse its number. See nextEntityVersionNumber.
+        const nextVersionNumber = await nextEntityVersionNumber(tx, {
+          entityId: sessionPreview.entityId,
+          workspaceId,
         });
 
         const nextVersionStamp = buildVersionStamp({

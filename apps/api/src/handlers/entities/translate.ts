@@ -10,7 +10,7 @@
  */
 
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { t } from "elysia";
 
 import { entities, entityVersions, fields } from "@/api/db/schema";
@@ -126,7 +126,10 @@ const translateEntity = createSafeHandler(
           .from(fields)
           .innerJoin(
             entityVersions,
-            eq(fields.entityVersionId, entityVersions.id),
+            and(
+              eq(fields.entityVersionId, entityVersions.id),
+              isNull(entityVersions.deletedAt),
+            ),
           )
           .innerJoin(
             entities,

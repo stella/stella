@@ -8,10 +8,10 @@
  */
 
 import { Result } from "better-result";
-import { and, desc, eq, lt } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entityVersions } from "@/api/db/schema";
+import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { createFileKey } from "@/api/handlers/files/utils";
@@ -53,6 +53,7 @@ export const loadEntityVersionDiffSources = async function* ({
           id: { eq: versionId },
           entityId: { eq: entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: { versionNumber: true },
       }),
@@ -75,6 +76,7 @@ export const loadEntityVersionDiffSources = async function* ({
             eq(entityVersions.entityId, entityId),
             eq(entityVersions.workspaceId, workspaceId),
             lt(entityVersions.versionNumber, version.versionNumber),
+            isNull(entityVersions.deletedAt),
           ),
         )
         .orderBy(desc(entityVersions.versionNumber))
@@ -87,21 +89,40 @@ export const loadEntityVersionDiffSources = async function* ({
     versionId,
     ...(previousVersionId ? [previousVersionId] : []),
   ];
-  const fields = yield* Result.await(
+  // Join entity_versions and require a live (non-tombstoned) version in the SAME
+  // query as the content read. Reading fields separately (keyed only by
+  // entityVersionId) after the `deletedAt IS NULL` check above left a TOCTOU
+  // window: a tombstone landing between the two reads would still surface the
+  // withdrawn version's DOCX content. If the target version is tombstoned
+  // concurrently, its fields drop out here and the caller gets a 400 rather
+  // than the withdrawn bytes.
+  const fieldRows = yield* Result.await(
     safeDb((tx) =>
       // SAFETY: at most two version ids (current + previous); each version's
       // fields are bounded by LIMITS.propertiesCount via the unique
       // (propertyId, entityVersionId) index.
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: { entityVersionId: { in: versionIds } },
-        columns: { entityVersionId: true, content: true },
-      }),
+      tx
+        .select({
+          entityVersionId: fields.entityVersionId,
+          content: fields.content,
+        })
+        .from(fields)
+        .innerJoin(
+          entityVersions,
+          eq(entityVersions.id, fields.entityVersionId),
+        )
+        .where(
+          and(
+            inArray(fields.entityVersionId, versionIds),
+            eq(fields.workspaceId, workspaceId),
+            isNull(entityVersions.deletedAt),
+          ),
+        ),
     ),
   );
 
   const currentFile = findDocxFile(
-    fields.filter((f) => f.entityVersionId === versionId),
+    fieldRows.filter((f) => f.entityVersionId === versionId),
   );
   if (!currentFile) {
     return yield* Result.err(
@@ -116,7 +137,7 @@ export const loadEntityVersionDiffSources = async function* ({
   // format); diff against the empty document in that case.
   const previousFile = previousVersionId
     ? findDocxFile(
-        fields.filter((f) => f.entityVersionId === previousVersionId),
+        fieldRows.filter((f) => f.entityVersionId === previousVersionId),
       )
     : null;
 
@@ -174,6 +195,10 @@ export const loadEntityVersionDocxText = async function* ({
   entityId,
   versionId,
 }: LoadEntityVersionDocxTextOptions) {
+  // Read the version and its fields in one tombstone-checked query. Fetching
+  // the fields separately (keyed only by entityVersionId) after the version's
+  // `deletedAt IS NULL` check left a TOCTOU window that could surface a
+  // just-withdrawn version's DOCX content.
   const version = yield* Result.await(
     safeDb((tx) =>
       tx.query.entityVersions.findFirst({
@@ -181,8 +206,14 @@ export const loadEntityVersionDocxText = async function* ({
           id: { eq: versionId },
           entityId: { eq: entityId },
           workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
         },
         columns: { id: true },
+        with: {
+          // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via
+          // the unique (propertyId, entityVersionId) index.
+          fields: { columns: { content: true } },
+        },
       }),
     ),
   );
@@ -192,19 +223,7 @@ export const loadEntityVersionDocxText = async function* ({
     );
   }
 
-  const versionFields = yield* Result.await(
-    safeDb((tx) =>
-      // SAFETY: one version's fields, bounded by LIMITS.propertiesCount via the
-      // unique (propertyId, entityVersionId) index.
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: { entityVersionId: { eq: versionId } },
-        columns: { content: true },
-      }),
-    ),
-  );
-
-  const file = findDocxFile(versionFields);
+  const file = findDocxFile(version.fields);
   if (!file) {
     return Result.err(
       new HandlerError({

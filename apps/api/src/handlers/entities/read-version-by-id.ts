@@ -1,8 +1,6 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { entityVersions } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -46,57 +44,54 @@ const readVersionByIdHandler = async function* ({
     );
   }
 
-  // Fetch the specific version
-  const version = yield* Result.await(
+  // Fetch the version metadata AND its fields in a single tombstone-checked
+  // query. Reading the fields separately (keyed only by entityVersionId) after
+  // a `deletedAt IS NULL` metadata check left a TOCTOU window: a tombstone
+  // landing between the two reads would still return the withdrawn version's
+  // field content. Tying the fields to the same live-version row closes it —
+  // either the live version and its fields come back together, or neither does.
+  const versionRow = yield* Result.await(
     safeDb((tx) =>
-      tx
-        .select({
-          id: entityVersions.id,
-          versionNumber: entityVersions.versionNumber,
-          stamp: entityVersions.stamp,
-          createdAt: entityVersions.createdAt,
-        })
-        .from(entityVersions)
-        .where(
-          and(
-            eq(entityVersions.id, versionId),
-            eq(entityVersions.entityId, entityId),
-            eq(entityVersions.workspaceId, workspaceId),
-          ),
-        )
-        .limit(1),
+      tx.query.entityVersions.findFirst({
+        where: {
+          id: { eq: versionId },
+          entityId: { eq: entityId },
+          workspaceId: { eq: workspaceId },
+          deletedAt: { isNull: true },
+        },
+        columns: {
+          id: true,
+          versionNumber: true,
+          stamp: true,
+          createdAt: true,
+        },
+        with: {
+          // SAFETY: fields of one entity version, bounded by
+          // properties-per-workspace (LIMITS.propertiesCount).
+          fields: {
+            columns: {
+              id: true,
+              propertyId: true,
+              content: true,
+            },
+          },
+        },
+      }),
     ),
   );
 
-  const versionRow = version.at(0);
   if (!versionRow) {
     return Result.err(
       new HandlerError({ status: 404, message: "Version not found" }),
     );
   }
 
-  // Fetch fields for this version
-  const versionFields = yield* Result.await(
-    safeDb((tx) =>
-      // SAFETY: fields of one entity version, bounded by properties-per-workspace (LIMITS.propertiesCount)
-      // eslint-disable-next-line require-query-limit/require-query-limit
-      tx.query.fields.findMany({
-        where: { entityVersionId: { eq: versionId } },
-        columns: {
-          id: true,
-          propertyId: true,
-          content: true,
-        },
-      }),
-    ),
-  );
-
   return Result.ok({
     id: versionRow.id,
     versionNumber: versionRow.versionNumber,
     stamp: versionRow.stamp,
     createdAt: versionRow.createdAt.toISOString(),
-    fields: versionFields,
+    fields: versionRow.fields,
   });
 };
 

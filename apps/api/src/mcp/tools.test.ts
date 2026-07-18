@@ -340,9 +340,16 @@ type MockMcpTransaction = {
   query: {
     entities: {
       findFirst: (input?: MockEntityFindFirstInput) => Promise<{
-        currentVersionId: string;
         kind: string;
         name: string;
+        currentVersion: {
+          id: string;
+          fields: {
+            id: string;
+            propertyId: string;
+            content: { type: string };
+          }[];
+        } | null;
       } | null>;
     };
     extractedContent: {
@@ -408,9 +415,18 @@ const createScopedDb = (
                 }
 
                 return {
-                  currentVersionId: "entity_version_1",
                   kind: extractedContentRow.entity.kind,
                   name: extractedContentRow.entity.name,
+                  currentVersion: {
+                    id: "entity_version_1",
+                    fields: [
+                      {
+                        id: "field_1",
+                        propertyId: "property_1",
+                        content: { type: "file" },
+                      },
+                    ],
+                  },
                 };
               },
             },
@@ -1891,10 +1907,10 @@ describe("OpenAI-compatible MCP tools", () => {
           query: {
             entities: {
               findFirst: async () => ({
-                currentVersionId: "ver_current",
                 kind: "document",
                 name: "Secret Doc for John Smith",
                 workspaceId: "ws_1",
+                currentVersion: { id: "ver_current", fields: [] },
               }),
             },
             fields: {
