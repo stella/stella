@@ -65,6 +65,7 @@ const memberAc = ac.newRole({
   view: ["create", "update", "delete"],
   property: ["create", "update", "delete"],
   playbook: ["create", "update", "delete", "apply"],
+  flow: ["create", "update", "delete", "run", "review"],
   billingCode: ["create", "update", "delete"],
   rate: ["create", "update", "delete"],
   chat: ["create", "update", "delete"],
