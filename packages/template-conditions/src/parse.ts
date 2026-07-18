@@ -1,8 +1,8 @@
 /**
  * Parse a template `{{#if ...}}` condition expression into the canonical
- * `@stll/conditions` AST. The surface syntax — `==`, `!=`, `>`, `<`, `>=`,
+ * `@stll/conditions` AST. The surface syntax (`==`, `!=`, `>`, `<`, `>=`,
  * `<=`, `contains`, `and`, `or`, `!`, parentheses, dotted-path identifiers,
- * and string / number / boolean literals — maps onto `CompareNode` /
+ * and string / number / boolean literals) maps onto `CompareNode` /
  * `PredicateNode` / `GroupNode` with `path` and `literal` operands. Operator
  * semantics and evaluation live in `@stll/conditions`; this module is purely
  * surface-syntax → AST.
@@ -35,7 +35,7 @@ type Token =
 // closing quote is not guaranteed to exist, so an unterminated string forces
 // the (unanchored) `matchAll` scan below to retry an expensive "find the
 // close, honoring escapes" search starting at every subsequent `"` in the
-// input — quadratic on adversarial input. `scanString` below handles quoted
+// input, quadratic on adversarial input. `scanString` below handles quoted
 // strings with a dedicated, guaranteed-single-pass scan instead, so this
 // regex only ever needs to match (or fail to match, in O(1)) at the exact
 // position it is asked to start from.
@@ -61,7 +61,7 @@ type StringScan = { content: string; end: number };
  * each character is visited at most once, so this is safe on adversarial
  * input regardless of how many `"` or `\\` characters it contains.
  *
- * A closing quote is not required — consistent with the module's
+ * A closing quote is not required, consistent with the module's
  * degrade-gracefully policy for an unmatched `(`, a literal missing its
  * closing quote simply closes at end of input.
  */
@@ -86,15 +86,7 @@ const classifyNonString = (raw: string): Token => {
   if (raw === "!") {
     return { type: "not" };
   }
-  if (
-    raw === "==" ||
-    raw === "!=" ||
-    raw === ">" ||
-    raw === "<" ||
-    raw === ">=" ||
-    raw === "<=" ||
-    raw === "contains"
-  ) {
+  if (raw === "contains" || Object.hasOwn(COMPARE_SYMBOL_TO_OP, raw)) {
     return { type: "op", raw };
   }
   if (raw === "(") {

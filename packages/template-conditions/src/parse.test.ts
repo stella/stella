@@ -233,7 +233,7 @@ describe("tokenizer performance", () => {
   // (`"[^"\\]*(?:\\.[^"\\]*)*"`) scanned via an unanchored `matchAll`. On an
   // unterminated string, the scan for a closing quote fails, and `matchAll`
   // retries that same expensive "find the close, honoring escapes" search
-  // starting at every subsequent `"` character in the input — quadratic in
+  // starting at every subsequent `"` character in the input, quadratic in
   // the input length. Guard against that shape reappearing by asserting a
   // large adversarial input (many escaped-quote-like sequences, never
   // closing) still parses fast.
