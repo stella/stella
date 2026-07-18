@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import { buildVersionStamp } from "@/api/handlers/entities/version-utils";
@@ -110,8 +110,41 @@ export default createSafeHandler(
     });
 
     // Create a new version (copy-to-top) with all fields from the source version
-    yield* Result.await(
+    const restoreOutcome = yield* Result.await(
       safeDb(async (tx) => {
+        // Serialize with delete-version (which tombstones under the same entity
+        // FOR UPDATE) and re-verify the source version is still live before
+        // cloning its content into a new version. The pre-read liveness check
+        // above races: a delete committing between it and this mutation could
+        // tombstone the source mid-restore, and resurrecting a withdrawn
+        // version's content would defeat the withdrawal. Rechecking under the
+        // lock makes the delete and the restore run one at a time.
+        await tx
+          .select({ id: entities.id })
+          .from(entities)
+          .where(
+            and(
+              eq(entities.id, params.entityId),
+              eq(entities.workspaceId, workspaceId),
+            ),
+          )
+          .for("update");
+        const sourceLive = await tx
+          .select({ id: entityVersions.id })
+          .from(entityVersions)
+          .where(
+            and(
+              eq(entityVersions.id, params.versionId),
+              eq(entityVersions.entityId, params.entityId),
+              eq(entityVersions.workspaceId, workspaceId),
+              isNull(entityVersions.deletedAt),
+            ),
+          )
+          .limit(1);
+        if (sourceLive.length === 0) {
+          return { restored: false as const };
+        }
+
         await tx.insert(entityVersions).values({
           createdBy: userId,
           entityId: params.entityId,
@@ -183,8 +216,16 @@ export default createSafeHandler(
             },
           },
         ]);
+
+        return { restored: true as const };
       }),
     );
+
+    if (!restoreOutcome.restored) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Version not found" }),
+      );
+    }
 
     broadcast(workspaceId, {
       type: "invalidate-query",
