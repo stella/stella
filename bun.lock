@@ -117,7 +117,7 @@
       "name": "@stll/collab",
       "version": "0.0.0",
       "dependencies": {
-        "@hocuspocus/server": "^4.3.0",
+        "@hocuspocus/server": "^4.4.0",
         "@stll/errors": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "better-result": "catalog:",
@@ -126,7 +126,7 @@
         "yjs": "^13.6.31",
       },
       "devDependencies": {
-        "@hocuspocus/provider": "^4.3.0",
+        "@hocuspocus/provider": "^4.4.0",
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
       },
@@ -216,10 +216,10 @@
         "@better-auth/oauth-provider": "catalog:",
         "@elysiajs/eden": "^1.4.9",
         "@fontsource-variable/source-serif-4": "^5.2.9",
-        "@hocuspocus/provider": "^4.3.0",
+        "@hocuspocus/provider": "^4.4.0",
         "@libpdf/core": "catalog:",
         "@posthog/react": "^1.10.3",
-        "@pydantic/genai-prices": "^0.0.70",
+        "@pydantic/genai-prices": "^0.0.71",
         "@stll/ai-catalog": "workspace:*",
         "@stll/anonymize-chat": "workspace:*",
         "@stll/anonymize-data": "catalog:",
@@ -666,7 +666,7 @@
     "eslint-plugin-drizzle": "0.2.3",
     "fast-check": "^4.9.0",
     "jszip": "3.10.1",
-    "lucide-react": "1.23.0",
+    "lucide-react": "1.24.0",
     "oxfmt": "0.58.0",
     "oxlint": "1.73.0",
     "sherif": "1.13.0",
@@ -1048,11 +1048,11 @@
 
     "@google/genai": ["@google/genai@2.10.0", "", { "dependencies": { "google-auth-library": "^10.3.0", "p-retry": "^4.6.2", "protobufjs": "^7.5.4", "ws": "^8.18.0" }, "peerDependencies": { "@modelcontextprotocol/sdk": "^1.25.2" }, "optionalPeers": ["@modelcontextprotocol/sdk"] }, "sha512-e4cFxj3tiuMtsgOT4G9c1hXyGJhg7/Buj7VVeBacRY3fRtkRZZ59Q3nuVp2xbq8BGQXLXCDB253qMhklMOeUDg=="],
 
-    "@hocuspocus/common": ["@hocuspocus/common@4.3.0", "", { "dependencies": { "lib0": "^0.2.87" } }, "sha512-8USsMvso01aMKOSSyvb8oTAlfES/nBM+Y74XjW5Fy5ovmOaVpoRRBrktIrEVwydrp8Cr6C66ivc0orcW/3P+Kg=="],
+    "@hocuspocus/common": ["@hocuspocus/common@4.4.0", "", { "dependencies": { "lib0": "^0.2.87" } }, "sha512-cPSlPu/ws2JzBHW6OzctyaQMyDCq/YUS4nhXSbyMdkQwJzhjCkvfmmRnVtcmgLR3TBLaNwToNDwR/mNaJFOYsg=="],
 
-    "@hocuspocus/provider": ["@hocuspocus/provider@4.3.0", "", { "dependencies": { "@hocuspocus/common": "^4.3.0", "@lifeomic/attempt": "^3.0.2", "lib0": "^0.2.87" }, "peerDependencies": { "y-protocols": "^1.0.6", "yjs": "^13.6.8" } }, "sha512-eS5dECLnJDgELI2AfZNvr5jS0B6IWFoo7eAUgwwOzy1bf7KdPagXAYCtSWqSXmLMwjABlubZJQg8FVrTefU0cA=="],
+    "@hocuspocus/provider": ["@hocuspocus/provider@4.4.0", "", { "dependencies": { "@hocuspocus/common": "^4.4.0", "@lifeomic/attempt": "^3.0.2", "lib0": "^0.2.87" }, "peerDependencies": { "y-protocols": "^1.0.6", "yjs": "^13.6.8" } }, "sha512-A83ROMFqU2bgjTTQ1YMteY9v2cIhDHj4S6XgzjPaqYEgOFr2XvBYGnK+NXzZ6DgldKTnlN7qqvWvZplPvltgyw=="],
 
-    "@hocuspocus/server": ["@hocuspocus/server@4.3.0", "", { "dependencies": { "@hocuspocus/common": "^4.3.0", "async-mutex": "^0.5.0", "crossws": "^0.4.4", "kleur": "^4.1.4", "lib0": "^0.2.47" }, "peerDependencies": { "y-protocols": "^1.0.6", "yjs": "^13.6.8" } }, "sha512-GX9ohUJAr6aIa2ewS0EPeyf3w12wLCBBSGfc76ZMOuZJZPUzDH6BJWFjkVlaVW3OmwZ5+jxdXXFUf6sAi4EIrg=="],
+    "@hocuspocus/server": ["@hocuspocus/server@4.4.0", "", { "dependencies": { "@hocuspocus/common": "^4.4.0", "async-mutex": "^0.5.0", "crossws": "^0.4.4", "kleur": "^4.1.4", "lib0": "^0.2.47" }, "peerDependencies": { "y-protocols": "^1.0.6", "yjs": "^13.6.8" } }, "sha512-eVSnx+76CN81vaRol+OlT8FyyGFOBF9Z+kdJQhjVXRpj3kIAI1TzuRHKiZN1vkUogdHfmOAN5Bhs5v7V/qhMkQ=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.11", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g=="],
 
@@ -1442,7 +1442,7 @@
 
     "@protobufjs/utf8": ["@protobufjs/utf8@1.1.1", "", {}, "sha512-oOAWABowe8EAbMyWKM0tYDKi8Yaox52D+HWZhAIJqQXbqe0xI/GV7FhLWqlEKreMkfDjshR5FKgi3mnle0h6Eg=="],
 
-    "@pydantic/genai-prices": ["@pydantic/genai-prices@0.0.70", "", { "dependencies": { "yargs": "^17.7.2" }, "bin": { "genai-prices": "dist/cli.js" } }, "sha512-wdYoD6OmCt4/V3HT7sF8d9USUEsGNCUbXZzlJopOF5d+XNhZ2Gu1EeSj+Bh04YmVXfvwZZUwLiF4W+kH1Hs8Jg=="],
+    "@pydantic/genai-prices": ["@pydantic/genai-prices@0.0.71", "", { "dependencies": { "yargs": "^17.7.2" }, "bin": { "genai-prices": "dist/cli.js" } }, "sha512-P/glZ0p/QKudacboG47UT/sF7uweP3RWlmuweAcZRSvNogANq4xa9WJv4SNIWM0Pd8nxDzDeIErIPTarYyzXzg=="],
 
     "@quansync/fs": ["@quansync/fs@1.0.0", "", { "dependencies": { "quansync": "^1.0.0" } }, "sha512-4TJ3DFtlf1L5LDMaM6CanJ/0lckGNtJcMjQ1NAV6zDmA0tEHKZtxNKin8EgPaVX1YzljbxckyT2tJrpQKAtngQ=="],
 
@@ -4143,8 +4143,6 @@
     "@bruits/satteri-wasm32-wasi/@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.5", "", { "dependencies": { "@tybys/wasm-util": "^0.10.2" }, "peerDependencies": { "@emnapi/core": "^1.7.1", "@emnapi/runtime": "^1.7.1" } }, "sha512-AWPoBRJ9tsnVhor4sjO7rkni+7p+2IAEFj6cx06UgP10jkQHqay/36uRV/bFkgrh18D9vb4cr8Q0Pthskgzy+Q=="],
 
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
-
-    "@hocuspocus/server/crossws": ["crossws@0.4.6", "", { "peerDependencies": { "srvx": ">=0.11.5" }, "optionalPeers": ["srvx"] }, "sha512-/Wxe9Z007EbJ496j88nToZEvyPZ8PY/wjZJ18Agh/GCA9cYHyLbxtrpdFlFzAw3TV20F0SUYGl0g6PzChbwUrg=="],
 
     "@modelcontextprotocol/sdk/ajv": ["ajv@8.18.0", "", { "dependencies": { "fast-deep-equal": "^3.1.3", "fast-uri": "^3.0.1", "json-schema-traverse": "^1.0.0", "require-from-string": "^2.0.2" } }, "sha512-PlXPeEWMXMZ7sPYOHqmDyCJzcfNrUr3fGNKtezX14ykXOEIvyK81d+qydx89KY5O71FKMPaQ2vBfBFI5NHR63A=="],
 
