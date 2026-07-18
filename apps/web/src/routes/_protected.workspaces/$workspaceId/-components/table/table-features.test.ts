@@ -4,6 +4,8 @@ import { describe, expect, test } from "bun:test";
 
 import { workspaceTableFeatures } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
 
+// constructTable needs a reactivity feature at runtime; the app gets it from
+// the React bindings, this headless test wires the store bindings directly.
 const testFeatures = {
   coreReactivityFeature: storeReactivityBindings(),
   ...workspaceTableFeatures,

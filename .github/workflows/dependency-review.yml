@@ -69,6 +69,8 @@ jobs:
           # MIT", filetime "MIT OR Apache-2.0", mac-notification-sys
           # "MIT OR Apache-2.0"), reporting them as an
           # unrecognized LicenseRef even though both halves are allowed above.
+          # webpki-root-certs is genuinely CDLA-Permissive-2.0: the permissive
+          # data license Mozilla uses for its CA certificate bundle.
           # Keep these exceptions package-scoped; do not add namespace/group
           # exceptions.
           allow-dependencies-licenses: >-
@@ -123,5 +125,6 @@ jobs:
             pkg:cargo/brotli-decompressor,
             pkg:cargo/dbus,
             pkg:cargo/filetime,
-            pkg:cargo/mac-notification-sys
+            pkg:cargo/mac-notification-sys,
+            pkg:cargo/webpki-root-certs
           comment-summary-in-pr: always

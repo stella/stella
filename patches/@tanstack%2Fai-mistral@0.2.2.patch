@@ -1,13 +1,13 @@
 diff --git a/dist/esm/adapters/text.js b/dist/esm/adapters/text.js
-index 13611c9775f408011abc8c710144f74d3cf1e577..cbe700a3a81017a056d7ecc5632c01717ef22dbd 100644
+index f9627b9..cbe700a 100644
 --- a/dist/esm/adapters/text.js
 +++ b/dist/esm/adapters/text.js
 @@ -1,15 +1,16 @@
  import { BaseTextAdapter } from "@tanstack/ai/adapters";
--import { makeMistralStructuredOutputCompatible, transformNullsToUndefined } from "../utils/schema-converter.js";
 +import { undoNullWidening } from "@tanstack/ai-utils";
  import { convertToolsToProviderFormat } from "../tools/tool-converter.js";
  import { createMistralClient, generateId, getMistralApiKeyFromEnv } from "../utils/client.js";
+-import { makeMistralStructuredOutputCompatible, transformNullsToUndefined } from "../utils/schema-converter.js";
 +import { createToolInputNormalizer, makeMistralStructuredOutputCompatibleWithMap } from "../utils/schema-converter.js";
  const asChunk = (chunk) => (
    // eslint-disable-next-line no-restricted-syntax -- Record<string, unknown> doesn't structurally overlap the StreamChunk discriminated union; events are built with literal `type` fields the union accepts at runtime
@@ -91,7 +91,7 @@ index 13611c9775f408011abc8c710144f74d3cf1e577..cbe700a3a81017a056d7ecc5632c0171
              partialInput = {};
            }
 diff --git a/dist/esm/tools/function-tool.js b/dist/esm/tools/function-tool.js
-index bc0022117d0291720e7ef32054b00a372b9562ab..27fa02fecb2ab7fee2335cfdaff65132884946d1 100644
+index bc00221..27fa02f 100644
 --- a/dist/esm/tools/function-tool.js
 +++ b/dist/esm/tools/function-tool.js
 @@ -1,4 +1,4 @@
@@ -119,7 +119,7 @@ index bc0022117d0291720e7ef32054b00a372b9562ab..27fa02fecb2ab7fee2335cfdaff65132
    };
  }
 diff --git a/dist/esm/utils/schema-converter.js b/dist/esm/utils/schema-converter.js
-index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..a944a72894ec47e6cec63cb8d5f69163456895f2 100644
+index 2d0f3c4..a944a72 100644
 --- a/dist/esm/utils/schema-converter.js
 +++ b/dist/esm/utils/schema-converter.js
 @@ -1,73 +1,120 @@
@@ -371,11 +371,11 @@ index 2d0f3c4c8ebd9ab94d1eed248c178921b8e5a9b3..a944a72894ec47e6cec63cb8d5f69163
  };
  //# sourceMappingURL=schema-converter.js.map
 diff --git a/package.json b/package.json
-index d8b724f09ffd2b4a43f8f2280a4240fbf0df318f..34ee6635cbc9e27d2ef99fcdd0fd4f285ecd5ac3 100644
+index cf9eb73..e19941a 100644
 --- a/package.json
 +++ b/package.json
 @@ -42,7 +42,8 @@
-     "@tanstack/ai": "^0.40.0"
+     "@tanstack/ai": "^0.41.0"
    },
    "dependencies": {
 -    "@mistralai/mistralai": "2.2.0"
