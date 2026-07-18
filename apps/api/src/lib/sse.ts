@@ -359,6 +359,13 @@ type SseLifecycle = {
    * WITHOUT re-issuing SUBSCRIBE — so a `connected` client can be silently deaf.
    */
   subscriptionLive: boolean;
+  /**
+   * Pending retry timer for the next attach attempt, or null when an attempt is
+   * running or a subscriber is attached. Each failed attempt schedules the next
+   * via `setTimeout` and returns, so attempts never await one another (no
+   * unbounded promise/stack chain over a long outage). `stopSse` clears it.
+   */
+  attachTimer: ReturnType<typeof setTimeout> | null;
 };
 
 let activeLifecycle: SseLifecycle | null = null;
@@ -404,20 +411,18 @@ const SUBSCRIBER_ATTACH_STEADY_DELAY_MS = 5000;
 const SUBSCRIBER_ATTACH_STEADY_LOG_EVERY = 12;
 
 /**
- * Attach the cross-instance Redis subscriber for `lifecycle`, retrying with a
- * bounded backoff on failure. Written as recursion rather than a for-loop so
- * each attempt still observes success/failure sequentially without awaiting
- * inside a loop. Bails whenever `lifecycle` is no longer the active one, so a
- * stop (or stop+restart) during a connect or a backoff never attaches a stale
- * subscriber to a lifecycle that is no longer current.
+ * Run one attach attempt for `lifecycle`. On success it attaches the subscriber
+ * and wires reconnect handling; on failure it logs and schedules the NEXT
+ * attempt via a timer, then returns. Attempts therefore never await one another
+ * — no unbounded promise/stack chain builds up over a long outage. Bails
+ * whenever `lifecycle` is no longer the active one, so a stop (or stop+restart)
+ * during a connect or a backoff never attaches a stale subscriber.
  */
-const attachSubscriber = async (
+const runAttachAttempt = async (
   lifecycle: SseLifecycle,
   attempt: number,
 ): Promise<void> => {
   if (activeLifecycle !== lifecycle) {
-    // stopSse (and possibly a subsequent startSse) ran while we were waiting
-    // between retries; abandon this attach loop.
     return;
   }
 
@@ -458,14 +463,14 @@ const attachSubscriber = async (
       logger.warn("sse.redis_subscriber_reconnected", {
         channel: REDIS_CHANNEL,
       });
-      void attachSubscriber(lifecycle, 0);
+      launchAttachAttempt(lifecycle, 0);
     });
     logger.info("sse.redis_connected", { channel: REDIS_CHANNEL });
   } catch (error: unknown) {
     subscriber?.close();
     if (activeLifecycle !== lifecycle) {
       // The lifecycle was torn down (stop, or stop+restart) during the
-      // attempt; abandon this attach loop quietly.
+      // attempt; abandon the retry chain quietly.
       return;
     }
     const rampDelay = SUBSCRIBER_ATTACH_RETRY_DELAYS_MS[attempt];
@@ -488,9 +493,41 @@ const attachSubscriber = async (
         logger.warn("sse.redis_subscribe_retry", connectionErrorFields(error));
       }
     }
-    await Bun.sleep(delayMs);
-    await attachSubscriber(lifecycle, attempt + 1);
+    scheduleAttachAttempt(lifecycle, attempt + 1, delayMs);
   }
+};
+
+/**
+ * Kick off an attach attempt as detached work, capturing any unexpected
+ * rejection (`runAttachAttempt` handles expected connection failures itself, so
+ * this guards only against a throw the attempt did not model, keeping it from
+ * becoming an unhandled rejection). Handling the promise with `.catch` here is
+ * why no caller needs a bare `void` on the attempt.
+ */
+const launchAttachAttempt = (
+  lifecycle: SseLifecycle,
+  attempt: number,
+): void => {
+  runAttachAttempt(lifecycle, attempt).catch((error: unknown) => {
+    logger.error("sse.redis_connection_failed", connectionErrorFields(error));
+  });
+};
+
+/**
+ * Schedule the next attach attempt after `delayMs`. The timer is unref'd (like
+ * the keep-alive timer) so a pending retry never keeps the process alive on its
+ * own, and tracked on the lifecycle so `stopSse` can clear it.
+ */
+const scheduleAttachAttempt = (
+  lifecycle: SseLifecycle,
+  attempt: number,
+  delayMs: number,
+): void => {
+  const timer = setTimeout(() => {
+    launchAttachAttempt(lifecycle, attempt);
+  }, delayMs);
+  timer.unref();
+  lifecycle.attachTimer = timer;
 };
 
 /**
@@ -521,11 +558,13 @@ export const startSse = (): void => {
     keepAliveTimer: setInterval(sendKeepAlive, KEEP_ALIVE_INTERVAL_MS),
     subscriber: null,
     subscriptionLive: false,
+    attachTimer: null,
   };
   lifecycle.keepAliveTimer.unref();
   activeLifecycle = lifecycle;
 
-  void attachSubscriber(lifecycle, 0);
+  // First attempt runs immediately; only retries are timer-scheduled.
+  launchAttachAttempt(lifecycle, 0);
 
   logger.info("sse.initialized", {
     keepAliveIntervalMs: KEEP_ALIVE_INTERVAL_MS,
@@ -544,6 +583,11 @@ export const stopSse = (): void => {
   activeLifecycle = null;
 
   clearInterval(lifecycle.keepAliveTimer);
+
+  if (lifecycle.attachTimer) {
+    clearTimeout(lifecycle.attachTimer);
+    lifecycle.attachTimer = null;
+  }
 
   if (lifecycle.subscriber) {
     try {

@@ -536,36 +536,53 @@ describe("startSse: subscriber attach retry", () => {
     subscribeFailuresRemaining = 0;
   });
 
-  test("keeps retrying at the capped interval and recovers after a prolonged outage", async () => {
+  test("keeps retrying at the capped interval and recovers after a long outage", async () => {
     createdClients.length = 0;
     subscribeBehavior = "resolve";
-    // Fail the whole 5-step ramp plus one steady attempt (6 failures), then
-    // attach: proves retries continue past the ramp instead of giving up, so an
-    // outage longer than the ramp still self-heals when Redis recovers.
-    subscribeFailuresRemaining = 6;
-    const sleepSpy = spyOn(Bun, "sleep").mockImplementation(async () => {});
+    // Fail the 5-step ramp plus 35 steady attempts (40 failures), then attach.
+    // Proves retries continue indefinitely deep into the steady phase, so an
+    // outage far longer than the ramp still self-heals when Redis recovers —
+    // and, with the timer-scheduled driver, without any recursive/awaited
+    // attempt chain building up.
+    subscribeFailuresRemaining = 40;
+
+    // Zero out the retry backoff so 41 attempts run fast: each attempt's timer
+    // fires on the next macrotask instead of after the real ramp/steady delay.
+    // The drain below uses the real setTimeout captured here.
+    const realSetTimeout = globalThis.setTimeout;
+    // A timer stub that fires the callback promptly, ignoring the delay. Matching
+    // Bun's full overloaded setTimeout type adds no test value, so assert it.
+    // oxlint-disable-next-line no-unsafe-type-assertion -- test-only timer stub
+    const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
+      realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
+    const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
+      immediateSetTimeout,
+    );
 
     startSse();
-    // Bun.sleep is instant here, so the whole retry chain drains within
-    // microtasks; a macrotask tick lets every attempt run to the eventual
-    // success. A few ticks give margin.
-    const tick = async (): Promise<void> => {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      });
-    };
-    await tick();
-    await tick();
-    await tick();
 
-    // 7 clients: 6 failed attach attempts + the one that finally subscribed.
-    expect(createdClients).toHaveLength(7);
+    // Drain macrotasks until the subscriber attaches; bounded recursion (not a
+    // loop) so no await sits inside a loop and a stuck run cannot hang forever.
+    const drainUntilAttached = async (remaining: number): Promise<void> => {
+      if (createdClients.at(-1)?.subscribedLive === true || remaining <= 0) {
+        return;
+      }
+      await new Promise<void>((resolve) => {
+        realSetTimeout(resolve, 0);
+      });
+      await drainUntilAttached(remaining - 1);
+    };
+    await drainUntilAttached(300);
+
+    // 41 clients: 40 failed attach attempts (well past the 5-step ramp) + the
+    // one that finally subscribed.
+    expect(createdClients).toHaveLength(41);
     const attached = createdClients.at(-1);
     expect(attached?.subscribedLive).toBe(true);
     expect(attached?.subscribe).toHaveBeenCalledTimes(1);
     expect(attached?.close).not.toHaveBeenCalled();
 
-    sleepSpy.mockRestore();
+    timeoutSpy.mockRestore();
     subscribeFailuresRemaining = 0;
     stopSse();
     await flushMicrotasks();
