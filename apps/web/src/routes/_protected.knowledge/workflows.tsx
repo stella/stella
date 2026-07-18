@@ -43,9 +43,19 @@ const toTriggerBody = (
   trigger: FlowDefinitionDetail["trigger"],
 ): FlowDefinitionBody["trigger"] => {
   if (trigger.type === "schedule") {
+    const { dayOfWeek, dayOfMonth, frequency, hourUtc } = trigger.schedule;
     return {
-      ...trigger,
+      type: "schedule",
       workspaceId: toSafeId<"workspace">(trigger.workspaceId),
+      // The fetched trigger types the day fields as `number | undefined`; under
+      // exactOptionalPropertyTypes the body wants them absent, not `undefined`,
+      // so re-add each only when it has a value.
+      schedule: {
+        frequency,
+        hourUtc,
+        ...(dayOfWeek === undefined ? {} : { dayOfWeek }),
+        ...(dayOfMonth === undefined ? {} : { dayOfMonth }),
+      },
     };
   }
   if (trigger.type === "file-upload") {

@@ -40,7 +40,11 @@ const tFlowStep = t.Union([
 ]);
 
 const tFlowSchedule = t.Object({
-  frequency: t.Union(FLOW_SCHEDULE_FREQUENCIES.map((f) => t.Literal(f))),
+  // `t.Union(arr.map(t.Literal))` builds the union from a general array, whose
+  // static type Eden cannot reconstruct — it collapses to `never` on the client
+  // body type. Use `t.UnionEnum([...const])` like the required `decision` field
+  // below so the frontend sees `"daily" | "weekly" | "monthly"`.
+  frequency: t.UnionEnum([...FLOW_SCHEDULE_FREQUENCIES]),
   hourUtc: t.Integer({ minimum: 0, maximum: 23 }),
   dayOfWeek: t.Optional(t.Integer({ minimum: 0, maximum: 6 })),
   dayOfMonth: t.Optional(t.Integer({ minimum: 1, maximum: 28 })),

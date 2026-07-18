@@ -25172,20 +25172,9 @@ export const generatedRouteMap: RouteNode = {
                               required: ["frequency", "hourUtc"],
                               properties: {
                                 frequency: {
-                                  anyOf: [
-                                    {
-                                      const: "daily",
-                                      type: "string",
-                                    },
-                                    {
-                                      const: "weekly",
-                                      type: "string",
-                                    },
-                                    {
-                                      const: "monthly",
-                                      type: "string",
-                                    },
-                                  ],
+                                  default: "daily",
+                                  type: "string",
+                                  enum: ["daily", "weekly", "monthly"],
                                 },
                                 hourUtc: {
                                   minimum: 0,
@@ -25995,20 +25984,9 @@ export const generatedRouteMap: RouteNode = {
                               required: ["frequency", "hourUtc"],
                               properties: {
                                 frequency: {
-                                  anyOf: [
-                                    {
-                                      const: "daily",
-                                      type: "string",
-                                    },
-                                    {
-                                      const: "weekly",
-                                      type: "string",
-                                    },
-                                    {
-                                      const: "monthly",
-                                      type: "string",
-                                    },
-                                  ],
+                                  default: "daily",
+                                  type: "string",
+                                  enum: ["daily", "weekly", "monthly"],
                                 },
                                 hourUtc: {
                                   minimum: 0,
