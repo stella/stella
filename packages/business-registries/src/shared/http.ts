@@ -119,12 +119,7 @@ export type RegistryFetchOptions<T> = RegistryRequestOptions & {
 export const registryFetch = async <T>(
   options: RegistryFetchOptions<T>,
 ): Promise<T | null> => {
-  const response = await performRegistryRequest({
-    url: options.url,
-    init: options.init,
-    timeoutMs: options.timeoutMs,
-    wrapRequestError: options.wrapRequestError,
-  });
+  const response = await performRegistryRequest(options);
   if (!response.ok) {
     if (response.status === 429 && options.onRateLimited) {
       return options.onRateLimited(response);

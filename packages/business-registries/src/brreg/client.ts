@@ -92,11 +92,11 @@ const parseErrorBody = (value: unknown): BrregErrorResponse => {
   return result;
 };
 
-const brregGet = <T>(
+const brregGet = async <T>(
   url: string,
   isExpectedShape: (value: unknown) => value is T,
 ): Promise<T | null> =>
-  registryFetch({
+  await registryFetch({
     url,
     init: { headers: { Accept: "application/json" } },
     isExpectedShape,

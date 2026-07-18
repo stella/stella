@@ -60,11 +60,11 @@ const isEdgarRawSubmission = (value: unknown): value is EdgarRawSubmission =>
       value["formerNames"].every(isEdgarFormerName))) &&
   isOptionalRecord(value["filings"]);
 
-const edgarGet = (
+const edgarGet = async (
   url: string,
   userAgent: string,
 ): Promise<EdgarRawSubmission | null> =>
-  registryFetch({
+  await registryFetch({
     url,
     init: {
       headers: {

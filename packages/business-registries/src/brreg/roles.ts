@@ -283,8 +283,10 @@ const parseUpstreamMessage = (value: unknown): string | null => {
   return null;
 };
 
-const brregGetRoles = (url: string): Promise<BrregRawRolesResponse | null> =>
-  registryFetch({
+const brregGetRoles = async (
+  url: string,
+): Promise<BrregRawRolesResponse | null> =>
+  await registryFetch({
     url,
     init: { headers: { Accept: "application/json" } },
     isExpectedShape: isRawRolesResponse,

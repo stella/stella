@@ -140,11 +140,11 @@ const handleAresError = async (
   });
 };
 
-const readAresJson = <T>(
+const readAresJson = async <T>(
   response: Response,
   isExpectedShape: (value: unknown) => value is T,
 ): Promise<T> =>
-  readRegistryJson({
+  await readRegistryJson({
     response,
     isExpectedShape,
     wrapParseError: (cause) =>

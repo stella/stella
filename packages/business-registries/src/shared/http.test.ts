@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { isRecord } from "./guards.js";
 import {
   parseRetryAfterMs,
   performRegistryRequest,
@@ -24,7 +25,7 @@ class ApiMarkerError extends Error {
 
 type Shape = { ok: true };
 const isShape = (value: unknown): value is Shape =>
-  typeof value === "object" && value !== null && (value as Shape).ok === true;
+  isRecord(value) && value["ok"] === true;
 
 const installFetchStub = (
   handler: (input: URL | Request | string) => Promise<Response>,
@@ -69,10 +70,10 @@ const baseOptions = {
 
 describe("performRegistryRequest", () => {
   test("wraps a transport/timeout failure via wrapRequestError", async () => {
-    restore = installFetchStub(() =>
-      Promise.reject(new Error("The operation timed out")),
-    );
-    await expect(
+    restore = installFetchStub(async () => {
+      throw new Error("The operation timed out");
+    });
+    expect(
       performRegistryRequest({
         url: "https://example.test",
         wrapRequestError: (cause) =>
@@ -82,9 +83,7 @@ describe("performRegistryRequest", () => {
   });
 
   test("returns the raw response on success", async () => {
-    restore = installFetchStub(() =>
-      Promise.resolve(jsonResponse({ ok: true })),
-    );
+    restore = installFetchStub(async () => jsonResponse({ ok: true }));
     const response = await performRegistryRequest({
       url: "https://example.test",
       wrapRequestError: (cause) => new RequestMarkerError("wrapped", { cause }),
@@ -104,8 +103,8 @@ describe("readRegistryJson", () => {
     expect(body).toEqual({ ok: true });
   });
 
-  test("maps a non-JSON body to the parse error", async () => {
-    await expect(
+  test("maps a non-JSON body to the parse error", () => {
+    expect(
       readRegistryJson({
         response: new Response("<html>not json</html>", { status: 200 }),
         isExpectedShape: isShape,
@@ -115,8 +114,8 @@ describe("readRegistryJson", () => {
     ).rejects.toBeInstanceOf(ParseMarkerError);
   });
 
-  test("maps an unexpected shape to the shape error", async () => {
-    await expect(
+  test("maps an unexpected shape to the shape error", () => {
+    expect(
       readRegistryJson({
         response: jsonResponse({ nope: 1 }),
         isExpectedShape: isShape,
@@ -129,62 +128,46 @@ describe("readRegistryJson", () => {
 
 describe("registryFetch", () => {
   test("parses and guards a successful JSON body", async () => {
-    restore = installFetchStub(() =>
-      Promise.resolve(jsonResponse({ ok: true })),
-    );
+    restore = installFetchStub(async () => jsonResponse({ ok: true }));
     const result = await registryFetch(baseOptions);
     expect(result).toEqual({ ok: true });
   });
 
-  test("wraps a transport failure via wrapRequestError", async () => {
-    restore = installFetchStub(() => Promise.reject(new Error("timed out")));
-    await expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(
+  test("wraps a transport failure via wrapRequestError", () => {
+    restore = installFetchStub(async () => {
+      throw new Error("timed out");
+    });
+    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(
       RequestMarkerError,
     );
   });
 
-  test("delegates a non-OK status to onErrorResponse (throws)", async () => {
-    restore = installFetchStub(() =>
-      Promise.resolve(jsonResponse({ error: true }, 500)),
-    );
-    await expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(
-      ApiMarkerError,
-    );
+  test("delegates a non-OK status to onErrorResponse (throws)", () => {
+    restore = installFetchStub(async () => jsonResponse({ error: true }, 500));
+    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(ApiMarkerError);
   });
 
-  test("lets onErrorResponse resolve a not-found status to null", async () => {
-    restore = installFetchStub(() =>
-      Promise.resolve(jsonResponse({ error: true }, 404)),
-    );
-    await expect(registryFetch(baseOptions)).resolves.toBeNull();
+  test("lets onErrorResponse resolve a not-found status to null", () => {
+    restore = installFetchStub(async () => jsonResponse({ error: true }, 404));
+    expect(registryFetch(baseOptions)).resolves.toBeNull();
   });
 
-  test("maps a malformed 2xx JSON body to the parse error", async () => {
-    restore = installFetchStub(() =>
-      Promise.resolve(new Response("}{", { status: 200 })),
-    );
-    await expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(
-      ParseMarkerError,
-    );
+  test("maps a malformed 2xx JSON body to the parse error", () => {
+    restore = installFetchStub(async () => new Response("}{", { status: 200 }));
+    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(ParseMarkerError);
   });
 
-  test("maps an unexpected 2xx shape to the shape error", async () => {
-    restore = installFetchStub(() =>
-      Promise.resolve(jsonResponse({ nope: true })),
-    );
-    await expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(
-      ShapeMarkerError,
-    );
+  test("maps an unexpected 2xx shape to the shape error", () => {
+    restore = installFetchStub(async () => jsonResponse({ nope: true }));
+    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(ShapeMarkerError);
   });
 
-  test("routes a 429 to onRateLimited when provided, before onErrorResponse", async () => {
-    restore = installFetchStub(() =>
-      Promise.resolve(jsonResponse({ error: true }, 429)),
-    );
+  test("routes a 429 to onRateLimited when provided, before onErrorResponse", () => {
+    restore = installFetchStub(async () => jsonResponse({ error: true }, 429));
     class RateMarkerError extends Error {
       override name = "RateMarkerError";
     }
-    await expect(
+    expect(
       registryFetch({
         ...baseOptions,
         onRateLimited: () => {
@@ -194,13 +177,9 @@ describe("registryFetch", () => {
     ).rejects.toBeInstanceOf(RateMarkerError);
   });
 
-  test("falls back to onErrorResponse for a 429 when onRateLimited is absent", async () => {
-    restore = installFetchStub(() =>
-      Promise.resolve(jsonResponse({ error: true }, 429)),
-    );
-    await expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(
-      ApiMarkerError,
-    );
+  test("falls back to onErrorResponse for a 429 when onRateLimited is absent", () => {
+    restore = installFetchStub(async () => jsonResponse({ error: true }, 429));
+    expect(registryFetch(baseOptions)).rejects.toBeInstanceOf(ApiMarkerError);
   });
 });
 

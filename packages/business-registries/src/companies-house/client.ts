@@ -159,12 +159,12 @@ const readUpstreamMessage = async (
   }
 };
 
-const companiesHouseGet = <T>(
+const companiesHouseGet = async <T>(
   url: string,
   apiKey: string,
   isExpectedShape: (value: unknown) => value is T,
 ): Promise<T | null> =>
-  registryFetch({
+  await registryFetch({
     url,
     init: {
       headers: {

@@ -11,9 +11,17 @@
  * number 0) and only specific fields (e.g. DENUE postal code) use `"0"`
  * as an absent-value sentinel, which those fields must handle
  * explicitly rather than relying on a blanket rule here.
+ *
+ * Accepts `unknown` on purpose: this normalizes optional fields from
+ * upstream registry JSON that the adapter shape guards do not fully
+ * validate (recherche-entreprises, for instance, only checks `siret` /
+ * `type_dirigeant`, so a numeric `numero_voie` or `denomination` can
+ * reach here). Any non-string value is treated as absent (`null`)
+ * rather than throwing a raw `TypeError`, matching the per-adapter
+ * `trimToNull` helpers this consolidated.
  */
-export const trimToNull = (value: string | null | undefined): string | null => {
-  if (value === null || value === undefined) {
+export const trimToNull = (value: unknown): string | null => {
+  if (typeof value !== "string") {
     return null;
   }
   const trimmed = value.trim();
