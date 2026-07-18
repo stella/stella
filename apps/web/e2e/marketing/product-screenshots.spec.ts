@@ -88,7 +88,9 @@ test("capture landing product screenshots", async ({
   await page.getByRole("button", { name: /Test Firm/u }).click();
 
   for (const theme of ["light", "dark"] as const) {
+    // eslint-disable-next-line no-await-in-loop -- captures reuse one authenticated page, so each theme switch and capture must be prepared and shot in order
     await page.emulateMedia({ colorScheme: theme });
+    // eslint-disable-next-line no-await-in-loop -- see above
     await page.evaluate((nextTheme) => {
       localStorage.setItem("theme", nextTheme);
     }, theme);
@@ -97,33 +99,49 @@ test("capture landing product screenshots", async ({
       if (requestedCapture && capture.name !== requestedCapture) {
         continue;
       }
+      // eslint-disable-next-line no-await-in-loop -- see above
       await page.goto(capture.path, { waitUntil: "domcontentloaded" });
+      // eslint-disable-next-line no-await-in-loop -- see above
       await expect(page).not.toHaveURL(/\/sign-in(?:\/|\?|$)/u);
+      // eslint-disable-next-line no-await-in-loop -- see above
       await expect(page.getByText(capture.readyText).first()).toBeVisible();
       if ("readySelector" in capture) {
+        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.locator(capture.readySelector).first()).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-decision") {
+        // eslint-disable-next-line no-await-in-loop -- see above
         await page.locator('main a[href*="/cases/"]').first().click();
+        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page).toHaveURL(/\/law\/[a-z-]+\/cases\//u);
+        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.locator("article").first()).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-files") {
+        // eslint-disable-next-line no-await-in-loop -- see above
         await page.getByRole("tab", { name: "Files" }).click();
+        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page).toHaveURL(
           new RegExp(`/workspaces/${AKVIZICE_WORKSPACE_ID}/[^/?]+`, "u"),
         );
+        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(
           page.getByText("Internal_SAFE_Agreement.docx").first(),
         ).toBeVisible();
       }
       if ("prepare" in capture && capture.prepare === "open-table") {
+        // eslint-disable-next-line no-await-in-loop -- see above
         await page.getByRole("tab", { name: "Table" }).click();
+        // eslint-disable-next-line no-await-in-loop -- see above
         await expect(page.getByRole("grid")).toBeVisible();
       }
+      // eslint-disable-next-line no-await-in-loop -- see above
       await page.locator("body").waitFor({ state: "visible" });
+      // eslint-disable-next-line no-await-in-loop -- see above
       await page.evaluate(async () => document.fonts.ready);
+      // eslint-disable-next-line no-await-in-loop -- see above
       await page.waitForTimeout(300);
+      // eslint-disable-next-line no-await-in-loop -- see above
       await page.addStyleTag({
         content: `
           *, *::before, *::after {
@@ -137,6 +155,7 @@ test("capture landing product screenshots", async ({
       });
 
       const themeSuffix = theme === "dark" ? "-dark" : "";
+      // eslint-disable-next-line no-await-in-loop -- see above
       await expect(page).toHaveScreenshot(`${capture.name}${themeSuffix}.png`, {
         animations: "disabled",
         caret: "hide",

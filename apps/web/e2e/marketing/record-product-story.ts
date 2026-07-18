@@ -1,3 +1,8 @@
+// The e2e tsconfig is node-only (lib ESNext); the `page.evaluate` /
+// `addInitScript` callbacks below run in the browser, so pull in the DOM
+// lib for their globals (document, localStorage, MutationObserver, ...).
+/// <reference lib="dom" />
+/// <reference lib="dom.iterable" />
 import { chromium, request as playwrightRequest } from "@playwright/test";
 import type { Browser, Page } from "@playwright/test";
 import { execFile } from "node:child_process";
@@ -17,6 +22,7 @@ const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review"
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 const NORTHSTAR_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
 const VIEWPORT = { height: 720, width: 1280 } as const;
+// eslint-disable-next-line typescript/strict-void-return -- promisify resolves execFile via its custom `__promisify__` overload; the rule matches the generic void-callback overload instead
 const execFileAsync = promisify(execFile);
 
 type CaptureTheme = "dark" | "light";
@@ -114,6 +120,7 @@ const main = async () => {
       if (CAPTURE_FILTER && capture.id !== CAPTURE_FILTER) {
         continue;
       }
+      // eslint-disable-next-line no-await-in-loop -- recordings are captured one scene at a time; a shared browser cannot record overlapping scenes
       await recordCapture({ browser, capture, cookies, theme, views });
     }
   }
@@ -147,7 +154,9 @@ const recordCapture = async ({
   await page.goto(capture.path(views), { waitUntil: "commit" });
   await capture.prepare(page);
   await hideCaptureNoise(page);
-  await page.evaluate(async () => document.fonts.ready);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
   await page.waitForTimeout(450);
   const trimStartSeconds = (performance.now() - recordingStartedAt) / 1000;
 
@@ -286,29 +295,33 @@ const resolveMarketingViewRoutes = async (
   };
 };
 
+// `Array.isArray` narrows `unknown` to `any[]`; this keeps elements `unknown`.
+const isUnknownArray = (value: unknown): value is unknown[] =>
+  Array.isArray(value);
+
 const getMarketingAgentThreadId = (payload: unknown): string | undefined => {
   if (
-    !payload ||
     typeof payload !== "object" ||
+    payload === null ||
     !("workspaces" in payload) ||
-    !Array.isArray(payload.workspaces)
+    !isUnknownArray(payload.workspaces)
   ) {
     return undefined;
   }
 
   for (const workspace of payload.workspaces) {
     if (
-      !workspace ||
       typeof workspace !== "object" ||
+      workspace === null ||
       !("threads" in workspace) ||
-      !Array.isArray(workspace.threads)
+      !isUnknownArray(workspace.threads)
     ) {
       continue;
     }
     for (const thread of workspace.threads) {
       if (
-        thread &&
         typeof thread === "object" &&
+        thread !== null &&
         "id" in thread &&
         typeof thread.id === "string" &&
         "title" in thread &&
@@ -336,7 +349,7 @@ const getViewRecords = (payload: unknown): ViewRecord[] => {
 };
 
 const isViewRecord = (value: unknown): value is ViewRecord => {
-  if (!value || typeof value !== "object") {
+  if (typeof value !== "object" || value === null) {
     return false;
   }
   if (!("id" in value) || typeof value.id !== "string") {
@@ -344,8 +357,8 @@ const isViewRecord = (value: unknown): value is ViewRecord => {
   }
   if (
     !("layout" in value) ||
-    !value.layout ||
-    typeof value.layout !== "object"
+    typeof value.layout !== "object" ||
+    value.layout === null
   ) {
     return false;
   }
@@ -372,11 +385,19 @@ const authenticate = async () => {
   if (!otpResponse.ok()) {
     throw new Error("Could not obtain the development marketing OTP");
   }
-  const { otp } = await otpResponse.json();
+  const otpPayload: unknown = await otpResponse.json();
+  if (
+    typeof otpPayload !== "object" ||
+    otpPayload === null ||
+    !("otp" in otpPayload) ||
+    typeof otpPayload.otp !== "string"
+  ) {
+    throw new Error("The development marketing OTP response had no otp field");
+  }
   const signInResponse = await request.post(
     `${API_URL}/api/auth/sign-in/email-otp`,
     {
-      data: { email: EMAIL, otp },
+      data: { email: EMAIL, otp: otpPayload.otp },
       headers: { origin },
     },
   );
@@ -398,9 +419,10 @@ const hideCaptureNoise = async (page: Page) => {
         const label = group.querySelector(
           '[data-sidebar="group-label"], [data-slot="sidebar-group-label"]',
         );
+        const labelText = label?.textContent ?? "";
         if (
           group instanceof HTMLElement &&
-          label?.textContent?.trim() === "Recent chats"
+          labelText.trim() === "Recent chats"
         ) {
           group.style.display = "none";
         }
@@ -440,7 +462,7 @@ const animateBetweenRows = async (
 };
 
 const closeInspectorIfOpen = async (page: Page) => {
-  const closeButton = page.getByRole("button", { name: /close/i }).last();
+  const closeButton = page.getByRole("button", { name: /close/iu }).last();
   if (await closeButton.isVisible().catch(() => false)) {
     await closeButton.click();
     await page.waitForTimeout(500);
@@ -476,17 +498,16 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
     await animateDocumentScroll(page);
     return;
   }
-  if (captureId === "agent") {
-    await page
-      .getByText(/atlas_001_Corporate/u)
-      .first()
-      .click();
-    await page.waitForTimeout(2800);
-    await page
-      .getByText(/atlas_005_Finance/u)
-      .first()
-      .click();
-  }
+  // Only "agent" remains.
+  await page
+    .getByText(/atlas_001_Corporate/u)
+    .first()
+    .click();
+  await page.waitForTimeout(2800);
+  await page
+    .getByText(/atlas_005_Finance/u)
+    .first()
+    .click();
 };
 
 type TranscodeVideoOptions = {
