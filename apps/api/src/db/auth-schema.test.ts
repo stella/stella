@@ -23,12 +23,14 @@ describe("auth schema", () => {
   });
 
   // Locks the table in sync with node_modules/better-auth/dist/plugins/
-  // two-factor/schema.mjs: 1.6.20 has no `failedVerificationCount` or
-  // `lockedUntil` columns, unlike some documented/newer shapes.
+  // two-factor/schema.mjs: 1.6.23 writes `failedVerificationCount` and
+  // `lockedUntil` in its verification path (account lockout is on by default).
   test("twoFactor includes the columns Better Auth's two-factor plugin writes", () => {
     expect(Object.keys(getColumns(twoFactor)).toSorted()).toEqual([
       "backupCodes",
+      "failedVerificationCount",
       "id",
+      "lockedUntil",
       "secret",
       "userId",
       "verified",
