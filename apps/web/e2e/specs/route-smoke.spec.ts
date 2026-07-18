@@ -242,6 +242,10 @@ test.describe
   let apiRequest: APIRequestContext;
   let context: BrowserContext;
   let world: SmokeWorld | null = null;
+  // Recorded the moment each fixture is created (not only after the whole
+  // setup succeeds), so a failure mid-setup still tears down what exists.
+  let createdWorkspace: SmokeWorld["workspace"] | null = null;
+  let createdContactId: string | null = null;
   const networkResults = new Map<string, RouteNetworkMetrics>();
 
   test.beforeAll(async ({ browser }) => {
@@ -251,35 +255,48 @@ test.describe
     context = await browser.newContext({ storageState: STORAGE_STATE });
 
     const workspace = await createTestWorkspace(apiRequest, "route-smoke");
+    createdWorkspace = workspace;
     const contactId = await createContact(apiRequest);
+    createdContactId = contactId;
     const documentRoute = await createDocumentRoute(apiRequest, workspace);
     world = { workspace, contactId, documentRoute };
   });
 
   test.afterAll(async () => {
+    // Best-effort but total: attempt every teardown step even if one throws,
+    // so a single failure cannot strand the other fixture or leak the browser
+    // context / request context. Runs on the beforeAll-owned request context
+    // (not a per-test fixture), so it cannot race a timing-out test body into
+    // the "context closed" masking error.
     const failures: unknown[] = [];
-    if (world !== null) {
-      // Best-effort but total: attempt every delete even if one throws, so a
-      // single failed cleanup cannot strand the other fixture. Runs on the
-      // beforeAll-owned request context (not a per-test fixture), so it cannot
-      // race a timing-out test body into the "context closed" masking error.
+    if (createdContactId !== null) {
       try {
-        await apiDelete(apiRequest, `/contacts/${world.contactId}`);
-      } catch (error) {
-        failures.push(error);
-      }
-      try {
-        await deleteTestWorkspace(apiRequest, world.workspace.id);
+        await apiDelete(apiRequest, `/contacts/${createdContactId}`);
       } catch (error) {
         failures.push(error);
       }
     }
-    await context.close();
-    await apiRequest.dispose();
+    if (createdWorkspace !== null) {
+      try {
+        await deleteTestWorkspace(apiRequest, createdWorkspace.id);
+      } catch (error) {
+        failures.push(error);
+      }
+    }
+    try {
+      await context.close();
+    } catch (error) {
+      failures.push(error);
+    }
+    try {
+      await apiRequest.dispose();
+    } catch (error) {
+      failures.push(error);
+    }
     if (failures.length > 0) {
       throw new AggregateError(
         failures,
-        "route-smoke teardown failed to delete one or more fixtures",
+        "route-smoke teardown failed to release one or more fixtures",
       );
     }
   });
