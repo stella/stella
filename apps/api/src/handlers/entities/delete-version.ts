@@ -2,7 +2,12 @@ import { Result } from "better-result";
 import { and, desc, eq, isNull, ne } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { desktopEditSessions, entities, entityVersions } from "@/api/db/schema";
+import {
+  desktopEditSessions,
+  entities,
+  entityVersions,
+  folioCollabSessions,
+} from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -59,9 +64,11 @@ export const deleteEntityVersionHandler = async function* ({
   // would invert finalize's order and risk an ABBA deadlock.
   const txOutcome = yield* Result.await(
     safeDb(async (tx) => {
-      // Lock (not yet cancel) the open sessions anchored to this version first,
-      // establishing the session -> entity order. The cancel UPDATE below
-      // re-touches these already-locked rows.
+      // Lock (not yet cancel) every open session anchored to this version first,
+      // establishing the session -> entity order. Both session kinds anchor to a
+      // base version (desktop_edit_sessions and folio_collab_sessions), so both
+      // must be withdrawn when that version is tombstoned. The cancel UPDATEs
+      // below re-touch these already-locked rows.
       await tx
         .select({ id: desktopEditSessions.id })
         .from(desktopEditSessions)
@@ -70,6 +77,17 @@ export const deleteEntityVersionHandler = async function* ({
             eq(desktopEditSessions.baseVersionId, params.versionId),
             eq(desktopEditSessions.workspaceId, workspaceId),
             eq(desktopEditSessions.status, "open"),
+          ),
+        )
+        .for("update");
+      await tx
+        .select({ id: folioCollabSessions.id })
+        .from(folioCollabSessions)
+        .where(
+          and(
+            eq(folioCollabSessions.baseVersionId, params.versionId),
+            eq(folioCollabSessions.workspaceId, workspaceId),
+            eq(folioCollabSessions.status, "open"),
           ),
         )
         .for("update");
@@ -203,12 +221,16 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         );
 
-      // Cascade the withdrawal to any open desktop edit session anchored to this
-      // version: without this an in-flight session could resume and re-download
-      // the withdrawn version's bytes. Cancel them in the same transaction so
-      // the tombstone and the session closure commit atomically. The resume-path
-      // chokepoint (readVersionDocxTarget) is the class guard should a future
-      // tombstone writer forget this step; closing here is the primary fix.
+      // Cascade the withdrawal to every open edit session anchored to this
+      // version: without this an in-flight session could resume/seed and
+      // re-download the withdrawn version's bytes. Both session kinds anchor to
+      // a base version, and the baseVersionId FK is `onDelete: cascade` — which
+      // never fires here because we soft-delete (tombstone) rather than DELETE —
+      // so each kind must be cancelled explicitly. Cancel them in the same
+      // transaction so the tombstone and the closures commit atomically. The
+      // resume-path chokepoint (readVersionDocxTarget) is the class guard for
+      // desktop sessions should a future tombstone writer forget this step;
+      // closing here is the primary fix for both kinds.
       const cancelledSessions = await tx
         .update(desktopEditSessions)
         .set({ status: "cancelled", closedAt: new Date() })
@@ -220,6 +242,17 @@ export const deleteEntityVersionHandler = async function* ({
           ),
         )
         .returning({ id: desktopEditSessions.id });
+      const cancelledCollabSessions = await tx
+        .update(folioCollabSessions)
+        .set({ status: "cancelled", closedAt: new Date() })
+        .where(
+          and(
+            eq(folioCollabSessions.baseVersionId, params.versionId),
+            eq(folioCollabSessions.workspaceId, workspaceId),
+            eq(folioCollabSessions.status, "open"),
+          ),
+        )
+        .returning({ id: folioCollabSessions.id });
 
       const events: AuditEvent[] = [
         {
@@ -254,6 +287,15 @@ export const deleteEntityVersionHandler = async function* ({
         events.push({
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.DESKTOP_EDIT_SESSION,
+          resourceId: session.id,
+          changes: { status: { old: "open", new: "cancelled" } },
+          metadata: { reason: "base_version_tombstoned" },
+        });
+      }
+      for (const session of cancelledCollabSessions) {
+        events.push({
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
           resourceId: session.id,
           changes: { status: { old: "open", new: "cancelled" } },
           metadata: { reason: "base_version_tombstoned" },
