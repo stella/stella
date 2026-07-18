@@ -282,7 +282,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "access": "write",
     "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {countryCode, isPrimary}; exactly one entry should be primary.",
     "annotations": {
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     },
     "inputSchema": {
@@ -1005,7 +1005,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "access": "write",
     "description": "Set a document's value for a property (a cell in the matter's table). Pass the document entity_id, the property_id (from list_properties), and a content object whose 'type' matches the property's value type: text (value: string), single-select (value: string or null), multi-select (value: array of strings), date (value: ISO YYYY-MM-DD or null), or int (value: integer, optional currency: 3-letter ISO code). An empty value clears the cell.",
     "annotations": {
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     },
     "inputSchema": {

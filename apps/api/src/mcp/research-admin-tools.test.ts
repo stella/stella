@@ -9,7 +9,7 @@ import {
   ANONYMIZED_MCP_TOOL_DEFINITIONS,
   DEFAULT_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
-import type { McpToolResponse } from "@/api/mcp/tool-types";
+import type { McpToolDefinition, McpToolResponse } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { listMcpTools } from "@/api/mcp/tools";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -236,9 +236,12 @@ describe("manage_organization per-action validation", () => {
 
 describe("manage_organization remove_member confirm gate", () => {
   test("the tool is not marked destructiveHint (so the central gate skips it)", () => {
-    const def = DEFAULT_MCP_TOOL_DEFINITIONS.find(
-      (tool) => tool.name === "manage_organization",
-    );
+    // Widen to the SDK annotations shape (the `as const` registry element types
+    // annotations to only the keys manage_organization declares, which omits
+    // destructiveHint) so the assertion below can read the hint it must be absent.
+    const definitions: readonly McpToolDefinition[] =
+      DEFAULT_MCP_TOOL_DEFINITIONS;
+    const def = definitions.find((tool) => tool.name === "manage_organization");
     expect(def).toBeDefined();
     // manage_organization also adds members and updates settings, so it must not
     // trip the whole-tool central confirm gate: it carries no destructiveHint.

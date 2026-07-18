@@ -564,7 +564,7 @@
       "required": ["jurisdictions"]
     },
     "annotations": {
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     }
   },
@@ -1016,7 +1016,7 @@
       "required": ["entity_id", "property_id", "content"]
     },
     "annotations": {
-      "idempotentHint": true,
+      "idempotentHint": false,
       "openWorldHint": false
     }
   },

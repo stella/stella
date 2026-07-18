@@ -661,7 +661,11 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["jurisdictions"],
     },
-    annotations: { idempotentHint: true, openWorldHint: false },
+    // Not idempotent: the handler records a fresh audit event and bumps
+    // updatedAt on every call even when the jurisdictions are unchanged, so a
+    // repeat with identical args has an observable additional effect (a
+    // duplicate audit entry) in this compliance context.
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_practice_jurisdictions",

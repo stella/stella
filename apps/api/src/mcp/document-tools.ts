@@ -661,7 +661,11 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       },
       required: ["entity_id", "property_id", "content"],
     },
-    annotations: { idempotentHint: true, openWorldHint: false },
+    // Not idempotent: upsertFieldHandler unconditionally deletes/reinserts and
+    // reindexes the cell and records a fresh audit event + updatedAt bump on
+    // every call, so a repeat with identical args has an observable additional
+    // effect (a duplicate audit entry) in this compliance context.
+    annotations: { idempotentHint: false, openWorldHint: false },
     access: "write",
     anonymized: { exposure: "excluded", reason: "write" },
     name: "set_field_value",
