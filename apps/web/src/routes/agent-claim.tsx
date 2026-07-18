@@ -19,6 +19,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { env } from "@/env";
 import { authClient } from "@/lib/auth";
+import { APIError } from "@/lib/errors/api";
+import { fetchWithTimeout } from "@/lib/fetch";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -189,13 +191,16 @@ type ConfirmResult =
 // absent from the `eden.v1` treaty. Call it directly; the session cookie is
 // sent via `credentials: "include"`.
 const confirmAgentClaim = async (userCode: string): Promise<ConfirmResult> => {
-  const response = await fetch(`${env.VITE_API_URL}/agent/identity/confirm`, {
-    method: "POST",
-    credentials: "include",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ user_code: userCode }),
-    signal: AbortSignal.timeout(10_000),
-  });
+  const response = await fetchWithTimeout(
+    `${env.VITE_API_URL}/agent/identity/confirm`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ user_code: userCode }),
+      timeoutMs: 10_000,
+    },
+  );
 
   if (response.ok) {
     return { status: "claimed" };
@@ -210,5 +215,8 @@ const confirmAgentClaim = async (userCode: string): Promise<ConfirmResult> => {
     return { status: "invalid" };
   }
 
-  throw new Error(`Unexpected confirm response: ${response.status}`);
+  throw new APIError({
+    status: response.status,
+    message: `Unexpected confirm response: ${response.status}`,
+  });
 };
