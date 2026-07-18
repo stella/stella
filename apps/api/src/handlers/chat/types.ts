@@ -7,7 +7,10 @@ import type {
   ChatClientToolsFor,
   ChatUIToolsFor,
 } from "@/api/handlers/chat/tools/chat-tool-types";
-import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
+import type {
+  ChatBuiltinApprovalToolName,
+  ChatTools,
+} from "@/api/handlers/chat/tools/chat-tools";
 import type { UserFileUrl } from "@/api/handlers/user-files/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -66,7 +69,10 @@ export type ChatAnonRestorationsData = {
 };
 
 export type ChatUITools = ChatUIToolsFor<ChatTools>;
-export type ChatClientTools = ChatClientToolsFor<ChatTools>;
+export type ChatClientTools = ChatClientToolsFor<
+  ChatTools,
+  ChatBuiltinApprovalToolName
+>;
 
 export type ChatAttachmentMetadata = {
   filename?: string | undefined;

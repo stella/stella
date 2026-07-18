@@ -20,7 +20,10 @@ import {
   createChatHistoryTools,
   SEARCH_CHAT_HISTORY_TOOL_NAME,
 } from "@/api/handlers/chat/tools/chat-history-tools";
-import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
+import type {
+  ChatToolMap,
+  ChatUIToolsFor,
+} from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -196,6 +199,12 @@ type BuiltInChatTools = OrgTools &
   SubagentTools;
 
 export type ChatTools = BuiltInChatTools;
+
+export type ChatBuiltinApprovalToolName = Exclude<
+  keyof ChatUIToolsFor<BuiltInChatTools>,
+  "ask-user" | "create-document"
+>;
+
 type BuiltInChatToolPolicyName =
   | keyof BuiltInChatTools
   | CurrentSkillEditToolName;
