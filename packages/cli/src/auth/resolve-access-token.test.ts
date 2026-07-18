@@ -440,4 +440,81 @@ describe("resolveAccessToken", () => {
       provider.close();
     }
   });
+
+  test("preserves a newer same-org credential a concurrent process writes mid-exchange", async () => {
+    let tokenRequestCount = 0;
+    const provider = startMockProvider(async (body) => {
+      tokenRequestCount += 1;
+      if (
+        body.get("grant_type") !== "refresh_token" ||
+        body.get("refresh_token") !== "old-refresh-token"
+      ) {
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      }
+      // Simulate a concurrent process (another command's own refresh
+      // racing this one, or a fresh `auth login` to the same org)
+      // finishing first and replacing this exact (serverUrl, orgId)
+      // credential's tokens while this exchange is still in flight. Reads
+      // the target back off disk rather than closing over `provider`.
+      const concurrent = await readCredentialFile(configDir);
+      const target = concurrent.credentials.at(0);
+      if (target === undefined) {
+        return Response.json({ error: "invalid_grant" }, { status: 400 });
+      }
+      await writeCredentialFile(
+        configDir,
+        upsertCredential(concurrent, {
+          ...target,
+          accessToken: "concurrent-access-token",
+          expiresAt: Date.now() + 60_000,
+          refreshToken: "concurrent-refresh-token",
+          updatedAt: Date.now(),
+        }),
+      );
+      // The stale-generation exchange still "succeeds" at the network
+      // level — the token endpoint has no way to know a newer credential
+      // already landed locally.
+      return Response.json({
+        access_token: "stale-generation-token",
+        expires_in: 900,
+        refresh_token: "stale-generation-refresh-token",
+        scope: "openid stella:read",
+        token_type: "Bearer",
+      });
+    });
+    try {
+      const now = Date.now();
+      await seedCredential(
+        buildCredential(provider.serverUrl, { expiresAt: now - 1000 }),
+      );
+
+      const result = await resolveAccessToken({
+        configDir,
+        serverUrl: provider.serverUrl,
+        now,
+      });
+
+      // The concurrent write already landed a newer, comfortably-valid
+      // credential; this command must use that one rather than the token
+      // from its own (now-stale) exchange.
+      expect(result.status).toBe("ok");
+      if (result.status === "ok") {
+        expect(result.token).toBe("concurrent-access-token");
+      }
+      expect(tokenRequestCount).toBe(1);
+
+      // The newer credential must survive on disk untouched — not rolled
+      // back to the stale-generation tokens this exchange produced.
+      const persisted = await readCredentialFile(configDir);
+      const stored = persisted.credentials.find(
+        (credential) =>
+          credential.serverUrl === provider.serverUrl &&
+          credential.orgId === "org-1",
+      );
+      expect(stored?.accessToken).toBe("concurrent-access-token");
+      expect(stored?.refreshToken).toBe("concurrent-refresh-token");
+    } finally {
+      provider.close();
+    }
+  });
 });

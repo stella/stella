@@ -125,6 +125,36 @@ export const ensureFreshCredential = async (
     );
   }
 
+  // Existing, not just present: a concurrent process (another command's
+  // refresh racing this one, or a fresh `auth login` to the same org) may
+  // have already replaced this exact credential's token-bearing fields
+  // while our exchange was in flight. Writing `updated` — derived from
+  // `input.credential`, the generation this refresh started from — would
+  // then roll that newer generation back to an older one. Only write when
+  // nothing has moved since we read `input.credential`; otherwise the
+  // fresher entry already on disk wins and we hand that back instead of
+  // touching the file. (This is a compare-and-skip, not a true atomic
+  // compare-and-swap — a lock across the read-modify-write is out of scope
+  // here; see the atomic temp+rename write follow-up.)
+  const unchangedSinceRefreshStarted =
+    stillPresent.accessToken === input.credential.accessToken &&
+    stillPresent.refreshToken === input.credential.refreshToken &&
+    stillPresent.expiresAt === input.credential.expiresAt &&
+    stillPresent.scope === input.credential.scope &&
+    stillPresent.updatedAt === input.credential.updatedAt;
+
+  if (!unchangedSinceRefreshStarted) {
+    if (!credentialNeedsRefresh(stillPresent, now)) {
+      return Result.ok(stillPresent);
+    }
+    // The concurrent writer's own credential is itself already due a
+    // refresh (rare — e.g. it raced in with a short-lived token). Retry
+    // from this newer generation rather than either clobbering it or
+    // handing back a token that's already stale; `credentialNeedsRefresh`
+    // re-checks first, so this terminates once nothing further races in.
+    return ensureFreshCredential({ ...input, credential: stillPresent, now });
+  }
+
   await writeCredentialFile(
     input.configDir,
     upsertCredential(latestCredentialFile, updated),
