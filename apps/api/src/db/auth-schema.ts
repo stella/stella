@@ -3,6 +3,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
   index,
+  integer,
   pgTable,
   text,
   timestamp,
@@ -158,6 +159,16 @@ export const twoFactor = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     verified: boolean("verified").default(true).notNull(),
+    // Account-lockout bookkeeping written by Better Auth's 2FA verification
+    // path (see node_modules/better-auth/dist/plugins/two-factor/schema.mjs and
+    // verify-two-factor.mjs): `failedVerificationCount` is incremented per
+    // failed factor check and reset on success; `lockedUntil` holds the
+    // lockout expiry once the failure budget is spent. The plugin's default
+    // `accountLockout` is enabled, so these columns must exist for it to work.
+    failedVerificationCount: integer("failed_verification_count")
+      .default(0)
+      .notNull(),
+    lockedUntil: timestamp("locked_until"),
   },
   (table) => [
     index("two_factor_user_id_idx").on(table.userId),
