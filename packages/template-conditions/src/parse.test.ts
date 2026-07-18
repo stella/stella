@@ -69,6 +69,33 @@ describe("operands", () => {
       right: { type: "literal", value: 'a"b' },
     });
   });
+
+  test("an empty string literal is the empty string", () => {
+    expect(parseCondition('s == ""')).toEqual({
+      type: "compare",
+      left: { type: "path", path: "s" },
+      op: "eq",
+      right: { type: "literal", value: "" },
+    });
+  });
+
+  test("multiple escaped quotes in one string literal are all unescaped", () => {
+    expect(parseCondition('s == "a\\"b\\"c"')).toEqual({
+      type: "compare",
+      left: { type: "path", path: "s" },
+      op: "eq",
+      right: { type: "literal", value: 'a"b"c' },
+    });
+  });
+
+  test('an escaped backslash is kept literally (only \\" is unescaped)', () => {
+    expect(parseCondition('s == "a\\\\b"')).toEqual({
+      type: "compare",
+      left: { type: "path", path: "s" },
+      op: "eq",
+      right: { type: "literal", value: "a\\\\b" },
+    });
+  });
 });
 
 describe("comparisons", () => {
@@ -198,5 +225,35 @@ describe("degenerate input", () => {
 
   test("a dangling operator falls back to the left operand's truthiness", () => {
     expect(parseCondition("a ==")).toEqual(path("a"));
+  });
+});
+
+describe("tokenizer performance", () => {
+  // The tokenizer's string-literal handling used to be a regex branch
+  // (`"[^"\\]*(?:\\.[^"\\]*)*"`) scanned via an unanchored `matchAll`. On an
+  // unterminated string, the scan for a closing quote fails, and `matchAll`
+  // retries that same expensive "find the close, honoring escapes" search
+  // starting at every subsequent `"` character in the input, quadratic in
+  // the input length. Guard against that shape reappearing by asserting a
+  // large adversarial input (many escaped-quote-like sequences, never
+  // closing) still parses fast.
+  test("an unterminated quoted string with many escape-like sequences parses in linear time", () => {
+    const evilTail = '\\"\\a'.repeat(10_000); // ~50k chars, never closes the string
+    const expression = `s == "${evilTail}`;
+
+    const start = performance.now();
+    const node = parseCondition(expression);
+    const elapsed = performance.now() - start;
+
+    expect(elapsed).toBeLessThan(2000);
+    // Malformed input degrades gracefully: a literal missing its closing
+    // quote closes at end of input (consistent with an unmatched `(` closing
+    // at end of input), producing one (very large) string literal.
+    expect(node).toMatchObject({
+      type: "compare",
+      left: { type: "path", path: "s" },
+      op: "eq",
+      right: { type: "literal" },
+    });
   });
 });
